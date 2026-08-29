@@ -45,38 +45,41 @@ TEST_CASE("Test partial aggregate precomputation partition race reproduces PR 24
 
 	std::atomic<double> result(-1);
 	std::string query_error;
-	// joiner before the guard: the guard is destroyed first and releases the parked thread
+	// the sync point guard below lives in an inner scope that ends before the join: a
+	// reader parking after the wait timed out is released instead of deadlocking it
 	ThreadJoiner joiner;
-	// the reader thread parks at the sync point after capturing its indices until released below
-	auto guard = SyncPointCtl::EnableInScope("optimizer.partial_precompute.indices_captured");
-	joiner.thread = std::thread([&] {
-		Connection reader(db);
-		auto res = reader.Query("SELECT count(*) FROM race_db.t WHERE key=5");
-		if (res->HasError()) {
-			query_error = res->GetError();
-			return;
-		}
-		result = res->GetValue<double>(0, 0);
-	});
+	{
+		// the reader thread parks at the sync point after capturing its indices until released below
+		auto guard = SyncPointCtl::EnableInScope("optimizer.partial_precompute.indices_captured");
+		joiner.thread = std::thread([&] {
+			Connection reader(db);
+			auto res = reader.Query("SELECT count(*) FROM race_db.t WHERE key=5");
+			if (res->HasError()) {
+				query_error = res->GetError();
+				return;
+			}
+			result = res->GetValue<double>(0, 0);
+		});
 
-	bool precompute_active = true;
-	try {
-		guard.WaitAndPause(3000);
-	} catch (...) {
-		WARN("The reader did not park at the sync point");
-		// a parked-arrival timeout (or any other failure to reach the hook)
-		// falls back to the plain correctness check below
-		precompute_active = false;
-	}
-	// the timeout fallback is the path on the current tree (the hook is
-	// unreachable while the partial precompute is disabled; see the TODO at the
-	// early return in TryExecuteAggregates)
-	if (precompute_active) {
-		// the reader is parked at the captured indices: invoke checkpoint to swap
-		// the row group collection
-		REQUIRE_NO_FAIL(writer.Query("CHECKPOINT race_db"));
-		guard.Next();
-	}
+		bool precompute_active = true;
+		try {
+			guard.WaitAndPause(3000);
+		} catch (...) {
+			WARN("The reader did not park at the sync point");
+			// a parked-arrival timeout (or any other failure to reach the hook)
+			// falls back to the plain correctness check below
+			precompute_active = false;
+		}
+		// the timeout fallback is the path on the current tree (the hook is
+		// unreachable while the partial precompute is disabled; see the TODO at the
+		// early return in TryExecuteAggregates)
+		if (precompute_active) {
+			// the reader is parked at the captured indices: invoke checkpoint to swap
+			// the row group collection
+			REQUIRE_NO_FAIL(writer.Query("CHECKPOINT race_db"));
+			guard.Next();
+		}
+	} // ends the sync point scope: disables the point before the join below
 	joiner.thread.join();
 
 	// the reader must not count precomputed partitions twice

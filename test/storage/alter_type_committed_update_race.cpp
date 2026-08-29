@@ -27,33 +27,36 @@ TEST_CASE("Test ALTER TYPE does not drop a concurrently committed update", "[sto
 	REQUIRE_NO_FAIL(conn.Query("INSERT INTO t VALUES (1, 0)"));
 
 	std::string alter_error;
-	// joiner before the guard: the guard is destroyed first and releases the parked thread
-	ThreadJoiner joiner;
-	// the alter thread parks at the sync point until released below
-	auto guard = SyncPointCtl::EnableInScope("alter_type.rewrite_scan_complete");
-	joiner.thread = std::thread([&] {
-		Connection alter(db);
-		auto res = alter.Query("ALTER TABLE t ALTER COLUMN v SET DATA TYPE BIGINT");
-		if (res->HasError()) {
-			alter_error = res->GetError();
-		}
-	});
-
 	std::atomic<bool> update_succeeded(false);
-	bool rewrite_parked = true;
-	try {
-		guard.WaitAndPause(3000);
-	} catch (const InternalException &) {
-		WARN("The ALTER TYPE rewrite did not park at the sync point");
-		rewrite_parked = false;
-	}
-	if (rewrite_parked) {
-		// the rewrite is parked mid-flight: commit the update in a separate connection
-		Connection updater(db);
-		auto res = updater.Query("UPDATE t SET v = 7");
-		update_succeeded = !res->HasError();
-		guard.Next();
-	}
+	// the sync point guard below lives in an inner scope that ends before the join: an
+	// alter thread parking after the wait timed out is released instead of deadlocking it
+	ThreadJoiner joiner;
+	{
+		// the alter thread parks at the sync point until released below
+		auto guard = SyncPointCtl::EnableInScope("alter_type.rewrite_scan_complete");
+		joiner.thread = std::thread([&] {
+			Connection alter(db);
+			auto res = alter.Query("ALTER TABLE t ALTER COLUMN v SET DATA TYPE BIGINT");
+			if (res->HasError()) {
+				alter_error = res->GetError();
+			}
+		});
+
+		bool rewrite_parked = true;
+		try {
+			guard.WaitAndPause(3000);
+		} catch (const InternalException &) {
+			WARN("The ALTER TYPE rewrite did not park at the sync point");
+			rewrite_parked = false;
+		}
+		if (rewrite_parked) {
+			// the rewrite is parked mid-flight: commit the update in a separate connection
+			Connection updater(db);
+			auto res = updater.Query("UPDATE t SET v = 7");
+			update_succeeded = !res->HasError();
+			guard.Next();
+		}
+	} // ends the sync point scope: disables the point before the join below
 	joiner.thread.join();
 	REQUIRE(alter_error.empty());
 
