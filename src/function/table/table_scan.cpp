@@ -2,14 +2,17 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -18,6 +21,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/parser/column_definition.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -28,6 +32,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/parallel/async_result.hpp"
@@ -714,78 +719,10 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 	return expressions;
 }
 
-bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list, TableFunctionInitInput &input,
-                  TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
-	// FIXME: No support for index scans on compound ARTs.
-	// See note above on multi-filter support.
-	if (art->UnboundExpressionCount() > 1) {
-		return false;
-	}
-
-	auto index_expr = art->CopyUnboundExpression(0);
-	auto indexed_columns = art->GetColumnIds();
-
-	// NOTE: We do not push down multi-column filters, e.g., 42 = a + b.
-	if (indexed_columns.size() != 1) {
-		return false;
-	}
-
-	// Resolve bound column references in the index_expr against the current input projection
-	ProjectionIndex updated_index_column;
-	bool found_index_column_in_input = false;
-
-	// Find the indexed column amongst the input columns
-	for (idx_t i = 0; i < input.column_ids.size(); ++i) {
-		if (input.column_ids[i] == indexed_columns[0]) {
-			updated_index_column = ProjectionIndex(i);
-			found_index_column_in_input = true;
-			break;
-		}
-	}
-
-	// If found, update the bound column ref within index_expr
-	if (found_index_column_in_input) {
-		ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
-			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-				return;
-			}
-
-			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
-
-			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.Binding().column_index == indexed_columns[0]) {
-				bound_column_ref_expr.BindingMutable().column_index = updated_index_column;
-			}
-		});
-	}
-
-	// Get ART column.
-	auto &col = column_list.GetColumn(LogicalIndex(indexed_columns[0]));
-
-	// The indexes of the filters match input.column_indexes, which are: i -> column_index.
-	// Try to find a filter on the ART column.
-	ProjectionIndex storage_index;
-	for (idx_t i = 0; i < input.column_indexes.size(); i++) {
-		if (input.column_indexes[i].ToLogical() == col.Logical()) {
-			storage_index = ProjectionIndex(i);
-			break;
-		}
-	}
-
-	// No filter matches the ART column.
-	if (!storage_index.IsValid()) {
-		return false;
-	}
-
-	// Try to find a matching filter for the column.
-	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index);
-	if (!filter) {
-		return false;
-	}
-
-	auto expressions = ExtractFilterExpressions(col, *filter, storage_index.GetIndex());
+static bool TryScanIndex(const IndexReadHandle<ART> &art, const Expression &index_expr,
+                         const vector<unique_ptr<Expression>> &expressions, idx_t max_count, set<row_t> &row_ids) {
 	for (const auto &filter_expr : expressions) {
-		auto scan_state = art->TryInitializeScan(*index_expr, *filter_expr);
+		auto scan_state = art->TryInitializeScan(index_expr, *filter_expr);
 		if (!scan_state) {
 			return false;
 		}
@@ -799,7 +736,7 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 			if (!delta_index) {
 				continue;
 			}
-			auto delta_scan_state = delta_index->TryInitializeScan(*index_expr, *filter_expr);
+			auto delta_scan_state = delta_index->TryInitializeScan(index_expr, *filter_expr);
 			if (!delta_scan_state) {
 				return false;
 			}
@@ -812,6 +749,140 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 		}
 	}
 	return true;
+}
+
+static void IntersectRowIds(set<row_t> &row_ids, const set<row_t> &candidate_row_ids) {
+	auto row_id = row_ids.begin();
+	auto candidate_row_id = candidate_row_ids.begin();
+	while (row_id != row_ids.end() && candidate_row_id != candidate_row_ids.end()) {
+		if (*row_id < *candidate_row_id) {
+			row_id = row_ids.erase(row_id);
+		} else if (*candidate_row_id < *row_id) {
+			candidate_row_id++;
+		} else {
+			row_id++;
+			candidate_row_id++;
+		}
+	}
+	row_ids.erase(row_id, row_ids.end());
+}
+
+struct IndexScanCandidate {
+	IndexScanCandidate(IndexReadHandle<ART> art_p, unique_ptr<Expression> index_expr_p,
+	                   vector<unique_ptr<Expression>> filter_expressions_p, ProjectionIndex filter_index_p)
+	    : art(std::move(art_p)), index_expr(std::move(index_expr_p)),
+	      filter_expressions(std::move(filter_expressions_p)), filter_index(filter_index_p) {
+	}
+
+	IndexReadHandle<ART> art;
+	unique_ptr<Expression> index_expr;
+	vector<unique_ptr<Expression>> filter_expressions;
+	ProjectionIndex filter_index;
+};
+
+static bool TryScanIndexes(const TableIndexList &indexes, const ColumnList &column_list, TableFunctionInitInput &input,
+                           TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
+	if (filter_set.HasMultiColumnFilters() || !filter_set.HasFilters()) {
+		return false;
+	}
+
+	// Collect the single-column ARTs that could cover each filter before scanning any index.
+	vector<IndexScanCandidate> candidates;
+	unordered_set<ProjectionIndex> covered_filters;
+
+	for (auto entry : indexes.IndexEntries()) {
+		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
+			continue;
+		}
+
+		auto index = entry->GetReadHandle<ART>();
+
+		// FIXME: No support for index scans on compound ARTs.
+		if (index->UnboundExpressionCount() > 1) {
+			continue;
+		}
+
+		auto index_expr = index->CopyUnboundExpression(0);
+		auto &indexed_columns = index->GetColumnIds();
+
+		// NOTE: We do not push down multi-column filters, e.g., 42 = a + b.
+		if (indexed_columns.size() != 1) {
+			continue;
+		}
+		auto indexed_column = PhysicalIndex(indexed_columns[0]);
+		auto indexed_logical_column = column_list.PhysicalToLogical(indexed_column);
+
+		// Resolve bound column references in the index_expr against the current input projection
+		ProjectionIndex scan_column_index;
+
+		// Find the indexed column amongst the input columns
+		for (idx_t i = 0; i < input.column_indexes.size(); ++i) {
+			if (input.column_indexes[i].ToLogical() == indexed_logical_column) {
+				scan_column_index = ProjectionIndex(i);
+				break;
+			}
+		}
+
+		// No filter matches the ART column.
+		if (!scan_column_index.IsValid()) {
+			continue;
+		}
+
+		// If found, update the bound column ref within index_expr
+		ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
+			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				return;
+			}
+
+			// A single-column index expression binds every column reference to its sole input.
+			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
+			bound_column_ref_expr.BindingMutable().column_index = scan_column_index;
+		});
+
+		// Try to find a matching filter for the column.
+		auto filter = filter_set.TryGetFilterByColumnIndex(scan_column_index);
+		if (!filter) {
+			continue;
+		}
+
+		auto &col = column_list.GetColumn(indexed_column);
+		auto expressions = ExtractFilterExpressions(col, *filter, scan_column_index.GetIndex());
+
+		covered_filters.insert(scan_column_index);
+		candidates.emplace_back(std::move(index), std::move(index_expr), std::move(expressions), scan_column_index);
+	}
+
+	// TODO: Support partially covered filters by applying residual filters after fetching candidate rows.
+	if (covered_filters.size() != filter_set.FilterCount()) {
+		return false;
+	}
+
+	bool first_index = true;
+	unordered_set<ProjectionIndex> scanned_filters;
+	for (auto &candidate : candidates) {
+		if (scanned_filters.find(candidate.filter_index) != scanned_filters.end()) {
+			continue;
+		}
+		set<row_t> candidate_row_ids;
+		if (!TryScanIndex(candidate.art, *candidate.index_expr, candidate.filter_expressions, max_count,
+		                  candidate_row_ids)) {
+			continue;
+		}
+		scanned_filters.insert(candidate.filter_index);
+
+		if (first_index) {
+			row_ids = std::move(candidate_row_ids);
+			first_index = false;
+		} else {
+			IntersectRowIds(row_ids, candidate_row_ids);
+		}
+
+		if (row_ids.empty()) {
+			// No rows match all scanned index filters, so we can skip scanning any other indexes.
+			return true;
+		}
+	}
+	return scanned_filters.size() == filter_set.FilterCount();
 }
 
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
@@ -833,16 +904,6 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	auto &filter_set = *input.filters;
 
-	// FIXME: We currently only support scanning one ART with one filter.
-	// If multiple filters exist, i.e., a = 11 AND b = 24, we need to
-	// 1.	1.1. Find + scan one ART for a = 11.
-	//		1.2. Find + scan one ART for b = 24.
-	//		1.3. Return the intersecting row IDs.
-	// 2. (Reorder and) scan a single ART with a compound key of (a, b).
-	if (filter_set.FilterCount() != 1) {
-		return DuckTableScanInitGlobal(context, input, storage, bind_data);
-	}
-
 	auto &info = storage.GetDataTableInfo();
 	auto &indexes = info->GetIndexes();
 	if (indexes.Empty()) {
@@ -856,10 +917,6 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * scan_percentage);
 	auto max_count = MaxValue(scan_max_count, total_rows_from_percentage);
 
-	auto &column_list = duck_table.GetColumns();
-	bool index_scan = false;
-	set<row_t> row_ids;
-
 	info->BindIndexes(context, ART::TYPE_NAME);
 
 	// Exclude rowid-shifting vacuum from the ART probe until the index scan finishes: collected rowids must be
@@ -872,19 +929,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
-	for (auto entry : indexes.IndexEntries()) {
-		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
-			continue;
-		}
-		auto index = entry->GetReadHandle<ART>();
-		index_scan = TryScanIndex(index, column_list, input, filter_set, max_count, row_ids);
-		if (index_scan) {
-			// found an index - break
-			break;
-		}
-	}
-
-	if (!index_scan) {
+	set<row_t> row_ids;
+	if (!TryScanIndexes(indexes, duck_table.GetColumns(), input, filter_set, max_count, row_ids)) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids, std::move(vacuum_lock));
