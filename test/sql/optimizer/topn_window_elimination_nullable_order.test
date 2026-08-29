@@ -8,8 +8,9 @@ CREATE TABLE t(id INTEGER PRIMARY KEY);
 statement ok
 INSERT INTO t VALUES (1), (2), (3);
 
-# A compound ORDER BY expression (NULLIF) can produce NULLs even though id is NOT NULL.
-# The rewrite must use the nulls-last aggregate variant so the NULL-keyed row is kept, not dropped.
+# Verbatim reproducer from the issue. A compound ORDER BY expression (NULLIF) can produce NULLs even
+# though id is NOT NULL, so the rewrite must use the nulls-last aggregate variant and keep the
+# NULL-keyed row (3) instead of dropping it.
 query II
 SELECT id, ROW_NUMBER() OVER (ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST) AS rn
 FROM t
