@@ -877,6 +877,123 @@ vector<unique_ptr<AsyncTask>> RowGroup::CollectScanIOTasks(CollectionScanState &
 	return GetBlockManager().buffer_manager.CreatePrefetchTasks(state.context, prefetch_state.blocks);
 }
 
+// These cutoffs balance vector-level materialization against point fetches.
+static constexpr idx_t ROW_ID_SCAN_BITPACKING_PARALLEL_THREADS = 8;
+
+static idx_t GetRowIdSelectThreshold(const ColumnData &column_data, const idx_t scheduler_thread_count) {
+	const auto physical_type = column_data.GetType().InternalType();
+	if (physical_type == PhysicalType::INTERVAL || physical_type == PhysicalType::LIST) {
+		return 0;
+	}
+	const auto compression_function = column_data.GetCompressionFunction();
+	if (!compression_function) {
+		return 0;
+	}
+	switch (compression_function->type) {
+	case CompressionType::COMPRESSION_RLE:
+		return 1;
+	case CompressionType::COMPRESSION_BITPACKING:
+		// Use the scheduler pool size as a heuristic for sparse vector materialization.
+		return scheduler_thread_count >= ROW_ID_SCAN_BITPACKING_PARALLEL_THREADS ? 1 : 3;
+	case CompressionType::COMPRESSION_UNCOMPRESSED:
+		return physical_type == PhysicalType::VARCHAR || physical_type == PhysicalType::BIT ? 0 : 3;
+	case CompressionType::COMPRESSION_ALP:
+	case CompressionType::COMPRESSION_ALPRD:
+	case CompressionType::COMPRESSION_ZSTD:
+	case CompressionType::COMPRESSION_DICT_FSST:
+		return 2;
+	default:
+		return 0;
+	}
+}
+
+void RowGroup::ScanRowIds(TransactionData transaction, CollectionScanState &state, SegmentNode<RowGroup> &node,
+                          const array_ptr<const row_t> &row_ids, idx_t live_row_end, idx_t scheduler_thread_count,
+                          ColumnFetchState &fetch_state, DataChunk &result) {
+	D_ASSERT(!row_ids.empty() && row_ids.size() <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(!state.GetFilterInfo().HasFilters());
+	D_ASSERT(!state.GetSamplingInfo().do_system_sample);
+	const auto row_start = node.GetRowStart();
+	const auto row_end = MinValue<idx_t>(node.GetRowEnd(), live_row_end);
+	const auto first_row_id = UnsafeNumericCast<idx_t>(row_ids[0]);
+	D_ASSERT(first_row_id >= row_start);
+	if (first_row_id >= row_end) {
+		return;
+	}
+	const auto vector_offset = (first_row_id - row_start) / STANDARD_VECTOR_SIZE;
+	const auto vector_start = vector_offset * STANDARD_VECTOR_SIZE;
+	D_ASSERT(vector_start < node.GetCount());
+	const auto physical_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, row_end - row_start - vector_start);
+	idx_t offsets[STANDARD_VECTOR_SIZE];
+	idx_t candidate_count = 0;
+	for (; candidate_count < row_ids.size(); candidate_count++) {
+		const auto row_id = UnsafeNumericCast<idx_t>(row_ids[candidate_count]);
+		if (row_id >= row_end) {
+			break;
+		}
+		D_ASSERT(candidate_count == 0 || row_ids[candidate_count - 1] < row_ids[candidate_count]);
+		offsets[candidate_count] = row_id - row_start;
+		D_ASSERT(offsets[candidate_count] >= vector_start && offsets[candidate_count] < vector_start + physical_count);
+	}
+
+	sel_t visible_sel_buffer[STANDARD_VECTOR_SIZE];
+	SelectionVector visible_sel(visible_sel_buffer, STANDARD_VECTOR_SIZE);
+	const auto visible_count = Fetch(transaction, offsets, candidate_count, visible_sel);
+	if (visible_count == 0) {
+		return;
+	}
+	// Fetch can return the full count without populating visible_sel.
+	const auto &fetch_sel = visible_count == candidate_count ? *FlatVector::IncrementalSelectionVector() : visible_sel;
+	const bool scan_all = visible_count == physical_count;
+	const bool same_row_group = state.row_group && RefersToSameObject(*state.row_group, node);
+	state.max_row = live_row_end;
+	[[maybe_unused]] const auto initialized = InitializeScanInternal(state, node, vector_offset);
+	D_ASSERT(initialized);
+	D_ASSERT(vector_start + physical_count <= state.max_row_group_row);
+	const auto &column_ids = state.GetColumnIds();
+	auto &selection = state.valid_sel;
+	fetch_state.row_group = state.row_group;
+	if (!scan_all) {
+		for (idx_t i = 0; i < visible_count; i++) {
+			selection.set_index(i, offsets[fetch_sel.get_index(i)] - vector_start);
+		}
+	}
+
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		const auto &column = column_ids[i];
+		D_ASSERT(!column.IsRowNumberColumn());
+		auto &column_data = GetColumn(column);
+		auto &column_scan = state.column_scans[i];
+		if (!same_row_group) {
+			// FetchRows leaves the decoder untouched, so invalidate every column when changing RowGroups.
+			column_scan.offset_in_column = DConstants::INVALID_INDEX;
+		}
+		bool use_select = false;
+		if (!scan_all && physical_count == STANDARD_VECTOR_SIZE) {
+			const auto select_threshold = GetRowIdSelectThreshold(column_data, scheduler_thread_count);
+			use_select = select_threshold > 0 && visible_count >= select_threshold;
+		}
+		if (scan_all || use_select) {
+			// Scan and Select advance this offset, while FetchRows does not. Only reuse an exactly aligned state.
+			if (column_scan.offset_in_column != vector_start) {
+				column_data.InitializeScanWithOffset(column_scan, vector_start);
+			}
+			column_scan.scan_options = &state.GetOptions();
+			column_scan.update_scan_type = UpdateScanType::STANDARD;
+		}
+		if (scan_all) {
+			column_data.Scan(transaction, state.vector_index, column_scan, result.data[i], physical_count);
+		} else if (use_select) {
+			column_data.Select(transaction, state.vector_index, column_scan, result.data[i], selection, visible_count);
+		} else {
+			D_ASSERT(visible_count < physical_count);
+			column_data.FetchRows(transaction, fetch_state, column, offsets, fetch_sel, visible_count, result.data[i],
+			                      0);
+		}
+	}
+	result.SetChildCardinality(visible_count);
+}
+
 bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 	auto &prepared = state.prepared_vector;
 	if (prepared.prepare_state != VectorPrepareState::NONE) {

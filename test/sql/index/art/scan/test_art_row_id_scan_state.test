@@ -1,0 +1,157 @@
+# name: test/sql/index/art/scan/test_art_row_id_scan_state.test
+# description: ART scans preserve decoder ownership and candidate selection after MVCC
+# group: [scan]
+
+require exact_vector_size 2048
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+statement ok
+ATTACH '{TEST_DIR}/art_row_id_scan_state.db' AS scan_state (ROW_GROUP_SIZE 4096);
+
+# SMALLINT keeps BitPacking eligible even with 16 KB blocks.
+statement ok
+CREATE TABLE scan_state.t(
+    bucket INTEGER,
+    bucket_partial INTEGER,
+    bucket_mvcc INTEGER,
+    payload BIGINT USING COMPRESSION UNCOMPRESSED,
+    text_payload VARCHAR USING COMPRESSION UNCOMPRESSED,
+    packed SMALLINT USING COMPRESSION BITPACKING,
+    nullable BIGINT USING COMPRESSION UNCOMPRESSED,
+    arr BIGINT[2],
+    s STRUCT(x BIGINT)
+);
+
+# A/vector 0: Scan, B/vector 0: FetchRows, B/vector 1: Scan.
+# FetchRows must not leave A's decoder reusable at B's next vector offset.
+statement ok
+INSERT INTO scan_state.t
+SELECT CASE WHEN i < 2048 OR i = 4096 OR i >= 6144 THEN 7 ELSE 8 END,
+       CASE WHEN i < 17 OR i = 4096 OR i BETWEEN 6144 AND 6160 THEN 7 ELSE 8 END,
+       CASE WHEN i IN (2049, 2055, 2067, 2085, 2121, 2175) THEN 7 ELSE 8 END,
+       i, 'row_' || i::VARCHAR, (i * 13) % 10000, CASE WHEN i % 2 = 0 THEN NULL ELSE i END,
+       [i, i + 1]::BIGINT[2], struct_pack(x := i)
+FROM range(8192) r(i);
+
+statement ok
+CHECKPOINT scan_state;
+
+# Load persisted codec metadata and retain the two separate RowGroups.
+statement ok
+DETACH scan_state;
+
+statement ok
+ATTACH '{TEST_DIR}/art_row_id_scan_state.db' AS scan_state (ROW_GROUP_SIZE 4096);
+
+query IIII
+SELECT count(DISTINCT row_group_id),
+       count(*) FILTER (WHERE column_name = 'payload' AND compression = 'Uncompressed') > 0,
+       count(*) FILTER (WHERE column_name = 'text_payload' AND compression = 'Uncompressed') > 0,
+       count(*) FILTER (WHERE column_name = 'packed' AND compression = 'BitPacking') > 0
+FROM pragma_storage_info('scan_state.t');
+----
+2	true	true	true
+
+foreach key bucket bucket_partial bucket_mvcc
+
+statement ok
+CREATE INDEX t_{key} ON scan_state.t USING ART({key});
+
+endloop
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM scan_state.t WHERE bucket = 7;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# The sparse window also takes different BitPacking paths below and above eight scheduler threads.
+foreach thread_count 1 8
+
+statement ok
+SET threads = {thread_count};
+
+foreach fetch true false
+
+statement ok
+SET debug_force_fetch_row = {fetch};
+
+query III
+SELECT count(*), sum(payload),
+       bool_and(payload = rowid AND packed = (rowid * 13) % 10000
+                AND arr[1] = rowid AND arr[2] = rowid + 1 AND s.x = rowid
+                AND nullable IS NOT DISTINCT FROM CASE WHEN rowid % 2 = 0 THEN NULL ELSE rowid END)
+FROM scan_state.t WHERE bucket = 7;
+----
+4097	16779264	true
+
+# A/vector 0: Select, B/vector 0: FetchRows, B/vector 1: Select.
+query III
+SELECT count(*), sum(payload), bool_and(payload = rowid AND packed = (rowid * 13) % 10000)
+FROM scan_state.t WHERE bucket_partial = 7;
+----
+35	108816	true
+
+endloop
+
+endloop
+
+statement ok
+SET threads = 1;
+
+# Without version info, Fetch returns the full count without filling its selection.
+foreach fetch true false
+
+statement ok
+SET debug_force_fetch_row = {fetch};
+
+query IT
+SELECT payload, text_payload FROM scan_state.t WHERE bucket_mvcc = 7 ORDER BY payload;
+----
+2049	row_2049
+2055	row_2055
+2067	row_2067
+2085	row_2085
+2121	row_2121
+2175	row_2175
+
+endloop
+
+statement ok
+BEGIN TRANSACTION;
+
+# Uncommitted deletes retain six ART candidates in vector 1 but hide two interior rows.
+statement ok
+DELETE FROM scan_state.t WHERE payload IN (2055, 2085);
+
+query II
+EXPLAIN ANALYZE SELECT payload, text_payload FROM scan_state.t WHERE bucket_mvcc = 7;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# Four visible rows use Select for payload and FetchRows for text_payload.
+# fetch_sel indexes candidates [0, 2, 4, 5]; Select needs vector offsets [1, 19, 73, 127].
+foreach fetch true false
+
+statement ok
+SET debug_force_fetch_row = {fetch};
+
+query IT
+SELECT payload, text_payload FROM scan_state.t WHERE bucket_mvcc = 7 ORDER BY payload;
+----
+2049	row_2049
+2067	row_2067
+2121	row_2121
+2175	row_2175
+
+endloop
+
+statement ok
+ROLLBACK;
