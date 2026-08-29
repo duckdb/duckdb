@@ -322,7 +322,8 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 		return nullptr;
 	}
 
-	// Replace fast implementation when possible: only INT32/INT64 have a narrower no-overflow implementation to swap in.
+	// Replace with fast implementation when possible: only INT32/INT64 have a narrower no-overflow implementation to
+	// swap in.
 	const bool has_no_overflow_variant = internal_type == PhysicalType::INT32 || internal_type == PhysicalType::INT64;
 	const bool sum_fits_in_int64 =
 	    wide_negative > NumericLimits<int64_t>::Minimum() && wide_positive < NumericLimits<int64_t>::Maximum();
