@@ -46,7 +46,7 @@ EXPLAIN SELECT 1 IN (1+1, 2, 3, 4, NULL)
 ----
 
 query I nosort cfold5
-EXPLAIN SELECT NULL
+EXPLAIN SELECT NULL::BOOLEAN
 ----
 
 query I nosort cfold6

@@ -31,6 +31,7 @@ class TProtocol;
 namespace duckdb_parquet {
 class ColumnChunk;
 class ColumnMetaData;
+class FileMetaData;
 class SchemaElement;
 class Statistics;
 } // namespace duckdb_parquet
@@ -47,7 +48,14 @@ struct LogicalType;
 struct ParquetColumnSchema;
 class ResizeableBuffer;
 
+enum class ParquetIntervalBloomFilterVersion : uint8_t { NONE, NORMALIZED_V1 };
+
+enum class ParquetBloomFilterHashStrategy : uint8_t { STANDARD, NORMALIZED_INTERVAL_V1 };
+
 struct ParquetStatisticsUtils {
+	static constexpr const char *INTERVAL_BLOOM_FILTER_KEY = "duckdb.interval_bloom_filter";
+	static constexpr const char *INTERVAL_BLOOM_FILTER_VALUE = "normalized-v1";
+
 	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ParquetColumnSchema &reader,
 	                                                            const vector<ColumnChunk> &columns, bool can_have_nan);
 
@@ -58,10 +66,16 @@ struct ParquetStatisticsUtils {
 
 	static Value ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele, const std::string &stats);
 
-	static bool BloomFilterSupported(const LogicalTypeId &type_id);
+	static ParquetIntervalBloomFilterVersion
+	GetIntervalBloomFilterVersion(const duckdb_parquet::FileMetaData &file_meta_data);
+
+	static optional<ParquetBloomFilterHashStrategy>
+	GetBloomFilterHashStrategy(const ParquetColumnSchema &schema,
+	                           ParquetIntervalBloomFilterVersion interval_bloom_filter_version);
 
 	static bool BloomFilterExcludes(const TableFilter &filter, const duckdb_parquet::ColumnMetaData &column_meta_data,
-	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator);
+	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator,
+	                                const ParquetColumnSchema &schema, ParquetBloomFilterHashStrategy hash_strategy);
 
 	static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type, const ParquetColumnSchema &schema_ele,
 	                                                     const duckdb_parquet::Statistics &parquet_stats);

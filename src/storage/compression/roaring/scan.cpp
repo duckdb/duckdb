@@ -213,6 +213,10 @@ RoaringScanState::RoaringScanState(ColumnSegment &segment) : segment(segment) {
 	if (segment_count % ROARING_CONTAINER_SIZE != 0) {
 		container_count++;
 	}
+	auto available_metadata_space = segment_size - metadata_offset;
+	if (container_count > available_metadata_space) {
+		throw IOException("Corrupted Roaring segment: container count exceeds available metadata space");
+	}
 	metadata_collection.Deserialize(metadata_ptr, container_count);
 	ContainerMetadataCollectionScanner scanner(metadata_collection);
 	data_start_position.reserve(container_count);

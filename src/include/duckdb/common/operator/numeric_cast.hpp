@@ -76,11 +76,14 @@ bool TryCastWithOverflowCheckFloat(SRC value, T &result, SRC min, SRC max) {
 	if (!Value::IsFinite<SRC>(value)) {
 		return false;
 	}
-	if (!(value >= min && value < max)) {
+	// PG FLOAT => INT casts use statistical rounding, and it is the ROUNDED value that has to fit the
+	// destination: 127.6 rounds to 128, which no TINYINT can hold, while -128.4 rounds to -128, which
+	// it can. Range checking before rounding gets both of those wrong.
+	auto rounded = std::nearbyint(value);
+	if (!(rounded >= min && rounded < max)) {
 		return false;
 	}
-	// PG FLOAT => INT casts use statistical rounding.
-	result = static_cast<T>(std::nearbyint(value));
+	result = static_cast<T>(rounded);
 	return true;
 }
 

@@ -23,7 +23,8 @@ public:
 public:
 	string ToString() const;
 	bool Empty() const;
-	static bool IsSubset(JoinRelationSet &super, JoinRelationSet &sub);
+	static bool IsSubset(const JoinRelationSet &super, const JoinRelationSet &sub);
+	static bool Intersects(const JoinRelationSet &left, const JoinRelationSet &right);
 
 public:
 	unsafe_unique_array<RelationIndex> relations;

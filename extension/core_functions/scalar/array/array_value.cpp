@@ -63,6 +63,14 @@ unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
 		throw OutOfRangeException("Array size exceeds maximum allowed size");
 	}
 
+	// Cast all arguments to the common child type so that execution and statistics see matching types.
+	auto &function_args = bound_function.GetArguments();
+	function_args.clear();
+	function_args.reserve(arguments.size());
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		function_args.push_back(child_type);
+	}
+
 	bound_function.SetReturnType(LogicalType::ARRAY(child_type, arguments.size()));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }

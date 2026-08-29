@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 2.8.12...3.29)
 
 project(TpcdsExtension)
 
+# Before any subdirectory or target, which would otherwise inherit the
+# directory-wide definition
+set_extension_version_sources(tpcds tpcds_extension.cpp)
+
 include_directories(include)
 include_directories(dsdgen/include)
 add_subdirectory(dsdgen)

@@ -54,6 +54,11 @@ shared_ptr<CSVBufferHandle> CSVSequentialBufferManager::GetBuffer(const idx_t po
 			done = true;
 		}
 	}
+	UnpinPrevious(pos);
+	return cached_buffers[pos]->Pin(*file_handle, has_seeked);
+}
+
+void CSVSequentialBufferManager::UnpinPrevious(const idx_t pos) {
 	if (pos != 0 && (sniffing || file_handle->CanSeek() || per_file_single_threaded)) {
 		// We don't need to unpin the buffers here if we are not sniffing since we
 		// control it per-thread on the scan
@@ -61,7 +66,27 @@ shared_ptr<CSVBufferHandle> CSVSequentialBufferManager::GetBuffer(const idx_t po
 			cached_buffers[pos - 1]->Unpin();
 		}
 	}
-	return cached_buffers[pos]->Pin(*file_handle, has_seeked);
+}
+
+CSVBufferResidency CSVSequentialBufferManager::GetBufferResidency(const idx_t pos,
+                                                                  shared_ptr<CSVBufferHandle> &handle) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (pos < cached_buffers.size()) {
+		D_ASSERT(cached_buffers[pos]);
+		if (!cached_buffers[pos]->IsInMemory()) {
+			return CSVBufferResidency::NEEDS_LOAD;
+		}
+		UnpinPrevious(pos);
+		handle = cached_buffers[pos]->Pin(*file_handle, has_seeked);
+		return CSVBufferResidency::IN_MEMORY;
+	}
+	if (!cached_buffers.empty() && cached_buffers.back() && cached_buffers.back()->last_buffer) {
+		done = true;
+	}
+	if (done) {
+		return CSVBufferResidency::END_OF_FILE;
+	}
+	return CSVBufferResidency::NEEDS_LOAD;
 }
 
 void CSVSequentialBufferManager::ResetBuffer(const idx_t buffer_idx) {

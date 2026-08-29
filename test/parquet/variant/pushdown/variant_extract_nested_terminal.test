@@ -1,0 +1,165 @@
+# name: test/parquet/variant/pushdown/variant_extract_nested_terminal.test
+# group: [pushdown]
+
+require parquet
+
+statement ok
+COPY (
+	FROM (VALUES
+		({'obj': {'a': 1::INTEGER, 'b': 'one'}, 'arr': [1::INTEGER, 2], 'tag': 'one'}::VARIANT),
+		({'obj': {'a': 2::INTEGER}, 'arr': [3::INTEGER], 'tag': 'two'}::VARIANT),
+		({'obj': NULL, 'arr': [], 'tag': 'nullobj'}::VARIANT),
+		({'arr': [5::INTEGER, 6], 'tag': 'missingobj'}::VARIANT),
+		(NULL::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_nested_terminal.parquet' (
+	SHREDDING {'v': 'STRUCT(obj STRUCT(a INTEGER), arr INTEGER[])'}
+);
+
+statement ok
+COPY (
+	FROM (VALUES
+		({'obj': {'a': 1::INTEGER}, 'arr': [1::INTEGER, 2]}::VARIANT),
+		({'obj': {'a': 2::INTEGER}, 'arr': [3::INTEGER]}::VARIANT),
+		({'obj': {'a': 5::INTEGER}, 'arr': [5::INTEGER, 6]}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_nested_terminal_fully.parquet' (
+	SHREDDING {'v': 'STRUCT(obj STRUCT(a INTEGER), arr INTEGER[])'}
+);
+
+statement ok
+COPY (
+	FROM (VALUES
+		({'obj': {'a': 1::INTEGER, 'b': 'one'}, 'tag': 'both'}::VARIANT),
+		({'obj': {'a': 2::INTEGER}, 'tag': 'only_a'}::VARIANT),
+		({'obj': {'b': 'only_b'}, 'tag': 'only_b'}::VARIANT),
+		({'obj': {}, 'tag': 'empty'}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_nested_terminal_missing_fields.parquet' (
+	SHREDDING {'v': 'STRUCT(obj STRUCT(a INTEGER, b VARCHAR), tag VARCHAR)'}
+);
+
+query IIII
+SELECT
+	count(*) FILTER (WHERE variant_typeof(v.obj) LIKE 'OBJECT%'),
+	count(*) FILTER (WHERE v.obj.a = 2),
+	count(*) FILTER (WHERE variant_typeof(v.arr) LIKE 'ARRAY%'),
+	count(*) FILTER (WHERE v.arr::VARCHAR = '[1, 2]')
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal.parquet'
+----
+2	1	4	1
+
+query TTT nosort
+SELECT variant_typeof(v.obj), variant_typeof(v.arr), v.arr::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal.parquet'
+ORDER BY v.tag::VARCHAR NULLS LAST
+----
+VARIANT_NULL	ARRAY(2)	[5, 6]
+VARIANT_NULL	ARRAY(0)	[]
+OBJECT(a, b)	ARRAY(2)	[1, 2]
+OBJECT(a)	ARRAY(1)	[3]
+VARIANT_NULL	VARIANT_NULL	NULL
+
+query TT nosort
+SELECT v.obj::VARCHAR, v.arr::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal.parquet'
+WHERE variant_typeof(v.obj) LIKE 'OBJECT%'
+ORDER BY v.obj.a::INTEGER
+----
+{'a': 1, 'b': one}	[1, 2]
+{'a': 2}	[3]
+
+query TT
+SELECT v.obj::VARCHAR, v.arr::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal.parquet'
+WHERE v.arr::VARCHAR = '[3]'
+----
+{'a': 2}	[3]
+
+query TT nosort
+SELECT variant_typeof(v.obj), v.obj::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal_missing_fields.parquet'
+ORDER BY v.tag::VARCHAR
+----
+OBJECT(a, b)	{'a': 1, 'b': one}
+OBJECT()	{}
+OBJECT(a)	{'a': 2}
+OBJECT(b)	{'b': only_b}
+
+query T
+SELECT v.obj::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal_missing_fields.parquet'
+WHERE v.obj::VARCHAR = '{''b'': only_b}'
+----
+{'b': only_b}
+
+query IIII
+SELECT
+	count(*) FILTER (WHERE variant_typeof(v.obj) LIKE 'OBJECT%'),
+	count(*) FILTER (WHERE v.obj.a = 2),
+	count(*) FILTER (WHERE variant_typeof(v.arr) LIKE 'ARRAY%'),
+	count(*) FILTER (WHERE v.arr::VARCHAR = '[1, 2]')
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal_fully.parquet'
+----
+3	1	3	1
+
+query TTT nosort
+SELECT variant_typeof(v.obj), variant_typeof(v.arr), v.arr::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal_fully.parquet'
+ORDER BY v.obj.a::INTEGER
+----
+OBJECT(a)	ARRAY(2)	[1, 2]
+OBJECT(a)	ARRAY(1)	[3]
+OBJECT(a)	ARRAY(2)	[5, 6]
+
+query TT nosort
+SELECT v.obj::VARCHAR, v.arr::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal_fully.parquet'
+ORDER BY v.obj.a::INTEGER
+----
+{'a': 1}	[1, 2]
+{'a': 2}	[3]
+{'a': 5}	[5, 6]
+
+query TT
+SELECT v.obj::VARCHAR, v.arr::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal_fully.parquet'
+WHERE v.obj::VARCHAR = '{''a'': 2}'
+----
+{'a': 2}	[3]
+
+query II
+SELECT v.obj.a::INTEGER, v.arr::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal.parquet'
+WHERE v.obj.a = 2
+----
+2	[3]
+
+query II
+SELECT v.obj.a::INTEGER, v.arr::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal_fully.parquet'
+WHERE v.obj.a = 2
+----
+2	[3]
+
+statement ok
+COPY (
+	FROM (
+		VALUES
+		({'arr': [1::INTEGER,2,3], 'tag': 'a'}::VARIANT),
+		({'arr': [4::INTEGER,5,6], 'tag': 'b'}::VARIANT),
+		({'arr': [7::INTEGER,8,9], 'tag': 'c'}::VARIANT)
+	) t(v))
+TO '{TEST_DIR}/variant_pushdown_array_extract.parquet' (
+	SHREDDING {
+		'v': 'STRUCT(arr INTEGER[], tag VARCHAR)'
+	}
+);
+
+query I
+SELECT
+	v.arr::INTEGER[3]
+FROM '{TEST_DIR}/variant_pushdown_array_extract.parquet'
+WHERE v.tag = 'b';
+----
+[4, 5, 6]

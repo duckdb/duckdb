@@ -301,3 +301,34 @@ SELECT s FROM log_alias_shadow;
 ----
 local
 
+# COPY FROM exposes all inserted rows to the trigger body
+statement ok
+CREATE TABLE t_copy_source (i INTEGER);
+
+statement ok
+INSERT INTO t_copy_source VALUES (1), (2), (3);
+
+statement ok
+COPY t_copy_source TO '{TEST_DIR}/trigger_copy.csv';
+
+statement ok
+CREATE TABLE t_copy (i INTEGER);
+
+statement ok
+CREATE TABLE t_copy_log (i INTEGER);
+
+statement ok
+CREATE TRIGGER tr_copy AFTER INSERT ON t_copy
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+    INSERT INTO t_copy_log SELECT i FROM new_rows;
+
+statement ok
+COPY t_copy FROM '{TEST_DIR}/trigger_copy.csv';
+
+query I
+SELECT i FROM t_copy_log ORDER BY i;
+----
+1
+2
+3

@@ -1,0 +1,25 @@
+# name: test/sql/peg_parser/parser/comments.test
+# description: Test comment handling in the PEG parser
+# group: [parser]
+
+require autocomplete
+
+query I
+SELECT 1 /* I /* love */ comments */ + 2;
+----
+3
+
+query I
+SELECT 1 -- /* not a block */ rest
++ 2;
+----
+3
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT 1 /* outer /* inner */ rest */ + 2;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT 10 /* a /* b /* c */ b */ a */ + 5;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT 1/**//* second */+2;$TEST_PEG_PARSER$);

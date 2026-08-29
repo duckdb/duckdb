@@ -30,4 +30,36 @@ nan	True	False	False
 statement ok
 DROP TABLE floats
 
+statement ok
+CREATE TABLE no_nan(f {type} NOT NULL)
+
+statement ok
+INSERT INTO no_nan VALUES (-1), (0), (1), ('inf'), ('-inf')
+
+query I nosort isnan_no_nan_stats
+EXPLAIN SELECT isnan(f), f FROM no_nan
+----
+
+query I nosort isnan_no_nan_stats
+EXPLAIN SELECT false, f FROM no_nan
+----
+
+statement ok
+CREATE TABLE no_nan_nullable(f {type})
+
+statement ok
+INSERT INTO no_nan_nullable VALUES (3), (NULL)
+
+query II
+SELECT f, isnan(f) FROM no_nan_nullable ORDER BY f
+----
+NULL	NULL
+3	false
+
+statement ok
+DROP TABLE no_nan
+
+statement ok
+DROP TABLE no_nan_nullable
+
 endloop

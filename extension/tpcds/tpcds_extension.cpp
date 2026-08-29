@@ -47,7 +47,7 @@ static AsyncResult DSDGenYield() {
 }
 
 static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                           vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<DSDGenFunctionData>();
 
 	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
@@ -160,7 +160,7 @@ unique_ptr<GlobalTableFunctionState> TPCDSInit(ClientContext &context, TableFunc
 }
 
 static duckdb::unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, TableFunctionBindInput &input,
-                                                       vector<LogicalType> &return_types, vector<string> &names) {
+                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -194,7 +194,8 @@ static void TPCDSQueryFunction(ClientContext &context, TableFunctionInput &data_
 }
 
 static duckdb::unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
-                                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                                             vector<LogicalType> &return_types,
+                                                             vector<Identifier> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -238,6 +239,9 @@ static void TPCDSQueryAnswerFunction(ClientContext &context, TableFunctionInput 
 }
 
 static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters &parameters) {
+	if (parameters.values[0].IsNull()) {
+		throw InvalidInputException("Cannot use NULL as argument for the TPC-DS query number");
+	}
 	auto index = parameters.values[0].GetValue<int32_t>();
 	return tpcds::DSDGenWrapper::GetQuery(index);
 }

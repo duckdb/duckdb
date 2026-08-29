@@ -259,11 +259,11 @@ string_t StringCast::Operation(dtime_tz_t input, StringHeap &heap) {
 
 	ss %= Interval::SECS_PER_HOUR;
 	const auto mm = ss / Interval::SECS_PER_MINUTE;
-	if (mm) {
+	ss %= Interval::SECS_PER_MINUTE;
+	if (mm || ss) {
 		length += 3;
 	}
 
-	ss %= Interval::SECS_PER_MINUTE;
 	if (ss) {
 		length += 3;
 	}
@@ -283,7 +283,7 @@ string_t StringCast::Operation(dtime_tz_t input, StringHeap &heap) {
 	}
 	pos += hh_length;
 
-	if (mm) {
+	if (mm || ss) {
 		data[pos++] = ':';
 		TimeToStringCast::FormatTwoDigits(data + pos, mm);
 		pos += 2;

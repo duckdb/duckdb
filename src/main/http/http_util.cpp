@@ -38,8 +38,24 @@ HTTPHeaders::HTTPHeaders(DatabaseInstance &db) {
 	headers.insert({"User-Agent", StringUtil::Format("%s %s", db.config.UserAgent(), DuckDB::SourceID())});
 }
 
+HTTPHeaders::~HTTPHeaders() = default;
+
 void HTTPHeaders::Insert(string key, string value) {
 	headers.insert(make_pair(std::move(key), std::move(value)));
+}
+
+void HTTPHeaders::Append(string key, string value) {
+	auto entry = headers.find(key);
+	if (entry == headers.end()) {
+		headers.insert(make_pair(std::move(key), std::move(value)));
+		return;
+	}
+	auto repeated_entry = repeated_headers.find(key);
+	if (repeated_entry == repeated_headers.end()) {
+		repeated_headers.insert(make_pair(std::move(key), header_values_t {entry->second, std::move(value)}));
+	} else {
+		repeated_entry->second.push_back(std::move(value));
+	}
 }
 
 bool HTTPHeaders::HasHeader(const string &key) const {
@@ -54,6 +70,14 @@ string HTTPHeaders::GetHeaderValue(const string &key) const {
 	return entry->second;
 }
 
+HTTPHeaders::header_values_t HTTPHeaders::GetHeaderValues(const string &key) const {
+	auto repeated_entry = repeated_headers.find(key);
+	if (repeated_entry != repeated_headers.end()) {
+		return repeated_entry->second;
+	}
+	return {GetHeaderValue(key)};
+}
+
 #ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
 unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 	auto status_code = HTTPUtil::ToStatusCode(res ? res->status : 0);
@@ -63,7 +87,7 @@ unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 		result->body = response.body;
 		result->reason = response.reason;
 		for (auto &entry : response.headers) {
-			result->headers.Insert(entry.first, entry.second);
+			result->headers.Append(entry.first, entry.second);
 		}
 	} else {
 		result->request_error = to_string(res.error());
@@ -74,6 +98,8 @@ unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 
 HTTPResponse::HTTPResponse(HTTPStatusCode code) : status(code) {
 }
+
+HTTPResponse::~HTTPResponse() = default;
 
 bool HTTPResponse::HasHeader(const string &key) const {
 	return headers.HasHeader(key);
@@ -112,7 +138,7 @@ string HTTPUtil::GetName() const {
 
 bool HTTPResponse::ShouldRetry() const {
 	if (HasRequestError()) {
-		// always retry on request errors
+		// request errors are eligible for retry
 		return true;
 	}
 	switch (status) {
@@ -129,6 +155,14 @@ bool HTTPResponse::ShouldRetry() const {
 	}
 }
 
+bool HTTPUtil::IsIdempotent(RequestType type) {
+	return type != RequestType::POST_REQUEST;
+}
+
+bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &response) {
+	return response.ShouldRetry();
+}
+
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
 	unique_ptr<HTTPClient> client;
 	return SendRequest(request, client);
@@ -142,6 +176,15 @@ BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders 
     : type(type), url(url), headers(MergeHeaders(headers, params)), params(params) {
 	HTTPUtil::DecomposeURL(url, path, proto_host_port);
 }
+
+// Out-of-line destructors: force the symbols to be emitted and exported from the main WASM module so
+// loadable side-module extensions (e.g. the aws/httpfs extensions) can link against them at load time.
+BaseRequest::~BaseRequest() = default;
+GetRequestInfo::~GetRequestInfo() = default;
+PutRequestInfo::~PutRequestInfo() = default;
+HeadRequestInfo::~HeadRequestInfo() = default;
+DeleteRequestInfo::~DeleteRequestInfo() = default;
+PostRequestInfo::~PostRequestInfo() = default;
 
 #ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
 class HTTPLibClient : public HTTPClient {
@@ -221,7 +264,7 @@ private:
 		result->body = response.body;
 		result->reason = response.reason;
 		for (auto &entry : response.headers) {
-			result->headers.Insert(entry.first, entry.second);
+			result->headers.Append(entry.first, entry.second);
 		}
 		return result;
 	}
@@ -327,7 +370,7 @@ struct URISchemeDetectionResult {
 };
 
 bool IsValidSchemeChar(char c) {
-	return std::isalnum(c) || c == '+' || c == '.' || c == '-';
+	return std::isalnum(static_cast<unsigned char>(c)) || c == '+' || c == '.' || c == '-';
 }
 
 //! See https://datatracker.ietf.org/doc/html/rfc3986#section-3.1
@@ -342,7 +385,7 @@ URISchemeDetectionResult DetectURIScheme(const string &uri) {
 		return result;
 	}
 
-	if (!std::isalpha(uri[0])) {
+	if (!std::isalpha(static_cast<unsigned char>(uri[0]))) {
 		//! Scheme names consist of a sequence of characters beginning with a letter
 		result.lower_scheme = "";
 		result.scheme_type = URISchemeType::NONE;
@@ -434,8 +477,8 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 			}
 		}
 
-		// Note: request errors will always be retried
-		bool should_retry = !response || response->ShouldRetry();
+		// Request errors and caught exceptions are eligible for retry without a response status
+		bool should_retry = !response || params.http_util.ShouldRetry(request, *response);
 		if (!should_retry) {
 			auto response_code = static_cast<uint16_t>(response->status);
 			if (response_code >= 200 && response_code < 300) {
@@ -465,7 +508,8 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 0;
 #endif
 		static constexpr uint64_t THROTTLE_MAX_BACKOFF_MS = 10000;
-		const idx_t max_tries = params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
+		const idx_t max_tries =
+		    !HTTPUtil::IsIdempotent(request.type) ? 0 : params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
 		if (tries <= max_tries) {
 			if (tries > 1 || throttled) {
 #ifndef DUCKDB_NO_THREADS

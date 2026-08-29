@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 #include <set>
@@ -55,7 +56,7 @@ TEST_CASE("Test DB config configuration", "[api]") {
 }
 
 TEST_CASE("Test allowed options", "[api]") {
-	case_insensitive_map_t<Value> config_dict;
+	identifier_map_t<Value> config_dict;
 	string option;
 
 	SECTION("allowed_directories") {
@@ -130,6 +131,26 @@ TEST_CASE("Test user_agent", "[api]") {
 		auto res = con.Query("PRAGMA user_agent");
 		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
 	}
+	{
+		DuckDB db(nullptr);
+		HTTPHeaders headers(*db.instance);
+		auto user_agent = headers.GetHeaderValue("User-Agent");
+		REQUIRE(!user_agent.empty());
+		REQUIRE(user_agent.back() != ' ');
+		REQUIRE(user_agent.back() != '\t');
+	}
+}
+
+TEST_CASE("HTTPHeaders preserves repeated field values", "[api]") {
+	HTTPHeaders headers;
+	headers.Insert("Cache-Control", "max-age=600");
+	headers.Append("cache-control", "no-store");
+
+	REQUIRE(headers.GetHeaderValue("CACHE-CONTROL") == "max-age=600");
+	const auto values = headers.GetHeaderValues("Cache-Control");
+	REQUIRE(values.size() == 2);
+	REQUIRE(values[0] == "max-age=600");
+	REQUIRE(values[1] == "no-store");
 }
 
 TEST_CASE("Test secret_directory configuration", "[api]") {

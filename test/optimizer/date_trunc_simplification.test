@@ -422,3 +422,91 @@ query I
 select * from test where date_trunc('quarter', d) >= '2025-04-01';
 ----
 
+#
+# check comparisons with infinity
+#
+
+statement ok
+create table infinity_test(d TIMESTAMP);
+
+statement ok
+insert into infinity_test values ('-infinity'), ('2025-01-01'), ('infinity'), (NULL);
+
+query IIIIII
+select date_trunc('day', d) = TIMESTAMP 'infinity',
+       date_trunc('day', d) != TIMESTAMP 'infinity',
+       date_trunc('day', d) < TIMESTAMP 'infinity',
+       date_trunc('day', d) <= TIMESTAMP 'infinity',
+       date_trunc('day', d) > TIMESTAMP 'infinity',
+       date_trunc('day', d) >= TIMESTAMP 'infinity'
+from infinity_test
+order by d;
+----
+false	true	true	true	false	false
+false	true	true	true	false	false
+true	false	false	true	false	true
+NULL	NULL	NULL	NULL	NULL	NULL
+
+query IIIIII
+select date_trunc('day', d) = TIMESTAMP '-infinity',
+       date_trunc('day', d) != TIMESTAMP '-infinity',
+       date_trunc('day', d) < TIMESTAMP '-infinity',
+       date_trunc('day', d) <= TIMESTAMP '-infinity',
+       date_trunc('day', d) > TIMESTAMP '-infinity',
+       date_trunc('day', d) >= TIMESTAMP '-infinity'
+from infinity_test
+order by d;
+----
+true	false	false	true	false	true
+false	true	false	false	true	true
+false	true	false	false	true	true
+NULL	NULL	NULL	NULL	NULL	NULL
+
+statement ok
+create table infinity_date_test(d DATE);
+
+statement ok
+insert into infinity_date_test values ('-infinity'), ('2025-01-01'), ('infinity'), (NULL);
+
+query IIIIII
+select TIMESTAMP 'infinity' = date_trunc('day', d),
+       TIMESTAMP 'infinity' != date_trunc('day', d),
+       TIMESTAMP 'infinity' < date_trunc('day', d),
+       TIMESTAMP 'infinity' <= date_trunc('day', d),
+       TIMESTAMP 'infinity' > date_trunc('day', d),
+       TIMESTAMP 'infinity' >= date_trunc('day', d)
+from infinity_date_test
+order by d;
+----
+false	true	false	false	true	true
+false	true	false	false	true	true
+true	false	false	true	false	true
+NULL	NULL	NULL	NULL	NULL	NULL
+
+query IIIIII
+select TIMESTAMP '-infinity' = date_trunc('day', d),
+       TIMESTAMP '-infinity' != date_trunc('day', d),
+       TIMESTAMP '-infinity' < date_trunc('day', d),
+       TIMESTAMP '-infinity' <= date_trunc('day', d),
+       TIMESTAMP '-infinity' > date_trunc('day', d),
+       TIMESTAMP '-infinity' >= date_trunc('day', d)
+from infinity_date_test
+order by d;
+----
+true	false	false	true	false	true
+false	true	true	true	false	false
+false	true	true	true	false	false
+NULL	NULL	NULL	NULL	NULL	NULL
+
+query IIII
+select date_trunc('day', d) is not distinct from TIMESTAMP 'infinity',
+       date_trunc('day', d) is distinct from TIMESTAMP 'infinity',
+       TIMESTAMP 'infinity' is not distinct from date_trunc('day', d),
+       TIMESTAMP 'infinity' is distinct from date_trunc('day', d)
+from infinity_test
+order by d;
+----
+false	true	false	true
+false	true	false	true
+true	false	true	false
+false	true	false	true

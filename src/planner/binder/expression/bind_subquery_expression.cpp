@@ -73,11 +73,12 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 	// because row comparison is lexicographic, not element-wise
 	// e.g. (0, 0) < (1, 0) is TRUE (first element comparison wins)
 	// but if we split into separate conditions: 0 < 1 AND 0 < 0, this becomes FALSE
-	// Only equality and not-equal can be safely split into multiple conditions
-	if (comparison_type != ExpressionType::COMPARE_EQUAL && comparison_type != ExpressionType::COMPARE_NOTEQUAL &&
-	    comparison_type != ExpressionType::COMPARE_DISTINCT_FROM &&
+	// Only comparisons whose row semantics are element-wise can be safely split.
+	// Row-valued <> is not element-wise under SQL three-valued logic:
+	// e.g. (1, 2) <> (1, NULL) yields NULL, not FALSE.
+	if (comparison_type != ExpressionType::COMPARE_EQUAL && comparison_type != ExpressionType::COMPARE_DISTINCT_FROM &&
 	    comparison_type != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-		// For ordered comparisons, keep the struct intact
+		// Keep the struct intact for row-valued comparisons with non-element-wise semantics.
 		return;
 	}
 	for (auto &row_child : function.GetChildrenMutable()) {
@@ -138,13 +139,19 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			}
 			expected_columns = child_expressions.size();
 		}
-		// If we have an unexpanded struct (kept intact for ordered comparison),
-		// the subquery might return multiple columns that need to be combined into a struct
-		if (has_unexpanded_struct && expected_columns == 1 && bound_subquery.bound_node.types.size() > 1 &&
-		    TypeIsTuple(child_expressions[0]->GetReturnType())) {
-			// The child is a struct with N elements, and the subquery returns N columns
-			// This is allowed - the subquery columns will be matched against the struct during execution
-			expected_columns = StructType::GetChildCount(child_expressions[0]->GetReturnType());
+		// If we keep a row-valued child intact, we still need to distinguish between:
+		// (1) a subquery that returns a single row/struct value and
+		// (2) a subquery that returns multiple scalar columns that should match the row width.
+		if (has_unexpanded_struct && expected_columns == 1 && TypeIsTuple(child_expressions[0]->GetReturnType())) {
+			const auto struct_child_count = StructType::GetChildCount(child_expressions[0]->GetReturnType());
+			const bool subquery_returns_single_struct =
+			    bound_subquery.bound_node.types.size() == 1 && TypeIsTuple(bound_subquery.bound_node.types[0]);
+			if (!subquery_returns_single_struct) {
+				// The child is a row with N elements, so a scalar/multi-column subquery must expose N columns.
+				// This preserves the historical width mismatch error for cases like:
+				// (a, b) = ALL(SELECT 1)
+				expected_columns = struct_child_count;
+			}
 		}
 		if (bound_subquery.bound_node.types.size() != expected_columns) {
 			throw BinderException(expr, "Subquery returns %zu columns - expected %d",
@@ -169,12 +176,21 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// this means we kept the struct intact for ordered comparison (e.g., (a,b) < ANY(...))
 		if (child_expressions.size() == 1 && bound_node.types.size() > 1 &&
 		    TypeIsTuple(child_expressions[0]->GetReturnType())) {
-			// Keep the struct as-is for proper lexicographic row comparison
-			result->GetChildrenMutable().push_back(std::move(child_expressions[0]));
-			// Store all the subquery types - they will be used to construct the RHS struct during planning
-			for (auto &subquery_type : bound_node.types) {
-				result->ChildTypesMutable().push_back(subquery_type);
-				result->ChildTargetsMutable().push_back(subquery_type);
+			auto &child = child_expressions[0];
+			auto child_type = ExpressionBinder::GetExpressionReturnType(*child);
+			auto subquery_type = LogicalType::TUPLE(bound_node.types);
+			LogicalType compare_type;
+			if (!LogicalType::TryGetMaxLogicalType(context, child_type, subquery_type, compare_type)) {
+				throw BinderException(
+				    expr, "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
+				    child_type.ToString(), subquery_type);
+			}
+			child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
+			result->GetChildrenMutable().push_back(std::move(child));
+			for (idx_t child_idx = 0; child_idx < bound_node.types.size(); child_idx++) {
+				auto &subquery_child_type = bound_node.types[child_idx];
+				result->ChildTypesMutable().push_back(subquery_child_type);
+				result->ChildTargetsMutable().push_back(StructType::GetChildType(compare_type, child_idx));
 			}
 		} else {
 			// Standard case: either no struct or struct was extracted into separate expressions

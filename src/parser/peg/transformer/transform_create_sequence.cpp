@@ -45,6 +45,9 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(
 	for (auto &option : sequence_options) {
 		if (option.first == "increment") {
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
+			if (seq_val_option->value.IsNull()) {
+				throw ParserException("INCREMENT must not be NULL");
+			}
 			info->increment = seq_val_option->value.GetValue<int64_t>();
 			if (info->increment == 0) {
 				throw ParserException("Increment must not be zero");
@@ -68,6 +71,9 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(
 				continue;
 			}
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
+			if (seq_val_option->value.IsNull()) {
+				throw ParserException("MINVALUE must not be NULL");
+			}
 			info->min_value = seq_val_option->value.GetValue<int64_t>();
 			min_value_set = true;
 		} else if (option.first == "maxvalue") {
@@ -75,10 +81,16 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(
 				continue;
 			}
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
+			if (seq_val_option->value.IsNull()) {
+				throw ParserException("MAXVALUE must not be NULL");
+			}
 			info->max_value = seq_val_option->value.GetValue<int64_t>();
 			max_value_set = true;
 		} else if (option.first == "start") {
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
+			if (seq_val_option->value.IsNull()) {
+				throw ParserException("START value must not be NULL");
+			}
 			info->start_value = seq_val_option->value.GetValue<int64_t>();
 			has_start_value = true;
 		} else if (option.first == "cycle") {

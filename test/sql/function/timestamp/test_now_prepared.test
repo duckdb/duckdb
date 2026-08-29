@@ -12,7 +12,7 @@ PREPARE v1 AS INSERT INTO timestamps VALUES(NOW());
 statement ok
 EXECUTE v1;
 
-sleep 1 second
+sleep 1 millisecond
 
 statement ok
 EXECUTE v1
@@ -29,7 +29,7 @@ CREATE TABLE timestamps_default(ts TIMESTAMP DEFAULT NOW());
 statement ok
 INSERT INTO timestamps_default DEFAULT VALUES
 
-sleep 1 second
+sleep 1 millisecond
 
 statement ok
 INSERT INTO timestamps_default DEFAULT VALUES

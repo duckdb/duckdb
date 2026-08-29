@@ -21,7 +21,7 @@ struct SumSetOperation {
 			target.value = source.value;
 			target.is_set = true;
 		} else {
-			target.value += source.value;
+			CombineSumStateValue(target.value, source.value);
 		}
 	}
 	template <class STATE>

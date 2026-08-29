@@ -22,12 +22,12 @@ struct DataTableInfo {
 	friend class DataTable;
 
 public:
-	DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, Identifier schema,
+	DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, vector<Identifier> schema_path,
 	              Identifier table);
 
 	//! Bind unknown indexes throwing an exception if binding fails.
-	//! Only binds the specified index type, or all, if nullptr.
-	void BindIndexes(ClientContext &context, const char *index_type = nullptr);
+	//! Only binds the specified index type, or all if no type is specified.
+	void BindIndexes(ClientContext &context, const optional<string> &index_type = {});
 
 	//! Whether or not the table is temporary
 	bool IsTemporary() const;
@@ -50,9 +50,11 @@ public:
 	}
 	bool AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id);
 	optional_idx CheckpointRowGroupCount(const CheckpointOptions &options) const;
-	void VerifyIndexBuffers();
+	void VerifyIndexBuffers() const;
 
 	Identifier GetSchemaName();
+	//! The full (possibly nested) schema path of the table
+	const vector<Identifier> &GetSchemaPath() const;
 	Identifier GetTableName();
 	void SetTableName(Identifier name);
 
@@ -63,8 +65,8 @@ private:
 	shared_ptr<TableIOManager> table_io_manager;
 	//! Lock for modifying the name
 	mutex name_lock;
-	//! The schema of the table
-	Identifier schema;
+	//! The (possibly nested) schema path of the table, outermost schema first
+	vector<Identifier> schema_path;
 	//! The name of the table
 	Identifier table;
 	//! The physical list of indexes of this table

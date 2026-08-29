@@ -109,13 +109,13 @@ COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (SEP ',', HEADER 0.2);
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (SEP);
 ----
-<REGEX>:.*"(SEP|sep)" requires an argument of type VARCHAR.*
+<REGEX>:.*(SEP|"sep") requires an argument of type VARCHAR.*
 
 # number as delimiter
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (SEP 1);
 ----
-<REGEX>:.*"(SEP|sep)" expected an argument of type VARCHAR.*
+<REGEX>:.*(SEP|"sep") expected an argument of type VARCHAR.*
 
 # multiple format options
 statement error

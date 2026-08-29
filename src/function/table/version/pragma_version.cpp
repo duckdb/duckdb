@@ -15,7 +15,7 @@ struct PragmaVersionData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("library_version");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("source_id");
@@ -99,7 +99,7 @@ struct PragmaPlatformData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> PragmaPlatformBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("platform");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	return nullptr;

@@ -1,0 +1,95 @@
+# name: test/sql/storage/rowid_gaps/indexed_remap_partial_chunk.test
+# description: vacuum remap buffers only the shifted rows of a scan chunk that mixes shifted and unshifted rows
+# group: [rowid_gaps]
+
+# One scan chunk contains both shifted and unshifted rows.
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_remap_partial.db' AS remap_partial (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
+
+statement ok
+SET max_vacuum_tasks = 99;
+
+statement ok
+CREATE TABLE remap_partial.t(i INTEGER, g INTEGER);
+
+statement ok
+INSERT INTO remap_partial.t
+SELECT i, CASE WHEN i IN (99, 2100) THEN 7 ELSE i + 10000 END FROM range(2048) tbl(i);
+
+statement ok
+CHECKPOINT remap_partial;
+
+statement ok
+INSERT INTO remap_partial.t
+SELECT i, CASE WHEN i IN (99, 2100) THEN 7 ELSE i + 10000 END FROM range(2048, 2148) tbl(i);
+
+statement ok
+CHECKPOINT remap_partial;
+
+statement ok
+CREATE UNIQUE INDEX t_i_idx ON remap_partial.t(i);
+
+statement ok
+CREATE INDEX t_g_idx ON remap_partial.t(g);
+
+# Before vacuum
+query II
+SELECT rowid, i FROM remap_partial.t WHERE i IN (0, 99, 200, 2047, 2048, 2147) ORDER BY i;
+----
+0	0
+99	99
+200	200
+2047	2047
+2048	2048
+2147	2147
+
+query II
+SELECT rowid, i FROM remap_partial.t WHERE g = 7 ORDER BY i;
+----
+99	99
+2100	2100
+
+statement ok
+DELETE FROM remap_partial.t WHERE i >= 100 AND i < 200;
+
+statement ok
+FORCE CHECKPOINT remap_partial;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('remap_partial.t');
+----
+1
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM remap_partial.t;
+----
+0	2047	2048
+
+# Rows after the deleted range shift by 100.
+query II
+SELECT rowid, i FROM remap_partial.t WHERE i IN (0, 99, 200, 2047, 2048, 2147) ORDER BY i;
+----
+0	0
+99	99
+100	200
+1947	2047
+1948	2048
+2047	2147
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM remap_partial.t WHERE i = 200;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# Duplicate key with one unshifted and one shifted row.
+query II
+SELECT rowid, i FROM remap_partial.t WHERE g = 7 ORDER BY i;
+----
+99	99
+2000	2100
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM remap_partial.t WHERE g = 7;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*

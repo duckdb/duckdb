@@ -16,14 +16,16 @@ void RowOperations::InitializeStates(TupleDataLayout &layout, Vector &addresses,
 	auto aggr_idx = layout.ColumnCount();
 
 	for (const auto &aggr : layout.GetAggregates()) {
+		AggregateStateInput state_input(aggr.function, aggr.GetFunctionData());
 		if (sel.IsSet()) {
 			for (idx_t i = 0; i < count; ++i) {
-				aggr.function.GetStateInitCallback()(aggr.function,
-				                                     pointers[sel.get_index_unsafe(i)] + offsets[aggr_idx]);
+				data_ptr_t state_ptr = pointers[sel.get_index_unsafe(i)] + offsets[aggr_idx];
+				aggr.function.GetStateInitCallback()(state_input, &state_ptr, 1);
 			}
 		} else {
 			for (idx_t i = 0; i < count; ++i) {
-				aggr.function.GetStateInitCallback()(aggr.function, pointers[i] + offsets[aggr_idx]);
+				data_ptr_t state_ptr = pointers[i] + offsets[aggr_idx];
+				aggr.function.GetStateInitCallback()(state_input, &state_ptr, 1);
 			}
 		}
 		++aggr_idx;

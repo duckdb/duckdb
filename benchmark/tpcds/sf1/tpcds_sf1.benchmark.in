@@ -11,3 +11,5 @@ subgroup sf${sf}
 run extension/tpcds/dsdgen/queries/${QUERY_NUMBER_PADDED}.sql
 
 result extension/tpcds/dsdgen/answers/sf1/${QUERY_NUMBER_PADDED}.csv sf=1
+
+result extension/tpcds/dsdgen/answers/sf10/${QUERY_NUMBER_PADDED}.csv sf=10

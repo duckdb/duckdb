@@ -1,0 +1,31 @@
+# name: test/sql/alter/alter_type/alter_type_failed_cast_keeps_table_usable.test
+# description: a rewrite that fails must leave the table usable, not marked altered
+# group: [alter_type]
+
+statement ok
+CREATE TABLE t(v VARCHAR)
+
+statement ok
+INSERT INTO t VALUES ('not a number')
+
+# the rewrite fails on the cast
+statement error
+ALTER TABLE t ALTER COLUMN v SET DATA TYPE INTEGER
+----
+
+# the table must still be usable: the failed alter must not leave it marked altered
+statement ok
+INSERT INTO t VALUES ('still works')
+
+query I
+SELECT count(*) FROM t
+----
+2
+
+statement ok
+UPDATE t SET v = 'updated'
+
+query I
+SELECT count(*) FROM t WHERE v = 'updated'
+----
+2

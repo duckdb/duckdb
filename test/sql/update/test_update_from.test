@@ -100,23 +100,24 @@ SELECT * FROM test
 ----
 1
 
-# test with multiple updates per row (which is undefined),
-# but in this case the last value in the table will win
-# FIXME:
-mode skip instable
-
+# multiple source rows match the single target row. UPDATE ... FROM now updates each row at most once
+# (one arbitrary match wins) rather than the previous undefined last-write-wins.
 statement ok
 INSERT INTO src VALUES (7)
 
 statement ok
 UPDATE test SET a=s.a FROM src s
 
+# exactly one row remains, updated to one of the matching source values
 query I
-SELECT * FROM test
+SELECT count(*) FROM test
 ----
-7
+1
 
-mode unskip
+query I
+SELECT a IN (2, 7) FROM test
+----
+true
 
 # test described in issue 1035
 

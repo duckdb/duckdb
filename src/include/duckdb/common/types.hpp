@@ -263,7 +263,7 @@ struct ExtensionTypeInfo;
 struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
-	DUCKDB_API LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info);
+	DUCKDB_API LogicalType(LogicalTypeId id, shared_ptr<const ExtraTypeInfo> type_info);
 	DUCKDB_API LogicalType(const LogicalType &other);
 	DUCKDB_API LogicalType(LogicalType &&other) noexcept;
 
@@ -275,7 +275,7 @@ struct LogicalType {
 	inline PhysicalType InternalType() const {
 		return physical_type_;
 	}
-	inline const optional_ptr<ExtraTypeInfo> AuxInfo() const {
+	inline optional_ptr<const ExtraTypeInfo> AuxInfo() const {
 		return type_info_.get();
 	}
 	inline bool IsNested() const {
@@ -298,18 +298,11 @@ struct LogicalType {
 		return id_ == LogicalTypeId::UNBOUND;
 	}
 
-	inline shared_ptr<ExtraTypeInfo> GetAuxInfoShrPtr() const {
-		return type_info_;
-	}
-
 	//! Copies the logical type, making a new ExtraTypeInfo
 	LogicalType Copy() const;
 	//! DeepCopy() will make a unique copy of any nested ExtraTypeInfo as well
 	LogicalType DeepCopy() const;
 
-	inline void CopyAuxInfo(const LogicalType &other) {
-		type_info_ = other.type_info_;
-	}
 	bool EqualTypeInfo(const LogicalType &rhs) const;
 
 	// copy assignment
@@ -353,14 +346,15 @@ struct LogicalType {
 	DUCKDB_API static bool IsNumeric(LogicalTypeId type);
 	DUCKDB_API bool IsTemporal() const;
 	DUCKDB_API hash_t Hash() const;
-	DUCKDB_API void SetAlias(string alias);
+	//! Returns a copy of this type with "alias" as its alias - never modifies types that share our type info
+	DUCKDB_API LogicalType WithAlias(string alias) const;
 	DUCKDB_API bool HasAlias() const;
 	DUCKDB_API string GetAlias() const;
 
 	DUCKDB_API bool HasExtensionInfo() const;
 	DUCKDB_API optional_ptr<const ExtensionTypeInfo> GetExtensionInfo() const;
-	DUCKDB_API optional_ptr<ExtensionTypeInfo> GetExtensionInfo();
-	DUCKDB_API void SetExtensionInfo(unique_ptr<ExtensionTypeInfo> info);
+	//! Returns a copy of this type with "info" as its extension info - never modifies types that share our type info
+	DUCKDB_API LogicalType WithExtensionInfo(unique_ptr<ExtensionTypeInfo> info) const;
 
 	//! Returns the maximum logical type when combining the two types - or throws an exception if combining is not
 	//! possible
@@ -400,9 +394,9 @@ struct LogicalType {
 	bool SupportsRegularUpdate() const;
 
 private:
-	LogicalTypeId id_;                    // NOLINT: allow this naming for legacy reasons
-	PhysicalType physical_type_;          // NOLINT: allow this naming for legacy reasons
-	shared_ptr<ExtraTypeInfo> type_info_; // NOLINT: allow this naming for legacy reasons
+	LogicalTypeId id_;                          // NOLINT: allow this naming for legacy reasons
+	PhysicalType physical_type_;                // NOLINT: allow this naming for legacy reasons
+	shared_ptr<const ExtraTypeInfo> type_info_; // NOLINT: allow this naming for legacy reasons
 
 private:
 	PhysicalType GetInternalType();

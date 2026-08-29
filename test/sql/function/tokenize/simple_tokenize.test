@@ -32,14 +32,14 @@ query III
 select start, token_type, word from sql_tokenize($TEST_TOKENIZER$select $$dollar$$;$TEST_TOKENIZER$);
 ----
 0	KEYWORD	select
-7	STRING_LITERAL	'dollar'
+7	STRING_LITERAL	$$dollar$$
 17	TERMINATOR	;
 
 query III
 select start, token_type, word from sql_tokenize($$select $tag$val$ue$tag$;$$);
 ----
 0	KEYWORD	select
-7	STRING_LITERAL	'val$ue'
+7	STRING_LITERAL	$tag$val$ue$tag$
 23	TERMINATOR	;
 
 query III
@@ -73,6 +73,23 @@ select start, token_type, word from sql_tokenize($$select 1; -- this is a commen
 7	NUMBER_LITERAL	1
 8	TERMINATOR	;
 10	COMMENT	-- this is a comment
+
+query III
+select start, token_type, word from sql_tokenize($$SELECT 1 /* I /* love */ comments */ + 2;$$);
+----
+0	KEYWORD	SELECT
+7	NUMBER_LITERAL	1
+9	COMMENT	/* I /* love */ comments */
+37	OPERATOR	+
+39	NUMBER_LITERAL	2
+40	TERMINATOR	;
+
+query III
+select start, token_type, word from sql_tokenize($$SELECT 1 -- /* not a block */ rest$$);
+----
+0	KEYWORD	SELECT
+7	NUMBER_LITERAL	1
+9	COMMENT	-- /* not a block */ rest
 
 query III
 select start, token_type, word from sql_tokenize($$select * fro$$);

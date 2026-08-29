@@ -215,6 +215,9 @@ MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
 MetadataPointer MetadataManager::FromDiskPointerInternal(unique_lock<mutex> &block_lock, MetaBlockPointer pointer) {
 	auto block_id = pointer.GetBlockId();
 	auto index = pointer.GetBlockIndex();
+	if (index >= METADATA_BLOCK_COUNT) {
+		throw IOException("Metadata block index %llu exceeds metadata block count %llu", index, METADATA_BLOCK_COUNT);
+	}
 
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) { // LCOV_EXCL_START
@@ -238,9 +241,14 @@ MetadataPointer MetadataManager::RegisterDiskPointer(MetaBlockPointer pointer) {
 }
 
 BlockPointer MetadataManager::ToBlockPointer(MetaBlockPointer meta_pointer, const idx_t metadata_block_size) {
+	auto index = meta_pointer.GetBlockIndex();
+	if (index >= MetadataManager::METADATA_BLOCK_COUNT) {
+		throw IOException("Metadata block index %llu exceeds metadata block count %llu", index,
+		                  MetadataManager::METADATA_BLOCK_COUNT);
+	}
 	BlockPointer result;
 	result.block_id = meta_pointer.GetBlockId();
-	result.offset = meta_pointer.GetBlockIndex() * NumericCast<uint32_t>(metadata_block_size) + meta_pointer.offset;
+	result.offset = index * NumericCast<uint32_t>(metadata_block_size) + meta_pointer.offset;
 	D_ASSERT(result.offset < metadata_block_size * MetadataManager::METADATA_BLOCK_COUNT);
 	return result;
 }
@@ -251,7 +259,10 @@ MetaBlockPointer MetadataManager::FromBlockPointer(BlockPointer block_pointer, c
 	}
 	idx_t index = block_pointer.offset / metadata_block_size;
 	auto offset = block_pointer.offset % metadata_block_size;
-	D_ASSERT(index < MetadataManager::METADATA_BLOCK_COUNT);
+	if (index >= MetadataManager::METADATA_BLOCK_COUNT) {
+		throw IOException("Metadata block offset %llu exceeds metadata block capacity %llu", block_pointer.offset,
+		                  metadata_block_size * MetadataManager::METADATA_BLOCK_COUNT);
+	}
 	D_ASSERT(offset < metadata_block_size);
 	MetaBlockPointer result;
 	result.block_pointer = idx_t(block_pointer.block_id) | index << 56ULL;

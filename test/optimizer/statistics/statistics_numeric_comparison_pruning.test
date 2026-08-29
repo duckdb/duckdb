@@ -1,0 +1,29 @@
+# name: test/optimizer/statistics/statistics_numeric_comparison_pruning.test
+# description: Row-group pruning for numeric inequality comparisons
+# group: [statistics]
+
+statement ok
+ATTACH '{TEST_DIR}/numeric_comparison.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+foreach type <numeric> decimal(4,1) decimal(9,1) decimal(18,1) decimal(38,1)
+
+statement ok
+CREATE TABLE db.numeric_values AS
+SELECT (CASE range // 2048 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 2 END)::{type} AS a,
+       (CASE range // 2048 WHEN 0 THEN 1 WHEN 1 THEN 2 ELSE 2 END)::{type} AS b
+FROM range(6144);
+
+query II
+EXPLAIN ANALYZE SELECT sum(a) FROM db.numeric_values WHERE a != b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM db.numeric_values WHERE a != b;
+----
+2048
+
+statement ok
+DROP TABLE db.numeric_values;
+
+endloop

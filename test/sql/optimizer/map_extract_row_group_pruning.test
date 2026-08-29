@@ -1,0 +1,29 @@
+# name: test/sql/optimizer/map_extract_row_group_pruning.test
+# description: Map value extracts use value-field statistics for row-group pruning
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/map_extract_row_group_pruning.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+statement ok
+CREATE TABLE maps AS
+SELECT MAP {'k': i} AS m
+FROM range(6144) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM maps WHERE m['k'] BETWEEN 2900 AND 3100;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM maps WHERE m['k'] BETWEEN 2900 AND 3100;
+----
+201
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM maps WHERE map_extract_value(m, 'k') BETWEEN 2900 AND 3100;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*

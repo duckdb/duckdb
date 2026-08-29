@@ -1,0 +1,7 @@
+# name: benchmark/recursive_cte/aoc2022_day23.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/aoc2022/recursive_cte_aoc2022.benchmark.in
+DAY=day23
+BENCHMARK_NAME=AoC 2022 day23 unstable diffusion
+DESCRIPTION=Run recursive frontier updates with correlated neighborhood aggregation

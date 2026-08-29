@@ -20,7 +20,7 @@ struct AvgState {
 
 	void Combine(const AvgState<T> &other) {
 		this->count += other.count;
-		this->value += other.value;
+		CombineSumStateValue(this->value, other.value);
 	}
 };
 

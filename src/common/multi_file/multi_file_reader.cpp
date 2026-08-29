@@ -133,49 +133,48 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return CreateFileList(context, paths, glob_input);
 }
 
-bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileOptions &options,
+bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
                                   ClientContext &context) {
-	auto loption = StringUtil::Lower(key);
-	if (loption == "filename") {
+	if (key == "filename") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type() == LogicalType::VARCHAR) {
 			// If not, we interpret it as the name of the column containing the filename
 			options.filename = true;
 			options.filename_column = StringValue::Get(val);
 		} else {
-			Value boolean_value;
 			string error_message;
-			if (val.DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
+			auto boolean_value = val.DefaultTryCastAs(LogicalType::BOOLEAN, &error_message);
+			if (boolean_value) {
 				// If the argument can be cast to boolean, we just interpret it as a boolean
-				options.filename = BooleanValue::Get(boolean_value);
+				options.filename = BooleanValue::Get(*boolean_value);
 			}
 		}
-	} else if (loption == "hive_partitioning") {
+	} else if (key == "hive_partitioning") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
-	} else if (loption == "union_by_name") {
+	} else if (key == "union_by_name") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.union_by_name = BooleanValue::Get(val);
-	} else if (loption == "allow_empty") {
+	} else if (key == "allow_empty") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.allow_empty = BooleanValue::Get(val);
-	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
+	} else if (key == "hive_types_autocast" || key == "hive_type_autocast") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_types_autocast = BooleanValue::Get(val);
-	} else if (loption == "hive_types" || loption == "hive_type") {
+	} else if (key == "hive_types" || key == "hive_type") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(
@@ -187,7 +186,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		for (idx_t i = 0; i < children.size(); i++) {
 			const Value &child = children[i];
 			if (child.type().id() != LogicalType::VARCHAR) {
-				throw InvalidInputException("hive_types: '%s' must be a VARCHAR, instead: '%s' was provided",
+				throw InvalidInputException("hive_types: %s must be a VARCHAR, instead: '%s' was provided",
 				                            StructType::GetChildName(val.type(), i), child.type().ToString());
 			}
 			// for every child of the struct, get the logical type
@@ -209,13 +208,21 @@ unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &
 	return files.ComplexFilterPushdown(context, options, info, filters);
 }
 
-unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(ClientContext &context, const MultiFileList &files,
-                                                                 const MultiFileOptions &options,
-                                                                 const vector<Identifier> &names,
-                                                                 const vector<LogicalType> &types,
-                                                                 const vector<column_t> &column_ids,
-                                                                 TableFilterSet &filters) {
-	return files.DynamicFilterPushdown(context, options, names, types, column_ids, filters);
+MultiFileDynamicPushdownInfo::MultiFileDynamicPushdownInfo(ClientContext &context, const MultiFileOptions &options,
+                                                           const vector<Identifier> &column_names,
+                                                           const vector<LogicalType> &column_types,
+                                                           const vector<ColumnIndex> &column_indexes,
+                                                           TableFilterSet &filters)
+    : context(context), options(options), column_names(column_names), column_types(column_types),
+      column_indexes(column_indexes), filters(filters) {
+	for (auto &column_id : column_indexes) {
+		column_ids.push_back(column_id.GetPrimaryIndex());
+	}
+}
+
+unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(const MultiFileList &files,
+                                                                 MultiFileDynamicPushdownInfo &pushdown_info) {
+	return files.DynamicFilterPushdown(pushdown_info);
 }
 
 bool MultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
@@ -275,8 +282,14 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 			auto lookup = std::find_if(names.begin(), names.end(),
 			                           [&](const Identifier &col_name) { return col_name == part.first; });
 			if (lookup != names.end()) {
-				// hive partitioning column also exists in file - override
 				auto idx = NumericCast<idx_t>(lookup - names.begin());
+				if (bind_data.filename_idx == idx) {
+					throw BinderException(
+					    "Option filename adds column \"%s\", but a hive partition column with this "
+					    "name also exists. Try setting a different name: filename='<filename column name>'",
+					    options.filename_column);
+				}
+				// hive partitioning column also exists in file - override
 				hive_partitioning_index = idx;
 				return_types[idx] = options.GetHiveLogicalType(part.first);
 			} else {
@@ -374,7 +387,8 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
 				// push a NULL value of the specified type
-				reader_data.constant_map.Add(global_idx, Value(type));
+				auto &constant_type = col_id.HasType() ? col_id.GetScanType() : type;
+				reader_data.constant_map.Add(global_idx, Value(constant_type));
 				continue;
 			}
 		}
@@ -415,11 +429,11 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 		// not a cast
 		return string();
 	}
-	auto &cast_expr = expr.Cast<BoundCastExpression>();
-	if (cast_expr.Child().GetExpressionType() != ExpressionType::BOUND_REF) {
+	auto &cast_expr = expr.Cast<BoundFunctionExpression>();
+	if (BoundCastExpression::Child(cast_expr).GetExpressionType() != ExpressionType::BOUND_REF) {
 		return string();
 	}
-	auto &ref = cast_expr.Child().Cast<BoundReferenceExpression>();
+	auto &ref = BoundCastExpression::Child(cast_expr).Cast<BoundReferenceExpression>();
 	auto &source_type = ref.GetReturnType();
 	auto &target_type = cast_expr.GetReturnType();
 	auto &columns = reader.GetColumns();
@@ -436,7 +450,7 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 			target_column = "\"" + bind_data.table_columns[expr_idx] + "\" ";
 		}
 		extended_error = StringUtil::Format(
-		    "In file \"%s\" the column \"%s\" has type %s, but we are trying to load it into column %swith type "
+		    "In file \"%s\" the column %s has type %s, but we are trying to load it into column %swith type "
 		    "%s.\nThis means the %s schema does not match the schema of the table.\nPossible solutions:\n* Insert by "
 		    "name instead of by position using \"INSERT INTO tbl BY NAME SELECT * FROM %s(...)\"\n* Manually specify "
 		    "which columns to insert using \"INSERT INTO tbl SELECT ... FROM %s(...)\"",
@@ -445,7 +459,7 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 	} else {
 		// read_parquet() with multiple files
 		extended_error = StringUtil::Format(
-		    "In file \"%s\" the column \"%s\" has type %s, but we are trying to read it as type %s."
+		    "In file \"%s\" the column %s has type %s, but we are trying to read it as type %s."
 		    "\nThis can happen when reading multiple %s files. The schema information is taken from "
 		    "the first %s file by default. Possible solutions:\n"
 		    "* Enable the union_by_name=True option to combine the schema of all %s files "
@@ -453,8 +467,8 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 		    "* Use a COPY statement to automatically derive types from an existing table.",
 		    reader.GetFileName(), local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
 	}
-	first_message = StringUtil::Format("failed to cast column \"%s\" from type %s to %s: ", local_col.name, source_type,
-	                                   target_type);
+	first_message =
+	    StringUtil::Format("failed to cast column %s from type %s to %s: ", local_col.name, source_type, target_type);
 	return extended_error;
 }
 
@@ -775,7 +789,7 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 			LogicalType detected_type = LogicalType::VARCHAR;
 			Value value(part.second);
 			for (auto &candidate : candidates) {
-				const bool success = value.TryCastAs(context, candidate, true);
+				const bool success = value.TryCastAs(context, candidate, nullptr, true).has_value();
 				if (success) {
 					detected_type = candidate;
 					break;

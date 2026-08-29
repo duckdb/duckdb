@@ -1,0 +1,239 @@
+# name: test/sql/prepared/prepared_stale_statistics.test
+# description: Prepared statements must not reuse plan-time table statistics after data changes
+# group: [prepared]
+
+statement ok
+PRAGMA threads=1;
+
+statement ok
+CREATE TABLE filter_t(i INTEGER);
+
+statement ok
+INSERT INTO filter_t SELECT range FROM range(100);
+
+statement ok
+PREPARE stale_filter AS SELECT count(*) FROM filter_t WHERE i = 200;
+
+query I
+EXECUTE stale_filter;
+----
+0
+
+statement ok
+INSERT INTO filter_t VALUES (200);
+
+query I
+EXECUTE stale_filter;
+----
+1
+
+query I
+SELECT count(*) FROM filter_t WHERE i = 200;
+----
+1
+
+# Transaction-local changes and rollbacks must use the current transaction snapshot.
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO filter_t VALUES (200);
+
+query I
+EXECUTE stale_filter;
+----
+2
+
+statement ok
+ROLLBACK;
+
+query I
+EXECUTE stale_filter;
+----
+1
+
+# The same dependency can be nested below a materialization boundary.
+statement ok
+PREPARE stale_cte AS
+WITH filtered AS MATERIALIZED (SELECT * FROM filter_t WHERE i = 201)
+SELECT count(*) FROM filtered;
+
+query I
+EXECUTE stale_cte;
+----
+0
+
+statement ok
+INSERT INTO filter_t VALUES (201);
+
+query I
+EXECUTE stale_cte;
+----
+1
+
+# Join statistics must not become static probe filters in a reusable plan.
+statement ok
+CREATE TABLE probe AS SELECT i::BIGINT AS k FROM range(0, 6144) t(i);
+
+statement ok
+CREATE TABLE build(k BIGINT);
+
+statement ok
+INSERT INTO build VALUES (3000), (5000);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PREPARE stale_join AS
+SELECT count(*)::BIGINT AS c, coalesce(sum(probe.k), 0)::BIGINT AS s
+FROM probe
+JOIN build USING (k);
+
+query II
+EXECUTE stale_join;
+----
+2	8000
+
+statement ok
+DELETE FROM build;
+
+statement ok
+INSERT INTO build VALUES (1), (2);
+
+query II
+EXECUTE stale_join;
+----
+2	3
+
+query II
+SELECT count(*)::BIGINT AS c, coalesce(sum(probe.k), 0)::BIGINT AS s
+FROM probe
+JOIN build USING (k);
+----
+2	3
+
+# Repeated execution must refresh correctly with duplicate and NULL build keys.
+statement ok
+DELETE FROM build;
+
+statement ok
+INSERT INTO build VALUES (1), (1), (2), (NULL);
+
+query II
+EXECUTE stale_join;
+----
+3	4
+
+query II
+SELECT count(*)::BIGINT AS c, coalesce(sum(probe.k), 0)::BIGINT AS s
+FROM probe
+JOIN build USING (k);
+----
+3	4
+
+# The same invariant applies to SEMI joins, where build duplicates do not duplicate probe rows.
+statement ok
+PREPARE stale_semi AS
+SELECT count(*)::BIGINT AS c, coalesce(sum(k), 0)::BIGINT AS s
+FROM probe
+WHERE k IN (SELECT k FROM build);
+
+query II
+EXECUTE stale_semi;
+----
+2	3
+
+statement ok
+DELETE FROM build;
+
+statement ok
+INSERT INTO build VALUES (3000), (3000), (5000), (NULL);
+
+query II
+EXECUTE stale_semi;
+----
+2	8000
+
+query II
+SELECT count(*)::BIGINT AS c, coalesce(sum(k), 0)::BIGINT AS s
+FROM probe
+WHERE k IN (SELECT k FROM build);
+----
+2	8000
+
+# Metadata-only aggregate rewrites must also observe post-prepare changes.
+statement ok
+CREATE TABLE aggregate_t AS SELECT i::INTEGER AS i FROM range(100) t(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PREPARE stale_aggregate AS SELECT min(i), max(i), count(*) FROM aggregate_t;
+
+query III
+EXECUTE stale_aggregate;
+----
+0	99	100
+
+statement ok
+INSERT INTO aggregate_t VALUES (-1), (200);
+
+query III
+EXECUTE stale_aggregate;
+----
+-1	200	102
+
+query III
+SELECT min(i), max(i), count(*) FROM aggregate_t;
+----
+-1	200	102
+
+# COUNT rewrites based on nullability statistics must be refreshed.
+statement ok
+CREATE TABLE count_t(i INTEGER);
+
+statement ok
+INSERT INTO count_t VALUES (1), (2);
+
+statement ok
+PREPARE stale_count AS SELECT count(i), count(*) FROM count_t;
+
+query II
+EXECUTE stale_count;
+----
+2	2
+
+statement ok
+INSERT INTO count_t VALUES (NULL);
+
+query II
+EXECUTE stale_count;
+----
+2	3
+
+# Statistics-pruned filters in modifying statements must also be refreshed.
+statement ok
+CREATE TABLE delete_t(i INTEGER);
+
+statement ok
+PREPARE stale_delete AS DELETE FROM delete_t WHERE i = 42;
+
+query I
+EXECUTE stale_delete;
+----
+0
+
+statement ok
+INSERT INTO delete_t VALUES (42);
+
+query I
+EXECUTE stale_delete;
+----
+1
+
+query I
+SELECT count(*) FROM delete_t;
+----
+0

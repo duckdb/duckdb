@@ -62,6 +62,9 @@ static void ValidateType(const ExternalResourceType &type) {
 	if (!type.resolve_function.empty()) {
 		ValidateFunctionName(type, "resolve_function", type.resolve_function);
 	}
+	if (!type.list_function.empty()) {
+		ValidateFunctionName(type, "list_function", type.list_function);
+	}
 }
 
 void ExternalResourceTypeRegistry::Add(ExternalResourceType type) {

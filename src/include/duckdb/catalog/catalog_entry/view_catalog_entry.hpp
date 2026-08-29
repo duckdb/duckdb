@@ -14,6 +14,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/enums/view_security_type.hpp"
 
 namespace duckdb {
 
@@ -44,6 +45,8 @@ public:
 	string sql;
 	//! The set of aliases associated with the view
 	vector<Identifier> aliases;
+	//! The security type of the view
+	ViewSecurityType security_type = ViewSecurityType::REGULAR_VIEW;
 
 	//! Returns the view column info, if the view is bound. Otherwise returns `nullptr`
 	virtual shared_ptr<ViewColumnInfo> GetColumnInfo() const;

@@ -1,3 +1,4 @@
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -131,6 +132,28 @@ static unique_ptr<FunctionData> ListExtractBind(BindScalarFunctionInput &input) 
 	return nullptr;
 }
 
+//! Extracting from a string throws if the index is outside of the range supported by substring - if the index is a
+//! constant within that range the extract cannot throw
+//! Extracting from a list returns NULL for indexes that are out of range instead
+static unique_ptr<FunctionData> StringExtractBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto index = input.TryGetConstant(1);
+	if (!index) {
+		bound_function.SetFallible();
+		return nullptr;
+	}
+	string error;
+	auto index_value = index->DefaultTryCastAs(LogicalType::BIGINT, &error);
+	if (!index_value) {
+		// the index is a constant that cannot be converted to an integer at all - report that directly
+		throw ConversionException(error);
+	}
+	if (index_value->IsNull() || !SubstringInSupportedRange(BigIntValue::Get(*index_value), 1)) {
+		bound_function.SetFallible();
+	}
+	return nullptr;
+}
+
 static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &list_child_stats = ListStats::GetChildStats(child_stats[0]);
@@ -150,9 +173,9 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 	lfun.GetSignature().GetParameter(0).SetName("list");
 	lfun.GetSignature().GetParameter(1).SetName("index");
 
-	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
+	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction,
+	                    StringExtractBind);
 	lfun.SetFallible();
-	sfun.SetFallible();
 	list_extract_set.AddFunction(lfun);
 	list_extract_set.AddFunction(sfun);
 	return list_extract_set;
@@ -168,7 +191,8 @@ ScalarFunctionSet ArrayExtractFun::GetFunctions() {
 	lfun.GetSignature().GetParameter(0).SetName("array");
 	lfun.GetSignature().GetParameter(1).SetName("index");
 
-	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
+	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction,
+	                    StringExtractBind);
 
 	array_extract_set.AddFunction(lfun);
 	array_extract_set.AddFunction(sfun);

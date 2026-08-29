@@ -93,10 +93,11 @@ select '1999-12-31 16:00:00-08'::timestamptz + interval 2400 hours
 ----
 2000-04-09 17:00:00-07
 
-statement error
+# the instant is representable, and this is what the same arithmetic on a TIMESTAMP gives
+query I
 select 'epoch'::timestamptz + '9223372036854775000 microseconds'::interval
 ----
-Conversion Error: ICU date overflows timestamp range
+294247-01-09 20:00:54.775-08
 
 query I
 select 'epoch'::timestamptz + '9223372036854774999 microseconds'::interval
@@ -108,10 +109,11 @@ select 'epoch'::timestamptz + '-9223372022400001001 microseconds'::interval
 ----
 Conversion Error: ICU date overflows timestamp range
 
-query I
+# one microsecond below the smallest representable instant, which a TIMESTAMP rejects too
+statement error
 select 'epoch'::timestamptz + '-9223372022400001000 microseconds'::interval
 ----
-290309-12-21 (BC) 16:07:02-07:52
+Conversion Error: ICU date overflows timestamp range
 
 # interval + timestamp
 query II
@@ -154,10 +156,11 @@ select interval 2400 hours + '1999-12-31 16:00:00-08'::timestamptz
 ----
 2000-04-09 17:00:00-07
 
-statement error
+# the instant is representable, and this is what the same arithmetic on a TIMESTAMP gives
+query I
 select '9223372036854775000 microseconds'::interval + 'epoch'::timestamptz
 ----
-Conversion Error: ICU date overflows timestamp range
+294247-01-09 20:00:54.775-08
 
 query I
 select '9223372036854774999 microseconds'::interval + 'epoch'::timestamptz
@@ -169,10 +172,11 @@ select '-9223372022400001001 microseconds'::interval + 'epoch'::timestamptz
 ----
 Conversion Error: ICU date overflows timestamp range
 
-query I
+# one microsecond below the smallest representable instant, which a TIMESTAMP rejects too
+statement error
 select  '-9223372022400001000 microseconds'::interval + 'epoch'::timestamptz
 ----
-290309-12-21 (BC) 16:07:02-07:52
+Conversion Error: ICU date overflows timestamp range
 
 # infinity
 query I
@@ -241,10 +245,11 @@ select 'epoch'::timestamptz - '9223372022400001001 microseconds'::interval
 ----
 Conversion Error: ICU date overflows timestamp range
 
-query I
+# one microsecond past the smallest representable instant, which a TIMESTAMP rejects too
+statement error
 select 'epoch'::timestamptz - '9223372022400001000 microseconds'::interval
 ----
-290309-12-21 (BC) 16:07:02-07:52
+Conversion Error: ICU date overflows timestamp range
 
 # infinity
 query I
@@ -318,7 +323,7 @@ WHERE label = 'tsmin'
 00:06:00	290309-12-21 (BC) 16:13:02-07:52
 00:00:01	290309-12-21 (BC) 16:07:03-07:52
 00:00:23	290309-12-21 (BC) 16:07:25-07:52
-00:00:00.001	290309-12-21 (BC) 16:07:02-07:52
+00:00:00.001	290309-12-21 (BC) 16:07:02.001-07:52
 00:00:00.91	290309-12-21 (BC) 16:07:02.91-07:52
 00:00:00.000001	290309-12-21 (BC) 16:07:02.000001-07:52
 00:00:00.000612	290309-12-21 (BC) 16:07:02.000612-07:52
@@ -379,11 +384,12 @@ SELECT ts + (INTERVAL (-118) second) FROM limits WHERE label = 'tsmin';
 ----
 Conversion Error: ICU date overflows timestamp range
 
-# Succeeds because we are below the precision of UDate
-query I
+# a millisecond below the smallest instant, which used to succeed only because a millisecond
+# was below the precision that a double has at that end of the range
+statement error
 SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmin';
 ----
-290309-12-21 (BC) 16:07:02-07:52
+Conversion Error: ICU date overflows timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-150) millisecond) FROM limits WHERE label = 'tsmin';
@@ -410,42 +416,47 @@ SELECT ts + INTERVAL (-485) microsecond FROM limits WHERE label = 'tsmin';
 ----
 Conversion Error: Date out of range in timestamp conversion
 
-# Backward from the maximum
-# UDate loses ms accuracy when close to the upper limit,
-# so these results are off by 1ms
+# Backward from the maximum. These used to be off by a millisecond, because a double loses
+# millisecond accuracy at this end of the range.
 
 query II
 SELECT iv, ts + iv FROM limits, intervals
 WHERE label = 'tsmax'
   AND iv < (INTERVAL (-1) millisecond);
 ----
--1 year	294246-01-09 20:00:54.776806-08
--1 month	294246-12-09 20:00:54.776806-08
--1 year -3 months	294245-10-09 20:00:54.776806-07
--1 day	294247-01-08 20:00:54.776806-08
--40 days	294246-11-30 20:00:54.776806-08
--01:00:00	294247-01-09 19:00:54.776806-08
--14:00:00	294247-01-09 06:00:54.776806-08
--00:01:00	294247-01-09 19:59:54.776806-08
--01:12:00	294247-01-09 18:48:54.776806-08
--00:00:01	294247-01-09 20:00:53.776806-08
--00:01:58	294247-01-09 19:58:56.776806-08
--00:00:00.15	294247-01-09 20:00:54.626806-08
+-1 year	294246-01-09 20:00:54.775806-08
+-1 month	294246-12-09 20:00:54.775806-08
+-1 year -3 months	294245-10-09 20:00:54.775806-07
+-1 day	294247-01-08 20:00:54.775806-08
+-40 days	294246-11-30 20:00:54.775806-08
+-01:00:00	294247-01-09 19:00:54.775806-08
+-14:00:00	294247-01-09 06:00:54.775806-08
+-00:01:00	294247-01-09 19:59:54.775806-08
+-01:12:00	294247-01-09 18:48:54.775806-08
+-00:00:01	294247-01-09 20:00:53.775806-08
+-00:01:58	294247-01-09 19:58:56.775806-08
+-00:00:00.15	294247-01-09 20:00:54.625806-08
 
-statement error
+# subtracting from the maximum stays inside the range; this used to overflow only because
+# a double cannot represent the result at this end of the range
+query I
 SELECT ts + (INTERVAL (-485) microsecond) FROM limits WHERE label = 'tsmax';
 ----
-Conversion Error: ICU date overflows timestamp range
+294247-01-09 20:00:54.775321-08
 
-statement error
+# subtracting from the maximum stays inside the range; this used to overflow only because
+# a double cannot represent the result at this end of the range
+query I
 SELECT ts + (INTERVAL (-1) microsecond) FROM limits WHERE label = 'tsmax';
 ----
-Conversion Error: ICU date overflows timestamp range
+294247-01-09 20:00:54.775805-08
 
-statement error
+# subtracting from the maximum stays inside the range; this used to overflow only because
+# a double cannot represent the result at this end of the range
+query I
 SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmax';
 ----
-Conversion Error: ICU date overflows timestamp range
+294247-01-09 20:00:54.774806-08
 
 # Forward from the maximum
 statement error

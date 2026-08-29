@@ -32,7 +32,7 @@ BoundIndex::BoundIndex(const Identifier &name, const string &index_type, IndexCo
 	}
 }
 
-void BoundIndex::InitializeLock(IndexLock &state) {
+void BoundIndex::InitializeLock(IndexLock &state) const {
 	state.index_lock = unique_lock<mutex>(lock);
 }
 
@@ -137,14 +137,25 @@ void BoundIndex::Vacuum() {
 	Vacuum(state);
 }
 
-idx_t BoundIndex::GetInMemorySize() {
+idx_t BoundIndex::GetInMemorySize() const {
 	IndexLock state;
 	InitializeLock(state);
 	return GetInMemorySize(state);
 }
 
-void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
+void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) const {
 	executor.Execute(input, result);
+}
+
+idx_t BoundIndex::UnboundExpressionCount() const {
+	return unbound_expressions.size();
+}
+
+unique_ptr<Expression> BoundIndex::CopyUnboundExpression(const idx_t index) const {
+	D_ASSERT(index < unbound_expressions.size());
+	auto &expression = unbound_expressions[index];
+	D_ASSERT(expression);
+	return expression->Copy();
 }
 
 unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> root_expr) {
@@ -169,8 +180,12 @@ bool BoundIndex::SupportsDeltaIndexes() const {
 	return false;
 }
 
-unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_type) const {
-	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
+unique_ptr<BoundIndex> BoundIndex::CreateEmptyCopy(IndexConstraintType) const {
+	throw InternalException("BoundIndex::CreateEmptyCopy is not supported for this index type");
+}
+
+ErrorData BoundIndex::MergeCheckpointDelta(IndexDeltaType, BoundIndex &) {
+	throw InternalException("BoundIndex::MergeCheckpointDelta is not supported for this index type");
 }
 
 IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
@@ -247,6 +262,8 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, Bu
 
 			SelectionVector sel(offset_in_chunk, rows_to_process);
 
+			// Buffered chunks are in mapped_column_ids layout (plus a trailing rowid column).
+			D_ASSERT(state.current_chunk.ColumnCount() == mapped_column_ids.size() + 1);
 			for (idx_t col_idx = 0; col_idx < state.current_chunk.ColumnCount() - 1; col_idx++) {
 				const auto col_id = mapped_column_ids[col_idx].GetPrimaryIndex();
 				table_chunk.data[col_id].Reference(state.current_chunk.data[col_idx]);

@@ -1,0 +1,49 @@
+# name: test/sql/delete/piecemeal_delete_checkpoint_compress.test_slow
+# description: Test that checkpointing compresses the version info of vectors fully deleted across transactions
+# group: [delete]
+
+statement ok
+SET threads=1
+
+# prevent automatic checkpoints on commit so that the explicit CHECKPOINT below performs the compression
+statement ok
+SET debug_skip_checkpoint_on_commit=true
+
+# 60 vectors in a single row group
+statement ok
+CREATE TABLE tbl AS SELECT i FROM range(122880) t(i);
+
+# fully delete every vector, but across two transactions (even ids, then odd ids). every vector ends up
+# fully deleted, but with two different delete commit ids, so the deletes cannot be compressed on commit -
+# only a checkpoint can compress them into a per-vector constant
+query I
+DELETE FROM tbl WHERE i % 2 = 0
+----
+61440
+
+query I
+DELETE FROM tbl WHERE i % 2 = 1
+----
+61440
+
+# before the checkpoint the per-row delete ids are materialized (multiple 16KB arrays)
+query I
+SELECT memory_usage_bytes > 300000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true
+
+statement ok
+CHECKPOINT
+
+# the checkpoint compresses the per-row delete ids into per-vector constants and releases the now-empty
+# version info buffers. under the default config this reaches 0; some configs may retain a single 256KB
+# allocator buffer, so assert a bound rather than an exact value
+query I
+SELECT memory_usage_bytes < 300000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true
+
+query I
+SELECT COUNT(*) FROM tbl
+----
+0

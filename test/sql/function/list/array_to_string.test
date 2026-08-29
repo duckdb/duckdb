@@ -39,4 +39,4 @@ SELECT array_to_string([i, i + 1], '-') FROM range(6) t(i) WHERE i<=2 OR i>4
 statement error
 SELECT array_to_string([1, 2, 3], k) FROM repeat(',', 5) t(k)
 ----
-Separator argument to StringAgg must be a constant
+must be a constant expression

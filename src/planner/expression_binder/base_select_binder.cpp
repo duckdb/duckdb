@@ -118,7 +118,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 
 		if (node.groups.grouping_sets.size() <= 1) {
 			// if there are no more than two grouping sets, you can return the uncollated first expression.
-			// "first" meaning the aggreagte function.
+			// "first" meaning the aggregate function.
 			return BindResult(std::move(uncollated_first_expression));
 		}
 

@@ -13,10 +13,10 @@ TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog &catalog, SchemaCat
                                                      CreateTableFunctionInfo &info)
     : FunctionEntry(CatalogType::TABLE_FUNCTION_ENTRY, catalog, schema, info), functions(std::move(info.functions)) {
 	D_ASSERT(this->functions.Size() > 0);
-	for (auto &function : functions.functions) {
+	functions.ApplyToFunctions([&](TableFunction &function) {
 		function.SetCatalogName(catalog.GetAttached().GetName());
 		function.SetSchemaName(schema.name);
-	}
+	});
 }
 
 unique_ptr<CatalogEntry> TableFunctionCatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {

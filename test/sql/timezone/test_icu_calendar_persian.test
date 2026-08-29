@@ -1,0 +1,230 @@
+# name: test/sql/timezone/test_icu_calendar_persian.test
+# description: The Persian and Indian calendars
+# group: [timezone]
+
+require icu
+
+statement ok
+SET TimeZone='UTC'
+
+# persian
+statement ok
+SET Calendar='persian'
+
+query IIIIII
+SELECT ts, year(ts), month(ts), day(ts), era(ts), dayofyear(ts) FROM (VALUES
+  ('2024-06-15 12:00:00+00'::TIMESTAMPTZ), ('0622-03-21 12:00:00+00'), ('0622-03-22 12:00:00+00'),
+  ('1970-01-01 00:00:00+00'), ('2024-03-19 12:00:00+00'), ('2024-03-20 12:00:00+00'),
+  ('2025-03-20 12:00:00+00'), ('2025-03-21 12:00:00+00'), ('2123-03-20 12:00:00+00'),
+  ('2124-03-20 12:00:00+00'), ('1500-01-01 12:00:00+00'), ('0001-01-01 12:00:00+00')) t(ts)
+----
+1403-03-26 12:00:00+00	1403	3	26	0	88
+0001-01-01 12:00:00+00	1	1	1	0	1
+0001-01-02 12:00:00+00	1	1	2	0	2
+1348-10-11 00:00:00+00	1348	10	11	0	287
+1402-12-29 12:00:00+00	1402	12	29	0	365
+1403-01-01 12:00:00+00	1403	1	1	0	1
+1403-12-30 12:00:00+00	1403	12	30	0	366
+1404-01-01 12:00:00+00	1404	1	1	0	1
+1501-12-29 12:00:00+00	1501	12	29	0	365
+1503-01-01 12:00:00+00	1503	1	1	0	1
+0878-10-11 12:00:00+00	878	10	11	0	287
+0622-10-11 (BC) 12:00:00+00	-621	10	11	0	287
+
+query I
+SELECT make_timestamptz(1403, 1, 1, 0, 0, 0.0, 'UTC')
+----
+1403-01-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(1403, 12, 29, 0, 0, 0.0, 'UTC')
+----
+1403-12-29 00:00:00+00
+
+query I
+SELECT make_timestamptz(1403, 12, 30, 0, 0, 0.0, 'UTC')
+----
+1403-12-30 00:00:00+00
+
+query I
+SELECT make_timestamptz(1402, 12, 30, 0, 0, 0.0, 'UTC')
+----
+1403-01-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(1, 1, 1, 0, 0, 0.0, 'UTC')
+----
+0001-01-01 00:00:00+00
+
+query I
+SELECT '2024-06-15 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 MONTH
+----
+1403-04-26 12:00:00+00
+
+query I
+SELECT '2024-06-15 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 YEAR
+----
+1404-03-26 12:00:00+00
+
+query I
+SELECT '2024-03-20 12:00:00+00'::TIMESTAMPTZ - INTERVAL 1 DAY
+----
+1402-12-29 12:00:00+00
+
+query I
+SELECT date_trunc('year', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+1403-01-01 00:00:00+00
+
+query I
+SELECT date_trunc('month', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+1403-03-01 00:00:00+00
+
+query I
+SELECT date_trunc('quarter', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+1403-01-01 00:00:00+00
+
+query I
+SELECT last_day('2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2024-06-20
+
+query I
+SELECT last_day('2025-03-01 12:00:00+00'::TIMESTAMPTZ)
+----
+2025-03-20
+
+query I
+SELECT date_diff('year', '1900-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+124
+
+query I
+SELECT date_diff('month', '2023-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+12
+
+query I
+SELECT age('2024-06-15 12:00:00+00'::TIMESTAMPTZ, '1900-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+124 years 1 day
+
+query I
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear'], '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+{'year': 1403, 'month': 3, 'day': 26, 'era': 0, 'dayofyear': 88, 'week': 13, 'isoyear': 1403}
+
+query I
+SELECT * FROM generate_series('2024-03-15 12:00:00+00'::TIMESTAMPTZ, '2024-03-25 12:00:00+00'::TIMESTAMPTZ, INTERVAL 2 DAY)
+----
+1402-12-25 12:00:00+00
+1402-12-27 12:00:00+00
+1402-12-29 12:00:00+00
+1403-01-02 12:00:00+00
+1403-01-04 12:00:00+00
+1403-01-06 12:00:00+00
+
+# indian
+statement ok
+SET Calendar='indian'
+
+query IIIIII
+SELECT ts, year(ts), month(ts), day(ts), era(ts), dayofyear(ts) FROM (VALUES
+  ('2024-06-15 12:00:00+00'::TIMESTAMPTZ), ('0079-03-22 12:00:00+00'), ('0078-03-22 12:00:00+00'),
+  ('1970-01-01 00:00:00+00'), ('2024-03-20 12:00:00+00'), ('2024-03-21 12:00:00+00'),
+  ('2023-03-21 12:00:00+00'), ('2023-03-22 12:00:00+00'), ('2024-12-31 12:00:00+00'),
+  ('2025-01-01 12:00:00+00'), ('0001-01-01 12:00:00+00')) t(ts)
+----
+1946-03-25 12:00:00+00	1946	3	25	0	87
+0001-01-01 12:00:00+00	1	1	1	0	1
+0001-01-01 (BC) 12:00:00+00	0	1	1	0	1
+1891-10-11 00:00:00+00	1891	10	11	0	286
+1945-12-30 12:00:00+00	1945	12	30	0	365
+1946-01-01 12:00:00+00	1946	1	1	0	1
+1944-12-30 12:00:00+00	1944	12	30	0	365
+1945-01-01 12:00:00+00	1945	1	1	0	1
+1946-10-10 12:00:00+00	1946	10	10	0	286
+1946-10-11 12:00:00+00	1946	10	11	0	287
+0079-10-11 (BC) 12:00:00+00	-78	10	11	0	287
+
+query I
+SELECT make_timestamptz(1946, 1, 1, 0, 0, 0.0, 'UTC')
+----
+1946-01-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(1946, 1, 31, 0, 0, 0.0, 'UTC')
+----
+1946-01-31 00:00:00+00
+
+query I
+SELECT make_timestamptz(1945, 1, 31, 0, 0, 0.0, 'UTC')
+----
+1945-02-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(1946, 12, 30, 0, 0, 0.0, 'UTC')
+----
+1946-12-30 00:00:00+00
+
+query I
+SELECT make_timestamptz(1, 1, 1, 0, 0, 0.0, 'UTC')
+----
+0001-01-01 00:00:00+00
+
+query I
+SELECT '2024-06-15 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 MONTH
+----
+1946-04-25 12:00:00+00
+
+query I
+SELECT '2024-06-15 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 YEAR
+----
+1947-03-25 12:00:00+00
+
+query I
+SELECT date_trunc('year', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+1946-01-01 00:00:00+00
+
+query I
+SELECT date_trunc('month', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+1946-03-01 00:00:00+00
+
+query I
+SELECT last_day('2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2024-06-21
+
+query I
+SELECT last_day('2024-04-01 12:00:00+00'::TIMESTAMPTZ)
+----
+2024-04-20
+
+query I
+SELECT date_diff('year', '1900-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+124
+
+query I
+SELECT age('2024-06-15 12:00:00+00'::TIMESTAMPTZ, '1900-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+124 years
+
+query I
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear'], '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+{'year': 1946, 'month': 3, 'day': 25, 'era': 0, 'dayofyear': 87, 'week': 13, 'isoyear': 1946}
+
+query I
+SELECT * FROM generate_series('2024-03-18 12:00:00+00'::TIMESTAMPTZ, '2024-03-26 12:00:00+00'::TIMESTAMPTZ, INTERVAL 2 DAY)
+----
+1945-12-28 12:00:00+00
+1945-12-30 12:00:00+00
+1946-01-02 12:00:00+00
+1946-01-04 12:00:00+00
+1946-01-06 12:00:00+00
+

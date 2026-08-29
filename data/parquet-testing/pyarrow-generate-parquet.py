@@ -25,6 +25,8 @@ def generate_byte_stream_split(path: Path):
 
     floats = pa.array(rng.uniform(-100.0, 100.0, num_rows), type=pa.float32())
     doubles = pa.array(rng.uniform(-100.0, 100.0, num_rows), type=pa.float64())
+    ints = pa.array(rng.integers(-2147483648, 2147483647, num_rows), type=pa.int32())
+    longs = pa.array(rng.integers(-9223372036854775808, 9223372036854775807, num_rows), type=pa.int64())
 
     null_mask = np.ones(num_rows, dtype=np.bool_)
     null_mask[num_rows // 10:] = False
@@ -33,8 +35,8 @@ def generate_byte_stream_split(path: Path):
             rng.uniform(-100.0, 100.0, num_rows), type=pa.float32(), mask=null_mask)
 
     table = pa.Table.from_arrays(
-            [floats, doubles, nullable_floats],
-            ["floats", "doubles", "nullable_floats"])
+            [floats, doubles, ints, longs, nullable_floats],
+            ["floats", "doubles", "ints", "longs", "nullable_floats"])
 
     with pq.ParquetWriter(
             path,

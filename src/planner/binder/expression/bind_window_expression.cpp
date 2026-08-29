@@ -283,7 +283,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 			                      window.FunctionName());
 		}
 		if (window.HasIgnoreNulls() && !bound_function.CanIgnoreNulls()) {
-			throw BinderException(error_context, "RESPECT/IGNORE NULLS is not supported for the window function \"%s\"",
+			throw BinderException(error_context, "RESPECT/IGNORE NULLS is not supported for the window function %s",
 			                      window.FunctionName());
 		}
 

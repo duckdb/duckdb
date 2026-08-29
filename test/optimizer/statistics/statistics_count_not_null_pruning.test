@@ -1,0 +1,175 @@
+# name: test/optimizer/statistics/statistics_count_not_null_pruning.test
+# description: Statistics propagation prunes non-null COUNT arguments from scans
+# group: [statistics]
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+CREATE TABLE events(user_id INTEGER NOT NULL, session_id INTEGER, device_type VARCHAR, event_type VARCHAR);
+
+statement ok
+INSERT INTO events VALUES (1, NULL, 'Desktop', 'action'), (2, 2, 'Mobile', 'view');
+
+# user_id cannot be NULL, so the aggregate becomes count_star() and the column is no longer read
+query II
+EXPLAIN SELECT device_type, count(user_id) FROM events GROUP BY device_type;
+----
+physical_plan	<!REGEX>:.*user_id.*
+
+# a nullable argument keeps the real count and the column
+query II
+EXPLAIN SELECT device_type, count(session_id) FROM events GROUP BY device_type;
+----
+physical_plan	<!REGEX>:.*count_star.*
+
+query TII
+SELECT device_type, count(user_id), count(session_id) FROM events GROUP BY device_type ORDER BY device_type;
+----
+Desktop	1	0
+Mobile	1	1
+
+# FILTER over a different column: rewritten, only the filter column survives
+query II
+EXPLAIN SELECT device_type, count(user_id) FILTER (WHERE event_type = 'action') FROM events GROUP BY device_type;
+----
+physical_plan	<!REGEX>:.*user_id.*
+
+query TI
+SELECT device_type, count(user_id) FILTER (WHERE event_type = 'action') FROM events GROUP BY device_type ORDER BY device_type;
+----
+Desktop	1
+Mobile	0
+
+# FILTER over the counted column: rewritten, but the column is still referenced
+query II
+EXPLAIN SELECT device_type, count(user_id) FILTER (WHERE user_id = 2) FROM events GROUP BY device_type;
+----
+physical_plan	<REGEX>:.*user_id.*
+
+query TI
+SELECT device_type, count(user_id) FILTER (WHERE user_id = 2) FROM events GROUP BY device_type ORDER BY device_type;
+----
+Desktop	0
+Mobile	1
+
+# count is not order dependent, so ORDER BY inside the aggregate is rewritten too
+query II
+EXPLAIN SELECT device_type, count(user_id ORDER BY event_type) FROM events GROUP BY device_type;
+----
+physical_plan	<!REGEX>:.*user_id.*
+
+query TI
+SELECT device_type, count(user_id ORDER BY event_type) FROM events GROUP BY device_type ORDER BY device_type;
+----
+Desktop	1
+Mobile	1
+
+# the rewrite must not change results, with any of the passes it depends on disabled
+# column_lifetime is the interesting one: the rerun is skipped so the cleared maps are not regenerated
+foreach disabled_opt 'statistics_propagation' 'unused_columns' 'column_lifetime'
+
+statement ok
+SET disabled_optimizers to {disabled_opt}
+
+query TII
+SELECT device_type, count(user_id), count(session_id) FROM events GROUP BY device_type ORDER BY device_type;
+----
+Desktop	1	0
+Mobile	1	1
+
+query TI
+SELECT device_type, count(user_id) FILTER (WHERE user_id = 2) FROM events GROUP BY device_type ORDER BY device_type;
+----
+Desktop	0
+Mobile	1
+
+statement ok
+RESET disabled_optimizers;
+
+endloop
+
+# the counted column is pruned from a join too, where the projection maps live
+statement ok
+CREATE TABLE devices(device_type VARCHAR, vendor VARCHAR);
+
+statement ok
+INSERT INTO devices VALUES ('Desktop', 'Acme'), ('Mobile', 'Globex');
+
+query II
+EXPLAIN SELECT d.vendor, count(e.user_id) FROM events e JOIN devices d USING (device_type) GROUP BY d.vendor;
+----
+physical_plan	<!REGEX>:.*user_id.*
+
+query TI
+SELECT d.vendor, count(e.user_id) FROM events e JOIN devices d USING (device_type) GROUP BY d.vendor ORDER BY d.vendor;
+----
+Acme	1
+Globex	1
+
+# a materialized CTE referenced twice also goes through the common subplan optimizer
+statement ok
+CREATE TABLE wide_events AS SELECT i AS user_id, 'd' || (i % 4) AS device_type FROM range(20) t(i);
+
+# DISTINCT must not be rewritten: 4 distinct values over 20 non-null rows
+query I
+SELECT count(DISTINCT device_type) FROM wide_events
+----
+4
+
+query II
+EXPLAIN WITH cte AS MATERIALIZED (SELECT device_type FROM wide_events)
+SELECT w.device_type, count(w.user_id) FROM wide_events w
+WHERE w.device_type IN (SELECT device_type FROM cte UNION ALL SELECT device_type FROM cte)
+GROUP BY w.device_type;
+----
+physical_plan	<!REGEX>:.*user_id.*
+
+query TI
+WITH cte AS MATERIALIZED (SELECT device_type FROM wide_events)
+SELECT w.device_type, count(w.user_id) FROM wide_events w
+WHERE w.device_type IN (SELECT device_type FROM cte UNION ALL SELECT device_type FROM cte)
+GROUP BY w.device_type ORDER BY w.device_type;
+----
+d0	5
+d1	5
+d2	5
+d3	5
+
+# identical union branches become one common subplan CTE, which the rerun then sees for the first time
+statement ok
+CREATE TABLE cs(a INTEGER, b INTEGER NOT NULL);
+
+statement ok
+INSERT INTO cs SELECT i, i FROM range(3) t(i);
+
+query II
+SELECT * FROM (
+    SELECT a, (SELECT count(b) FROM cs) AS c FROM cs
+    UNION ALL
+    SELECT a, (SELECT count(b) FROM cs) AS c FROM cs
+) ORDER BY 1, 2;
+----
+0	3
+0	3
+1	3
+1	3
+2	3
+2	3
+
+# non-nullness can come from a pushed-down filter rather than the column itself
+statement ok
+CREATE TABLE filtered AS SELECT CASE WHEN i % 5 = 0 THEN NULL ELSE i END AS maybe_null, 'g' || (i % 3) AS grp FROM range(30) t(i);
+
+# the filter still references the column, but the scan no longer projects it
+query II
+EXPLAIN SELECT grp, count(maybe_null) FROM filtered WHERE maybe_null > 0 GROUP BY grp;
+----
+physical_plan	<!REGEX>:.*Projections: maybe_null.*
+
+query TI
+SELECT grp, count(maybe_null) FROM filtered WHERE maybe_null > 0 GROUP BY grp ORDER BY grp;
+----
+g0	8
+g1	8
+g2	8

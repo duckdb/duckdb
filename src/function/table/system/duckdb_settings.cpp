@@ -6,7 +6,7 @@
 namespace duckdb {
 
 struct DuckDBSettingValue {
-	string name;
+	Identifier name;
 	Value value;
 	string description;
 	string input_type;
@@ -27,7 +27,7 @@ struct DuckDBSettingsData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -45,6 +45,9 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("typed_value");
+	return_types.emplace_back(LogicalType::VARIANT());
 
 	return nullptr;
 }
@@ -85,7 +88,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		}
 		for (auto &alias : value.aliases) {
 			DuckDBSettingValue alias_value = value;
-			alias_value.name = StringValue::Get(alias);
+			alias_value.name = alias.GetValue<Identifier>();
 			alias_value.aliases.clear();
 			result->settings.push_back(std::move(alias_value));
 		}
@@ -133,6 +136,8 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 	auto &scope = output.data[4];
 	// aliases, LogicalType::VARCHAR[]
 	auto &aliases = output.data[5];
+	// value, LogicalType::VARIANT
+	auto &typed_value = output.data[6];
 
 	while (data.offset < data.settings.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.settings[data.offset++];
@@ -143,6 +148,7 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		input_type.Append(Value(entry.input_type));
 		scope.Append(Value(entry.scope));
 		aliases.Append(Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
+		typed_value.Append(entry.value.CastAs(context, LogicalType::VARIANT()));
 		count++;
 	}
 }

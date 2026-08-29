@@ -11,11 +11,11 @@ create table issue5920 AS
 	select 
 		a.*, 
 		b.*, 
-		c.generate_series::varchar AS c
-	from generate_series(1, 500) as a(a) 
+		c.c::varchar AS c
+	from generate_series(1, 500) as a(a)
 	join generate_series(1, 500) as b(b)
-	  on true 
-	join generate_series(1, 50) as c
+	  on true
+	join generate_series(1, 50) as c(c)
 	  on true
 ;
 

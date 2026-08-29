@@ -102,3 +102,18 @@ query I
 select variant_bytes_to_variant(NULL::BLOB);
 ----
 NULL
+
+# ---------- DECIMAL min signed values (INT32_MIN / INT64_MIN) ----------
+# Metadata: version=1, empty dictionary. Value: DECIMAL4/8, scale=0, little-endian min int.
+
+query II
+SELECT variant_typeof(v), v
+FROM (SELECT variant_bytes_to_variant('\x01\x00\x00\x20\x00\x00\x00\x00\x80'::BLOB) AS v);
+----
+DECIMAL(10, 0)	-2147483648
+
+query II
+SELECT variant_typeof(v), v
+FROM (SELECT variant_bytes_to_variant('\x01\x00\x00\x24\x00\x00\x00\x00\x00\x00\x00\x00\x80'::BLOB) AS v);
+----
+DECIMAL(19, 0)	-9223372036854775808

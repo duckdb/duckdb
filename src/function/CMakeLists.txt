@@ -14,6 +14,7 @@ add_library_unity(
   duckdb_function
   OBJECT
   aggregate_function.cpp
+  aggregate_state_serialization.cpp
   built_in_functions.cpp
   cast_rules.cpp
   combine_types_rules.cpp

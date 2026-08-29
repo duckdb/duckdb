@@ -1,0 +1,143 @@
+# name: test/sql/timezone/test_icu_calendar_japanese.test
+# description: The Japanese calendar
+# group: [timezone]
+
+require icu
+
+statement ok
+SET TimeZone='UTC'
+
+statement ok
+SET Calendar='japanese'
+
+# era boundaries
+query IIIII
+SELECT ts, era(ts), year(ts), month(ts), day(ts) FROM (VALUES
+  ('2024-06-15 12:00:00+00'::TIMESTAMPTZ), ('2019-04-30 12:00:00+00'), ('2019-05-01 12:00:00+00'),
+  ('1989-01-07 12:00:00+00'), ('1989-01-08 12:00:00+00'), ('1926-12-24 12:00:00+00'),
+  ('1926-12-25 12:00:00+00'), ('1912-07-29 12:00:00+00'), ('1912-07-30 12:00:00+00'),
+  ('1868-10-22 12:00:00+00'), ('1868-10-23 12:00:00+00'), ('0645-06-18 12:00:00+00'),
+  ('0645-06-19 12:00:00+00'), ('0600-01-01 12:00:00+00'), ('1582-10-04 12:00:00+00'),
+  ('1582-10-15 12:00:00+00')) t(ts)
+----
+2024-06-15 12:00:00+00	236	6	6	15
+2019-04-30 12:00:00+00	235	31	4	30
+2019-05-01 12:00:00+00	236	1	5	1
+1989-01-07 12:00:00+00	234	64	1	7
+1989-01-08 12:00:00+00	235	1	1	8
+1926-12-24 12:00:00+00	233	15	12	24
+1926-12-25 12:00:00+00	234	1	12	25
+1912-07-29 12:00:00+00	232	45	7	29
+1912-07-30 12:00:00+00	233	1	7	30
+1868-10-22 12:00:00+00	231	4	10	22
+1868-10-23 12:00:00+00	232	1	10	23
+0645-06-15 12:00:00+00	0	1	6	15
+0645-06-16 12:00:00+00	0	1	6	16
+0599-12-30 12:00:00+00	0	-45	12	30
+1582-09-24 12:00:00+00	194	10	9	24
+1582-10-15 12:00:00+00	194	10	10	15
+
+# constructing dates
+query I
+SELECT make_timestamptz(6, 6, 15, 12, 0, 0.0, 'UTC')
+----
+2024-06-15 12:00:00+00
+
+query I
+SELECT make_timestamptz(1, 1, 1, 0, 0, 0.0, 'UTC')
+----
+2019-01-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(31, 4, 30, 12, 0, 0.0, 'UTC')
+----
+2049-04-30 12:00:00+00
+
+query I
+SELECT make_timestamptz(64, 1, 7, 12, 0, 0.0, 'UTC')
+----
+2082-01-07 12:00:00+00
+
+# truncation and parts
+query I
+SELECT date_trunc('year', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2024-01-01 00:00:00+00
+
+query I
+SELECT date_trunc('year', '2019-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2019-01-01 00:00:00+00
+
+query I
+SELECT date_trunc('month', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2024-06-01 00:00:00+00
+
+query I
+SELECT date_trunc('decade', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2018-01-01 00:00:00+00
+
+query I
+SELECT date_trunc('era', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2018-01-01 00:00:00+00
+
+query I
+SELECT last_day('2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2024-06-30
+
+query I
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear'], '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+{'year': 6, 'month': 6, 'day': 15, 'era': 236, 'dayofyear': 167, 'week': 24, 'isoyear': 2024}
+
+# arithmetic
+query I
+SELECT '2024-06-15 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 YEAR
+----
+2025-06-15 12:00:00+00
+
+query I
+SELECT '2019-04-30 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 YEAR
+----
+2020-04-30 12:00:00+00
+
+query I
+SELECT '2019-04-30 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 MONTH
+----
+2019-05-30 12:00:00+00
+
+query I
+SELECT '2019-04-30 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 DAY
+----
+2019-05-01 12:00:00+00
+
+query I
+SELECT date_diff('year', '1900-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+124
+
+query I
+SELECT date_diff('year', '2019-01-01 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+5
+
+query I
+SELECT age('2024-06-15 12:00:00+00'::TIMESTAMPTZ, '1900-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+124 years
+
+# a sweep across every era
+query II
+SELECT count(*), count(distinct era) FROM (SELECT era(ts) era FROM generate_series('0600-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 31 DAY) t(ts))
+----
+17674	236
+
+query I
+SELECT sum(hash(ts::VARCHAR)) FROM generate_series('0600-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 13 DAY) t(ts)
+----
+388480068353742324350185
+

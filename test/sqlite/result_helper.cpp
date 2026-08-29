@@ -122,7 +122,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		fname = runner.ReplaceKeywords(fname);
 		fname = runner.LoopReplacement(fname, context.running_loops);
 		string csv_error;
-		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
+		comparison_values =
+		    LoadResultFromFile(fname, IdentifiersToStrings(result.GetNames()), expected_column_count, csv_error);
 		if (!csv_error.empty()) {
 			string log_message;
 			logger.PrintErrorHeader(csv_error);
@@ -458,7 +459,7 @@ void TestResultHelper::DuckDBConvertResult(MaterializedQueryResult &result, bool
 	for (r = 0; r < row_count; r++) {
 		for (c = 0; c < column_count; c++) {
 			auto value = result.GetValue(c, r);
-			auto converted_value = SQLLogicTestConvertValue(value, result.types[c], original_sqlite_test);
+			auto converted_value = SQLLogicTestConvertValue(value, result.GetTypes()[c], original_sqlite_test);
 			out_result[r * column_count + c] = converted_value;
 		}
 	}
@@ -512,7 +513,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 	}
 	// some times require more checking (specifically floating point numbers because of inaccuracies)
 	// if not equivalent we need to cast to the SQL type to verify
-	auto sql_type = result.types[current_column];
+	auto sql_type = result.GetTypes()[current_column];
 	if (sql_type.IsNumeric()) {
 		bool converted_lvalue = false;
 		bool converted_rvalue = false;
@@ -520,18 +521,24 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 			lvalue = Value(sql_type);
 			converted_lvalue = true;
 		} else {
-			lvalue = Value(lvalue_str);
-			if (lvalue.TryCastAs(*runner.con->context, sql_type)) {
+			auto cast_lvalue = Value(lvalue_str).TryCastAs(*runner.con->context, sql_type);
+			if (cast_lvalue) {
+				lvalue = std::move(*cast_lvalue);
 				converted_lvalue = true;
+			} else {
+				lvalue = Value(lvalue_str);
 			}
 		}
 		if (rvalue_str == "NULL") {
 			rvalue = Value(sql_type);
 			converted_rvalue = true;
 		} else {
-			rvalue = Value(rvalue_str);
-			if (rvalue.TryCastAs(*runner.con->context, sql_type)) {
+			auto cast_rvalue = Value(rvalue_str).TryCastAs(*runner.con->context, sql_type);
+			if (cast_rvalue) {
+				rvalue = std::move(*cast_rvalue);
 				converted_rvalue = true;
+			} else {
+				rvalue = Value(rvalue_str);
 			}
 		}
 		if (converted_lvalue && converted_rvalue) {

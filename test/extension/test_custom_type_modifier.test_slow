@@ -97,7 +97,7 @@ CREATE TYPE user_type AS INTEGER
 statement error
 CREATE TABLE t4 (i user_type(NULL));
 ----
-Binder Error: Type 'user_type' does not take any type parameters
+Binder Error: Type "user_type" does not take any type parameters
 
 statement error
 SELECT 1::BOUNDED(NULL)

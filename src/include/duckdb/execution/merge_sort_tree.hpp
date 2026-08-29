@@ -443,9 +443,26 @@ void MergeSortTree<E, O, CMP, F, C>::BuildRun(idx_t level_idx, idx_t run_idx) {
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
 pair<idx_t, idx_t> MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n) const {
-	// Handle special case of a one-element tree
+	// Find Nth element in a top-down traversal
+	idx_t result = 0;
+
+	// Handle special case of a 0/1-element tree
 	if (tree.size() < 2) {
-		return {0, 0};
+		++n;
+
+		//	Zero element tree always fails
+		if (tree[0].first.empty()) {
+			return {result, n};
+		}
+
+		//	Either the element is in the frame or it isn't
+		const auto *level_data = tree[0].first.data();
+		const auto v = level_data[result];
+		for (const auto &frame : frames) {
+			n -= (v >= frame.start) && (v < frame.end);
+		}
+
+		return {result, n};
 	}
 
 	// 	The first level contains a single run,
@@ -455,9 +472,6 @@ pair<idx_t, idx_t> MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &fr
 	for (idx_t i = 0; i < level_no; ++i) {
 		level_width *= FANOUT;
 	}
-
-	// Find Nth element in a top-down traversal
-	idx_t result = 0;
 
 	// First, handle levels with cascading pointers
 	const auto min_cascaded = LowestCascadingLevel();

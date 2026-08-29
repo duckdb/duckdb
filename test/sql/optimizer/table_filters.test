@@ -315,6 +315,197 @@ JOIN phj_build_cast_down b
 ----
 10
 
+# A narrowing probe cast must still produce an exact runtime filter instead of
+# falling back to storage-only filtering.
+statement ok
+CREATE TABLE phj_probe_narrow_cast AS
+SELECT i::BIGINT AS k
+FROM range(0, 1000000) t(i)
+UNION ALL
+SELECT 1000000000::BIGINT
+UNION ALL
+SELECT 3000000000::BIGINT
+
+statement ok
+CREATE TABLE phj_build_narrow_cast AS
+SELECT i::INTEGER AS k
+FROM range(100000, 100010) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM (
+  SELECT *
+  FROM phj_probe_narrow_cast
+  WHERE k < 1000000
+) p
+JOIN phj_build_narrow_cast b
+  ON p.k::INTEGER = b.k
+----
+analyzed_plan	<REGEX>:(?s).*IN.*PRF.*\(k\).*
+
+query I
+SELECT count(*)
+FROM (
+  SELECT *
+  FROM phj_probe_narrow_cast
+  WHERE k < 1000000
+) p
+JOIN phj_build_narrow_cast b
+  ON p.k::INTEGER = b.k
+----
+10
+
+# Sparse values use an IN filter. It must reconstruct the narrowing cast and
+# retain the original conversion error for out-of-range probe values.
+statement ok
+SET dynamic_or_filter_threshold=10
+
+statement ok
+CREATE TABLE phj_build_narrow_cast_sparse AS
+SELECT *
+FROM (VALUES (1::INTEGER), (1000000000::INTEGER)) t(k)
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM (
+  SELECT *
+  FROM phj_probe_narrow_cast
+  WHERE k < 2000000000
+) p
+JOIN phj_build_narrow_cast_sparse b
+  ON p.k::INTEGER = b.k
+----
+analyzed_plan	<REGEX>:(?s).*TRY_CAST.*IN \(1, 1000000000\).*
+
+query I
+SELECT count(*)
+FROM (
+  SELECT *
+  FROM phj_probe_narrow_cast
+  WHERE k < 2000000000
+) p
+JOIN phj_build_narrow_cast_sparse b
+  ON p.k::INTEGER = b.k
+----
+2
+
+# The exact IN filter must not suppress the cast error raised by the join.
+statement error
+SELECT count(*)
+FROM phj_probe_narrow_cast p
+JOIN phj_build_narrow_cast_sparse b
+  ON p.k::INTEGER = b.k
+----
+<REGEX>:Conversion Error:.*out of range.*
+
+statement ok
+SET dynamic_or_filter_threshold=0
+
+# Runtime-filter reconstruction of a normal narrowing cast must retain the
+# conversion error that the join expression itself would raise.
+statement error
+SELECT count(*)
+FROM phj_probe_narrow_cast p
+JOIN phj_build_narrow_cast b
+  ON p.k::INTEGER = b.k
+----
+<REGEX>:Conversion Error:.*out of range.*
+
+# Reconstruction retains every cast in a nested exact PRF input.
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM (
+  SELECT *
+  FROM phj_probe_narrow_cast
+  WHERE k < 1000000
+) p
+JOIN phj_build_narrow_cast b
+  ON CAST(CAST(p.k AS INTEGER) AS BIGINT) = CAST(b.k AS BIGINT)
+----
+analyzed_plan	<REGEX>:(?s).*PRF.*
+
+statement error
+SELECT count(*)
+FROM phj_probe_narrow_cast p
+JOIN phj_build_narrow_cast b
+  ON CAST(CAST(p.k AS INTEGER) AS BIGINT) = CAST(b.k AS BIGINT)
+----
+<REGEX>:Conversion Error:.*out of range.*
+
+# Explicit TRY_CAST has different semantics: failed casts become NULL and may be removed by the runtime filter.
+query I
+SELECT count(*)
+FROM phj_probe_narrow_cast p
+JOIN phj_build_narrow_cast b
+  ON TRY_CAST(p.k AS INTEGER) = b.k
+----
+10
+
+# Force the Bloom-filter path with a range that is too wide for an exact PRF.
+statement ok
+CREATE TABLE bf_build_narrow_cast_errors AS
+SELECT (i * 1000)::INTEGER AS k
+FROM range(0, 100000) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM (
+  SELECT *
+  FROM phj_probe_narrow_cast
+  WHERE k < 2000000000
+) p
+JOIN bf_build_narrow_cast_errors b
+  ON p.k::INTEGER = b.k
+----
+analyzed_plan	<REGEX>:(?s).*TRY_CAST.*IN.*BF.*
+
+statement error
+SELECT count(*)
+FROM phj_probe_narrow_cast p
+JOIN bf_build_narrow_cast_errors b
+  ON p.k::INTEGER = b.k
+----
+<REGEX>:Conversion Error:.*out of range.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM (
+  SELECT *
+  FROM phj_probe_narrow_cast
+  WHERE k < 2000000000
+) p
+JOIN bf_build_narrow_cast_errors b
+  ON CAST(CAST(p.k AS INTEGER) AS BIGINT) = CAST(b.k AS BIGINT)
+----
+analyzed_plan	<REGEX>:(?s).*BF.*
+
+statement error
+SELECT count(*)
+FROM phj_probe_narrow_cast p
+JOIN bf_build_narrow_cast_errors b
+  ON CAST(CAST(p.k AS INTEGER) AS BIGINT) = CAST(b.k AS BIGINT)
+----
+<REGEX>:Conversion Error:.*out of range.*
+
+query I
+SELECT count(*)
+FROM phj_probe_narrow_cast p
+JOIN bf_build_narrow_cast_errors b
+  ON TRY_CAST(p.k AS INTEGER) = b.k
+----
+1000
+
 # These sparse build sides still fall under the exact PRF budget, so PRF is
 # selected before Bloom even with the residual inequality.
 statement ok
@@ -380,6 +571,32 @@ JOIN bf_build_cast_down b
  AND p.g >= b.g
 ----
 600000
+
+# A wide exact PRF is built alongside parallel hash finalization.
+statement ok
+CREATE TABLE prf_parallel_wide_build AS
+SELECT (i * 200)::INTEGER AS k
+FROM range(0, 300000) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM bf_probe_cast_up p
+JOIN prf_parallel_wide_build b
+  ON p.k = b.k
+----
+analyzed_plan	<REGEX>:(?s).*IN.*PRF.*
+
+query I
+SELECT count(*)
+FROM bf_probe_cast_up p
+JOIN prf_parallel_wide_build b
+  ON p.k = b.k
+----
+10000
 
 # Chained comparison filters must evaluate later filters at the selected row
 # indices from earlier filters, not at dense positions in the vector.

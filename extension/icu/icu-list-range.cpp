@@ -157,6 +157,8 @@ struct ICUListRange : public ICUDateFunc {
 		range.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                                 LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<false>,
 		                                 Bind));
+		// throws for infinite or mixed-sign intervals
+		range.SetFallible();
 		loader.RegisterFunction(range);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
@@ -165,6 +167,8 @@ struct ICUListRange : public ICUDateFunc {
 		    ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                   LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<true>, Bind));
 
+		// throws for infinite or mixed-sign intervals
+		generate_series.SetFallible();
 		loader.RegisterFunction(generate_series);
 	}
 };

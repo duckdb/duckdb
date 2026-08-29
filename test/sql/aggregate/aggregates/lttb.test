@@ -1,0 +1,276 @@
+# name: test/sql/aggregate/aggregates/lttb.test
+# description: Test the lttb (Largest Triangle Three Buckets) downsampling aggregate
+# group: [aggregates]
+
+require core_functions
+
+# basic downsample of a parabola: 10 points -> 5, first and last always kept
+query I
+SELECT lttb(x::DOUBLE, y::DOUBLE, 5 ORDER BY x)
+FROM (SELECT i AS x, (i * i)::DOUBLE AS y FROM range(10) t(i))
+----
+[{'x': 0.0, 'y': 0.0}, {'x': 2.0, 'y': 4.0}, {'x': 5.0, 'y': 25.0}, {'x': 7.0, 'y': 49.0}, {'x': 9.0, 'y': 81.0}]
+
+# 10 points -> 4
+query I
+SELECT lttb(x::DOUBLE, y::DOUBLE, 4 ORDER BY x)
+FROM (SELECT i AS x, (i * i)::DOUBLE AS y FROM range(10) t(i))
+----
+[{'x': 0.0, 'y': 0.0}, {'x': 3.0, 'y': 9.0}, {'x': 6.0, 'y': 36.0}, {'x': 9.0, 'y': 81.0}]
+
+# typical usage: UNNEST the result back into rows
+query II
+SELECT p.x, p.y
+FROM (SELECT UNNEST(lttb(x::DOUBLE, y::DOUBLE, 4 ORDER BY x)) AS p
+      FROM (SELECT i AS x, (i * i)::DOUBLE AS y FROM range(10) t(i)))
+----
+0.0	0.0
+3.0	9.0
+6.0	36.0
+9.0	81.0
+
+# the first and last input points are always retained, and the output length is at most n
+query III
+SELECT len(l), l[1], l[len(l)]
+FROM (SELECT lttb(x::DOUBLE, y::DOUBLE, 5 ORDER BY x) AS l
+      FROM (SELECT i AS x, (i * i)::DOUBLE AS y FROM range(100) t(i)))
+----
+5	{'x': 0.0, 'y': 0.0}	{'x': 99.0, 'y': 9801.0}
+
+# n >= number of points: return all points unchanged
+query I
+SELECT lttb(x::DOUBLE, y::DOUBLE, 100 ORDER BY x)
+FROM (SELECT i AS x, i::DOUBLE AS y FROM range(4) t(i))
+----
+[{'x': 0.0, 'y': 0.0}, {'x': 1.0, 'y': 1.0}, {'x': 2.0, 'y': 2.0}, {'x': 3.0, 'y': 3.0}]
+
+# n < 3 (n == 2): keep only the first and last point
+query I
+SELECT lttb(x::DOUBLE, y::DOUBLE, 2 ORDER BY x)
+FROM (SELECT i AS x, i::DOUBLE AS y FROM range(10) t(i))
+----
+[{'x': 0.0, 'y': 0.0}, {'x': 9.0, 'y': 9.0}]
+
+# NULL x or y points are ignored
+query I
+SELECT len(lttb(x::DOUBLE, y, 5 ORDER BY x))
+FROM (SELECT i AS x, CASE WHEN i % 2 = 0 THEN NULL ELSE i::DOUBLE END AS y FROM range(20) t(i))
+----
+5
+
+# empty input / all-NULL input returns NULL (consistent with list() and with exported/imported state)
+query I
+SELECT lttb(x::DOUBLE, y::DOUBLE, 5 ORDER BY x) FROM range(0) t(x), (SELECT 1.0 y) WHERE false
+----
+NULL
+
+query I
+SELECT lttb(x::DOUBLE, NULL::DOUBLE, 5 ORDER BY x) FROM range(10) t(x)
+----
+NULL
+
+# grouped downsampling with varying group sizes - small groups (< n) pass through
+query II
+SELECT g, len(lttb(x::DOUBLE, y::DOUBLE, 5 ORDER BY x)) AS l
+FROM (SELECT i % 3 AS g, i AS x, (i * 2)::DOUBLE AS y FROM range(20) t(i))
+GROUP BY g ORDER BY g
+----
+0	5
+1	5
+2	5
+
+# groups of very different sizes share one materialization buffer: each group keeps its own endpoints
+query IIII
+SELECT g, len(l), l[1].x, l[len(l)].x
+FROM (
+    SELECT g, lttb(x::DOUBLE, y::DOUBLE, 4 ORDER BY x) AS l
+    FROM (SELECT CASE WHEN i < 100 THEN 0 WHEN i < 110 THEN 1 ELSE 2 END AS g,
+                 i AS x, (i * i) AS y FROM range(115) t(i))
+    GROUP BY g
+) ORDER BY g
+----
+0	4	0.0	99.0
+1	4	100.0	109.0
+2	4	110.0	114.0
+
+# a group with NULLs followed by smaller groups (the reused buffer must not leak validity between groups)
+query II
+SELECT g, len(lttb(x::DOUBLE, y, 4 ORDER BY x))
+FROM (SELECT CASE WHEN i < 100 THEN 0 WHEN i < 110 THEN 1 ELSE 2 END AS g,
+             i AS x, CASE WHEN i % 3 = 0 THEN NULL ELSE (i % 7)::DOUBLE END AS y FROM range(115) t(i))
+GROUP BY g ORDER BY g
+----
+0	4
+1	4
+2	3
+
+# timestamp x keys: each timestamp overload resolves and downsamples
+query I
+SELECT len(lttb(ts, v, 4 ORDER BY ts))
+FROM (SELECT TIMESTAMP '2020-01-01' + INTERVAL (i) HOUR AS ts, (i % 7)::DOUBLE AS v FROM range(50) t(i))
+----
+4
+
+query III
+SELECT len(lttb(ts::TIMESTAMP_S, v, 3 ORDER BY ts)),
+       len(lttb(ts::TIMESTAMP_MS, v, 3 ORDER BY ts)),
+       len(lttb(ts::TIMESTAMP_NS, v, 3 ORDER BY ts))
+FROM (SELECT TIMESTAMP '2020-01-01' + INTERVAL (i) HOUR AS ts, i::DOUBLE AS v FROM range(20) t(i))
+----
+3	3	3
+
+# a timestamp key preserves the original timestamp values in the output
+query I
+SELECT lttb(ts, v, 3 ORDER BY ts)
+FROM (SELECT TIMESTAMP '2020-01-01' + INTERVAL (i) DAY AS ts, (i * i)::DOUBLE AS v FROM range(5) t(i))
+----
+[{'x': '2020-01-01 00:00:00', 'y': 0.0}, {'x': '2020-01-03 00:00:00', 'y': 4.0}, {'x': '2020-01-05 00:00:00', 'y': 16.0}]
+
+# the y axis is a measurement: timestamps are only supported on the x axis
+statement error
+SELECT lttb(x::DOUBLE, ts, 3 ORDER BY x)
+FROM (SELECT i AS x, TIMESTAMP '2020-01-01' + INTERVAL (i * i) DAY AS ts FROM range(5) t(i))
+----
+<REGEX>:.*(No function matches|Could not|does not support).*
+
+# TIMESTAMPTZ is a timestamp type and should be accepted if lttb supports timestamp axes.
+statement ok
+SELECT lttb(ts, y, 3 ORDER BY ts)
+FROM (
+    VALUES
+        (TIMESTAMPTZ '2020-01-01 00:00:00+00', 0::DOUBLE),
+        (TIMESTAMPTZ '2020-01-01 01:00:00+00', 1::DOUBLE),
+        (TIMESTAMPTZ '2020-01-01 02:00:00+00', 2::DOUBLE),
+        (TIMESTAMPTZ '2020-01-01 03:00:00+00', 3::DOUBLE),
+        (TIMESTAMPTZ '2020-01-01 04:00:00+00', 4::DOUBLE)
+) t(ts, y);
+
+# LTTB point selection should be invariant under translating the x-axis.
+query T
+WITH data AS (
+    SELECT i,
+           (CASE WHEN i = 37 THEN 1000 ELSE i % 7 END)::DOUBLE AS y,
+           make_timestamp_ns(1577836800000000000 + i) AS ts
+    FROM range(100) t(i)
+),
+num AS (
+    SELECT UNNEST(lttb(i::DOUBLE, y, 10 ORDER BY i)) AS p
+    FROM data
+),
+ns AS (
+    SELECT UNNEST(lttb(ts, y, 10 ORDER BY ts)) AS p
+    FROM data
+)
+SELECT (SELECT list(p.x ORDER BY p.x) FROM num)
+       = (SELECT list((epoch_ns(p.x) - 1577836800000000000)::DOUBLE ORDER BY epoch_ns(p.x)) FROM ns)
+----
+true
+
+# FLOAT is supported on either axis and selects the same points as DOUBLE
+query I
+SELECT lttb(x::FLOAT, y::FLOAT, 4 ORDER BY x)
+FROM (SELECT i AS x, (i * i) AS y FROM range(10) t(i))
+----
+[{'x': 0.0, 'y': 0.0}, {'x': 3.0, 'y': 9.0}, {'x': 6.0, 'y': 36.0}, {'x': 9.0, 'y': 81.0}]
+
+# mixed FLOAT/DOUBLE axes resolve to exact overloads (no cast in the result type)
+query II
+SELECT typeof(lttb(x::FLOAT, y::DOUBLE, 4 ORDER BY x)), typeof(lttb(x::DOUBLE, y::FLOAT, 4 ORDER BY x))
+FROM (SELECT i AS x, (i * i) AS y FROM range(10) t(i))
+----
+STRUCT(x FLOAT, y DOUBLE)[]	STRUCT(x DOUBLE, y FLOAT)[]
+
+# the target count must be a constant
+statement error
+SELECT lttb(x::DOUBLE, y::DOUBLE, x::BIGINT ORDER BY x) FROM (SELECT i x, i::DOUBLE y FROM range(10) t(i))
+----
+<REGEX>:.*must be a constant.*
+
+# the target count must be at least 2
+statement error
+SELECT lttb(x::DOUBLE, y::DOUBLE, 1 ORDER BY x) FROM (SELECT i x, i::DOUBLE y FROM range(10) t(i))
+----
+<REGEX>:.*at least 2.*
+
+# non-numeric arguments are rejected (no ANY overload)
+statement error
+SELECT lttb('a', 'b', 5)
+----
+<REGEX>:.*(No function matches|Could not|does not support).*
+
+# state export round-trips to the same result
+query I
+SELECT (finalize(lttb(x::DOUBLE, y::DOUBLE, 5 ORDER BY x) EXPORT_STATE)
+        = (SELECT lttb(x::DOUBLE, y::DOUBLE, 5 ORDER BY x) FROM (SELECT i x, (i * i)::DOUBLE y FROM range(20) t(i))))
+FROM (SELECT i x, (i * i)::DOUBLE y FROM range(20) t(i))
+----
+true
+
+# large group spanning many vectors (exercises the clustered/batched append path); endpoints kept, length == n
+query III
+SELECT len(l), l[1], l[len(l)]
+FROM (SELECT lttb(x::DOUBLE, y::DOUBLE, 100 ORDER BY x) AS l
+      FROM (SELECT i AS x, (i * i)::DOUBLE AS y FROM range(10000) t(i)))
+----
+100	{'x': 0.0, 'y': 0.0}	{'x': 9999.0, 'y': 99980001.0}
+
+# a large group with interspersed NULLs (exercises the null-filtering clustered path)
+query I
+SELECT len(lttb(x::DOUBLE, y, 100 ORDER BY x))
+FROM (SELECT i AS x, CASE WHEN i % 7 = 0 THEN NULL ELSE i::DOUBLE END AS y FROM range(10000) t(i))
+----
+100
+
+# duplicate x values are allowed
+query I
+SELECT len(lttb((x // 2)::DOUBLE, x::DOUBLE, 4 ORDER BY x))
+FROM range(10) t(x)
+----
+4
+
+# an oversized constant n stays within the memory limit: small groups pass through unchanged
+statement ok
+SET memory_limit = '500MB'
+
+query I
+SELECT lttb(x::DOUBLE, x::DOUBLE, 5000000000 ORDER BY x) FROM range(3) t(x)
+----
+[{'x': 0.0, 'y': 0.0}, {'x': 1.0, 'y': 1.0}, {'x': 2.0, 'y': 2.0}]
+
+# the remaining tests store an aggregate state column, which requires storage version v2.0.0
+require noforcestorage
+
+# imported states may contain NULL points (unlike the update path, the import does no element filtering).
+# The data behind a NULL point is never written, so those points must be dropped rather than read.
+# Finalizing a large state with NULLs alongside a smaller clean one must also not leak NULLs between them.
+statement ok
+CREATE TABLE lttb_states AS
+SELECT lttb(x::DOUBLE, y::DOUBLE, 3) EXPORT_STATE AS st
+FROM (SELECT i x, (i * i)::DOUBLE y FROM range(10) t(i)) WHERE false;
+
+statement ok
+DELETE FROM lttb_states;
+
+statement ok
+INSERT INTO lttb_states VALUES ([{'x':0.0,'y':0.0}, NULL, NULL, {'x':3.0,'y':3.0}, {'x':4.0,'y':4.0},
+                                 {'x':5.0,'y':5.0}, {'x':6.0,'y':6.0}, {'x':7.0,'y':7.0}, {'x':8.0,'y':8.0},
+                                 {'x':9.0,'y':9.0}]);
+
+statement ok
+INSERT INTO lttb_states VALUES ([{'x':100.0,'y':1.0}, {'x':101.0,'y':2.0}, {'x':102.0,'y':3.0}]);
+
+# an all-NULL state behaves like an empty one
+statement ok
+INSERT INTO lttb_states VALUES ([NULL, NULL]);
+
+# a NULL on either axis drops the whole point, even when the point itself is not NULL
+statement ok
+INSERT INTO lttb_states VALUES ([{'x':1.0,'y':NULL}, {'x':2.0,'y':5.0}, {'x':3.0,'y':6.0}]);
+
+query I
+SELECT finalize(st) FROM lttb_states
+----
+[{'x': 0.0, 'y': 0.0}, {'x': 3.0, 'y': 3.0}, {'x': 9.0, 'y': 9.0}]
+[{'x': 100.0, 'y': 1.0}, {'x': 101.0, 'y': 2.0}, {'x': 102.0, 'y': 3.0}]
+NULL
+[{'x': 2.0, 'y': 5.0}, {'x': 3.0, 'y': 6.0}]

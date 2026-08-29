@@ -30,3 +30,9 @@ query II
 select * from parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true) where d>10;
 ----
 nan	nan
+
+query II
+SELECT sum(isnan(f)::INT), sum(isnan(d)::INT)
+FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true)
+----
+1	1

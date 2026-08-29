@@ -41,9 +41,9 @@ public:
 	//! The file path to copy to/from
 	string file_path;
 	//! Set of (key, value) options
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> parsed_options;
+	identifier_map_t<unique_ptr<ParsedExpression>> parsed_options;
 	//! Set of (key, value) options
-	case_insensitive_map_t<vector<Value>> options;
+	identifier_map_t<vector<Value>> options;
 	//! The SQL statement used instead of a table when copying data out to a file
 	unique_ptr<QueryNode> select_statement;
 
@@ -72,6 +72,7 @@ public:
 
 public:
 	unique_ptr<CopyInfo> Copy() const;
+	bool Equals(const CopyInfo &other) const;
 	string ToString() const;
 	string TablePartToString() const;
 

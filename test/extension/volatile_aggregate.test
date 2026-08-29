@@ -1,0 +1,33 @@
+# name: test/extension/volatile_aggregate.test
+# description: Volatile aggregate expressions retain physical-row evaluation identity during decorrelation
+# group: [extension]
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement ok
+SELECT test_reset_volatile_aggregate();
+
+# Four physical candidate pairs must produce four aggregate evaluations even though
+# both inputs have duplicate correlation values.
+query I
+WITH l(a) AS (VALUES (1), (1)),
+     r(b) AS (VALUES (1), (1))
+SELECT count(*)
+FROM l
+LEFT JOIN r ON (
+	SELECT test_volatile_aggregate(v)
+	FROM (VALUES (1)) input(v)
+	WHERE l.a = r.b
+) > 0;
+----
+4
+
+query I
+SELECT test_volatile_aggregate_calls();
+----
+4

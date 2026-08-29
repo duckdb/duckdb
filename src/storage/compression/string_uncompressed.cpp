@@ -232,7 +232,7 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, BaseStat
 	// the block has space left: figure out how much space we can save
 	auto move_amount = segment.SegmentSize() - total_size;
 	// move the dictionary so it lines up exactly with the offsets
-	auto dataptr = handle.GetDataMutable();
+	auto dataptr = handle.GetDataMutable() + segment.GetBlockOffset();
 	memmove(dataptr + offset_size, dataptr + dict.end - dict.size, dict.size);
 	dict.end -= move_amount;
 	D_ASSERT(dict.end == total_size);

@@ -75,13 +75,13 @@ logical_opt	<REGEX>:.*EMPTY_RESULT.*
 query II
 explain select * from integers where i > any(select * from integers2) order by 1;
 ----
-logical_opt	<REGEX>:.*EMPTY_RESULT.*
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
 
-# join is guaranteed to match: entire join is stripped away
+# join is guaranteed to match: ANY rewrite prevents static pruning
 query II
 explain select * from integers where i < any(select * from integers2) order by 1;
 ----
-logical_opt	<!REGEX>:.*JOIN.*
+logical_opt	<REGEX>:.*ANY_JOIN.*
 
 query I
 SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i=i2.i ORDER BY 1;
