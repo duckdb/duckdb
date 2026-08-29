@@ -169,7 +169,10 @@ interval_parse_time : {
 	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time)) {
 		return false;
 	}
-	result.micros += time.value;
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.micros, time.value, result.micros)) {
+		AssignOutOfRangeErrorOrThrow("interval value is out of range", error_message);
+		return false;
+	}
 	found_any = true;
 	if (negative) {
 		result.micros = -result.micros;

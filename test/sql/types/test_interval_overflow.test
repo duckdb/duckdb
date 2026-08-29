@@ -1,0 +1,21 @@
+# name: test/sql/types/test_interval_overflow.test
+# description: Test for unchecked int64 overflow in interval colon-time addition
+# group: [types]
+
+# Issue #25071: Unchecked int64 Overflow in Interval Colon-Time Addition
+# The colon-time branch in Interval::FromCString did a raw result.micros += time.value
+# without overflow checking, causing signed integer overflow (undefined behavior).
+
+statement error
+SELECT '9223372036854775807 microseconds 999999999:00:00'::INTERVAL;
+----
+<REGEX>:.*out of range.*
+
+statement error
+SELECT '9223372036854775807 microseconds 999999999:59:59'::INTERVAL;
+----
+<REGEX>:.*out of range.*
+
+# Normal cases should still work
+statement ok
+SELECT '1 hour 30 minutes'::INTERVAL;
