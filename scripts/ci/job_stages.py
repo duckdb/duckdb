@@ -263,11 +263,7 @@ def linux_musl_matrix(selection_input: JobSelectionInput) -> list[dict[str, obje
 
 def compute_job_selection(selection_input: JobSelectionInput) -> JobSelection:
     selected_jobs = enabled_jobs(selection_input)
-    optimized_release = (
-        selection_input.event_name == "workflow_dispatch"
-        and not selection_input.skip_tests
-        and "linux-release" in selected_jobs
-    )
+    optimized_release = selection_input.event_name == "workflow_dispatch" and "linux-release" in selected_jobs
     return JobSelection(
         enabled_jobs=selected_jobs,
         save_cache=should_save_cache(selection_input),
