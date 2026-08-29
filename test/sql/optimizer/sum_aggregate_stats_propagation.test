@@ -254,3 +254,96 @@ query II
 EXPLAIN SELECT sum(x) FROM thbig HAVING sum(x) < 0;
 ----
 physical_plan	<!REGEX>:.*Empty Result.*
+
+# unsigned integer inputs reach the callback via an implicit widening cast:
+# UTINYINT / USMALLINT / UINTEGER  -> BIGINT   -> INT64 case
+# UBIGINT                          -> HUGEINT  -> INT128 case
+# every width should fold impossible HAVING sum(x) < 0 the same way
+
+statement ok
+CREATE TABLE tu8  AS SELECT (range % 100)::UTINYINT  AS x FROM range(10000);
+
+statement ok
+CREATE TABLE tu16 AS SELECT (range % 100)::USMALLINT AS x FROM range(10000);
+
+statement ok
+CREATE TABLE tu32 AS SELECT (range % 100)::UINTEGER  AS x FROM range(10000);
+
+statement ok
+CREATE TABLE tu64 AS SELECT (range % 100)::UBIGINT   AS x FROM range(10000);
+
+query I
+SELECT sum(x) FROM tu8;
+----
+495000
+
+query I
+SELECT sum(x) FROM tu16;
+----
+495000
+
+query I
+SELECT sum(x) FROM tu32;
+----
+495000
+
+query I
+SELECT sum(x) FROM tu64;
+----
+495000
+
+query II
+EXPLAIN SELECT sum(x) FROM tu8  HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS r FROM tu8 HAVING sum(x) < 0);
+----
+0
+
+query II
+EXPLAIN SELECT sum(x) FROM tu16 HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS r FROM tu16 HAVING sum(x) < 0);
+----
+0
+
+query II
+EXPLAIN SELECT sum(x) FROM tu32 HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS r FROM tu32 HAVING sum(x) < 0);
+----
+0
+
+query II
+EXPLAIN SELECT sum(x) FROM tu64 HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS r FROM tu64 HAVING sum(x) < 0);
+----
+0
+
+# satisfiable HAVING must survive for every unsigned width
+query II
+EXPLAIN SELECT sum(x) FROM tu32 HAVING sum(x) > 0;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(x) FROM tu32 HAVING sum(x) > 0;
+----
+495000
+
+query I
+SELECT sum(x) FROM tu64 HAVING sum(x) > 0;
+----
+495000

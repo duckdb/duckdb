@@ -313,11 +313,10 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 	default:
 		throw InternalException("Unsupported type for propagate sum stats");
 	}
-	auto max_card = Hugeint::Convert(input.node_stats->max_cardinality);
+
+	const auto max_card = Hugeint::Convert(input.node_stats->max_cardinality);
 	hugeint_t wide_negative = 0;
 	hugeint_t wide_positive = 0;
-	// use a checked multiply: cardinality * min/max can overflow hugeint for INT128 inputs and,
-	// in extreme cases, for INT64 inputs as well; bail out with no stats when it does
 	if (!Hugeint::TryMultiply(max_negative, max_card, wide_negative) ||
 	    !Hugeint::TryMultiply(max_positive, max_card, wide_positive)) {
 		return nullptr;
