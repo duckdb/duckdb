@@ -1,5 +1,6 @@
 #include "duckdb/execution/executor.hpp"
 
+#include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/time_point.hpp"
 #include "duckdb/execution/execution_context.hpp"
@@ -110,7 +111,7 @@ static reference_set_t<Pipeline> GetStreamingResultPipelines(const PipelineSched
 }
 
 static bool HasStreamingExecuteDependency(const PipelineSchedule &schedule, idx_t stage_idx,
-                                          const vector<bool> &streaming_execute_stages) {
+                                          const ValidityMask &streaming_execute_stages) {
 	vector<bool> visited(schedule.stages.size(), false);
 	vector<idx_t> to_visit = schedule.stages[stage_idx].dependencies;
 	while (!to_visit.empty()) {
@@ -120,7 +121,7 @@ static bool HasStreamingExecuteDependency(const PipelineSchedule &schedule, idx_
 			continue;
 		}
 		visited[dependency] = true;
-		if (streaming_execute_stages[dependency]) {
+		if (!streaming_execute_stages.RowIsValid(dependency)) {
 			return true;
 		}
 		for (auto child_dependency : schedule.stages[dependency].dependencies) {
@@ -132,18 +133,18 @@ static bool HasStreamingExecuteDependency(const PipelineSchedule &schedule, idx_
 
 static vector<idx_t> GetStreamingResultPipelineEntries(const PipelineSchedule &schedule) {
 	auto result_pipelines = GetStreamingResultPipelines(schedule);
-	vector<bool> streaming_execute_stages(schedule.stages.size(), false);
+	ValidityMask streaming_execute_stages(schedule.stages.size());
 	for (idx_t stage_idx = 0; stage_idx < schedule.stages.size(); stage_idx++) {
 		auto &stage = schedule.stages[stage_idx];
 		if (stage.type == PipelineScheduleStageType::EXECUTE &&
 		    result_pipelines.find(*stage.pipeline) != result_pipelines.end()) {
-			streaming_execute_stages[stage_idx] = true;
+			streaming_execute_stages.SetInvalid(stage_idx);
 		}
 	}
 
 	vector<idx_t> result;
 	for (idx_t stage_idx = 0; stage_idx < schedule.stages.size(); stage_idx++) {
-		if (streaming_execute_stages[stage_idx] &&
+		if (!streaming_execute_stages.RowIsValid(stage_idx) &&
 		    !HasStreamingExecuteDependency(schedule, stage_idx, streaming_execute_stages)) {
 			result.push_back(stage_idx);
 		}
