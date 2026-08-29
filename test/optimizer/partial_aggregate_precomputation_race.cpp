@@ -13,29 +13,6 @@ using namespace duckdb;
 
 #ifdef D_ASSERT_IS_ENABLED
 
-namespace {
-
-//! Joins the thread even when a REQUIRE fails; the sync point guard must be
-//! declared after this joiner so it is destroyed first and releases the thread.
-struct RaceThreadJoiner {
-	std::thread thread;
-	~RaceThreadJoiner() {
-		if (thread.joinable()) {
-			thread.join();
-		}
-	}
-};
-
-//! Layout after setup (row group size 2048):
-//!   partition 0: 2048 rows of 1    -> deleted before the reader starts, vacuums
-//!                                     out of the tree at the mutation checkpoint
-//!   partition 1: alternating 5/6   -> needs a scan (contributes 1024 rows of 5)
-//!   partition 2: 2048 rows of 5    -> always true, precomputed
-//! Correct count for key=5: 2048 (precomputed) + 1024 (scanned) = 3072.
-static constexpr double PRECOMPUTE_RACE_EXPECTED = 2048.0 + 1024.0;
-
-} // namespace
-
 //! A checkpoint can swap the row group collection between plan-time index
 //! capture and execution-time scan: the plan-time indices then refer to different
 //! (or fewer) partitions, so a partition that was precomputed is scanned again
@@ -44,6 +21,13 @@ static constexpr double PRECOMPUTE_RACE_EXPECTED = 2048.0 + 1024.0;
 //! (which vacuums out the fully-deleted leading row group and installs a renumbered
 //! collection), and only then is the reader released.
 TEST_CASE("Test partial aggregate precomputation partition race reproduces PR 24962", "[optimizer][sync_point]") {
+	// Layout after setup (row group size 2048):
+	//   partition 0: 2048 rows of 1    -> deleted before the reader starts, vacuums
+	//                                     out of the tree at the mutation checkpoint
+	//   partition 1: alternating 5/6   -> needs a scan (contributes 1024 rows of 5)
+	//   partition 2: 2048 rows of 5    -> always true, precomputed
+	// Correct count for key=5: 2048 (precomputed) + 1024 (scanned) = 3072.
+	constexpr double precompute_race_expected = 2048.0 + 1024.0;
 	auto db_path = TestDirectoryPath() + "precompute_race.duckdb";
 	duckdb::DuckDB db(nullptr);
 	Connection conn(db);
@@ -59,11 +43,12 @@ TEST_CASE("Test partial aggregate precomputation partition race reproduces PR 24
 	REQUIRE_NO_FAIL(conn.Query("DELETE FROM race_db.t WHERE key=1"));
 	Connection writer(db);
 
-	// the reader thread parks at the sync point after capturing its indices until released below
-	auto guard = SyncPointCtl::EnableInScope("optimizer.partial_precompute.indices_captured");
 	std::atomic<double> result(-1);
 	std::string query_error;
-	RaceThreadJoiner joiner;
+	// joiner before the guard: the guard is destroyed first and releases the parked thread
+	ThreadJoiner joiner;
+	// the reader thread parks at the sync point after capturing its indices until released below
+	auto guard = SyncPointCtl::EnableInScope("optimizer.partial_precompute.indices_captured");
 	joiner.thread = std::thread([&] {
 		Connection reader(db);
 		auto res = reader.Query("SELECT count(*) FROM race_db.t WHERE key=5");
@@ -97,7 +82,7 @@ TEST_CASE("Test partial aggregate precomputation partition race reproduces PR 24
 	// the reader must not count precomputed partitions twice
 	INFO(query_error);
 	REQUIRE(query_error.empty());
-	REQUIRE(result == PRECOMPUTE_RACE_EXPECTED);
+	REQUIRE(result == precompute_race_expected);
 }
 
 #endif
