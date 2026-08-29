@@ -107,7 +107,7 @@ public:
 	bool HasStreamingResultCollector();
 	//! Returns the query result - can only be used if `HasResultCollector` returns true
 	unique_ptr<QueryResult> GetResult();
-	//! Opens the result-producing pipeline frontier after the streaming result has been installed
+	//! Opens the result-producing pipelines after the streaming result has been installed
 	void OpenResultPipeline();
 
 	//! Returns true if all pipelines have been completed
@@ -186,7 +186,7 @@ private:
 	reference_map_t<Task, shared_ptr<Task>> to_be_rescheduled_tasks;
 	//! The semaphore to signal task rescheduling
 	std::condition_variable task_reschedule;
-	//! Gate holding back the result-producing pipeline frontier until the streaming result is installed
+	//! Gate holding back the result-producing pipelines until the streaming result is installed
 	shared_ptr<PipelineResultReadyEvent> result_ready_event;
 	//! Whether the result gate is ready to be opened
 	atomic<bool> result_ready {false};

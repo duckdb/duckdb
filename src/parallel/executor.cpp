@@ -79,8 +79,8 @@ static shared_ptr<Event> CreatePipelineScheduleEvent(const PipelineScheduleStage
 	}
 }
 
-static reference_set_t<Pipeline> GetStreamingResultFrontier(const PipelineSchedule &schedule) {
-	reference_set_t<Pipeline> frontier;
+static reference_set_t<Pipeline> GetStreamingResultPipelines(const PipelineSchedule &schedule) {
+	reference_set_t<Pipeline> result_pipelines;
 	vector<reference<Pipeline>> to_visit;
 	for (auto &stage : schedule.stages) {
 		if (stage.type != PipelineScheduleStageType::EXECUTE) {
@@ -91,7 +91,7 @@ static reference_set_t<Pipeline> GetStreamingResultFrontier(const PipelineSchedu
 		    !sink->Cast<PhysicalResultCollector>().IsStreaming()) {
 			continue;
 		}
-		if (frontier.insert(*stage.pipeline).second) {
+		if (result_pipelines.insert(*stage.pipeline).second) {
 			to_visit.push_back(*stage.pipeline);
 		}
 	}
@@ -101,12 +101,12 @@ static reference_set_t<Pipeline> GetStreamingResultFrontier(const PipelineSchedu
 		for (auto &producer_ref : pipeline.GetExternalInputProducers()) {
 			auto producer = producer_ref.lock();
 			D_ASSERT(producer);
-			if (frontier.insert(*producer).second) {
+			if (result_pipelines.insert(*producer).second) {
 				to_visit.push_back(*producer);
 			}
 		}
 	}
-	return frontier;
+	return result_pipelines;
 }
 
 static bool HasStreamingExecuteDependency(const PipelineSchedule &schedule, idx_t stage_idx,
@@ -130,12 +130,13 @@ static bool HasStreamingExecuteDependency(const PipelineSchedule &schedule, idx_
 	return false;
 }
 
-static vector<idx_t> GetStreamingResultFrontierEntries(const PipelineSchedule &schedule) {
-	auto frontier = GetStreamingResultFrontier(schedule);
+static vector<idx_t> GetStreamingResultPipelineEntries(const PipelineSchedule &schedule) {
+	auto result_pipelines = GetStreamingResultPipelines(schedule);
 	vector<bool> streaming_execute_stages(schedule.stages.size(), false);
 	for (idx_t stage_idx = 0; stage_idx < schedule.stages.size(); stage_idx++) {
 		auto &stage = schedule.stages[stage_idx];
-		if (stage.type == PipelineScheduleStageType::EXECUTE && frontier.find(*stage.pipeline) != frontier.end()) {
+		if (stage.type == PipelineScheduleStageType::EXECUTE &&
+		    result_pipelines.find(*stage.pipeline) != result_pipelines.end()) {
 			streaming_execute_stages[stage_idx] = true;
 		}
 	}
@@ -179,12 +180,12 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		}
 	}
 	if (event_data.initial_schedule && HasStreamingResultCollector()) {
-		auto frontier_entries = GetStreamingResultFrontierEntries(*schedule);
-		if (frontier_entries.empty()) {
-			throw InternalException("Failed to find an entry pipeline for the streaming result frontier");
+		auto entry_stages = GetStreamingResultPipelineEntries(*schedule);
+		if (entry_stages.empty()) {
+			throw InternalException("Failed to find an entry pipeline for the streaming result");
 		}
 		set<idx_t> gate_dependencies;
-		for (auto entry_idx : frontier_entries) {
+		for (auto entry_idx : entry_stages) {
 			for (auto dependency : schedule->stages[entry_idx].dependencies) {
 				gate_dependencies.insert(dependency);
 			}
@@ -193,7 +194,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		for (auto dependency : gate_dependencies) {
 			gate->AddDependency(*events[dependency]);
 		}
-		for (auto entry_idx : frontier_entries) {
+		for (auto entry_idx : entry_stages) {
 			events[entry_idx]->AddDependency(*gate);
 		}
 		result_ready_event = gate;
