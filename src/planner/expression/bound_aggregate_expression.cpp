@@ -67,6 +67,12 @@ hash_t BoundAggregateExpression::Hash() const {
 	hash_t result = Expression::Hash();
 	result = CombineHash(result, function.Hash());
 	result = CombineHash(result, duckdb::Hash(IsDistinct()));
+	if (IsDistinct()) {
+		for (auto &child : children) {
+			auto collation = StringType::GetCollation(child->GetReturnType());
+			result = CombineHash(result, duckdb::Hash(collation.c_str(), collation.size()));
+		}
+	}
 	return result;
 }
 
@@ -88,6 +94,10 @@ bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 		return false;
 	}
 	for (idx_t i = 0; i < children.size(); i++) {
+		if (IsDistinct() && StringType::GetCollation(children[i]->GetReturnType()) !=
+		                        StringType::GetCollation(other.children[i]->GetReturnType())) {
+			return false;
+		}
 		if (!Expression::Equals(*children[i], *other.children[i])) {
 			return false;
 		}

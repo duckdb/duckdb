@@ -24,7 +24,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::UNGROUPED_AGGREGATE;
 
 public:
-	PhysicalUngroupedAggregate(PhysicalPlan &physical_plan, vector<LogicalType> types,
+	PhysicalUngroupedAggregate(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
 	                           vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality,
 	                           TupleDataValidityType distinct_validity);
 

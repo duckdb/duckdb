@@ -44,9 +44,10 @@ private:
 
 struct DistinctAggregateData {
 public:
-	DistinctAggregateData(const DistinctAggregateCollectionInfo &info, TupleDataValidityType distinct_validity);
-	DistinctAggregateData(const DistinctAggregateCollectionInfo &info, const GroupingSet &groups,
-	                      const vector<unique_ptr<Expression>> *group_expressions,
+	DistinctAggregateData(ClientContext &context, const DistinctAggregateCollectionInfo &info,
+	                      TupleDataValidityType distinct_validity);
+	DistinctAggregateData(ClientContext &context, const DistinctAggregateCollectionInfo &info,
+	                      const GroupingSet &groups, const vector<unique_ptr<Expression>> *group_expressions,
 	                      TupleDataValidityType distinct_validity);
 	//! The data used by the hashtables
 	vector<unique_ptr<GroupedAggregateData>> grouped_aggregate_data;
@@ -54,10 +55,18 @@ public:
 	vector<unique_ptr<RadixPartitionedHashTable>> radix_tables;
 	//! The groups (arguments)
 	vector<GroupingSet> grouping_sets;
+	//! Collation-aware comparison expressions, indexed by DISTINCT table
+	vector<vector<unique_ptr<Expression>>> key_normalizers;
+	//! Internal aggregates to update, indexed by DISTINCT table
+	vector<unsafe_vector<idx_t>> internal_aggregate_filters;
+	//! Input column indices used to preserve original values for collation-aware DISTINCT aggregates
+	vector<vector<idx_t>> representative_input_indices;
 	const DistinctAggregateCollectionInfo &info;
 
 public:
 	bool IsDistinct(idx_t index) const;
+	bool RequiresNormalization(idx_t table_idx) const;
+	bool AnyRequiresNormalization() const;
 };
 
 struct DistinctAggregateState {
@@ -70,6 +79,21 @@ public:
 	vector<unique_ptr<GlobalSinkState>> radix_states;
 	//! Output chunks to receive distinct data from hashtables
 	vector<unique_ptr<DataChunk>> distinct_output_chunks;
+};
+
+struct DistinctAggregateLocalState {
+public:
+	DistinctAggregateLocalState(const DistinctAggregateData &data, ClientContext &client);
+
+	//! Prepare normalized DISTINCT keys and original-value payloads for one input batch
+	void PrepareData(const DistinctAggregateData &data, idx_t table_idx, DataChunk &input);
+
+	//! Per-table executors that build the hash-table input from each source batch
+	vector<unique_ptr<ExpressionExecutor>> input_executors;
+	//! Per-table temporary chunks containing group columns and normalized DISTINCT keys
+	vector<unique_ptr<DataChunk>> input_chunks;
+	//! Per-table temporary chunks containing original values for hidden representative aggregates
+	vector<unique_ptr<DataChunk>> payload_chunks;
 };
 
 } // namespace duckdb
