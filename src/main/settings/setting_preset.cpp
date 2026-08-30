@@ -10,6 +10,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -195,7 +196,7 @@ Preset PresetRegistry::LoadFromFile(ClientContext &context, const string &path) 
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto file_size = NumericCast<idx_t>(fs.GetFileSize(*handle));
 	string contents(file_size, '\0');
-	fs.Read(*handle, const_cast<char *>(contents.c_str()), NumericCast<int64_t>(file_size)); // NOLINT
+	fs.Read(*handle, contents.data(), NumericCast<int64_t>(file_size));
 
 	JSONParseError error;
 	auto doc = JSONDocument::TryParse(contents.c_str(), contents.size(), error, JSONReadFlags::NONE);
@@ -263,17 +264,145 @@ Preset PresetRegistry::LoadFromFile(ClientContext &context, const string &path) 
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// PresetManager
+//===--------------------------------------------------------------------===//
+
+void PresetManager::Register(Preset preset) {
+	lock_guard<mutex> guard(lock);
+	auto name = preset.name;
+	presets[name] = std::move(preset);
+}
+
+bool PresetManager::TryGet(const string &name, Preset &result) const {
+	lock_guard<mutex> guard(lock);
+	auto entry = presets.find(name);
+	if (entry == presets.end()) {
+		return false;
+	}
+	result = entry->second;
+	return true;
+}
+
+vector<Preset> PresetManager::All() const {
+	lock_guard<mutex> guard(lock);
+	vector<Preset> result;
+	for (auto &entry : presets) {
+		result.push_back(entry.second);
+	}
+	return result;
+}
+
+void PresetManager::SetDirectory(string path) {
+	lock_guard<mutex> guard(lock);
+	directory = std::move(path);
+}
+
+void PresetManager::ResetDirectory() {
+	lock_guard<mutex> guard(lock);
+	directory.clear();
+}
+
+string PresetManager::GetDirectory() const {
+	lock_guard<mutex> guard(lock);
+	if (!directory.empty()) {
+		return directory;
+	}
+	// a local filesystem is all that is needed to resolve the home directory, as for secrets
+	auto fs = FileSystem::CreateLocal();
+	return fs->JoinPath(fs->JoinPath(fs->GetHomeDirectory(), ".duckdb"), "presets");
+}
+
+//===--------------------------------------------------------------------===//
+// Persistence
+//===--------------------------------------------------------------------===//
+
+string PresetRegistry::GetPresetPath(ClientContext &context, const string &name) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto &config = DBConfig::GetConfig(context);
+	auto path = config.preset_manager->GetDirectory();
+	// a namespaced name becomes a subdirectory: "host:shared" -> host/shared.json. A colon is not a
+	// legal filename character on every platform, so it cannot simply be kept.
+	auto parts = StringUtil::Split(name, ':');
+	for (idx_t i = 0; i + 1 < parts.size(); i++) {
+		path = fs.JoinPath(path, parts[i]);
+	}
+	return fs.JoinPath(path, parts.back() + ".json");
+}
+
+string PresetRegistry::ToJSON(const Preset &preset) {
+	JSONWriter writer;
+	auto root = writer.CreateObject();
+	if (!preset.description.empty()) {
+		root.AddString("description", preset.description);
+	}
+	auto settings = writer.CreateArray();
+	for (auto &setting : preset.settings) {
+		auto entry = writer.CreateObject();
+		if (setting.is_reset || setting.value.IsNull()) {
+			entry.Add(setting.name, writer.CreateNull());
+		} else if (setting.value.type().id() == LogicalTypeId::BOOLEAN) {
+			entry.Add(setting.name, writer.CreateBoolean(BooleanValue::Get(setting.value)));
+		} else if (setting.value.type().IsIntegral()) {
+			entry.Add(setting.name, writer.CreateSignedInteger(setting.value.GetValue<int64_t>()));
+		} else if (setting.value.type().id() == LogicalTypeId::LIST) {
+			auto list = writer.CreateArray();
+			for (auto &child : ListValue::GetChildren(setting.value)) {
+				list.AppendString(child.ToString());
+			}
+			entry.Add(setting.name, std::move(list));
+		} else {
+			entry.AddString(setting.name, setting.value.ToString());
+		}
+		settings.Append(std::move(entry));
+	}
+	root.Add("settings", std::move(settings));
+	writer.SetRoot(std::move(root));
+	return writer.ToString(JSONWriteFlags::PRETTY);
+}
+
+void PresetRegistry::Persist(ClientContext &context, const Preset &preset) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto path = GetPresetPath(context, preset.name);
+	auto directory = fs.JoinPath(path, "..");
+	fs.CreateDirectoriesRecursive(StringUtil::GetFilePath(path));
+
+	auto contents = ToJSON(preset);
+	// written 0600, like a persistent secret: a preset is executed, so it must not be writable by
+	// anyone but its owner
+	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileFlags::FILE_FLAGS_PRIVATE;
+	auto handle = fs.OpenFile(path, flags);
+	handle->Write(QueryContext(context), contents.data(), contents.size(), 0);
+	handle->Truncate(NumericCast<int64_t>(contents.size()));
+}
+
 Preset PresetRegistry::Resolve(ClientContext &context, const string &name) {
+	auto &config = DBConfig::GetConfig(context);
+	// most local wins, so that a preset defined here overrides one shipped with DuckDB
+	Preset registered;
+	if (config.preset_manager->TryGet(name, registered)) {
+		return registered;
+	}
+	// the name maps to a path, so a miss costs one failed open rather than a directory scan
+	auto path = GetPresetPath(context, name);
+	auto &fs = FileSystem::GetFileSystem(context);
+	if (fs.FileExists(path)) {
+		auto result = LoadFromFile(context, path);
+		result.name = name;
+		return result;
+	}
 	auto builtin = FindBuiltin(name);
 	if (builtin) {
-		return Materialize(*builtin, DBConfig::GetConfig(context));
+		return Materialize(*builtin, config);
 	}
-	// there are few enough presets that listing them is more useful than a fuzzy guess
 	vector<string> candidates;
 	for (idx_t i = 0; i < GetBuiltinCount(); i++) {
 		candidates.emplace_back(GetBuiltinByIndex(i).name);
 	}
-	throw CatalogException("Preset \"%s\" does not exist\nAvailable presets: %s", name,
+	for (auto &preset : config.preset_manager->All()) {
+		candidates.push_back(preset.name);
+	}
+	throw CatalogException("Preset \"%s\" does not exist (looked for %s)\nAvailable presets: %s", name, path,
 	                       StringUtil::Join(candidates, ", "));
 }
 

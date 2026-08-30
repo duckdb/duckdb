@@ -1,0 +1,81 @@
+# name: test/sql/presets/presets_register.test
+# description: Registering and persisting presets
+# group: [presets]
+
+statement ok
+SET preset_directory='{TEST_DIR}/presets'
+
+# a preset registered this session is listed and can be applied
+query III
+CALL register_preset('quack:throughput', {'threads': 3, 'preserve_insertion_order': false})
+----
+threads	3	session
+preserve_insertion_order	false	session
+
+query II
+SELECT name, source FROM duckdb_presets() WHERE name = 'quack:throughput'
+----
+quack:throughput	session
+
+query II
+SELECT setting, new_value FROM preset('quack:throughput')
+----
+threads	3
+preserve_insertion_order	false
+
+# a struct preserves field order, which is the order the settings are applied in
+query I
+SELECT list(setting) FROM preset('quack:throughput')
+----
+[threads, preserve_insertion_order]
+
+# null in the struct means reset, not "assign null"
+statement ok
+SET max_expression_depth=9999
+
+statement ok
+CALL register_preset('quack:reset_depth', {'max_expression_depth': NULL})
+
+query II
+SELECT setting, new_value FROM preset('quack:reset_depth')
+----
+max_expression_depth	1000
+
+# nothing is written to disk unless persistence is asked for
+statement ok
+CALL register_preset('quack:session_only', {'threads': 2})
+
+query I
+SELECT count(*) FROM duckdb_presets() WHERE name = 'quack:session_only' AND source = 'file'
+----
+0
+
+# persisting writes a file that a later lookup resolves by name
+statement ok
+CALL register_preset('quack:persisted', {'threads': 4}, persistent := true, description := 'kept on disk')
+
+query I
+SELECT count(*) FROM duckdb_presets() WHERE name = 'quack:persisted' AND source = 'file'
+----
+1
+
+# a locally defined preset overrides a built-in of the same name
+statement ok
+CALL register_preset('memory:no_spill', {'threads': 5})
+
+query II
+SELECT setting, new_value FROM preset('memory:no_spill')
+----
+threads	5
+
+# a preset must name at least one setting
+statement error
+CALL register_preset('quack:empty', {})
+----
+<REGEX>:.*
+
+# an unknown preset reports where it looked
+statement error
+CALL preset('quack:missing')
+----
+<REGEX>:.*does not exist.*

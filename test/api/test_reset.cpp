@@ -66,6 +66,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"variant_minimum_shredding_size", {Value::INTEGER(-1)}},
 	    {"allow_persistent_secrets", {Value(false)}},
 	    {"secret_directory", {"/tmp/some/path"}},
+	    {"preset_directory", {"/tmp/some/preset/path"}},
 	    {"default_secret_storage", {"custom_storage"}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},

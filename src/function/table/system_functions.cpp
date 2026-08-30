@@ -55,6 +55,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBPresetsFun::RegisterFunction(*this);
 	DuckDBSettingsFun::RegisterFunction(*this);
 	PresetFun::RegisterFunction(*this);
+	RegisterPresetFun::RegisterFunction(*this);
 	DuckDBTablesFun::RegisterFunction(*this);
 	DuckDBTableSample::RegisterFunction(*this);
 	DuckDBTemporaryFilesFun::RegisterFunction(*this);

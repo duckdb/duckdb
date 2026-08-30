@@ -8,13 +8,16 @@
 
 #pragma once
 
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class ClientContext;
 class DBConfig;
+class FileSystem;
 
 //! One setting within a preset, resolved to a concrete value.
 struct PresetSetting {
@@ -69,6 +72,28 @@ struct PresetApplyResult {
 	string note;
 };
 
+//! Presets registered at runtime, and where persistent ones are kept. Owned by the DBConfig.
+class PresetManager {
+public:
+	//! Register a preset for this session, replacing any previous one of the same name
+	DUCKDB_API void Register(Preset preset);
+	//! A preset registered this session, if any
+	DUCKDB_API bool TryGet(const string &name, Preset &result) const;
+	//! Every preset registered this session
+	DUCKDB_API vector<Preset> All() const;
+
+	//! Where persistent presets are stored; defaults to <home>/.duckdb/presets
+	DUCKDB_API void SetDirectory(string path);
+	DUCKDB_API void ResetDirectory();
+	DUCKDB_API string GetDirectory() const;
+
+private:
+	mutable mutex lock;
+	case_insensitive_map_t<Preset> presets;
+	//! Empty means "use the default"
+	string directory;
+};
+
 struct PresetRegistry {
 	//! The presets defined in code
 	DUCKDB_API static idx_t GetBuiltinCount();
@@ -79,8 +104,16 @@ struct PresetRegistry {
 	DUCKDB_API static Preset Materialize(const PresetDefinition &definition, DBConfig &config);
 	//! Read a preset from a JSON file
 	DUCKDB_API static Preset LoadFromFile(ClientContext &context, const string &path);
-	//! Look up a preset by name
+	//! Look up a preset by name. Most local wins: one registered this session, then a file in the
+	//! preset directory, then a built-in - so a preset defined locally overrides a shipped one.
+	//! A namespaced name maps to a subdirectory, so "host:shared" is host/shared.json.
 	DUCKDB_API static Preset Resolve(ClientContext &context, const string &name);
+	//! The file a named preset would be stored in
+	DUCKDB_API static string GetPresetPath(ClientContext &context, const string &name);
+	//! Write a preset to the preset directory as JSON
+	DUCKDB_API static void Persist(ClientContext &context, const Preset &preset);
+	//! Serialize a preset to the JSON form read by LoadFromFile
+	DUCKDB_API static string ToJSON(const Preset &preset);
 
 	//! Apply a preset. Settings are applied in order through the regular SET and RESET paths, so
 	//! configuration locking, extension autoloading and scope resolution behave as they do for an
