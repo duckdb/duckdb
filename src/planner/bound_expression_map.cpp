@@ -5,7 +5,9 @@
 namespace duckdb {
 
 void BoundExpressionMap::Insert(const ParsedExpression &node, unique_ptr<Expression> expr) {
-	D_ASSERT(!scope_stack.empty());
+	if (scope_stack.empty()) {
+		throw InternalException("BoundExpressionMap::Insert called without an open BoundExpressionScope");
+	}
 	D_ASSERT(expr);
 	MapEntry entry;
 	entry.expression = std::move(expr);
