@@ -39,8 +39,8 @@ static unique_ptr<GlobalTableFunctionState> DuckDBPresetsInit(ClientContext &con
 static void DuckDBPresetsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBPresetsData>();
 	idx_t count = 0;
-	while (data.offset < PresetRegistry::GetPresetCount() && count < STANDARD_VECTOR_SIZE) {
-		auto &preset = PresetRegistry::GetPresetByIndex(data.offset++);
+	while (data.offset < PresetRegistry::GetBuiltinCount() && count < STANDARD_VECTOR_SIZE) {
+		auto &preset = PresetRegistry::GetBuiltinByIndex(data.offset++);
 
 		vector<Value> settings;
 		for (idx_t i = 0; i < preset.member_count; i++) {
@@ -66,14 +66,15 @@ void DuckDBPresetsFun::RegisterFunction(BuiltinFunctions &set) {
 struct PresetApplyData : public GlobalTableFunctionState {
 	PresetApplyData() : offset(0) {
 	}
-	vector<PresetMemberResult> results;
+	vector<PresetApplyResult> results;
 	idx_t offset;
 };
 
 struct PresetBindData : public TableFunctionData {
-	explicit PresetBindData(string name_p) : name(std::move(name_p)) {
-	}
+	//! The name of a preset to look up, or empty when loading from a file
 	string name;
+	//! The path of a preset file, or empty when looking up by name
+	string file;
 };
 
 static unique_ptr<FunctionData> PresetBind(ClientContext &context, TableFunctionBindInput &input,
@@ -93,27 +94,35 @@ static unique_ptr<FunctionData> PresetBind(ClientContext &context, TableFunction
 	names.emplace_back("note");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	if (input.inputs.empty() || input.inputs[0].IsNull()) {
-		throw BinderException("preset requires the name of a preset");
+	auto result = make_uniq<PresetBindData>();
+	if (!input.inputs.empty() && !input.inputs[0].IsNull()) {
+		result->name = input.inputs[0].ToString();
 	}
-	return make_uniq<PresetBindData>(input.inputs[0].ToString());
+	for (auto &entry : input.named_parameters) {
+		if (entry.second.IsNull()) {
+			continue;
+		}
+		if (entry.first == "file") {
+			result->file = entry.second.ToString();
+		} else if (entry.first == "name") {
+			result->name = entry.second.ToString();
+		}
+	}
+	if (result->name.empty() && result->file.empty()) {
+		throw BinderException("preset requires either a preset name or file := '<path>'");
+	}
+	if (!result->name.empty() && !result->file.empty()) {
+		throw BinderException("preset takes either a preset name or file := '<path>', not both");
+	}
+	return std::move(result);
 }
 
 static unique_ptr<GlobalTableFunctionState> PresetInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<PresetBindData>();
 	auto result = make_uniq<PresetApplyData>();
-
-	auto preset = PresetRegistry::Find(bind_data.name);
-	if (!preset) {
-		// there are few enough presets that listing them is more useful than a fuzzy guess
-		vector<string> candidates;
-		for (idx_t i = 0; i < PresetRegistry::GetPresetCount(); i++) {
-			candidates.emplace_back(PresetRegistry::GetPresetByIndex(i).name);
-		}
-		throw CatalogException("Preset \"%s\" does not exist\nAvailable presets: %s", bind_data.name,
-		                       StringUtil::Join(candidates, ", "));
-	}
-	result->results = PresetRegistry::Apply(context, *preset);
+	auto preset = bind_data.file.empty() ? PresetRegistry::Resolve(context, bind_data.name)
+	                                     : PresetRegistry::LoadFromFile(context, bind_data.file);
+	result->results = PresetRegistry::Apply(context, preset);
 	return std::move(result);
 }
 
@@ -135,8 +144,18 @@ static void PresetFunction(ClientContext &context, TableFunctionInput &data_p, D
 }
 
 void PresetFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("preset", {LogicalType::VARCHAR}, PresetFunction, PresetBind, PresetInit));
+	TableFunctionSet functions("preset");
+	// preset('name'), and preset(name := ...) / preset(file := ...)
+	vector<vector<LogicalType>> signatures;
+	signatures.emplace_back();
+	signatures.push_back({LogicalType::VARCHAR});
+	for (auto &arguments : signatures) {
+		TableFunction function(arguments, PresetFunction, PresetBind, PresetInit);
+		function.named_parameters["name"] = LogicalType::VARCHAR;
+		function.named_parameters["file"] = LogicalType::VARCHAR;
+		functions.AddFunction(std::move(function));
+	}
+	set.AddFunction(functions);
 }
 
 } // namespace duckdb
