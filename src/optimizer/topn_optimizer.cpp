@@ -91,6 +91,16 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		// no pushdown targets
 		return;
 	}
+	for (auto &target : pushdown_targets) {
+		auto &pushed_column = target.columns[0];
+		if (pushed_column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION ||
+		    !pushed_column.runtime_filter_casts.empty() || pushed_column.storage_type != type) {
+			// the raw scan column is not identical to the sort key column (a cast or projection is
+			// in between): the filter constants are built in the sort key's type and would be
+			// reinterpreted against a different storage type - bail out
+			return;
+		}
+	}
 	// found pushdown targets! generate dynamic filters
 	ExpressionType comparison_type;
 	if (op.orders[0].type == OrderType::ASCENDING) {

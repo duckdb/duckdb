@@ -1,0 +1,81 @@
+# name: test/sql/topn/topn_dynamic_filter_cast.test
+# description: Test Top-N dynamic filter pushdown across type-changing casts
+# group: [topn]
+
+# The Top-N dynamic filter pushdown may only fire when the sort key column is identical to the raw
+# scan column. When the sort key reaches the scan through a type-changing cast (aggregate GROUP BY
+# CAST / projected cast column / set-op child projection), the filter constants are built in the
+# sort key's type and would be reinterpreted against a different storage type at runtime - bail out
+# instead of pushing.
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+require no_alternative_verify
+
+statement ok
+SET threads TO 1;
+
+# positive: plain column sort key - the dynamic filter is still pushed and results stay correct
+statement ok
+CREATE TABLE t AS SELECT i AS k FROM range(0, 100000) t(i);
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY k LIMIT 10;
+----
+analyzed_plan	<REGEX>:(?s).*Dynamic Filter.*
+
+query I
+SELECT k FROM t ORDER BY k LIMIT 3;
+----
+0
+1
+2
+
+# negative: sort key passes through an aggregate GROUP BY CAST(...) - no dynamic filter may be pushed
+statement ok
+CREATE TABLE tint AS SELECT i::INTEGER AS k FROM range(0, 204800) t(i);
+
+query II
+EXPLAIN ANALYZE SELECT CAST(k AS BIGINT) AS x, count(*) FROM tint GROUP BY CAST(k AS BIGINT) ORDER BY x LIMIT 10;
+----
+analyzed_plan	<!REGEX>:(?s).*Dynamic Filter.*
+
+query II
+SELECT CAST(k AS BIGINT) AS x, count(*) FROM tint GROUP BY CAST(k AS BIGINT) ORDER BY x LIMIT 3;
+----
+0	1
+1	1
+2	1
+
+# negative: sort key is a bare reference to a projected cast column
+query II
+EXPLAIN ANALYZE SELECT CAST(k AS BIGINT) AS x FROM tint ORDER BY x LIMIT 5;
+----
+analyzed_plan	<!REGEX>:(?s).*Dynamic Filter.*
+
+query I
+SELECT CAST(k AS BIGINT) AS x FROM tint ORDER BY x LIMIT 3;
+----
+0
+1
+2
+
+# negative: casts recorded through set-op child projections
+statement ok
+CREATE TABLE ta AS SELECT i::INTEGER AS k FROM range(0, 100000) t(i);
+
+statement ok
+CREATE TABLE tb AS SELECT (100000 + i)::INTEGER AS k FROM range(100000, 200000) t(i);
+
+query II
+EXPLAIN ANALYZE SELECT k FROM (SELECT CAST(k AS BIGINT) AS k FROM ta UNION ALL SELECT CAST(k AS BIGINT) AS k FROM tb) st ORDER BY k LIMIT 5;
+----
+analyzed_plan	<!REGEX>:(?s).*Dynamic Filter.*
+
+query I
+SELECT k FROM (SELECT CAST(k AS BIGINT) AS k FROM ta UNION ALL SELECT CAST(k AS BIGINT) AS k FROM tb) st ORDER BY k LIMIT 3;
+----
+0
+1
+2
