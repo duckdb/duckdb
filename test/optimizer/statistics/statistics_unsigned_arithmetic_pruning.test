@@ -1,5 +1,5 @@
 # name: test/optimizer/statistics/statistics_unsigned_arithmetic_pruning.test
-# description: PropagateNumericStats should propagate min/max through arithmetic on unsigned integer columns (currently only signed widths are handled), so downstream filters can fold to Empty Result.
+# description: unsigned integer columns propagate stats
 # group: [statistics]
 
 statement ok
