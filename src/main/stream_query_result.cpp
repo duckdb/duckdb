@@ -132,7 +132,7 @@ static unique_ptr<DataChunk> AlternativeFetch(StreamQueryResult &stream_result) 
 		                            "caused by executing a different query");
 	}
 	if (execution_result == StreamExecutionResult::EXECUTION_ERROR) {
-		stream_result.ThrowError();
+		return nullptr;
 	}
 	return stream_result.Fetch();
 }
