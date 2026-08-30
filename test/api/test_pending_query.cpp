@@ -102,8 +102,23 @@ TEST_CASE("Test Pending Query API", "[api][.]") {
 		auto result = pending_query->Execute();
 		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		REQUIRE(!result->HasError());
-		REQUIRE(!result->Fetch());
-		REQUIRE(result->HasError());
+		SECTION("fetch") {
+			REQUIRE(!result->Fetch());
+			REQUIRE(result->HasError());
+			REQUIRE(result->GetErrorObject().Type() == ExceptionType::CONVERSION);
+		}
+		SECTION("materialize") {
+			ErrorData materialize_error;
+			try {
+				auto materialized = result->Cast<StreamQueryResult>().Materialize();
+				if (materialized->HasError()) {
+					materialize_error = materialized->GetErrorObject();
+				}
+			} catch (std::exception &ex) {
+				materialize_error = ErrorData(ex);
+			}
+			REQUIRE(materialize_error.Type() == ExceptionType::CONVERSION);
+		}
 
 		// query the connection as normal after
 		result = con.Query("SELECT 42");

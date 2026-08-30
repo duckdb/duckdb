@@ -58,7 +58,11 @@ StreamExecutionResult SimpleBufferedData::ExecuteTaskInternal(StreamQueryResult 
 	// Check for interrupt even if the buffer is full.
 	// Without this check, cancel requests would not be detected until the buffer is drained.
 	if (cc->interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED) {
-		throw InterruptException();
+		// Let ClientContext prefer any executor error that triggered this interrupt.
+		auto execution_result = cc->ExecuteTaskInternal(context_lock, result);
+		D_ASSERT(execution_result == PendingExecutionResult::EXECUTION_ERROR);
+		Close();
+		return StreamExecutionResult::EXECUTION_ERROR;
 	}
 	if (BufferIsFull()) {
 		// The buffer isn't empty yet, just return
