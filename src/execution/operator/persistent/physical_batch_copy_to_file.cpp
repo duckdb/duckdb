@@ -500,6 +500,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 	}
 	unique_ptr<FixedRawBatchData> append_batch;
 	ColumnDataAppendState append_state;
+	CopyBatchAppender batch_appender(children[0].get().GetTypes(), batch_size, batch_size_bytes);
 	// now perform the actual repartitioning
 	for (auto &current_batch : raw_batches) {
 		if (!append_batch) {
@@ -523,6 +524,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 			}
 			if (append_batch) {
 				append_batch->collection->InitializeAppend(append_state);
+				batch_appender.SetCollectionBytes(append_batch->collection->SizeInBytes());
 			}
 		}
 		if (!current_batch) {
@@ -533,20 +535,21 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 		append_batch->memory_usage += current_batch->memory_usage;
 		// iterate the collection while appending
 		for (auto &chunk : current_collection.Chunks()) {
-			// append the chunk to the collection
-			append_batch->collection->Append(append_state, chunk);
-			const CopyFunctionBatchAnalyzer batch_analyzer(*append_batch->collection, batch_size, batch_size_bytes);
-			if (!batch_analyzer.MeetsFlushCriteria()) {
-				// the collection is still under the desired batch size - continue
-				continue;
-			}
-			// the collection is full - move it to the result and create a new one
-			task_manager.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(append_batch)));
+			idx_t offset = 0;
+			while (offset < chunk.size()) {
+				if (!batch_appender.AppendUntilFull(*append_batch->collection, append_state, chunk, offset)) {
+					continue; // the collection is still under the desired batch size
+				}
+				// the collection is full - move it to the result and create a new one
+				task_manager.AddTask(
+				    make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(append_batch)));
 
-			auto new_collection = make_uniq<ColumnDataCollection>(context, children[0].get().GetTypes());
-			new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
-			append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
-			append_batch->collection->InitializeAppend(append_state);
+				auto new_collection = make_uniq<ColumnDataCollection>(context, children[0].get().GetTypes());
+				new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
+				append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
+				append_batch->collection->InitializeAppend(append_state);
+				batch_appender.SetCollectionBytes(0);
+			}
 		}
 	}
 	if (append_batch && append_batch->collection->Count() > 0) {
