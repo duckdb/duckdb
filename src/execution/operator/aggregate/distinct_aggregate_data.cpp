@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
@@ -60,6 +61,9 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 		for (auto &group_type : data.grouped_aggregate_data[table_idx]->group_types) {
 			chunk_types.push_back(group_type);
 		}
+		for (auto &aggregate_type : data.grouped_aggregate_data[table_idx]->aggregate_return_types) {
+			chunk_types.push_back(aggregate_type);
+		}
 
 		// This is used in Finalize to get the data from the radix table
 		distinct_output_chunks[table_idx] = make_uniq<DataChunk>();
@@ -68,18 +72,22 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 }
 
 //! Persistent + shared (read-only) data for the distinct aggregates
-DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info,
+DistinctAggregateData::DistinctAggregateData(ClientContext &context, const DistinctAggregateCollectionInfo &info,
                                              TupleDataValidityType distinct_validity)
-    : DistinctAggregateData(info, {}, nullptr, distinct_validity) {
+    : DistinctAggregateData(context, info, {}, nullptr, distinct_validity) {
 }
 
-DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info, const GroupingSet &groups,
+DistinctAggregateData::DistinctAggregateData(ClientContext &context, const DistinctAggregateCollectionInfo &info,
+                                             const GroupingSet &groups,
                                              const vector<unique_ptr<Expression>> *group_expressions,
                                              TupleDataValidityType distinct_validity)
     : info(info) {
 	grouped_aggregate_data.resize(info.table_count);
 	radix_tables.resize(info.table_count);
 	grouping_sets.resize(info.table_count);
+	key_normalizers.resize(info.table_count);
+	internal_aggregate_filters.resize(info.table_count);
+	representative_input_indices.resize(info.table_count);
 
 	for (auto &i : info.indices) {
 		auto &aggregate = info.aggregates[i]->Cast<BoundAggregateExpression>();
@@ -89,6 +97,24 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 		if (radix_tables[table_idx] != nullptr) {
 			//! This aggregate shares a table with another aggregate, and the table is already initialized
 			continue;
+		}
+
+		auto &normalizers = key_normalizers[table_idx];
+		auto &representative_indices = representative_input_indices[table_idx];
+		vector<bool> requires_normalization;
+		for (idx_t child_idx = 0; child_idx < aggregate.GetChildren().size(); child_idx++) {
+			auto &child = aggregate.GetChildren()[child_idx];
+			auto &child_ref = child->Cast<BoundReferenceExpression>();
+
+			unique_ptr<Expression> normalizer =
+			    make_uniq<BoundReferenceExpression>(child->GetReturnType(), child_ref.Index());
+			const auto child_requires_normalization =
+			    ExpressionBinder::PushCollation(context, normalizer, child->GetReturnType());
+			requires_normalization.push_back(child_requires_normalization);
+			if (child_requires_normalization) {
+				representative_indices.push_back(child_ref.Index());
+			}
+			normalizers.push_back(std::move(normalizer));
 		}
 		// The grouping set contains the indices of the chunk that correspond to the data vector
 		// that will be used to figure out in which bucket the payload should be put
@@ -103,16 +129,82 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 		}
 		// Create the hashtable for the aggregate
 		grouped_aggregate_data[table_idx] = make_uniq<GroupedAggregateData>();
-		grouped_aggregate_data[table_idx]->InitializeDistinct(info.aggregates[i], group_expressions);
+		grouped_aggregate_data[table_idx]->InitializeDistinct(context, info.aggregates[i], group_expressions,
+		                                                      normalizers, requires_normalization);
+		D_ASSERT(representative_indices.size() == grouped_aggregate_data[table_idx]->payload_types.size());
+		auto &internal_filter = internal_aggregate_filters[table_idx];
+		internal_filter.reserve(grouped_aggregate_data[table_idx]->aggregates.size());
+		for (idx_t internal_idx = 0; internal_idx < grouped_aggregate_data[table_idx]->aggregates.size();
+		     internal_idx++) {
+			internal_filter.push_back(internal_idx);
+		}
+		if (representative_indices.empty()) {
+			normalizers.clear();
+		}
 		radix_tables[table_idx] =
 		    make_uniq<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[table_idx], distinct_validity);
+	}
+}
 
-		// Fill the chunk_types (only contains the payload of the distinct aggregates)
-		vector<LogicalType> chunk_types;
-		for (auto &child_p : aggregate.GetChildren()) {
-			chunk_types.push_back(child_p->GetReturnType());
+bool DistinctAggregateData::RequiresNormalization(idx_t table_idx) const {
+	return !key_normalizers[table_idx].empty();
+}
+
+bool DistinctAggregateData::AnyRequiresNormalization() const {
+	for (auto &normalizers : key_normalizers) {
+		if (!normalizers.empty()) {
+			return true;
 		}
 	}
+	return false;
+}
+
+DistinctAggregateLocalState::DistinctAggregateLocalState(const DistinctAggregateData &data, ClientContext &client) {
+	const auto table_count = data.info.table_count;
+	input_executors.resize(table_count);
+	input_chunks.resize(table_count);
+	payload_chunks.resize(table_count);
+
+	for (idx_t table_idx = 0; table_idx < table_count; table_idx++) {
+		if (!data.radix_tables[table_idx] || !data.RequiresNormalization(table_idx)) {
+			continue;
+		}
+
+		auto &table_data = *data.grouped_aggregate_data[table_idx];
+		D_ASSERT(table_data.GroupCount() >= data.key_normalizers[table_idx].size());
+		const auto sql_group_count = table_data.GroupCount() - data.key_normalizers[table_idx].size();
+		auto executor = make_uniq<ExpressionExecutor>(client);
+		for (idx_t group_idx = 0; group_idx < sql_group_count; group_idx++) {
+			executor->AddExpression(*table_data.groups[group_idx]);
+		}
+		for (auto &normalizer : data.key_normalizers[table_idx]) {
+			executor->AddExpression(*normalizer);
+		}
+		input_executors[table_idx] = std::move(executor);
+
+		input_chunks[table_idx] = make_uniq<DataChunk>();
+		input_chunks[table_idx]->Initialize(client, table_data.group_types);
+
+		payload_chunks[table_idx] = make_uniq<DataChunk>();
+		payload_chunks[table_idx]->Initialize(client, table_data.payload_types);
+	}
+}
+
+void DistinctAggregateLocalState::PrepareData(const DistinctAggregateData &data, idx_t table_idx, DataChunk &input) {
+	D_ASSERT(data.RequiresNormalization(table_idx));
+	auto &distinct_input = *input_chunks[table_idx];
+	auto &payload = *payload_chunks[table_idx];
+
+	distinct_input.Reset();
+	payload.Reset();
+
+	auto &representative_indices = data.representative_input_indices[table_idx];
+	D_ASSERT(representative_indices.size() == payload.ColumnCount());
+	for (idx_t payload_idx = 0; payload_idx < representative_indices.size(); payload_idx++) {
+		payload.data[payload_idx].Reference(input.data[representative_indices[payload_idx]]);
+	}
+	payload.SetChildCardinality(input.size());
+	input_executors[table_idx]->Execute(input, distinct_input);
 }
 
 using aggr_ref_t = reference<BoundAggregateExpression>;
@@ -133,6 +225,10 @@ struct FindMatchingAggregate {
 			auto &other_child = other.GetChildren()[i]->Cast<BoundReferenceExpression>();
 			auto &aggr_child = aggr.GetChildren()[i]->Cast<BoundReferenceExpression>();
 			if (other_child.Index() != aggr_child.Index()) {
+				return false;
+			}
+			if (StringType::GetCollation(other_child.GetReturnType()) !=
+			    StringType::GetCollation(aggr_child.GetReturnType())) {
 				return false;
 			}
 		}

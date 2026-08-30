@@ -25,7 +25,8 @@
 
 namespace duckdb {
 
-PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_plan, vector<LogicalType> types,
+PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_plan, ClientContext &context,
+                                                       vector<LogicalType> types,
                                                        vector<unique_ptr<Expression>> expressions,
                                                        idx_t estimated_cardinality,
                                                        TupleDataValidityType distinct_validity)
@@ -36,7 +37,7 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_pl
 	if (!distinct_collection_info) {
 		return;
 	}
-	distinct_data = make_uniq<DistinctAggregateData>(*distinct_collection_info, distinct_validity);
+	distinct_data = make_uniq<DistinctAggregateData>(context, *distinct_collection_info, distinct_validity);
 }
 
 //===--------------------------------------------------------------------===//
@@ -263,6 +264,8 @@ public:
 	UngroupedAggregateExecuteState execute_state;
 	//! The local sink states of the distinct aggregates hash tables
 	vector<unique_ptr<LocalSinkState>> radix_states;
+	//! Per-thread state for preparing collation-aware DISTINCT input
+	unique_ptr<DistinctAggregateLocalState> distinct_prepare_state;
 
 public:
 	void InitializeDistinctAggregates(const PhysicalUngroupedAggregate &op,
@@ -278,6 +281,9 @@ public:
 		radix_states.resize(aggregate_count);
 
 		auto &distinct_info = *op.distinct_collection_info;
+		if (data.AnyRequiresNormalization()) {
+			distinct_prepare_state = make_uniq<DistinctAggregateLocalState>(data, context.client);
+		}
 
 		for (auto &idx : distinct_info.indices) {
 			idx_t table_idx = distinct_info.table_map[idx];
@@ -325,8 +331,6 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChu
 
 	DataChunk empty_chunk;
 
-	auto &distinct_filter = distinct_info.Indices();
-
 	for (auto &idx : distinct_indices) {
 		auto &aggregate = aggregates[idx]->Cast<BoundAggregateExpression>();
 
@@ -341,6 +345,7 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChu
 		auto &radix_local_sink = *sink.radix_states[table_idx];
 		OperatorSinkInput sink_input {radix_global_sink, radix_local_sink, input.interrupt_state};
 
+		DataChunk *sink_chunk = &chunk;
 		if (aggregate.GetFilter()) {
 			// The hashtable can apply a filter, but only on the payload
 			// And in our case, we need to filter the groups (the distinct aggr children)
@@ -348,10 +353,19 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChu
 			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.execute_state.filter_set.GetFilterData(idx);
 			filtered_data.ApplyFilter(chunk);
+			sink_chunk = &filtered_data.filtered_payload;
+		}
 
-			radix_table.Sink(context, filtered_data.filtered_payload, sink_input, empty_chunk, distinct_filter);
+		if (distinct_data->RequiresNormalization(table_idx)) {
+			D_ASSERT(sink.distinct_prepare_state);
+			auto &local_distinct = *sink.distinct_prepare_state;
+			local_distinct.PrepareData(*distinct_data, table_idx, *sink_chunk);
+			radix_table.Sink(context, *local_distinct.input_chunks[table_idx], sink_input,
+			                 *local_distinct.payload_chunks[table_idx],
+			                 distinct_data->internal_aggregate_filters[table_idx]);
 		} else {
-			radix_table.Sink(context, chunk, sink_input, empty_chunk, distinct_filter);
+			unsafe_vector<idx_t> empty_filter;
+			radix_table.Sink(context, *sink_chunk, sink_input, empty_chunk, empty_filter);
 		}
 	}
 }
@@ -592,8 +606,12 @@ TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() 
 		DataChunk output_chunk;
 		output_chunk.Initialize(executor.context, distinct_state.distinct_output_chunks[table_idx]->GetTypes());
 
+		vector<LogicalType> payload_types;
+		for (auto &child : aggregate.GetChildren()) {
+			payload_types.push_back(child->GetReturnType());
+		}
 		DataChunk payload_chunk;
-		payload_chunk.InitializeEmpty(distinct_data.grouped_aggregate_data[table_idx]->group_types);
+		payload_chunk.InitializeEmpty(payload_types);
 		payload_chunk.SetChildCardinality(0);
 
 		while (true) {
@@ -610,8 +628,10 @@ TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() 
 
 			// We dont need to resolve the filter, we already did this in Sink
 			idx_t payload_cnt = aggregate.GetChildren().size();
+			auto &distinct_table_data = *distinct_data.grouped_aggregate_data[table_idx];
 			for (idx_t i = 0; i < payload_cnt; i++) {
-				payload_chunk.data[i].Reference(output_chunk.data[i]);
+				payload_chunk.data[i].Reference(
+				    output_chunk.data[distinct_table_data.distinct_representative_indices[i]]);
 			}
 
 			// Update the aggregate state

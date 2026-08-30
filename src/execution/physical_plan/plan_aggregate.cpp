@@ -277,8 +277,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 
 	if (op.groups.empty() && op.grouping_sets.size() <= 1) {
 		// no groups: use the dedicated ungrouped aggregate path
-		auto &group_by = Make<PhysicalUngroupedAggregate>(op.types, std::move(op.expressions), op.estimated_cardinality,
-		                                                  op.distinct_validity);
+		auto &group_by = Make<PhysicalUngroupedAggregate>(context, op.types, std::move(op.expressions),
+		                                                  op.estimated_cardinality, op.distinct_validity);
 		group_by.children.push_back(plan);
 		return group_by;
 	}

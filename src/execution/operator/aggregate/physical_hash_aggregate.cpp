@@ -19,7 +19,7 @@
 
 namespace duckdb {
 
-HashAggregateGroupingData::HashAggregateGroupingData(GroupingSet &grouping_set_p,
+HashAggregateGroupingData::HashAggregateGroupingData(ClientContext &context, GroupingSet &grouping_set_p,
                                                      const GroupedAggregateData &grouped_aggregate_data,
                                                      unique_ptr<DistinctAggregateCollectionInfo> &info,
                                                      TupleDataValidityType group_validity,
@@ -30,8 +30,8 @@ HashAggregateGroupingData::HashAggregateGroupingData(GroupingSet &grouping_set_p
 		                               distinct_validity == TupleDataValidityType::CANNOT_HAVE_NULL_VALUES
 		                           ? TupleDataValidityType::CANNOT_HAVE_NULL_VALUES
 		                           : TupleDataValidityType::CAN_HAVE_NULL_VALUES;
-		distinct_data =
-		    make_uniq<DistinctAggregateData>(*info, grouping_set_p, &grouped_aggregate_data.groups, nested_validity);
+		distinct_data = make_uniq<DistinctAggregateData>(context, *info, grouping_set_p, &grouped_aggregate_data.groups,
+		                                                 nested_validity);
 	}
 }
 
@@ -55,6 +55,9 @@ HashAggregateGroupingLocalState::HashAggregateGroupingLocalState(const PhysicalH
 		return;
 	}
 	auto &distinct_data = *data.distinct_data;
+	if (distinct_data.AnyRequiresNormalization()) {
+		distinct_prepare_state = make_uniq<DistinctAggregateLocalState>(distinct_data, context.client);
+	}
 
 	auto &distinct_indices = op.distinct_collection_info->Indices();
 	D_ASSERT(!distinct_indices.empty());
@@ -183,8 +186,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 	distinct_collection_info = DistinctAggregateCollectionInfo::Create(grouped_aggregate_data.aggregates);
 
 	for (idx_t i = 0; i < grouping_sets.size(); i++) {
-		groupings.emplace_back(grouping_sets[i], grouped_aggregate_data, distinct_collection_info, group_validity,
-		                       distinct_validity);
+		groupings.emplace_back(context, grouping_sets[i], grouped_aggregate_data, distinct_collection_info,
+		                       group_validity, distinct_validity);
 	}
 }
 
@@ -356,6 +359,19 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 
 		InterruptState interrupt_state;
 		OperatorSinkInput sink_input {radix_global_sink, radix_local_sink, interrupt_state};
+		// Prepare and sink a DISTINCT batch, applying collation normalization when required.
+		auto sink_distinct = [&](DataChunk &sink_chunk) {
+			if (!distinct_data->RequiresNormalization(table_idx)) {
+				radix_table.Sink(context, sink_chunk, sink_input, empty_chunk, empty_filter);
+				return;
+			}
+			D_ASSERT(grouping_lstate.distinct_prepare_state);
+			auto &local_distinct = *grouping_lstate.distinct_prepare_state;
+			local_distinct.PrepareData(*distinct_data, table_idx, sink_chunk);
+			radix_table.Sink(context, *local_distinct.input_chunks[table_idx], sink_input,
+			                 *local_distinct.payload_chunks[table_idx],
+			                 distinct_data->internal_aggregate_filters[table_idx]);
+		};
 
 		if (aggregate.GetFilter()) {
 			DataChunk filter_chunk;
@@ -399,9 +415,9 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 				col.Slice(sel_vec, count);
 			}
 
-			radix_table.Sink(context, filtered_input, sink_input, empty_chunk, empty_filter);
+			sink_distinct(filtered_input);
 		} else {
-			radix_table.Sink(context, chunk, sink_input, empty_chunk, empty_filter);
+			sink_distinct(chunk);
 		}
 	}
 }
@@ -796,9 +812,9 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping
 				group_chunk.data[bound_ref_expr.Index()].Reference(output_chunk.data[group_idx]);
 			}
 
-			for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.groups.size() - group_by_size; child_idx++) {
+			for (idx_t child_idx = 0; child_idx < aggregate.GetChildren().size(); child_idx++) {
 				aggregate_input_chunk.data[payload_idx + child_idx].Reference(
-				    output_chunk.data[group_by_size + child_idx]);
+				    output_chunk.data[grouped_aggregate_data.distinct_representative_indices[child_idx]]);
 			}
 			aggregate_input_chunk.SetChildCardinality(output_chunk.size());
 

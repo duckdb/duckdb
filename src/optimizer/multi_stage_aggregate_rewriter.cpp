@@ -9,7 +9,9 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
@@ -74,6 +76,25 @@ static void AddOrderExpressions(DistinctAggregateSet &set, const BoundAggregateE
 			set.order_expressions.push_back(order.expression->Copy());
 		}
 	}
+}
+
+static bool CanRewriteDistinctAggregate(ClientContext &context, const BoundAggregateExpression &aggregate) {
+	for (auto &child : aggregate.GetChildren()) {
+		unique_ptr<Expression> comparison_key = make_uniq<BoundReferenceExpression>(child->GetReturnType(), idx_t(0));
+		if (ExpressionBinder::PushCollation(context, comparison_key, child->GetReturnType())) {
+			return false;
+		}
+	}
+	if (aggregate.GetOrderBys()) {
+		for (auto &order : aggregate.GetOrderBys()->orders) {
+			unique_ptr<Expression> comparison_key =
+			    make_uniq<BoundReferenceExpression>(order.expression->GetReturnType(), idx_t(0));
+			if (ExpressionBinder::PushCollation(context, comparison_key, order.expression->GetReturnType())) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 static unique_ptr<BoundAggregateExpression> CreateFinalAggregate(const BoundAggregateExpression &source,
@@ -637,6 +658,7 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 
 	bool has_rewrite = false;
 	vector<bool> rewrite_candidates(aggr.expressions.size(), false);
+	vector<bool> distinct_rewrite_candidates(aggr.expressions.size(), false);
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggr.expressions.size(); aggregate_idx++) {
 		auto &expr = aggr.expressions[aggregate_idx];
 		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
@@ -644,7 +666,8 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 		}
 		auto &aggregate = expr->Cast<BoundAggregateExpression>();
 		if (rewrite_distinct && aggregate.IsDistinct()) {
-			has_rewrite = true;
+			distinct_rewrite_candidates[aggregate_idx] = CanRewriteDistinctAggregate(optimizer.context, aggregate);
+			has_rewrite = has_rewrite || distinct_rewrite_candidates[aggregate_idx];
 			continue;
 		}
 		if (ShouldRewrite(aggregate, aggr)) {
@@ -682,7 +705,7 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 			}
 			continue;
 		}
-		if (!rewrite_distinct || !aggregate.IsDistinct()) {
+		if (!distinct_rewrite_candidates[aggregate_idx]) {
 			regular_aggregates.push_back(aggregate_idx);
 			continue;
 		}

@@ -1,0 +1,181 @@
+# name: test/sql/aggregate/distinct/collated.test
+# description: Collation-aware ordinary DISTINCT aggregates
+# group: [distinct]
+
+statement ok
+CREATE TABLE collated_values(g INTEGER, name VARCHAR COLLATE NOCASE, keep BOOLEAN);
+
+statement ok
+INSERT INTO collated_values VALUES
+    (1, 'Alice', true),
+    (1, 'alice', true),
+    (1, 'Bob', false),
+    (2, 'Bob', true),
+    (2, 'BOB', true),
+    (2, NULL, true);
+
+# Ungrouped DISTINCT aggregates use the collation and can share their DISTINCT table
+query II
+SELECT count(DISTINCT name), list_count(list(DISTINCT name))
+FROM collated_values;
+----
+2	2
+
+# Collated DISTINCT aggregates remain correct when other aggregates use optimizer rewrites
+query III
+SELECT count(DISTINCT name), count(DISTINCT g), sum(g)
+FROM collated_values;
+----
+2	2	9
+
+# Value-returning aggregates retain an original representative, not the normalized comparison key
+query I
+SELECT bool_and(value COLLATE C IN ('Alice', 'alice', 'Bob', 'BOB'))
+FROM unnest((SELECT list(DISTINCT name) FROM collated_values)) AS values(value);
+----
+true
+
+# Filters are applied before collation-aware deduplication
+query II
+SELECT count(DISTINCT name) FILTER (WHERE keep),
+       count(DISTINCT name) FILTER (WHERE NOT keep)
+FROM collated_values;
+----
+2	1
+
+# Filtered value-returning aggregates keep their original representatives aligned
+query II
+SELECT count(*), bool_and(value COLLATE C IN ('Alice', 'alice', 'Bob', 'BOB'))
+FROM unnest((
+    SELECT list(DISTINCT name) FILTER (WHERE keep AND name IS NOT NULL)
+    FROM collated_values
+)) AS values(value);
+----
+2	true
+
+# Collated aggregate ORDER BY expressions bypass the incompatible DISTINCT rewrite
+query T
+SELECT lower(string_agg(DISTINCT name, ',' ORDER BY name))
+FROM collated_values;
+----
+alice,bob
+
+# Empty and all-NULL inputs do not create invalid representatives
+query II
+SELECT count(DISTINCT name), list(DISTINCT name) IS NULL
+FROM collated_values
+WHERE false;
+----
+0	true
+
+query III
+SELECT count(DISTINCT name), list(DISTINCT name) IS NULL, array_length(list(DISTINCT name))
+FROM collated_values
+WHERE name IS NULL;
+----
+0	false	1
+
+# Grouped DISTINCT aggregates deduplicate within each SQL group
+query III
+SELECT g, count(DISTINCT name), list_count(list(DISTINCT name))
+FROM collated_values
+GROUP BY g
+ORDER BY g;
+----
+1	2	2
+2	1	1
+
+# Grouping sets preserve the input layout before normalized DISTINCT keys
+query II
+SELECT g, count(DISTINCT name)
+FROM collated_values
+GROUP BY GROUPING SETS ((g), ())
+ORDER BY g NULLS LAST;
+----
+1	2
+2	1
+NULL	2
+
+# Multi-argument aggregates can mix normalized and direct DISTINCT keys
+query I
+SELECT list_count(arg_min(DISTINCT name, g, 4))
+FROM collated_values;
+----
+3
+
+statement ok
+CREATE TABLE accented_values(name VARCHAR COLLATE NOACCENT.NOCASE);
+
+statement ok
+INSERT INTO accented_values VALUES ('Hélène'), ('helene'), ('HELENE'), ('Zoë');
+
+query I
+SELECT count(DISTINCT name) FROM accented_values;
+----
+2
+
+# Uncollated values retain byte-wise DISTINCT behavior
+query I
+SELECT count(DISTINCT name COLLATE C) FROM collated_values;
+----
+4
+
+# DISTINCT aggregates with different collations must not be deduplicated or share state
+query II
+SELECT count(DISTINCT name), count(DISTINCT name COLLATE C)
+FROM collated_values;
+----
+2	4
+
+query II
+SELECT count(DISTINCT name COLLATE C), count(DISTINCT name)
+FROM collated_values;
+----
+4	2
+
+# The session default collation is also used for DISTINCT aggregate keys
+statement ok
+PRAGMA default_collation='NOCASE';
+
+statement ok
+CREATE TABLE default_collated_values(name VARCHAR);
+
+statement ok
+INSERT INTO default_collated_values VALUES ('DuckDB'), ('duckdb');
+
+query II
+SELECT count(DISTINCT name), list_count(list(DISTINCT name))
+FROM default_collated_values;
+----
+1	1
+
+statement ok
+PRAGMA default_collation='C';
+
+# Ordinary DISTINCT tables continue to use the original input layout when no normalization is required
+statement ok
+PRAGMA disable_optimizer;
+
+statement ok
+CREATE TABLE unoptimized_values(i INTEGER, keep BOOLEAN);
+
+statement ok
+INSERT INTO unoptimized_values VALUES (1, true), (2, false), (NULL, true);
+
+query II
+SELECT count(*) FILTER (WHERE keep), count(DISTINCT i)
+FROM unoptimized_values;
+----
+2	2
+
+query II
+SELECT keep::INTEGER, count(DISTINCT i)
+FROM unoptimized_values
+GROUP BY keep
+ORDER BY keep;
+----
+0	1
+1	1
+
+statement ok
+PRAGMA enable_optimizer;
