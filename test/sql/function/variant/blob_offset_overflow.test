@@ -1,0 +1,26 @@
+# name: test/sql/function/variant/blob_offset_overflow.test
+# description: test for uint32_t blob_offset overflow when casting oversized rows to VARIANT
+# group: [variant]
+
+require no_alternative_verify
+
+statement ok
+SELECT CAST({'a': repeat('a', 2), 'b': repeat('b', 2), 'c': repeat('c', 2)} AS VARIANT);
+----
+{'a': aa, 'b': bb, 'c': cc}
+
+statement error
+SELECT CAST({'a': repeat('a', 1600000000), 'b': repeat('b', 1600000000), 'c': repeat('c', 1600000000)} AS VARIANT);
+----
+exceeds the maximum
+
+# 2147483647 + 2147483647 + 2 = 4294967296 = UINT32_MAX + 1
+statement error
+SELECT CAST({'a': repeat('a', 2147483647), 'b': repeat('b', 2147483647), 'c': repeat('c', 2)} AS VARIANT);
+----
+exceeds the maximum
+
+statement ok
+SELECT length(CAST(ROW(repeat('a', 2147483647), repeat('b', 2147483647), repeat('c', 1)) AS VARIANT));
+----
+true
