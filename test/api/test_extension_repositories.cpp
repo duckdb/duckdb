@@ -7,8 +7,6 @@
 #include "duckdb/main/extension_repository_manager.hpp"
 #include "test_helpers.hpp"
 
-#include <fstream>
-
 using namespace duckdb;
 
 static constexpr const char *TEST_PUBLIC_KEY =
@@ -239,13 +237,12 @@ TEST_CASE("Test which signing keys a load trusts", "[api]") {
 	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, true, T::USER_PROVIDED) == T::CORE);
 }
 
-// Write raw bytes to a path directly, bypassing DuckDB's filesystem (which reserves the '.duckdb_extension' trust
-// domain from writes). A test legitimately stages the on-disk state an install would produce.
-static void WriteFileRaw(const string &path, const char *data, idx_t size) {
-	std::ofstream out(path, std::ios::binary | std::ios::trunc);
-	REQUIRE(out.good());
-	out.write(data, static_cast<std::streamsize>(size));
-	out.close();
+// A test legitimately stages the on-disk state an install would produce, so it writes the reserved
+// '.duckdb_extension' trust domain the way INSTALL does
+static void WriteExtensionFile(FileSystem &fs, const string &path, void *data, idx_t size) {
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
+	                                    FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
+	handle->Write(data, size);
 }
 
 // Stage <extension_directory>/<version>/<platform>/<name>.duckdb_extension plus a .info recording a user-provided
@@ -257,8 +254,8 @@ static void StageUserRepoExtensionFlat(DatabaseInstance &db, const string &name,
 	fs->CreateDirectoriesRecursive(dir);
 
 	string ext_path = fs->JoinPath(dir, name + ".duckdb_extension");
-	string zeros(ParsedExtensionMetaData::FOOTER_SIZE, '\0');
-	WriteFileRaw(ext_path, zeros.c_str(), zeros.size());
+	vector<data_t> stub(ParsedExtensionMetaData::FOOTER_SIZE, 0);
+	WriteExtensionFile(*fs, ext_path, stub.data(), stub.size());
 
 	ExtensionInstallInfo info;
 	info.mode = ExtensionInstallMode::REPOSITORY;
@@ -267,12 +264,12 @@ static void StageUserRepoExtensionFlat(DatabaseInstance &db, const string &name,
 	info.version = "";
 	MemoryStream stream;
 	BinarySerializer::Serialize(info, stream);
-	WriteFileRaw(ext_path + ".info", const_char_ptr_cast(stream.GetData()), stream.GetPosition());
+	WriteExtensionFile(*fs, ext_path + ".info", stream.GetData(), stream.GetPosition());
 }
 
-TEST_CASE("Test that a user-provided repository does not block loading when unsigned extensions are allowed", "[api]") {
-	auto repository_directory = TestCreatePath("extension_repositories_devflow");
-	auto extension_directory = TestCreatePath("extension_repositories_devflow_extdir");
+TEST_CASE("Test that a user repository does not block an unsigned load", "[api]") {
+	auto repository_directory = TestCreatePath("ext_repo_devflow");
+	auto extension_directory = TestCreatePath("ext_repo_devflow_ext");
 
 	// pointing at a build folder (or a repository prefix) to test autoloading is a real workflow: when the signature
 	// trust model is off (allow_unsigned_extensions), a user-provided origin must NOT impose an extra load barrier -
