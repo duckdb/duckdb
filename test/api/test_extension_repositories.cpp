@@ -216,21 +216,27 @@ TEST_CASE("Test that the extension repository directory is a startup-only trust 
 	}
 }
 
-
-TEST_CASE("Test that a bare load trusts only core and community keys", "[api]") {
+TEST_CASE("Test which signing keys a load trusts", "[api]") {
 	using T = ExtensionRepositoryType;
-	// with an explicit FROM, the named origin's keys are the ones trusted
-	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, T::CORE) == T::CORE);
-	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, T::COMMUNITY) == T::COMMUNITY);
-	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, T::USER_PROVIDED) == T::USER_PROVIDED);
+	// signature (has_from_clause, core_only, recorded_origin)
 
-	// a bare load (no FROM, which is also how autoloading loads) trusts only the fixed core/community keys: core stays
-	// core, a community extension keeps its community keys, and a user-provided origin is verified against the core
-	// keys - never the repository's own. This is what stops a repointed extension_directory from loading native code
-	// under a user-provided key off an on-disk .info
-	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, T::CORE) == T::CORE);
-	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, T::COMMUNITY) == T::COMMUNITY);
-	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, T::USER_PROVIDED) == T::CORE);
+	// with an explicit FROM, the named origin's keys are the ones trusted
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, false, T::CORE) == T::CORE);
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, false, T::COMMUNITY) == T::COMMUNITY);
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, false, T::USER_PROVIDED) == T::USER_PROVIDED);
+
+	// a plain bare LOAD trusts the fixed core/community keys: core stays core, a community extension keeps its
+	// community keys, and a user-provided origin is verified against the core keys - never the repository's own. This
+	// stops a repointed extension_directory from loading native code under a user-provided key off an on-disk .info
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, false, T::CORE) == T::CORE);
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, false, T::COMMUNITY) == T::COMMUNITY);
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, false, T::USER_PROVIDED) == T::CORE);
+
+	// an autoload (core_only) targets only core extensions, so it trusts nothing but the core keys - not even a
+	// community origin can be autoloaded, closing the last way a non-core-signed extension could be loaded implicitly
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, true, T::CORE) == T::CORE);
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, true, T::COMMUNITY) == T::CORE);
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, true, T::USER_PROVIDED) == T::CORE);
 }
 
 // Write raw bytes to a path directly, bypassing DuckDB's filesystem (which reserves the '.duckdb_extension' trust

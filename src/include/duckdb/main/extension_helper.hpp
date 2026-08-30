@@ -182,11 +182,12 @@ public:
 	static vector<string> GetTrustedPublicKeys(DatabaseInstance &db, ExtensionRepositoryType repository_type,
 	                                           const string &repository_name);
 
-	//! The origin whose signing keys a load trusts. Without an explicit FROM (a bare load, which is also what
-	//! autoloading performs) only the fixed core and community keys are trusted: a community extension keeps its
-	//! community keys, while every other origin - including a user-provided repository that merely redeploys an
-	//! extension - is verified against the core keys, never the repository's own. With a FROM the named origin is used.
-	static ExtensionRepositoryType ResolveTrustedSignatureOrigin(bool has_from_clause,
+	//! The origin whose signing keys a load trusts. With an explicit FROM the named origin is used. An autoload
+	//! (core_only) trusts only the core keys - every autoloadable extension is a core extension, so it never needs to
+	//! accept a community or user-provided origin. A plain bare LOAD trusts the fixed core and community keys (a
+	//! community extension keeps its community keys), but never a user-provided repository's own keys - those, and a
+	//! user-provided repository that merely redeploys an extension, are verified against the core keys instead.
+	static ExtensionRepositoryType ResolveTrustedSignatureOrigin(bool has_from_clause, bool core_only,
 	                                                             ExtensionRepositoryType recorded_origin);
 
 	// Returns extension name, or empty string if not a replacement open path
@@ -282,13 +283,14 @@ private:
 	static vector<string> DefaultExtensionFolders(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                       const string &repository_name = string());
+	                                       const string &repository_name = string(), bool core_only = false);
 	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                           const string &repository_name, ExtensionInitResult &result, string &error);
+	                           const string &repository_name, bool core_only, ExtensionInitResult &result,
+	                           string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                          const string &repository_name, ExtensionActiveLoad &info,
+	                                          const string &repository_name, bool core_only, ExtensionActiveLoad &info,
 	                                          optional_ptr<ClientContext> context);
 
 private:
