@@ -1,0 +1,82 @@
+# name: test/sql/presets/presets_builtin.test
+# description: Built-in setting presets
+# group: [presets]
+
+# the built-in presets are listed
+query I
+SELECT count(*) >= 6 FROM duckdb_presets()
+----
+true
+
+query II
+SELECT name, source FROM duckdb_presets() WHERE name = 'host:shared'
+----
+host:shared	builtin
+
+# every preset reports the settings it touches
+query I
+SELECT len(settings) > 0 FROM duckdb_presets() WHERE name = 'host:background'
+----
+true
+
+# applying a preset reports what it changed
+query I
+SELECT count(*) > 0 FROM preset('memory:no_spill')
+----
+true
+
+query II
+SELECT setting, status FROM preset('memory:no_spill')
+----
+max_temp_directory_size	applied
+
+query I
+SELECT current_setting('max_temp_directory_size')
+----
+0 bytes
+
+# the host rungs are ordered: background never claims more than dedicated.
+# asserted relatively so the test does not encode this machine's core count.
+statement ok
+CALL preset('host:dedicated')
+
+statement ok
+CREATE TABLE dedicated AS SELECT current_setting('threads')::BIGINT AS threads
+
+statement ok
+CALL preset('host:background')
+
+query I
+SELECT current_setting('threads')::BIGINT <= (SELECT threads FROM dedicated)
+----
+true
+
+# switching back is complete: each rung sets the same settings
+statement ok
+CALL preset('host:dedicated')
+
+query I
+SELECT current_setting('threads')::BIGINT = (SELECT threads FROM dedicated)
+----
+true
+
+# an unknown preset lists what is available
+statement error
+CALL preset('does:not_exist')
+----
+<REGEX>:.*does not exist.*Available presets.*
+
+# members owned by an extension that is not installed are skipped, not fatal
+query I
+SELECT count(*) FROM preset('network:flaky') WHERE status = 'applied'
+----
+2
+
+# lock_configuration blocks a preset, exactly as it blocks a SET
+statement ok
+SET lock_configuration=true
+
+statement error
+CALL preset('host:shared')
+----
+<REGEX>:.*configuration has been locked.*
