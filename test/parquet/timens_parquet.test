@@ -102,7 +102,7 @@ SELECT count(*) FROM '{TEST_DIR}/time_ns_pruning.parquet' WHERE t >= TIME_NS '01
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/time_ns_pruning.parquet' WHERE t > TIME_NS '23:59:59.999999999';
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+analyzed_plan	<REGEX>:.*Empty Result.*
 
 query I
 SELECT count(*) FROM '{TEST_DIR}/time_ns_pruning.parquet' WHERE t > TIME_NS '23:59:59.999999999';
