@@ -47,10 +47,19 @@ namespace duckdb {
 //! Sentinel marking an array child (whose 'key_id' is NULL)
 constexpr uint32_t VARIANT_INVALID_KEY = NumericLimits<uint32_t>::Maximum();
 
+inline void VariantBuilderCheckBlobSize(const string &blob) {
+	if (blob.size() > NumericLimits<uint32_t>::Maximum()) {
+		throw InvalidInputException(
+		    "Cannot convert value to VARIANT: encoded row size exceeds the maximum supported %u bytes",
+		    NumericLimits<uint32_t>::Maximum());
+	}
+}
+
 inline void VariantBuilderAppendVarint(string &blob, uint32_t value) {
 	auto size = GetVarintSize(value);
 	auto pos = blob.size();
 	blob.resize(pos + size);
+	VariantBuilderCheckBlobSize(blob);
 	VarintEncode<uint32_t>(value, data_ptr_cast(blob.data()) + pos);
 }
 
@@ -58,11 +67,13 @@ template <class T>
 void VariantBuilderAppendFixed(string &blob, T value) {
 	auto pos = blob.size();
 	blob.resize(pos + sizeof(T));
+	VariantBuilderCheckBlobSize(blob);
 	Store<T>(value, data_ptr_cast(blob.data()) + pos);
 }
 
 inline void VariantBuilderAppendBytes(string &blob, const_data_ptr_t data, idx_t size) {
 	blob.append(const_char_ptr_cast(data), size);
+	VariantBuilderCheckBlobSize(blob);
 }
 
 inline uint32_t VariantBuilderGetOrCreateIndex(OrderedOwningStringMap<uint32_t> &dictionary, const string_t &key) {
