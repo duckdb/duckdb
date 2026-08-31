@@ -290,6 +290,9 @@ public:
 	//! names and names with a single schema level keep the (catalog, schema, name) shape so that the search path
 	//! applies; a nested schema path yields a fully resolved [catalog, schema path..., name].
 	static QualifiedName BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name);
+	//! Register a read of the catalog owning the entry - required when bind data holds a reference to the entry,
+	//! so that cached prepared statement plans are invalidated when the catalog changes
+	static void RegisterEntryRead(optional_ptr<Binder> binder, ClientContext &context, CatalogEntry &entry);
 	QualifiedName BindTableName(const QualifiedName &name);
 	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
 	void BindCreateSchema(CreateSchemaInfo &info);
