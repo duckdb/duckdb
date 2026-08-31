@@ -20,6 +20,10 @@
 
 namespace duckdb {
 
+[[noreturn]] void ThrowAlpMetadataBeforeHeader();
+[[noreturn]] void ThrowAlpMetadataTableOutOfBounds();
+[[noreturn]] void ThrowAlpVectorOffsetOutOfBounds();
+[[noreturn]] void ThrowAlpVectorOffsetsInvalid();
 [[noreturn]] void ThrowAlpExponentOutOfRange(AlpConstants::EXPONENT_TYPE exponent,
                                              AlpConstants::EXPONENT_TYPE max_exponent);
 [[noreturn]] void ThrowAlpFactorOutOfRange(AlpConstants::FACTOR_TYPE factor, AlpConstants::EXPONENT_TYPE exponent);
@@ -86,13 +90,13 @@ public:
 		auto reader = CompressionSegmentReader::FromSegment(handle, segment, "ALP segment");
 		auto metadata_end = reader.template Read<METADATA_POINTER_TYPE>();
 		if (metadata_end < AlpConstants::HEADER_SIZE) {
-			throw DataCorruptionException("Corrupted ALP segment: metadata ends before the segment header");
+			ThrowAlpMetadataBeforeHeader();
 		}
 		reader = reader.GetSubReader(0, metadata_end, "ALP segment");
 
 		auto vector_count = count / AlpConstants::ALP_VECTOR_SIZE + (count % AlpConstants::ALP_VECTOR_SIZE != 0);
 		if (vector_count > (metadata_end - AlpConstants::HEADER_SIZE) / AlpConstants::METADATA_POINTER_SIZE) {
-			throw DataCorruptionException("Corrupted ALP segment: metadata offset table exceeds the segment");
+			ThrowAlpMetadataTableOutOfBounds();
 		}
 		auto metadata_size = vector_count * AlpConstants::METADATA_POINTER_SIZE;
 		auto metadata_start = metadata_end - metadata_size;
@@ -131,7 +135,7 @@ public:
 		D_ASSERT(vector_index < layout.vector_offsets.size());
 		auto vector_start = GetVectorOffset(vector_index);
 		if (vector_start < AlpConstants::HEADER_SIZE) {
-			throw DataCorruptionException("Corrupted ALP segment: vector offset is outside the data region");
+			ThrowAlpVectorOffsetOutOfBounds();
 		}
 		auto data_start = vector_start - AlpConstants::HEADER_SIZE;
 
@@ -139,12 +143,12 @@ public:
 		if (vector_index + 1 < layout.vector_offsets.size()) {
 			auto vector_end = GetVectorOffset(vector_index + 1);
 			if (vector_end < AlpConstants::HEADER_SIZE) {
-				throw DataCorruptionException("Corrupted ALP segment: vector offset is outside the data region");
+				ThrowAlpVectorOffsetOutOfBounds();
 			}
 			data_end = vector_end - AlpConstants::HEADER_SIZE;
 		}
 		if (data_start > data_end || data_end > layout.data.Size()) {
-			throw DataCorruptionException("Corrupted ALP segment: vector offsets do not describe a data range");
+			ThrowAlpVectorOffsetsInvalid();
 		}
 		return layout.data.GetSubReader(data_start, data_end - data_start, "ALP vector");
 	}

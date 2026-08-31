@@ -7,6 +7,22 @@
 
 namespace duckdb {
 
+void ThrowAlpMetadataBeforeHeader() {
+	throw DataCorruptionException("Corrupted ALP segment: metadata ends before the segment header");
+}
+
+void ThrowAlpMetadataTableOutOfBounds() {
+	throw DataCorruptionException("Corrupted ALP segment: metadata offset table exceeds the segment");
+}
+
+void ThrowAlpVectorOffsetOutOfBounds() {
+	throw DataCorruptionException("Corrupted ALP segment: vector offset is outside the data region");
+}
+
+void ThrowAlpVectorOffsetsInvalid() {
+	throw DataCorruptionException("Corrupted ALP segment: vector offsets do not describe a data range");
+}
+
 void ThrowAlpExponentOutOfRange(AlpConstants::EXPONENT_TYPE exponent, AlpConstants::EXPONENT_TYPE max_exponent) {
 	throw DataCorruptionException("Corrupted ALP segment: exponent %d exceeds the maximum %d", exponent, max_exponent);
 }
