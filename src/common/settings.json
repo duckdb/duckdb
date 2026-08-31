@@ -53,6 +53,16 @@
         ]
     },
     {
+        "name": "allow_extension_repositories",
+        "description": "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones). While the database is running the setting can only move from 'undecided' to 'allowed' or 'forbidden', or from 'allowed' to 'forbidden'",
+        "type": "VARCHAR",
+        "scope": "global",
+        "default_value": "undecided",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "allow_extensions_metadata_mismatch",
         "description": "Allow to load extensions with not compatible metadata",
         "type": "BOOLEAN",
@@ -761,6 +771,16 @@
         "default_value": ""
     },
     {
+        "name": "extension_repository_directory",
+        "description": "Set the directory in which trusted extension repositories are stored. This is the trust anchor for user-provided repositories, so while signature checking is enabled (allow_unsigned_extensions=false) it can only be set at startup, not while the database is running",
+        "type": "VARCHAR",
+        "scope": "global",
+        "default_value": "",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "external_file_cache_local_block_size",
         "description": "Block size in bytes for the external file cache when reading local (non-remote) files.",
         "type": "UBIGINT",
@@ -1076,6 +1096,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "5"
+    },
+    {
+        "name": "null_on_division_by_zero",
+        "description": "Return NULL instead of throwing an error when dividing by zero.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "old_implicit_casting",

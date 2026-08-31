@@ -2,6 +2,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -231,13 +232,11 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 			if (!child_stats) {
 				return nullptr;
 			}
-			auto cast_stats =
-			    StatisticsPropagator::TryPropagateCast(*child_stats, cast_child.GetReturnType(), func.GetReturnType());
+			auto expr_copy = func.Copy();
+			auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
+			auto cast_stats = BoundCastExpression::PropagateStatistics(func_copy, *child_stats, context_p);
 			if (!cast_stats) {
 				return nullptr;
-			}
-			if (BoundCastExpression::IsTryCast(func)) {
-				cast_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 			}
 			owned_stats.push_back(std::move(cast_stats));
 			return owned_stats.back().get();
@@ -295,6 +294,37 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 		}
 
 		return nullptr;
+	}
+	case ExpressionClass::BOUND_OPERATOR: {
+		auto &op = expr.Cast<BoundOperatorExpression>();
+		if (op.GetExpressionType() != ExpressionType::OPERATOR_COALESCE || op.GetChildren().empty()) {
+			return nullptr;
+		}
+		// COALESCE returns the first non-NULL child: merge the stats of every reachable child,
+		// stopping at the first child that can never be NULL since later children are unreachable
+		unique_ptr<BaseStatistics> merged;
+		bool last_child_can_be_null = true;
+		for (auto &child : op.GetChildren()) {
+			auto child_stats = TryGetExpressionStats(context_p, *child, input_stats, owned_stats);
+			if (!child_stats) {
+				return nullptr;
+			}
+			if (!merged) {
+				merged = child_stats->ToUnique();
+			} else {
+				merged->Merge(*child_stats);
+			}
+			last_child_can_be_null = child_stats->CanHaveNull();
+			if (!last_child_can_be_null) {
+				break;
+			}
+		}
+		if (!last_child_can_be_null) {
+			// the result is NULL only if every considered child is NULL
+			merged->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		}
+		owned_stats.push_back(std::move(merged));
+		return owned_stats.back().get();
 	}
 	default:
 		return nullptr;
@@ -369,7 +399,7 @@ TryPrepareVariantComparisonStats(const BaseStatistics &stats, Value &constant,
 		return &typed_stats;
 	}
 
-	auto cast_stats = StatisticsPropagator::TryPropagateCast(typed_stats, typed_type, comparison_type);
+	auto cast_stats = CastStatistics::TryPropagate(typed_stats, typed_type, comparison_type);
 	if (!cast_stats) {
 		return nullptr;
 	}

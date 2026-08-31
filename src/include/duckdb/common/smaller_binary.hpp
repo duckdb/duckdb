@@ -181,6 +181,10 @@
 #define DUCKDB_SB_FEATURE_list_aggregate_types DUCKDB_SB_DEFAULT // group: function_type_specialization
 #endif
 
+#ifndef DUCKDB_SB_FEATURE_unchecked_numeric_casts
+#define DUCKDB_SB_FEATURE_unchecked_numeric_casts DUCKDB_SB_DEFAULT // group: function_type_specialization
+#endif
+
 // --- window_specialization: custom windowed implementations of holistic aggregates --------------
 // Trimming these falls back to re-aggregating each window frame.
 

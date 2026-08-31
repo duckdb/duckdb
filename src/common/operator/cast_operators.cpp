@@ -3233,20 +3233,24 @@ static void FillDecimalDigits(SRC input, duckdb_fast_float::decimal &decimal, bo
 }
 
 static void FillDecimalDigits(hugeint_t input, duckdb_fast_float::decimal &decimal, bool &negative) {
+	if (input == 0) {
+		return;
+	}
+
 	if (input < 0) {
 		negative = true;
 		Hugeint::NegateInPlace(input);
 	} else {
 		negative = false;
 	}
-	uint8_t digits[DecimalWidth<hugeint_t>::max];
-	while (input > 0) {
-		uint64_t remainder;
-		input = Hugeint::DivModPositive(input, 10, remainder);
-		digits[decimal.num_digits++] = UnsafeNumericCast<uint8_t>(remainder);
-	}
+
+	char buffer[DecimalWidth<hugeint_t>::max];
+	auto end = buffer + sizeof(buffer);
+	auto begin = NumericHelper::FormatUnsigned(input, end);
+
+	decimal.num_digits = UnsafeNumericCast<uint32_t>(end - begin);
 	for (uint32_t i = 0; i < decimal.num_digits; i++) {
-		decimal.digits[i] = digits[decimal.num_digits - i - 1];
+		decimal.digits[i] = UnsafeNumericCast<uint8_t>(begin[i] - '0');
 	}
 }
 

@@ -76,6 +76,7 @@ enum class RequestType : uint8_t {
 };
 
 struct HTTPHeaders {
+	using header_values_t = vector<string>;
 	using header_map_t = case_insensitive_map_t<string>;
 
 public:
@@ -85,8 +86,12 @@ public:
 	DUCKDB_API ~HTTPHeaders();
 
 	void Insert(string key, string value);
+	//! Append another field line without combining its value.
+	void Append(string key, string value);
 	bool HasHeader(const string &key) const;
+	//! Return the first field value.
 	string GetHeaderValue(const string &key) const;
+	header_values_t GetHeaderValues(const string &key) const;
 
 	header_map_t::iterator begin() { // NOLINT: match stl API
 		return headers.begin();
@@ -112,6 +117,8 @@ public:
 
 private:
 	header_map_t headers;
+	//! HTTP responses can contain multiple field lines with the same name (i.e., Cache-Control).
+	case_insensitive_map_t<header_values_t> repeated_headers;
 };
 
 struct HTTPResponse {

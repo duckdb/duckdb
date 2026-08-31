@@ -194,7 +194,8 @@ void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval
 			}
 		} else {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				rdata.WriteValue(UnsafeNumericCast<int64_t>(row_idx - frame_begin[i] + 1));
+				const auto frame_idx = MaxValue(frame_begin[i], MinValue(row_idx, frame_end[i]));
+				rdata.WriteValue(UnsafeNumericCast<int64_t>(frame_idx - frame_begin[i] + 1));
 			}
 		}
 		return;

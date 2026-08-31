@@ -182,11 +182,14 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 		if (path.GetCatalog().empty()) {
 			auto catalog = Catalog::GetCatalogEntry(context, path.GetSchema());
 			if (catalog) {
-				auto schema = catalog->GetSchema(context, catalog->GetDefaultSchema(), OnEntryNotFound::RETURN_NULL);
-				if (schema) {
-					path.SetCatalog(path.GetSchema());
-					path.SetSchema(schema->name);
-					continue;
+				auto default_schema = catalog->GetDefaultSchema();
+				if (default_schema) {
+					auto schema = catalog->GetSchema(context, *default_schema, OnEntryNotFound::RETURN_NULL);
+					if (schema) {
+						path.SetCatalog(path.GetSchema());
+						path.SetSchema(schema->name);
+						continue;
+					}
 				}
 			}
 		}
@@ -238,7 +241,7 @@ Identifier CatalogSearchPath::GetDefaultSchema(const Identifier &catalog) const 
 	return DEFAULT_SCHEMA;
 }
 
-Identifier CatalogSearchPath::GetDefaultSchema(ClientContext &context, const Identifier &catalog) const {
+optional<Identifier> CatalogSearchPath::GetDefaultSchema(ClientContext &context, const Identifier &catalog) const {
 	for (auto &path : paths) {
 		if (path.GetCatalog() == TEMP_CATALOG) {
 			continue;
@@ -251,7 +254,7 @@ Identifier CatalogSearchPath::GetDefaultSchema(ClientContext &context, const Ide
 	if (catalog_entry) {
 		return catalog_entry->GetDefaultSchema();
 	}
-	return DEFAULT_SCHEMA;
+	return Identifier(DEFAULT_SCHEMA);
 }
 
 Identifier CatalogSearchPath::GetDefaultCatalog(const Identifier &schema) const {
@@ -316,7 +319,11 @@ vector<CatalogSearchEntry> CatalogSearchPath::GetWithPrecedenceSchemas(ClientCon
 			if (!catalog_entry) {
 				continue;
 			}
-			res.emplace_back(path.GetCatalog(), catalog_entry->GetDefaultSchema());
+			auto default_schema = catalog_entry->GetDefaultSchema();
+			if (!default_schema) {
+				continue;
+			}
+			res.emplace_back(path.GetCatalog(), *default_schema);
 		} else {
 			res.emplace_back(path);
 		}

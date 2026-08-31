@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class Binder;
+class FilterStatisticsOptimizer;
 class SQLStatement;
 
 class Optimizer {
@@ -42,6 +43,8 @@ public:
 	ExpressionRewriter rewriter;
 
 private:
+	friend class FilterStatisticsOptimizer;
+
 	void RunBuiltInOptimizers();
 	void RunOptimizer(OptimizerType type, const std::function<void()> &callback);
 	void Verify(LogicalOperator &op);

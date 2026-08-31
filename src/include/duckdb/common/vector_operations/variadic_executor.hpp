@@ -99,6 +99,7 @@ private:
 		static constexpr bool SPECIALIZE_FLAT = false;
 #endif
 		static constexpr bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS = false;
+		static constexpr bool SPECIALIZE_NON_NULL_GENERIC_SELECTIONS = false;
 		static constexpr bool PRESERVE_RESULT_VALIDITY = false;
 	};
 

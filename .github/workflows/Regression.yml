@@ -64,9 +64,12 @@ jobs:
         if: ${{ inputs.build_current_release }}
         uses: duckdb/duckdb-ci/build-duckdb@main
         env:
+          EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/linux_release_extensions.cmake'
+          ENABLE_EXTENSION_AUTOLOADING: 1
+          ENABLE_EXTENSION_AUTOINSTALL: 1
           BUILD_BENCHMARK: 1
           BUILD_JEMALLOC: 1
-          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
+          FORCE_WARN_UNUSED: 1
           DISABLE_SANITIZER: 1
         with:
           build: python3 scripts/ci/retry.py -- make release
@@ -111,7 +114,7 @@ jobs:
         env:
           BUILD_BENCHMARK: 1
           BUILD_JEMALLOC: 1
-          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
           DISABLE_SANITIZER: 1
         with:
           build: python3 scripts/ci/retry.py -- make release
@@ -434,9 +437,9 @@ jobs:
       - name: Regression Test IMDB
         if: always()
         run: |
-          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/imdb_plan_cost
+          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/imdb_plan_cost --extension=httpfs
 
       - name: Regression Test TPCH
         if: always()
         run: |
-          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/tpch_plan_cost
+          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/tpch_plan_cost --extension=tpch

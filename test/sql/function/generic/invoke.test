@@ -143,3 +143,20 @@ statement error
 SELECT invoke(NULL, 1);
 ----
 Binder Error: Invalid lambda expression passed to 'invoke' function.
+
+# a runtime error thrown by the lambda body must surface as-is
+
+statement error
+SELECT invoke(lambda x: x::INTEGER, 'abc');
+----
+Conversion Error: Could not convert string 'abc' to INT32
+
+statement error
+SELECT invoke(lambda x: error('boom'), 1);
+----
+Invalid Input Error: boom
+
+statement error
+SELECT invoke(lambda x: x * 2, 9223372036854775807::BIGINT);
+----
+Out of Range Error: Overflow in multiplication of INT64

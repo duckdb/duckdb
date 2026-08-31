@@ -70,7 +70,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const Identifier &ke
 		return true;
 	}
 	if (key == "compression") {
-		options.compression = EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(StringValue::Get(value)));
+		options.compression = FileCompressionType(StringValue::Get(value));
 		return true;
 	}
 	if (key == "columns") {
@@ -252,8 +252,7 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier
 	}
 	if (key == "compression") {
 		JSONCheckSingleParameter(key, values);
-		options.compression =
-		    EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(StringValue::Get(values.back())));
+		options.compression = FileCompressionType(StringValue::Get(values.back()));
 		return true;
 	}
 	if (key == "array") {

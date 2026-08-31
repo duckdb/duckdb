@@ -17,18 +17,12 @@
 
 namespace duckdb {
 
-optional_ptr<ParseResult> Matcher::MatchParseResult(MatchState &state) const {
-	optional_ptr<ParseResult> result;
+MatcherResult Matcher::MatchParseResult(MatchState &state) const {
+	state.rule = rule;
 	if (state.packrat_cache && IsPackratMemoized()) {
-		result = state.packrat_cache->Match(*this, state);
-	} else {
-		result = MatchParseResultInternal(state);
+		return state.packrat_cache->Match(*this, state);
 	}
-	if (result && rule) {
-		result->SetRule(*rule);
-		result->name = rule->name;
-	}
-	return result;
+	return MatchParseResultInternal(state);
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {

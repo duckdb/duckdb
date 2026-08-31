@@ -215,9 +215,9 @@ void RowGroup::LoadColumn(storage_t c) const {
 	this->columns[c] = ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, column_data_reader, types[c]);
 	is_loaded[c] = true;
 	if (this->columns[c]->count != this->count) {
-		throw InternalException("Corrupted database - loaded column with index %llu, count %llu did "
-		                        "not match count of row group %llu",
-		                        c, this->columns[c]->count.load(), this->count.load());
+		throw DataCorruptionException("Corrupted database - loaded column with index %llu, count %llu did "
+		                              "not match count of row group %llu",
+		                              c, this->columns[c]->count.load(), this->count.load());
 	}
 }
 
@@ -760,7 +760,8 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 		} else {
 			prune_result = GetColumn(base_column_index).CheckZonemap(context, base_column_index, filter);
 		}
-		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			return false;
 		}
 		if (ExpressionFilter::IsRootNonSelectivityOptionalFilter(filter)) {
@@ -790,7 +791,8 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 
 		optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 		auto prune_result = column_data.CheckZonemap(state.column_scans[column_idx], filter, current_segment);
-		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE &&
+		    prune_result != FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			continue;
 		}
 

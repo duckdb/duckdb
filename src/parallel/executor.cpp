@@ -288,9 +288,31 @@ void Executor::CancelTasks() {
 	to_destroy.clear();
 	// Drain all tasks first — they hold references to pipelines/events/states,
 	// so those must stay alive until all tasks have completed
+#ifndef DUCKDB_NO_THREADS
+	if (producer) {
+		auto &scheduler = TaskScheduler::GetScheduler(context);
+		shared_ptr<Task> task_from_producer;
+		while (true) {
+			{
+				annotated_unique_lock<annotated_mutex> lk(producer->producer_lock);
+				if (executor_tasks == 0) {
+					break;
+				}
+				if (!scheduler.GetTaskFromProducerLocked(*producer, task_from_producer)) {
+					// Nothing to execute on this thread: wait until a task completes or is enqueued
+					producer->producer_cv.wait(lk);
+					continue;
+				}
+			}
+			// Discard the dequeued task without executing it.
+			task_from_producer.reset();
+		}
+	}
+#else
 	while (executor_tasks > 0) {
 		WorkOnTasks();
 	}
+#endif
 	// Now safe to destroy pipelines, events and states — no tasks reference them
 	lock_guard<mutex> elock(executor_lock);
 	for (auto &rec_cte_ref : recursive_ctes) {
@@ -325,14 +347,16 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 
 void Executor::UnregisterTask() {
 #ifndef DUCKDB_NO_THREADS
+	lock_guard<mutex> l(executor_lock);
 	{
-		// Wake any thread blocked in `WaitForTask`.
-		// A finished task may have scheduled follow-up tasks or completed the query.
-		lock_guard<mutex> l(executor_lock);
-		task_reschedule.notify_all();
+		const annotated_lock_guard<annotated_mutex> producer_lock(producer->producer_lock);
+		executor_tasks--;
+		producer->producer_cv.notify_all();
 	}
-#endif
+	task_reschedule.notify_all();
+#else
 	executor_tasks--;
+#endif
 }
 
 void Executor::WaitForTask() {

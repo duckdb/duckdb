@@ -1,0 +1,68 @@
+# name: test/sql/optimizer/coalesce_zonemap_pruning.test
+# description: Row group pruning for filters on COALESCE expressions
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/coalesce_zonemap_pruning.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# 6144 rows -> 3 row groups of 2048 rows.
+# x is i with a NULL every 100 rows; y is i without NULLs.
+statement ok
+CREATE TABLE coalesce_pruning AS
+SELECT i::INTEGER AS i,
+       CASE WHEN i % 100 = 0 THEN NULL ELSE i END::INTEGER AS x,
+       i::INTEGER AS y
+FROM range(6144) r(i);
+
+# The merged stats of a row group are [0, max(x)]: the default 0 and the first
+# two row groups all lie below 5000, so only the last row group can match.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM coalesce_pruning WHERE coalesce(x, 0) > 5000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM coalesce_pruning WHERE coalesce(x, 0) > 5000;
+----
+1132
+
+# The reachable values of the middle row group are {2048..4095} and 0, but the
+# merged interval [0, 4095] cannot express that hole: no pruning for a range
+# that falls inside it.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM coalesce_pruning WHERE coalesce(x, 0) BETWEEN 100 AND 200;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# i = 100 and i = 200 are NULL and become 0, so they do not match.
+query I
+SELECT count(*) FROM coalesce_pruning WHERE coalesce(x, 0) BETWEEN 100 AND 200;
+----
+99
+
+# Every row group contains NULLs, so every row group can produce the default:
+# a filter matching the default cannot prune anything.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM coalesce_pruning WHERE coalesce(x, 0) = 0;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM coalesce_pruning WHERE coalesce(x, 0) = 0;
+----
+62
+
+# y has no NULLs: the default 0 is unreachable and must not widen the stats of
+# the last two row groups, whose y ranges do not contain 0.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM coalesce_pruning WHERE coalesce(y, 0) = 0;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM coalesce_pruning WHERE coalesce(y, 0) = 0;
+----
+1

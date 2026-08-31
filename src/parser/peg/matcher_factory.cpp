@@ -164,7 +164,7 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 				break;
 			}
 			case '+': {
-				// Similar to '*' except it's not optional and just repeat (match at least once)
+				// Similar to '*' except it is not optional and just repeat (match at least once)
 				auto &last_matcher = list.GetLastRootMatcher().matcher;
 				if (last_matcher.Type() != MatcherType::LIST) {
 					throw InternalException("Repeat expected a list matcher");

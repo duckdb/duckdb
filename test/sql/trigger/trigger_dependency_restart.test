@@ -1,0 +1,102 @@
+# name: test/sql/trigger/trigger_dependency_restart.test
+# description: Test that trigger body dependencies survive a checkpoint and database restart
+# group: [trigger]
+
+# Trigger tests are excluded from the force_storage/latest_storage sweeps (CREATE TRIGGER requires
+# v2.0.0+ storage), so persistence has to be verified manually here instead.
+require noforcestorage
+
+statement ok
+ATTACH '{TEST_DIR}/trigger_dependency_restart.db' AS triggerdb (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+USE triggerdb;
+
+statement ok
+CREATE TABLE t(i INT);
+
+statement ok
+CREATE TABLE log(i INT);
+
+statement ok
+CREATE TRIGGER tr AFTER INSERT ON t FOR EACH STATEMENT INSERT INTO log VALUES (1);
+
+# same-named triggers on different tables, to verify the table qualifier round-trips distinctly
+statement ok
+CREATE TABLE a(i INT);
+
+statement ok
+CREATE TABLE b(i INT);
+
+statement ok
+CREATE TABLE log_a(i INT);
+
+statement ok
+CREATE TABLE log_b(i INT);
+
+statement ok
+CREATE TRIGGER same AFTER INSERT ON a FOR EACH STATEMENT INSERT INTO log_a VALUES (1);
+
+statement ok
+CREATE TRIGGER same AFTER INSERT ON b FOR EACH STATEMENT INSERT INTO log_b VALUES (1);
+
+statement ok
+CHECKPOINT;
+
+# Detach and re-attach simulates a database restart, reading everything back from storage
+statement ok
+USE memory;
+
+statement ok
+DETACH triggerdb;
+
+statement ok
+ATTACH '{TEST_DIR}/trigger_dependency_restart.db' AS triggerdb;
+
+statement ok
+USE triggerdb;
+
+# the body dependency on `log` must still be tracked after reload
+statement error
+DROP TABLE log RESTRICT;
+----
+<REGEX>:.*trigger "tr" on table "t" depends on table "log".*
+
+# the trigger's own table is still not blocked (non-blocking dependency survives reload too)
+statement ok
+DROP TABLE t;
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'tr';
+----
+0
+
+statement ok
+DROP TABLE log;
+
+# same-named triggers on different tables must still be distinguishable after reload
+statement ok
+DROP TRIGGER same ON a;
+
+statement ok
+DROP TABLE log_a RESTRICT;
+
+statement error
+DROP TABLE log_b RESTRICT;
+----
+<REGEX>:.*trigger "same" on table "b".*
+
+statement ok
+DROP TABLE b CASCADE;
+
+statement ok
+DROP TABLE log_b RESTRICT;
+
+statement ok
+DROP TABLE a;
+
+statement ok
+USE memory;
+
+statement ok
+DETACH triggerdb;

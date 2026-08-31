@@ -4,7 +4,6 @@ add_library_unity(
   propagate_aggregate.cpp
   propagate_between.cpp
   propagate_case.cpp
-  propagate_cast.cpp
   propagate_comparison.cpp
   propagate_conjunction.cpp
   propagate_constant.cpp

@@ -790,8 +790,9 @@
       {
         "id": 103,
         "name": "compression",
-        "type": "FileCompressionType",
-        "property": "options.compression"
+        "type": "string",
+        "serialize_property": "options.compression.ToString()",
+        "deserialize_property": "options.compression"
       },
       {
         "id": 104,

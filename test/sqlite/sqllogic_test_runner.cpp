@@ -47,6 +47,9 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	bool autoload_known_extensions = false;
 	bool autoinstall_known_extensions = false;
 	config->SetOptionByName("allow_unsigned_extensions", true);
+	// enable custom trusted extension repositories at startup (they cannot be enabled at runtime), mirroring the
+	// permissive allow_unsigned_extensions default above. Tests can still tighten this at runtime
+	config->SetOptionByName("allow_extension_repositories", "allowed");
 	local_extension_repo = "";
 	autoinstall_is_checked = false;
 

@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parser/parser.hpp"

@@ -13,10 +13,8 @@
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/storage/index.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -388,22 +386,25 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 
 void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
                     const Identifier &name) {
-	const auto storage_version = db.GetStorageManager().GetStorageVersion();
-	for (auto &index : list.Indexes()) {
-		if (name == index.GetIndexName()) {
-			// We never write an unbound index to the WAL.
-			D_ASSERT(index.IsBound());
-			const auto &info = index.Cast<BoundIndex>().SerializeToWAL(storage_version);
-			serializer.WriteProperty(102, "index_storage_info", info);
-			serializer.WriteList(103, "index_storage", info.buffers.size(), [&](Serializer::List &list, idx_t i) {
-				auto &buffers = info.buffers[i];
-				for (auto buffer : buffers) {
-					list.WriteElement(buffer.buffer_ptr, buffer.allocation_size);
-				}
-			});
-			break;
-		}
+	case_insensitive_map_t<Value> options;
+	auto storage_version = db.GetStorageManager().GetStorageVersion();
+	// Before: serialization version 3
+	auto v1_0_0_storage = StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version);
+	if (!v1_0_0_storage) {
+		options["v1_0_0_storage"] = v1_0_0_storage;
 	}
+
+	auto info = list.SerializeToWAL(name, options);
+	if (!info) {
+		return;
+	}
+	serializer.WriteProperty(102, "index_storage_info", *info);
+	serializer.WriteList(103, "index_storage", info->buffers.size(), [&](Serializer::List &list, idx_t i) {
+		auto &buffers = info->buffers[i];
+		for (auto buffer : buffers) {
+			list.WriteElement(buffer.buffer_ptr, buffer.allocation_size);
+		}
+	});
 }
 
 void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {

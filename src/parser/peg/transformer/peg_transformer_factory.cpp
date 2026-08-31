@@ -90,10 +90,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	ParseResultAllocator parse_result_allocator;
 	ParserPackratCache packrat_cache;
 	idx_t max_token_index = token_iterator.Position();
-	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index, options.identifier_case_mode,
-	                 &packrat_cache);
+	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index,
+	                 MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
 	auto match_result = root_matcher.MatchParseResult(state);
-	if (match_result == nullptr) {
+	if (!match_result.IsSuccess()) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
 		auto token_stream = token_iterator.ToString();
 		idx_t error_token_idx = state.GetMaxTokenIndex();
@@ -111,6 +111,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 		throw ParserException::SyntaxError(token_stream, error_message,
 		                                   QueryLocation(error_token.offset, error_token.length));
 	}
+	D_ASSERT(match_result.HasParseResult());
 
 	// Advance the caller's cursor past the consumed tokens.
 	token_iterator.SetPosition(state.token_iterator);
@@ -118,7 +119,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	// TopLevelStatement <- Statement? (';'+ / EndOfInput)
 	//   child 0: Optional<Statement>
 	//   child 1: bracket-wrapper list around Choice<';'+ | EndOfInput>
-	auto &tls = match_result->Cast<ListParseResult>();
+	auto &tls = match_result.GetParseResult()->Cast<ListParseResult>();
 	auto &stmt_opt = tls.Child<OptionalParseResult>(0);
 	if (!stmt_opt.HasResult()) {
 		// separator-only or EOI-only TopLevelStatement — no statement to yield

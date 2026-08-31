@@ -539,18 +539,20 @@ BufferingLogStorage::BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_si
 
 void BufferingLogStorage::ResetLogBuffers() {
 	idx_t buffer_size = MaxValue<idx_t>(buffer_limit, 1);
+	// initialize the new buffers before replacing the old ones - initializing allocates, and a buffer that is
+	// replaced but not initialized has no columns, so every later write to it indexes out of bounds
 	if (normalize_contexts) {
-		buffers[LoggingTargetTable::LOG_ENTRIES] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::LOG_CONTEXTS] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::LOG_ENTRIES]->Initialize(Allocator::DefaultAllocator(),
-		                                                     GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_size);
-		buffers[LoggingTargetTable::LOG_CONTEXTS]->Initialize(Allocator::DefaultAllocator(),
-		                                                      GetSchema(LoggingTargetTable::LOG_CONTEXTS), buffer_size);
-
+		auto log_entries = make_uniq<DataChunk>();
+		auto log_contexts = make_uniq<DataChunk>();
+		log_entries->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_size);
+		log_contexts->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_CONTEXTS),
+		                         buffer_size);
+		buffers[LoggingTargetTable::LOG_ENTRIES] = std::move(log_entries);
+		buffers[LoggingTargetTable::LOG_CONTEXTS] = std::move(log_contexts);
 	} else {
-		buffers[LoggingTargetTable::ALL_LOGS] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::ALL_LOGS]->Initialize(Allocator::DefaultAllocator(),
-		                                                  GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
+		auto all_logs = make_uniq<DataChunk>();
+		all_logs->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
+		buffers[LoggingTargetTable::ALL_LOGS] = std::move(all_logs);
 	}
 	registered_contexts.clear();
 }

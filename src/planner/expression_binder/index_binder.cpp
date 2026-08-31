@@ -83,7 +83,8 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 		if (&catalog != &entry.ParentCatalog()) {
 			return;
 		}
-		dependencies.AddDependency(entry);
+		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
+		dependencies.AddDependency(entry, DependencyDependentFlags());
 	});
 
 	// Bind the index expressions.

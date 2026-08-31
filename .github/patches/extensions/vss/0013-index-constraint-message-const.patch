@@ -1,0 +1,13 @@
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index 1c6c52b..22fed36 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -108,7 +108,7 @@ public:
+ 	void VerifyAllocations(IndexLock &state) override;
+ 
+ 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+-	                                     DataChunk &input) override {
++	                                     DataChunk &input) const override {
+ 		return "Constraint violation in HNSW index";
+ 	}
+ 

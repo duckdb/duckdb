@@ -578,7 +578,7 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "ignore_errors", options.ignore_errors, false);
 	serializer.WritePropertyWithDefault<idx_t>(101, "buffer_sample_size", options.buffer_sample_size);
 	serializer.WritePropertyWithDefault<vector<string>>(102, "null_str", options.null_str);
-	serializer.WriteProperty<FileCompressionType>(103, "compression", options.compression);
+	serializer.WritePropertyWithDefault<string>(103, "compression", options.compression.ToString());
 	serializer.WritePropertyWithDefault<bool>(104, "allow_quoted_nulls", options.allow_quoted_nulls);
 	serializer.WriteProperty<CSVOption<idx_t>>(105, "maximum_line_size", options.maximum_line_size);
 	serializer.WritePropertyWithDefault<bool>(106, "normalize_names", options.normalize_names);
@@ -626,7 +626,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	auto options_ignore_errors = deserializer.ReadPropertyWithExplicitDefault<bool>(100, "ignore_errors", false);
 	auto options_buffer_sample_size = deserializer.ReadPropertyWithDefault<idx_t>(101, "buffer_sample_size");
 	auto options_null_str = deserializer.ReadPropertyWithDefault<vector<string>>(102, "null_str");
-	auto options_compression = deserializer.ReadProperty<FileCompressionType>(103, "compression");
+	auto options_compression = deserializer.ReadPropertyWithDefault<string>(103, "compression");
 	auto options_allow_quoted_nulls = deserializer.ReadPropertyWithDefault<bool>(104, "allow_quoted_nulls");
 	auto options_maximum_line_size = deserializer.ReadProperty<CSVOption<idx_t>>(105, "maximum_line_size");
 	auto options_normalize_names = deserializer.ReadPropertyWithDefault<bool>(106, "normalize_names");
@@ -669,7 +669,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	result.options.ignore_errors = options_ignore_errors;
 	result.options.buffer_sample_size = options_buffer_sample_size;
 	result.options.null_str = std::move(options_null_str);
-	result.options.compression = options_compression;
+	result.options.compression = std::move(options_compression);
 	result.options.allow_quoted_nulls = options_allow_quoted_nulls;
 	result.options.maximum_line_size = options_maximum_line_size;
 	result.options.normalize_names = options_normalize_names;

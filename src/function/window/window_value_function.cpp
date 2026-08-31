@@ -1127,13 +1127,13 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 	for (idx_t i = 0; i < count; ++i) {
 		if (!any_value || validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
 			++nth_count;
-		}
-		// One-based comparison.
-		if (nth_count == nth_index) {
-			auto v = arg.GetValue(i);
-			vec.Reference(v, count_t(count));
-			s = 1;
-			split.SetValue(s, v);
+			// One-based comparison.
+			if (nth_count == nth_index) {
+				auto v = arg.GetValue(i);
+				vec.Reference(v, count_t(count));
+				s = 1;
+				split.SetValue(s, v);
+			}
 		}
 		sel.set_index(i, s);
 	}

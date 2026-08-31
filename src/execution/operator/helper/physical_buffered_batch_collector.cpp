@@ -108,6 +108,9 @@ unique_ptr<GlobalSinkState> PhysicalBufferedBatchCollector::GetGlobalSinkState(C
 unique_ptr<QueryResult> PhysicalBufferedBatchCollector::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<BufferedBatchCollectorGlobalState>();
 	auto cc = gstate.context.lock();
+	if (!cc) {
+		throw ConnectionException("Connection has already been closed");
+	}
 	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names, cc->GetClientProperties(),
 	                                           gstate.buffered_data);
 	return std::move(result);

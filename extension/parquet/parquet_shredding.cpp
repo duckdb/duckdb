@@ -31,10 +31,7 @@ bool ShreddingType::operator==(const ShreddingType &other) const {
 	if (set != other.set) {
 		return false;
 	}
-	if (!set) {
-		return true;
-	}
-	if (type != other.type) {
+	if (set && type != other.type) {
 		return false;
 	}
 	if (!children.types && !other.children.types) {

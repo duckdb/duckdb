@@ -14,26 +14,21 @@ public:
 	    : Matcher(TYPE), keyword(std::move(keyword_p)), info(info) {
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		if (!MatchKeyword(state)) {
-			return MatchResultType::FAIL;
-		}
-		return MatchResultType::SUCCESS;
-	}
-
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 		auto &token_text = token->text;
 		auto start_offset = optional_idx(token->offset);
 		auto token_length = optional_idx(token->length);
 		if (!MatchKeyword(state)) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
-		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(token_text, start_offset, token_length));
-		result->name = name;
+		auto result = state.AllocateParseResult<KeywordParseResult>(token_text, start_offset, token_length);
+		if (result.HasParseResult()) {
+			result.GetParseResult()->name = name;
+		}
 		return result;
 	}
 
