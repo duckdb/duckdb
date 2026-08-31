@@ -57,23 +57,28 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 			if (!info.is_list[col_idx - 1]) {
 				auto input = scalar_iterators[scalar_i++][r];
-				if (!input.IsValid())
+				if (!input.IsValid()) {
 					continue;
-				if (has_result)
+				}
+				if (has_result) {
 					result_length += sep.GetSize();
+				}
 				result_length += input.GetValue().GetSize();
 				has_result = true;
 			} else {
 				auto list_entry = list_iterators[list_i++][r];
-				if (!list_entry.IsValid())
+				if (!list_entry.IsValid()) {
 					continue;
+				}
 				for (idx_t e = 0; e < list_entry.GetListLength(); e++) {
 					auto elem = list_entry.GetChildValue(e);
-					if (!elem.IsValid())
+					if (!elem.IsValid()) {
 						continue;
+					}
 					auto elem_str = elem.GetValue();
-					if (has_result)
+					if (has_result) {
 						result_length += sep.GetSize();
+					}
 					result_length += elem_str.GetSize();
 					has_result = true;
 				}
@@ -91,8 +96,9 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 			if (!info.is_list[col_idx - 1]) {
 				auto input = scalar_iterators[scalar_i++][r];
-				if (!input.IsValid())
+				if (!input.IsValid()) {
 					continue;
+				}
 				if (has_result) {
 					memcpy(result_ptr + result_length, sep_ptr, sep_size);
 					result_length += sep.GetSize();
@@ -103,13 +109,15 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 				has_result = true;
 			} else {
 				auto list_entry = list_iterators[list_i++][r];
-				if (!list_entry.IsValid())
+				if (!list_entry.IsValid()) {
 					continue;
+				}
 				auto entry = list_entry.GetValue();
 				for (idx_t e = 0; e < entry.length; e++) {
 					auto elem = list_entry.GetChildValue(e);
-					if (!elem.IsValid())
+					if (!elem.IsValid()) {
 						continue;
+					}
 					if (has_result) {
 						memcpy(result_ptr + result_length, sep_ptr, sep_size);
 						result_length += sep.GetSize();
