@@ -4,6 +4,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "json_common.hpp"
 #include "json_deserializer.hpp"
@@ -139,7 +140,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 				}
 
 				ColumnBindingResolver resolver;
-				resolver.Verify(context, *plan);
+				LogicalPlanVerifier::Verify(context, *plan);
 				resolver.VisitOperator(*plan);
 				plan->ResolveOperatorTypes();
 

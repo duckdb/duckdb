@@ -68,6 +68,30 @@ static DatabaseInstance &GetDB(DatabaseInstance *db) {
 	return *db;
 }
 
+//! Parse a memory limit that may also be given as a percentage. The base is only computed when a
+//! percentage is actually given, since obtaining it can be expensive or unavailable.
+template <class BASE>
+static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) {
+	if (input.empty() || input.back() != '%') {
+		return DBConfig::ParseMemoryLimit(input);
+	}
+	double percentage;
+	if (!TryDoubleCast(input.c_str(), input.size() - 1, percentage, false) || percentage < 0 || percentage > 100) {
+		throw InvalidInputException("Unable to parse valid percentage (input: %s)", input);
+	}
+	return LossyNumericCast<idx_t>(percentage) * get_base() / 100;
+}
+
+//! The available system memory. The config's filesystem is not set until the database starts, but
+//! options can be configured before that, so fall back to a temporary local filesystem.
+static idx_t GetAvailableSystemMemory(DBConfig &config) {
+	if (config.file_system) {
+		return DBConfig::GetSystemAvailableMemory(*config.file_system);
+	}
+	auto local_fs = FileSystem::CreateLocal();
+	return DBConfig::GetSystemAvailableMemory(*local_fs);
+}
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -334,18 +358,7 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 // Block Allocator Memory
 //===----------------------------------------------------------------------===//
 void BlockAllocatorMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	const auto input_string = input.ToString();
-	idx_t size;
-	if (!input_string.empty() && input_string.back() == '%') {
-		double percentage;
-		if (!TryDoubleCast(input_string.c_str(), input_string.size() - 1, percentage, false) || percentage < 0 ||
-		    percentage > 100) {
-			throw InvalidInputException("Unable to parse valid percentage (input: %s)", input_string);
-		}
-		size = LossyNumericCast<idx_t>(percentage) * config.options.maximum_memory / 100;
-	} else {
-		size = DBConfig::ParseMemoryLimit(input_string);
-	}
+	const auto size = ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return config.options.maximum_memory; });
 	if (db) {
 		BlockAllocator::Get(*db).Resize(size);
 	}
@@ -1139,7 +1152,9 @@ void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 // Max Memory
 //===----------------------------------------------------------------------===//
 void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
+	// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
+	config.options.maximum_memory =
+	    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(config); });
 	if (db) {
 		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
 	}

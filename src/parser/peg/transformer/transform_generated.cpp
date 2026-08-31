@@ -3340,6 +3340,25 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeFuncNameInt
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeFuncKeywordInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColLabelInternal(PEGTransformer &transformer,
                                                                                   ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -11219,6 +11238,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ColId", &PEGTransformerFactory::TransformColIdInternal},
 	    {"ColIdOrString", &PEGTransformerFactory::TransformColIdOrStringInternal},
 	    {"TypeFuncName", &PEGTransformerFactory::TransformTypeFuncNameInternal},
+	    {"TypeFuncKeyword", &PEGTransformerFactory::TransformTypeFuncKeywordInternal},
 	    {"ColLabel", &PEGTransformerFactory::TransformColLabelInternal},
 	    {"ColLabelOrString", &PEGTransformerFactory::TransformColLabelOrStringInternal},
 	    {"ColLabelIdentifier", &PEGTransformerFactory::TransformColLabelIdentifierInternal},

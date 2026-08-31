@@ -165,8 +165,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	}
 
 	// the children have been successfully resolved
-	auto &left = BoundExpression::GetExpression(*expr.LeftMutable());
-	auto &right = BoundExpression::GetExpression(*expr.RightMutable());
+	auto left = GetBoundExpressions().Consume(*expr.LeftMutable());
+	auto right = GetBoundExpressions().Consume(*expr.RightMutable());
 	auto left_sql_type = ExpressionBinder::GetExpressionReturnType(*left);
 	auto right_sql_type = ExpressionBinder::GetExpressionReturnType(*right);
 	// cast the input types to the same type

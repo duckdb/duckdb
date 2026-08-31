@@ -2423,13 +2423,19 @@ LIMIT 5)");
 		if (!style.layout_on.empty()) {
 			style.layout_off = ShellHighlight::ResetTerminalCode();
 		}
-		style.heading_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::BOLD);
-		style.heading_off = ShellHighlight::ResetTerminalCode();
-		style.path_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::STANDARD);
-		style.path_off = ShellHighlight::ResetTerminalCode();
+		if (linenoiseGetTerminalColorMode() == LINENOISE_LIGHT_MODE) {
+			style.heading_on = ShellHighlight::TerminalCode(PrintColor::BLACK, PrintIntensity::BOLD);
+			style.path_on = ShellHighlight::TerminalCode(PrintColor::BLACK, PrintIntensity::STANDARD);
+		} else {
+			style.heading_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::BOLD);
+			style.path_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::STANDARD);
+		}
 		style.param_on = ShellHighlight::TerminalCode(PrintColor::GRAY, PrintIntensity::ITALIC);
-		style.param_off = ShellHighlight::ResetTerminalCode();
 		style.type_on = ShellHighlight::TerminalCode(PrintColor::STANDARD, PrintIntensity::BOLD);
+
+		style.heading_off = ShellHighlight::ResetTerminalCode();
+		style.path_off = ShellHighlight::ResetTerminalCode();
+		style.param_off = ShellHighlight::ResetTerminalCode();
 		style.type_off = ShellHighlight::ResetTerminalCode();
 	}
 
