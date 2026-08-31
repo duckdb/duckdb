@@ -24,82 +24,84 @@
 
 namespace duckdb {
 
-using BoundExpressionSQLExportResult = LogicalPlanCompilerResult<unique_ptr<ParsedExpression>>;
+using BoundExpressionSQLExportResult = LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>;
 
-static LogicalPlanCompilerPath ChildPath(const LogicalPlanCompilerPath &path, idx_t child_index) {
+static LogicalPlanVerificationPath ChildPath(const LogicalPlanVerificationPath &path, idx_t child_index) {
 	auto child_path = path;
 	child_path.components.push_back(
-	    LogicalPlanCompilerPathComponent {LogicalPlanCompilerPathComponentType::EXPRESSION_CHILD, child_index});
+	    LogicalPlanVerificationPathComponent {LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, child_index});
 	return child_path;
 }
 
-static bool IsExpressionRootPath(const LogicalPlanCompilerPath &path) {
+static bool IsExpressionRootPath(const LogicalPlanVerificationPath &path) {
 	if (!path.IsValid()) {
 		return false;
 	}
-	if (path.root == LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION) {
+	if (path.root == LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION) {
 		return true;
 	}
 	for (auto &component : path.components) {
-		if (component.type == LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION) {
+		if (component.type == LogicalPlanVerificationPathComponentType::OPERATOR_EXPRESSION) {
 			return true;
 		}
 	}
 	return false;
 }
 
-static LogicalPlanCompilerIssue InternalInvariant(optional<LogicalPlanCompilerPath> path, string message,
-                                                  optional<LogicalPlanCompilerConstructIdentity> construct = {}) {
-	LogicalPlanCompilerIssue issue;
-	issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
-	issue.phase = LogicalPlanCompilerPhase::EXPRESSION_EXPORT;
+static LogicalPlanVerificationIssue
+InternalInvariant(optional<LogicalPlanVerificationPath> path, string message,
+                  optional<LogicalPlanVerificationConstructIdentity> construct = {}) {
+	LogicalPlanVerificationIssue issue;
+	issue.code = LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT;
+	issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
 	issue.path = std::move(path);
 	issue.construct = std::move(construct);
 	issue.message = std::move(message);
 	return issue;
 }
 
-static LogicalPlanCompilerIssue InternalExpressionInvariant(const LogicalPlanCompilerPath &path,
-                                                            const Expression &expression, string message) {
+static LogicalPlanVerificationIssue InternalExpressionInvariant(const LogicalPlanVerificationPath &path,
+                                                                const Expression &expression, string message) {
 	return InternalInvariant(path, std::move(message),
-	                         LogicalPlanCompilerConstructIdentity::Expression(expression.GetExpressionClass()));
+	                         LogicalPlanVerificationConstructIdentity::Expression(expression.GetExpressionClass()));
 }
 
-static LogicalPlanCompilerIssue UnsupportedExpression(const LogicalPlanCompilerPath &path,
-                                                      ExpressionClass expression_class) {
-	LogicalPlanCompilerIssue issue;
-	issue.code = LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPRESSION;
-	issue.phase = LogicalPlanCompilerPhase::EXPRESSION_EXPORT;
+static LogicalPlanVerificationIssue UnsupportedExpression(const LogicalPlanVerificationPath &path,
+                                                          ExpressionClass expression_class) {
+	LogicalPlanVerificationIssue issue;
+	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION;
+	issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
 	issue.path = path;
-	issue.construct = LogicalPlanCompilerConstructIdentity::Expression(expression_class);
+	issue.construct = LogicalPlanVerificationConstructIdentity::Expression(expression_class);
 	issue.message = "The bound expression class does not have a SQL AST representation in this exporter";
 	return issue;
 }
 
-static LogicalPlanCompilerIssue UnsupportedFeature(const LogicalPlanCompilerPath &path, string feature,
-                                                   string message) {
-	LogicalPlanCompilerIssue issue;
-	issue.code = LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE;
-	issue.phase = LogicalPlanCompilerPhase::EXPRESSION_EXPORT;
+static LogicalPlanVerificationIssue UnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
+                                                       string message) {
+	LogicalPlanVerificationIssue issue;
+	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE;
+	issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
 	issue.path = path;
-	issue.construct = LogicalPlanCompilerConstructIdentity::ExportFeature(std::move(feature));
+	issue.construct = LogicalPlanVerificationConstructIdentity::ExportFeature(std::move(feature));
 	issue.message = std::move(message);
 	return issue;
 }
 
-static LogicalPlanCompilerIssue UnsupportedFunction(const LogicalPlanCompilerPath &path,
-                                                    LogicalPlanCompilerFunctionIdentity identity, string message) {
-	LogicalPlanCompilerIssue issue;
-	issue.code = LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION;
-	issue.phase = LogicalPlanCompilerPhase::EXPRESSION_EXPORT;
+static LogicalPlanVerificationIssue UnsupportedFunction(const LogicalPlanVerificationPath &path,
+                                                        LogicalPlanVerificationFunctionIdentity identity,
+                                                        string message) {
+	LogicalPlanVerificationIssue issue;
+	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION;
+	issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
 	issue.path = path;
-	issue.construct = LogicalPlanCompilerConstructIdentity::Function(std::move(identity));
+	issue.construct = LogicalPlanVerificationConstructIdentity::Function(std::move(identity));
 	issue.message = std::move(message);
 	return issue;
 }
 
-static BoundExpressionSQLExportResult Failure(LogicalPlanCompilerIssue issue) {
-	vector<LogicalPlanCompilerIssue> issues;
+static BoundExpressionSQLExportResult Failure(LogicalPlanVerificationIssue issue) {
+	vector<LogicalPlanVerificationIssue> issues;
 	issues.push_back(std::move(issue));
 	return BoundExpressionSQLExportResult::Failure(std::move(issues));
 }
@@ -173,11 +175,11 @@ static bool ChildrenAreConsistentWithArguments(const vector<unique_ptr<Expressio
 }
 
 template <class FUNCTION>
-static LogicalPlanCompilerFunctionIdentity FunctionIdentity(const FUNCTION &function,
-                                                            const vector<unique_ptr<Expression>> &children,
-                                                            const LogicalType &return_type) {
+static LogicalPlanVerificationFunctionIdentity FunctionIdentity(const FUNCTION &function,
+                                                                const vector<unique_ptr<Expression>> &children,
+                                                                const LogicalType &return_type) {
 	auto &definition = function.GetDefinition();
-	LogicalPlanCompilerFunctionIdentity identity;
+	LogicalPlanVerificationFunctionIdentity identity;
 	if (definition) {
 		identity.catalog = definition->GetCatalogName().GetIdentifierName();
 		identity.schema = definition->GetSchemaName().GetIdentifierName();
@@ -208,7 +210,7 @@ public:
 	explicit BoundExpressionSQLExportState(const BoundExpressionSQLExportContext &context_p) : context(context_p) {
 	}
 
-	BoundExpressionSQLExportResult Export(const Expression &expression, const LogicalPlanCompilerPath &path) {
+	BoundExpressionSQLExportResult Export(const Expression &expression, const LogicalPlanVerificationPath &path) {
 		switch (expression.GetExpressionClass()) {
 		case ExpressionClass::BOUND_CONSTANT:
 			return ExportConstant(expression.Cast<BoundConstantExpression>(), path);
@@ -269,7 +271,7 @@ public:
 
 private:
 	BoundExpressionSQLExportResult ExportConstant(const BoundConstantExpression &expression,
-	                                              const LogicalPlanCompilerPath &path) {
+	                                              const LogicalPlanVerificationPath &path) {
 		if (expression.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound constant has an invalid expression type"));
@@ -291,7 +293,7 @@ private:
 	}
 
 	BoundExpressionSQLExportResult ExportColumnRef(const BoundColumnRefExpression &expression,
-	                                               const LogicalPlanCompilerPath &path) {
+	                                               const LogicalPlanVerificationPath &path) {
 		if (expression.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound column reference has an invalid expression type"));
@@ -330,23 +332,23 @@ private:
 			return Failure(InternalExpressionInvariant(path, expression, "The resolved SQL column type is incomplete"));
 		}
 		if (resolved->type != expression.GetReturnType()) {
-			LogicalPlanCompilerIssue issue;
-			issue.code = LogicalPlanCompilerIssueCode::TYPE_MISMATCH;
-			issue.phase = LogicalPlanCompilerPhase::EXPRESSION_EXPORT;
+			LogicalPlanVerificationIssue issue;
+			issue.code = LogicalPlanVerificationIssueCode::TYPE_MISMATCH;
+			issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
 			issue.path = path;
-			issue.construct =
-			    LogicalPlanCompilerConstructIdentity::BindingTypeMismatch(resolved->type, expression.GetReturnType());
+			issue.construct = LogicalPlanVerificationConstructIdentity::BindingTypeMismatch(resolved->type,
+			                                                                                expression.GetReturnType());
 			issue.message = "The resolved SQL column type differs from the bound expression type";
 			return Failure(std::move(issue));
 		}
 		return BoundExpressionSQLExportResult::Success(make_uniq<ColumnRefExpression>(std::move(resolved->names)));
 	}
 
-	LogicalPlanCompilerIssue InvalidBinding(const LogicalPlanCompilerPath &path, const ColumnBinding &binding,
-	                                        string message) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::INVALID_BINDING;
-		issue.phase = LogicalPlanCompilerPhase::EXPRESSION_EXPORT;
+	LogicalPlanVerificationIssue InvalidBinding(const LogicalPlanVerificationPath &path, const ColumnBinding &binding,
+	                                            string message) {
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::INVALID_BINDING;
+		issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
 		issue.path = path;
 		issue.facts.emplace_back("column_index", Value::UBIGINT(binding.column_index.GetIndexUnsafe()));
 		issue.facts.emplace_back("table_index", Value::UBIGINT(binding.table_index.index));
@@ -355,7 +357,7 @@ private:
 	}
 
 	BoundExpressionSQLExportResult ExportFunction(const BoundFunctionExpression &expression,
-	                                              const LogicalPlanCompilerPath &path) {
+	                                              const LogicalPlanVerificationPath &path) {
 		switch (expression.GetExpressionType()) {
 		case ExpressionType::OPERATOR_CAST:
 			if (BoundCastExpression::HasCanonicalFunction(expression)) {
@@ -388,7 +390,7 @@ private:
 	}
 
 	BoundExpressionSQLExportResult ExportCast(const BoundFunctionExpression &expression,
-	                                          const LogicalPlanCompilerPath &path) {
+	                                          const LogicalPlanVerificationPath &path) {
 		if (expression.GetChildren().size() != 1 || !expression.GetChildren()[0] ||
 		    !BoundCastExpression::HasValidBindData(expression) || !IsSQLRepresentableType(expression.GetReturnType()) ||
 		    !IsSQLRepresentableType(expression.GetChildren()[0]->GetReturnType())) {
@@ -408,7 +410,7 @@ private:
 	}
 
 	BoundExpressionSQLExportResult ExportComparison(const BoundFunctionExpression &expression,
-	                                                const LogicalPlanCompilerPath &path) {
+	                                                const LogicalPlanVerificationPath &path) {
 		if (expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 2 ||
 		    !expression.GetChildren()[0] || !expression.GetChildren()[1] ||
 		    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[1]->GetReturnType()) {
@@ -416,7 +418,7 @@ private:
 			    InternalExpressionInvariant(path, expression, "Bound comparison has malformed type or arity"));
 		}
 		vector<unique_ptr<ParsedExpression>> children;
-		vector<LogicalPlanCompilerIssue> issues;
+		vector<LogicalPlanVerificationIssue> issues;
 		ExportChildren(expression.GetChildren(), path, children, issues);
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
@@ -426,7 +428,7 @@ private:
 	}
 
 	BoundExpressionSQLExportResult ExportBetween(const BoundFunctionExpression &expression,
-	                                             const LogicalPlanCompilerPath &path) {
+	                                             const LogicalPlanVerificationPath &path) {
 		if (expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 3 ||
 		    !expression.GetChildren()[0] || !expression.GetChildren()[1] || !expression.GetChildren()[2] ||
 		    !BoundBetweenExpression::HasValidBindData(expression) ||
@@ -436,7 +438,7 @@ private:
 			    InternalExpressionInvariant(path, expression, "Bound BETWEEN has malformed type, data, or arity"));
 		}
 		vector<unique_ptr<ParsedExpression>> children;
-		vector<LogicalPlanCompilerIssue> issues;
+		vector<LogicalPlanVerificationIssue> issues;
 		ExportChildren(expression.GetChildren(), path, children, issues);
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
@@ -461,7 +463,7 @@ private:
 	}
 
 	BoundExpressionSQLExportResult ExportConjunction(const BoundConjunctionExpression &expression,
-	                                                 const LogicalPlanCompilerPath &path) {
+	                                                 const LogicalPlanVerificationPath &path) {
 		if ((expression.GetExpressionType() != ExpressionType::CONJUNCTION_AND &&
 		     expression.GetExpressionType() != ExpressionType::CONJUNCTION_OR) ||
 		    expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() < 2) {
@@ -469,7 +471,7 @@ private:
 			    InternalExpressionInvariant(path, expression, "Bound conjunction has malformed type or arity"));
 		}
 		vector<unique_ptr<ParsedExpression>> children;
-		vector<LogicalPlanCompilerIssue> issues;
+		vector<LogicalPlanVerificationIssue> issues;
 		ExportChildren(expression.GetChildren(), path, children, issues, LogicalType::BOOLEAN);
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
@@ -480,7 +482,7 @@ private:
 	}
 
 	BoundExpressionSQLExportResult ExportCase(const BoundCaseExpression &expression,
-	                                          const LogicalPlanCompilerPath &path) {
+	                                          const LogicalPlanVerificationPath &path) {
 		if (expression.GetExpressionType() != ExpressionType::CASE_EXPR) {
 			return Failure(InternalExpressionInvariant(path, expression, "Bound CASE has an invalid expression type"));
 		}
@@ -499,7 +501,7 @@ private:
 		expected_types.push_back(expression.GetReturnType());
 
 		vector<unique_ptr<ParsedExpression>> children;
-		vector<LogicalPlanCompilerIssue> issues;
+		vector<LogicalPlanVerificationIssue> issues;
 		ExportChildren(source_children, path, children, issues, expected_types);
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
@@ -516,7 +518,7 @@ private:
 	}
 
 	BoundExpressionSQLExportResult ExportOperator(const BoundOperatorExpression &expression,
-	                                              const LogicalPlanCompilerPath &path) {
+	                                              const LogicalPlanVerificationPath &path) {
 		optional<LogicalType> expected_type;
 		auto child_count = expression.GetChildren().size();
 		switch (expression.GetExpressionType()) {
@@ -573,7 +575,7 @@ private:
 			    InternalExpressionInvariant(path, expression, "Bound operator has an invalid expression type"));
 		}
 		vector<unique_ptr<ParsedExpression>> children;
-		vector<LogicalPlanCompilerIssue> issues;
+		vector<LogicalPlanVerificationIssue> issues;
 		ExportChildren(expression.GetChildren(), path, children, issues, expected_type);
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
@@ -583,7 +585,7 @@ private:
 	}
 
 	BoundExpressionSQLExportResult ExportScalarFunction(const BoundFunctionExpression &expression,
-	                                                    const LogicalPlanCompilerPath &path) {
+	                                                    const LogicalPlanVerificationPath &path) {
 		auto &function = expression.Function();
 		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetArguments()) ||
 		    expression.GetReturnType() != function.GetReturnType()) {
@@ -613,7 +615,7 @@ private:
 			}
 		}
 		vector<unique_ptr<ParsedExpression>> children;
-		vector<LogicalPlanCompilerIssue> issues;
+		vector<LogicalPlanVerificationIssue> issues;
 		ExportChildren(expression.GetChildren(), path, children, issues);
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
@@ -624,7 +626,7 @@ private:
 	}
 
 	BoundExpressionSQLExportResult ExportAggregate(const BoundAggregateExpression &expression,
-	                                               const LogicalPlanCompilerPath &path) {
+	                                               const LogicalPlanVerificationPath &path) {
 		if (expression.GetExpressionType() != ExpressionType::BOUND_AGGREGATE) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid expression type"));
@@ -690,7 +692,7 @@ private:
 		}
 
 		vector<unique_ptr<ParsedExpression>> children;
-		vector<LogicalPlanCompilerIssue> issues;
+		vector<LogicalPlanVerificationIssue> issues;
 		ExportChildren(source_children, path, children, issues, expected_types);
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
@@ -717,13 +719,13 @@ private:
 		    expression.StateExportMode() == AggregateStateExportMode::STATE_EXPORT));
 	}
 
-	BoundExpressionSQLExportResult ExportChild(const Expression &expression, const LogicalPlanCompilerPath &path,
+	BoundExpressionSQLExportResult ExportChild(const Expression &expression, const LogicalPlanVerificationPath &path,
 	                                           idx_t child_index) {
 		return Export(expression, ChildPath(path, child_index));
 	}
 
-	void ExportChildren(const vector<unique_ptr<Expression>> &source, const LogicalPlanCompilerPath &path,
-	                    vector<unique_ptr<ParsedExpression>> &result, vector<LogicalPlanCompilerIssue> &issues,
+	void ExportChildren(const vector<unique_ptr<Expression>> &source, const LogicalPlanVerificationPath &path,
+	                    vector<unique_ptr<ParsedExpression>> &result, vector<LogicalPlanVerificationIssue> &issues,
 	                    optional<LogicalType> expected_type = {}) {
 		vector<optional_ptr<const Expression>> source_refs;
 		vector<optional<LogicalType>> expected_types;
@@ -734,8 +736,8 @@ private:
 		ExportChildren(source_refs, path, result, issues, expected_types);
 	}
 
-	void ExportChildren(const vector<optional_ptr<const Expression>> &source, const LogicalPlanCompilerPath &path,
-	                    vector<unique_ptr<ParsedExpression>> &result, vector<LogicalPlanCompilerIssue> &issues,
+	void ExportChildren(const vector<optional_ptr<const Expression>> &source, const LogicalPlanVerificationPath &path,
+	                    vector<unique_ptr<ParsedExpression>> &result, vector<LogicalPlanVerificationIssue> &issues,
 	                    const vector<optional<LogicalType>> &expected_types) {
 		D_ASSERT(source.size() == expected_types.size());
 		result.resize(source.size());
@@ -765,16 +767,16 @@ private:
 	const BoundExpressionSQLExportContext &context;
 };
 
-LogicalPlanCompilerResult<unique_ptr<ParsedExpression>>
+LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 BoundExpressionSQLExporter::Export(const Expression &expression, const BoundExpressionSQLExportContext &context) {
-	LogicalPlanCompilerPath path;
-	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 	return ExportAtPath(expression, context, path);
 }
 
-LogicalPlanCompilerResult<unique_ptr<ParsedExpression>>
+LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 BoundExpressionSQLExporter::ExportAtPath(const Expression &expression, const BoundExpressionSQLExportContext &context,
-                                         const LogicalPlanCompilerPath &path) {
+                                         const LogicalPlanVerificationPath &path) {
 	if (!IsExpressionRootPath(path)) {
 		return Failure(InternalInvariant({}, "Expression export requires an already-valid expression root path"));
 	}
