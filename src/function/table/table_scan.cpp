@@ -658,6 +658,12 @@ static bool ValueQualifies(const Value &value, const vector<ComparisonCondition>
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			passes = ValueOperations::LessThanEquals(value, comp.constant);
 			break;
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			passes = ValueOperations::DistinctFrom(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			passes = ValueOperations::NotDistinctFrom(value, comp.constant);
+			break;
 		default:
 			return true;
 		}

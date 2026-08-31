@@ -12,7 +12,6 @@ on:
       run_all:
         type: boolean
         default: true
-  repository_dispatch:
   push:
     branches-ignore:
       - 'main'
@@ -82,14 +81,15 @@ jobs:
       runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
       runners: ${{ steps.runners.outputs.runners }}
       images: ${{ steps.config.outputs.images }}
-      linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
+      linux_release_matrix: ${{ steps.selection.outputs.linux_release_matrix }}
+      linux_musl_matrix: ${{ steps.selection.outputs.linux_musl_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
       changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
       changed_slow_tests_files: ${{ steps.changed.outputs.tests_slow_all_changed_files }}
       run_slow_tests: ${{ steps.config.outputs.run_slow_tests }}
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
-      enabled_jobs: ${{ steps.config.outputs.enabled_jobs }}
-      save_cache: ${{ steps.config.outputs.save_cache }}
+      enabled_jobs: ${{ steps.selection.outputs.enabled_jobs }}
+      save_cache: ${{ steps.selection.outputs.save_cache }}
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
       effective_git_describe: ${{ steps.version.outputs.effective_git_describe }}
@@ -174,6 +174,19 @@ jobs:
         timeout-minutes: 10
         uses: duckdb/duckdb-ci/lint-ci@main
 
+      - name: Select CI jobs
+        id: selection
+        shell: bash
+        run: |
+          skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
+          python3 scripts/ci/job_stages.py \
+            --event "${{ github.event_name }}" \
+            --ref_name "${{ github.ref_name }}" \
+            --repository "${{ github.repository }}" \
+            --skip-tests "$skip_tests" \
+            --changed-keys "${{ steps.changed.outputs.changed_keys }}" \
+            --runners '${{ steps.runners.outputs.runners }}'
+
       - name: Configure CI
         id: config
         run: |
@@ -196,8 +209,6 @@ jobs:
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
 
-          runner_linux_x64="${{ steps.runners.outputs.runner_linux_x64 }}"
-          runner_linux_arm64="${{ steps.runners.outputs.runner_linux_arm64 }}"
           image_version="$(<scripts/ci/image_version.txt)"
 
           images=$(
@@ -211,53 +222,8 @@ jobs:
               }'
           )
 
-          linux_cli_matrix=$(
-            jq -nc --arg runner "$runner_linux_arm64" \
-              '[{
-                runner: $runner,
-                arch: "arm64",
-                image: "alpine_arm64_main",
-                name: "arm64-musl",
-                artifact_suffix: "linux-arm64-musl",
-                cache_suffix: "arm64-musl"
-              }]'
-          )
-
-          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
-            linux_cli_matrix=$(
-              jq -c \
-                --arg runner_arm64 "$runner_linux_arm64" \
-                --arg runner_x64 "$runner_linux_x64" \
-                '. = [{
-                  runner: $runner_arm64,
-                  arch: "arm64",
-                  image: "manylinux_arm64_main",
-                  name: "arm64",
-                  artifact_suffix: "linux-arm64",
-                  cache_suffix: "arm64-glibc"
-                }, {
-                  runner: $runner_x64,
-                  arch: "amd64",
-                  image: "alpine_amd64_main",
-                  name: "amd64-musl",
-                  artifact_suffix: "linux-amd64-musl",
-                  cache_suffix: "amd64-musl"
-                }] + .' <<<"$linux_cli_matrix"
-            )
-          fi
-
-          python3 scripts/ci/job_stages.py \
-            --event "${{ github.event_name }}" \
-            --ref_name "${{ github.ref_name }}" \
-            --repository "${{ github.repository }}" \
-            --skip-tests "$skip_tests" \
-            --changed-keys "${{ steps.changed.outputs.changed_keys }}"
-
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
-          {
-            echo "images=$images"
-            echo "linux_cli_matrix=$linux_cli_matrix"
-          } >> "$GITHUB_OUTPUT"
+          echo "images=$images" >> "$GITHUB_OUTPUT"
 
       - name: Install tools
         timeout-minutes: 10
@@ -440,7 +406,7 @@ jobs:
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
-      opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}
+      opt_in_archs: ${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}
       allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       runners: ${{ needs.prepare.outputs.runners }}
       runner_provider: ${{ needs.prepare.outputs.runner_provider }}
@@ -477,12 +443,16 @@ jobs:
       run: make wasm_ci
 
  linux-release:
-    name: Linux Release
+    name: Linux Release (${{ matrix.config.name }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release') }}
     needs: prepare
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.prepare.outputs.linux_release_matrix) }}
+    runs-on: ${{ matrix.config.runner }}
     container:
-      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
+      image: ${{ fromJson(needs.prepare.outputs.images)[matrix.config.image] }}
     env:
       GEN: ninja
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
@@ -496,7 +466,9 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: ./.github/actions/ccache-action
+      if: ${{ matrix.config.use_ccache }}
       with:
+        key: ${{ matrix.config.ccache_key }}
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Write changed tests file
@@ -506,21 +478,24 @@ jobs:
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
-        EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/linux_release_extensions.cmake'
+        EXTENSION_CONFIGS: ${{ format('{0}/.github/config/{1}', github.workspace, matrix.config.extension_config) }}
         ENABLE_EXTENSION_AUTOLOADING: 1
         ENABLE_EXTENSION_AUTOINSTALL: 1
         BUILD_BENCHMARK: 1
-        BUILD_JEMALLOC: 1
+        BUILD_JEMALLOC: ${{ matrix.config.build_jemalloc }}
         FORCE_WARN_UNUSED: 1
-        DISABLE_SANITIZER: 1
+        LTO: ${{ matrix.config.lto }}
+        LTO_JOBS: ${{ matrix.config.lto_jobs }}
         SMOKE_RUNNER: build/release/test/run
+        EXTRA_CMAKE_VARIABLES: ${{ matrix.config.extra_cmake_variables }}
       with:
         build: python3 scripts/ci/retry.py -- make release
-        test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' }}
+        test: ${{ !fromJson(needs.prepare.outputs.skip_tests) && matrix.config.run_smoke && 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' || 'true' }}
         bundle: make release-artifact
-        upload-name: linux-release-build
+        upload-name: ${{ matrix.config.build_artifact }}
         vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
-        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+        cache-suffix: ${{ matrix.config.vcpkg_cache_suffix }}
+        save-cache: ${{ matrix.config.save_vcpkg_cache && fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
@@ -529,18 +504,54 @@ jobs:
       shell: bash
       run: |
         ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
-        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           # Fail on non-zero major version.
-          ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+          ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v'
         fi
 
-    - name: Verify architecture flags
+    - name: Verify build flags
+      shell: bash
       run: |
-        grep -Fq -- '-march=x86-64-v3' build/release/compile_commands.json
+        if [[ "${{ matrix.config.arch }}" == "amd64" ]]; then
+          grep -Fq -- '-march=x86-64-v3' build/release/compile_commands.json
+        else
+          grep -Fq -- '-march=armv8-a' build/release/compile_commands.json
+        fi
         grep -Fq -- '-mtune=generic' build/release/compile_commands.json
+        if [[ "${{ matrix.config.is_compatibility_build }}" == "true" ]]; then
+          if grep -Fq -- '-flto' build/release/compile_commands.json; then
+            echo "Compatibility build unexpectedly contains LTO flags" >&2
+            exit 1
+          fi
+        else
+          grep -Fq -- '-flto=thin' build/release/compile_commands.json
+        fi
 
-    - name: Bundle static libraries
-      run: make gather-libs
+    - name: GCC static library compatibility
+      if: ${{ matrix.config.is_compatibility_build }}
+      shell: bash
+      run: |
+        gcc -std=c11 \
+          -Isrc/include \
+          examples/embedded-c/main.c \
+          build/release/src/libduckdb_static.a \
+          build/release/extension/libdummy_static_extension_loader.a \
+          -ldl -lpthread -lm -lstdc++ \
+          -o build/release/gcc-static-library-smoke
+        build/release/gcc-static-library-smoke
+
+    - name: GCC shared library compatibility
+      if: ${{ matrix.config.is_canonical_build }}
+      shell: bash
+      run: |
+        gcc -std=c11 \
+          -Isrc/include \
+          examples/embedded-c/main.c \
+          -Lbuild/release/src \
+          -Wl,-rpath,"$PWD/build/release/src" \
+          -lduckdb \
+          -o build/release/gcc-shared-library-smoke
+        build/release/gcc-shared-library-smoke
 
     - name: Deploy
       shell: bash
@@ -549,26 +560,60 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
-        zip -r -j static-libs-linux-amd64.zip src/include/duckdb.h build/release/libs/
-        make cli-release-artifact ARTIFACT_SUFFIX=linux-amd64 CLI_BINARY=build/release/duckdb
-        make shared-libs-release-artifact ARTIFACT_SUFFIX=linux-amd64 SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip duckdb-cli-linux-amd64.tar.gz duckdb-shared-libs-linux-amd64.tar.gz static-libs-linux-amd64.zip
+        assets=()
+        if [[ "${{ matrix.config.publish_source }}" == "true" ]]; then
+          zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
+          assets+=(libduckdb-src.zip)
+        fi
+        if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
+          make gather-libs
+          zip -r -j static-libs-${{ matrix.config.artifact_suffix }}.zip src/include/duckdb.h build/release/libs/
+          assets+=(static-libs-${{ matrix.config.artifact_suffix }}.zip)
+        fi
+        if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
+          make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
+          make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
+          assets+=(duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
+        fi
+        ./scripts/upload-assets-to-staging.sh github_release "${assets[@]}"
 
     - uses: actions/upload-artifact@v7
+      if: ${{ matrix.config.is_canonical_build }}
       with:
-        path: duckdb-cli-linux-amd64.tar.gz
+        path: duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
 
     - uses: actions/upload-artifact@v7
+      if: ${{ matrix.config.is_canonical_build }}
       with:
-        path: duckdb-shared-libs-linux-amd64.tar.gz
+        path: duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
 
     - uses: actions/upload-artifact@v7
+      if: ${{ matrix.config.publish_static }}
       with:
-        name: duckdb-static-libs-linux-amd64
-        path: static-libs-linux-amd64.zip
+        name: duckdb-static-libs-${{ matrix.config.artifact_suffix }}
+        path: static-libs-${{ matrix.config.artifact_suffix }}.zip
+
+    - name: ARM64 release tests
+      if: ${{ matrix.config.run_arm_tests && !fromJson(needs.prepare.outputs.skip_tests) }}
+      shell: bash
+      run: |
+        if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
+          make alltest_release_tag
+        else
+          make test_release_tag
+        fi
+
+    - name: ARM64 tools tests
+      if: ${{ matrix.config.run_arm_tests && !fromJson(needs.prepare.outputs.skip_tests) }}
+      run: python -m pytest tools/shell/tests --shell-binary build/release/duckdb
+
+    - name: ARM64 examples
+      if: ${{ matrix.config.run_arm_tests && !fromJson(needs.prepare.outputs.skip_tests) }}
+      run: |
+        build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
+        build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
  codecov:
     name: Code Coverage
@@ -665,16 +710,14 @@ jobs:
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
- linux-release-cli:
-    name: Linux CLI (${{ matrix.config.name }})
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-cli') }}
-    needs:
-      - prepare
-      - linux-release
+ linux-release-musl:
+    name: Linux Release (musl, ${{ matrix.config.name }})
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-musl') }}
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
-        config: ${{ fromJson(needs.prepare.outputs.linux_cli_matrix) }}
+        config: ${{ fromJson(needs.prepare.outputs.linux_musl_matrix) }}
     runs-on: ${{ matrix.config.runner }}
     container:
       image: ${{ fromJson(needs.prepare.outputs.images)[matrix.config.image] }}
@@ -712,9 +755,9 @@ jobs:
       shell: bash
       run: |
         ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
-        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           # Fail on non-zero major version.
-          ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+          ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v'
         fi
 
     - name: Verify architecture flags
@@ -726,10 +769,10 @@ jobs:
           grep -Fq -- '-march=armv8-a' build/release/compile_commands.json
         fi
         grep -Fq -- '-mtune=generic' build/release/compile_commands.json
-
-    - name: Bundle static libraries
-      if: ${{ matrix.config.artifact_suffix == 'linux-arm64' }}
-      run: make gather-libs
+        if grep -Fq -- '-flto' build/release/compile_commands.json; then
+          echo "Compatibility build unexpectedly contains LTO flags" >&2
+          exit 1
+        fi
 
     - name: Deploy
       env:
@@ -750,23 +793,6 @@ jobs:
       with:
         path: duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
-
-    - name: Deploy static libraries
-      if: ${{ matrix.config.artifact_suffix == 'linux-arm64' }}
-      shell: bash
-      env:
-        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-      run: |
-        zip -r -j static-libs-linux-arm64.zip src/include/duckdb.h build/release/libs/
-        ./scripts/upload-assets-to-staging.sh github_release static-libs-linux-arm64.zip
-
-    - uses: actions/upload-artifact@v7
-      if: ${{ matrix.config.artifact_suffix == 'linux-arm64' }}
-      with:
-        name: duckdb-static-libs-linux-arm64
-        path: static-libs-linux-arm64.zip
 
     - name: Release tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -1099,7 +1125,7 @@ jobs:
       - linux-release
       - codecov
       - linux-release-tests
-      - linux-release-cli
+      - linux-release-musl
       - staged-extension-install
       - swift
       - windows
@@ -1112,14 +1138,14 @@ jobs:
     steps:
       - id: release-status
         name: Compute release status
-        if: ${{ always() && (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') }}
+        if: ${{ always() && github.event_name == 'workflow_dispatch' }}
         shell: bash
         run: |
           if [[ "${{ needs.extensions.result }}" == "success" && \
                 "${{ needs.osx.result }}" == "success" && \
                 "${{ needs.windows.result }}" == "success" && \
                 "${{ needs.linux-release.result }}" == "success" && \
-                "${{ needs.linux-release-cli.result }}" == "success" ]]; then
+                "${{ needs.linux-release-musl.result }}" == "success" ]]; then
             echo "success=true" >> "$GITHUB_OUTPUT"
           else
             echo "success=false" >> "$GITHUB_OUTPUT"
@@ -1137,7 +1163,7 @@ jobs:
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
         run: |
           is_release_event=false
-          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "repository_dispatch" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             is_release_event=true
           fi
 
