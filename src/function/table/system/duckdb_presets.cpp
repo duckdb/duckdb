@@ -101,8 +101,7 @@ static void DuckDBPresetsFunction(ClientContext &context, TableFunctionInput &da
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 		output.SetValue(0, count, Value(entry.name));
-		output.SetValue(1, count, entry.description.empty() ? Value(LogicalType::VARCHAR)
-		                                                    : Value(entry.description));
+		output.SetValue(1, count, entry.description.empty() ? Value(LogicalType::VARCHAR) : Value(entry.description));
 		output.SetValue(2, count, Value::LIST(LogicalType::VARCHAR, entry.settings));
 		output.SetValue(3, count, Value(entry.source));
 		count++;
@@ -169,10 +168,10 @@ static void PresetFunction(ClientContext &context, TableFunctionInput &data_p, D
 	while (data.offset < data.results.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &result = data.results[data.offset++];
 		output.SetValue(0, count, Value(result.setting));
-		output.SetValue(1, count, result.old_value.IsNull() ? Value(LogicalType::VARCHAR)
-		                                                    : Value(result.old_value.ToString()));
-		output.SetValue(2, count, result.new_value.IsNull() ? Value(LogicalType::VARCHAR)
-		                                                    : Value(result.new_value.ToString()));
+		output.SetValue(1, count,
+		                result.old_value.IsNull() ? Value(LogicalType::VARCHAR) : Value(result.old_value.ToString()));
+		output.SetValue(2, count,
+		                result.new_value.IsNull() ? Value(LogicalType::VARCHAR) : Value(result.new_value.ToString()));
 		output.SetValue(3, count, Value(result.status));
 		output.SetValue(4, count, result.note.empty() ? Value(LogicalType::VARCHAR) : Value(result.note));
 		count++;
@@ -185,7 +184,6 @@ void PresetFun::RegisterFunction(BuiltinFunctions &set) {
 	// slash or backslash, so the two can always be told apart.
 	set.AddFunction(TableFunction("preset", {LogicalType::VARCHAR}, PresetFunction, PresetBind, PresetInit));
 }
-
 
 //===--------------------------------------------------------------------===//
 // register_preset(name, {settings}) - define a preset
@@ -222,8 +220,7 @@ static unique_ptr<FunctionData> RegisterPresetBind(ClientContext &context, Table
 	result->preset.name = input.inputs[0].ToString();
 	if (ExtensionHelper::IsFullPath(result->preset.name)) {
 		// such a name would be read back as a file path and could never be resolved
-		throw BinderException("Preset name \"%s\" may not contain a dot, slash or backslash",
-		                      result->preset.name);
+		throw BinderException("Preset name \"%s\" may not contain a dot, slash or backslash", result->preset.name);
 	}
 	result->preset.source = "session";
 
@@ -261,8 +258,7 @@ static unique_ptr<FunctionData> RegisterPresetBind(ClientContext &context, Table
 	return std::move(result);
 }
 
-static unique_ptr<GlobalTableFunctionState> RegisterPresetInit(ClientContext &context,
-                                                               TableFunctionInitInput &input) {
+static unique_ptr<GlobalTableFunctionState> RegisterPresetInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<RegisterPresetBindData>();
 	auto result = make_uniq<RegisterPresetData>();
 	result->preset = bind_data.preset;

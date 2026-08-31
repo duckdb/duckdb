@@ -7,8 +7,8 @@
 
 namespace duckdb {
 
-void PhysicalReset::ResetExtensionVariable(ClientContext &context, DBConfig &config,
-                                           ExtensionOption &extension_option, SetScope scope) {
+void PhysicalReset::ResetExtensionVariable(ClientContext &context, DBConfig &config, ExtensionOption &extension_option,
+                                           SetScope scope) {
 	auto effective_scope = scope == SetScope::AUTOMATIC ? extension_option.default_scope : scope;
 	if (extension_option.set_function) {
 		extension_option.set_function(context, effective_scope, extension_option.default_value);

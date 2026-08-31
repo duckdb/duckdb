@@ -57,25 +57,25 @@ Value DefaultAsyncThreads(DBConfig &config) {
 // left out rather than pinned to its default.
 
 const PresetMember HOST_DEDICATED[] = {
-	{"threads", [](DBConfig &c) { return ThreadFraction(c, 1); }, false},
-	{"async_threads", [](DBConfig &c) { return DefaultAsyncThreads(c); }, false},
-	{"max_memory", [](DBConfig &c) { return MemoryFraction(c, 80); }, false},
-	{"pin_threads", [](DBConfig &) { return Value("auto"); }, false},
+    {"threads", [](DBConfig &c) { return ThreadFraction(c, 1); }, false},
+    {"async_threads", [](DBConfig &c) { return DefaultAsyncThreads(c); }, false},
+    {"max_memory", [](DBConfig &c) { return MemoryFraction(c, 80); }, false},
+    {"pin_threads", [](DBConfig &) { return Value("auto"); }, false},
 };
 
 const PresetMember HOST_SHARED[] = {
-	// threads before async_threads: the async pool is sized relative to it
-	{"threads", [](DBConfig &c) { return ThreadFraction(c, 2); }, false},
-	{"async_threads", [](DBConfig &c) { return ThreadFraction(c, 2); }, false},
-	{"max_memory", [](DBConfig &c) { return MemoryFraction(c, 50); }, false},
-	{"pin_threads", [](DBConfig &) { return Value("off"); }, false},
+    // threads before async_threads: the async pool is sized relative to it
+    {"threads", [](DBConfig &c) { return ThreadFraction(c, 2); }, false},
+    {"async_threads", [](DBConfig &c) { return ThreadFraction(c, 2); }, false},
+    {"max_memory", [](DBConfig &c) { return MemoryFraction(c, 50); }, false},
+    {"pin_threads", [](DBConfig &) { return Value("off"); }, false},
 };
 
 const PresetMember HOST_BACKGROUND[] = {
-	{"threads", [](DBConfig &c) { return ThreadFraction(c, 4); }, false},
-	{"async_threads", [](DBConfig &c) { return ThreadFraction(c, 4); }, false},
-	{"max_memory", [](DBConfig &c) { return MemoryFraction(c, 25); }, false},
-	{"pin_threads", [](DBConfig &) { return Value("off"); }, false},
+    {"threads", [](DBConfig &c) { return ThreadFraction(c, 4); }, false},
+    {"async_threads", [](DBConfig &c) { return ThreadFraction(c, 4); }, false},
+    {"max_memory", [](DBConfig &c) { return MemoryFraction(c, 25); }, false},
+    {"pin_threads", [](DBConfig &) { return Value("off"); }, false},
 };
 
 //===--------------------------------------------------------------------===//
@@ -85,11 +85,11 @@ const PresetMember HOST_BACKGROUND[] = {
 // are optional because httpfs may not be installed.
 
 const PresetMember NETWORK_FLAKY[] = {
-	{"autoload_known_extensions", [](DBConfig &) { return Value::BOOLEAN(true); }, false},
-	{"async_threads", [](DBConfig &c) { return ThreadFraction(c, 1); }, false},
-	{"http_retries", [](DBConfig &) { return Value::BIGINT(10); }, true},
-	{"http_retry_backoff", [](DBConfig &) { return Value::FLOAT(2); }, true},
-	{"http_timeout", [](DBConfig &) { return Value::BIGINT(120000); }, true},
+    {"autoload_known_extensions", [](DBConfig &) { return Value::BOOLEAN(true); }, false},
+    {"async_threads", [](DBConfig &c) { return ThreadFraction(c, 1); }, false},
+    {"http_retries", [](DBConfig &) { return Value::BIGINT(10); }, true},
+    {"http_retry_backoff", [](DBConfig &) { return Value::FLOAT(2); }, true},
+    {"http_timeout", [](DBConfig &) { return Value::BIGINT(120000); }, true},
 };
 
 //===--------------------------------------------------------------------===//
@@ -97,23 +97,24 @@ const PresetMember NETWORK_FLAKY[] = {
 //===--------------------------------------------------------------------===//
 
 const PresetMember MEMORY_NO_SPILL[] = {
-	{"max_temp_directory_size", [](DBConfig &) { return Value("0B"); }, false},
+    {"max_temp_directory_size", [](DBConfig &) { return Value("0B"); }, false},
 };
 
 const PresetMember EXECUTION_BULK_INGEST[] = {
-	{"preserve_insertion_order", [](DBConfig &) { return Value::BOOLEAN(false); }, false},
-	{"checkpoint_threshold", [](DBConfig &) { return Value("1GB"); }, false},
+    {"preserve_insertion_order", [](DBConfig &) { return Value::BOOLEAN(false); }, false},
+    {"checkpoint_threshold", [](DBConfig &) { return Value("1GB"); }, false},
 };
 
-#define DUCKDB_PRESET(NAME, DESC, MEMBERS) {NAME, DESC, MEMBERS, sizeof(MEMBERS) / sizeof(PresetMember)}
+#define DUCKDB_PRESET(NAME, DESC, MEMBERS)                                                                             \
+	{ NAME, DESC, MEMBERS, sizeof(MEMBERS) / sizeof(PresetMember) }
 
 const PresetDefinition BUILTIN_PRESETS[] = {
-	DUCKDB_PRESET("execution:bulk_ingest", "Bulk loading rather than querying", EXECUTION_BULK_INGEST),
-	DUCKDB_PRESET("host:background", "DuckDB is not the main process on this machine", HOST_BACKGROUND),
-	DUCKDB_PRESET("host:dedicated", "DuckDB may use the whole machine", HOST_DEDICATED),
-	DUCKDB_PRESET("host:shared", "DuckDB shares this machine with other work", HOST_SHARED),
-	DUCKDB_PRESET("memory:no_spill", "Fail rather than spill to disk", MEMORY_NO_SPILL),
-	DUCKDB_PRESET("network:flaky", "The link to remote storage drops or rate-limits", NETWORK_FLAKY),
+    DUCKDB_PRESET("execution:bulk_ingest", "Bulk loading rather than querying", EXECUTION_BULK_INGEST),
+    DUCKDB_PRESET("host:background", "DuckDB is not the main process on this machine", HOST_BACKGROUND),
+    DUCKDB_PRESET("host:dedicated", "DuckDB may use the whole machine", HOST_DEDICATED),
+    DUCKDB_PRESET("host:shared", "DuckDB shares this machine with other work", HOST_SHARED),
+    DUCKDB_PRESET("memory:no_spill", "Fail rather than spill to disk", MEMORY_NO_SPILL),
+    DUCKDB_PRESET("network:flaky", "The link to remote storage drops or rate-limits", NETWORK_FLAKY),
 };
 
 } // namespace
@@ -223,8 +224,7 @@ Preset PresetRegistry::LoadFromFile(ClientContext &context, const string &path) 
 	}
 	settings.IterateArray([&](JSONValue element) {
 		if (!element.IsObject()) {
-			throw InvalidInputException("Each entry of \"settings\" must be an object of one setting, in \"%s\"",
-			                            path);
+			throw InvalidInputException("Each entry of \"settings\" must be an object of one setting, in \"%s\"", path);
 		}
 		idx_t members = 0;
 		element.IterateObject([&](const string &key, JSONValue value) {
