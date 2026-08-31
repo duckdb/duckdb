@@ -21,6 +21,12 @@ class LocalSinkState;
 class WindowCollection;
 class BoundWindowFunction;
 
+class WindowExecutorStreamingState : public LocalSourceState {
+public:
+	//! The constant offset
+	int64_t offset = 0;
+};
+
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t {
 	PARTITION_BEGIN,
@@ -131,12 +137,12 @@ typedef void (*window_evaluate_function_t)(ExecutionContext &context, DataChunk 
 typedef bool (*window_canstream_function_t)(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta);
 
 //! Constructs a thread local state for the streaming function
-typedef unique_ptr<LocalSourceState> (*window_streaming_state_function_t)(ClientContext &client, DataChunk &input,
-                                                                          const BoundWindowExpression &wexpr);
+typedef unique_ptr<WindowExecutorStreamingState> (*window_streaming_state_function_t)(
+    ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr);
 
 //! Evaluates the next chunk of the streaming function
 typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                         idx_t delayed_capacity, Vector &result, LocalSourceState &lstate);
+                                         idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &lstate);
 
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -422,14 +428,14 @@ public:
 		return GetCanStreamCallback()(client, wexpr, max_delta);
 	}
 
-	unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                               const BoundWindowExpression &wexpr) const {
+	unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                           const BoundWindowExpression &wexpr) const {
 		D_ASSERT(HasStreamingStateCallback());
 		return GetStreamingStateCallback()(client, input, wexpr);
 	}
 
 	void GetStreamingData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                      Vector &result, LocalSourceState &lstate) const {
+	                      Vector &result, WindowExecutorStreamingState &lstate) const {
 		D_ASSERT(HasStreamingDataCallback());
 		GetStreamingDataCallback()(context, input, delayed, delayed_capacity, result, lstate);
 	}
