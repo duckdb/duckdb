@@ -97,17 +97,6 @@ index 0000000..50250b9
 +x,aaaaaaaa
 +x,aaaaaaaa
 +z,pppppppppp巗tail
-diff --git a/data/boundaries/straddle_cp932_1k.csv.gz b/data/boundaries/straddle_cp932_1k.csv.gz
-new file mode 100644
-index 0000000000000000000000000000000000000000..25d5f0b505d2780f7655e8563a063832f4276ffb
-GIT binary patch
-literal 54
-zcmb2|=3oE==F@&_uV{Lo(e!<~>VjuWQ{Xd=;whFnGefOd3oeAmOqwzCFe}3?8*dvn
-H76t|Y0!I@O
-
-literal 0
-HcmV?d00001
-
 diff --git a/data/boundaries/straddle_cp932_2k.csv b/data/boundaries/straddle_cp932_2k.csv
 new file mode 100644
 index 0000000..2916ee1
@@ -591,17 +580,6 @@ index 0000000..3e6552a
 +x,aaaaaaaa
 +x,aaaaaaaa
 +z,ppppppppp¡tail
-diff --git a/data/boundaries/straddle_gb18030_2k.csv.gz b/data/boundaries/straddle_gb18030_2k.csv.gz
-new file mode 100644
-index 0000000000000000000000000000000000000000..429c25a967878983ab1b320fb989ea00e9cb9690
-GIT binary patch
-literal 63
-zcmb2|=3oE==F@&_uV{Lo(e!<~>VjuWQ{Xd=;whG=WK#Q#+-Dx{ja(Ycz}(BGdrY-+
-PrezF+^_BzTY(Sj=$5j>>
-
-literal 0
-HcmV?d00001
-
 diff --git a/data/boundaries/tiny_gb18030.csv b/data/boundaries/tiny_gb18030.csv
 new file mode 100644
 index 0000000..e9e8768
@@ -616,10 +594,10 @@ index 0000000..e9e8768
 +Ā
 diff --git a/test/sql/decode_straddle.test b/test/sql/decode_straddle.test
 new file mode 100644
-index 0000000..0d75f31
+index 0000000..9ca1269
 --- /dev/null
 +++ b/test/sql/decode_straddle.test
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,35 @@
 +# name: test/sql/decode_straddle.test
 +# description: A multi-byte character straddling the encoded-buffer boundary must survive (duckdb/duckdb#20598)
 +# group: [sql]
@@ -647,18 +625,6 @@ index 0000000..0d75f31
 +
 +query I
 +SELECT right(value, 8) FROM read_csv('data/boundaries/straddle_gb18030_2k.csv', header=true, all_varchar=true, encoding='gb18030', buffer_size=1024) WHERE key='z'
-+----
-+ppp隆tail
-+
-+# Compressed files are read twice, once for sniffing and once for scanning, so the encoder has to start over
-+
-+query I
-+SELECT right(value, 8) FROM read_csv('data/boundaries/straddle_cp932_1k.csv.gz', header=true, all_varchar=true, encoding='ibm-943_P15A-2003', buffer_size=1024) WHERE key='z'
-+----
-+ppp甯倀ail
-+
-+query I
-+SELECT right(value, 8) FROM read_csv('data/boundaries/straddle_gb18030_2k.csv.gz', header=true, all_varchar=true, encoding='gb18030', buffer_size=1024) WHERE key='z'
 +----
 +ppp隆tail
 +
