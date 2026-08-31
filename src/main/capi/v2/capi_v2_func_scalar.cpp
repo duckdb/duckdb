@@ -170,6 +170,12 @@ static auto CV2ScalarExec(DataChunk &input, ExpressionState &state, Vector &resu
 
 class CV2ScalarFunction {
 public:
+	CV2ScalarFunction() {
+		// The exec callback's error slot makes failure part of the API contract, so the function defaults to fallible:
+		// a non-fallible function turns any execution error reported through the slot into an internal error.
+		properties.SetFallible();
+	}
+
 	void Register() {
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
@@ -198,9 +204,7 @@ public:
 		signature.Verify();
 
 		ScalarFunction function(name, {}, return_type, CV2ScalarExec);
-		// The exec callback's error slot makes failure part of the API contract, so the function must be fallible:
-		// a non-fallible function turns any execution error reported through the slot into an internal error.
-		function.SetFallible();
+		function.SetProperties(properties);
 		function.GetSignature() = signature;
 
 		if (info.bind_cb) {
@@ -222,6 +226,7 @@ public:
 	FunctionSignature signature;
 	CV2ScalarFunctionInfo info;
 	Identifier name;
+	FunctionProperties properties;
 };
 
 class CV2ConnectionScalarFunction : public CV2ScalarFunction {
@@ -322,6 +327,14 @@ DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_user_data(duckdb_v2_scalar_functio
 		Convert(function)->info.user_data =
 		    duckdb::make_shared_ptr<CV2UserData>(user_data->ptr, user_data->destroy, user_data->equals);
 	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_property(duckdb_v2_scalar_function_handle function,
+                                                       DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                                                       DUCKDB_V2_FUNCTION_PROPERTY_VALUE value,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { SetScalarFunctionProperty(Convert(function)->properties, key, value); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_bind_callback(duckdb_v2_scalar_function_handle function,

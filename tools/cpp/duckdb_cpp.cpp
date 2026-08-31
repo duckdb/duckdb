@@ -2181,6 +2181,81 @@ auto FunctionSignature::SetReturnType(const LogicalType &type) -> FunctionSignat
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Function Properties
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// Conversions from the typed C++ property enums to the C API's generic
+// (key, value) channel. Every C++ enumerator maps to exactly one C value.
+
+auto ToCValue(FunctionStability value) -> DUCKDB_V2_FUNCTION_PROPERTY_VALUE {
+	switch (value) {
+	case FunctionStability::CONSISTENT:
+		return DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_CONSISTENT;
+	case FunctionStability::VOLATILE:
+		return DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_VOLATILE;
+	case FunctionStability::CONSISTENT_WITHIN_QUERY:
+		return DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_CONSISTENT_WITHIN_QUERY;
+	}
+	return DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_CONSISTENT;
+}
+
+auto ToCValue(FunctionNullHandling value) -> DUCKDB_V2_FUNCTION_PROPERTY_VALUE {
+	switch (value) {
+	case FunctionNullHandling::DEFAULT:
+		return DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING_DEFAULT;
+	case FunctionNullHandling::SPECIAL:
+		return DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING_SPECIAL;
+	}
+	return DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING_DEFAULT;
+}
+
+auto ToCValue(FunctionFallibility value) -> DUCKDB_V2_FUNCTION_PROPERTY_VALUE {
+	switch (value) {
+	case FunctionFallibility::INFALLIBLE:
+		return DUCKDB_V2_FUNCTION_PROPERTY_FALLIBILITY_INFALLIBLE;
+	case FunctionFallibility::FALLIBLE:
+		return DUCKDB_V2_FUNCTION_PROPERTY_FALLIBILITY_FALLIBLE;
+	}
+	return DUCKDB_V2_FUNCTION_PROPERTY_FALLIBILITY_FALLIBLE;
+}
+
+auto ToCValue(FunctionCollationHandling value) -> DUCKDB_V2_FUNCTION_PROPERTY_VALUE {
+	switch (value) {
+	case FunctionCollationHandling::PROPAGATE:
+		return DUCKDB_V2_FUNCTION_PROPERTY_COLLATION_HANDLING_PROPAGATE;
+	case FunctionCollationHandling::PUSH_COMBINABLE:
+		return DUCKDB_V2_FUNCTION_PROPERTY_COLLATION_HANDLING_PUSH_COMBINABLE;
+	case FunctionCollationHandling::IGNORE:
+		return DUCKDB_V2_FUNCTION_PROPERTY_COLLATION_HANDLING_IGNORE;
+	}
+	return DUCKDB_V2_FUNCTION_PROPERTY_COLLATION_HANDLING_PROPAGATE;
+}
+
+auto ToCValue(AggregateFunction::OrderDependence value) -> DUCKDB_V2_FUNCTION_PROPERTY_VALUE {
+	switch (value) {
+	case AggregateFunction::OrderDependence::DEPENDENT:
+		return DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT_YES;
+	case AggregateFunction::OrderDependence::INDEPENDENT:
+		return DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT_NO;
+	}
+	return DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT_YES;
+}
+
+auto ToCValue(AggregateFunction::DistinctDependence value) -> DUCKDB_V2_FUNCTION_PROPERTY_VALUE {
+	switch (value) {
+	case AggregateFunction::DistinctDependence::DEPENDENT:
+		return DUCKDB_V2_FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT_YES;
+	case AggregateFunction::DistinctDependence::INDEPENDENT:
+		return DUCKDB_V2_FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT_NO;
+	}
+	return DUCKDB_V2_FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT_YES;
+}
+
+} // namespace
+
+//----------------------------------------------------------------------------------------------------------------------
 // Scalar Function
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -2341,6 +2416,30 @@ auto ScalarFunction::SetExecCallback(ExecCallback callback) & -> ScalarFunction 
 
 	CheckedAPICall(duckdb_v2_scalar_function_set_exec_callback, handle(), trampoline);
 	exec_callback = callback;
+	return *this;
+}
+
+auto ScalarFunction::SetStability(FunctionStability value) & -> ScalarFunction & {
+	CheckedAPICall(duckdb_v2_scalar_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	               ToCValue(value));
+	return *this;
+}
+
+auto ScalarFunction::SetNullHandling(FunctionNullHandling value) & -> ScalarFunction & {
+	CheckedAPICall(duckdb_v2_scalar_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING,
+	               ToCValue(value));
+	return *this;
+}
+
+auto ScalarFunction::SetFallibility(FunctionFallibility value) & -> ScalarFunction & {
+	CheckedAPICall(duckdb_v2_scalar_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_FALLIBILITY,
+	               ToCValue(value));
+	return *this;
+}
+
+auto ScalarFunction::SetCollationHandling(FunctionCollationHandling value) & -> ScalarFunction & {
+	CheckedAPICall(duckdb_v2_scalar_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_COLLATION_HANDLING,
+	               ToCValue(value));
 	return *this;
 }
 
@@ -2753,6 +2852,42 @@ auto AggregateFunction::SetDestroyCallback(DestroyCallback callback) & -> Aggreg
 
 	CheckedAPICall(duckdb_v2_aggregate_function_set_destroy_callback, handle(), trampoline);
 	destroy_callback = callback;
+	return *this;
+}
+
+auto AggregateFunction::SetStability(FunctionStability value) & -> AggregateFunction & {
+	CheckedAPICall(duckdb_v2_aggregate_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	               ToCValue(value));
+	return *this;
+}
+
+auto AggregateFunction::SetNullHandling(FunctionNullHandling value) & -> AggregateFunction & {
+	CheckedAPICall(duckdb_v2_aggregate_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING,
+	               ToCValue(value));
+	return *this;
+}
+
+auto AggregateFunction::SetFallibility(FunctionFallibility value) & -> AggregateFunction & {
+	CheckedAPICall(duckdb_v2_aggregate_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_FALLIBILITY,
+	               ToCValue(value));
+	return *this;
+}
+
+auto AggregateFunction::SetCollationHandling(FunctionCollationHandling value) & -> AggregateFunction & {
+	CheckedAPICall(duckdb_v2_aggregate_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_COLLATION_HANDLING,
+	               ToCValue(value));
+	return *this;
+}
+
+auto AggregateFunction::SetOrderDependence(OrderDependence value) & -> AggregateFunction & {
+	CheckedAPICall(duckdb_v2_aggregate_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT,
+	               ToCValue(value));
+	return *this;
+}
+
+auto AggregateFunction::SetDistinctDependence(DistinctDependence value) & -> AggregateFunction & {
+	CheckedAPICall(duckdb_v2_aggregate_function_set_property, handle(),
+	               DUCKDB_V2_FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT, ToCValue(value));
 	return *this;
 }
 

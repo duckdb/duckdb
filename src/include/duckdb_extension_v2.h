@@ -810,6 +810,12 @@ typedef struct {
 	(duckdb_v2_aggregate_function_update_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_update_get_user_data)
 	(duckdb_v2_aggregate_function_update_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_set_property)
+	(duckdb_v2_aggregate_function_handle function, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+	 DUCKDB_V2_FUNCTION_PROPERTY_VALUE value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_property)
+	(duckdb_v2_scalar_function_handle function, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+	 DUCKDB_V2_FUNCTION_PROPERTY_VALUE value, duckdb_v2_error_info_handle *err);
 	// capigen:end appended
 } duckdb_ext_api_v2;
 
@@ -1161,6 +1167,8 @@ typedef struct {
 #define duckdb_v2_aggregate_function_update_get_states duckdb_ext_api.duckdb_v2_aggregate_function_update_get_states
 #define duckdb_v2_aggregate_function_update_get_user_data                                                              \
 	duckdb_ext_api.duckdb_v2_aggregate_function_update_get_user_data
+#define duckdb_v2_aggregate_function_set_property duckdb_ext_api.duckdb_v2_aggregate_function_set_property
+#define duckdb_v2_scalar_function_set_property    duckdb_ext_api.duckdb_v2_scalar_function_set_property
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 

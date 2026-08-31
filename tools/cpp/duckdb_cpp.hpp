@@ -2435,6 +2435,50 @@ private:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Function Properties
+//----------------------------------------------------------------------------------------------------------------------
+// Properties shared by every function category, set with the function classes' property setters (`SetStability`,
+// `SetFallibility`, ...) to configure metadata that influences planning and execution. Category-specific properties
+// (e.g. aggregate order/DISTINCT dependence) are declared as nested enums on the relevant function class.
+
+/// How stable/deterministic a function's result is, used by the optimizer.
+enum class FunctionStability : uint8_t {
+	/// Always returns the same result for the same input.
+	CONSISTENT = 0,
+	/// The result may differ per row (e.g. random()).
+	VOLATILE = 1,
+	/// Stable within a single query/transaction but may change across queries (e.g. now()).
+	CONSISTENT_WITHIN_QUERY = 2,
+};
+
+/// Whether a function handles NULL inputs itself.
+enum class FunctionNullHandling : uint8_t {
+	/// If any argument is NULL the result is NULL and the function is not invoked for that row.
+	DEFAULT = 0,
+	/// The function is invoked even when arguments are NULL and decides the result itself.
+	SPECIAL = 1,
+};
+
+/// Whether a function can raise a runtime error.
+enum class FunctionFallibility : uint8_t {
+	/// The function never raises a runtime error. Declaring this promises the callbacks never throw; an exception
+	/// thrown anyway becomes an internal error.
+	INFALLIBLE = 0,
+	/// The function may raise a runtime error for some inputs (default).
+	FALLIBLE = 1,
+};
+
+/// How a function interacts with collations on its arguments.
+enum class FunctionCollationHandling : uint8_t {
+	/// Combines collations from its inputs and propagates them to its result (default).
+	PROPAGATE = 0,
+	/// Combinable collations are executed on the input arguments before the function runs.
+	PUSH_COMBINABLE = 1,
+	/// Collations are ignored by the function.
+	IGNORE = 2,
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // Scalar Function
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -2499,6 +2543,16 @@ public:
 	auto SetBindCallback(BindCallback callback) & -> ScalarFunction &;
 	auto SetInitCallback(InitCallback callback) & -> ScalarFunction &;
 	auto SetExecCallback(ExecCallback callback) & -> ScalarFunction &;
+
+	/// How stable the function's result is across rows and queries. Defaults to `CONSISTENT`.
+	auto SetStability(FunctionStability value) & -> ScalarFunction &;
+	/// Whether the function handles NULL inputs itself. Defaults to `DEFAULT` (NULL in, NULL out).
+	auto SetNullHandling(FunctionNullHandling value) & -> ScalarFunction &;
+	/// Whether the function can raise a runtime error. Defaults to `FALLIBLE`; declaring `INFALLIBLE` promises the
+	/// callbacks never throw.
+	auto SetFallibility(FunctionFallibility value) & -> ScalarFunction &;
+	/// How the function interacts with collations on its arguments. Defaults to `PROPAGATE`.
+	auto SetCollationHandling(FunctionCollationHandling value) & -> ScalarFunction &;
 
 	/// Registers the function in the catalog it was created against. The function object remains valid and may be
 	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
@@ -2701,6 +2755,22 @@ class AggregateFunction final : public detail::Handle<AggregateFunction> {
 	friend detail::Factory;
 
 public:
+	/// Whether the aggregate's result depends on the order in which rows are aggregated.
+	enum class OrderDependence : uint8_t {
+		/// The result depends on input order (default).
+		DEPENDENT = 0,
+		/// The result does not depend on input order.
+		INDEPENDENT = 1,
+	};
+
+	/// Whether the aggregate's result is affected by a DISTINCT modifier.
+	enum class DistinctDependence : uint8_t {
+		/// The result is affected by DISTINCT (default).
+		DEPENDENT = 0,
+		/// The result is not affected by DISTINCT.
+		INDEPENDENT = 1,
+	};
+
 	class BindInput;
 	class SizeInput;
 	class InitInput;
@@ -2766,6 +2836,20 @@ public:
 	auto SetCombineCallback(CombineCallback callback) & -> AggregateFunction &;
 	auto SetFinalizeCallback(FinalizeCallback callback) & -> AggregateFunction &;
 	auto SetDestroyCallback(DestroyCallback callback) & -> AggregateFunction &;
+
+	/// How stable the function's result is across rows and queries. Defaults to `CONSISTENT`.
+	auto SetStability(FunctionStability value) & -> AggregateFunction &;
+	/// Whether the function handles NULL inputs itself. Defaults to `DEFAULT` (NULL in, NULL out).
+	auto SetNullHandling(FunctionNullHandling value) & -> AggregateFunction &;
+	/// Whether the function can raise a runtime error. Defaults to `FALLIBLE`; declaring `INFALLIBLE` promises the
+	/// callbacks never throw.
+	auto SetFallibility(FunctionFallibility value) & -> AggregateFunction &;
+	/// How the function interacts with collations on its arguments. Defaults to `PROPAGATE`.
+	auto SetCollationHandling(FunctionCollationHandling value) & -> AggregateFunction &;
+	/// Whether the result depends on the order in which rows are aggregated. Defaults to `DEPENDENT`.
+	auto SetOrderDependence(OrderDependence value) & -> AggregateFunction &;
+	/// Whether the result is affected by a DISTINCT modifier. Defaults to `DEPENDENT`.
+	auto SetDistinctDependence(DistinctDependence value) & -> AggregateFunction &;
 
 	/// Registers the function in the catalog it was created against. The function object remains valid and may be
 	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.

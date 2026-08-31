@@ -683,4 +683,50 @@ TEST_CASE("V2 aggregate: null arguments and destroy null-safety", "[capi_v2][agg
 	REQUIRE(duckdb_v2_aggregate_function_destroy(&null_function) == DUCKDB_V2_ERROR_NONE);
 }
 
+// ===========================================================================
+// Function properties.
+// ===========================================================================
+
+TEST_CASE("V2 aggregate: function properties", "[capi_v2][aggregate_function]") {
+	EnvFixture fx;
+	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+
+	// Both COMMON and AGGREGATE group keys are accepted.
+	auto function = MakeAggregate(fx.conn, "prop_sum");
+	auto sig = AggSigOf(function);
+	AggSigParam(sig, "x", integer);
+	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, bigint, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_size_callback(function, SumSize, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_init_callback(function, SumInit, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_update_callback(function, SumUpdate, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_combine_callback(function, SumCombine, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, SumFinalize, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	                                                  DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_CONSISTENT,
+	                                                  nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT,
+	                                                  DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT_NO,
+	                                                  nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT,
+	                                                  DUCKDB_V2_FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT_NO,
+	                                                  nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	// A value that does not belong to the key is rejected.
+	REQUIRE(duckdb_v2_aggregate_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT,
+	                                                  DUCKDB_V2_FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT_YES,
+	                                                  nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	// A key from an unknown group is rejected.
+	REQUIRE(duckdb_v2_aggregate_function_set_property(function, static_cast<DUCKDB_V2_FUNCTION_PROPERTY_KEY>(0x7F0000),
+	                                                  static_cast<DUCKDB_V2_FUNCTION_PROPERTY_VALUE>(0x7F0000),
+	                                                  nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_aggregate_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&integer);
+	duckdb_v2_logical_type_destroy(&bigint);
+
+	REQUIRE(AggQueryI64(fx.conn, "SELECT prop_sum(r::INTEGER) FROM range(100) t(r)") == 100LL * 99 / 2);
+}
+
 } // namespace test_capi_v2

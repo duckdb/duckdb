@@ -618,4 +618,75 @@ TEST_CASE("V2 scalar: null arguments and destroy null-safety", "[capi_v2][scalar
 	REQUIRE(duckdb_v2_scalar_function_destroy(&null_function) == DUCKDB_V2_ERROR_NONE);
 }
 
+// ===========================================================================
+// Function properties.
+// ===========================================================================
+
+namespace {
+
+// out[i] = 42, regardless of the input.
+void Const42Exec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle,
+                 duckdb_v2_error_info_handle *err) {
+	duckdb_v2_vector_handle out = nullptr;
+	idx_t count = 0;
+	if (duckdb_v2_scalar_function_exec_get_result(info, &out, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_scalar_function_exec_get_row_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	void *raw = nullptr;
+	if (duckdb_v2_vector_get_data_mutable(out, &raw, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto *out_data = static_cast<int32_t *>(raw);
+	for (idx_t i = 0; i < count; i++) {
+		out_data[i] = 42;
+	}
+}
+
+} // namespace
+
+TEST_CASE("V2 scalar: function properties", "[capi_v2][scalar_function]") {
+	EnvFixture fx;
+	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+
+	// SPECIAL null handling: the exec callback runs even for a NULL argument and produces a value.
+	auto function = MakeScalar(fx.conn, "always42");
+	auto sig = SigOf(function);
+	SigParam(sig, "a", integer);
+	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, Const42Exec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING,
+	                                               DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING_SPECIAL,
+	                                               nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	                                               DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_VOLATILE,
+	                                               nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_scalar_function_destroy(&function);
+
+	// With default null handling this would be NULL without invoking the callback.
+	REQUIRE(QueryI32(fx.conn, "SELECT COALESCE(always42(NULL::INTEGER), -1)") == 42);
+
+	// Invalid combinations are rejected.
+	function = MakeScalar(fx.conn, "prop_errors");
+	// A value that does not belong to the key.
+	REQUIRE(duckdb_v2_scalar_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	                                               DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING_SPECIAL,
+	                                               nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	// An aggregate-only key on a scalar function.
+	REQUIRE(duckdb_v2_scalar_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT,
+	                                               DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT_NO,
+	                                               nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	// An unknown key in the COMMON group.
+	REQUIRE(duckdb_v2_scalar_function_set_property(function, static_cast<DUCKDB_V2_FUNCTION_PROPERTY_KEY>(0x01FF00),
+	                                               static_cast<DUCKDB_V2_FUNCTION_PROPERTY_VALUE>(0x01FF00),
+	                                               nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	// A null function handle.
+	REQUIRE(duckdb_v2_scalar_function_set_property(nullptr, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	                                               DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_VOLATILE,
+	                                               nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_scalar_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&integer);
+}
+
 } // namespace test_capi_v2

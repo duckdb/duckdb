@@ -304,6 +304,12 @@ static auto CV2AggregateDestroy(Vector &state, AggregateInputData &aggr_input_da
 
 class CV2AggregateFunction {
 public:
+	CV2AggregateFunction() {
+		// The callbacks' error slots make failure part of the API contract, so the function defaults to fallible:
+		// a non-fallible function turns any execution error reported through the slot into an internal error.
+		properties.SetFallible();
+	}
+
 	void Register() {
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
@@ -346,9 +352,7 @@ public:
 		AggregateFunction function(name, {}, return_type, CV2AggregateSize, CV2AggregateInit, CV2AggregateUpdate,
 		                           CV2AggregateCombine, CV2AggregateFinalize,
 		                           FunctionNullHandling::DEFAULT_NULL_HANDLING);
-		// The callbacks' error slots make failure part of the API contract, so the function must be fallible:
-		// a non-fallible function turns any execution error reported through the slot into an internal error.
-		function.SetFallible();
+		function.SetProperties(properties);
 		function.GetSignature() = signature;
 
 		if (info.bind_cb) {
@@ -370,6 +374,7 @@ public:
 	FunctionSignature signature;
 	CV2AggregateFunctionInfo info;
 	Identifier name;
+	AggregateFunctionProperties properties;
 };
 
 class CV2ConnectionAggregateFunction : public CV2AggregateFunction {
@@ -471,6 +476,14 @@ DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_user_data(duckdb_v2_aggregate_f
 		Convert(function)->info.user_data =
 		    duckdb::make_shared_ptr<CV2UserData>(user_data->ptr, user_data->destroy, user_data->equals);
 	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_property(duckdb_v2_aggregate_function_handle function,
+                                                          DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                                                          DUCKDB_V2_FUNCTION_PROPERTY_VALUE value,
+                                                          duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { SetAggregateFunctionProperty(Convert(function)->properties, key, value); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_bind_callback(duckdb_v2_aggregate_function_handle function,

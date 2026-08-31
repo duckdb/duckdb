@@ -57,6 +57,8 @@ static_assert(offsetof(duckdb_v2_bytes, value.inlined.inlined) == 4,
 
 namespace duckdb {
 
+class AggregateFunctionProperties;
+
 namespace capiv2 {
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -173,6 +175,13 @@ inline auto Convert(CV2Context *ctx) -> duckdb_v2_context_handle {
 //! cannot be Convert'ed with a cast: the loader is resolved through the state instead. Valid only while the
 //! extension's entrypoint is running.
 auto GetExtensionLoader(duckdb_v2_extension_handle handle) -> ExtensionLoader &;
+
+//! Translate the generic (key, value) function property channel into engine properties; defined in
+//! capi_v2_func_properties.cpp and shared by the scalar and aggregate set_property entry points.
+void SetScalarFunctionProperty(FunctionProperties &props, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                               DUCKDB_V2_FUNCTION_PROPERTY_VALUE value);
+void SetAggregateFunctionProperty(AggregateFunctionProperties &props, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                                  DUCKDB_V2_FUNCTION_PROPERTY_VALUE value);
 
 using CV2FunctionSignature = duckdb::FunctionSignature;
 

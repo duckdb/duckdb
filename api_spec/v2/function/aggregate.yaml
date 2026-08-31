@@ -271,6 +271,32 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  aggregate_function_set_property:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-31" ]
+    description: |
+      Sets a property on the aggregate function.
+
+      Configures a function property that influences planning and execution, such as stability, NULL handling,
+      fallibility, collation handling, or the aggregate-specific order/DISTINCT dependence. The value must be
+      one of the `[[FUNCTION_PROPERTY_VALUE]]` entries belonging to `key`; passing a value that does not belong
+      to the key, or a key that is not valid for aggregate functions, results in an error.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the property of.
+      key:
+        type: FUNCTION_PROPERTY_KEY
+        description: The property to set.
+      value:
+        type: FUNCTION_PROPERTY_VALUE
+        description: The value to set for the property. Must belong to `key`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   aggregate_function_set_bind_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-28" ]

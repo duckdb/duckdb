@@ -210,6 +210,32 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  scalar_function_set_property:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-31" ]
+    description: |
+      Sets a property on the scalar function.
+
+      Configures a function property that influences planning and execution, such as stability, NULL handling,
+      fallibility or collation handling. The value must be one of the `[[FUNCTION_PROPERTY_VALUE]]` entries
+      belonging to `key`; passing a value that does not belong to the key, or a key that is not valid for
+      scalar functions, results in an error.
+    parameters:
+      function:
+        type: scalar_function
+        description: The function to set the property of.
+      key:
+        type: FUNCTION_PROPERTY_KEY
+        description: The property to set.
+      value:
+        type: FUNCTION_PROPERTY_VALUE
+        description: The value to set for the property. Must belong to `key`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   scalar_function_set_bind_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]

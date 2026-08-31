@@ -670,3 +670,63 @@ TEST_CASE("Stable C++API: ScalarExecutor reference arguments", "[cpp_api]") {
 	REQUIRE(CollectInts(conn.Execute("SELECT exec_ref_add(r::INTEGER, 100) FROM range(3) t(r)")) ==
 	        std::vector<int32_t> {100, 101, 102});
 }
+
+// ---------------------------------------------------------------------------
+// Function properties.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+std::atomic<idx_t> prop_exec_rows {0};
+
+// out[i] = 1; counts processed rows to observe constant folding.
+void CountingOneExec(ScalarFunction::ExecInput &input) {
+	auto result = input.GetResult();
+	auto *out = result.GetDataMutable<int32_t>();
+	for (idx_t i = 0; i < input.GetRowCount(); i++) {
+		out[i] = 1;
+	}
+	prop_exec_rows += input.GetRowCount();
+}
+
+} // namespace
+
+TEST_CASE("Stable C++API: scalar function properties", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto integer = conn.ParseType("INTEGER");
+
+	// CONSISTENT (the default): a call with a constant argument is folded to a
+	// single evaluation instead of running per row.
+	auto consistent = ScalarFunction::Create(conn);
+	consistent.SetName("prop_consistent").SetExecCallback(CountingOneExec);
+	consistent.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	consistent.Register();
+
+	// The same function declared VOLATILE must be evaluated for every row.
+	auto vol = ScalarFunction::Create(conn);
+	vol.SetName("prop_volatile").SetExecCallback(CountingOneExec).SetStability(FunctionStability::VOLATILE);
+	vol.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	vol.Register();
+
+	prop_exec_rows = 0;
+	CollectInts(conn.Execute("SELECT prop_consistent(42) FROM range(1000)"));
+	const auto consistent_rows = prop_exec_rows.load();
+
+	prop_exec_rows = 0;
+	CollectInts(conn.Execute("SELECT prop_volatile(42) FROM range(1000)"));
+	const auto volatile_rows = prop_exec_rows.load();
+
+	REQUIRE(volatile_rows >= 1000);
+	REQUIRE(consistent_rows < volatile_rows);
+
+	// SPECIAL null handling: the callback runs for a NULL argument and produces
+	// a value; with default handling the result would be NULL.
+	auto special = ScalarFunction::Create(conn);
+	special.SetName("prop_special").SetExecCallback(CountingOneExec).SetNullHandling(FunctionNullHandling::SPECIAL);
+	special.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	special.Register();
+
+	REQUIRE(CollectInts(conn.Execute("SELECT prop_special(NULL::INTEGER)")) == std::vector<int32_t> {1});
+}

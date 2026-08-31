@@ -482,3 +482,34 @@ TEST_CASE("Stable C++API: aggregate function registration validation", "[cpp_api
 		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Function properties.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stable C++API: aggregate function properties", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	// Setting common and aggregate-specific properties leaves the function
+	// registrable and correct.
+	auto function = AggregateFunction::Create(conn);
+	function.SetName("prop_sum")
+	    .WithSignature([&](FunctionSignature &sig) {
+		    sig.AddParameter("a", conn.ParseType("INTEGER")).SetReturnType(conn.ParseType("BIGINT"));
+	    })
+	    .SetSizeCallback(SumSize)
+	    .SetInitCallback(SumInit)
+	    .SetUpdateCallback(SumUpdate)
+	    .SetCombineCallback(SumCombine)
+	    .SetFinalizeCallback(SumFinalize)
+	    .SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY)
+	    .SetCollationHandling(FunctionCollationHandling::IGNORE)
+	    .SetOrderDependence(AggregateFunction::OrderDependence::INDEPENDENT)
+	    .SetDistinctDependence(AggregateFunction::DistinctDependence::INDEPENDENT);
+	function.Register();
+
+	REQUIRE(CollectBigInts(conn.Execute("SELECT prop_sum(r::INTEGER) FROM range(1000) t(r)")) ==
+	        std::vector<int64_t> {1000LL * 999 / 2});
+}
