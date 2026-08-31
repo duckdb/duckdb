@@ -1,0 +1,18 @@
+From 9a0a69d3aebdd0a0533d7610204303d05a0181ae Mon Sep 17 00:00:00 2001
+From: Copilot <copilot@localhost>
+Date: Fri, 28 Aug 2026 13:12:08 +0200
+Subject: [PATCH 4/8] Preserve literal plus signs in URLs
+
+
+diff --git a/third_party/httplib/httplib.hpp b/third_party/httplib/httplib.hpp
+index d8dc6be..ad9322a 100644
+--- a/third_party/httplib/httplib.hpp
++++ b/third_party/httplib/httplib.hpp
+@@ -5579,7 +5579,6 @@ inline std::string encode_path(const std::string &s) {
+   for (size_t i = 0; s[i]; i++) {
+     switch (s[i]) {
+     case ' ': result += "%20"; break;
+-    case '+': result += "%2B"; break;
+     case '\r': result += "%0D"; break;
+     case '\n': result += "%0A"; break;
+     case '\'': result += "%27"; break;
