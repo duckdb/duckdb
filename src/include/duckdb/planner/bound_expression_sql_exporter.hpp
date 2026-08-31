@@ -13,7 +13,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/column_binding.hpp"
-#include "duckdb/planner/logical_plan_compiler_result.hpp"
+#include "duckdb/planner/logical_plan_verification_result.hpp"
 
 #include <functional>
 
@@ -35,12 +35,12 @@ struct BoundExpressionSQLExportContext {
 
 class BoundExpressionSQLExporter {
 public:
-	DUCKDB_API static LogicalPlanCompilerResult<unique_ptr<ParsedExpression>>
+	DUCKDB_API static LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 	Export(const Expression &expression, const BoundExpressionSQLExportContext &context);
 
-	DUCKDB_API static LogicalPlanCompilerResult<unique_ptr<ParsedExpression>>
+	DUCKDB_API static LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 	ExportAtPath(const Expression &expression, const BoundExpressionSQLExportContext &context,
-	             const LogicalPlanCompilerPath &path);
+	             const LogicalPlanVerificationPath &path);
 };
 
 } // namespace duckdb

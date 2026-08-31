@@ -58,7 +58,7 @@ using namespace duckdb;
 
 namespace {
 
-using ExportResult = LogicalPlanCompilerResult<unique_ptr<ParsedExpression>>;
+using ExportResult = LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>;
 
 static unique_ptr<LogicalOperator> OptimizeExportQuery(Connection &connection, const string &query) {
 	Parser parser(connection.context->GetParserOptions());
@@ -148,14 +148,14 @@ static void RequireRoundTrip(Connection &connection, const Expression &expressio
 	REQUIRE(exported_result->Equals(*oracle_result, false));
 }
 
-static void RequireIssue(const ExportResult &result, LogicalPlanCompilerIssueCode code,
-                         const LogicalPlanCompilerPath &path) {
+static void RequireIssue(const ExportResult &result, LogicalPlanVerificationIssueCode code,
+                         const LogicalPlanVerificationPath &path) {
 	REQUIRE(result.IsValid());
 	REQUIRE(result.HasError());
 	REQUIRE(result.GetIssues().size() == 1);
 	REQUIRE(result.GetIssues()[0].code == code);
-	REQUIRE(result.GetIssues()[0].phase == LogicalPlanCompilerPhase::EXPRESSION_EXPORT);
-	REQUIRE(result.GetIssues()[0].path == optional<LogicalPlanCompilerPath>(path));
+	REQUIRE(result.GetIssues()[0].phase == LogicalPlanVerificationPhase::EXPRESSION_EXPORT);
+	REQUIRE(result.GetIssues()[0].path == optional<LogicalPlanVerificationPath>(path));
 }
 
 static unique_ptr<Expression> Constant(Value value) {
@@ -381,14 +381,14 @@ static unique_ptr<Expression> BindFlippingExpression(FunctionBindExpressionInput
 
 static void RequireInvalidExpressionTypes(const Expression &expression, const BoundExpressionSQLExportContext &context,
                                           const string &label) {
-	LogicalPlanCompilerPath path;
-	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 	for (auto type : {ExpressionType::INVALID, static_cast<ExpressionType>(255)}) {
 		INFO("expression class=" << label << " expression type=" << static_cast<uint32_t>(type));
 		auto malformed = expression.Copy();
 		malformed->SetExpressionTypeUnsafe(type);
 		RequireIssue(BoundExpressionSQLExporter::Export(*malformed, context),
-		             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+		             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	}
 }
 
@@ -481,38 +481,38 @@ TEST_CASE("Bound expression SQL export resolves columns only by binding", "[boun
 	BoundColumnRefExpression missing(Identifier("usable_alias"), LogicalType::INTEGER, left_binding);
 	BoundExpressionSQLExportContext missing_context;
 	auto missing_result = BoundExpressionSQLExporter::Export(missing, missing_context);
-	LogicalPlanCompilerPath standalone_path;
-	standalone_path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
-	RequireIssue(missing_result, LogicalPlanCompilerIssueCode::INVALID_BINDING, standalone_path);
+	LogicalPlanVerificationPath standalone_path;
+	standalone_path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+	RequireIssue(missing_result, LogicalPlanVerificationIssueCode::INVALID_BINDING, standalone_path);
 	REQUIRE(missing_result.GetIssues()[0].facts.size() == 2);
 
 	auto wrong_type = ResolveBinding(left_binding, {Identifier("src"), Identifier("select")}, LogicalType::BIGINT);
 	auto mismatch = BoundExpressionSQLExporter::Export(missing, wrong_type);
-	RequireIssue(mismatch, LogicalPlanCompilerIssueCode::TYPE_MISMATCH, standalone_path);
+	RequireIssue(mismatch, LogicalPlanVerificationIssueCode::TYPE_MISMATCH, standalone_path);
 	auto &type_mismatch = *mismatch.GetIssues()[0].construct->type_mismatch;
 	REQUIRE(type_mismatch.expected_type == LogicalType::BIGINT);
 	REQUIRE(type_mismatch.actual_type == LogicalType::INTEGER);
 
 	BoundColumnRefExpression correlated(LogicalType::INTEGER, left_binding, 1);
 	auto correlated_result = BoundExpressionSQLExporter::Export(correlated, context);
-	RequireIssue(correlated_result, LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE, standalone_path);
+	RequireIssue(correlated_result, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, standalone_path);
 	REQUIRE(*correlated_result.GetIssues()[0].construct->identifier == "correlated_column_reference");
 
 	BoundColumnRefExpression invalid_binding(LogicalType::INTEGER, ColumnBinding());
 	auto invalid_result = BoundExpressionSQLExporter::Export(invalid_binding, context);
-	RequireIssue(invalid_result, LogicalPlanCompilerIssueCode::INVALID_BINDING, standalone_path);
+	RequireIssue(invalid_result, LogicalPlanVerificationIssueCode::INVALID_BINDING, standalone_path);
 
 	auto invalid_name = ResolveBinding(left_binding, {Identifier(string("\xFF", 1))}, LogicalType::INTEGER);
 	auto invalid_name_result = BoundExpressionSQLExporter::Export(missing, invalid_name);
-	RequireIssue(invalid_name_result, LogicalPlanCompilerIssueCode::INVALID_BINDING, standalone_path);
+	RequireIssue(invalid_name_result, LogicalPlanVerificationIssueCode::INVALID_BINDING, standalone_path);
 
 	BoundColumnRefExpression incomplete_type(LogicalType::ANY, left_binding);
 	auto incomplete_type_result = BoundExpressionSQLExporter::Export(incomplete_type, context);
-	RequireIssue(incomplete_type_result, LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, standalone_path);
+	RequireIssue(incomplete_type_result, LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, standalone_path);
 	auto incomplete_resolution =
 	    ResolveBinding(left_binding, {Identifier("src"), Identifier("select")}, LogicalType::ANY);
 	auto incomplete_resolution_result = BoundExpressionSQLExporter::Export(missing, incomplete_resolution);
-	RequireIssue(incomplete_resolution_result, LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, standalone_path);
+	RequireIssue(incomplete_resolution_result, LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, standalone_path);
 }
 
 TEST_CASE("Bound expression SQL export composes deterministic expression paths", "[bound_expression_sql_export]") {
@@ -521,30 +521,30 @@ TEST_CASE("Bound expression SQL export composes deterministic expression paths",
 	    ExpressionType::COMPARE_EQUAL, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding),
 	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding));
 	BoundExpressionSQLExportContext context;
-	LogicalPlanCompilerPath root;
-	root.root = LogicalPlanCompilerPathRoot::LOGICAL_PLAN;
+	LogicalPlanVerificationPath root;
+	root.root = LogicalPlanVerificationPathRoot::LOGICAL_PLAN;
 	root.components.push_back(
-	    LogicalPlanCompilerPathComponent {LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 2});
+	    LogicalPlanVerificationPathComponent {LogicalPlanVerificationPathComponentType::OPERATOR_CHILD, 2});
 	root.components.push_back(
-	    LogicalPlanCompilerPathComponent {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 4});
+	    LogicalPlanVerificationPathComponent {LogicalPlanVerificationPathComponentType::OPERATOR_EXPRESSION, 4});
 	auto result = BoundExpressionSQLExporter::ExportAtPath(*expression, context, root);
 	REQUIRE(result.IsValid());
 	REQUIRE(result.HasError());
 	REQUIRE(result.GetIssues().size() == 2);
 	for (idx_t child_index = 0; child_index < 2; child_index++) {
 		auto expected = root;
-		expected.components.push_back(
-		    LogicalPlanCompilerPathComponent {LogicalPlanCompilerPathComponentType::EXPRESSION_CHILD, child_index});
-		REQUIRE(result.GetIssues()[child_index].path == optional<LogicalPlanCompilerPath>(expected));
+		expected.components.push_back(LogicalPlanVerificationPathComponent {
+		    LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, child_index});
+		REQUIRE(result.GetIssues()[child_index].path == optional<LogicalPlanVerificationPath>(expected));
 	}
 
-	LogicalPlanCompilerPath invalid_root;
-	invalid_root.root = LogicalPlanCompilerPathRoot::LOGICAL_PLAN;
+	LogicalPlanVerificationPath invalid_root;
+	invalid_root.root = LogicalPlanVerificationPathRoot::LOGICAL_PLAN;
 	auto invalid = BoundExpressionSQLExporter::ExportAtPath(*expression, context, invalid_root);
 	REQUIRE(invalid.IsValid());
 	REQUIRE(invalid.HasError());
 	REQUIRE(invalid.GetIssues().size() == 1);
-	REQUIRE(invalid.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
+	REQUIRE(invalid.GetIssues()[0].code == LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
 	REQUIRE_FALSE(invalid.GetIssues()[0].path.has_value());
 }
 
@@ -563,7 +563,7 @@ TEST_CASE("Bound expression SQL export reconstructs structural expression forms"
 	auto default_cast = BoundCastExpression::AddDefaultCastToType(Constant(Value::INTEGER(42)), LogicalType::BIGINT);
 	auto default_result = BoundExpressionSQLExporter::Export(*default_cast, context);
 	REQUIRE(default_result.HasError());
-	REQUIRE(default_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE);
+	REQUIRE(default_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
 	REQUIRE(*default_result.GetIssues()[0].construct->identifier == "default_cast_binding");
 
 	for (auto comparison_type :
@@ -630,8 +630,8 @@ TEST_CASE("Bound expression SQL export validates durable special-function identi
 	Connection connection(db);
 	connection.BeginTransaction();
 	BoundExpressionSQLExportContext context;
-	LogicalPlanCompilerPath path;
-	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 
 	auto callback_mutation = BoundComparisonExpression::Create(
 	    ExpressionType::COMPARE_EQUAL, Constant(Value::INTEGER(7)), Constant(Value::INTEGER(7)));
@@ -639,7 +639,7 @@ TEST_CASE("Bound expression SQL export validates durable special-function identi
 	    ScalarFunction::BinaryFunction<int32_t, int32_t, bool, NotEqualOperation>);
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *callback_mutation) == Value::BOOLEAN(false));
 	RequireIssue(BoundExpressionSQLExporter::Export(*callback_mutation, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto property_mutation = BoundComparisonExpression::Create(
 	    ExpressionType::COMPARE_DISTINCT_FROM, Constant(Value(LogicalType::INTEGER)), Constant(Value::INTEGER(1)));
@@ -647,19 +647,19 @@ TEST_CASE("Bound expression SQL export validates durable special-function identi
 	    FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *property_mutation).IsNull());
 	RequireIssue(BoundExpressionSQLExporter::Export(*property_mutation, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto cast_mutation =
 	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
 	cast_mutation->Cast<BoundFunctionExpression>().FunctionMutable().SetFunctionCallback(ScalarFunction::NopFunction);
 	RequireIssue(BoundExpressionSQLExporter::Export(*cast_mutation, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	auto bound_cast_mutation =
 	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
 	BoundCastExpression::GetBoundCastMutable(bound_cast_mutation->Cast<BoundFunctionExpression>())
 	    .SetFunction(DefaultCasts::TryVectorNullCast);
 	RequireIssue(BoundExpressionSQLExporter::Export(*bound_cast_mutation, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto between_mutation = BoundBetweenExpression::Create(Constant(Value::INTEGER(2)), Constant(Value::INTEGER(2)),
 	                                                       Constant(Value::INTEGER(9)), true, true);
@@ -667,7 +667,7 @@ TEST_CASE("Bound expression SQL export validates durable special-function identi
 	    ScalarFunction::TernaryFunction<int32_t, int32_t, int32_t, bool, OutsideRangeOperation>);
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *between_mutation) == Value::BOOLEAN(false));
 	RequireIssue(BoundExpressionSQLExporter::Export(*between_mutation, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto equivalent_definition = BoundComparisonExpression::Create(
 	    ExpressionType::COMPARE_EQUAL, Constant(Value::INTEGER(7)), Constant(Value::INTEGER(7)));
@@ -775,8 +775,8 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	RequireRoundTrip(connection, *serialized_aggregate, context, string(),
 	                 "synthetic_provenance_schema.synthetic_sum(CAST(7 AS INTEGER))");
 
-	LogicalPlanCompilerPath path;
-	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 	auto &catalog = Catalog::GetSystemCatalog(*connection.context);
 	auto &schema = catalog.GetSchema(*connection.context, Identifier::DefaultSchema());
 	FunctionBinder function_binder(*connection.context);
@@ -801,11 +801,11 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *flipping_scalar_expression) == Value::INTEGER(8));
 	REQUIRE_FALSE(flipping_scalar_expression->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*flipping_scalar_expression, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	auto serialized_flipping_scalar = BinaryRoundTrip(*connection.context, *flipping_scalar_expression);
 	REQUIRE_FALSE(serialized_flipping_scalar->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_flipping_scalar, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	flipping_bind_expression_count = 0;
 	auto &flipping_bind_expression_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
@@ -823,7 +823,7 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE_FALSE(
 	    flipping_bind_expression_result->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*flipping_bind_expression_result, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	auto serialized_flipping_bind_expression = BinaryRoundTrip(*connection.context, *flipping_bind_expression_result);
 	REQUIRE(flipping_bind_expression_count == 2);
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *serialized_flipping_bind_expression) ==
@@ -831,7 +831,7 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE_FALSE(
 	    serialized_flipping_bind_expression->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_flipping_bind_expression, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	flipping_aggregate_bind_count = 0;
 	auto flipping_aggregate_result =
@@ -855,11 +855,11 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE(flipping_aggregate_expression->Function().GetCallbacks() == plus_one_aggregate.GetCallbacks());
 	REQUIRE_FALSE(flipping_aggregate_expression->Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*flipping_aggregate_expression, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	auto serialized_flipping_aggregate = BinaryRoundTrip(*connection.context, *flipping_aggregate_expression);
 	REQUIRE_FALSE(serialized_flipping_aggregate->Cast<BoundAggregateExpression>().Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_flipping_aggregate, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	ScalarFunction forged_abs(Identifier("abs"), {LogicalType::INTEGER}, LogicalType::INTEGER,
 	                          ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
@@ -874,7 +874,7 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *forged_abs_expression) == Value::INTEGER(8));
 	REQUIRE_FALSE(forged_abs_expression->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*forged_abs_expression, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto &abs_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
 	    *connection.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier("abs")));
@@ -896,18 +896,18 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE_FALSE(scalar->Function().HasRebindableDefinition());
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *scalar) == Value::INTEGER(8));
 	RequireIssue(BoundExpressionSQLExporter::Export(*scalar, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	auto serialized_scalar_impostor = BinaryRoundTrip(*connection.context, *scalar);
 	REQUIRE_FALSE(serialized_scalar_impostor->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_scalar_impostor, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	auto mutated_scalar_expression = catalog_scalar->Copy();
 	auto &mutated_scalar = mutated_scalar_expression->Cast<BoundFunctionExpression>();
 	mutated_scalar.FunctionMutable().SetFunctionCallback(
 	    ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, mutated_scalar) == Value::INTEGER(8));
 	RequireIssue(BoundExpressionSQLExporter::Export(mutated_scalar, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto changed_definition_expression = catalog_scalar->Copy();
 	auto &changed_definition = changed_definition_expression->Cast<BoundFunctionExpression>();
@@ -916,7 +916,7 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	changed_definition.FunctionMutable().SetDefinition(std::move(replacement_definition));
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, changed_definition) == Value::INTEGER(7));
 	RequireIssue(BoundExpressionSQLExporter::Export(changed_definition, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto ordinary_result = connection.Query("SELECT synthetic_provenance_schema.synthetic_sum(CAST(7 AS INTEGER))");
 	REQUIRE_FALSE(ordinary_result->HasError());
@@ -939,7 +939,7 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE(forged_sum_expression->Function().GetCallbacks() == sum_plus_one.GetCallbacks());
 	REQUIRE_FALSE(forged_sum_expression->Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*forged_sum_expression, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
 	    *connection.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier("sum")));
@@ -962,11 +962,11 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE(aggregate->Function().GetCallbacks() == sum_plus_one.GetCallbacks());
 	REQUIRE(aggregate->Function().GetCallbacks() != sum.GetCallbacks());
 	RequireIssue(BoundExpressionSQLExporter::Export(*aggregate, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	auto serialized_aggregate_impostor = BinaryRoundTrip(*connection.context, *aggregate);
 	REQUIRE_FALSE(serialized_aggregate_impostor->Cast<BoundAggregateExpression>().Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_aggregate_impostor, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto mutated_aggregate_expression = catalog_aggregate->Copy();
 	auto &mutated_aggregate = mutated_aggregate_expression->Cast<BoundAggregateExpression>();
@@ -975,7 +975,7 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE(mutated_aggregate.Function().GetCallbacks() !=
 	        mutated_aggregate.Function().GetDefinition()->GetCallbacks());
 	RequireIssue(BoundExpressionSQLExporter::Export(mutated_aggregate, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	connection.Rollback();
 }
 
@@ -986,10 +986,10 @@ TEST_CASE("Bound expression SQL export admits only context-rebindable casts", "[
 	                                                BoundCastInfo(IntegerToBigintPlusOne));
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*unregistered_connection.context, *unregistered) == Value::BIGINT(8));
 	BoundExpressionSQLExportContext context;
-	LogicalPlanCompilerPath path;
-	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 	RequireIssue(BoundExpressionSQLExporter::Export(*unregistered, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	DuckDB registered_db;
 	Connection registered_connection(registered_db);
@@ -1047,12 +1047,12 @@ TEST_CASE("Bound expression SQL export admits only validated bound operators", "
 	invalid.GetChildrenMutable().push_back(Constant(Value::INTEGER(2)));
 	auto invalid_result = BoundExpressionSQLExporter::Export(invalid, context);
 	REQUIRE(invalid_result.HasError());
-	REQUIRE(invalid_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE);
+	REQUIRE(invalid_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
 
 	BoundOperatorExpression invalid_arity(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
 	auto arity_result = BoundExpressionSQLExporter::Export(invalid_arity, context);
 	REQUIRE(arity_result.HasError());
-	REQUIRE(arity_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
+	REQUIRE(arity_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
 }
 
 TEST_CASE("Bound expression SQL export rejects TRY around volatile children", "[bound_expression_sql_export]") {
@@ -1060,8 +1060,8 @@ TEST_CASE("Bound expression SQL export rejects TRY around volatile children", "[
 	Connection connection(db);
 	connection.BeginTransaction();
 	BoundExpressionSQLExportContext context;
-	LogicalPlanCompilerPath path;
-	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 
 	auto fallible_cast = BoundCastExpression::AddCastToType(*connection.context, Constant(Value("not an integer")),
 	                                                        LogicalType::INTEGER);
@@ -1087,7 +1087,7 @@ TEST_CASE("Bound expression SQL export rejects TRY around volatile children", "[
 	BoundOperatorExpression volatile_try(ExpressionType::OPERATOR_TRY, LogicalType::DOUBLE);
 	volatile_try.GetChildrenMutable().push_back(random->Copy());
 	auto volatile_result = BoundExpressionSQLExporter::Export(volatile_try, context);
-	RequireIssue(volatile_result, LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
+	RequireIssue(volatile_result, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
 	REQUIRE(*volatile_result.GetIssues()[0].construct->identifier == "try_volatile_child");
 	connection.Rollback();
 }
@@ -1155,7 +1155,7 @@ TEST_CASE("Bound expression SQL export reconstructs optimizer-produced scalar fu
 	REQUIRE(struct_result.IsValid());
 	REQUIRE(struct_result.HasError());
 	INFO(struct_result.GetIssues()[0].message);
-	REQUIRE(struct_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION);
+	REQUIRE(struct_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
 
 	ScalarFunction opaque_function(Identifier("opaque_scalar"), {LogicalType::INTEGER}, LogicalType::INTEGER,
 	                               ScalarFunction::NopFunction);
@@ -1169,7 +1169,7 @@ TEST_CASE("Bound expression SQL export reconstructs optimizer-produced scalar fu
 	auto opaque_result = BoundExpressionSQLExporter::Export(opaque_expression, opaque_context);
 	REQUIRE(opaque_result.IsValid());
 	REQUIRE(opaque_result.HasError());
-	REQUIRE(opaque_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION);
+	REQUIRE(opaque_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
 
 	auto random_plan = OptimizeExportQuery(connection, "SELECT random()");
 	auto random_expression = FindExpression(*random_plan, [](const Expression &expression) {
@@ -1182,7 +1182,7 @@ TEST_CASE("Bound expression SQL export reconstructs optimizer-produced scalar fu
 	BoundExpressionSQLExportContext empty_context;
 	auto volatile_result = BoundExpressionSQLExporter::Export(*volatile_between, empty_context);
 	REQUIRE(volatile_result.HasError());
-	REQUIRE(volatile_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE);
+	REQUIRE(volatile_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
 	REQUIRE(*volatile_result.GetIssues()[0].construct->identifier == "exclusive_between_input_evaluation");
 	connection.Rollback();
 }
@@ -1282,8 +1282,8 @@ TEST_CASE("Bound expression SQL export does not trust scalar expression type cal
 	REQUIRE_FALSE(comparison_rebound->HasError());
 	REQUIRE(comparison_rebound->GetTypes() == vector<LogicalType> {LogicalType::BOOLEAN});
 	REQUIRE(comparison_rebound->GetValue(0, 0) == Value::BOOLEAN(false));
-	LogicalPlanCompilerPath path;
-	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 
 	auto callback_spoof = OperatorEqualFun::GetFunction();
 	callback_spoof.SetFunctionCallback(ScalarFunction::BinaryFunction<int32_t, int32_t, bool, NotEqualOperation>);
@@ -1294,7 +1294,7 @@ TEST_CASE("Bound expression SQL export does not trust scalar expression type cal
 	REQUIRE(callback_expression->GetExpressionType() == ExpressionType::COMPARE_EQUAL);
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *callback_expression) == Value::BOOLEAN(false));
 	RequireIssue(BoundExpressionSQLExporter::Export(*callback_expression, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto property_spoof = IsDistinctFromFun::GetFunction();
 	property_spoof.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
@@ -1305,7 +1305,7 @@ TEST_CASE("Bound expression SQL export does not trust scalar expression type cal
 	REQUIRE(property_expression->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM);
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *property_expression).IsNull());
 	RequireIssue(BoundExpressionSQLExporter::Export(*property_expression, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	vector<pair<ExpressionType, unique_ptr<Expression>>> malformed_bind_data;
 	malformed_bind_data.emplace_back(
@@ -1321,14 +1321,14 @@ TEST_CASE("Bound expression SQL export does not trust scalar expression type cal
 	for (auto &entry : malformed_bind_data) {
 		REQUIRE(entry.second->GetExpressionType() == entry.first);
 		RequireIssue(BoundExpressionSQLExporter::Export(*entry.second, context),
-		             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	}
 
 	auto malformed_cast =
 	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
 	malformed_cast->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
 	RequireIssue(BoundExpressionSQLExporter::Export(*malformed_cast, context),
-	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	auto spoofed_cast =
 	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
 	SpoofCastFunctionData spoof_cast_source;
@@ -1341,7 +1341,7 @@ TEST_CASE("Bound expression SQL export does not trust scalar expression type cal
 	spoofed_cast->Cast<BoundFunctionExpression>().BindInfoMutable() =
 	    make_uniq<SpoofCastFunctionData>(spoof_cast_assignment);
 	RequireIssue(BoundExpressionSQLExporter::Export(*spoofed_cast, context),
-	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	auto mismatched_cast_data =
 	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
 	auto varchar_cast =
@@ -1349,13 +1349,13 @@ TEST_CASE("Bound expression SQL export does not trust scalar expression type cal
 	mismatched_cast_data->Cast<BoundFunctionExpression>().BindInfoMutable() =
 	    varchar_cast->Cast<BoundFunctionExpression>().BindInfo()->Copy();
 	RequireIssue(BoundExpressionSQLExporter::Export(*mismatched_cast_data, context),
-	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 
 	auto malformed_between = BoundBetweenExpression::Create(Constant(Value::INTEGER(7)), Constant(Value::INTEGER(2)),
 	                                                        Constant(Value::INTEGER(9)), true, true);
 	malformed_between->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
 	RequireIssue(BoundExpressionSQLExporter::Export(*malformed_between, context),
-	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	auto spoofed_between = BoundBetweenExpression::Create(Constant(Value::INTEGER(2)), Constant(Value::INTEGER(2)),
 	                                                      Constant(Value::INTEGER(9)), true, true);
 	SpoofBetweenFunctionData spoof_between_source;
@@ -1368,7 +1368,7 @@ TEST_CASE("Bound expression SQL export does not trust scalar expression type cal
 	spoofed_between->Cast<BoundFunctionExpression>().BindInfoMutable() =
 	    make_uniq<SpoofBetweenFunctionData>(spoof_between_copy);
 	RequireIssue(BoundExpressionSQLExporter::Export(*spoofed_between, context),
-	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	connection.Rollback();
 }
 
@@ -1477,15 +1477,15 @@ TEST_CASE("Bound expression SQL export preserves aggregate modifiers", "[bound_e
 	auto count_result = BoundExpressionSQLExporter::Export(*count, count_context);
 	REQUIRE(count_result.IsValid());
 	REQUIRE(count_result.HasError());
-	REQUIRE(count_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION);
+	REQUIRE(count_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
 	connection.Rollback();
 }
 
 TEST_CASE("Bound expression SQL export fails closed for deferred and malformed inputs",
           "[bound_expression_sql_export]") {
 	BoundExpressionSQLExportContext context;
-	LogicalPlanCompilerPath path;
-	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 	vector<unique_ptr<Expression>> deferred;
 	deferred.push_back(make_uniq<BoundDefaultExpression>(LogicalType::INTEGER));
 	deferred.push_back(make_uniq<BoundParameterExpression>(Identifier("1")));
@@ -1504,23 +1504,23 @@ TEST_CASE("Bound expression SQL export fails closed for deferred and malformed i
 	                                                           Constant(Value::INTEGER(2)), true, true));
 	for (auto &expression : deferred) {
 		RequireIssue(BoundExpressionSQLExporter::Export(*expression, context),
-		             LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPRESSION, path);
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION, path);
 	}
 
 	vector<unique_ptr<Expression>> expanded_children;
 	expanded_children.push_back(Constant(Value::INTEGER(1)));
 	BoundExpandedExpression expanded(std::move(expanded_children));
 	RequireIssue(BoundExpressionSQLExporter::Export(expanded, context),
-	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	SyntheticExpression parsed(ExpressionClass::CONSTANT, ExpressionType::VALUE_CONSTANT, LogicalType::INTEGER);
-	RequireIssue(BoundExpressionSQLExporter::Export(parsed, context), LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT,
-	             path);
+	RequireIssue(BoundExpressionSQLExporter::Export(parsed, context),
+	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	SyntheticExpression invalid(ExpressionClass::INVALID, ExpressionType::INVALID, LogicalType::INTEGER);
-	RequireIssue(BoundExpressionSQLExporter::Export(invalid, context), LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT,
-	             path);
+	RequireIssue(BoundExpressionSQLExporter::Export(invalid, context),
+	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	SyntheticExpression unknown(static_cast<ExpressionClass>(255), ExpressionType::INVALID, LogicalType::INTEGER);
-	RequireIssue(BoundExpressionSQLExporter::Export(unknown, context), LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT,
-	             path);
+	RequireIssue(BoundExpressionSQLExporter::Export(unknown, context),
+	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 
 	auto malformed = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 	malformed->GetChildrenMutable().push_back(nullptr);
@@ -1529,8 +1529,8 @@ TEST_CASE("Bound expression SQL export fails closed for deferred and malformed i
 	REQUIRE(malformed_result.IsValid());
 	REQUIRE(malformed_result.HasError());
 	REQUIRE(malformed_result.GetIssues().size() == 2);
-	REQUIRE(malformed_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
-	REQUIRE(malformed_result.GetIssues()[1].code == LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPRESSION);
+	REQUIRE(malformed_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	REQUIRE(malformed_result.GetIssues()[1].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION);
 }
 
 TEST_CASE("Bound expression SQL export rejects invalid class and type combinations", "[bound_expression_sql_export]") {
@@ -1577,10 +1577,10 @@ TEST_CASE("Bound expression SQL export rejects invalid class and type combinatio
 	BoundOperatorExpression deferred(ExpressionType::ARRAY_EXTRACT, LogicalType::INTEGER);
 	deferred.GetChildrenMutable().push_back(Constant(Value::INTEGER(1)));
 	deferred.GetChildrenMutable().push_back(Constant(Value::INTEGER(2)));
-	LogicalPlanCompilerPath path;
-	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 	RequireIssue(BoundExpressionSQLExporter::Export(deferred, context),
-	             LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
 	connection.Rollback();
 }
 
