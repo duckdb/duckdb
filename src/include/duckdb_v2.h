@@ -3014,42 +3014,75 @@ struct duckdb_v2_interval_t {
 
 /* --- Types for aggregate --- */
 
-//! TODO
+/*!
+ * An owned opaque handle to a custom aggregate function being built. Created with
+ * `duckdb_v2_aggregate_function_create_with_connection()` or `duckdb_v2_aggregate_function_create_with_extension()`,
+ * configured with the setter functions (e.g. `duckdb_v2_aggregate_function_set_name()`,
+ * `duckdb_v2_aggregate_function_set_update_callback()`, etc.) and the signature obtained via
+ * `duckdb_v2_aggregate_function_get_signature()`, made available with `duckdb_v2_aggregate_function_register()`, and
+ * destroyed with `duckdb_v2_aggregate_function_destroy()`.
+ */
 typedef struct _duckdb_v2_aggregate_function {
 	void *internal_ptr;
 } * duckdb_v2_aggregate_function_handle;
 
-//! TODO
+/*!
+ * A borrowed opaque handle to the arguments supplied to an aggregate function during the query preparation "bind"
+ * phase. The "bind" callback receives this handle and can use it to e.g. inspect the arguments given to the function,
+ * initialize some constant state and set the return type.
+ */
 typedef struct _duckdb_v2_aggregate_function_bind_info {
 	void *internal_ptr;
 } * duckdb_v2_aggregate_function_bind_info_handle;
 
-//! TODO
+/*!
+ * A borrowed opaque handle to the arguments supplied to an aggregate function during the state sizing "size" phase. The
+ * "size" callback receives this handle and must use it to report the size of a single aggregate state in bytes.
+ */
 typedef struct _duckdb_v2_aggregate_function_size_info {
 	void *internal_ptr;
 } * duckdb_v2_aggregate_function_size_info_handle;
 
-//! TODO
+/*!
+ * A borrowed opaque handle to the arguments supplied to an aggregate function during the state initialization "init"
+ * phase. The "init" callback receives this handle and can use it to access the array of aggregate states it must
+ * initialize in place.
+ */
 typedef struct _duckdb_v2_aggregate_function_init_info {
 	void *internal_ptr;
 } * duckdb_v2_aggregate_function_init_info_handle;
 
-//! TODO
+/*!
+ * A borrowed opaque handle to the arguments supplied to an aggregate function during the "update" phase. The "update"
+ * callback receives this handle and can use it to access the input argument vectors, the number of rows to process, and
+ * the aggregate state each row must be aggregated into.
+ */
 typedef struct _duckdb_v2_aggregate_function_update_info {
 	void *internal_ptr;
 } * duckdb_v2_aggregate_function_update_info_handle;
 
-//! TODO
+/*!
+ * A borrowed opaque handle to the arguments supplied to an aggregate function during the "combine" phase. The "combine"
+ * callback receives this handle and can use it to access the source and target aggregate state arrays to merge.
+ */
 typedef struct _duckdb_v2_aggregate_function_combine_info {
 	void *internal_ptr;
 } * duckdb_v2_aggregate_function_combine_info_handle;
 
-//! TODO
+/*!
+ * A borrowed opaque handle to the arguments supplied to an aggregate function during the "finalize" phase. The
+ * "finalize" callback receives this handle and can use it to access the aggregate states and the result vector and
+ * offset to write their final values to.
+ */
 typedef struct _duckdb_v2_aggregate_function_finalize_info {
 	void *internal_ptr;
 } * duckdb_v2_aggregate_function_finalize_info_handle;
 
-//! TODO
+/*!
+ * A borrowed opaque handle to the arguments supplied to an aggregate function during the state destruction "destroy"
+ * phase. The "destroy" callback receives this handle and can use it to access the array of aggregate states whose
+ * resources must be released.
+ */
 typedef struct _duckdb_v2_aggregate_function_destroy_info {
 	void *internal_ptr;
 } * duckdb_v2_aggregate_function_destroy_info_handle;
@@ -3083,14 +3116,21 @@ typedef void (*duckdb_v2_aggregate_function_destroy_callback_fn)(duckdb_v2_aggre
 /* --- Functions for aggregate --- */
 
 /*!
- * TODO
+ * Creates a new aggregate function that will be registered on the connection's database.
+ *
+ * The function starts out empty: configure it with the setter functions (e.g.
+ * `duckdb_v2_aggregate_function_set_name()`, `duckdb_v2_aggregate_function_set_update_callback()`, etc.) and the
+ * signature obtained via `duckdb_v2_aggregate_function_get_signature()`, then make it available with
+ * `duckdb_v2_aggregate_function_register()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_aggregate_function_destroy()`, also after registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param connection The connection to create the function in.
- * @param function
- * @param err
+ * @param function On success, receives the newly created aggregate function. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_connection(
@@ -3098,14 +3138,22 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_connection
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Creates a new aggregate function that will be registered on the loading extension's database.
+ *
+ * Use this from an extension load callback, where an extension handle is available. The function starts out empty:
+ * configure it with the setter functions (e.g. `duckdb_v2_aggregate_function_set_name()`,
+ * `duckdb_v2_aggregate_function_set_update_callback()`, etc.) and the signature obtained via
+ * `duckdb_v2_aggregate_function_get_signature()`, then make it available with
+ * `duckdb_v2_aggregate_function_register()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_aggregate_function_destroy()`, also after registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param extension The extension to create the function in.
- * @param function
- * @param err
+ * @param function On success, receives the newly created aggregate function. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_extension(
@@ -3113,14 +3161,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_extension(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the name of the aggregate function.
+ *
+ * The name is borrowed and copied. Calling this again replaces the previous name. A name must be set before
+ * registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the name of.
- * @param name The name to set.
- * @param err
+ * @param name The name to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_name(duckdb_v2_aggregate_function_handle function,
@@ -3128,14 +3180,20 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_name(duckdb_v2_agg
                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Returns the function's signature so it can be configured.
+ *
+ * Add parameters with `duckdb_v2_function_signature_add_parameter()`, set a variadic tail with
+ * `duckdb_v2_function_signature_set_varargs()` and set the return type with
+ * `duckdb_v2_function_signature_set_return_type()`. The signature is modified in place; the function must be given a
+ * signature with a return type before registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to get the signature of.
  * @param sig The returned signature. Borrowed and valid for the lifetime of the function handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_get_signature(duckdb_v2_aggregate_function_handle function,
@@ -3143,12 +3201,19 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_get_signature(duckdb_v
                                                                         duckdb_v2_error_info_handle *err);
 
 /*!
+ * Sets arbitrary user data on the aggregate function.
+ *
+ * Associates an opaque pointer with the function, retrievable from each callback via its user data accessor (e.g.
+ * `duckdb_v2_aggregate_function_bind_get_user_data()`, `duckdb_v2_aggregate_function_update_get_user_data()`, etc.).
+ * The opaque handle bundles the pointer with an optional destructor, invoked when the data is no longer needed.
+ *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the user data of.
- * @param data The user data to set.
- * @param err
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_user_data(duckdb_v2_aggregate_function_handle function,
@@ -3156,14 +3221,19 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_user_data(duckdb_v
                                                                         duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the optional bind callback of the aggregate function.
+ *
+ * The bind callback is invoked during query planning for each call site of the function. It can inspect the argument
+ * types and constant argument values, set a concrete return type, and set "bind data" that is shared with the other
+ * callbacks.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the bind callback of.
  * @param callback The bind callback to set.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_bind_callback(
@@ -3171,14 +3241,19 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_bind_callback(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the size callback of the aggregate function.
+ *
+ * The size callback reports the size of a single aggregate state in bytes via
+ * `duckdb_v2_aggregate_function_size_set_state_size()`; DuckDB uses it to allocate state memory. A size callback must
+ * be set before registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the size callback of.
  * @param callback The size callback to set.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_size_callback(
@@ -3186,14 +3261,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_size_callback(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the init callback of the aggregate function.
+ *
+ * The init callback initializes freshly allocated aggregate states in place, obtained via
+ * `duckdb_v2_aggregate_function_init_get_states()`. An init callback must be set before registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the init callback of.
  * @param callback The init callback to set.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_init_callback(
@@ -3201,14 +3280,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_init_callback(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the update callback of the aggregate function.
+ *
+ * The update callback is invoked during query execution with a batch of input rows: row i of every argument vector must
+ * be aggregated into state i of the state array. An update callback must be set before registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the update callback of.
  * @param callback The update callback to set.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_update_callback(
@@ -3216,14 +3299,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_update_callback(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the combine callback of the aggregate function.
+ *
+ * The combine callback merges partial aggregate states computed in parallel: source state i must be combined into
+ * target state i. A combine callback must be set before registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the combine callback of.
  * @param callback The combine callback to set.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_combine_callback(
@@ -3231,14 +3318,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_combine_callback(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the finalize callback of the aggregate function.
+ *
+ * The finalize callback produces the function's result: state i must be finalized into result row offset + i of the
+ * result vector. A finalize callback must be set before registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the finalize callback of.
  * @param callback The finalize callback to set.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_finalize_callback(
@@ -3255,7 +3346,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_finalize_callback(
  *
  * @param function The function to set the destroy callback of.
  * @param callback The destroy callback to set.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_destroy_callback(
@@ -3263,57 +3355,71 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_destroy_callback(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the user data set via `duckdb_v2_aggregate_function_set_user_data()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The user data to get
- * @param err
+ * @param info The bind info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_get_user_data(
     duckdb_v2_aggregate_function_bind_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the function's "bind data" from the bind callback.
+ *
+ * The bind data is stored with the bound call site and retrievable from the other callbacks. The opaque handle bundles
+ * the pointer with an optional destructor, invoked when the bind data is no longer needed, and an optional equality
+ * callback used when comparing two bound call sites; without one, pointer equality is used.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The bind data to set
- * @param err
+ * @param info The bind info handle.
+ * @param data Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_bind_data(
     duckdb_v2_aggregate_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Returns the number of arguments of the call site being bound.
+ *
+ * Variadic tail arguments are included. Valid indices for `duckdb_v2_aggregate_function_bind_get_arg_type()` and
+ * `duckdb_v2_aggregate_function_bind_get_arg_value()` are [0, count).
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The bind info handle.
  * @param count Receives the number of arguments.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_get_arg_count(
     duckdb_v2_aggregate_function_bind_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the type of the argument at the given index.
+ *
+ * Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
+ * `duckdb_v2_logical_type_destroy()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The bind info handle.
  * @param index The index of the argument to get the type of.
- * @param type The argument type to get.
- * @param err
+ * @param type Receives the argument type. Owned by the caller; destroy via `duckdb_v2_logical_type_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR
@@ -3321,15 +3427,20 @@ duckdb_v2_aggregate_function_bind_get_arg_type(duckdb_v2_aggregate_function_bind
                                                duckdb_v2_logical_type_handle *type, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Folds the argument at the given index to a constant value.
+ *
+ * The argument must be foldable to a constant (e.g. a literal or a constant expression); otherwise the call fails with
+ * an error, as it does when the index is out of bounds. The resulting value may be NULL. The returned value is owned by
+ * the caller and must be destroyed via `duckdb_v2_value_destroy()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The bind info handle.
  * @param index The index of the argument to extract a constant value from.
- * @param value The constant value to get.
- * @param err
+ * @param value Receives the constant value. Owned by the caller; destroy via `duckdb_v2_value_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR
@@ -3337,14 +3448,19 @@ duckdb_v2_aggregate_function_bind_get_arg_value(duckdb_v2_aggregate_function_bin
                                                 duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the concrete return type of the call site being bound.
+ *
+ * Overrides the return type declared in the signature. Register the function with an ANY return type and set the
+ * concrete type here, derived from the argument types, to build a function whose result type depends on its input. The
+ * type is borrowed and copied.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The bind info handle.
  * @param return_type The return type to set. Borrowed for the call only.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_return_type(
@@ -3352,28 +3468,30 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_return_type(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the user data set via `duckdb_v2_aggregate_function_set_user_data()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The user data to get
- * @param err
+ * @param info The size info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_size_get_user_data(
     duckdb_v2_aggregate_function_size_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the bind data set by the function's bind callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The bind data to get
- * @param err
+ * @param info The size info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_size_get_bind_data(
@@ -3386,37 +3504,40 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_size_get_bind_data(
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The size info handle.
  * @param size The size of a single aggregate state, in bytes.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_size_set_state_size(
     duckdb_v2_aggregate_function_size_info_handle info, idx_t size, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the user data set via `duckdb_v2_aggregate_function_set_user_data()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The user data to get
- * @param err
+ * @param info The init info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_init_get_user_data(
     duckdb_v2_aggregate_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the bind data set by the function's bind callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The bind data to get
- * @param err
+ * @param info The init info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_init_get_bind_data(
@@ -3424,14 +3545,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_init_get_bind_data(
 
 /*!
  * Returns how many aggregate states this invocation must initialize. This is the length of the array returned by
- * aggregate_function_init_get_states.
+ * `duckdb_v2_aggregate_function_init_get_states()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The init info handle.
  * @param count Receives the number of states.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_init_get_state_count(
@@ -3444,37 +3566,40 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_init_get_state_count(
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param states The array of aggregate state pointers to get.
- * @param err
+ * @param info The init info handle.
+ * @param states Receives the array of aggregate state pointers. Borrowed; valid only for the duration of the callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_init_get_states(
     duckdb_v2_aggregate_function_init_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the user data set via `duckdb_v2_aggregate_function_set_user_data()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The user data to get
- * @param err
+ * @param info The update info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_user_data(
     duckdb_v2_aggregate_function_update_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the bind data set by the function's bind callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The bind data to get
- * @param err
+ * @param info The update info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_bind_data(
@@ -3487,9 +3612,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_bind_data(
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The update info handle.
  * @param count Receives the number of rows.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_row_count(
@@ -3497,29 +3623,35 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_row_count(
 
 /*!
  * Returns how many argument vectors this invocation carries: one per argument of the call, variadic tail arguments
- * included. Valid indices for aggregate_function_update_get_arg are [0, count).
+ * included. Valid indices for `duckdb_v2_aggregate_function_update_get_arg()` are [0, count).
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The update info handle.
  * @param count Receives the number of argument vectors.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_arg_count(
     duckdb_v2_aggregate_function_update_info_handle info, uint32_t *count, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the argument vector at the given index.
+ *
+ * The vector holds the argument's values for the current batch; use
+ * `duckdb_v2_aggregate_function_update_get_row_count()` for the number of rows. Fails if the index is out of bounds.
+ * Borrowed; valid only for the duration of the callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The update info handle.
  * @param index The index of the argument vector to get.
- * @param vector The argument vector to get.
- * @param err
+ * @param vector Receives the borrowed argument vector.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR
@@ -3533,37 +3665,40 @@ duckdb_v2_aggregate_function_update_get_arg(duckdb_v2_aggregate_function_update_
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param states The array of aggregate state pointers to get.
- * @param err
+ * @param info The update info handle.
+ * @param states Receives the array of aggregate state pointers. Borrowed; valid only for the duration of the callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_states(
     duckdb_v2_aggregate_function_update_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the user data set via `duckdb_v2_aggregate_function_set_user_data()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The user data to get
- * @param err
+ * @param info The combine info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_user_data(
     duckdb_v2_aggregate_function_combine_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the bind data set by the function's bind callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The bind data to get
- * @param err
+ * @param info The combine info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_bind_data(
@@ -3576,9 +3711,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_bind_data(
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The combine info handle.
  * @param count Receives the number of state pairs.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_state_count(
@@ -3591,9 +3727,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_state_coun
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param states The array of source aggregate state pointers to get.
- * @param err
+ * @param info The combine info handle.
+ * @param states Receives the array of source aggregate state pointers. Borrowed; valid only for the duration of the
+ * callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_sources(
@@ -3605,37 +3743,41 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_sources(
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param states The array of target aggregate state pointers to get.
- * @param err
+ * @param info The combine info handle.
+ * @param states Receives the array of target aggregate state pointers. Borrowed; valid only for the duration of the
+ * callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_targets(
     duckdb_v2_aggregate_function_combine_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the user data set via `duckdb_v2_aggregate_function_set_user_data()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The user data to get
- * @param err
+ * @param info The finalize info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_user_data(
     duckdb_v2_aggregate_function_finalize_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the bind data set by the function's bind callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The bind data to get
- * @param err
+ * @param info The finalize info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_bind_data(
@@ -3648,9 +3790,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_bind_data
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The finalize info handle.
  * @param count Receives the number of states.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_state_count(
@@ -3663,23 +3806,28 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_state_cou
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param states The array of aggregate state pointers to get.
- * @param err
+ * @param info The finalize info handle.
+ * @param states Receives the array of aggregate state pointers. Borrowed; valid only for the duration of the callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_states(
     duckdb_v2_aggregate_function_finalize_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the result vector the finalize callback must write into.
+ *
+ * State i must be finalized into result row offset + i, with the offset from
+ * `duckdb_v2_aggregate_function_finalize_get_result_offset()`. Borrowed; valid only for the duration of the callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param vector The result vector to get.
- * @param err
+ * @param info The finalize info handle.
+ * @param vector Receives the borrowed result vector to write into.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR
@@ -3693,37 +3841,40 @@ duckdb_v2_aggregate_function_finalize_get_result(duckdb_v2_aggregate_function_fi
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The finalize info handle.
  * @param offset Receives the result offset.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_result_offset(
     duckdb_v2_aggregate_function_finalize_info_handle info, idx_t *offset, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the user data set via `duckdb_v2_aggregate_function_set_user_data()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The user data to get
- * @param err
+ * @param info The destroy info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_user_data(
     duckdb_v2_aggregate_function_destroy_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the bind data set by the function's bind callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The bind data to get
- * @param err
+ * @param info The destroy info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_bind_data(
@@ -3735,9 +3886,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_bind_data(
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The destroy info handle.
  * @param count Receives the number of states.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_state_count(
@@ -3750,29 +3902,40 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_state_coun
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param states The array of aggregate state pointers to get.
- * @param err
+ * @param info The destroy info handle.
+ * @param states Receives the array of aggregate state pointers. Borrowed; valid only for the duration of the callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_states(
     duckdb_v2_aggregate_function_destroy_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Registers the aggregate function, making it available for use in SQL queries.
+ *
+ * The function is registered on the target given at creation: the connection's database or the loading extension.
+ * Registration requires a name, the size, init, update, combine and finalize callbacks, and a signature with a complete
+ * return type; an ANY return type is accepted only together with a bind callback that sets the concrete type per call
+ * site. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_aggregate_function_destroy()`, which does not affect the registered function.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to register.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_register(duckdb_v2_aggregate_function_handle function,
                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Destroys the aggregate function, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered function.
  *
  * history:
  * - stable: v2.0.0
@@ -4034,22 +4197,41 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_destroy(duckdb_v2_query_pr
 
 /* --- Types for scalar --- */
 
-//! TODO
+/*!
+ * An owned opaque handle to a custom scalar function being built. Created with
+ * `duckdb_v2_scalar_function_create_with_connection()` or `duckdb_v2_scalar_function_create_with_extension()`,
+ * configured with the setter functions (e.g. `duckdb_v2_scalar_function_set_name()`,
+ * `duckdb_v2_scalar_function_set_exec_callback()`, etc.) and the signature obtained via
+ * `duckdb_v2_scalar_function_get_signature()`, made available with `duckdb_v2_scalar_function_register()`, and
+ * destroyed with `duckdb_v2_scalar_function_destroy()`.
+ */
 typedef struct _duckdb_v2_scalar_function {
 	void *internal_ptr;
 } * duckdb_v2_scalar_function_handle;
 
-//! TODO
+/*!
+ * A borrowed opaque handle to the arguments supplied to a scalar function during the query preparation "bind" phase.
+ * The "bind" callback receives this handle and can use it to e.g. inspect the arguments given to the function,
+ * initialize some constant state and set the return type.
+ */
 typedef struct _duckdb_v2_scalar_function_bind_info {
 	void *internal_ptr;
 } * duckdb_v2_scalar_function_bind_info_handle;
 
-//! TODO
+/*!
+ * A borrowed opaque handle to the arguments supplied to a scalar function during the local state initialization "init"
+ * phase. The "init" callback receives this handle and can use it to e.g. set up local state reusable across invocations
+ * of the "exec" execution callback.
+ */
 typedef struct _duckdb_v2_scalar_function_init_info {
 	void *internal_ptr;
 } * duckdb_v2_scalar_function_init_info_handle;
 
-//! TODO
+/*!
+ * A borrowed opaque handle to the arguments supplied to a scalar function during the execution "exec" phase. The "exec"
+ * callback receives this handle and can use it to e.g. access the input argument vectors, retrieve the number of rows
+ * to process, and write results to the output vector.
+ */
 typedef struct _duckdb_v2_scalar_function_exec_info {
 	void *internal_ptr;
 } * duckdb_v2_scalar_function_exec_info_handle;
@@ -4073,14 +4255,21 @@ typedef void (*duckdb_v2_scalar_function_exec_callback_fn)(duckdb_v2_scalar_func
 /* --- Functions for scalar --- */
 
 /*!
- * TODO
+ * Creates a new scalar function that will be registered on the connection's database.
+ *
+ * The function starts out empty: configure it with the setter functions (e.g. `duckdb_v2_scalar_function_set_name()`,
+ * `duckdb_v2_scalar_function_set_exec_callback()`, etc.) and the signature obtained via
+ * `duckdb_v2_scalar_function_get_signature()`, then make it available with `duckdb_v2_scalar_function_register()`. The
+ * caller owns the returned handle and must destroy it with `duckdb_v2_scalar_function_destroy()`, also after
+ * registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param connection The connection to create the function in.
- * @param function
- * @param err
+ * @param function On success, receives the newly created scalar function. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_connection(
@@ -4088,14 +4277,22 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_connection(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Creates a new scalar function that will be registered on the loading extension's database.
+ *
+ * Use this from an extension load callback, where an extension handle is available. The function starts out empty:
+ * configure it with the setter functions (e.g. `duckdb_v2_scalar_function_set_name()`,
+ * `duckdb_v2_scalar_function_set_exec_callback()`, etc.) and the signature obtained via
+ * `duckdb_v2_scalar_function_get_signature()`, then make it available with `duckdb_v2_scalar_function_register()`. The
+ * caller owns the returned handle and must destroy it with `duckdb_v2_scalar_function_destroy()`, also after
+ * registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param extension The extension to create the function in.
- * @param function
- * @param err
+ * @param function On success, receives the newly created scalar function. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_extension(duckdb_v2_extension_handle extension,
@@ -4103,28 +4300,38 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_extension(duc
                                                                              duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the name of the scalar function.
+ *
+ * The name is borrowed and copied. Calling this again replaces the previous name. A name must be set before
+ * registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the name of.
- * @param name The name to set.
- * @param err
+ * @param name The name to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_name(duckdb_v2_scalar_function_handle function,
                                                                 duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Returns the function's signature so it can be configured.
+ *
+ * Add parameters with `duckdb_v2_function_signature_add_parameter()`, set a variadic tail with
+ * `duckdb_v2_function_signature_set_varargs()` and set the return type with
+ * `duckdb_v2_function_signature_set_return_type()`. The signature is modified in place; the function must be given a
+ * signature with a return type before registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to get the signature of.
  * @param sig The returned signature. Borrowed and valid for the lifetime of the function handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_get_signature(duckdb_v2_scalar_function_handle function,
@@ -4132,12 +4339,20 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_get_signature(duckdb_v2_s
                                                                      duckdb_v2_error_info_handle *err);
 
 /*!
+ * Sets arbitrary user data on the scalar function.
+ *
+ * Associates an opaque pointer with the function, retrievable from the callbacks via
+ * `duckdb_v2_scalar_function_bind_get_user_data()`, `duckdb_v2_scalar_function_init_get_user_data()` and
+ * `duckdb_v2_scalar_function_exec_get_user_data()`. The opaque handle bundles the pointer with an optional destructor,
+ * invoked when the data is no longer needed.
+ *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the user data of.
- * @param data The user data to set.
- * @param err
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_user_data(duckdb_v2_scalar_function_handle function,
@@ -4145,14 +4360,19 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_user_data(duckdb_v2_s
                                                                      duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the optional bind callback of the scalar function.
+ *
+ * The bind callback is invoked during query planning for each call site of the function. It can inspect the argument
+ * types and constant argument values, set a concrete return type, and set "bind data" that is shared with the init and
+ * exec callbacks.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the bind callback of.
  * @param callback The bind callback to set.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_bind_callback(
@@ -4160,14 +4380,19 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_bind_callback(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the optional init callback of the scalar function.
+ *
+ * The init callback is invoked at the start of execution for each thread that will execute the function. It can set
+ * worker-local "init data", retrievable from the exec callback, to keep mutable state across invocations of the
+ * function.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the init callback of.
  * @param callback The init callback to set.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_init_callback(
@@ -4175,14 +4400,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_init_callback(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the exec callback of the scalar function.
+ *
+ * The exec callback implements the function's logic: it is invoked during query execution with a batch of input rows
+ * and must fill the result vector. An exec callback must be set before registration.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to set the exec callback of.
  * @param callback The exec callback to set.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_exec_callback(
@@ -4190,57 +4419,71 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_exec_callback(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the user data set via `duckdb_v2_scalar_function_set_user_data()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The user data to get
- * @param err
+ * @param info The bind info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_get_user_data(
     duckdb_v2_scalar_function_bind_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the function's "bind data" from the bind callback.
+ *
+ * The bind data is stored with the bound call site and retrievable from the init and exec callbacks. The opaque handle
+ * bundles the pointer with an optional destructor, invoked when the bind data is no longer needed, and an optional
+ * equality callback used when comparing two bound call sites; without one, pointer equality is used.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The bind data to set
- * @param err
+ * @param info The bind info handle.
+ * @param data Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_bind_data(
     duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Returns the number of arguments of the call site being bound.
+ *
+ * Variadic tail arguments are included. Valid indices for `duckdb_v2_scalar_function_bind_get_arg_type()` and
+ * `duckdb_v2_scalar_function_bind_get_arg_value()` are [0, count).
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The bind info handle.
  * @param count Receives the number of arguments.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_get_arg_count(
     duckdb_v2_scalar_function_bind_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the type of the argument at the given index.
+ *
+ * Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
+ * `duckdb_v2_logical_type_destroy()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The bind info handle.
  * @param index The index of the argument to get the type of.
- * @param type The argument type to get.
- * @param err
+ * @param type Receives the argument type. Owned by the caller; destroy via `duckdb_v2_logical_type_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR
@@ -4248,15 +4491,20 @@ duckdb_v2_scalar_function_bind_get_arg_type(duckdb_v2_scalar_function_bind_info_
                                             duckdb_v2_logical_type_handle *type, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Folds the argument at the given index to a constant value.
+ *
+ * The argument must be foldable to a constant (e.g. a literal or a constant expression); otherwise the call fails with
+ * an error, as it does when the index is out of bounds. The resulting value may be NULL. The returned value is owned by
+ * the caller and must be destroyed via `duckdb_v2_value_destroy()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The bind info handle.
  * @param index The index of the argument to extract a constant value from.
- * @param value The constant value to get.
- * @param err
+ * @param value Receives the constant value. Owned by the caller; destroy via `duckdb_v2_value_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR
@@ -4264,14 +4512,19 @@ duckdb_v2_scalar_function_bind_get_arg_value(duckdb_v2_scalar_function_bind_info
                                              duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the concrete return type of the call site being bound.
+ *
+ * Overrides the return type declared in the signature. Register the function with an ANY return type and set the
+ * concrete type here, derived from the argument types, to build a function whose result type depends on its input. The
+ * type is borrowed and copied.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The bind info handle.
  * @param return_type The return type to set. Borrowed for the call only.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_return_type(
@@ -4279,84 +4532,94 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_return_type(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the user data set via `duckdb_v2_scalar_function_set_user_data()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The user data to get
- * @param err
+ * @param info The init info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_init_get_user_data(
     duckdb_v2_scalar_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the bind data set by the function's bind callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The bind data to get
- * @param err
+ * @param info The init info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_init_get_bind_data(
     duckdb_v2_scalar_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Sets the function's worker-local "init data" from the init callback.
+ *
+ * The init data is associated with the executing thread for the duration of the query and retrievable from the exec
+ * callback via `duckdb_v2_scalar_function_exec_get_init_data()`. The opaque handle bundles the pointer with an optional
+ * destructor, invoked when the init data is no longer needed.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The init data to set
- * @param err
+ * @param info The init info handle.
+ * @param data Opaque handle bundling the init data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_init_set_init_data(
     duckdb_v2_scalar_function_init_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the user data set via `duckdb_v2_scalar_function_set_user_data()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The user data to get
- * @param err
+ * @param info The exec info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_user_data(
     duckdb_v2_scalar_function_exec_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the bind data set by the function's bind callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The bind data to get
- * @param err
+ * @param info The exec info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_bind_data(
     duckdb_v2_scalar_function_exec_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the worker-local init data set by the function's init callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param data The init data to get
- * @param err
+ * @param info The exec info handle.
+ * @param data Receives the init data pointer for the executing thread, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_init_data(
@@ -4370,9 +4633,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_init_data(
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The exec info handle.
  * @param count Receives the number of rows.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_row_count(
@@ -4380,29 +4644,34 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_row_count(
 
 /*!
  * Returns how many argument vectors this execution carries: one per argument of the call, variadic tail arguments
- * included. Valid indices for scalar_function_exec_get_arg are [0, count).
+ * included. Valid indices for `duckdb_v2_scalar_function_exec_get_arg()` are [0, count).
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The exec info handle.
  * @param count Receives the number of argument vectors.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_arg_count(
     duckdb_v2_scalar_function_exec_info_handle info, uint32_t *count, duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the argument vector at the given index.
+ *
+ * The vector holds the argument's values for the current batch; use `duckdb_v2_scalar_function_exec_get_row_count()`
+ * for the number of rows. Fails if the index is out of bounds. Borrowed; valid only for the duration of the callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
+ * @param info The exec info handle.
  * @param index The index of the argument vector to get.
- * @param vector The argument vector to get.
- * @param err
+ * @param vector Receives the borrowed argument vector.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_arg(duckdb_v2_scalar_function_exec_info_handle info,
@@ -4410,14 +4679,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_arg(duckdb_v2_sc
                                                                     duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Retrieves the result vector the exec callback must write into.
+ *
+ * The callback must write one entry per input row; use `duckdb_v2_scalar_function_exec_get_row_count()` for the number
+ * of rows. Borrowed; valid only for the duration of the callback.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info
- * @param vector The result vector to get.
- * @param err
+ * @param info The exec info handle.
+ * @param vector Receives the borrowed result vector to write into.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_result(duckdb_v2_scalar_function_exec_info_handle info,
@@ -4425,20 +4698,30 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_result(duckdb_v2
                                                                        duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Registers the scalar function, making it available for use in SQL queries.
+ *
+ * The function is registered on the target given at creation: the connection's database or the loading extension.
+ * Registration requires a name, an exec callback, and a signature with a complete return type; an ANY return type is
+ * accepted only together with a bind callback that sets the concrete type per call site. The caller still owns the
+ * handle after registration and must destroy it with `duckdb_v2_scalar_function_destroy()`, which does not affect the
+ * registered function.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param function The function to register.
- * @param err
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_register(duckdb_v2_scalar_function_handle function,
                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
- * TODO
+ * Destroys the scalar function, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered function.
  *
  * history:
  * - stable: v2.0.0

@@ -4,16 +4,31 @@ module: scalar
 #-----------------------------------------------------------------------------------------------------------------------
 handles:
   scalar_function:
-    description: "TODO"
+    description: |
+      An owned opaque handle to a custom scalar function being built. Created with
+      `[[scalar_function_create_with_connection]]` or `[[scalar_function_create_with_extension]]`, configured with the
+      setter functions (e.g. `[[scalar_function_set_name]]`, `[[scalar_function_set_exec_callback]]`, etc.) and the
+      signature obtained via `[[scalar_function_get_signature]]`, made available with `[[scalar_function_register]]`, and
+      destroyed with `[[scalar_function_destroy]]`.
 
   scalar_function_bind_info:
-    description: "TODO"
+    description: |
+      A borrowed opaque handle to the arguments supplied to a scalar function during the query preparation "bind" phase. 
+      The "bind" callback receives this handle and can use it to e.g. inspect the arguments given to the function, 
+      initialize some constant state and set the return type.
 
   scalar_function_init_info:
-    description: "TODO"
+    description: |
+      A borrowed opaque handle to the arguments supplied to a scalar function during the local state initialization 
+      "init" phase. The "init" callback receives this handle and can use it to e.g. set up local state reusable across 
+      invocations of the "exec" execution callback.
 
   scalar_function_exec_info:
-    description: "TODO"
+    description: |
+      A borrowed opaque handle to the arguments supplied to a scalar function during the execution "exec" phase. 
+      The "exec" callback receives this handle and can use it to e.g. access the input argument vectors, 
+      retrieve the number of rows to process, and write results to the output vector.
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Callbacks
 #-----------------------------------------------------------------------------------------------------------------------
@@ -22,33 +37,42 @@ callbacks:
     parameters:
       info:
         type: scalar_function_bind_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
       context:
         type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
       err:
         type: error_info
         indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
   scalar_function_init_callback:
     parameters:
       info:
         type: scalar_function_init_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
       context:
         type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
       err:
         type: error_info
         indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
   scalar_function_exec_callback:
     parameters:
       info:
         type: scalar_function_exec_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
       context:
         type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
       err:
         type: error_info
         indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -60,7 +84,14 @@ functions:
   scalar_function_create_with_connection:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Creates a new scalar function that will be registered on the connection's database.
+
+      The function starts out empty: configure it with the setter functions (e.g. `[[scalar_function_set_name]]`,
+      `[[scalar_function_set_exec_callback]]`, etc.) and the signature obtained via
+      `[[scalar_function_get_signature]]`, then make it available with `[[scalar_function_register]]`.
+      The caller owns the returned handle and must destroy it with `[[scalar_function_destroy]]`, also after
+      registration.
     parameters:
       connection:
         type: connection
@@ -68,15 +99,26 @@ functions:
       function:
         type: scalar_function
         indirection: 1
+        kind: OUT
+        description: On success, receives the newly created scalar function. Owned by the caller.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_create_with_extension:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Creates a new scalar function that will be registered on the loading extension's database.
+
+      Use this from an extension load callback, where an extension handle is available. The function starts out
+      empty: configure it with the setter functions (e.g. `[[scalar_function_set_name]]`,
+      `[[scalar_function_set_exec_callback]]`, etc.) and the signature obtained via
+      `[[scalar_function_get_signature]]`, then make it available with `[[scalar_function_register]]`.
+      The caller owns the returned handle and must destroy it with `[[scalar_function_destroy]]`, also after
+      registration.
     parameters:
       extension:
         type: extension
@@ -84,9 +126,12 @@ functions:
       function:
         type: scalar_function
         indirection: 1
+        kind: OUT
+        description: On success, receives the newly created scalar function. Owned by the caller.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -95,7 +140,11 @@ functions:
   scalar_function_set_name:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Sets the name of the scalar function.
+
+      The name is borrowed and copied. Calling this again replaces the previous name.
+      A name must be set before registration.
     parameters:
       function:
         type: scalar_function
@@ -103,16 +152,23 @@ functions:
       name:
         type: str
         indirection: 1
-        description: The name to set.
+        description: The name to set. Borrowed and copied.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_get_signature:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Returns the function's signature so it can be configured.
+
+      Add parameters with `[[function_signature_add_parameter]]`, set a variadic tail with
+      `[[function_signature_set_varargs]]` and set the return type with `[[function_signature_set_return_type]]`.
+      The signature is modified in place; the function must be given a signature with a return type before
+      registration.
     parameters:
       function:
         type: scalar_function
@@ -127,12 +183,19 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_set_user_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: |
+      Sets arbitrary user data on the scalar function.
+
+      Associates an opaque pointer with the function, retrievable from the callbacks via
+      `[[scalar_function_bind_get_user_data]]`, `[[scalar_function_init_get_user_data]]` and
+      `[[scalar_function_exec_get_user_data]]`. The opaque handle bundles the pointer with an optional
+      destructor, invoked when the data is no longer needed.
     parameters:
       function:
         type: scalar_function
@@ -140,16 +203,22 @@ functions:
       data:
         type: opaque
         indirection: 1
-        description: The user data to set.
+        description: Opaque handle bundling the user data pointer plus an optional destructor.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_set_bind_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Sets the optional bind callback of the scalar function.
+
+      The bind callback is invoked during query planning for each call site of the function. It can inspect the
+      argument types and constant argument values, set a concrete return type, and set "bind data" that is
+      shared with the init and exec callbacks.
     parameters:
       function:
         type: scalar_function
@@ -160,12 +229,18 @@ functions:
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_set_init_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Sets the optional init callback of the scalar function.
+
+      The init callback is invoked at the start of execution for each thread that will execute the function.
+      It can set worker-local "init data", retrievable from the exec callback, to keep mutable state across
+      invocations of the function.
     parameters:
       function:
         type: scalar_function
@@ -176,12 +251,17 @@ functions:
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_set_exec_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Sets the exec callback of the scalar function.
+
+      The exec callback implements the function's logic: it is invoked during query execution with a batch of
+      input rows and must fill the result vector. An exec callback must be set before registration.
     parameters:
       function:
         type: scalar_function
@@ -192,6 +272,7 @@ functions:
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -200,42 +281,58 @@ functions:
   scalar_function_bind_get_user_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: Retrieves the user data set via `[[scalar_function_set_user_data]]`.
     parameters:
       info:
         type: scalar_function_bind_info
+        description: The bind info handle.
       data:
         type: void
         indirection: 2
-        description: The user data to get
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_bind_set_bind_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Sets the function's "bind data" from the bind callback.
+
+      The bind data is stored with the bound call site and retrievable from the init and exec callbacks.
+      The opaque handle bundles the pointer with an optional destructor, invoked when the bind data is no
+      longer needed, and an optional equality callback used when comparing two bound call sites; without one,
+      pointer equality is used.
     parameters:
       info:
         type: scalar_function_bind_info
+        description: The bind info handle.
       data:
         type: opaque
         indirection: 1
-        description: The bind data to set
+        description: Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_bind_get_arg_count:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Returns the number of arguments of the call site being bound.
+      
+      Variadic tail arguments are included. Valid indices for `[[scalar_function_bind_get_arg_type]]` and
+      `[[scalar_function_bind_get_arg_value]]` are [0, count).
     parameters:
       info:
         type: scalar_function_bind_info
+        description: The bind info handle.
       count:
         type: idx
         indirection: 1
@@ -244,15 +341,21 @@ functions:
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_bind_get_arg_type:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Retrieves the type of the argument at the given index.
+
+      Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed
+      via `[[logical_type_destroy]]`.
     parameters:
       info:
         type: scalar_function_bind_info
+        description: The bind info handle.
       index:
         type: idx
         description: The index of the argument to get the type of.
@@ -260,19 +363,26 @@ functions:
         type: logical_type
         indirection: 1
         kind: OUT
-        description: The argument type to get.
+        description: Receives the argument type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_bind_get_arg_value:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Folds the argument at the given index to a constant value.
+
+      The argument must be foldable to a constant (e.g. a literal or a constant expression); otherwise the call
+      fails with an error, as it does when the index is out of bounds. The resulting value may be NULL.
+      The returned value is owned by the caller and must be destroyed via `[[value_destroy]]`.
     parameters:
       info:
         type: scalar_function_bind_info
+        description: The bind info handle.
       index:
         type: idx
         description: The index of the argument to extract a constant value from.
@@ -280,25 +390,33 @@ functions:
         type: value
         indirection: 1
         kind: OUT
-        description: The constant value to get.
+        description: Receives the constant value. Owned by the caller; destroy via `[[value_destroy]]`.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_bind_set_return_type:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Sets the concrete return type of the call site being bound.
+
+      Overrides the return type declared in the signature. Register the function with an ANY return type and set
+      the concrete type here, derived from the argument types, to build a function whose result type depends on
+      its input. The type is borrowed and copied.
     parameters:
       info:
         type: scalar_function_bind_info
+        description: The bind info handle.
       return_type:
         type: logical_type
         description: The return type to set. Borrowed for the call only.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -307,49 +425,62 @@ functions:
   scalar_function_init_get_user_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: Retrieves the user data set via `[[scalar_function_set_user_data]]`.
     parameters:
       info:
         type: scalar_function_init_info
+        description: The init info handle.
       data:
         type: void
         indirection: 2
-        description: The user data to get
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_init_get_bind_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: Retrieves the bind data set by the function's bind callback.
     parameters:
       info:
         type: scalar_function_init_info
+        description: The init info handle.
       data:
         type: void
         indirection: 2
-        description: The bind data to get
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_init_set_init_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Sets the function's worker-local "init data" from the init callback.
+
+      The init data is associated with the executing thread for the duration of the query and retrievable from
+      the exec callback via `[[scalar_function_exec_get_init_data]]`. The opaque handle bundles the pointer with an
+      optional destructor, invoked when the init data is no longer needed.
     parameters:
       info:
         type: scalar_function_init_info
+        description: The init info handle.
       data:
         type: opaque
         indirection: 1
-        description: The init data to set
+        description: Opaque handle bundling the init data pointer plus an optional destructor.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -358,49 +489,58 @@ functions:
   scalar_function_exec_get_user_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: Retrieves the user data set via `[[scalar_function_set_user_data]]`.
     parameters:
       info:
         type: scalar_function_exec_info
+        description: The exec info handle.
       data:
         type: void
         indirection: 2
-        description: The user data to get
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_exec_get_bind_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: Retrieves the bind data set by the function's bind callback.
     parameters:
       info:
         type: scalar_function_exec_info
+        description: The exec info handle.
       data:
         type: void
         indirection: 2
-        description: The bind data to get
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_exec_get_init_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: Retrieves the worker-local init data set by the function's init callback.
     parameters:
       info:
         type: scalar_function_exec_info
+        description: The exec info handle.
       data:
         type: void
         indirection: 2
-        description: The init data to get
+        kind: OUT
+        description: Receives the init data pointer for the executing thread, or null if none was set.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_exec_get_row_count:
@@ -414,6 +554,7 @@ functions:
     parameters:
       info:
         type: scalar_function_exec_info
+        description: The exec info handle.
       count:
         type: idx
         indirection: 1
@@ -422,6 +563,7 @@ functions:
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_exec_get_arg_count:
@@ -430,10 +572,11 @@ functions:
     description: |
       Returns how many argument vectors this execution carries: one per
       argument of the call, variadic tail arguments included. Valid indices
-      for scalar_function_exec_get_arg are [0, count).
+      for `[[scalar_function_exec_get_arg]]` are [0, count).
     parameters:
       info:
         type: scalar_function_exec_info
+        description: The exec info handle.
       count:
         type: u32
         indirection: 1
@@ -442,41 +585,57 @@ functions:
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_exec_get_arg:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Retrieves the argument vector at the given index.
+
+      The vector holds the argument's values for the current batch; use `[[scalar_function_exec_get_row_count]]` for
+      the number of rows. Fails if the index is out of bounds. Borrowed; valid only for the duration of the
+      callback.
     parameters:
       info:
         type: scalar_function_exec_info
+        description: The exec info handle.
       index:
         type: u32
         description: The index of the argument vector to get.
       vector:
         type: vector
         indirection: 1
-        description: The argument vector to get.
+        kind: OUT
+        description: Receives the borrowed argument vector.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   scalar_function_exec_get_result:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Retrieves the result vector the exec callback must write into.
+
+      The callback must write one entry per input row; use `[[scalar_function_exec_get_row_count]]` for the number of
+      rows. Borrowed; valid only for the duration of the callback.
     parameters:
       info:
         type: scalar_function_exec_info
+        description: The exec info handle.
       vector:
         type: vector
         indirection: 1
-        description: The result vector to get.
+        kind: OUT
+        description: Receives the borrowed result vector to write into.
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -485,7 +644,14 @@ functions:
   scalar_function_register:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Registers the scalar function, making it available for use in SQL queries.
+
+      The function is registered on the target given at creation: the connection's database or the loading
+      extension. Registration requires a name, an exec callback, and a signature with a complete return type;
+      an ANY return type is accepted only together with a bind callback that sets the concrete type per call
+      site. The caller still owns the handle after registration and must destroy it with
+      `[[scalar_function_destroy]]`, which does not affect the registered function.
     parameters:
       function:
         type: scalar_function
@@ -493,6 +659,7 @@ functions:
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -501,7 +668,12 @@ functions:
   scalar_function_destroy:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: TODO
+    description: |
+      Destroys the scalar function, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to
+      prevent double-destruction. Destroying the handle after registration does not affect the registered
+      function.
     parameters:
       function:
         type: scalar_function
