@@ -1,0 +1,26 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index ba36fa2..d8665c3 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -587,7 +587,7 @@ IndexStorageInfo HNSWIndex::SerializeToWAL(const case_insensitive_map_t<Value> &
+ 	return info;
+ }
+ 
+-idx_t HNSWIndex::GetInMemorySize(IndexLock &state) {
++idx_t HNSWIndex::GetInMemorySize(IndexLock &state) const {
+ 	// TODO: This is not correct: its a lower bound, but it's a start
+ 	return index.memory_usage();
+ }
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index 22fed36..f28011c 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -91,7 +91,7 @@ public:
+ 	//! Serializes HNSW memory to the WAL and returns the index storage information.
+ 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
+ 
+-	idx_t GetInMemorySize(IndexLock &state) override;
++	idx_t GetInMemorySize(IndexLock &state) const override;
+ 
+ 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
+ 	//! index must also be locked during the merge

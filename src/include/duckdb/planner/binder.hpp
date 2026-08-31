@@ -23,6 +23,7 @@
 #include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/bound_expression_map.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -205,6 +206,8 @@ struct GlobalBinderState {
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)
 	Identifier trigger_creation_name;
+	//! Bound expressions of parsed nodes, used to prevent re-binding of already bound parts
+	BoundExpressionMap bound_expressions;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -290,6 +293,9 @@ public:
 	//! names and names with a single schema level keep the (catalog, schema, name) shape so that the search path
 	//! applies; a nested schema path yields a fully resolved [catalog, schema path..., name].
 	static QualifiedName BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name);
+	//! Register a read of the catalog owning the entry - required when bind data holds a reference to the entry,
+	//! so that cached prepared statement plans are invalidated when the catalog changes
+	static void RegisterEntryRead(optional_ptr<Binder> binder, ClientContext &context, CatalogEntry &entry);
 	QualifiedName BindTableName(const QualifiedName &name);
 	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
 	void BindCreateSchema(CreateSchemaInfo &info);
@@ -380,6 +386,7 @@ public:
 	bool IsInsideSubquery() const;
 
 	StatementProperties &GetStatementProperties();
+	BoundExpressionMap &GetBoundExpressions();
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
 	static string ReplaceColumnsAlias(const string &alias, const string &column_name,
 	                                  optional_ptr<duckdb_re2::RE2> regex);

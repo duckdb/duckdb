@@ -36,7 +36,10 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 		// column was not found - check if it is a SQL value function
 		auto value_function = GetSQLValueFunction(col_ref.GetColumnName());
 		if (value_function) {
-			return BindExpression(value_function, depth);
+			auto result = BindExpression(value_function, depth);
+			// the value function expression is destroyed on return: erase any entries left for its children
+			GetBoundExpressions().EraseSubtree(*value_function);
+			return result;
 		}
 	}
 

@@ -740,7 +740,6 @@ def _generate_base_children_switch(entries, base_functions, sig, result_type, me
             lines.extend(member_appends_fn(member, 'cast_expr'))
         lines.append('\t\tbreak;')
         lines.append('\t}')
-    lines.append('\tcase ExpressionClass::BOUND_EXPRESSION:')
     for enum_val in no_child_enums:
         lines.append(f'\tcase ExpressionClass::{enum_val}:')
     lines.append('\t\t// these node types have no children')

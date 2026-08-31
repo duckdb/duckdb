@@ -3,6 +3,11 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp"
+#include "duckdb/execution/operator/helper/physical_buffered_collector.hpp"
+#include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 
 using namespace duckdb;
 
@@ -158,6 +163,42 @@ TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 	// now create a streaming result
 	auto result = con.SendQuery("SELECT CAST(v AS INTEGER) FROM strings");
 	REQUIRE_FAIL(result);
+}
+
+TEST_CASE("Buffered collectors reject results after the connection closes", "[api]") {
+	DuckDB db(nullptr);
+
+	auto test_collector = [&](bool batched) {
+		auto connection = make_uniq<Connection>(db);
+		weak_ptr<ClientContext> weak_context = connection->context;
+
+		PreparedStatementData data(StatementType::SELECT_STATEMENT);
+		data.names.emplace_back("value");
+		data.types.emplace_back(LogicalType::INTEGER);
+		data.memory_type = QueryResultMemoryType::IN_MEMORY;
+		data.physical_plan = make_uniq<PhysicalPlan>(Allocator::Get(*connection->context));
+		auto &root = data.physical_plan->Make<PhysicalDummyScan>(data.types, 0);
+		data.physical_plan->SetRoot(root);
+
+		unique_ptr<PhysicalResultCollector> collector;
+		if (batched) {
+			collector = make_uniq<PhysicalBufferedBatchCollector>(*data.physical_plan, data);
+		} else {
+			collector = make_uniq<PhysicalBufferedCollector>(*data.physical_plan, data, false);
+		}
+		auto sink_state = collector->GetGlobalSinkState(*connection->context);
+
+		connection.reset();
+		REQUIRE(weak_context.expired());
+		REQUIRE_THROWS_AS(collector->GetResult(*sink_state), ConnectionException);
+	};
+
+	SECTION("simple collector") {
+		test_collector(false);
+	}
+	SECTION("batched collector") {
+		test_collector(true);
+	}
 }
 
 TEST_CASE("Test UUID", "[api][uuid]") {

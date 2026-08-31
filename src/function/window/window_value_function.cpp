@@ -10,7 +10,6 @@
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/function/window/value_functions.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -1476,23 +1475,19 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input
 		return nullptr;
 	}
 
-	auto &orders = input.GetOrders();
-	auto &arg_orders = input.GetArgumentOrders();
+	auto &order_types = input.GetOrderTypes();
+	auto &arg_order_types = input.GetArgumentOrderTypes();
 
-	if (arg_orders.size() > 1 || (arg_orders.empty() && orders.size() != 1)) {
+	if (arg_order_types.size() > 1 || (arg_order_types.empty() && order_types.size() != 1)) {
 		throw BinderException("FILL functions must have only one ORDER BY expression");
 	}
 
 	LogicalType order_type;
-	if (arg_orders.empty()) {
-		D_ASSERT(!orders.empty());
-		auto &order_expr = orders[0].expression;
-		auto &bound = BoundExpression::GetExpression(*order_expr);
-		order_type = bound->GetReturnType();
+	if (arg_order_types.empty()) {
+		D_ASSERT(!order_types.empty());
+		order_type = order_types[0];
 	} else {
-		auto &order_expr = arg_orders[0].expression;
-		auto &bound = BoundExpression::GetExpression(*order_expr);
-		order_type = bound->GetReturnType();
+		order_type = arg_order_types[0];
 	}
 	if (!IsFillType(order_type)) {
 		throw BinderException("FILL ordering must support subtraction");
