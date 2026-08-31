@@ -628,6 +628,30 @@ static FilterPropagateResult CheckInOperatorStatistics(optional_ptr<ClientContex
 	return result;
 }
 
+static FilterPropagateResult CheckBoolRefStatistics(const Expression &expr, array_ptr<const BaseStatistics> input_stats,
+                                                    bool negated) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF ||
+	    expr.GetReturnType().id() != LogicalTypeId::BOOLEAN) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto index = expr.Cast<BoundReferenceExpression>().Index();
+	if (index >= input_stats.size() || !NumericStats::HasMinMax(input_stats[index])) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const auto &stats = input_stats[index];
+	const auto min_v = NumericStats::Min(stats).GetValue<bool>();
+	const auto max_v = NumericStats::Max(stats).GetValue<bool>();
+	if (min_v != max_v) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const bool value = negated ? !min_v : min_v;
+	if (!value) {
+		return stats.CanHaveNull() ? FilterPropagateResult::FILTER_FALSE_OR_NULL
+		                           : FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	return stats.CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+}
+
 static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientContext> context_p,
                                                         const BoundOperatorExpression &op_expr,
                                                         array_ptr<const BaseStatistics> input_stats) {
@@ -641,6 +665,10 @@ static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientConte
 		    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull()) {
 			return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 		}
+	}
+	auto bool_ref = CheckBoolRefStatistics(child, input_stats, true);
+	if (bool_ref != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		return bool_ref;
 	}
 	// a child matching every row makes NOT match no row - the converse does not hold, since a child
 	// that matches no row may be NULL rather than false, and NOT NULL does not match either
@@ -687,8 +715,9 @@ static FilterPropagateResult CheckConjunctionStatistics(optional_ptr<ClientConte
 		}
 		return result;
 	}
-	case ExpressionType::CONJUNCTION_OR:
+	case ExpressionType::CONJUNCTION_OR: {
 		D_ASSERT(!conj.GetChildren().empty());
+		auto result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		for (auto &child : conj.GetChildren()) {
 			auto prune_result = ExpressionFilter::CheckExpressionStatistics(context_p, *child, input_stats);
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
@@ -697,8 +726,15 @@ static FilterPropagateResult CheckConjunctionStatistics(optional_ptr<ClientConte
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 				return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 			}
+			if (prune_result == FilterPropagateResult::FILTER_TRUE_OR_NULL) {
+				result = FilterPropagateResult::FILTER_TRUE_OR_NULL;
+			} else if (prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL &&
+			           result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				result = FilterPropagateResult::FILTER_FALSE_OR_NULL;
+			}
 		}
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		return result;
+	}
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -728,6 +764,8 @@ FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(optional_ptr<C
 		return CheckOperatorStatistics(context_p, expr.Cast<BoundOperatorExpression>(), input_stats);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return CheckConjunctionStatistics(context_p, expr.Cast<BoundConjunctionExpression>(), input_stats);
+	case ExpressionClass::BOUND_REF:
+		return CheckBoolRefStatistics(expr, input_stats, false);
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
