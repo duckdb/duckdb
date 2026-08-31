@@ -58,7 +58,7 @@ jobs:
   # Build the extensions from the main extension shards and the Rust-based config
   extensions-build:
     name: Build extensions
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    uses: duckdb/extension-ci-tools/.github/workflows/build.yml@main
     with:
       duckdb_version: ${{ inputs.duckdb_commit }}
       image_version: ${{ inputs.image_version }}
