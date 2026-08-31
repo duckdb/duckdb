@@ -1,0 +1,18 @@
+# name: test/tmp1.test
+# description: A logical scan column ID collides with a different ART physical column ID
+# group: [tmp]
+
+statement ok
+CREATE TABLE t(
+    generated INTEGER AS (1),
+    b INTEGER,
+    c INTEGER UNIQUE
+)
+
+statement ok
+INSERT INTO t(b, c) VALUES (10, 100), (42, 200)
+
+query I
+SELECT b FROM t WHERE b = 10
+----
+10

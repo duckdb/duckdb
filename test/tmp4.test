@@ -1,0 +1,18 @@
+# name: test/tmp4.test
+# description: An ART physical column ID is used as a logical ColumnList index
+# group: [tmp]
+
+statement ok
+CREATE TABLE t(
+    generated INTEGER AS (1),
+    b INTEGER,
+    c INTEGER UNIQUE
+)
+
+statement ok
+INSERT INTO t(b, c) VALUES (10, 100), (42, 200)
+
+query II
+EXPLAIN ANALYZE SELECT c FROM t WHERE c = 100
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
