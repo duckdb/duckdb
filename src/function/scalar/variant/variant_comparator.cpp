@@ -353,7 +353,7 @@ unique_ptr<BaseStatistics> VariantComparatorStats(ClientContext &context, Functi
 ScalarFunction VariantComparatorFun::GetFunction() {
 	auto variant_type = LogicalType::VARIANT();
 	ScalarFunction function("variant_comparator", {variant_type}, LogicalType::BLOB, VariantComparatorFunction);
-	function.SetStatisticsCallback(VariantComparatorStats);
+	function.SetStatisticsCallback(VariantComparatorStats, FunctionIdentityPropagation::PRESERVE);
 	return function;
 }
 

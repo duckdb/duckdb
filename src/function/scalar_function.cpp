@@ -17,9 +17,10 @@ void ThrowNonFallibleFunctionError(const Identifier &name, std::exception &ex) {
 
 bool ScalarFunctionCallbacks::operator==(const ScalarFunctionCallbacks &rhs) const {
 	return bind == rhs.bind && init_local_state == rhs.init_local_state && statistics == rhs.statistics &&
-	       bind_lambda == rhs.bind_lambda && bind_expression == rhs.bind_expression &&
-	       get_modified_databases == rhs.get_modified_databases && serialize == rhs.serialize &&
-	       deserialize == rhs.deserialize && filter_prune == rhs.filter_prune;
+	       statistics_identity == rhs.statistics_identity && bind_lambda == rhs.bind_lambda &&
+	       bind_expression == rhs.bind_expression && get_modified_databases == rhs.get_modified_databases &&
+	       serialize == rhs.serialize && deserialize == rhs.deserialize &&
+	       deserialize_identity == rhs.deserialize_identity && filter_prune == rhs.filter_prune;
 }
 
 bool ScalarFunctionCallbacks::operator!=(const ScalarFunctionCallbacks &rhs) const {

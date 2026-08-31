@@ -768,8 +768,8 @@ void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &
 } // namespace
 
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
+	auto restore_rebindability = aggregate.Function().HasRebindableDefinition();
 	auto &bound_function = aggregate.FunctionMutable();
-	auto restore_rebindability = bound_function.HasRebindableDefinition();
 	// functions with an explicit export callback use it as the finalize; others use the field-based serialization
 	bound_function.SetStateFinalizeCallback(bound_function.HasExportAggregateStateCallback()
 	                                            ? bound_function.GetExportAggregateStateCallback()

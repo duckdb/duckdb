@@ -310,6 +310,7 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 
 	// Overload for 0 arguments, which returns an empty list.
 	ScalarFunction empty_fun({}, LogicalType::LIST(LogicalType::SQLNULL), ListValueFunction, nullptr, ListValueStats);
+	empty_fun.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
 	set.AddFunction(empty_fun);
 
 	// Overload for 1 + N arguments, which returns a list of the arguments.

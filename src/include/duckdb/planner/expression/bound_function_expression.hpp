@@ -28,6 +28,7 @@ public:
 		return function;
 	}
 	BoundScalarFunction &FunctionMutable() {
+		function.InvalidateFunctionExpressionIdentity();
 		return function;
 	}
 	const vector<unique_ptr<Expression>> &GetChildren() const {

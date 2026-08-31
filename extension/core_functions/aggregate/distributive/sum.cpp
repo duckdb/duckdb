@@ -250,7 +250,7 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
 		function.SetSerializeCallback(SumNoOverflowSerialize);
-		function.SetDeserializeCallback(SumNoOverflowDeserialize);
+		function.SetDeserializeCallback(SumNoOverflowDeserialize, FunctionIdentityPropagation::PRESERVE);
 		return function;
 	}
 	case PhysicalType::INT64: {
@@ -260,7 +260,7 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
 		function.SetSerializeCallback(SumNoOverflowSerialize);
-		function.SetDeserializeCallback(SumNoOverflowDeserialize);
+		function.SetDeserializeCallback(SumNoOverflowDeserialize, FunctionIdentityPropagation::PRESERVE);
 		return function;
 	}
 	default:
@@ -273,7 +273,7 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
 	                       SumNoOverflowBind);
 	aggr.SetSerializeCallback(SumNoOverflowSerialize);
-	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
+	aggr.SetDeserializeCallback(SumNoOverflowDeserialize, FunctionIdentityPropagation::PRESERVE);
 	return aggr;
 }
 
@@ -362,7 +362,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int32_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::INTEGER, LogicalType::HUGEINT);
-		function.SetStatisticsCallback(SumPropagateStats);
+		function.SetStatisticsCallback(SumPropagateStats, FunctionIdentityPropagation::PRESERVE);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
@@ -370,7 +370,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int64_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::BIGINT, LogicalType::HUGEINT);
-		function.SetStatisticsCallback(SumPropagateStats);
+		function.SetStatisticsCallback(SumPropagateStats, FunctionIdentityPropagation::PRESERVE);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
