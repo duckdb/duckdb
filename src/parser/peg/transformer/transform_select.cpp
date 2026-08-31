@@ -53,12 +53,15 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectStatementInter
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	CommonTableExpressionMap cte_map;
 	transformer.TransformOptional<CommonTableExpressionMap>(list_pr, 0, cte_map);
-	if (!cte_map.map.empty()) {
+	bool pushed_cte_scope = !cte_map.map.empty();
+	if (pushed_cte_scope) {
 		transformer.stored_cte_map.push_back(cte_map);
 	}
 	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(1));
 
-	if (!cte_map.map.empty()) {
+	if (pushed_cte_scope) {
+		// the CTEs are only visible while transforming this select statement
+		transformer.stored_cte_map.pop_back();
 		select_statement->node->cte_map = std::move(cte_map);
 	}
 	vector<unique_ptr<ResultModifier>> result_modifiers;
@@ -119,12 +122,18 @@ PEGTransformerFactory::FinalizeSelectStatementInternalTrampoline(PEGTransformer 
                                                                  TransformStackFrame &frame) {
 	if (frame.manual_state == 0) {
 		auto &cte_map = frame.GetResult<CommonTableExpressionMap>(0);
+		frame.manual_state = 1;
 		if (!cte_map.map.empty()) {
 			transformer.stored_cte_map.push_back(cte_map);
+			// state 2 - the pushed CTE scope must be popped after transforming the remainder
+			frame.manual_state = 2;
 		}
-		frame.manual_state = 1;
 		PushSelectStatementInternalRemainder(stack, frame);
 		return nullptr;
+	}
+	if (frame.manual_state == 2) {
+		// the CTEs are only visible while transforming this select statement
+		transformer.stored_cte_map.pop_back();
 	}
 
 	CommonTableExpressionMap cte_map;
