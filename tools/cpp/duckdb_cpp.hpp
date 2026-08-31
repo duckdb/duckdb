@@ -2537,6 +2537,30 @@ public:
 			return *static_cast<T *>(GetUserDataInternal());
 		}
 
+		/// How many arguments this call passes: one per argument of the call, variadic tail arguments included.
+		/// Valid indices for `GetArgType` and `GetConstantArgument` are [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// One argument's resolved type, as the binder settled it. An ANY parameter reports the type the caller
+		/// actually passed.
+		/// @param index Argument index in [0, GetArgCount()).
+		/// @throws InvalidInputException When the index is out of range.
+		auto GetArgType(idx_t index) const -> LogicalType;
+
+		/// The constant value of one argument, folded at bind time. Use it for arguments the function needs to know
+		/// before execution, e.g. a format string or a target type.
+		/// @param index Argument index in [0, GetArgCount()).
+		/// @throws InvalidInputException When the index is out of range.
+		/// @throws Exception When the argument is not a constant expression, e.g. a column reference.
+		auto GetConstantArgument(idx_t index) const -> Value;
+
+		/// `GetConstantArgument` without the failure: nullopt instead of an exception when the argument carries no
+		/// constant value, i.e. it is not a constant expression, its value is not yet known (an unresolved
+		/// prepared-statement parameter), or the index is out of range. Use it when a non-constant argument should
+		/// fall back to the runtime value instead of failing the query.
+		/// @param index Argument index in [0, GetArgCount()).
+		auto TryGetConstantArgument(idx_t index) const -> std::optional<Value>;
+
 		/// Resolves the declared return type; required, and only permitted, when the signature declared it as ANY.
 		/// @param type The concrete return type of this bound call.
 		auto SetReturnType(const LogicalType &type) -> void;
@@ -2783,6 +2807,30 @@ public:
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
 		}
+
+		/// How many arguments this call passes: one per argument of the call, variadic tail arguments included.
+		/// Valid indices for `GetArgType` and `GetConstantArgument` are [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// One argument's resolved type, as the binder settled it. An ANY parameter reports the type the caller
+		/// actually passed.
+		/// @param index Argument index in [0, GetArgCount()).
+		/// @throws InvalidInputException When the index is out of range.
+		auto GetArgType(idx_t index) const -> LogicalType;
+
+		/// The constant value of one argument, folded at bind time. Use it for arguments the function needs to know
+		/// before execution, e.g. a format string or a target type.
+		/// @param index Argument index in [0, GetArgCount()).
+		/// @throws InvalidInputException When the index is out of range.
+		/// @throws Exception When the argument is not a constant expression, e.g. a column reference.
+		auto GetConstantArgument(idx_t index) const -> Value;
+
+		/// `GetConstantArgument` without the failure: nullopt instead of an exception when the argument carries no
+		/// constant value, i.e. it is not a constant expression, its value is not yet known (an unresolved
+		/// prepared-statement parameter), or the index is out of range. Use it when a non-constant argument should
+		/// fall back to the runtime value instead of failing the query.
+		/// @param index Argument index in [0, GetArgCount()).
+		auto TryGetConstantArgument(idx_t index) const -> std::optional<Value>;
 
 		/// Resolves the declared return type; required, and only permitted, when the signature declared it as ANY.
 		/// @param type The concrete return type of this bound call.

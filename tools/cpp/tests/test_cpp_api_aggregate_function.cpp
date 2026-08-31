@@ -226,6 +226,46 @@ void NoUserDataUpdate(AggregateFunction::UpdateInput &input) {
 	(void)input.GetUserData<int>();
 }
 
+// Bind-time argument introspection, latched for the test to assert after the
+// query. The states go unused: the aggregate finalizes to the folded constant.
+struct AggArgProbe {
+	idx_t count = 0;
+	std::string types;
+	int32_t constant = 0;
+	bool tried_non_constant = false;
+	bool tried_out_of_range = false;
+};
+AggArgProbe agg_arg_probe;
+
+void ArgProbeBind(AggregateFunction::BindInput &input) {
+	agg_arg_probe.count = input.GetArgCount();
+	// Bind may run more than once for a call, so latch rather than accumulate.
+	agg_arg_probe.types.clear();
+	for (idx_t i = 0; i < input.GetArgCount(); i++) {
+		agg_arg_probe.types += (i ? "," : "") + input.GetArgType(i).ToText();
+	}
+	agg_arg_probe.constant = input.GetConstantArgument(1).Get<int32_t>();
+	// The first argument is whatever the caller passed, so it may well not be constant.
+	agg_arg_probe.tried_non_constant = input.TryGetConstantArgument(0).has_value();
+	agg_arg_probe.tried_out_of_range = input.TryGetConstantArgument(input.GetArgCount()).has_value();
+	input.SetReturnType(input.GetArgType(1));
+}
+
+void ArgProbeUpdate(AggregateFunction::UpdateInput &) {
+}
+
+void ArgProbeCombine(AggregateFunction::CombineInput &) {
+}
+
+void ArgProbeFinalize(AggregateFunction::FinalizeInput &input) {
+	auto result = input.GetResult();
+	auto *out = result.GetDataMutable<int32_t>();
+	const auto offset = input.GetResultOffset();
+	for (idx_t i = 0; i < input.GetStateCount(); i++) {
+		out[offset + i] = agg_arg_probe.constant;
+	}
+}
+
 } // namespace
 
 TEST_CASE("Stable C++API: aggregate function registers and executes", "[cpp_api]") {
@@ -237,15 +277,16 @@ TEST_CASE("Stable C++API: aggregate function registers and executes", "[cpp_api]
 
 	auto function = AggregateFunction::Create(conn);
 	function.SetName("cpp_sum")
-		.WithSignature([&](FunctionSignature &sig) {
-			sig.AddParameter("a", conn.ParseType("INTEGER")).SetReturnType(conn.ParseType("BIGINT"));
-		})
+	    .WithSignature([&](FunctionSignature &sig) {
+		    sig.AddParameter("a", conn.ParseType("INTEGER")).SetReturnType(conn.ParseType("BIGINT"));
+	    })
 	    .SetSizeCallback(SumSize)
 	    .SetInitCallback(SumInit)
 	    .SetUpdateCallback(SumUpdate)
 	    .SetCombineCallback(SumCombine)
 	    .SetFinalizeCallback(SumFinalize)
 	    .SetDestroyCallback(SumDestroy);
+	function.Register();
 
 	// Ungrouped, more rows than one chunk, so the callbacks see full vectors.
 	REQUIRE(CollectBigInts(conn.Execute("SELECT cpp_sum(r::INTEGER) FROM range(5000) t(r)")) ==
@@ -286,7 +327,9 @@ TEST_CASE("Stable C++API: aggregate function data flows user->bind->callbacks", 
 
 	// 5 * 3 + (3 + 7) = 25
 	REQUIRE(CollectBigInts(conn.Execute("SELECT cpp_flow_sum(5)")) == std::vector<int64_t> {25});
-	REQUIRE(bind_runs == 1);
+	// How often a query binds is not fixed: debug builds re-bind while verifying the plan.
+	const auto binds_after_first = bind_runs.load();
+	REQUIRE(binds_after_first >= 1);
 	REQUIRE(size_runs >= 1);
 	REQUIRE(init_runs >= 1);
 	REQUIRE(update_runs >= 1);
@@ -296,7 +339,7 @@ TEST_CASE("Stable C++API: aggregate function data flows user->bind->callbacks", 
 	// (0 + 1 + 2) * 3 + 10 = 19
 	REQUIRE(CollectBigInts(conn.Execute("SELECT cpp_flow_sum(r::INTEGER) FROM range(3) t(r)")) ==
 	        std::vector<int64_t> {19});
-	REQUIRE(bind_runs == 2);
+	REQUIRE(bind_runs > binds_after_first);
 }
 
 TEST_CASE("Stable C++API: aggregate function bind resolves an ANY return type", "[cpp_api]") {
@@ -320,6 +363,46 @@ TEST_CASE("Stable C++API: aggregate function bind resolves an ANY return type", 
 	auto result = conn.Execute("SELECT cpp_double_last(21)");
 	REQUIRE(result.GetSchema().GetFieldType(0).ToText() == "INTEGER");
 	REQUIRE(CollectInts(std::move(result)) == std::vector<int32_t> {42});
+}
+
+TEST_CASE("Stable C++API: aggregate function bind reads argument types and constants", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	auto function = AggregateFunction::Create(conn);
+	function.SetName("cpp_agg_arg_probe")
+	    .SetBindCallback(ArgProbeBind)
+	    .SetSizeCallback(LastSize)
+	    .SetInitCallback(LastInit)
+	    .SetUpdateCallback(ArgProbeUpdate)
+	    .SetCombineCallback(ArgProbeCombine)
+	    .SetFinalizeCallback(ArgProbeFinalize);
+	function.GetSignature()
+	    .AddParameter("a", conn.CreateType(LogicalTypeId::ANY))
+	    .AddParameter("b", conn.ParseType("INTEGER"))
+	    .SetReturnType(conn.CreateType(LogicalTypeId::ANY));
+	function.Register();
+
+	agg_arg_probe = {};
+	REQUIRE(CollectInts(conn.Execute("SELECT cpp_agg_arg_probe('hello', 21)")) == std::vector<int32_t> {21});
+	REQUIRE(agg_arg_probe.count == 2);
+	// The ANY parameter reports the type the call resolved it to.
+	REQUIRE(agg_arg_probe.types == "VARCHAR,INTEGER");
+	REQUIRE(agg_arg_probe.constant == 21);
+	REQUIRE(agg_arg_probe.tried_non_constant);
+	// An index past the last argument is absence, not a failure.
+	REQUIRE_FALSE(agg_arg_probe.tried_out_of_range);
+
+	// A column reference has no constant value: TryGetConstantArgument reports absence...
+	agg_arg_probe = {};
+	REQUIRE(CollectInts(conn.Execute("SELECT cpp_agg_arg_probe(a, 21) FROM (VALUES ('x')) t(a)")) ==
+	        std::vector<int32_t> {21});
+	REQUIRE_FALSE(agg_arg_probe.tried_non_constant);
+
+	// ...while GetConstantArgument fails the query with the binder's own error.
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_agg_arg_probe('hello', b) FROM (VALUES (21)) t(b)").Drain(),
+	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_QUERY_BINDER));
 }
 
 TEST_CASE("Stable C++API: aggregate function callback errors fail the query", "[cpp_api]") {

@@ -229,6 +229,63 @@ functions:
         indirection: 1
     return_type: ERROR
 
+  scalar_function_bind_get_arg_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_bind_info
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of arguments.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_bind_get_arg_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_bind_info
+      index:
+        type: idx
+        description: The index of the argument to get the type of.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: The argument type to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_bind_get_arg_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_bind_info
+      index:
+        type: idx
+        description: The index of the argument to extract a constant value from.
+      value:
+        type: value
+        indirection: 1
+        kind: OUT
+        description: The constant value to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
   scalar_function_bind_set_return_type:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]

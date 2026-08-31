@@ -143,6 +143,39 @@ void NoUserDataExec(ScalarFunction::ExecInput &input) {
 	(void)input.GetUserData<int>();
 }
 
+// Bind-time argument introspection, latched for the test to assert after the query.
+struct ArgProbe {
+	idx_t count = 0;
+	std::string types;
+	int32_t constant = 0;
+	bool tried_non_constant = false;
+	bool tried_out_of_range = false;
+};
+ArgProbe arg_probe;
+
+void ArgProbeBind(ScalarFunction::BindInput &input) {
+	arg_probe.count = input.GetArgCount();
+	// Bind may run more than once for a call, so latch rather than accumulate.
+	arg_probe.types.clear();
+	for (idx_t i = 0; i < input.GetArgCount(); i++) {
+		arg_probe.types += (i ? "," : "") + input.GetArgType(i).ToText();
+	}
+	arg_probe.constant = input.GetConstantArgument(1).Get<int32_t>();
+	// The first argument is whatever the caller passed, so it may well not be constant.
+	arg_probe.tried_non_constant = input.TryGetConstantArgument(0).has_value();
+	arg_probe.tried_out_of_range = input.TryGetConstantArgument(input.GetArgCount()).has_value();
+	input.SetReturnType(input.GetArgType(1));
+}
+
+// out[i] = the constant the bind callback folded out of the second argument.
+void ArgProbeExec(ScalarFunction::ExecInput &input) {
+	auto result = input.GetResult();
+	auto *out = result.GetDataMutable<int32_t>();
+	for (idx_t i = 0; i < input.GetRowCount(); i++) {
+		out[i] = arg_probe.constant;
+	}
+}
+
 } // namespace
 
 TEST_CASE("Stable C++API: scalar function registers and executes", "[cpp_api]") {
@@ -179,14 +212,16 @@ TEST_CASE("Stable C++API: scalar function data flows user->bind->init->exec", "[
 
 	// 5 * 3 + (3 + 7) = 25
 	REQUIRE(CollectInts(conn.Execute("SELECT cpp_flow(5)")) == std::vector<int32_t> {25});
-	REQUIRE(bind_runs == 1);
+	// How often a query binds is not fixed: debug builds re-bind while verifying the plan.
+	const auto binds_after_first = bind_runs.load();
+	REQUIRE(binds_after_first >= 1);
 	REQUIRE(init_runs >= 1);
 	REQUIRE(exec_runs >= 1);
 
 	// A second query binds afresh; the user data planted at registration is still there.
 	auto rows = CollectInts(conn.Execute("SELECT cpp_flow(r::INTEGER) FROM range(3) t(r)"));
 	REQUIRE(rows == std::vector<int32_t> {10, 13, 16});
-	REQUIRE(bind_runs == 2);
+	REQUIRE(bind_runs > binds_after_first);
 }
 
 TEST_CASE("Stable C++API: scalar function bind data without operator== compares by identity", "[cpp_api]") {
@@ -238,6 +273,40 @@ TEST_CASE("Stable C++API: scalar function bind resolves an ANY return type", "[c
 	auto result = conn.Execute("SELECT cpp_double(21)");
 	REQUIRE(result.GetSchema().GetFieldType(0).ToText() == "INTEGER");
 	REQUIRE(CollectInts(std::move(result)) == std::vector<int32_t> {42});
+}
+
+TEST_CASE("Stable C++API: scalar function bind reads argument types and constants", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	auto function = ScalarFunction::Create(conn);
+	function.SetName("cpp_arg_probe").SetBindCallback(ArgProbeBind).SetExecCallback(ArgProbeExec);
+	function.GetSignature()
+	    .AddParameter("a", conn.CreateType(LogicalTypeId::ANY))
+	    .AddParameter("b", conn.ParseType("INTEGER"))
+	    .SetReturnType(conn.CreateType(LogicalTypeId::ANY));
+	function.Register();
+
+	arg_probe = {};
+	REQUIRE(CollectInts(conn.Execute("SELECT cpp_arg_probe('hello', 21)")) == std::vector<int32_t> {21});
+	REQUIRE(arg_probe.count == 2);
+	// The ANY parameter reports the type the call resolved it to.
+	REQUIRE(arg_probe.types == "VARCHAR,INTEGER");
+	REQUIRE(arg_probe.constant == 21);
+	REQUIRE(arg_probe.tried_non_constant);
+	// An index past the last argument is absence, not a failure.
+	REQUIRE_FALSE(arg_probe.tried_out_of_range);
+
+	// A column reference has no constant value: TryGetConstantArgument reports absence...
+	arg_probe = {};
+	REQUIRE(CollectInts(conn.Execute("SELECT cpp_arg_probe(a, 21) FROM (VALUES ('x')) t(a)")) ==
+	        std::vector<int32_t> {21});
+	REQUIRE_FALSE(arg_probe.tried_non_constant);
+
+	// ...while GetConstantArgument fails the query with the binder's own error.
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_arg_probe('hello', b) FROM (VALUES (21)) t(b)").Drain(), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_QUERY_BINDER));
 }
 
 TEST_CASE("Stable C++API: scalar function callback errors fail the query", "[cpp_api]") {

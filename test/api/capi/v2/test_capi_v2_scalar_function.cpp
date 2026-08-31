@@ -229,6 +229,87 @@ void FlowExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Bind-time argument introspection. The bind callback reads the argument
+// count, the resolved type of every argument and the constant folded out of
+// the second one, then resolves the ANY return type to INTEGER. Exec fills
+// the result with the constant bind saw.
+// ---------------------------------------------------------------------------
+
+struct {
+	idx_t arg_count = 0;
+	DUCKDB_V2_LOGICAL_TYPE_ID arg_types[2] = {DUCKDB_V2_LOGICAL_TYPE_ID_INVALID, DUCKDB_V2_LOGICAL_TYPE_ID_INVALID};
+	int32_t constant = 0;
+	// Out-of-range probes, latched with their own (null) error slot.
+	DUCKDB_V2_ERROR oob_type_rc = DUCKDB_V2_ERROR_NONE;
+	DUCKDB_V2_ERROR oob_value_rc = DUCKDB_V2_ERROR_NONE;
+	bool oob_type_cleared = false;
+	bool oob_value_cleared = false;
+} arg_probe;
+
+void ArgProbeBind(duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_context_handle context,
+                  duckdb_v2_error_info_handle *err) {
+	if (duckdb_v2_scalar_function_bind_get_arg_count(info, &arg_probe.arg_count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	for (idx_t i = 0; i < arg_probe.arg_count && i < 2; i++) {
+		duckdb_v2_logical_type_handle type = nullptr;
+		if (duckdb_v2_scalar_function_bind_get_arg_type(info, i, &type, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+		auto rc = duckdb_v2_logical_type_get_id(type, &arg_probe.arg_types[i], err);
+		duckdb_v2_logical_type_destroy(&type);
+		if (rc != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+	}
+	// An index past the last argument is an input error, and leaves the out-parameter cleared.
+	duckdb_v2_logical_type_handle oob_type = nullptr;
+	duckdb_v2_value_handle oob_value = nullptr;
+	arg_probe.oob_type_rc = duckdb_v2_scalar_function_bind_get_arg_type(info, 5, &oob_type, nullptr);
+	arg_probe.oob_value_rc = duckdb_v2_scalar_function_bind_get_arg_value(info, 5, &oob_value, nullptr);
+	arg_probe.oob_type_cleared = oob_type == nullptr;
+	arg_probe.oob_value_cleared = oob_value == nullptr;
+
+	// Fold the second argument to a constant. A non-constant argument fails here.
+	duckdb_v2_value_handle value = nullptr;
+	if (duckdb_v2_scalar_function_bind_get_arg_value(info, 1, &value, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto rc = duckdb_v2_value_get_int(value, &arg_probe.constant, err);
+	duckdb_v2_value_destroy(&value);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+
+	duckdb_v2_logical_type_handle integer = nullptr;
+	if (duckdb_v2_context_create_type_from_id(context, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
+	                                          err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_scalar_function_bind_set_return_type(info, integer, err);
+	duckdb_v2_logical_type_destroy(&integer);
+}
+
+// out[i] = the constant the bind callback folded out of the second argument.
+void ArgProbeExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle,
+                  duckdb_v2_error_info_handle *err) {
+	duckdb_v2_vector_handle out = nullptr;
+	idx_t count = 0;
+	if (duckdb_v2_scalar_function_exec_get_result(info, &out, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_scalar_function_exec_get_row_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	void *raw = nullptr;
+	if (duckdb_v2_vector_get_data_mutable(out, &raw, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto *out_data = static_cast<int32_t *>(raw);
+	for (idx_t i = 0; i < count; i++) {
+		out_data[i] = arg_probe.constant;
+	}
+}
+
 } // namespace
 
 // ===========================================================================
@@ -344,6 +425,54 @@ TEST_CASE("V2 scalar: bind callback resolves ANY return and data flows", "[capi_
 	REQUIRE(flow.init_data_in_exec == &init_marker);
 	// The init data (per-execution) was destroyed with the finished query.
 	REQUIRE(flow.init_data_destroys >= 1);
+}
+
+// ===========================================================================
+// Bind-time argument introspection: count, types, constant folding.
+// ===========================================================================
+
+TEST_CASE("V2 scalar: bind reads argument count, types and constants", "[capi_v2][scalar_function]") {
+	EnvFixture fx;
+	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+
+	// arg_probe(x ANY, y INTEGER) -> ANY
+	auto function = MakeScalar(fx.conn, "arg_probe");
+	auto sig = SigOf(function);
+	SigParam(sig, "x", any);
+	SigParam(sig, "y", integer);
+	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, any, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_bind_callback(function, ArgProbeBind, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, ArgProbeExec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_scalar_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&integer);
+	duckdb_v2_logical_type_destroy(&any);
+
+	arg_probe = {};
+	REQUIRE(QueryI32(fx.conn, "SELECT arg_probe('hello', 21)") == 21);
+	REQUIRE(arg_probe.arg_count == 2);
+	// The ANY parameter reports the type the call resolved it to.
+	REQUIRE(arg_probe.arg_types[0] == DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+	REQUIRE(arg_probe.arg_types[1] == DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	REQUIRE(arg_probe.constant == 21);
+	REQUIRE(arg_probe.oob_type_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(arg_probe.oob_value_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(arg_probe.oob_type_cleared);
+	REQUIRE(arg_probe.oob_value_cleared);
+
+	// A foldable expression is still a constant.
+	arg_probe = {};
+	REQUIRE(QueryI32(fx.conn, "SELECT arg_probe(42, 20 + 1)") == 21);
+	REQUIRE(arg_probe.arg_types[0] == DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	REQUIRE(arg_probe.constant == 21);
+
+	// A column reference is not: the binder error surfaces from the bind callback.
+	arg_probe = {};
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT arg_probe('hello', i) FROM (VALUES (21)) t(i)", &result) ==
+	        DUCKDB_V2_ERROR_QUERY_BINDER);
+	duckdb_v2_result_destroy(&result);
 }
 
 // ===========================================================================
@@ -472,6 +601,16 @@ TEST_CASE("V2 scalar: null arguments and destroy null-safety", "[capi_v2][scalar
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(nullptr, &sig, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_scalar_function_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	idx_t arg_count = 0;
+	duckdb_v2_logical_type_handle arg_type = nullptr;
+	duckdb_v2_value_handle arg_value = nullptr;
+	REQUIRE(duckdb_v2_scalar_function_bind_get_arg_count(nullptr, &arg_count, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_bind_get_arg_type(nullptr, 0, &arg_type, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_bind_get_arg_value(nullptr, 0, &arg_value, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_scalar_function_destroy(&function);
 
 	REQUIRE(duckdb_v2_scalar_function_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);

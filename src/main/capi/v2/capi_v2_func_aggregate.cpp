@@ -24,7 +24,7 @@ public:
 class CV2AggregateBindInfo {
 public:
 	void *in_user_data = nullptr;
-	BoundAggregateFunction *in_function;
+	BindAggregateFunctionInput *in_input = nullptr;
 
 	duckdb_v2_opaque out_bind_data = {};
 };
@@ -161,7 +161,7 @@ static auto CV2AggregateBind(BindAggregateFunctionInput &input) -> unique_ptr<Fu
 
 	CV2AggregateBindInfo args = {};
 	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
-	args.in_function = &input.GetBoundFunction();
+	args.in_input = &input;
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -540,12 +540,53 @@ DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_bind_data(duckdb_v2_aggreg
 	return WithErrorHandler(err, [&]() { Convert(info)->out_bind_data = *data; });
 }
 
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_get_arg_count(duckdb_v2_aggregate_function_bind_info_handle info,
+                                                                idx_t *count, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(count);
+	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_input->GetArguments().size(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_get_arg_type(duckdb_v2_aggregate_function_bind_info_handle info,
+                                                               idx_t index, duckdb_v2_logical_type_handle *type,
+                                                               duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(type);
+	*type = nullptr;
+	return WithErrorHandler(err, [&]() {
+		const auto &input = *Convert(info)->in_input;
+		const auto &arguments = input.GetArguments();
+		if (index >= arguments.size()) {
+			throw duckdb::InvalidInputException(
+			    "Index out of bounds in duckdb_v2_aggregate_function_bind_get_arg_type");
+		}
+		*type = Convert(new duckdb::LogicalType(arguments[index]->GetReturnType()));
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_get_arg_value(duckdb_v2_aggregate_function_bind_info_handle info,
+                                                                idx_t index, duckdb_v2_value_handle *value,
+                                                                duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(value);
+	*value = nullptr;
+	return WithErrorHandler(err, [&]() {
+		const auto &input = *Convert(info)->in_input;
+		if (index >= input.GetArguments().size()) {
+			throw duckdb::InvalidInputException(
+			    "Index out of bounds in duckdb_v2_aggregate_function_bind_get_arg_value");
+		}
+		*value = Convert(new duckdb::Value(input.GetConstant(index)));
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_return_type(duckdb_v2_aggregate_function_bind_info_handle info,
                                                                   duckdb_v2_logical_type_handle return_type,
                                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(return_type);
-	return WithErrorHandler(err, [&]() { Convert(info)->in_function->SetReturnType(*Convert(return_type)); });
+	return WithErrorHandler(
+	    err, [&]() { Convert(info)->in_input->GetBoundFunction().SetReturnType(*Convert(return_type)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_aggregate_function_size_get_user_data(duckdb_v2_aggregate_function_size_info_handle info,

@@ -3297,6 +3297,52 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_bind_data(
  * - stable: v2.0.0
  *
  * @param info
+ * @param count Receives the number of arguments.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_get_arg_count(
+    duckdb_v2_aggregate_function_bind_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param index The index of the argument to get the type of.
+ * @param type The argument type to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR
+duckdb_v2_aggregate_function_bind_get_arg_type(duckdb_v2_aggregate_function_bind_info_handle info, idx_t index,
+                                               duckdb_v2_logical_type_handle *type, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param index The index of the argument to extract a constant value from.
+ * @param value The constant value to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR
+duckdb_v2_aggregate_function_bind_get_arg_value(duckdb_v2_aggregate_function_bind_info_handle info, idx_t index,
+                                                duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
  * @param return_type The return type to set. Borrowed for the call only.
  * @param err
  * @return DUCKDB_V2_ERROR
@@ -4170,6 +4216,52 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_get_user_data(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_bind_data(
     duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param count Receives the number of arguments.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_get_arg_count(
+    duckdb_v2_scalar_function_bind_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param index The index of the argument to get the type of.
+ * @param type The argument type to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR
+duckdb_v2_scalar_function_bind_get_arg_type(duckdb_v2_scalar_function_bind_info_handle info, idx_t index,
+                                            duckdb_v2_logical_type_handle *type, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param index The index of the argument to extract a constant value from.
+ * @param value The constant value to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR
+duckdb_v2_scalar_function_bind_get_arg_value(duckdb_v2_scalar_function_bind_info_handle info, idx_t index,
+                                             duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err);
 
 /*!
  * TODO

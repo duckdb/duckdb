@@ -2373,6 +2373,38 @@ void ScalarFunction::BindInput::SetBindDataInternal(void *data, bool (*equals)(v
 	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), &opaque);
 }
 
+auto ScalarFunction::BindInput::GetArgCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_scalar_function_bind_get_arg_count,
+	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), &count);
+	return count;
+}
+
+auto ScalarFunction::BindInput::GetArgType(idx_t index) const -> LogicalType {
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_bind_get_arg_type,
+	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), index, &type);
+	return detail::Factory::Make<LogicalType>(type);
+}
+
+auto ScalarFunction::BindInput::GetConstantArgument(idx_t index) const -> Value {
+	duckdb_v2_value_handle value = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_bind_get_arg_value,
+	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), index, &value);
+	return detail::Factory::Make<Value>(value);
+}
+
+auto ScalarFunction::BindInput::TryGetConstantArgument(idx_t index) const -> std::optional<Value> {
+	duckdb_v2_value_handle value = nullptr;
+	// No error slot: an argument without a constant value is absence here, not a failure to report.
+	const auto code = duckdb_v2_scalar_function_bind_get_arg_value(
+	    static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), index, &value, nullptr);
+	if (code != DUCKDB_V2_ERROR_NONE) {
+		return std::nullopt;
+	}
+	return detail::Factory::Make<Value>(value);
+}
+
 auto ScalarFunction::BindInput::SetReturnType(const LogicalType &type) -> void {
 	CheckedAPICall(duckdb_v2_scalar_function_bind_set_return_type,
 	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), type.handle());
@@ -2752,6 +2784,38 @@ void AggregateFunction::BindInput::SetBindDataInternal(void *data, bool (*equals
 	duckdb_v2_opaque opaque {data, destructor, equals};
 	CheckedAPICall(duckdb_v2_aggregate_function_bind_set_bind_data,
 	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), &opaque);
+}
+
+auto AggregateFunction::BindInput::GetArgCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_aggregate_function_bind_get_arg_count,
+	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), &count);
+	return count;
+}
+
+auto AggregateFunction::BindInput::GetArgType(idx_t index) const -> LogicalType {
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_bind_get_arg_type,
+	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), index, &type);
+	return detail::Factory::Make<LogicalType>(type);
+}
+
+auto AggregateFunction::BindInput::GetConstantArgument(idx_t index) const -> Value {
+	duckdb_v2_value_handle value = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_bind_get_arg_value,
+	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), index, &value);
+	return detail::Factory::Make<Value>(value);
+}
+
+auto AggregateFunction::BindInput::TryGetConstantArgument(idx_t index) const -> std::optional<Value> {
+	duckdb_v2_value_handle value = nullptr;
+	// No error slot: an argument without a constant value is absence here, not a failure to report.
+	const auto code = duckdb_v2_aggregate_function_bind_get_arg_value(
+	    static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), index, &value, nullptr);
+	if (code != DUCKDB_V2_ERROR_NONE) {
+		return std::nullopt;
+	}
+	return detail::Factory::Make<Value>(value);
 }
 
 auto AggregateFunction::BindInput::SetReturnType(const LogicalType &type) -> void {
