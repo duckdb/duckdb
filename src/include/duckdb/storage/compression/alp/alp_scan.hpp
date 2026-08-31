@@ -20,6 +20,15 @@
 
 namespace duckdb {
 
+[[noreturn]] void ThrowAlpExponentOutOfRange(AlpConstants::EXPONENT_TYPE exponent,
+                                             AlpConstants::EXPONENT_TYPE max_exponent);
+[[noreturn]] void ThrowAlpFactorOutOfRange(AlpConstants::FACTOR_TYPE factor, AlpConstants::EXPONENT_TYPE exponent);
+[[noreturn]] void ThrowAlpExceptionCountOutOfRange(AlpConstants::EXCEPTIONS_COUNT_TYPE exception_count,
+                                                   idx_t vector_size);
+[[noreturn]] void ThrowAlpBitWidthOutOfRange(AlpConstants::BIT_WIDTH_TYPE bit_width);
+[[noreturn]] void ThrowAlpExceptionPositionOutOfRange(AlpConstants::EXCEPTION_POSITION_TYPE position,
+                                                      idx_t vector_size);
+
 template <class T>
 struct AlpVectorState {
 public:
@@ -188,22 +197,22 @@ public:
 			}
 			return;
 		}
+		if (vector_state.v_exponent > AlpTypedConstants<T>::MAX_EXPONENT) {
+			ThrowAlpExponentOutOfRange(vector_state.v_exponent, AlpTypedConstants<T>::MAX_EXPONENT);
+		}
 		vector_state.v_factor = vector_reader.template Read<AlpConstants::FACTOR_TYPE>();
 		vector_state.exceptions_count = vector_reader.template Read<AlpConstants::EXCEPTIONS_COUNT_TYPE>();
 		vector_state.frame_of_reference = vector_reader.template Read<AlpConstants::FRAME_OF_REFERENCE_TYPE>();
 		vector_state.bit_width = vector_reader.template Read<AlpConstants::BIT_WIDTH_TYPE>();
 
 		if (vector_state.exceptions_count > vector_size) {
-			throw DataCorruptionException("Corrupted ALP segment: exceptions_count (%d) exceeds vector_size (%d)",
-			                              vector_state.exceptions_count, vector_size);
+			ThrowAlpExceptionCountOutOfRange(vector_state.exceptions_count, vector_size);
 		}
 		if (vector_state.v_factor > vector_state.v_exponent) {
-			throw DataCorruptionException("Corrupted ALP segment: v_factor (%d) exceeds v_exponent (%d)",
-			                              vector_state.v_factor, vector_state.v_exponent);
+			ThrowAlpFactorOutOfRange(vector_state.v_factor, vector_state.v_exponent);
 		}
 		if (vector_state.bit_width > AlpConstants::MAX_BIT_WIDTH) {
-			throw DataCorruptionException("Corrupted ALP segment: Invalid bit_width encountered: %d",
-			                              vector_state.bit_width);
+			ThrowAlpBitWidthOutOfRange(vector_state.bit_width);
 		}
 
 		if (vector_state.bit_width > 0) {
@@ -221,8 +230,7 @@ public:
 			//! The exception positions index into the decoded vector, so they must stay within its bounds
 			for (idx_t i = 0; i < vector_state.exceptions_count; i++) {
 				if (vector_state.exceptions_positions[i] >= vector_size) {
-					throw IOException("Corrupted ALP segment: exception position (%d) exceeds vector_size (%d)",
-					                  vector_state.exceptions_positions[i], vector_size);
+					ThrowAlpExceptionPositionOutOfRange(vector_state.exceptions_positions[i], vector_size);
 				}
 			}
 		}
