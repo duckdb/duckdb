@@ -31,7 +31,8 @@ public:
 			SetResult(MatcherResult::Success());
 			return;
 		}
-		SetResult(match_state.AllocateParseResult<OptionalParseResult>(child_result.GetParseResult(), start_offset));
+		auto result = match_state.AllocateParseResult<OptionalParseResult>(child_result.GetParseResult(), start_offset);
+		SetResult(result);
 	}
 
 private:
