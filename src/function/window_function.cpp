@@ -12,10 +12,10 @@ unique_ptr<BoundWindowExpression> WindowFunction::Bind(ClientContext &context) c
 unique_ptr<BoundWindowExpression> WindowFunction::Bind(ClientContext &context,
                                                        vector<unique_ptr<Expression>> arguments) const {
 	FunctionBinder func_binder(context);
-	vector<OrderByNode> orders;
-	vector<OrderByNode> arg_orders;
+	vector<LogicalType> order_types;
+	vector<LogicalType> arg_order_types;
 
-	return func_binder.BindWindowFunction(*this, std::move(arguments), orders, arg_orders);
+	return func_binder.BindWindowFunction(*this, std::move(arguments), order_types, arg_order_types);
 }
 
 BoundWindowFunction::BoundWindowFunction(const WindowFunction &base)
@@ -52,17 +52,17 @@ bool BoundWindowFunction::operator!=(const BoundWindowFunction &rhs) const {
 
 BindWindowFunctionInput::BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
                                                  vector<unique_ptr<Expression>> &arguments_p,
-                                                 const vector<Identifier> &argument_names_p, OptionalOrdering orders_p,
-                                                 OptionalOrdering arg_orders_p)
+                                                 const vector<Identifier> &argument_names_p,
+                                                 OptionalOrderTypes order_types_p, OptionalOrderTypes arg_order_types_p)
     : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p), bound_function(bound_function_p),
-      orders(orders_p), arg_orders(arg_orders_p) {
+      order_types(order_types_p), arg_order_types(arg_order_types_p) {
 }
 
 BindWindowFunctionInput::BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
-                                                 vector<unique_ptr<Expression>> &arguments_p, OptionalOrdering orders_p,
-                                                 OptionalOrdering arg_orders_p)
+                                                 vector<unique_ptr<Expression>> &arguments_p,
+                                                 OptionalOrderTypes order_types_p, OptionalOrderTypes arg_order_types_p)
     : BindFunctionInput(context_p, bound_function_p, arguments_p, nullptr), bound_function(bound_function_p),
-      orders(orders_p), arg_orders(arg_orders_p) {
+      order_types(order_types_p), arg_order_types(arg_order_types_p) {
 }
 
 } // namespace duckdb

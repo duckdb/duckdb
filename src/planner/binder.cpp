@@ -235,6 +235,10 @@ StatementProperties &Binder::GetStatementProperties() {
 	return global_binder_state->prop;
 }
 
+BoundExpressionMap &Binder::GetBoundExpressions() {
+	return global_binder_state->bound_expressions;
+}
+
 optional_ptr<LogicalGet> Binder::GetPassthroughTableFunctionGet(LogicalOperator &op) {
 	// Follow single-child projections down to a lone LOGICAL_GET; anything else is not a passthrough.
 	auto *current = &op;

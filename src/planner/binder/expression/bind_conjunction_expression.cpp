@@ -19,7 +19,7 @@ BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, idx_t d
 	// and construct the bound conjunction expression
 	auto result = make_uniq<BoundConjunctionExpression>(expr.GetExpressionType());
 	for (auto &child_expr : expr.GetChildrenMutable()) {
-		auto &child = BoundExpression::GetExpression(*child_expr);
+		auto child = GetBoundExpressions().Consume(*child_expr);
 		result->GetChildrenMutable().push_back(
 		    BoundCastExpression::AddCastToType(context, std::move(child), LogicalType::BOOLEAN));
 	}
