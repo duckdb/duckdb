@@ -1,0 +1,128 @@
+# name: test/sql/storage/compression/dict_fsst/dict_fsst_expression_filter.test
+# description: Test expression filters over DICT_FSST strings
+# group: [dict_fsst]
+
+require vector_size 2048
+
+load {TEST_DIR}/dict_fsst_expression_filter.db readwrite v2.0.0
+
+statement ok
+CREATE TABLE partial_segment AS
+SELECT concat('HumanEval/', i::VARCHAR) AS task_id
+FROM range(0, 164) tbl(i)
+
+statement ok
+CREATE TABLE full_vector AS
+SELECT concat('HumanEval/', i::VARCHAR) AS task_id
+FROM range(0, 2048) tbl(i)
+
+statement ok
+CHECKPOINT
+
+restart
+
+query I
+SELECT count(*) FROM pragma_storage_info('partial_segment')
+WHERE column_name = 'task_id'
+  AND segment_type = 'VARCHAR'
+  AND compression = 'DICT_FSST'
+----
+1
+
+query I
+SELECT count(*) FROM pragma_storage_info('full_vector')
+WHERE column_name = 'task_id'
+  AND segment_type = 'VARCHAR'
+  AND compression = 'DICT_FSST'
+----
+1
+
+query I
+SELECT count(*) FROM partial_segment
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10
+----
+154
+
+query I
+SELECT count(*) FROM partial_segment
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10000
+----
+0
+
+statement ok
+DELETE FROM partial_segment
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10
+
+query I
+SELECT count(*) FROM partial_segment
+----
+10
+
+query I
+SELECT count(*) FROM full_vector
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10
+----
+2038
+
+query I
+SELECT count(*) FROM full_vector
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10000
+----
+0
+
+statement ok
+DELETE FROM full_vector
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10
+
+query I
+SELECT count(*) FROM full_vector
+----
+10
+
+# Exercise the generic filter fallback after a specialized DICT_FSST scan.
+# The segment boundaries are not vector-aligned, so some vectors span segments.
+statement ok
+SET force_mbedtls_unsafe = true
+
+statement ok
+ATTACH '{TEST_DIR}/dict_fsst_multi_segment_encrypted.db' AS encrypted (ENCRYPTION_KEY 'asdf')
+
+statement ok
+USE encrypted
+
+statement ok
+CREATE TABLE multi_segment AS
+SELECT i, concat('Comment number ', i::VARCHAR,
+                 ' has repeated words special requests alpha beta gamma') AS comment
+FROM range(0, 50000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+statement ok
+USE dict_fsst_expression_filter
+
+restart
+
+statement ok
+SET force_mbedtls_unsafe = true
+
+statement ok
+ATTACH '{TEST_DIR}/dict_fsst_multi_segment_encrypted.db' AS encrypted (ENCRYPTION_KEY 'asdf')
+
+statement ok
+USE encrypted
+
+query I
+SELECT count(*) > 1 FROM pragma_storage_info('multi_segment')
+WHERE column_name = 'comment'
+  AND segment_type = 'VARCHAR'
+  AND compression = 'DICT_FSST'
+----
+true
+
+query II
+SELECT count(*), sum(i) FROM multi_segment
+WHERE split_part(comment, ' ', 3)::INTEGER % 2 = 0
+----
+25000	624975000

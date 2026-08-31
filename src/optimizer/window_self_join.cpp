@@ -13,6 +13,25 @@
 
 namespace duckdb {
 
+class VolatileExpressionCounter : public LogicalOperatorVisitor {
+public:
+	static idx_t HasVolatiles(LogicalOperator &op) {
+		VolatileExpressionCounter counter;
+		counter.VisitOperator(op);
+		return counter.volatiles;
+	}
+
+	VolatileExpressionCounter() {
+	}
+
+	void VisitExpression(unique_ptr<Expression> *expression) override {
+		volatiles += (*expression)->IsVolatile();
+		LogicalOperatorVisitor::VisitExpression(expression);
+	}
+
+	idx_t volatiles = 0;
+};
+
 static bool IsOrderableDistinctAggregate(const BoundWindowExpression &w_expr) {
 	//	If the aggregate is order-sensitive and distinct,
 	//	then the ORDER BYs need to be functional dependencies of the arguments.
@@ -179,6 +198,11 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 
 		// Check recursively
 		window.children[0] = OptimizeInternal(std::move(window.children[0]), replacer);
+
+		//	We cannot perform self-join when there are volatile functions below us.
+		if (VolatileExpressionCounter::HasVolatiles(window)) {
+			return op;
+		}
 
 		if (!CanOptimize(*window.children[0])) {
 			return op;

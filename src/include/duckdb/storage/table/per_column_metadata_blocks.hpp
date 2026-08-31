@@ -32,7 +32,11 @@ public:
 
 	//! Add a column entry with its block IDs
 	void AddColumn(idx_t col_idx, const vector<idx_t> &blocks);
-	//! Remove a column entry and all its block IDs (linear scan)
+	//! Clear a column's entry and all its block IDs in place, leaving the indices of the other
+	//! columns untouched (linear scan), for use when the column is rewritten (e.g. ALTER TYPE)
+	void ClearColumn(idx_t col_idx);
+	//! Remove a column's entry and shift down the indices of all subsequent columns,
+	//! for use when the column is positionally removed (e.g. DROP COLUMN)
 	void RemoveColumn(idx_t col_idx);
 	//! Merge two PerColumnMetadataBlocks sorted by column index with disjoint column sets
 	static PerColumnMetadataBlocks Merge(const PerColumnMetadataBlocks &a, const PerColumnMetadataBlocks &b);

@@ -202,9 +202,11 @@ bool CMHelper::GetIntegralOffsetCompressInfo(ClientContext &context, const Logic
 
 	// Get range and cast to UBIGINT (might fail for HUGEINT, in which case we just return)
 	range_value = GetIntegralRangeValue(context, type, stats);
-	if (!range_value.DefaultTryCastAs(LogicalType::UBIGINT)) {
+	auto range_ubigint = range_value.DefaultTryCastAs(LogicalType::UBIGINT);
+	if (!range_ubigint) {
 		return false;
 	}
+	range_value = std::move(*range_ubigint);
 	offset_type = GetIntegralOffsetType(UBigIntValue::Get(range_value));
 	min = NumericStats::Min(stats);
 	return true;
@@ -227,19 +229,20 @@ LogicalType CMHelper::GetSameWidthIntegralType(const LogicalType &type, const bo
 
 bool CMHelper::ValuePreservingCastFits(const Value &value, const LogicalType &source_type,
                                        const LogicalType &target_type) {
-	Value cast_value;
-	Value roundtrip_value;
+	optional<Value> roundtrip_value;
 	try {
-		if (!value.DefaultTryCastAs(target_type, cast_value, nullptr, true)) {
+		auto cast_value = value.DefaultTryCastAs(target_type, nullptr, true);
+		if (!cast_value) {
 			return false;
 		}
-		if (!cast_value.DefaultTryCastAs(source_type, roundtrip_value, nullptr, true)) {
+		roundtrip_value = cast_value->DefaultTryCastAs(source_type, nullptr, true);
+		if (!roundtrip_value) {
 			return false;
 		}
 	} catch (ConversionException &) {
 		return false;
 	}
-	return value == roundtrip_value;
+	return value == *roundtrip_value;
 }
 
 LogicalType CMHelper::GetIntegralCastType(const LogicalType &source_type, const LogicalType &offset_type,
@@ -276,15 +279,13 @@ unique_ptr<BaseStatistics> CMHelper::CreateIntegralCastStats(const LogicalType &
 	auto compress_stats = BaseStatistics::CreateEmpty(target_type);
 	compress_stats.CopyBase(stats);
 	if (NumericStats::HasMinMax(stats)) {
-		Value cast_min;
-		Value cast_max;
-		const auto min_success = NumericStats::Min(stats).DefaultTryCastAs(target_type, cast_min, nullptr, true);
-		const auto max_success = NumericStats::Max(stats).DefaultTryCastAs(target_type, cast_max, nullptr, true);
-		if (!min_success || !max_success) {
+		auto cast_min = NumericStats::Min(stats).DefaultTryCastAs(target_type, nullptr, true);
+		auto cast_max = NumericStats::Max(stats).DefaultTryCastAs(target_type, nullptr, true);
+		if (!cast_min || !cast_max) {
 			throw InternalException("Casting failure in CMHelper::CreateIntegralCastStats");
 		}
-		NumericStats::SetMin(compress_stats, cast_min);
-		NumericStats::SetMax(compress_stats, cast_max);
+		NumericStats::SetMin(compress_stats, *cast_min);
+		NumericStats::SetMax(compress_stats, *cast_max);
 	}
 	return compress_stats.ToUnique();
 }

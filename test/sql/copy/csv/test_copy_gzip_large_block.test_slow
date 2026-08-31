@@ -3,12 +3,12 @@
 # group: [csv]
 
 statement ok
-COPY (SELECT repeat('x', 2100000) AS doc FROM range(2048)) TO '__TEST_DIR__/large_gzip_block.csv.gz' (FORMAT CSV, HEADER false);
+COPY (SELECT repeat('x', 2100000) AS doc FROM range(2048)) TO '{TEST_DIR}/large_gzip_block.csv.gz' (FORMAT CSV, HEADER false);
 
 # Round-trip read-back ensures the gzip stream produced across multiple deflate chunks is
 # valid and decompresses to exactly the original data (2048 rows of 2100000 'x' characters).
 query II
 SELECT count(*), sum(length(doc))::BIGINT
-FROM read_csv('__TEST_DIR__/large_gzip_block.csv.gz', columns={'doc': 'VARCHAR'}, header=false, max_line_size=20000000);
+FROM read_csv('{TEST_DIR}/large_gzip_block.csv.gz', columns={'doc': 'VARCHAR'}, header=false, max_line_size=20000000);
 ----
 2048	4300800000

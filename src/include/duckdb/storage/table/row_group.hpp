@@ -22,6 +22,7 @@
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 
 namespace duckdb {
+class AsyncTask;
 class AttachedDatabase;
 class BlockManager;
 class ColumnData;
@@ -47,6 +48,7 @@ class CollectionScanState;
 class TableFilter;
 class TableFilterSet;
 struct ColumnFetchState;
+struct PrefetchState;
 struct RowGroupAppendState;
 class MetadataManager;
 class RowVersionManager;
@@ -129,7 +131,7 @@ public:
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
-	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk);
+	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk, TransactionData transaction);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
 	                               ExpressionExecutor &executor);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
@@ -149,12 +151,20 @@ public:
 	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
-	bool CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters);
+	bool CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start);
 	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were
 	//! skipped.
 	bool CheckZonemapSegments(CollectionScanState &state);
 	void Scan(ScanOptions options, CollectionScanState &state, DataChunk &result);
 	void Scan(CollectionScanState &state, DataChunk &result, TableScanType type);
+	//! Synchronously prefetches the blocks required to scan the next row_count rows
+	void PrefetchScanIO(CollectionScanState &state, idx_t row_count) const;
+	//! Collects the async I/O tasks required to scan the next row_count rows, without performing any I/O
+	vector<unique_ptr<AsyncTask>> CollectScanIOTasks(CollectionScanState &state, idx_t row_count) const;
+	//! Prepares the next eligible vector in the assigned range, idempotent, returns false when none remain
+	bool PrepareScan(ScanOptions options, CollectionScanState &state);
+	//! Processes the vector prepared by PrepareScan, clearing the prepared state when the vector is finished
+	void ProcessPreparedScan(ScanOptions options, CollectionScanState &state, DataChunk &result);
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
@@ -215,7 +225,7 @@ public:
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result,
 	                          const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {});
-	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group);
+	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group, TransactionData transaction);
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
@@ -238,12 +248,22 @@ public:
 	idx_t GetColumnCount() const;
 
 	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
+	//! Attempts to compress the version information of the row group
+	//! Per-row insert/delete ids that behave identically for all transactions with a start time of at least
+	//! lowest_active_start (i.e. all active and future transactions) are compressed into constants
+	void CompressVersionInfo(transaction_t lowest_active_start);
 
 	//! Direct accessors, fall outside of general use but can be useful to some extensions
 	ColumnData &GetRawColumnData(const StorageIndex &c) const;
 	ColumnData &GetRawColumnData(storage_t c) const;
 
 private:
+	//! Registers prefetch candidates for the next row_count rows, returns false when prefetching is not supported
+	bool RegisterScanIO(CollectionScanState &state, idx_t row_count, PrefetchState &prefetch_state) const;
+	//! Shared scan-state setup for InitializeScan and InitializeScanWithOffset
+	bool InitializeScanInternal(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
+	//! Advances the scan past the current vector, clearing the prepared state
+	void FinishVector(CollectionScanState &state);
 	void InitializeAppendInternal(RowGroupAppendState &append_state);
 	optional_ptr<RowVersionManager> GetVersionInfo();
 	optional_ptr<RowVersionManager> GetVersionInfoIfLoaded() const;

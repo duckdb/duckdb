@@ -3,6 +3,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -48,7 +49,7 @@ CSVWriterOptions::CSVWriterOptions(CSVReaderOptions &options)
                        options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline) {
 }
 
-CSVWriter::CSVWriter(WriteStream &stream, vector<string> name_list, bool shared)
+CSVWriter::CSVWriter(WriteStream &stream, vector<Identifier> name_list, bool shared)
     : writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
                      options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline),
       write_stream(stream), should_initialize(true), shared(shared) {

@@ -12,24 +12,9 @@ on:
         type: boolean
       runners:
         type: string
-  workflow_dispatch:
-    inputs:
-      override_git_describe:
+      runner_provider:
         type: string
-      git_ref:
-        type: string
-      skip_tests:
-        type: boolean
-        default: false
-      run_all:
-        type: boolean
-        default: true
-      runners:
-        description: 'JSON object with runner labels, e.g. {"windows_2022_x64":"windows-2022","linux_slim":"ubuntu-latest"}'
-        type: string
-        required: false
-        default: '{}'
-
+        required: true
 concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
@@ -49,9 +34,11 @@ jobs:
     env:
       GEN: ninja
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        fetch-depth: 0
+        runner_provider: ${{ inputs.runner_provider }}
+        fetch_depth: 0
         ref: ${{ inputs.git_ref }}
 
     - uses: actions/setup-python@v6
@@ -131,20 +118,19 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        "/c/Program Files/7-Zip/7z.exe" a -tzip duckdb_cli-windows-amd64.zip duckdb.exe
-        tmp_zip_dir="$(mktemp -d)"
-        lib_archive_path="$(pwd)/libduckdb-windows-amd64.zip"
-        cp src/duckdb.dll src/duckdb.lib src/include/duckdb.h "${tmp_zip_dir}/"
-        (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${lib_archive_path}" ./*)
-        rm -rf "${tmp_zip_dir}"
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
+        make cli-release-artifact ARTIFACT_SUFFIX=windows-amd64 CLI_BINARY=duckdb.exe
+        make shared-libs-release-artifact ARTIFACT_SUFFIX=windows-amd64 SHARED_LIBRARIES="src/duckdb.dll src/duckdb.lib"
+        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-amd64.tar.gz duckdb-shared-libs-windows-amd64.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
-        name: duckdb-binaries-windows-amd64
-        path: |
-          libduckdb-windows-amd64.zip
-          duckdb_cli-windows-amd64.zip
+        path: duckdb-cli-windows-amd64.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-shared-libs-windows-amd64.tar.gz
+        archive: false
 
  win-release-32:
     name: Windows (32 Bit)
@@ -156,9 +142,11 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        fetch-depth: 0
+        runner_provider: ${{ inputs.runner_provider }}
+        fetch_depth: 0
         ref: ${{ inputs.git_ref }}
 
     - uses: actions/setup-python@v6
@@ -179,10 +167,12 @@ jobs:
 
     - name: Test
       shell: bash
+      if: ${{ !inputs.skip_tests }}
       run: python test/run.py
 
     - name: Tools Test
       shell: bash
+      if: ${{ !inputs.skip_tests }}
       run: |
         python scripts/ci/retry.py -- python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary duckdb.exe
@@ -242,20 +232,19 @@ jobs:
          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
-         "/c/Program Files/7-Zip/7z.exe" a -tzip duckdb_cli-windows-arm64.zip duckdb.exe
-         tmp_zip_dir="$(mktemp -d)"
-         lib_archive_path="$(pwd)/libduckdb-windows-arm64.zip"
-         cp src/duckdb.dll src/duckdb.lib src/include/duckdb.h "${tmp_zip_dir}/"
-         (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${lib_archive_path}" ./*)
-         rm -rf "${tmp_zip_dir}"
-         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
+         make cli-release-artifact ARTIFACT_SUFFIX=windows-arm64 CLI_BINARY=duckdb.exe
+         make shared-libs-release-artifact ARTIFACT_SUFFIX=windows-arm64 SHARED_LIBRARIES="src/duckdb.dll src/duckdb.lib"
+         ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-arm64.tar.gz duckdb-shared-libs-windows-arm64.tar.gz
 
      - uses: actions/upload-artifact@v7
        with:
-         name: duckdb-binaries-windows-arm64
-         path: |
-           libduckdb-windows-arm64.zip
-           duckdb_cli-windows-arm64.zip
+         path: duckdb-cli-windows-arm64.tar.gz
+         archive: false
+
+     - uses: actions/upload-artifact@v7
+       with:
+         path: duckdb-shared-libs-windows-arm64.tar.gz
+         archive: false
 
  mingw:
      name: MinGW (64 Bit)
@@ -268,8 +257,10 @@ jobs:
        ENABLE_EXTENSION_AUTOLOADING: 1
        ENABLE_EXTENSION_AUTOINSTALL: 1
      steps:
-       - uses: actions/checkout@v6
+       - name: "Checkout"
+         uses: duckdb/duckdb-ci/.github/actions/checkout@main
          with:
+           runner_provider: ${{ inputs.runner_provider }}
            ref: ${{ inputs.git_ref }}
 
        - uses: actions/setup-python@v6
@@ -335,26 +326,3 @@ jobs:
 
        - name: Test
          run: python build/release/test/run.py
-
- win-packaged-upload:
-   runs-on: ${{ fromJSON(inputs.runners).linux_slim || 'ubuntu-latest' }}
-   needs:
-     - win-release-64
-     - win-release-arm64
-   steps:
-    - uses: actions/download-artifact@v8
-      with:
-        name: duckdb-binaries-windows-arm64
-
-    - uses: actions/download-artifact@v8
-      with:
-        name: duckdb-binaries-windows-amd64
-
-    - uses: actions/upload-artifact@v7
-      with:
-        name: duckdb-binaries-windows
-        path: |
-          libduckdb-windows-amd64.zip
-          duckdb_cli-windows-amd64.zip
-          libduckdb-windows-arm64.zip
-          duckdb_cli-windows-arm64.zip

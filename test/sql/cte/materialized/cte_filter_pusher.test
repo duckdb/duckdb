@@ -21,3 +21,106 @@ ORDER BY x;
 1
 4
 7
+
+statement ok
+PRAGMA explain_output='optimized_only'
+
+# Computed materialized outputs must not be copied into the combined consumer filter
+query II
+EXPLAIN WITH cte AS MATERIALIZED (
+	SELECT i, md5(i::VARCHAR) AS digest
+	FROM range(100) t(i)
+)
+SELECT count(*) FROM cte WHERE digest < '4'
+UNION ALL
+SELECT count(*) FROM cte WHERE digest > 'c';
+----
+logical_opt	<!REGEX>:.*md5.*md5.*
+
+query I
+WITH cte AS MATERIALIZED (
+	SELECT i, md5(i::VARCHAR) AS digest
+	FROM range(100) t(i)
+)
+SELECT count(*) FROM cte WHERE digest < '4'
+UNION ALL
+SELECT count(*) FROM cte WHERE digest > 'c';
+----
+25
+32
+
+# Direct column references must still push through projections into scans
+statement ok
+CREATE TABLE cte_filter_pushdown_source AS SELECT i FROM range(100) t(i);
+
+query II
+EXPLAIN WITH cte AS MATERIALIZED (
+	SELECT i AS alias
+	FROM cte_filter_pushdown_source
+)
+SELECT * FROM cte WHERE alias = 42;
+----
+logical_opt	<REGEX>:.*Filters: i = 42.*
+
+query I
+WITH cte AS MATERIALIZED (
+	SELECT i AS alias
+	FROM cte_filter_pushdown_source
+)
+SELECT * FROM cte WHERE alias = 42;
+----
+42
+
+# Split computed filter inputs from unrelated outputs so expensive expressions stay above the filter
+query II
+EXPLAIN WITH cte AS MATERIALIZED (
+	SELECT i + 1 AS x, md5(i::VARCHAR) AS payload
+	FROM range(100) t(i)
+)
+SELECT sum(length(payload))
+FROM cte
+WHERE x < 10;
+----
+logical_opt	<REGEX>:(?s).*Expressions: x,.*payload.*Expressions: x < 10.*Expressions: x, i.*
+
+query I
+WITH cte AS MATERIALIZED (
+	SELECT i + 1 AS x, md5(i::VARCHAR) AS payload
+	FROM range(100) t(i)
+)
+SELECT sum(length(payload))
+FROM cte
+WHERE x < 10;
+----
+288
+
+# Ordinary filter pushdown still moves computed predicates below unrelated projection expressions
+query II
+EXPLAIN SELECT sum(length(payload))
+FROM (
+	SELECT i + 1 AS x, md5(i::VARCHAR) AS payload
+	FROM range(100) t(i)
+) sq
+WHERE x < 10;
+----
+logical_opt	<REGEX>:(?s).*Expressions: payload.*Expressions: \(i \+ 1\) < 10.*Range.*
+
+# Preserve NULLs and duplicates while splitting a computed projection
+statement ok
+CREATE TABLE cte_projection_split_source(i INTEGER, payload VARCHAR);
+
+statement ok
+INSERT INTO cte_projection_split_source VALUES (1, 'a'), (1, 'b'), (NULL, 'c'), (2, NULL);
+
+query II rowsort
+WITH cte AS MATERIALIZED (
+	SELECT i + 1 AS x, upper(payload) AS payload
+	FROM cte_projection_split_source
+)
+SELECT coalesce(x, -1), coalesce(payload, 'NULL')
+FROM cte
+WHERE x = 2 OR x IS NULL;
+----
+-1	C
+2	A
+2	B

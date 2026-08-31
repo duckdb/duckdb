@@ -39,6 +39,10 @@ struct ExtensionInitResult {
 	string filebase;
 	ExtensionABIType abi_type = ExtensionABIType::UNKNOWN;
 
+	// (only for ExtensionABIType::C_STRUCT) the CAPI version from the metadata footer. Its major selects which C API
+	// family the extension targets, and therefore which entrypoint is called
+	string duckdb_capi_version;
+
 	// The deserialized install from the `<ext>.duckdb_extension.info` file
 	unique_ptr<ExtensionInstallInfo> install_info;
 
@@ -98,15 +102,20 @@ public:
 	static void LoadAllExtensions(DuckDB &db);
 	static vector<string> LoadedExtensionTestPaths();
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+	//! Publishes the extensions linked into this binary onto the config. Generated at build time;
+	//! a build that links none (or an extension carrying its own DuckDB) registers nothing.
+	static void RegisterLinkedExtensions(DBConfig &config);
 
 	//! Install an extension
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,
 	                                                         ExtensionInstallOptions &options);
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
 	                                                         const string &extension, ExtensionInstallOptions &options);
-	//! Load an extension
+	//! Load an extension. `context`, where available, is lent to a V2 C API extension's entrypoint; without one the
+	//! loader opens an internal connection for the duration of the load instead.
 	static void LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options);
-	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options);
+	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options,
+	                                  optional_ptr<ClientContext> context = nullptr);
 
 	//! Autoload an extension (depending on config, potentially a nop. Throws when installation fails)
 	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
@@ -178,13 +187,11 @@ public:
 	//! Lookup a name + type in an ExtensionFunctionEntry list
 	template <size_t N>
 	static vector<pair<string, CatalogType>>
-	FindExtensionInFunctionEntries(const string &name, const ExtensionFunctionEntry (&entries)[N]) {
-		auto lcase = StringUtil::Lower(name);
-
+	FindExtensionInFunctionEntries(const Identifier &name, const ExtensionFunctionEntry (&entries)[N]) {
 		vector<pair<string, CatalogType>> result;
 		for (idx_t i = 0; i < N; i++) {
 			auto &element = entries[i];
-			if (element.name == lcase) {
+			if (element.name == name) {
 				result.push_back(make_pair(element.extension, element.type));
 			}
 		}
@@ -206,13 +213,11 @@ public:
 
 	//! Lookup a name in an ExtensionEntry list
 	template <idx_t N>
-	static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
-		auto lcase = StringUtil::Lower(name);
-
+	static string FindExtensionInEntries(const Identifier &name, const ExtensionEntry (&entries)[N]) {
 		auto it =
-		    std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == lcase; });
+		    std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == name; });
 
-		if (it != entries + N && it->name == lcase) {
+		if (it != entries + N) {
 			return it->extension;
 		}
 		return "";
@@ -220,7 +225,8 @@ public:
 
 	//! Lookup a name in an extension entry and try to autoload it
 	template <idx_t N>
-	static void TryAutoloadFromEntry(DatabaseInstance &db, const string &entry, const ExtensionEntry (&entries)[N]) {
+	static void TryAutoloadFromEntry(DatabaseInstance &db, const Identifier &entry,
+	                                 const ExtensionEntry (&entries)[N]) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 		if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
@@ -264,7 +270,7 @@ private:
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                          ExtensionActiveLoad &info);
+	                                          ExtensionActiveLoad &info, optional_ptr<ClientContext> context);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

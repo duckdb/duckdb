@@ -52,8 +52,8 @@
 
 #include <stdio.h>
 
-struct W_WEB_SITE_TBL g_w_web_site;
-static struct W_WEB_SITE_TBL g_OldValues;
+thread_local struct W_WEB_SITE_TBL g_w_web_site;
+static thread_local struct W_WEB_SITE_TBL g_OldValues;
 
 /*
  * Routine: mk_web_site()
@@ -71,7 +71,7 @@ static struct W_WEB_SITE_TBL g_OldValues;
  */
 int mk_w_web_site(void *info_arr, ds_key_t index) {
 	int32_t nFieldChangeFlags, bFirstRecord = 0;
-	static decimal_t dMinTaxPercentage, dMaxTaxPercentage;
+	static thread_local decimal_t dMinTaxPercentage, dMaxTaxPercentage;
 
 	/* begin locals declarations */
 	char szTemp[16], *sName1, *sName2;

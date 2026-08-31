@@ -43,7 +43,7 @@ struct UnnestLocalState : public LocalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> UnnestBind(ClientContext &context, TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                           vector<LogicalType> &return_types, vector<Identifier> &names) {
 	if (input.input_table_types.size() != 1 || (input.input_table_types[0].id() != LogicalTypeId::LIST &&
 	                                            input.input_table_types[0].id() != LogicalTypeId::ARRAY)) {
 		throw BinderException("UNNEST requires a single list or array as input");

@@ -22,11 +22,18 @@ AsyncResult BaseFileReader::ScheduleIO(ClientContext &, GlobalTableFunctionState
 void BaseFileReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &) {
 }
 
+void BaseFileReader::PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &) {
+}
+
 void BaseFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {
 }
 
 double BaseFileReader::GetProgressInFile(ClientContext &context) {
 	return 0;
+}
+
+InsertionOrderPreservingMap<Value> BaseFileReader::GetMetadata() const {
+	return {};
 }
 
 unique_ptr<BaseStatistics> BaseUnionData::GetStatistics(ClientContext &context, const Identifier &name) {

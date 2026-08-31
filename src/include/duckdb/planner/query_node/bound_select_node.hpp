@@ -33,6 +33,28 @@ struct BoundUnnestNode {
 	vector<unique_ptr<Expression>> expressions;
 };
 
+using BoundUnnestMap = unordered_map<idx_t, BoundUnnestNode>;
+
+class BoundUnnestCollection {
+public:
+	BoundUnnestMap &SelectList() {
+		return select_list;
+	}
+	const BoundUnnestMap &SelectList() const {
+		return select_list;
+	}
+	BoundUnnestMap &GroupBy() {
+		return group_by;
+	}
+	const BoundUnnestMap &GroupBy() const {
+		return group_by;
+	}
+
+private:
+	BoundUnnestMap select_list;
+	BoundUnnestMap group_by;
+};
+
 //! Bound equivalent of SelectNode
 class BoundSelectNode : public BoundQueryNode {
 public:
@@ -79,8 +101,8 @@ public:
 	//! Window functions to compute (only used if HasWindow is true)
 	vector<unique_ptr<Expression>> windows;
 
-	//! Unnest expression
-	unordered_map<idx_t, BoundUnnestNode> unnests;
+	//! UNNEST expressions, split by SELECT-list and GROUP BY binding context
+	BoundUnnestCollection unnests;
 
 	//! Index of pruned node
 	TableIndex prune_index;

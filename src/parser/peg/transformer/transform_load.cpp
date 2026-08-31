@@ -32,7 +32,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(
     const optional<ExtensionRepositoryInfo> &from_source, const optional<string> &version_number) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
-	info->load_type = LoadType::INSTALL;
+	info->load_type = has_result ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
 	info->filename = identifier_or_string_literal.Name().GetIdentifierName();
 	info->repo_is_alias = false;
 	if (from_source) {

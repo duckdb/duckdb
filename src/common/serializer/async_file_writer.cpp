@@ -3,7 +3,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include <cstring>
@@ -201,7 +200,7 @@ void AsyncFileWriter::WriteDataSynchronously(data_ptr_t buffer, idx_t write_size
 		if (remaining_size > 0) {
 			auto remaining_offset = total_written;
 			total_written += remaining_size;
-			if (SupportsPositionalWrites()) {
+			if (GetWriteMode() != FileWriteMode::SEQUENTIAL) {
 				Write(buffer + copied_prefix, remaining_size, remaining_offset);
 			} else {
 				Write(buffer + copied_prefix, remaining_size);
@@ -262,14 +261,11 @@ void AsyncFileWriter::LeaveBatch() noexcept {
 	write_queue->LeaveBatch();
 }
 
-bool AsyncFileWriter::SupportsPositionalWrites() {
-	return handle->SupportsPositionalWrites();
+FileWriteMode AsyncFileWriter::GetWriteMode() {
+	return handle->GetWriteMode();
 }
 
 bool AsyncFileWriter::IsLocalFile() {
-	if (Settings::Get<DebugLocalFileSystemDelayMsSetting>(client_context) > 0) {
-		return false;
-	}
 	auto local_file = fs.IsLocalFileSystem();
 	if (!local_file && handle) {
 		try {

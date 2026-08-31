@@ -134,7 +134,7 @@ class JobStagesTest(unittest.TestCase):
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_main_includes_main_only_jobs(self):
         selection = self._compute_job_selection("push", "main", "duckdb/duckdb")
-        self.assertIn("main_julia", selection.enabled_jobs)
+        self.assertIn("codecov", selection.enabled_jobs)
         self.assertTrue(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
@@ -153,23 +153,16 @@ class JobStagesTest(unittest.TestCase):
 
     def test_regular_branch_excludes_main_only_jobs(self):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
-        self.assertNotIn("main_julia", selection.enabled_jobs)
+        self.assertNotIn("codecov", selection.enabled_jobs)
         self.assertFalse(selection.save_cache)
 
     def test_fork_saves_cache(self):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "somefork/duckdb")
         self.assertTrue(selection.save_cache)
 
-    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
-    def test_julia_changed_key_enables_main_julia_on_pr(self):
-        selection = self._compute_job_selection(
-            "pull_request", "feature/my-branch", "duckdb/duckdb", changed_keys={"julia"}
-        )
-        self.assertIn("main_julia", selection.enabled_jobs)
-
     def test_parse_changed_keys(self):
-        parsed = job_stages.parse_changed_keys(" jUlia,tests_slow\nextensions julia ")
-        self.assertEqual(parsed, {"julia", "tests_slow", "extensions"})
+        parsed = job_stages.parse_changed_keys(" tEsts_slow,extensions\ngithub tests_slow ")
+        self.assertEqual(parsed, {"tests_slow", "extensions", "github"})
 
     def test_writes_github_output(self):
         selection = job_stages.JobSelection(enabled_jobs=["linux-relassert"], save_cache=False)

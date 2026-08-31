@@ -41,9 +41,10 @@ public:
 			auto &aggregate = *wexpr.AggregateFunction();
 			bind_data = wexpr.BindInfo().get();
 			dtor = aggregate.GetCallbacks().GetStateDestructorCallback();
-			state.resize(aggregate.GetCallbacks().GetStateSizeCallback()(aggregate));
+			AggregateStateInput state_input(aggregate, bind_data);
+			state.resize(aggregate.GetCallbacks().GetStateSizeCallback()(state_input));
 			state_ptr = state.data();
-			aggregate.GetCallbacks().GetStateInitCallback()(aggregate, state.data());
+			aggregate.GetCallbacks().GetStateInitCallback()(state_input, &state_ptr, 1);
 			for (auto &child : wexpr.GetChildren()) {
 				arg_types.push_back(child->GetReturnType());
 				executor.AddExpression(*child);

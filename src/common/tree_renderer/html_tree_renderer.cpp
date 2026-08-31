@@ -1,5 +1,7 @@
 #include "duckdb/common/tree_renderer/html_tree_renderer.hpp"
 
+#include "duckdb/main/query_profiler.hpp"
+
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/tree_renderer/html_template.hpp"

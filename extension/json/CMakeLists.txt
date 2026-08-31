@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 2.8.12...3.29)
 
 project(JSONExtension)
 
+# Before any subdirectory or target, which would otherwise inherit the
+# directory-wide definition
+set_extension_version_sources(json json_extension.cpp)
+
 include_directories(include)
 add_subdirectory(json_functions)
 
@@ -28,6 +32,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_structure.cpp
     json_functions/json_transform.cpp
     json_functions/json_create.cpp
+    json_functions/json_geojson.cpp
     json_functions/json_type.cpp
     json_functions/json_valid.cpp
     json_functions/json_value.cpp
@@ -36,6 +41,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_normalize.cpp
     json_functions/json_deep_merge.cpp
     json_functions/json_merge_patch_diff.cpp
+    json_functions/json_modify.cpp
     json_functions/json_strip_nulls.cpp
     json_functions/read_json.cpp
     json_functions/read_json_objects.cpp)

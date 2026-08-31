@@ -16,9 +16,9 @@ CREATE TABLE t AS
 FROM range(300000) tbl(i) ORDER BY i;
 
 statement ok
-COPY (from t) TO '__TEST_DIR__/variant.parquet' (file_size_bytes '2mb')
+COPY (from t) TO '{TEST_DIR}/variant.parquet' (file_size_bytes '2mb')
 
 query I
-SELECT count(*) FROM read_parquet('__TEST_DIR__/variant.parquet')
+SELECT count(*) FROM read_parquet('{TEST_DIR}/variant.parquet')
 ----
 300000

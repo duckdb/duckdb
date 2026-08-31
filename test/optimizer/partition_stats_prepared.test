@@ -1,0 +1,29 @@
+# name: test/optimizer/partition_stats_prepared.test
+# description: Partition stats aggregate folding with prepared statements
+# group: [optimizer]
+
+statement ok
+CREATE TABLE prepared_count_rollback AS
+SELECT range::INTEGER AS i FROM range(11);
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM prepared_count_rollback WHERE i = 0
+
+statement ok
+PREPARE prepared_count_stmt AS SELECT count(*) FROM prepared_count_rollback
+
+query I
+EXECUTE prepared_count_stmt
+----
+10
+
+statement ok
+ROLLBACK
+
+query I
+EXECUTE prepared_count_stmt
+----
+11

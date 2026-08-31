@@ -49,7 +49,9 @@ public:
 	const QueryErrorContext &GetErrorContext() const;
 	const optional_ptr<BoundAtClause> GetAtClause() const;
 
-	static EntryLookupInfo SchemaLookup(const EntryLookupInfo &parent, Identifier schema_name);
+	//! Build a schema lookup from a (possibly nested) schema path ([outermost..innermost]); the innermost component is
+	//! the schema name and the preceding components are its parent schemas
+	static EntryLookupInfo SchemaLookup(const EntryLookupInfo &parent, vector<Identifier> schema_path);
 
 private:
 	CatalogType catalog_type;

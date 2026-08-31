@@ -28,6 +28,16 @@ struct SerializationData {
 		virtual ~CustomData() = default;
 	};
 
+	// Out-of-line so the special members touching stack<const_reference<CompressionInfo>> are only instantiated where
+	// the type is complete (serialization_data.cpp); other TUs may reach this header with CompressionInfo
+	// forward-declared.
+	SerializationData();
+	SerializationData(const SerializationData &);
+	SerializationData(SerializationData &&) noexcept;
+	SerializationData &operator=(const SerializationData &);
+	SerializationData &operator=(SerializationData &&) noexcept;
+	~SerializationData();
+
 	stack<reference<ClientContext>> contexts;
 	stack<reference<DatabaseInstance>> databases;
 	stack<reference<Catalog>> catalogs;
@@ -67,7 +77,8 @@ struct SerializationData {
 		if (stack.empty()) {
 			throw duckdb::InternalException("SerializationData - unexpected empty stack for %s", type);
 		}
-		return dynamic_cast<T &>(stack.top().get());
+		// the stack is keyed on T::GetType(), so it can only hold a T
+		return static_cast<T &>(stack.top().get());
 	}
 
 	template <typename T>

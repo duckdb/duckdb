@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -62,7 +63,9 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 
 		bool bind_macro_parameter = false;
 		if (col_ref.IsQualified()) {
-			if (col_ref.GetTableName().GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos) {
+			// the table qualifier is the component directly before the column name
+			auto &names = col_ref.ColumnNames();
+			if (names[names.size() - 2].StartsWith(DummyBinding::DUMMY_NAME)) {
 				bind_macro_parameter = true;
 			}
 		} else {

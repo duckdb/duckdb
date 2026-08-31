@@ -14,7 +14,7 @@ runs:
   steps:
      - name: Setup Ccache
        if: ${{ github.workflow != 'NightlyTests' }}
-       uses: hendrikmuhs/ccache-action@main
+       uses: hendrikmuhs/ccache-action@v1.2.22
        with:
          key: ${{ inputs.key }}
          save: ${{ inputs.save }}

@@ -8,6 +8,7 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
 

@@ -11,6 +11,9 @@ statement ok
 SET threads=1
 
 statement ok
+SET read_ahead_depth=1
+
+statement ok
 SET enable_external_file_cache=false
 
 statement ok

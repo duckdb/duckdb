@@ -50,7 +50,7 @@ vector<LogicalType> LogStorage::GetSchema(LoggingTargetTable table) {
 	}
 }
 
-vector<string> LogStorage::GetColumnNames(LoggingTargetTable table) {
+vector<Identifier> LogStorage::GetColumnNames(LoggingTargetTable table) {
 	switch (table) {
 	case LoggingTargetTable::ALL_LOGS: {
 		auto all_logs = GetColumnNames(LoggingTargetTable::LOG_CONTEXTS);
@@ -199,7 +199,7 @@ void CSVLogStorage::ResetCastChunk() {
 	InitializeCastChunk(LoggingTargetTable::ALL_LOGS);
 }
 
-void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<string> column_names) {
+void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<Identifier> column_names) {
 	writer.options = *reader_options;
 	writer.writer_options = *writer_options;
 

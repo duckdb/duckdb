@@ -80,14 +80,14 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction 
 	optional_ptr<CatalogEntry> parent_entry = schemas->GetEntry(transaction, parents[0]);
 	if (!parent_entry) {
 		// the root component was not a catalog (otherwise it would have been resolved as one) nor an existing schema
-		throw CatalogException("\"%s\" is not a catalog or schema", parents[0].GetIdentifierName());
+		throw CatalogException("%s is not a catalog or schema", parents[0]);
 	}
 	for (idx_t i = 1; i < parents.size(); i++) {
 		auto &duck_parent = parent_entry->Cast<DuckSchemaEntry>();
 		parent_entry = duck_parent.GetCatalogSet(CatalogType::SCHEMA_ENTRY).GetEntry(transaction, parents[i]);
 		if (!parent_entry) {
-			throw CatalogException("Cannot create nested schema \"%s\": parent schema \"%s\" does not exist",
-			                       info.SchemaName().GetIdentifierName(), parents[i].GetIdentifierName());
+			throw CatalogException("Cannot create nested schema %s: parent schema %s does not exist", info.SchemaName(),
+			                       parents[i]);
 		}
 	}
 	return parent_entry->Cast<DuckSchemaEntry>().CreateSchema(transaction, info);
@@ -139,8 +139,7 @@ void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
 		auto parent_entry = target_set.get().GetEntry(transaction, path[i]);
 		if (!parent_entry) {
 			if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw CatalogException("Cannot drop schema \"%s\": parent schema \"%s\" does not exist",
-				                       schema_name.GetIdentifierName(), path[i].GetIdentifierName());
+				throw CatalogException("Cannot drop schema %s: parent schema %s does not exist", schema_name, path[i]);
 			}
 			return;
 		}
@@ -204,14 +203,36 @@ CatalogSet &DuckCatalog::GetSchemaCatalogSet() {
 optional_ptr<SchemaCatalogEntry> DuckCatalog::LookupSchema(CatalogTransaction transaction,
                                                            const EntryLookupInfo &schema_lookup,
                                                            OnEntryNotFound if_not_found) {
-	auto &schema_name = schema_lookup.GetEntryName();
-	D_ASSERT(!schema_name.empty());
-	auto entry = schemas->GetEntry(transaction, Identifier(schema_name));
-	if (!entry) {
-		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException(schema_lookup.GetErrorContext(), "Schema with name %s does not exist!", schema_name);
+	// build the (possibly nested) schema path from the qualification. A qualified schema lookup always leads with the
+	// catalog component (e.g. [catalog, schema], [catalog, "", schema] or a nested [catalog, s1, s2]); a bare lookup is
+	// just [schema]. Drop that leading catalog component and any empty placeholders.
+	auto &qualified_path = schema_lookup.GetQualifiedName().Path();
+	vector<Identifier> schema_path;
+	for (idx_t i = 0; i < qualified_path.size(); i++) {
+		if (i == 0 && qualified_path.size() > 1) {
+			continue;
 		}
-		return nullptr;
+		if (qualified_path[i].empty()) {
+			continue;
+		}
+		schema_path.push_back(qualified_path[i]);
+	}
+	D_ASSERT(!schema_path.empty());
+	// navigate the schema chain: the outermost schema lives in the catalog, each subsequent one in its parent's schemas
+	reference<CatalogSet> current_set = *schemas;
+	optional_ptr<CatalogEntry> entry;
+	for (idx_t i = 0; i < schema_path.size(); i++) {
+		entry = current_set.get().GetEntry(transaction, schema_path[i]);
+		if (!entry) {
+			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+				throw CatalogException(schema_lookup.GetErrorContext(), "Schema with name %s does not exist!",
+				                       schema_path[i].GetIdentifierName());
+			}
+			return nullptr;
+		}
+		if (i + 1 < schema_path.size()) {
+			current_set = entry->Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY);
+		}
 	}
 	return &entry->Cast<SchemaCatalogEntry>();
 }

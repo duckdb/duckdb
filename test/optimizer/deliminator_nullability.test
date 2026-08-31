@@ -1,0 +1,179 @@
+# name: test/optimizer/deliminator_nullability.test
+# description: Preserve NULL semantics when removing duplicate-eliminated joins
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+CREATE TABLE nn(k INTEGER, wh INTEGER NOT NULL);
+
+statement ok
+INSERT INTO nn VALUES (1, 5), (3, 8);
+
+statement ok
+CREATE TABLE ids(id INTEGER NOT NULL);
+
+statement ok
+INSERT INTO ids VALUES (1), (2);
+
+statement ok
+CREATE TABLE ev(id INTEGER NOT NULL, wh INTEGER NOT NULL);
+
+statement ok
+INSERT INTO ev VALUES (1, 6), (2, 7), (3, 9);
+
+foreach cte_mode true false
+
+statement ok
+SET delim_join_as_cte={cte_mode};
+
+# A NOT NULL column on the nullable side of a LEFT join can still be NULL in the join output.
+query IIT
+SELECT ids.id, nn.wh,
+       EXISTS (
+           SELECT 1
+           FROM ev
+           WHERE ev.id = ids.id
+             AND nn.wh <> ev.wh
+       )
+FROM ids
+LEFT JOIN nn ON ids.id = nn.k
+ORDER BY ids.id;
+----
+1	5	true
+2	NULL	false
+
+# The same applies to the left input of a RIGHT join.
+query IIT
+SELECT ids.id, nn.wh,
+       EXISTS (
+           SELECT 1
+           FROM ev
+           WHERE ev.id = ids.id
+             AND nn.wh <> ev.wh
+       )
+FROM nn
+RIGHT JOIN ids ON ids.id = nn.k
+ORDER BY ids.id;
+----
+1	5	true
+2	NULL	false
+
+# A FULL join can introduce NULL into either input.
+query IIITT
+SELECT coalesce(ids.id, nn.k), ids.id, nn.wh,
+       EXISTS (
+           SELECT 1
+           FROM ev
+           WHERE ev.id = coalesce(ids.id, nn.k)
+             AND ids.id <> ev.wh
+       ),
+       EXISTS (
+           SELECT 1
+           FROM ev
+           WHERE ev.id = coalesce(ids.id, nn.k)
+             AND nn.wh <> ev.wh
+       )
+FROM ids
+FULL JOIN nn ON ids.id = nn.k
+ORDER BY 1;
+----
+1	1	5	true	true
+2	2	NULL	true	false
+3	NULL	8	false	true
+
+# A scalar subquery is planned as a SINGLE join whose right output is NULL when no row matches.
+query IIT
+SELECT ids.id, n.wh,
+       EXISTS (
+           SELECT 1
+           FROM ev
+           WHERE ev.id = ids.id
+             AND n.wh <> ev.wh
+       )
+FROM ids
+LEFT JOIN LATERAL (
+    SELECT (SELECT nn.wh FROM nn WHERE nn.k = ids.id) AS wh
+) n ON true
+ORDER BY ids.id;
+----
+1	5	true
+2	NULL	false
+
+# Materialized CTE references must retain nullability introduced inside their definitions.
+query IIT
+WITH outer_rows AS MATERIALIZED (
+    SELECT ids.id, nn.wh
+    FROM ids
+    LEFT JOIN nn ON ids.id = nn.k
+)
+SELECT id, wh,
+       EXISTS (
+           SELECT 1
+           FROM ev
+           WHERE ev.id = outer_rows.id
+             AND outer_rows.wh <> ev.wh
+       )
+FROM outer_rows
+ORDER BY id;
+----
+1	5	true
+2	NULL	false
+
+# Recursive CTE output is conservatively nullable even when its seed reads a NOT NULL base column.
+query IIT
+WITH RECURSIVE outer_rows(id, wh, iteration) AS (
+    SELECT ids.id, nn.wh, 0
+    FROM ids
+    LEFT JOIN nn ON ids.id = nn.k
+    UNION ALL
+    SELECT id, wh, iteration + 1
+    FROM outer_rows
+    WHERE iteration < 0
+)
+SELECT id, wh,
+       EXISTS (
+           SELECT 1
+           FROM ev
+           WHERE ev.id = outer_rows.id
+             AND outer_rows.wh <> ev.wh
+       )
+FROM outer_rows
+ORDER BY id;
+----
+1	5	true
+2	NULL	false
+
+# Explicit null rejection above an outer join still permits the null-safe MARK rewrite.
+query II
+EXPLAIN
+SELECT ids.id, nn.wh,
+       EXISTS (
+           SELECT 1
+           FROM ev
+           WHERE ev.id = ids.id
+             AND nn.wh <> ev.wh
+       )
+FROM ids
+LEFT JOIN nn ON ids.id = nn.k
+WHERE nn.wh IS NOT NULL;
+----
+logical_opt	<REGEX>:.*Join Type: MARK.*wh IS DISTINCT FROM wh.*
+
+# INNER joins do not introduce NULLs and retain the same optimization.
+query II
+EXPLAIN
+SELECT ids.id, nn.wh,
+       EXISTS (
+           SELECT 1
+           FROM ev
+           WHERE ev.id = ids.id
+             AND nn.wh <> ev.wh
+       )
+FROM ids
+JOIN nn ON ids.id = nn.k;
+----
+logical_opt	<REGEX>:.*Join Type: MARK.*wh IS DISTINCT FROM wh.*
+
+endloop

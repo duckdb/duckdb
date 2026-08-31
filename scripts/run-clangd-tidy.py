@@ -5,14 +5,30 @@ import json
 import multiprocessing
 import os
 import random
+import re
 import shlex
+import shutil
 import subprocess
 import sys
 import time
 
 
-MAX_CHUNK_CHARS = 100000
+# Amount of evenly sized filename chunks.
+TARGET_CHUNK_COUNT = 8
+
+MAX_FAILED_CHUNKS = 3
 MAX_RETRIES = 2
+
+ERROR_TAIL_LINES = 2000
+
+FORCE_COLOR_OUTPUT = True
+ANSI_RESET = '\033[0m'
+ANSI_BOLD = '\033[1m'
+ANSI_GRAY = '\033[90m'
+ANSI_RED = '\033[31m'
+ANSI_YELLOW = '\033[33m'
+ANSI_CYAN = '\033[36m'
+
 RETRY_BACKOFF_MS = 500
 RETRY_PATTERNS = (
     'invalid header end',
@@ -22,6 +38,30 @@ RETRY_PATTERNS = (
     'failed to read message',
     'jsonrpc',
 )
+
+
+def color_text(text, color):
+    if not FORCE_COLOR_OUTPUT:
+        return text
+    return f'{color}{text}{ANSI_RESET}'
+
+
+def print_status(message, file=None):
+    if file is None:
+        file = sys.stdout
+    print(color_text(message, ANSI_GRAY), file=file, flush=True)
+
+
+def color_diagnostic_line(line):
+    if re.search(r'\berror:', line, re.IGNORECASE):
+        return color_text(line, ANSI_RED)
+    if re.search(r'\bwarning:', line, re.IGNORECASE):
+        return color_text(line, ANSI_YELLOW)
+    if re.match(r'^[^:\s][^:]*:\d+:\d+:', line):
+        return color_text(line, ANSI_BOLD)
+    if re.match(r'^\s*\|?\s*\^', line):
+        return color_text(line, ANSI_CYAN)
+    return line
 
 
 def make_absolute(path, directory):
@@ -39,19 +79,18 @@ def is_ignored_file(path, repo_root):
     return relative == 'third_party' or relative.startswith('third_party' + os.sep)
 
 
-def chunk_files(files, max_chars=MAX_CHUNK_CHARS):
-    chunk = []
-    current_chars = 0
-    for path in files:
-        path_len = len(path) + 1
-        if chunk and current_chars + path_len > max_chars:
-            yield chunk
-            chunk = []
-            current_chars = 0
-        chunk.append(path)
-        current_chars += path_len
-    if chunk:
-        yield chunk
+def chunk_files(files, target_chunk_count=TARGET_CHUNK_COUNT):
+    if not files:
+        return
+    chunk_count = min(target_chunk_count, len(files))
+    chunk_size, remainder = divmod(len(files), chunk_count)
+    start = 0
+    for chunk_index in range(chunk_count):
+        end = start + chunk_size
+        if chunk_index < remainder:
+            end += 1
+        yield files[start:end]
+        start = end
 
 
 def load_files(build_path):
@@ -86,6 +125,34 @@ exec {shlex.quote(clangd_binary)} "$@" --pch-storage=disk
     return wrapper_path
 
 
+def format_bytes(size):
+    suffixes = ('B', 'KiB', 'MiB', 'GiB', 'TiB')
+    value = float(size)
+    for suffix in suffixes:
+        if value < 1024 or suffix == suffixes[-1]:
+            return f'{value:.1f} {suffix}'
+        value /= 1024
+
+
+def directory_size(path):
+    total = 0
+    if not os.path.exists(path):
+        return total
+    for root, _, files in os.walk(path):
+        for filename in files:
+            file_path = os.path.join(root, filename)
+            try:
+                total += os.path.getsize(file_path)
+            except OSError:
+                pass
+    return total
+
+
+def reset_pch_dir(pch_dir):
+    shutil.rmtree(pch_dir, ignore_errors=True)
+    os.makedirs(pch_dir, exist_ok=True)
+
+
 def is_retryable_failure(result):
     if result.returncode == 0:
         return False
@@ -94,52 +161,95 @@ def is_retryable_failure(result):
     return any(pattern in lower for pattern in RETRY_PATTERNS)
 
 
+def print_output_tail(label, text):
+    lines = (text or '').splitlines()
+    if not lines:
+        return
+    shown = lines[-ERROR_TAIL_LINES:]
+    omitted = len(lines) - len(shown)
+    message = f'--- clangd-tidy {label} tail ({len(shown)} lines'
+    if omitted > 0:
+        message += f', {omitted} omitted'
+    message += ') ---'
+    print_status(message)
+    for line in shown:
+        print(color_diagnostic_line(line), flush=True)
+    print_status(f'--- end clangd-tidy {label} tail ---')
+
+
 def write_attempt_logs(log_dir, attempt_id, chunk, result):
-    with open(os.path.join(log_dir, f'attempt-{attempt_id}.stdout.log'), 'w', encoding='utf-8') as handle:
+    stdout_path = os.path.join(log_dir, f'attempt-{attempt_id}.stdout.log')
+    stderr_path = os.path.join(log_dir, f'attempt-{attempt_id}.stderr.log')
+    with open(stdout_path, 'w', encoding='utf-8') as handle:
         handle.write(result.stdout or '')
-    with open(os.path.join(log_dir, f'attempt-{attempt_id}.stderr.log'), 'w', encoding='utf-8') as handle:
+    with open(stderr_path, 'w', encoding='utf-8') as handle:
         handle.write(result.stderr or '')
-    with open(os.path.join(log_dir, f'attempt-{attempt_id}.files.txt'), 'w', encoding='utf-8') as handle:
-        for entry in chunk:
-            handle.write(entry + '\n')
+    return stdout_path, stderr_path
 
 
 def run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter):
     retries = 0
+    pch_dir = os.path.join(pch_root, 'current')
+    os.makedirs(pch_dir, exist_ok=True)
     while True:
         attempt_counter[0] += 1
         attempt_id = attempt_counter[0]
-        attempt_pch_dir = os.path.join(pch_root, f'attempt-{attempt_id}')
-        os.makedirs(attempt_pch_dir, exist_ok=True)
-        clangd_wrapper = create_attempt_clangd_wrapper(log_dir, clangd_binary, attempt_pch_dir, attempt_id)
+        clangd_wrapper = create_attempt_clangd_wrapper(log_dir, clangd_binary, pch_dir, attempt_id)
         command = base_command + ['--clangd-executable', clangd_wrapper] + chunk
+        start = time.monotonic()
+        print_status(f'attempt {attempt_id} (retry {retries}/{MAX_RETRIES}, files {len(chunk)}): {chunk[0]}')
         result = subprocess.run(command, check=False, cwd=repo_root, env=env, text=True, capture_output=True)
-        write_attempt_logs(log_dir, attempt_id, chunk, result)
+        elapsed = time.monotonic() - start
+        stdout_path, stderr_path = write_attempt_logs(log_dir, attempt_id, chunk, result)
+        pch_size = format_bytes(directory_size(pch_dir))
+        print_status(f'attempt {attempt_id} finished exit={result.returncode} in {elapsed:.1f}s; pch size: {pch_size}')
         if result.returncode == 0:
-            return True
-        if retries >= MAX_RETRIES or not is_retryable_failure(result):
-            return False
+            return None
+        retryable = is_retryable_failure(result)
+        if retries >= MAX_RETRIES or not retryable:
+            if retryable:
+                print_status(
+                    f'retry limit reached after attempt {attempt_id}; '
+                    f'not retrying. stdout: {stdout_path}; stderr: {stderr_path}'
+                )
+                reset_pch_dir(pch_dir)
+            else:
+                print_output_tail('stdout', result.stdout)
+                print_output_tail('stderr', result.stderr)
+                reset_pch_dir(pch_dir)
+            return {
+                'attempt_id': attempt_id,
+                'stdout_path': stdout_path,
+                'stderr_path': stderr_path,
+                'retryable': retryable,
+            }
+        reset_pch_dir(pch_dir)
         delay = (RETRY_BACKOFF_MS / 1000.0) * (2**retries) + random.uniform(0.0, 0.2)
+        print_status(
+            f'retrying clangd-tidy after attempt {attempt_id}; retry {retries + 1}/{MAX_RETRIES} '
+            f'in {delay:.2f}s. stdout: {stdout_path}; stderr: {stderr_path}'
+        )
         time.sleep(delay)
         retries += 1
 
 
 def process_chunk(
-    base_command, chunk, repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter, hard_failures
+    base_command, chunk, chunk_index, chunk_count, repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter
 ):
-    ok = run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter)
-    if ok:
-        return
-    if len(chunk) == 1:
-        hard_failures.append(chunk[0])
-        return
-    mid = len(chunk) // 2
-    process_chunk(
-        base_command, chunk[:mid], repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter, hard_failures
+    failure = run_chunk_with_retries(
+        base_command, chunk, repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter
     )
-    process_chunk(
-        base_command, chunk[mid:], repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter, hard_failures
+    if not failure:
+        return None
+    failure.update(
+        {
+            'chunk_index': chunk_index,
+            'chunk_count': chunk_count,
+            'file_count': len(chunk),
+            'first_file': chunk[0],
+        }
     )
+    return failure
 
 
 def main():
@@ -177,8 +287,8 @@ def main():
     except Exception:
         print('Unable to run clangd-tidy or clangd.', file=sys.stderr)
         return 1
-    print(f'Using clangd-tidy: {clangd_tidy_version}')
-    print(f'Using clangd: {clangd_version}')
+    print_status(f'Using clangd-tidy: {clangd_tidy_version}')
+    print_status(f'Using clangd: {clangd_version}')
 
     log_dir = os.path.join(build_path, 'clangd-tidy-logs')
     os.makedirs(log_dir, exist_ok=True)
@@ -199,27 +309,41 @@ def main():
     run_env['PYTHONUNBUFFERED'] = '1'
 
     attempt_counter = [0]
-    hard_failures = []
-    for chunk in chunk_files(files):
-        process_chunk(
+    failed_chunks = []
+    chunks = list(chunk_files(files))
+    print_status(f'Running clangd-tidy on {len(files)} files in {len(chunks)} chunks')
+    for chunk_index, chunk in enumerate(chunks, 1):
+        failure = process_chunk(
             base_command,
             chunk,
+            chunk_index,
+            len(chunks),
             repo_root,
             run_env,
             log_dir,
             pch_root,
             args.clangd_binary,
             attempt_counter,
-            hard_failures,
         )
+        if failure:
+            failed_chunks.append(failure)
+            if len(failed_chunks) >= MAX_FAILED_CHUNKS:
+                print_status(f'failed chunk limit reached ({MAX_FAILED_CHUNKS}); stopping clangd-tidy')
+                break
 
-    if hard_failures:
-        print('clangd-tidy hard failures after retries:', file=sys.stderr)
-        for failed in hard_failures:
-            print(f'  {failed}', file=sys.stderr)
-    print(f'clangd-tidy logs written to: {log_dir}')
+    if failed_chunks:
+        print_status('clangd-tidy failed chunks after retries:', file=sys.stderr)
+        for failure in failed_chunks:
+            print_status(
+                f"  chunk {failure['chunk_index']}/{failure['chunk_count']}, "
+                f"attempt {failure['attempt_id']}, files {failure['file_count']}, "
+                f"first file: {failure['first_file']}, stdout: {failure['stdout_path']}, "
+                f"stderr: {failure['stderr_path']}",
+                file=sys.stderr,
+            )
+    print_status(f'clangd-tidy logs written to: {log_dir}')
 
-    return 1 if hard_failures else 0
+    return 1 if failed_chunks else 0
 
 
 if __name__ == '__main__':

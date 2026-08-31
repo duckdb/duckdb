@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 		column_name = Identifier(identifier.back());
 		identifier.pop_back();
 		if (identifier.empty()) {
-			throw ParserException("Invalid column reference: '%s'", column_name.GetIdentifierName());
+			throw ParserException("Invalid column reference: %s", SQLIdentifier(column_name));
 		}
 		auto qualified_name = StringToQualifiedName(identifier);
 		info = make_uniq<SetColumnCommentInfo>(qualified_name.Catalog(), qualified_name.Schema(), qualified_name.Name(),
@@ -83,14 +83,8 @@ CatalogType PEGTransformerFactory::TransformCommentColumn(PEGTransformer &transf
 	return CatalogType::INVALID;
 }
 
-Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer, ParseResult &choice_result) {
-	// CommentValue <- NullLiteral / StringLiteral
-	auto &list_pr = choice_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.GetResult().type == ParseResultType::STRING) {
-		return Value(choice_pr.GetResult().Cast<StringLiteralParseResult>().result);
-	}
-	return transformer.Transform<Value>(choice_pr.GetResult());
+Value PEGTransformerFactory::TransformStringLiteralValue(PEGTransformer &transformer, const string &string_literal) {
+	return Value(string_literal);
 }
 
 } // namespace duckdb

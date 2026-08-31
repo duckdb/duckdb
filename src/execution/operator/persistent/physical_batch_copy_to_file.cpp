@@ -11,6 +11,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_type.hpp"
 
@@ -45,6 +46,10 @@ InsertionOrderPreservingMap<string> PhysicalBatchCopyToFile::ParamsToString() co
 	InsertionOrderPreservingMap<string> result;
 	result["FORMAT"] = StringUtil::Upper(function.name.GetIdentifierName());
 	return result;
+}
+
+OperatorPartitionInfo PhysicalBatchCopyToFile::RequiredPartitionInfo() const {
+	return OperatorPartitionInfo::BatchIndex(batch_size.IsValid() ? batch_size : optional_idx(DEFAULT_ROW_GROUP_SIZE));
 }
 
 //===--------------------------------------------------------------------===//
@@ -663,6 +668,13 @@ SinkNextBatchType PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context,
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
 
 	state.InitializeCollection(context.client, *this);
+	return SinkNextBatchType::READY;
+}
+
+SinkNextBatchType PhysicalBatchCopyToFile::UpdateMinBatchIndex(ExecutionContext &,
+                                                               OperatorSinkNextBatchInput &input) const {
+	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
+	gstate.memory_manager.UpdateMinBatchIndex(input.local_state.partition_info.min_batch_index.GetIndex());
 	return SinkNextBatchType::READY;
 }
 

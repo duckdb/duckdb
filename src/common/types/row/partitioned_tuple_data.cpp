@@ -1,4 +1,5 @@
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
@@ -330,6 +331,13 @@ void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleD
 	if (partitions.size() == new_partitioned_data.partitions.size()) {
 		new_partitioned_data.Combine(*this);
 		return;
+	}
+
+	// Repartitioning only ever goes to more partitions - fewer would underflow the partition math and index
+	// out of bounds, so throw instead of corrupting memory.
+	if (partitions.size() > new_partitioned_data.partitions.size()) {
+		throw InternalException("PartitionedTupleData::Repartition into fewer partitions (%llu -> %llu)",
+		                        partitions.size(), new_partitioned_data.partitions.size());
 	}
 
 	PartitionedTupleDataAppendState append_state;

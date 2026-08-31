@@ -1,9 +1,11 @@
 add_library_unity(
   duckdb_bind_statement
   OBJECT
+  bind_alter.cpp
   bind_attach.cpp
   bind_call.cpp
   bind_connect.cpp
+  bind_external_resource.cpp
   bind_copy.cpp
   bind_copy_database.cpp
   bind_create.cpp
@@ -24,8 +26,8 @@ add_library_unity(
   bind_relation.cpp
   bind_select.cpp
   bind_set.cpp
-  bind_simple.cpp
   bind_summarize.cpp
+  bind_transaction.cpp
   bind_update.cpp
   bind_update_extensions.cpp
   bind_vacuum.cpp)

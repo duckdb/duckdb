@@ -55,7 +55,7 @@ typedef struct RNG_T {
 	ds_key_t nTotal;
 #endif
 } rng_t;
-extern rng_t Streams[];
+extern thread_local rng_t Streams[];
 
 #define FL_SEED_OVERRUN 0x0001
 

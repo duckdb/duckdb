@@ -33,4 +33,19 @@ struct DBGenWrapper {
 	static std::string GetAnswer(double sf, int query);
 };
 
+class DBGenGenerator {
+public:
+	virtual ~DBGenGenerator();
+
+	//! Generate the next batch of data, returning true when generation is complete
+	virtual bool GenerateNext() = 0;
+	//! Returns the progress percentage in [0, 100]
+	virtual double Progress() const = 0;
+};
+
+duckdb::unique_ptr<DBGenGenerator> CreateDBGenGenerator(duckdb::ClientContext &context, double sf,
+                                                        const duckdb::Identifier &catalog,
+                                                        const duckdb::Identifier &schema, std::string suffix,
+                                                        int children, int step);
+
 } // namespace tpch

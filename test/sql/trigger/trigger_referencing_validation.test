@@ -25,14 +25,15 @@ FOR EACH STATEMENT
 ----
 Binder Error: REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers
 
-# REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers
-statement error
+# REFERENCING OLD TABLE AS is now supported for AFTER UPDATE triggers
+statement ok
+CREATE TABLE t_old_upd_log (id INTEGER);
+
+statement ok
 CREATE TRIGGER trg_old_on_update AFTER UPDATE ON t
 REFERENCING OLD TABLE AS old_rows
 FOR EACH STATEMENT
-    INSERT INTO t VALUES (1);
-----
-Not implemented Error: REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers
+    INSERT INTO t_old_upd_log SELECT id FROM old_rows;
 
 # Transition tables can only be used with AFTER triggers
 statement ok
@@ -108,21 +109,21 @@ FOR EACH STATEMENT
 ----
 Binder Error: REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers
 
-statement error
+# Both transition tables on AFTER UPDATE are now supported, in either REFERENCING order
+statement ok
+CREATE TABLE t_both_upd_log (id INTEGER);
+
+statement ok
 CREATE TRIGGER trg_both_upd AFTER UPDATE ON t
 REFERENCING NEW TABLE AS new_rows OLD TABLE AS old_rows
 FOR EACH STATEMENT
-    INSERT INTO t VALUES (1);
-----
-Not implemented Error: REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers
+    INSERT INTO t_both_upd_log SELECT n.id FROM old_rows o JOIN new_rows n ON o.id = n.id;
 
-statement error
+statement ok
 CREATE TRIGGER trg_both_upd2 AFTER UPDATE ON t
 REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
 FOR EACH STATEMENT
-    INSERT INTO t VALUES (1);
-----
-Not implemented Error: REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers
+    INSERT INTO t_both_upd_log SELECT o.id FROM old_rows o JOIN new_rows n ON o.id = n.id;
 
 # Specifying the same transition table type twice is rejected at parse time
 statement error

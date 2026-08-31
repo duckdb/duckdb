@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/in_memory_checkpoint.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"

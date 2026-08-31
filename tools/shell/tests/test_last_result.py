@@ -84,5 +84,41 @@ def test_last_result_alias_self_join(shell):
     assert 'd1' not in result.stderr
     result.check_stdout("a")
 
+def test_last_result_common_subplan_column_pruning(shell):
+    common_subplan_query = """
+        SELECT sum(a)
+        FROM (
+            SELECT retained.a
+            FROM _ AS retained
+            JOIN range(100) generated ON retained.a = generated.range
+        )
+        UNION ALL
+        SELECT sum(b)
+        FROM (
+            SELECT retained.b
+            FROM _ AS retained
+            JOIN range(100) generated ON retained.a = generated.range
+        )
+    """
+    retained_result = """
+        SELECT i::BIGINT AS a, (i * 10)::BIGINT AS b
+        FROM range(100) t(i)
+    """
+    test = (
+        ShellTest(shell)
+        .statement(".maxrows 2")
+        .statement("SET profiling_renderer_settings = MAP {'operator_casing': 'upper'}")
+        .statement("PRAGMA explain_output='optimized_only'")
+        .statement(retained_result)
+        .statement("EXPLAIN " + common_subplan_query)
+        .statement(retained_result)
+        .statement(common_subplan_query)
+    )
+    result = test.run()
+    result.check_stdout("__common_subplan_1")
+    assert result.stdout.count("CTE_SCAN") == 2
+    assert "4950" in result.stdout
+    assert "49500" in result.stdout
+
 
 # fmt: on

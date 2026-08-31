@@ -1,6 +1,8 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 

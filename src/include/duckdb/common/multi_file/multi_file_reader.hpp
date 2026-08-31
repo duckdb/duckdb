@@ -9,6 +9,9 @@
 #pragma once
 
 #include "duckdb/common/enums/file_glob_options.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/execution/partition_info.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -26,6 +29,19 @@ class ClientContext;
 class DataChunk;
 
 enum class ReaderInitializeType { INITIALIZED, SKIP_READING_FILE };
+
+struct MultiFileDynamicPushdownInfo {
+	MultiFileDynamicPushdownInfo(ClientContext &context, const MultiFileOptions &options,
+	                             const vector<Identifier> &column_names, const vector<LogicalType> &column_types,
+	                             const vector<ColumnIndex> &column_indexes, TableFilterSet &filters);
+	ClientContext &context;
+	const MultiFileOptions &options;
+	const vector<Identifier> &column_names;
+	const vector<LogicalType> &column_types;
+	const vector<ColumnIndex> &column_indexes;
+	vector<column_t> column_ids;
+	TableFilterSet &filters;
+};
 
 struct MultiFileReaderVirtualColumnBinding {
 public:
@@ -113,17 +129,15 @@ public:
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
-	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileOptions &options,
+	DUCKDB_API virtual bool ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
 	                                    ClientContext &context);
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
 	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
 	                                                                   const MultiFileOptions &options,
 	                                                                   MultiFilePushdownInfo &info,
 	                                                                   vector<unique_ptr<Expression>> &filters);
-	DUCKDB_API virtual unique_ptr<MultiFileList>
-	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileOptions &options,
-	                      const vector<Identifier> &names, const vector<LogicalType> &types,
-	                      const vector<column_t> &column_ids, TableFilterSet &filters);
+	DUCKDB_API virtual unique_ptr<MultiFileList> DynamicFilterPushdown(const MultiFileList &files,
+	                                                                   MultiFileDynamicPushdownInfo &pushdown_info);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
 	//! directly.

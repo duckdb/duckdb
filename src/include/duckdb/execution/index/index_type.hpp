@@ -14,12 +14,14 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
 
 class BoundIndex;
 class PhysicalOperator;
+class PhysicalPlanGenerator;
+class DataChunk;
+struct CreateIndexInfo;
 class LogicalCreateIndex;
 enum class IndexConstraintType : uint8_t;
 class Expression;

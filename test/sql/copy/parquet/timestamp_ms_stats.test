@@ -20,3 +20,26 @@ select timestamp from '{DATA_DIR}/parquet-testing/issue_5533_timestamp_ms_stats.
 2022-11-27 17:42:44.28
 2022-11-27 17:42:44.28
 
+statement ok
+CREATE TABLE timestamp_ms_infinity(ts TIMESTAMP_MS)
+
+statement ok
+INSERT INTO timestamp_ms_infinity VALUES ('-infinity'), ('infinity')
+
+statement ok
+COPY timestamp_ms_infinity TO '{TEST_DIR}/timestamp_ms_infinity.parquet' (FORMAT parquet)
+
+query II
+SELECT ts::VARCHAR, isinf(ts)
+FROM read_parquet('{TEST_DIR}/timestamp_ms_infinity.parquet')
+ORDER BY ts
+----
+-infinity	true
+infinity	true
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/timestamp_ms_infinity.parquet')
+WHERE ts IN ('-infinity'::TIMESTAMP_MS, 'infinity'::TIMESTAMP_MS)
+----
+2

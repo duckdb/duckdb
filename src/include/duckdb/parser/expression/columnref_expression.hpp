@@ -40,7 +40,6 @@ public:
 
 	bool IsQualified() const;
 	const Identifier &GetColumnName() const;
-	const Identifier &GetTableName() const;
 	bool IsScalar() const override {
 		return false;
 	}

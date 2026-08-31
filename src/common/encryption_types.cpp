@@ -1,4 +1,5 @@
 #include "duckdb/common/encryption_types.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 

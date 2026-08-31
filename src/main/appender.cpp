@@ -80,7 +80,7 @@ void BaseAppender::EndRow() {
 		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
-	chunk.SetChildCardinality(chunk.size() + 1);
+	chunk.SetCardinalityUnsafe(chunk.size() + 1);
 	if (ShouldFlushChunk()) {
 		FlushChunk();
 	}
@@ -321,10 +321,10 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 	if (value.type() == target.GetTypes()[col]) {
 		target.data[col].SetValue(row, value);
 	} else {
-		Value new_value;
 		string error_msg;
-		if (value.DefaultTryCastAs(target.GetTypes()[col], new_value, &error_msg)) {
-			target.data[col].SetValue(row, new_value);
+		auto new_value = value.DefaultTryCastAs(target.GetTypes()[col], &error_msg);
+		if (new_value) {
+			target.data[col].SetValue(row, *new_value);
 		} else {
 			throw InvalidInputException("type mismatch in Append, expected %s, got %s for column %d",
 			                            target.GetTypes()[col], value.type(), col);
@@ -395,6 +395,7 @@ void BaseAppender::FlushChunk() {
 	if (chunk.size() == 0) {
 		return;
 	}
+	chunk.SetChildCardinality(chunk.size());
 	collection->Append(chunk);
 	chunk.Reset();
 	if (ShouldFlush()) {
@@ -511,8 +512,8 @@ Appender::Appender(Connection &con, const Identifier &database_name, const Ident
 
 	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
-		throw CatalogException(
-		    StringUtil::Format("Table \"%s.%s.%s\" could not be found", database_name, schema_name, table_name));
+		throw CatalogException(StringUtil::Format("Table '%s.%s.%s' could not be found", SQLIdentifier(database_name),
+		                                          SQLIdentifier(schema_name), SQLIdentifier(table_name)));
 	}
 	if (description->readonly) {
 		throw InvalidInputException("Cannot append to a readonly database.");

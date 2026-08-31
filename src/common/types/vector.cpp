@@ -19,6 +19,9 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -354,9 +357,9 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 
 Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	auto value = GetValueInternal(v_p, index_p);
-	// set the alias of the type to the correct value, if there is a type alias
+	// the value's type is reconstructed from the data - restore the source type so that the alias survives
 	if (v_p.GetType().HasAlias()) {
-		value.GetTypeMutable().CopyAuxInfo(v_p.GetType());
+		value = value.WithType(v_p.GetType());
 	}
 	if (v_p.GetType().id() != LogicalTypeId::LEGACY_AGGREGATE_STATE &&
 	    value.type().id() != LogicalTypeId::LEGACY_AGGREGATE_STATE) {

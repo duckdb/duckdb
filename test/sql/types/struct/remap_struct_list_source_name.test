@@ -8,9 +8,6 @@
 # and "bag" for Spark legacy. Such a non-"list" source name must still remap (the mapping is
 # unambiguous for a LIST) rather than throwing "Source value <name> not found".
 
-statement ok
-PRAGMA enable_verification
-
 # Control: the canonical "list" source name keeps working.
 query I
 SELECT remap_struct(

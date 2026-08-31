@@ -42,11 +42,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		callback(case_expr.ElseMutable());
 		break;
 	}
-	case ExpressionClass::BOUND_CAST: {
-		auto &cast_expr = expr.Cast<BoundCastExpression>();
-		callback(cast_expr.ChildMutable());
-		break;
-	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : conj_expr.GetChildrenMutable()) {

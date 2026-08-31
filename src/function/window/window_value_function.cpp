@@ -9,7 +9,6 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/function/window/value_functions.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/main/settings.hpp"
@@ -358,11 +357,11 @@ public:
 			if (offset_value.IsNull()) {
 				return false;
 			}
-			Value bigint_value;
-			if (!offset_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+			auto bigint_value = offset_value.DefaultTryCastAs(LogicalType::BIGINT);
+			if (!bigint_value) {
 				return false;
 			}
-			offset = bigint_value.GetValue<int64_t>();
+			offset = bigint_value->GetValue<int64_t>();
 		}
 
 		//	We can only support LEAD and LAG values within one standard vector
@@ -383,7 +382,12 @@ public:
 			return false;
 		}
 		auto dflt_value = ExpressionExecutor::EvaluateScalar(client, *default_expr);
-		return dflt_value.DefaultTryCastAs(wexpr.GetReturnType(), result, nullptr, false);
+		auto cast_value = dflt_value.DefaultTryCastAs(wexpr.GetReturnType());
+		if (!cast_value) {
+			return false;
+		}
+		result = std::move(*cast_value);
+		return true;
 	}
 
 	WindowLeadLagStreamingState(ClientContext &context, const BoundWindowExpression &wexpr)
@@ -646,7 +650,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 			}
 
 			// (1) compute the ROW_NUMBER of the own row
-			frame = FrameBounds(frame_begin[i], frame_end[i]);
+			frame = FrameBounds(frame_begin[i], MaxValue(frame_end[i], frame_begin[i]));
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
 			auto val_idx = NumericCast<int64_t>(own_row);
@@ -785,7 +789,12 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 			return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
 			       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 		}
-		return true;
+		// We can stream first values if the frame start is fixed at the partition start
+		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
+		       (wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS ||
+		        wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_RANGE ||
+		        wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_GROUPS ||
+		        wexpr.WindowEnd() == WindowBoundary::UNBOUNDED_FOLLOWING);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
 	                       Vector &result, LocalSourceState &state);
@@ -842,6 +851,7 @@ WindowFunction FirstValueFun::GetFunction() {
 	fun.SetCanStreamCallback(WindowFirstValueExecutor::CanStream);
 	fun.SetStreamingStateCallback(WindowFirstValueExecutor::GetStreamingState);
 	fun.SetStreamingDataCallback(WindowFirstValueExecutor::StreamData);
+	fun.SetCanExclude(true);
 	return fun;
 }
 
@@ -863,11 +873,11 @@ void WindowFirstValueExecutor::GetData(ExecutionContext &context, DataChunk &eva
 
 			if (frame_width) {
 				const auto first_idx = gvstate.value_tree->SelectNth(frames, 0);
-				D_ASSERT(first_idx.second == 0);
-				if (first_idx.first < cursor.Count()) {
-					cursor.CopyCell(0, first_idx.first, result, i);
-				} else {
+				if (first_idx.second || first_idx.first >= cursor.Count()) {
+					//	No first value - give up.
 					FlatVector::SetNull(result, i, true);
+				} else {
+					cursor.CopyCell(0, first_idx.first, result, i);
 				}
 			} else {
 				FlatVector::SetNull(result, i, true);
@@ -963,6 +973,7 @@ WindowFunction LastValueFun::GetFunction() {
 	fun.SetCanStreamCallback(WindowLastValueExecutor::CanStream);
 	fun.SetStreamingStateCallback(WindowLastValueExecutor::GetStreamingState);
 	fun.SetStreamingDataCallback(WindowLastValueExecutor::StreamData);
+	fun.SetCanExclude(true);
 	return fun;
 }
 
@@ -1035,13 +1046,13 @@ public:
 		if (nth_value.IsNull()) {
 			return false;
 		}
-		Value bigint_value;
-		if (!nth_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+		auto bigint_value = nth_value.DefaultTryCastAs(LogicalType::BIGINT);
+		if (!bigint_value) {
 			return false;
 		}
 		//	Unlike PG we are currently accepting negative indices and mapping them to 0.
 		//	Streaming this will have the same behaviour if we use a 0 index.
-		const auto bigint = bigint_value.GetValue<int64_t>();
+		const auto bigint = bigint_value->GetValue<int64_t>();
 		nth_index = bigint > 0 ? UnsafeNumericCast<idx_t>(bigint) : 0;
 		return true;
 	}
@@ -1138,6 +1149,7 @@ WindowFunction NthValueFun::GetFunction() {
 	fun.SetCanStreamCallback(WindowNthValueExecutor::CanStream);
 	fun.SetStreamingStateCallback(WindowNthValueExecutor::GetStreamingState);
 	fun.SetStreamingDataCallback(WindowNthValueExecutor::StreamData);
+	fun.SetCanExclude(true);
 	return fun;
 }
 
@@ -1247,12 +1259,17 @@ static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_vali
 	const auto x0 = LossyFillCast<double>(cursor.GetCell<T>(0, prev_valid));
 	const auto x1 = LossyFillCast<double>(cursor.GetCell<T>(0, next_valid));
 
-	const auto den = (x1 - x0);
+	auto den = (x1 - x0);
 	if (den == 0) {
 		// Duplicate X values, so pick the first.
 		return 0;
 	}
-	const auto num = (x - x0);
+	auto num = x - x0;
+	if (!std::isfinite(den)) {
+		const auto scale = MaxValue(std::abs(x0), std::abs(x1));
+		num = x / scale - x0 / scale;
+		den = x1 / scale - x0 / scale;
+	}
 	return num / den;
 }
 
@@ -1295,7 +1312,7 @@ struct TryExtrapolateOperator {
 		if (lo > hi) {
 			return Operation<T>(hi, -d, lo, result);
 		}
-		const auto delta = LossyNumericCast<double>(hi - lo);
+		const auto delta = LossyNumericCast<double>(hi) - LossyNumericCast<double>(lo);
 		T offset;
 		if (d < 0) {
 			if (!TryCast::Operation(delta * (-d), offset)) {

@@ -1,0 +1,440 @@
+# name: test/sql/aggregate/distinct/rewrite/distinct_aggregate_rewrite.test
+# description: DISTINCT aggregate logical rewrites
+# group: [rewrite]
+
+statement ok
+CREATE TABLE distinct_rewrite AS
+	SELECT i % 4 AS g, CASE WHEN i % 5 = 0 THEN NULL ELSE i % 7 END AS x, i % 11 AS y
+	FROM range(100) tbl(i);
+
+# ungrouped shared distinct input
+query III
+SELECT count(DISTINCT x), sum(DISTINCT x), avg(DISTINCT x) FROM distinct_rewrite;
+----
+7	21	3
+
+# grouped shared distinct input
+query III
+SELECT g, count(DISTINCT x), sum(DISTINCT x)
+FROM distinct_rewrite
+GROUP BY g
+ORDER BY g;
+----
+0	7	21
+1	7	21
+2	7	21
+3	7	21
+
+# ungrouped mixed distinct/non-distinct aggregates
+query IIII
+SELECT count(DISTINCT x), count(DISTINCT y), sum(DISTINCT x), sum(y)
+FROM distinct_rewrite;
+----
+7	11	21	495
+
+# optimizer-generated CTEs use direct streaming fan-out
+query II
+EXPLAIN ANALYZE
+SELECT count(DISTINCT x), count(DISTINCT y)
+FROM distinct_rewrite;
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 2.*Buffered Consumers: 0.*
+
+# grouped mixed distinct/non-distinct aggregates
+query III
+SELECT g, count(DISTINCT x), sum(y)
+FROM distinct_rewrite
+GROUP BY g
+ORDER BY g;
+----
+0	7	122
+1	7	125
+2	7	128
+3	7	120
+
+statement ok
+CREATE TABLE distinct_rewrite_nulls(g INTEGER, x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO distinct_rewrite_nulls VALUES
+	(NULL, NULL, 1),
+	(NULL, NULL, 2),
+	(1, NULL, 3),
+	(1, 4, 4),
+	(1, 4, 5),
+	(2, 5, 6),
+	(2, NULL, 7);
+
+# multi distinct inputs with NULL group keys
+query IIIII
+SELECT g, count(DISTINCT x), count(DISTINCT y), sum(DISTINCT x), sum(y)
+FROM distinct_rewrite_nulls
+GROUP BY g
+ORDER BY g NULLS FIRST;
+----
+NULL	0	2	NULL	3
+1	1	3	4	12
+2	1	2	5	13
+
+# empty ungrouped input
+query III
+SELECT count(DISTINCT x), sum(DISTINCT x), avg(DISTINCT x)
+FROM distinct_rewrite_nulls
+WHERE false;
+----
+0	NULL	NULL
+
+statement ok
+CREATE TABLE distinct_rewrite_order(g INTEGER, s VARCHAR, y INTEGER, keep BOOLEAN);
+
+statement ok
+INSERT INTO distinct_rewrite_order VALUES
+	(1, 'a', 2, true),
+	(1, 'b', 1, false),
+	(1, 'b', 4, true),
+	(1, 'c', 3, true),
+	(2, 'a', 5, false),
+	(2, 'd', 1, true),
+	(2, 'd', 2, true),
+	(3, NULL, 3, true);
+
+# distinct aggregate ORDER BY
+query IT
+SELECT count(DISTINCT s), string_agg(DISTINCT s, ',' ORDER BY s DESC)
+FROM distinct_rewrite_order;
+----
+4	d,c,b,a
+
+# distinct aggregate ORDER BY derived from its argument
+query T
+SELECT string_agg(DISTINCT s, ',' ORDER BY unicode(s) DESC)
+FROM distinct_rewrite_order;
+----
+d,c,b,a
+
+# grouped distinct aggregate ORDER BY
+query IT
+SELECT g, string_agg(DISTINCT s, ',' ORDER BY s DESC)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	c,b,a
+2	d,a
+3	NULL
+
+# regular aggregate filters can be kept in the regular branch
+query III
+SELECT g, count(DISTINCT s), sum(y) FILTER (WHERE keep)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	3	9
+2	2	3
+3	0	3
+
+# regular aggregate ORDER BY can be kept in the regular branch
+query IIT
+SELECT g, count(DISTINCT s), string_agg(y::VARCHAR, ',' ORDER BY y DESC)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	3	4,3,2,1
+2	2	5,2,1
+3	0	3
+
+# ungrouped distinct aggregate filters
+query IT
+SELECT count(DISTINCT s) FILTER (WHERE keep),
+       string_agg(DISTINCT s, ',' ORDER BY s DESC) FILTER (WHERE keep)
+FROM distinct_rewrite_order;
+----
+4	d,c,b,a
+
+# grouped distinct aggregate filters preserve groups with no matching distinct values
+query II
+SELECT g, count(DISTINCT x) FILTER (WHERE y > 3)
+FROM distinct_rewrite_nulls
+GROUP BY g
+ORDER BY g NULLS FIRST;
+----
+NULL	0
+1	1
+2	1
+
+# grouped distinct aggregate filters can be combined with ORDER BY
+query IIT
+SELECT g,
+       count(DISTINCT s) FILTER (WHERE keep),
+       string_agg(DISTINCT s, ',' ORDER BY s DESC) FILTER (WHERE keep)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	3	c,b,a
+2	1	d
+3	0	NULL
+
+# same distinct arguments with different filters are separate branches
+query III
+SELECT g,
+       count(DISTINCT s) FILTER (WHERE keep),
+       count(DISTINCT s) FILTER (WHERE NOT keep)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	3	1
+2	1	1
+3	0	0
+
+# filtered grouped list aggregates must see empty inputs, not artificial left-join NULLs
+query II
+SELECT g, list(DISTINCT s ORDER BY s) FILTER (WHERE keep AND y < 0)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	NULL
+2	NULL
+3	NULL
+
+statement ok
+CREATE TABLE distinct_rewrite_filter_errors(g INTEGER, value VARCHAR, keep BOOLEAN);
+
+statement ok
+INSERT INTO distinct_rewrite_filter_errors VALUES (1, 'bad', false), (1, '1', true);
+
+# FILTER does not suppress evaluation errors in aggregate arguments
+statement error
+SELECT count(DISTINCT value::INTEGER) FILTER (WHERE keep)
+FROM distinct_rewrite_filter_errors;
+----
+<REGEX>:Conversion Error:.*
+
+statement error
+SELECT g, count(DISTINCT value::INTEGER) FILTER (WHERE keep)
+FROM distinct_rewrite_filter_errors
+GROUP BY g;
+----
+<REGEX>:Conversion Error:.*
+
+# FILTER also does not suppress evaluation errors in a derived aggregate order
+statement error
+SELECT string_agg(DISTINCT value, ',' ORDER BY value::INTEGER) FILTER (WHERE keep)
+FROM distinct_rewrite_filter_errors;
+----
+<REGEX>:Conversion Error:.*
+
+# GROUPING() with a regular GROUP BY is constant after rewrite
+query III
+SELECT GROUPING(g), g, count(DISTINCT x)
+FROM distinct_rewrite_nulls
+GROUP BY g
+ORDER BY g NULLS FIRST;
+----
+0	NULL	0
+0	1	1
+0	2	1
+
+# DISTINCT aggregate state export is finalized over the deduplicated rows
+query II
+SELECT finalize(sum(DISTINCT x) EXPORT_STATE),
+       finalize(count(DISTINCT x) EXPORT_STATE)
+FROM distinct_rewrite_nulls;
+----
+9	2
+
+statement ok
+CREATE TABLE part(p_partkey BIGINT NOT NULL, p_brand VARCHAR NOT NULL, p_type VARCHAR NOT NULL,
+                  p_size INTEGER NOT NULL);
+
+statement ok
+CREATE TABLE partsupp(ps_partkey BIGINT NOT NULL, ps_suppkey BIGINT NOT NULL);
+
+statement ok
+CREATE TABLE supplier(s_suppkey BIGINT NOT NULL, s_comment VARCHAR NOT NULL);
+
+statement ok
+INSERT INTO part VALUES
+	(1, 'Brand#11', 'SMALL BRUSHED', 49),
+	(2, 'Brand#11', 'SMALL BRUSHED', 49),
+	(3, 'Brand#45', 'SMALL BRUSHED', 49),
+	(4, 'Brand#22', 'MEDIUM POLISHED STEEL', 14),
+	(5, 'Brand#22', 'LARGE BRUSHED', 3),
+	(6, 'Brand#33', 'LARGE BRUSHED', 2);
+
+statement ok
+INSERT INTO partsupp VALUES
+	(1, 10), (1, 20), (2, 10), (2, 30),
+	(3, 60), (4, 70), (5, 40), (5, 50), (6, 80);
+
+statement ok
+INSERT INTO supplier VALUES
+	(10, 'regular supplier'),
+	(20, 'Customer service Complaints pending'),
+	(30, 'regular supplier'),
+	(40, 'regular supplier'),
+	(50, 'regular supplier'),
+	(60, 'regular supplier'),
+	(70, 'regular supplier'),
+	(80, 'regular supplier');
+
+# TPC-H Q16 shape, including ORDER BY on the DISTINCT aggregate result
+query TTII
+SELECT p_brand, p_type, p_size, count(DISTINCT ps_suppkey) AS supplier_cnt
+FROM partsupp, part
+WHERE p_partkey = ps_partkey
+  AND p_brand <> 'Brand#45'
+  AND p_type NOT LIKE 'MEDIUM POLISHED%'
+  AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
+  AND ps_suppkey NOT IN (
+      SELECT s_suppkey FROM supplier WHERE s_comment LIKE '%Customer%Complaints%')
+GROUP BY p_brand, p_type, p_size
+ORDER BY supplier_cnt DESC, p_brand, p_type, p_size;
+----
+Brand#11	SMALL BRUSHED	49	2
+Brand#22	LARGE BRUSHED	3	2
+
+statement ok
+CREATE TABLE distinct_rewrite_grouping_sets(course VARCHAR, type VARCHAR, value INTEGER);
+
+statement ok
+INSERT INTO distinct_rewrite_grouping_sets VALUES
+	('CS', 'B', 1),
+	('CS', 'P', 1),
+	('CS', 'P', 2),
+	('Math', 'M', 2),
+	('Math', 'M', 2),
+	('Math', NULL, 3);
+
+# grouping sets with distinct aggregates are expanded before the distinct rewrite
+query TTIIII
+SELECT course, type, sum(DISTINCT value), count(DISTINCT value), GROUPING(course), GROUPING(type)
+FROM distinct_rewrite_grouping_sets
+GROUP BY CUBE(course, type)
+ORDER BY GROUPING(course), GROUPING(type), course, type NULLS FIRST;
+----
+CS	B	1	1	0	0
+CS	P	3	2	0	0
+Math	NULL	3	1	0	0
+Math	M	2	1	0	0
+CS	NULL	3	2	0	1
+Math	NULL	5	2	0	1
+NULL	NULL	3	1	1	0
+NULL	B	1	1	1	0
+NULL	M	2	1	1	0
+NULL	P	3	2	1	0
+NULL	NULL	6	3	1	1
+
+# state-export distinct aggregates also go through the grouping-set expansion
+query TTIII
+SELECT course, type, finalize(sum(DISTINCT value) EXPORT_STATE), GROUPING(course), GROUPING(type)
+FROM distinct_rewrite_grouping_sets
+GROUP BY CUBE(course, type)
+ORDER BY GROUPING(course), GROUPING(type), course, type NULLS FIRST;
+----
+CS	B	1	0	0
+CS	P	3	0	0
+Math	NULL	3	0	0
+Math	M	2	0	0
+CS	NULL	3	0	1
+Math	NULL	5	0	1
+NULL	NULL	3	1	0
+NULL	B	1	1	0
+NULL	M	2	1	0
+NULL	P	3	1	0
+NULL	NULL	6	1	1
+
+statement ok
+PRAGMA disable_verification
+
+statement ok
+CREATE SEQUENCE distinct_rewrite_seq_count START 1;
+
+statement ok
+CREATE SEQUENCE distinct_rewrite_seq_sum START 1;
+
+# each volatile DISTINCT argument is staged and evaluated once per row
+query II
+SELECT count(DISTINCT nextval('distinct_rewrite_seq_count')),
+       sum(DISTINCT nextval('distinct_rewrite_seq_sum'))
+FROM range(4);
+----
+4	10
+
+query II
+SELECT currval('distinct_rewrite_seq_count'), currval('distinct_rewrite_seq_sum');
+----
+4	4
+
+statement ok
+CREATE SEQUENCE distinct_rewrite_seq_filter START 1;
+
+# volatile FILTER expressions are staged before branch fan-out
+query II
+SELECT count(DISTINCT i) FILTER (WHERE nextval('distinct_rewrite_seq_filter') % 2 = 0),
+       sum(i)
+FROM range(5) tbl(i);
+----
+2	10
+
+query I
+SELECT currval('distinct_rewrite_seq_filter');
+----
+5
+
+statement ok
+CREATE SEQUENCE distinct_rewrite_seq_filtered_arg START 1;
+
+# volatile arguments are evaluated even when a non-volatile FILTER rejects every row
+query I
+SELECT count(DISTINCT nextval('distinct_rewrite_seq_filtered_arg')) FILTER (WHERE false)
+FROM range(4);
+----
+0
+
+query I
+SELECT currval('distinct_rewrite_seq_filtered_arg');
+----
+4
+
+statement ok
+CREATE SEQUENCE distinct_rewrite_seq_grouping_sets START 1;
+
+# grouping-set expansion stages volatile DISTINCT inputs before UNION fan-out
+query III
+SELECT g, count(DISTINCT nextval('distinct_rewrite_seq_grouping_sets')), GROUPING(g)
+FROM (VALUES (1), (2), (1)) tbl(g)
+GROUP BY CUBE(g)
+ORDER BY GROUPING(g), g;
+----
+1	2	0
+2	1	0
+NULL	3	1
+
+query I
+SELECT currval('distinct_rewrite_seq_grouping_sets');
+----
+3
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+# Q16 uses explicit deduplication followed by a regular count; the ORDER BY label remains SQL-level text
+query II
+EXPLAIN (FORMAT JSON)
+SELECT p_brand, p_type, p_size, count(DISTINCT ps_suppkey) AS supplier_cnt
+FROM partsupp, part
+WHERE p_partkey = ps_partkey
+  AND p_brand <> 'Brand#45'
+  AND p_type NOT LIKE 'MEDIUM POLISHED%'
+  AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
+  AND ps_suppkey NOT IN (
+      SELECT s_suppkey FROM supplier WHERE s_comment LIKE '%Customer%Complaints%')
+GROUP BY p_brand, p_type, p_size
+ORDER BY supplier_cnt DESC, p_brand, p_type, p_size;
+----
+logical_opt	<REGEX>:.*"Groups":\s*\[[^\]]*"ps_suppkey"[^\]]*\].*"Expressions":\s*"(count_star\(\)|count\(#[0-9]+\) EXPORT_STATE)".*

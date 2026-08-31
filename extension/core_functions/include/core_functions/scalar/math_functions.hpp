@@ -115,6 +115,16 @@ struct Atan2Fun {
 	static ScalarFunction GetFunction();
 };
 
+struct BinomFun {
+	static constexpr const char *Name = "binom";
+	static constexpr const char *Parameters = "n,k";
+	static constexpr const char *Description = "Returns binom(n,k)";
+	static constexpr const char *Example = "binom(5,2)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct BitCountFun {
 	static constexpr const char *Name = "bit_count";
 	static constexpr const char *Parameters = "x";

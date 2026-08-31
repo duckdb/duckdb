@@ -218,3 +218,28 @@ query II
 EXPLAIN SELECT row_number + 1 FROM (SELECT row_number() OVER () AS row_number FROM tbl);
 ----
 physical_plan	<!REGEX>:.*WINDOW.*
+
+# read_duckdb also exposes a row_number virtual column, but with file-local
+# semantics rather than SQL window semantics, so the rewrite must not fire for
+# it: ROW_NUMBER() OVER () must still be computed and return 1-based values, not
+# the scan's 0-based file-local row number. See issue #23586.
+statement ok
+ATTACH '{TEST_DIR}/row_number_read_duckdb.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT * FROM (VALUES (10), (20)) v(x)
+
+statement ok
+DETACH rd
+
+query II
+SELECT x, ROW_NUMBER() OVER () AS rn FROM read_duckdb('{TEST_DIR}/row_number_read_duckdb.db', table_name='t') ORDER BY x
+----
+10	1
+20	2
+
+# the window must be kept (not eliminated) for a table function scan
+query II
+EXPLAIN SELECT x, ROW_NUMBER() OVER () FROM read_duckdb('{TEST_DIR}/row_number_read_duckdb.db', table_name='t')
+----
+physical_plan	<REGEX>:.*WINDOW.*

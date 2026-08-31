@@ -1,0 +1,72 @@
+# name: test/sql/attach/attach_prefetch_header.test
+# description: Attaching a DuckDB file serves the initial header reads from bytes prefetched during file-type detection
+# group: [attach]
+
+# Populate a database file, then detach so it is closed on disk.
+statement ok
+ATTACH '{TEST_DIR}/attach_prefetch_header.db' AS db1
+
+statement ok
+CREATE TABLE db1.integers AS SELECT range AS i FROM range(10000);
+
+statement ok
+CREATE TABLE db1.strings AS SELECT 'v' || range::VARCHAR AS s FROM range(1000);
+
+statement ok
+DETACH db1
+
+# Re-attach read-only: the header prefetched during the magic-byte check serves the initial header reads;
+# the database handle itself is opened fresh (late), so no handle is carried over from type detection.
+statement ok
+ATTACH '{TEST_DIR}/attach_prefetch_header.db' AS db1 (READ_ONLY)
+
+query I
+SELECT COUNT(*) FROM db1.integers
+----
+10000
+
+query I
+SELECT SUM(i) FROM db1.integers
+----
+49995000
+
+query I
+SELECT COUNT(*) FROM db1.strings
+----
+1000
+
+statement ok
+DETACH db1
+
+# Re-attach read-write: a fresh read-write handle is opened, and the prefetched header bytes still serve the
+# initial header reads. Verify the data is intact and the database remains writable.
+statement ok
+ATTACH '{TEST_DIR}/attach_prefetch_header.db' AS db1 (READ_WRITE)
+
+query I
+SELECT COUNT(*) FROM db1.integers
+----
+10000
+
+statement ok
+INSERT INTO db1.integers VALUES (10000)
+
+query I
+SELECT COUNT(*) FROM db1.integers
+----
+10001
+
+statement ok
+DETACH db1
+
+# Attaching a non-DuckDB file must still work (prefetch is not populated for these).
+statement ok
+COPY (SELECT 42 AS a) TO '{TEST_DIR}/attach_prefetch_header.csv' (FORMAT CSV, HEADER)
+
+statement ok
+ATTACH '{TEST_DIR}/attach_prefetch_header.csv' AS c
+
+query I
+SELECT a FROM c.file
+----
+42

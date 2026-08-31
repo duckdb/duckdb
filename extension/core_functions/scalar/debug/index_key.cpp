@@ -12,6 +12,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
@@ -32,23 +33,20 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 		auto field_name = StringUtil::Lower(field_types[i].first.GetIdentifierName());
 
 		if (fields.find(field_name) == fields.end()) {
-			throw BinderException("index_key: unknown field '%s' in path", field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: unknown field %s in path", field_types[i].first);
 		}
 
 		auto &field_value = field_values[i];
 		if (field_value.IsNull()) {
-			throw BinderException("index_key: path field '%s' cannot be NULL",
-			                      field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: path field %s cannot be NULL", field_types[i].first);
 		}
 		if (field_value.type().id() != LogicalTypeId::VARCHAR) {
-			throw BinderException("index_key: path field '%s' must be VARCHAR",
-			                      field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: path field %s must be VARCHAR", field_types[i].first);
 		}
 
 		auto value = StringValue::Get(field_value);
 		if (value.empty()) {
-			throw BinderException("index_key: path field '%s' cannot be empty",
-			                      field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: path field %s cannot be empty", field_types[i].first);
 		}
 		fields[field_name] = value;
 	}
@@ -61,40 +59,18 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 	    QualifiedName(Identifier(fields["catalog"]), Identifier(fields["schema"]), Identifier(fields["table"])));
 }
 
-static TableDescription EvaluateTableDescription(ClientContext &context, const Expression &expr) {
-	if (expr.HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!expr.IsFoldable()) {
-		throw BinderException("index_key: path parameter must be a constant");
-	}
-
-	auto input_struct = ExpressionExecutor::EvaluateScalar(context, expr);
+static TableDescription EvaluateTableDescription(const Value &input_struct) {
 	if (input_struct.IsNull()) {
 		throw BinderException("index_key: path parameter cannot be NULL");
 	}
 
-	if (input_struct.type().id() != LogicalTypeId::STRUCT) {
-		throw BinderException("index_key: path parameter must evaluate to a STRUCT");
-	}
-
-	return ExtractTableDescription(StructType::GetChildTypes(expr.GetReturnType()),
+	return ExtractTableDescription(StructType::GetChildTypes(input_struct.type()),
 	                               StructValue::GetChildren(input_struct));
 }
 
-static string GetStringArgument(ClientContext &context, const Expression &expr, const string &param_name) {
-	if (expr.HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!expr.IsFoldable()) {
-		throw BinderException("index_key: parameter '%s' must be a constant", param_name);
-	}
-	auto value = ExpressionExecutor::EvaluateScalar(context, expr);
+static string GetStringArgument(const Value &value, const string &param_name) {
 	if (value.IsNull()) {
 		throw BinderException("index_key: parameter '%s' cannot be NULL", param_name);
-	}
-	if (value.type().id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("index_key: parameter '%s' must be VARCHAR", param_name);
 	}
 	return StringValue::Get(value);
 }
@@ -113,12 +89,12 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const Identifier &
 	}
 
 	if (available.empty()) {
-		throw CatalogException("index_key: index '%s' was not found on table %s. No indexes found on this table.",
-		                       index_name.GetIdentifierName(), qualified_table);
+		throw CatalogException("index_key: index %s was not found on table %s. No indexes found on this table.",
+		                       index_name, qualified_table);
 	}
 	auto available_list = StringUtil::Join(available, ", ");
-	throw CatalogException("index_key: index '%s' was not found on table %s. Available indexes: %s",
-	                       index_name.GetIdentifierName(), qualified_table, available_list);
+	throw CatalogException("index_key: index %s was not found on table %s. Available indexes: %s", index_name,
+	                       qualified_table, available_list);
 }
 
 struct IndexKeyBindData : public FunctionData {
@@ -146,13 +122,21 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 		throw BinderException("index_key: requires at least two arguments - path (STRUCT), index_name");
 	}
 
-	auto path = EvaluateTableDescription(context, *arguments[0]);
-	auto index_name = GetStringArgument(context, *arguments[1], "index_name");
+	auto path = EvaluateTableDescription(input.GetConstant(0));
+	auto index_name = GetStringArgument(input.GetConstant(1), "index_name");
 
-	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY,
-	                                      QualifiedName(path.qualified_name.Catalog(), path.qualified_name.Schema(),
-	                                                    path.qualified_name.Name()))
-	                        .Cast<TableCatalogEntry>();
+	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, path.qualified_name);
+	if (!table_entry.IsDuckTable()) {
+		throw BinderException("index_key: table '%s' is not a DuckDB table", qualified_table);
+	}
+
+	// index_key resolves index metadata during binding.
+	// Register the owning catalog so cached prepared statements rebind after catalog changes.
+	if (input.HasBinder()) {
+		auto &binder = input.GetBinder();
+		binder.GetStatementProperties().RegisterDBRead(table_entry.ParentCatalog(), context);
+	}
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
 	auto &data_table_info = *data_table.GetDataTableInfo();
@@ -231,8 +215,8 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 } // namespace
 
 ScalarFunction IndexKeyFun::GetFunction() {
-	ScalarFunction fun("index_key", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::BLOB, IndexKeyFunction,
-	                   IndexKeyBind);
+	ScalarFunction fun("index_key", {{"path", LogicalTypeId::STRUCT}, {"name", LogicalType::VARCHAR}},
+	                   LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
 	fun.SetVarArgs(LogicalTypeId::ANY);
 	return fun;
 }

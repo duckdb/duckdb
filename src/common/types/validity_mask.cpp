@@ -4,6 +4,10 @@
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/serializer/read_stream.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 

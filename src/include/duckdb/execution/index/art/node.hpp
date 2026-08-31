@@ -15,6 +15,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
+#include "duckdb/execution/index/art/node_handle.hpp"
 
 namespace duckdb {
 
@@ -40,6 +41,7 @@ class ART;
 class Prefix;
 class ARTKey;
 class FixedSizeAllocator;
+class OptionalNodePtr;
 
 //! State for TransformToDeprecated operations
 class TransformToDeprecatedState {
@@ -107,9 +109,9 @@ struct ToStringOptions {
 	}
 };
 
-//! The Node is the pointer class of the ART index.
+//! The NodePtr is the pointer class of the ART index.
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
-class Node : public IndexPointer {
+class NodePtr : public IndexPointer {
 	friend class Prefix;
 
 public:
@@ -119,11 +121,11 @@ public:
 
 public:
 	//! Get a new pointer to a node and initialize it.
-	static void New(ART &art, Node &node, const NType type);
+	static void New(ART &art, NodePtr &node, const NType type);
 	//! Free the node.
-	static void FreeNode(ART &art, Node &node);
+	static void FreeNode(ART &art, NodePtr &node);
 	//! Free the node and its children.
-	static void FreeTree(ART &art, Node &node);
+	static void FreeTree(ART &art, NodePtr &node);
 
 	//! Get a reference to the allocator.
 	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
@@ -132,31 +134,29 @@ public:
 
 	//! Get a reference to a node.
 	template <class NODE>
-	static inline NODE &Ref(const ART &art, const Node ptr, const NType type) {
-		D_ASSERT(ptr.GetType() != NType::PREFIX);
-		return *(GetAllocator(art, type).Get<NODE>(ptr, !std::is_const<NODE>::value));
-	}
-	//! Get a node pointer, if the node is in memory, else nullptr.
-	template <class NODE>
-	static inline unsafe_optional_ptr<NODE> InMemoryRef(const ART &art, const Node ptr, const NType type) {
-		D_ASSERT(ptr.GetType() != NType::PREFIX);
-		return GetAllocator(art, type).GetIfLoaded<NODE>(ptr);
+	static inline NODE &Ref(const ART &art, const NodePtr node, const NType type) {
+		D_ASSERT(node.GetType() != NType::PREFIX);
+		return *(GetAllocator(art, type).Get<NODE>(node, !std::is_const<NODE>::value));
 	}
 
 	//! Replace the child at byte.
-	void ReplaceChild(const ART &art, const uint8_t byte, const Node child = Node()) const;
+	void ReplaceChild(const ART &art, const uint8_t byte, const NodePtr child = NodePtr()) const;
 	//! Insert the child at byte.
-	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child = Node());
+	static void InsertChild(ART &art, NodePtr &node, const uint8_t byte, const NodePtr child = NodePtr());
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status,
+	static void DeleteChild(ART &art, NodePtr &node, NodePtr &prefix, const uint8_t byte, const GateStatus status,
 	                        const ARTKey &row_id);
 
+	//! Get the child node at byte, if it exists.
+	OptionalNodePtr GetChildNode(const ART &art, const uint8_t byte) const;
+	//! Get the first child node >= byte, if it exists, and update byte.
+	OptionalNodePtr GetNextChildNode(const ART &art, uint8_t &byte) const;
 	//! Get the immutable child at byte.
-	const unsafe_optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
+	const unsafe_optional_ptr<NodePtr> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.
-	unsafe_optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte, const bool unsafe = false) const;
+	unsafe_optional_ptr<NodePtr> GetChildMutable(ART &art, const uint8_t byte, const bool unsafe = false) const;
 	//! Get the first immutable child greater than or equal to the byte.
-	const unsafe_optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
+	const unsafe_optional_ptr<NodePtr> GetNextChild(ART &art, uint8_t &byte) const;
 	//! Returns true, if the byte exists, else false.
 	bool HasByte(ART &art, const uint8_t byte) const;
 	//! Get the first byte greater than or equal to the byte.
@@ -167,11 +167,11 @@ public:
 	//! Counts each node type.
 	void VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 
-	//! Returns the node type for a count.
-	static NType GetNodeType(const idx_t count);
+	//! Returns the internal node type for a count.
+	static NType GetInternalNodeType(const idx_t count);
 
 	//! Transform the node storage to deprecated storage.
-	static void TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
+	static void TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state);
 
 	//! Returns the string representation of the node at indentation level.
 	//!
@@ -186,9 +186,9 @@ public:
 	}
 
 	//! True, if the node is a Node4, Node16, Node48, or Node256.
-	bool IsNode() const;
+	bool IsInternalNode() const;
 	//! True, if the node is a Node7Leaf, Node15Leaf, or Node256Leaf.
-	bool IsLeafNode() const;
+	bool IsNestedLeaf() const;
 	//! True, if the node is any leaf.
 	bool IsAnyLeaf() const;
 
@@ -226,14 +226,6 @@ public:
 private:
 	//! Prints only the children of an internal node (used for tree-style printing).
 	string ToStringChildren(ART &art, const ToStringOptions &options) const;
-
-	template <class NODE>
-	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
-	                                          TransformToDeprecatedState &state) {
-		if (ptr) {
-			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, state); });
-		}
-	}
 };
 
 //! NodeChildren holds the extracted bytes of a node, and their respective children.
@@ -241,63 +233,33 @@ private:
 //! even if the original node has been freed.
 struct NodeChildren {
 	NodeChildren() = delete;
-	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<Node> children) : bytes(bytes), children(children) {};
+	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<NodePtr> children) : bytes(bytes), children(children) {};
 
 	array_ptr<uint8_t> bytes;
-	array_ptr<Node> children;
+	array_ptr<NodePtr> children;
 };
 
-//! NodeHandle is a mutable wrapper to access and modify a node.
-//! A segment handle is used for memory management and marks memory as modified.
-//! For read-only access, use ConstNodeHandle instead.
-template <class T>
-class NodeHandle {
+//! OptionalNodePtr holds a copied NodePtr value or is empty.
+//! A NodePtr without metadata is the empty state.
+class OptionalNodePtr {
 public:
-	NodeHandle(ART &art, const Node node)
-	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
-		handle.MarkModified();
+	OptionalNodePtr() = default;
+	OptionalNodePtr(const NodePtr node) : node(node) { // NOLINT: allow implicit conversion from NodePtr
 	}
-	NodeHandle() = delete;
-	NodeHandle(const NodeHandle &) = delete;
-	NodeHandle &operator=(const NodeHandle &) = delete;
 
-	NodeHandle(NodeHandle &&other) noexcept : handle(std::move(other.handle)), n(handle.GetRef<T>()) {
+	//! Returns true if the OptionalNodePtr holds a valid NodePtr.
+	explicit operator bool() const {
+		return node.HasMetadata();
 	}
-	NodeHandle &operator=(NodeHandle &&other) noexcept = delete;
 
-public:
-	T &Get() {
-		return n;
+	//! Returns the copied NodePtr. Must only be called if it is valid.
+	NodePtr Get() const {
+		D_ASSERT(node.HasMetadata());
+		return node;
 	}
 
 private:
-	SegmentHandle handle;
-	T &n;
-};
-
-//! ConstNodeHandle is a read-only wrapper to access a node.
-//! A segment handle is used for memory management, but it is not marked as modified.
-//! For mutable access, use NodeHandle instead.
-template <class T>
-class ConstNodeHandle {
-public:
-	ConstNodeHandle(const ART &art, const Node node)
-	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
-	}
-	ConstNodeHandle() = delete;
-	ConstNodeHandle(const ConstNodeHandle &) = delete;
-	ConstNodeHandle &operator=(const ConstNodeHandle &) = delete;
-	ConstNodeHandle(ConstNodeHandle &&other) noexcept = delete;
-	ConstNodeHandle &operator=(ConstNodeHandle &&other) noexcept = delete;
-
-public:
-	const T &Get() const {
-		return n;
-	}
-
-private:
-	SegmentHandle handle;
-	const T &n;
+	NodePtr node;
 };
 
 } // namespace duckdb

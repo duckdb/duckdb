@@ -17,6 +17,8 @@ class TableIndexList;
 class DuckTableEntry;
 class TableStatistics;
 class SingleFileCheckpointWriter;
+class RowGroupCollection;
+struct RowGroupPointer;
 
 //! The table data writer is responsible for writing the data of a table to storage.
 //
@@ -44,6 +46,10 @@ public:
 	virtual CheckpointOptions GetCheckpointOptions() const = 0;
 	virtual void FlushPartialBlocks() = 0;
 	virtual MetadataManager &GetMetadataManager() = 0;
+	//! Whether this is a SingleFileTableDataWriter
+	virtual bool IsSingleFileWriter() const {
+		return false;
+	}
 	optional_idx GetRowGroupCount() {
 		return row_group_count;
 	}
@@ -104,6 +110,9 @@ public:
 	CheckpointOptions GetCheckpointOptions() const override;
 	void FlushPartialBlocks() override;
 	MetadataManager &GetMetadataManager() override;
+	bool IsSingleFileWriter() const override {
+		return true;
+	}
 
 private:
 	SingleFileCheckpointWriter &checkpoint_manager;

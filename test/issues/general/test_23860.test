@@ -1,0 +1,114 @@
+# name: test/issues/general/test_23860.test
+# description: Issue 23860 - Failed binding for correlations hidden in nested dependent joins
+# group: [general]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (0), (1), (1), (NULL);
+
+# Direct correlation provides the expected-result baseline.
+query II
+SELECT ref_0.i,
+       (SELECT 1 WHERE EXISTS (SELECT 1 WHERE NULL::INTEGER | ref_0.i)) AS result
+FROM integers ref_0
+ORDER BY ref_0.i NULLS LAST;
+----
+0	NULL
+1	NULL
+1	NULL
+NULL	NULL
+
+# A nested scalar subquery hides the correlation in dependent-join metadata.
+statement ok
+SET debug_verify_column_bindings = true;
+
+query II
+SELECT ref_0.i,
+       (SELECT 1 WHERE EXISTS (SELECT 1 WHERE NULL::INTEGER | (SELECT ref_0.i))) AS result
+FROM integers ref_0
+ORDER BY ref_0.i NULLS LAST;
+----
+0	NULL
+1	NULL
+1	NULL
+NULL	NULL
+
+# The same plan must bind without rewriting delim joins to CTEs.
+statement ok
+SET delim_join_as_cte = false;
+
+query II
+SELECT ref_0.i,
+       (SELECT 1 WHERE EXISTS (SELECT 1 WHERE NULL::INTEGER | (SELECT ref_0.i))) AS result
+FROM integers ref_0
+ORDER BY ref_0.i NULLS LAST;
+----
+0	NULL
+1	NULL
+1	NULL
+NULL	NULL
+
+# The decorrelator must also work without optimizer assistance.
+statement ok
+PRAGMA disable_optimizer;
+
+query II
+SELECT ref_0.i,
+       (SELECT 1 WHERE EXISTS (SELECT 1 WHERE NULL::INTEGER | (SELECT ref_0.i))) AS result
+FROM integers ref_0
+ORDER BY ref_0.i NULLS LAST;
+----
+0	NULL
+1	NULL
+1	NULL
+NULL	NULL
+
+statement ok
+PRAGMA enable_optimizer;
+
+statement ok
+SET delim_join_as_cte = true;
+
+# Preserve the original LATERAL, UNION, and UNION ALL structure.
+query II
+SELECT ref_0.i,
+       (SELECT 1
+        WHERE EXISTS (
+            SELECT 1
+            WHERE NULL::INTEGER | (
+                ((SELECT NULL::INTEGER)
+                 UNION
+                 (SELECT NULL::INTEGER
+                  FROM LATERAL (SELECT ref_0.i AS c2) subq))
+                UNION ALL
+                (SELECT NULL::INTEGER WHERE false)
+            )
+        )) AS result
+FROM integers ref_0
+ORDER BY ref_0.i NULLS LAST;
+----
+0	NULL
+1	NULL
+1	NULL
+NULL	NULL
+
+# EXISTS creates a MARK dependent join whose hidden correlation also needs the domain.
+query II
+SELECT ref_0.i,
+       (SELECT 1
+        WHERE EXISTS (
+            SELECT 1
+            WHERE NULL::INTEGER | CAST(EXISTS (SELECT ref_0.i) AS INTEGER)
+        )) AS result
+FROM integers ref_0
+ORDER BY ref_0.i NULLS LAST;
+----
+0	NULL
+1	NULL
+1	NULL
+NULL	NULL
+
+statement ok
+SET debug_verify_column_bindings = false;

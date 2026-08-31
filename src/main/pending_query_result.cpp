@@ -1,13 +1,15 @@
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 
 namespace duckdb {
 
 PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
                                        vector<LogicalType> types_p, bool allow_stream_result)
     : BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, statement.properties,
-                      std::move(types_p), IdentifiersToStrings(statement.names)),
+                      std::move(types_p), statement.names),
       context(std::move(context_p)), allow_stream_result(allow_stream_result) {
 }
 
@@ -80,9 +82,9 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 	}
 	if (HasError()) {
 		if (allow_stream_result) {
-			return make_uniq<StreamQueryResult>(error);
+			return make_uniq<StreamQueryResult>(GetErrorObject());
 		} else {
-			return make_uniq<MaterializedQueryResult>(error);
+			return make_uniq<MaterializedQueryResult>(GetErrorObject());
 		}
 	}
 	auto result = context->FetchResultInternal(lock, *this);

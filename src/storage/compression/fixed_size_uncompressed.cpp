@@ -8,6 +8,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
 
@@ -254,9 +255,7 @@ struct ListFixedSizeAppend {
 template <class T, class OP>
 idx_t FixedSizeAppend(CompressionAppendState &append_state, ColumnSegment &segment, BaseStatistics &stats,
                       UnifiedVectorFormat &data, idx_t offset, idx_t count) {
-	D_ASSERT(segment.GetBlockOffset() == 0);
-
-	auto target_ptr = append_state.handle.GetDataMutable();
+	auto target_ptr = append_state.handle.GetDataMutable() + segment.GetBlockOffset();
 	idx_t max_tuple_count = segment.SegmentSize() / sizeof(T);
 	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
 

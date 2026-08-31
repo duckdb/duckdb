@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
+class BoundSelectNode;
 class ConstantExpression;
 class ColumnRefExpression;
 struct SelectBindState;
@@ -19,7 +20,7 @@ struct SelectBindState;
 //! The GROUP binder is responsible for binding expressions in the GROUP BY clause
 class GroupBinder : public ExpressionBinder {
 public:
-	GroupBinder(Binder &binder, ClientContext &context, TableIndex group_index, SelectBindState &bind_state);
+	GroupBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, SelectBindState &bind_state);
 
 public:
 	static void ReplaceSelectRef(SelectNode &node, SelectBindState &bind_state, ProjectionIndex index,
@@ -27,6 +28,8 @@ public:
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
+	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;
+	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
 
 	string UnsupportedAggregateMessage() override;
 
@@ -34,9 +37,9 @@ protected:
 	                              unique_ptr<ParsedExpression> &expr_ptr) override;
 
 private:
+	BoundSelectNode &node;
 	SelectBindState &bind_state;
-
-	TableIndex group_index;
+	idx_t unnest_level = 0;
 };
 
 } // namespace duckdb

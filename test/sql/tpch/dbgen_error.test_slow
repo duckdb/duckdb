@@ -4,6 +4,16 @@
 
 require tpch
 
+# dbgen must reject pre-existing TPC-H tables with incompatible schemas
+
+statement ok
+CREATE TABLE lineitem_invalid(a BIGINT, b BIGINT);
+
+statement error
+CALL dbgen(sf=0.01, suffix='_invalid');
+----
+<REGEX>:.*Invalid Input Error.*TPC-H table.*lineitem_invalid.*incompatible schema.*
+
 statement ok
 SET memory_limit = '100MB';
 

@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/crypto_hash.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/exception.hpp"

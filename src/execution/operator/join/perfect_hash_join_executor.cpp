@@ -2,6 +2,8 @@
 
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 
@@ -16,7 +18,7 @@ const LogicalType &PerfectHashJoinExecutor::GetKeyType() const {
 //===--------------------------------------------------------------------===//
 // Initialize
 //===--------------------------------------------------------------------===//
-bool ExtractNumericValue(Value val, hugeint_t &result) {
+bool ExtractNumericValue(const Value &val, hugeint_t &result) {
 	if (!val.type().IsIntegral()) {
 		switch (val.type().InternalType()) {
 		case PhysicalType::INT8:
@@ -59,10 +61,11 @@ bool ExtractNumericValue(Value val, hugeint_t &result) {
 			return false;
 		}
 	} else {
-		if (!val.DefaultTryCastAs(LogicalType::HUGEINT)) {
+		auto cast = val.DefaultTryCastAs(LogicalType::HUGEINT);
+		if (!cast) {
 			return false;
 		}
-		result = val.GetValue<hugeint_t>();
+		result = cast->GetValue<hugeint_t>();
 	}
 	return true;
 }

@@ -11,6 +11,10 @@
 
 namespace duckdb {
 
+Identifier PEGTransformerFactory::TransformAnalyzeKeyword(PEGTransformer &transformer) {
+	return Identifier("analyze");
+}
+
 string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
 	if (parse_result.type == ParseResultType::IDENTIFIER) {
 		return parse_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
@@ -20,7 +24,7 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 	}
 	if (parse_result.type == ParseResultType::CHOICE) {
 		auto &choice_pr = parse_result.Cast<ChoiceParseResult>();
-		return transformer.Transform<string>(choice_pr.GetResult());
+		return TransformIdentifierOrKeyword(transformer, choice_pr.GetResult());
 	}
 	if (parse_result.type == ParseResultType::LIST) {
 		auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -31,16 +35,16 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 			}
 			if (child.get().type == ParseResultType::CHOICE) {
 				auto &choice_result = child.get().Cast<ChoiceParseResult>().GetResult();
-				if (choice_result.type == ParseResultType::IDENTIFIER) {
-					return choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
-				}
-				if (choice_result.type == ParseResultType::KEYWORD) {
-					return choice_result.Cast<KeywordParseResult>().keyword;
-				}
-				return transformer.Transform<string>(choice_result);
+				return TransformIdentifierOrKeyword(transformer, choice_result);
+			}
+			if (child.get().type == ParseResultType::LIST) {
+				return TransformIdentifierOrKeyword(transformer, child.get());
 			}
 			if (child.get().type == ParseResultType::IDENTIFIER) {
 				return child.get().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+			}
+			if (child.get().type == ParseResultType::KEYWORD) {
+				return child.get().Cast<KeywordParseResult>().keyword;
 			}
 			throw InternalException("Unexpected IdentifierOrKeyword type encountered %s.",
 			                        ParseResultToString(child.get().type));
@@ -71,6 +75,11 @@ LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer,
 
 int64_t PEGTransformerFactory::TransformArrayKeyword(PEGTransformer &transformer) {
 	return -1;
+}
+
+int64_t PEGTransformerFactory::TransformArrayKeywordWithBounds(PEGTransformer &transformer,
+                                                               const int64_t &square_brackets_array) {
+	return square_brackets_array;
 }
 
 int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &transformer,
@@ -130,7 +139,14 @@ PEGTransformerFactory::TransformTimeType(PEGTransformer &transformer, const Logi
 		if (modifiers[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw ParserException("Expected a constant expression for timestamp precision");
 		}
-		auto timestamp_precision = modifiers[0]->Cast<ConstantExpression>().GetValue().GetValue<int64_t>();
+		auto precision_value = modifiers[0]->Cast<ConstantExpression>().GetValue();
+		if (precision_value.IsNull()) {
+			throw ParserException("TIMESTAMP precision cannot be NULL");
+		}
+		if (!precision_value.type().IsIntegral()) {
+			throw ParserException("TIMESTAMP precision must be an integral type");
+		}
+		auto timestamp_precision = precision_value.GetValue<int64_t>();
 		if (timestamp_precision > 10) {
 			throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
 		}
@@ -293,13 +309,13 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransformer &transformer,
-                                                                     const vector<LogicalType> &type) {
-	if (type.size() != 2) {
-		throw ParserException("Map type needs exactly two entries, key and value type.");
-	}
+                                                                     const optional<vector<LogicalType>> &type) {
 	vector<unique_ptr<ParsedExpression>> map_children;
-	map_children.push_back(UnboundType::GetTypeExpression(type[0])->Copy());
-	map_children.push_back(UnboundType::GetTypeExpression(type[1])->Copy());
+	if (type) {
+		for (auto &child_type : *type) {
+			map_children.push_back(UnboundType::GetTypeExpression(child_type)->Copy());
+		}
+	}
 	return make_uniq<TypeExpression>(Identifier("MAP"), std::move(map_children));
 }
 

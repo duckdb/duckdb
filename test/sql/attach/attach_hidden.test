@@ -30,8 +30,9 @@ SELECT * FROM hidden_db.main.tbl
 statement ok
 DETACH hidden_db;
 
-# after detach, the catalog is no longer accessible
+# after detach, the catalog is no longer accessible. "hidden_db" is not an attached database anymore, so
+# "hidden_db.main" is interpreted as a (nested) schema path
 statement error
 SELECT * FROM hidden_db.main.tbl
 ----
-Binder Error: Catalog "hidden_db" does not exist!
+schema "hidden_db.main" does not exist

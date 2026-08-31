@@ -190,7 +190,6 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 	}
 
 	InitAnalyze();
-
 	// scan over all the segments and run the analyze step
 	ScanSegments([&](Vector &scan_vector) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {

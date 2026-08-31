@@ -1,0 +1,166 @@
+# name: test/sql/show_select/show_settings.test
+# description: Test "SHOW name" resolution and the show_behavior setting
+# group: [show_select]
+
+statement ok
+CREATE TABLE my_table(i INTEGER, j INTEGER);
+
+statement ok
+SET threads TO 42;
+
+# ==============================================================================
+# Default (show_behavior = 'auto'): describe a table if one exists, else resolve a setting
+# ==============================================================================
+
+# A name that is a setting but not a table resolves to the setting value
+query I
+SHOW threads
+----
+42
+
+# Quoted identifiers and casing resolve to the same setting (settings are case-insensitive)
+query I
+SHOW "threads"
+----
+42
+
+query I
+SHOW THREADS
+----
+42
+
+# A name that is a table describes the table (deprecated - emits a warning)
+query TTTTTT
+SHOW my_table
+----
+i	INTEGER	YES	NULL	NULL	NULL
+j	INTEGER	YES	NULL	NULL	NULL
+
+# A name that is neither a table nor a setting is a table-not-found error (auto is table-first)
+statement error
+SHOW this_does_not_exist
+----
+<REGEX>:.*Table with name this_does_not_exist does not exist.*
+
+# DESCRIBE always describes tables, it never resolves a setting
+statement error
+DESCRIBE threads
+----
+<REGEX>:.*Table with name threads does not exist.*
+
+# The special MySQL-inherited forms keep working
+statement ok
+SHOW TABLES;
+
+statement ok
+SHOW DATABASES;
+
+statement ok
+SHOW ALL TABLES;
+
+# A qualified name can never be a setting; a missing one is a table error
+statement error
+SHOW main.threads
+----
+<REGEX>:.*Table with name threads does not exist.*
+
+# A qualified name that exists is described as a table
+query TTTTTT
+SHOW main.my_table
+----
+i	INTEGER	YES	NULL	NULL	NULL
+j	INTEGER	YES	NULL	NULL	NULL
+
+# "SHOW (SELECT ...)" describes the columns of the query, like DESCRIBE (deprecated) - not affected by show_behavior
+query TTTTTT
+SHOW (SELECT * FROM my_table)
+----
+i	INTEGER	YES	NULL	NULL	NULL
+j	INTEGER	YES	NULL	NULL	NULL
+
+# ==============================================================================
+# show_behavior = 'setting': "SHOW name" only ever resolves a setting
+# ==============================================================================
+
+statement ok
+SET show_behavior='setting'
+
+query I
+SHOW threads
+----
+42
+
+# A table name is not resolved - it errors as a missing setting
+statement error
+SHOW my_table
+----
+<REGEX>:.*Setting with name "my_table" does not exist.*
+
+statement error
+SHOW this_does_not_exist
+----
+<REGEX>:.*Setting with name "this_does_not_exist" does not exist.*
+
+# A qualified name cannot be a setting
+statement error
+SHOW main.my_table
+----
+<REGEX>:.*Setting with name "main.my_table" does not exist.*
+
+# ==============================================================================
+# show_behavior = 'table': "SHOW name" only ever describes a table
+# ==============================================================================
+
+statement ok
+SET show_behavior='table'
+
+# A table name describes the table (no deprecation warning in this explicit mode)
+query TTTTTT
+SHOW my_table
+----
+i	INTEGER	YES	NULL	NULL	NULL
+j	INTEGER	YES	NULL	NULL	NULL
+
+# A setting name is not resolved - it errors as a missing table
+statement error
+SHOW threads
+----
+<REGEX>:.*Table with name threads does not exist.*
+
+# ==============================================================================
+# Invalid show_behavior values are rejected at SET time
+# ==============================================================================
+
+statement error
+SET show_behavior='bogus'
+----
+<REGEX>:.*bogus.*ShowBehaviorType.*
+
+statement ok
+SET show_behavior='auto'
+
+# ==============================================================================
+# When a name is both a table and a setting, 'auto' prefers the table (table-first), while 'setting' still
+# resolves the setting. "threads" is a setting; create a table with the same name to force the collision.
+# ==============================================================================
+
+statement ok
+CREATE TABLE threads(x INTEGER)
+
+# 'auto': the table wins over the same-named setting
+query TTTTTT
+SHOW threads
+----
+x	INTEGER	YES	NULL	NULL	NULL
+
+# 'setting': the setting still wins (tables are never resolved)
+statement ok
+SET show_behavior='setting'
+
+query I
+SHOW threads
+----
+42
+
+statement ok
+SET show_behavior='auto'

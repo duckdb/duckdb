@@ -47,7 +47,7 @@
 
 #include <stdio.h>
 
-struct W_SHIP_MODE_TBL g_w_ship_mode;
+thread_local struct W_SHIP_MODE_TBL g_w_ship_mode;
 
 /*
  * Routine:

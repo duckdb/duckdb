@@ -954,3 +954,30 @@ query I
 select epoch_ns(make_timestamp_ns(1732118940123456789))
 ----
 1732118940123456789
+
+foreach type TIMESTAMP_NS TIMESTAMPTZ_NS
+
+foreach value infinity -infinity
+
+query I
+select epoch_ns('{value}'::{type})
+----
+NULL
+
+endloop
+
+endloop
+
+statement ok
+CREATE TABLE parts(p VARCHAR);
+
+statement ok
+INSERT INTO parts VALUES ('epoch'), ('julian'), ('year');
+
+query II
+SELECT p, date_part(p, TIMESTAMP '2023-05-15 10:00:00+00') 
+FROM parts;
+----
+epoch	1684144800
+julian	2460080.125
+year	2023

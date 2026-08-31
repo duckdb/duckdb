@@ -8,6 +8,8 @@
 #include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

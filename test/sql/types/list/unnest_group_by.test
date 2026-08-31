@@ -1,0 +1,187 @@
+# name: test/sql/types/list/unnest_group_by.test
+# description: Test grouping by SELECT-list UNNEST expressions
+# group: [list]
+
+query TI
+SELECT unnest(['a', 'b']) AS tag, count(*) FROM range(1) GROUP BY tag ORDER BY tag
+----
+a	1
+b	1
+
+query TI
+SELECT unnest(['a', 'b']) AS tag, count(*) FROM range(1) GROUP BY 1 ORDER BY 1
+----
+a	1
+b	1
+
+query T
+SELECT trim(unnest([' a ', 'b '])) AS tag ORDER BY tag
+----
+a
+b
+
+statement ok
+CREATE TABLE grouped_unnest_strings(tags VARCHAR);
+
+statement ok
+INSERT INTO grouped_unnest_strings VALUES ('a>b'), ('a>c'), ('b');
+
+query TI
+SELECT unnest(string_split(tags, '>')) AS tag, count(*)
+FROM grouped_unnest_strings
+GROUP BY tag
+ORDER BY tag
+----
+a	2
+b	2
+c	1
+
+query TI
+SELECT unnest(string_split(tags, '>')) AS tag, count(*)
+FROM grouped_unnest_strings
+GROUP BY unnest(string_split(tags, '>'))
+ORDER BY tag
+----
+a	2
+b	2
+c	1
+
+query TI
+SELECT trim(unnest(string_split(tags, '>'))) AS tag, count(*)
+FROM grouped_unnest_strings
+GROUP BY tag
+ORDER BY tag
+----
+a	2
+b	2
+c	1
+
+query TI
+SELECT upper(unnest(string_split(tags, '>'))) AS tag, count(*)
+FROM grouped_unnest_strings
+GROUP BY upper(unnest(string_split(tags, '>')))
+ORDER BY tag
+----
+A	2
+B	2
+C	1
+
+query II
+SELECT nullif(unnest([1, 2]), 0) AS tag, count(*)
+FROM range(1)
+GROUP BY tag
+ORDER BY tag
+----
+1	1
+2	1
+
+query II
+SELECT nullif(unnest([1, 2]), 0) AS tag, count(*)
+FROM range(1)
+GROUP BY nullif(unnest([1, 2]), 0)
+ORDER BY tag
+----
+1	1
+2	1
+
+query III
+SELECT unnest([1, 2]) AS a, unnest([10, 20]) AS b, count(*)
+FROM range(1)
+GROUP BY a, b
+ORDER BY a, b
+----
+1	10	1
+2	20	1
+
+query III
+SELECT unnest([1, 2]) AS g, unnest([10, 20]) AS s, count(*)
+FROM range(1)
+GROUP BY g
+ORDER BY g, s
+----
+1	10	1
+1	20	1
+2	10	1
+2	20	1
+
+statement error
+SELECT unnest(['a', 'b']) AS tag, count(*) FROM range(1) GROUP BY ALL;
+----
+Cannot group on an UNNEST or UNLIST clause
+
+statement error
+SELECT count(*) FROM range(3) t(i) GROUP BY unnest([sum(i)]);
+----
+GROUP BY clause cannot contain aggregates
+
+statement error
+SELECT count(*) FROM range(3) t(i) GROUP BY unnest([row_number() OVER ()]);
+----
+GROUP BY clause cannot contain window functions
+
+statement error
+SELECT count(*) FROM range(1) GROUP BY unnest({'a': 1, 'b': 2});
+----
+UNNEST of struct cannot be used in GROUP BY clause
+
+statement error
+SELECT count(*) FROM range(1) GROUP BY lower(unnest({'a': 'x'}));
+----
+UNNEST of struct cannot be used in GROUP BY clause
+
+query II
+SELECT coalesce(unnest([1, 2]), 0) AS tag, count(*)
+FROM range(1)
+GROUP BY tag
+ORDER BY tag
+----
+1	1
+2	1
+
+query II
+SELECT coalesce(unnest([1, 2]), 0) AS tag, count(*)
+FROM range(1)
+GROUP BY coalesce(unnest([1, 2]), 0)
+ORDER BY tag
+----
+1	1
+2	1
+
+query II
+SELECT abs(coalesce(unnest([-1, -2]), 0)) AS tag, count(*)
+FROM range(1)
+GROUP BY tag
+ORDER BY tag
+----
+1	1
+2	1
+
+query II
+SELECT CASE WHEN true THEN unnest([1, 2]) ELSE 0 END AS tag, count(*)
+FROM range(1)
+GROUP BY tag
+ORDER BY tag
+----
+1	1
+2	1
+
+query II
+SELECT CASE WHEN true THEN unnest([1, 2]) ELSE 0 END AS tag, count(*)
+FROM range(1)
+GROUP BY CASE WHEN true THEN unnest([1, 2]) ELSE 0 END
+ORDER BY tag
+----
+1	1
+2	1
+
+query II
+SELECT abs(CASE WHEN true THEN unnest([-1, -2]) ELSE 0 END) AS tag, count(*)
+FROM range(1)
+GROUP BY tag
+ORDER BY tag
+----
+1	1
+2	1
+
+statement ok
+DROP TABLE grouped_unnest_strings;

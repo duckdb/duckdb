@@ -204,7 +204,7 @@ TEST_CASE("Test WAL checksums", "[storage][.]") {
 		CopyFile(lfs, source_wal, storage_wal);
 		FlipWALByte(lfs, storage_wal, i);
 		{
-			// flipping a byte in the checksum leads to an IOException
+			// flipping a byte in the checksum leads to a DataCorruptionException
 			// flipping a byte in the size of a WAL entry leads to a torn write
 			// we succeed on either of these cases here
 			try {
@@ -214,7 +214,7 @@ TEST_CASE("Test WAL checksums", "[storage][.]") {
 				REQUIRE_FAIL(con.Query("FROM B"));
 			} catch (std::exception &ex) {
 				ErrorData error(ex);
-				if (error.Type() == ExceptionType::IO) {
+				if (error.Type() == ExceptionType::DATA_CORRUPTION) {
 					REQUIRE(1 == 1);
 				} else {
 					throw;

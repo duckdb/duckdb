@@ -53,7 +53,7 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 	if (!state.last_result) {
 		throw BinderException("Failed to query last result \"_\": no result available");
 	}
-	return make_uniq<ColumnDataRef>(state.last_result->Collection(), StringsToIdentifiers(state.last_result->names));
+	return make_uniq<ColumnDataRef>(state.last_result->Collection(), state.last_result->GetNames());
 }
 
 // Runs after the binder has finished. Releases the previous last_result early if it's
@@ -84,7 +84,7 @@ struct ShellHistoryData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> ShellHistoryBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("id");
 	return_types.emplace_back(LogicalType::BIGINT);
 	names.emplace_back("sql");

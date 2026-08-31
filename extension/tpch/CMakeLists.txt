@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 2.8.12...3.29)
 
 project(TpchExtension)
 
+# Before any subdirectory or target, which would otherwise inherit the
+# directory-wide definition
+set_extension_version_sources(tpch tpch_extension.cpp)
+
 include_directories(dbgen/include)
 include_directories(include)
 add_subdirectory(dbgen)

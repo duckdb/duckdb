@@ -4,6 +4,8 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 
@@ -89,6 +91,8 @@ static auto FromWKBStats(ClientContext &context, FunctionStatisticsInput &input)
 ScalarFunction StGeomfromwkbFun::GetFunction() {
 	ScalarFunction function({LogicalType::BLOB}, LogicalType::GEOMETRY(), FromWKBFunction);
 	function.SetStatisticsCallback(FromWKBStats);
+	// throws when the input is not valid WKB
+	function.SetFallible();
 	return function;
 }
 
@@ -136,9 +140,67 @@ static void IntersectsExtentFunction(DataChunk &input, ExpressionState &state, V
 	    });
 }
 
+// Prune row groups for `geom1 && geom2` (a.k.a. ST_Intersects_Extent), which is true iff the two bounding
+// boxes intersect. One argument must be a constant geometry; the other is the column we prune against. Both
+// operands' statistics are derived for us (the constant's geometry stats already carry its bounding box, and
+// the column's look through any CRS-only cast), so this works regardless of which side the constant is on.
+static FilterPropagateResult IntersectsExtentFilterPrune(const FunctionStatisticsPruneInput &input) {
+	auto &children = input.function.GetChildren();
+	if (children.size() != 2) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	// Constants are folded by the time we get here, so the constant operand is a plain BoundConstantExpression.
+	const auto lhs_is_const = children[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT;
+	const auto rhs_is_const = children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT;
+	if (lhs_is_const == rhs_is_const) {
+		// Need exactly one constant operand and one column operand.
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const idx_t constant_idx = lhs_is_const ? 0 : 1;
+
+	auto column_stats = input.ChildStats(1 - constant_idx);
+	auto constant_stats = input.ChildStats(constant_idx);
+	if (!column_stats || column_stats->GetStatsType() != StatisticsType::GEOMETRY_STATS || !constant_stats ||
+	    constant_stats->GetStatsType() != StatisticsType::GEOMETRY_STATS) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!column_stats->CanHaveNoNull()) {
+		// no non-null values are possible: always false
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	const auto &col_extent = GeometryStats::GetExtent(*column_stats);
+	if (!col_extent.CanPruneXY()) {
+		// If neither axis is set (the extent is empty or fully unknown), we cannot prune.
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	const auto &const_extent = GeometryStats::GetExtent(*constant_stats);
+	if (!const_extent.CanPruneXY()) {
+		// An empty constant geometry never intersects anything.
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (!const_extent.IntersectsXY(col_extent)) {
+		// The column zonemap does not intersect the constant: no row can match.
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (const_extent.ContainsXY(col_extent)) {
+		// The constant fully covers the column zonemap, so every row that is represented in the zonemap
+		// matches. Rows that are not represented in it do not: NULL rows (the predicate evaluates to NULL
+		// for them) and empty geometries (which contribute no vertices, but never intersect anything).
+		// Only when neither can be present may we prune the filter away entirely.
+		if (column_stats->CanHaveNull() || GeometryStats::GetFlags(*column_stats).HasEmptyGeometry()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
 ScalarFunction StIntersectsExtentFun::GetFunction() {
 	ScalarFunction function({LogicalType::GEOMETRY(), LogicalType::GEOMETRY()}, LogicalType::BOOLEAN,
 	                        IntersectsExtentFunction);
+	function.SetFilterPruneCallback(IntersectsExtentFilterPrune);
 	return function;
 }
 
@@ -189,30 +251,23 @@ ScalarFunction StCrsFun::GetFunction() {
 static unique_ptr<FunctionData> SetCRSBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 
 	// Check if the CRS is set in the second argument
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("ST_SetCRS: CRS argument must be constant!");
-	}
-	const auto crs_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	if (!crs_val.IsNull()) {
-		const auto &crs_str = StringValue::Get(crs_val);
-
-		// Try to convert to identify
-		const auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs_str);
-		if (lookup) {
-			bound_function.SetReturnType(LogicalType::GEOMETRY(lookup->GetDefinition()));
-		} else {
-			// Pass on the raw string (better than nothing)
-			bound_function.SetReturnType(LogicalType::GEOMETRY(crs_str));
-		}
+	const auto crs_val = input.GetConstant(1);
+	if (crs_val.IsNull()) {
+		return nullptr;
 	}
 
-	// Erase the CRS argument expression
+	const auto &crs_str = StringValue::Get(crs_val);
+
+	// Try to convert to identify
+	const auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs_str);
+	if (lookup) {
+		bound_function.SetReturnType(LogicalType::GEOMETRY(lookup->GetDefinition()));
+	} else {
+		// Pass on the raw string (better than nothing)
+		bound_function.SetReturnType(LogicalType::GEOMETRY(crs_str));
+	}
 	return nullptr;
 }
 
@@ -221,8 +276,8 @@ static void SetCRSFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 ScalarFunction StSetcrsFun::GetFunction() {
-	ScalarFunction geom_func({LogicalType::GEOMETRY(), LogicalType::VARCHAR}, LogicalType::GEOMETRY(), SetCRSFunction,
-	                         SetCRSBind);
+	ScalarFunction geom_func({{"geom", LogicalType::GEOMETRY()}, {"crs", LogicalType::VARCHAR}},
+	                         LogicalType::GEOMETRY(), SetCRSFunction, SetCRSBind);
 	return geom_func;
 }
 
@@ -247,18 +302,7 @@ struct VertexExtractBindData final : public FunctionData {
 } // namespace
 
 static auto VertexExtractBind(BindScalarFunctionInput &input) -> unique_ptr<FunctionData> {
-	auto &arguments = input.GetArguments();
-
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("vertex_extract: vertex argument must be constant!");
-	}
-	const auto vertex_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[1]);
-	if (vertex_val.IsNull()) {
-		throw BinderException("vertex_extract: vertex argument cannot be NULL!");
-	}
+	const auto vertex_val = input.GetNonNullConstant(1);
 	const auto vertex_str = StringUtil::Lower(StringValue::Get(vertex_val));
 	if (vertex_str == "x") {
 		return make_uniq<VertexExtractBindData>(static_cast<idx_t>(0));

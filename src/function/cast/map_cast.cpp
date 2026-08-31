@@ -152,47 +152,52 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 }
 
 static bool MapToMapCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	const bool succeeded = ListCast::ListToListCast(source, result, count, parameters);
-	if (succeeded) {
+	bool all_valid = ListCast::ListToListCast(source, result, count, parameters);
+
+	// CAST: throw exception if error occurred.
+	if (!parameters.error_message) {
+		if (!all_valid) {
+			HandleCastError::AssignError("Failed to cast map entries", parameters);
+			// throws exceptions
+		}
+		MapVector::MapConversionVerify(result, count);
 		return true;
 	}
 
-	// We're not in TRY_CAST mode, so the error will be thrown.
-	if (!parameters.error_message) {
-		return false;
-	}
+	// TRY_CAST: error message, so we need to nullify the invalid map entries.
+	SelectionVector row_sel(1);
+	// Return true if the map is invalid and we need to nullify the entry.
+	auto nullify_invalid_map = [&](MapInvalidReason reason) {
+		if (reason == MapInvalidReason::VALID) {
+			return false;
+		}
+		auto error_message =
+		    reason == MapInvalidReason::DUPLICATE_KEY ? "Map keys must be unique." : "Map keys can not be NULL.";
+		D_ASSERT(parameters.error_message);
+		HandleCastError::AssignError(error_message, parameters);
+		all_valid = false;
+		return true;
+	};
 
-	// We're in TRY_CAST mode: child cast failures may have produced NULL keys in the result maps.
-	// NULL keys are not allowed, so NULL out those map entries.
-	auto &keys = MapVector::GetKeys(result);
-	auto key_validity = keys.Validity();
-
+	// Special handle constant vector, which only needs to handle one map entry.
 	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		if (!ConstantVector::IsNull(result)) {
-			auto list_data = ConstantVector::GetData<list_entry_t>(result);
-			for (idx_t j = 0; j < list_data->length; j++) {
-				if (!key_validity.IsValid(list_data->offset + j)) {
-					ConstantVector::SetNull(result, count_t(count));
-					break;
-				}
-			}
+		if (nullify_invalid_map(MapVector::CheckMapValidity(result, count))) {
+			ConstantVector::SetNull(result, count_t(count));
 		}
-	} else {
-		auto list_data = FlatVector::GetData<list_entry_t>(result);
-		auto &result_validity = FlatVector::ValidityMutable(result);
-		for (idx_t i = 0; i < count; i++) {
-			if (!result_validity.RowIsValid(i)) {
-				continue;
-			}
-			for (idx_t j = 0; j < list_data[i].length; j++) {
-				if (!key_validity.IsValid(list_data[i].offset + j)) {
-					result_validity.SetInvalid(i);
-					break;
-				}
-			}
+		return all_valid;
+	}
+
+	auto &result_validity = FlatVector::ValidityMutable(result);
+	for (idx_t idx = 0; idx < count; ++idx) {
+		if (!result_validity.RowIsValid(idx)) {
+			continue;
+		}
+		row_sel.set_index(0, idx);
+		if (nullify_invalid_map(MapVector::CheckMapValidity(result, /*count=*/1, row_sel))) {
+			result_validity.SetInvalid(idx);
 		}
 	}
-	return false;
+	return all_valid;
 }
 
 BoundCastInfo DefaultCasts::MapCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {

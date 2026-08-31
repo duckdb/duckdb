@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/main/relation.hpp"
 
 namespace duckdb {
+class Relation;
 
 class RelationStatement : public SQLStatement {
 public:

@@ -1,0 +1,27 @@
+# name: benchmark/micro/optimizer/partial_aggregate_pushdown_fact_fact.benchmark
+# description: Self-amplifying fact/fact join for partial aggregate pushdown
+# group: [optimizer]
+
+name Partial Aggregate Pushdown Fact/Fact
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE fact_a AS
+SELECT LEAST(1999, FLOOR(2000 * POW(i::DOUBLE / 150000, 3.74)))::INTEGER AS keyid
+FROM range(150000) t(i);
+CREATE TABLE fact_b AS
+SELECT
+    LEAST(1999, FLOOR(2000 * POW(i::DOUBLE / 150000, 3.74)))::INTEGER AS keyid,
+    (((i * 13) % 1000)::DOUBLE / 7.0) AS measure
+FROM range(150000) t(i);
+CREATE TABLE dim AS
+SELECT i::INTEGER AS keyid, (i % 100)::INTEGER AS bucket
+FROM range(2000) t(i);
+
+run
+SELECT d.bucket, count(*) AS cnt, avg(b.measure) AS avg_measure
+FROM fact_a a
+JOIN dim d USING (keyid)
+JOIN fact_b b USING (keyid)
+GROUP BY d.bucket

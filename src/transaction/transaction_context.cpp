@@ -1,4 +1,5 @@
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 

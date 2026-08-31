@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/column_segment_tree.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/scan_vector_type.hpp"
+#include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/atomic_ptr.hpp"
 
@@ -23,6 +24,11 @@ namespace duckdb {
 class ColumnData;
 class ColumnSegment;
 class DatabaseInstance;
+class PartialBlockManager;
+class DuckTableEntry;
+struct ColumnCheckpointState;
+struct ColumnSegmentInfo;
+struct ColumnSegmentInfoScanOptions;
 class RowGroup;
 class RowGroupWriter;
 class StorageManager;
@@ -36,6 +42,7 @@ struct TransactionData;
 struct PersistentColumnData;
 class ValidityColumnData;
 struct ColumnDataFinalizeAppendState;
+struct SuballocationBlock;
 
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
@@ -74,7 +81,8 @@ public:
 	LogicalType type;
 
 public:
-	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
+	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter,
+	                                           optional_ptr<SegmentNode<ColumnSegment>> &checked_segment);
 
 	BlockManager &GetBlockManager() const {
 		return block_manager;
@@ -222,7 +230,8 @@ public:
 
 protected:
 	//! Append a transient segment
-	void AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment);
+	void AppendTransientSegment(SegmentLock &l, optional_ptr<SuballocationBlock> transient,
+	                            optional_ptr<ColumnSegment> prev_segment);
 	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
 
 	void BeginScanVectorInternal(ColumnScanState &state);
@@ -248,6 +257,11 @@ protected:
 	idx_t FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector, idx_t row_group_start);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
+
+	static bool IsDirectNullCheckFilter(const TableFilter &filter);
+	FilterPropagateResult CheckValidityZonemap(ColumnScanState &state, TableFilter &filter,
+	                                           optional_ptr<SegmentNode<ColumnSegment>> &checked_segment,
+	                                           ColumnData &validity_column);
 
 private:
 	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);

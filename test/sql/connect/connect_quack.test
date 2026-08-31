@@ -153,3 +153,39 @@ SELECT getvariable('v');
 
 statement ok
 DISCONNECT;
+
+# ============================================================================
+# Connection-string form with options: CONNECT '<uri>' (opts) attaches an
+# ephemeral, hidden catalog with those options and binds to it in one shot;
+# DISCONNECT detaches it again.
+# ============================================================================
+
+statement ok
+CONNECT 'quack:localhost' (TOKEN 'test_token');
+
+# Query routes through the ephemeral binding to the quack backend.
+query I
+SELECT 42;
+----
+42
+
+statement ok
+DISCONNECT;
+
+# After DISCONNECT the ephemeral attachment is reaped — nothing leaks.
+query I
+SELECT count(*) FROM pragma_database_list WHERE name LIKE '__connect%';
+----
+0
+
+# Wrong option value is surfaced from the backend at attach time (and rolled back).
+statement error
+CONNECT 'quack:localhost' (TOKEN 'wrong_token');
+----
+<REGEX>:.*(token|auth|Authentication|Unauthorized).*
+
+# The failed attempt did not leave a binding or a leaked attachment.
+statement error
+DISCONNECT;
+----
+<REGEX>:.*no active CONNECT.*

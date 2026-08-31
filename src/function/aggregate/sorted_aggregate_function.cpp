@@ -213,9 +213,13 @@ struct SortedAggregateState : ListAggState {};
 //! When the caller provides a local state slot (e.g. the hash table scan), this state survives across finalize
 //! calls instead of being re-instantiated for every result chunk.
 struct SortedAggregateFinalizeState : FunctionLocalState {
+	static idx_t StateSize(const SortedAggregateBindData &order_bind) {
+		AggregateStateInput input(order_bind.function, order_bind.bind_info.get());
+		return order_bind.function.GetCallbacks().GetStateSizeCallback()(input);
+	}
+
 	explicit SortedAggregateFinalizeState(const SortedAggregateBindData &order_bind)
-	    : thread(order_bind.context), context(order_bind.context, thread, nullptr),
-	      agg_state(order_bind.function.GetCallbacks().GetStateSizeCallback()(order_bind.function)),
+	    : thread(order_bind.context), context(order_bind.context, thread, nullptr), agg_state(StateSize(order_bind)),
 	      agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())), count_t(1)) {
 		auto &buffer_allocator = BufferManager::GetBufferManager(order_bind.context).GetBufferAllocator();
 		rows.Initialize(buffer_allocator, {order_bind.buffered_struct_type});
@@ -382,6 +386,8 @@ struct SortedAggregateFunction {
 		auto cluster_update = aggr.GetCallbacks().GetStateClusterUpdateCallback();
 		auto update = aggr.GetCallbacks().GetStateUpdateCallback();
 		auto finalize = aggr.GetCallbacks().GetStateFinalizeCallback();
+		AggregateStateInput state_input(aggr, bind_info);
+		data_ptr_t agg_state_ptr = agg_state.data();
 
 		auto sdata = states.Values<SortedAggregateState *>();
 
@@ -433,7 +439,7 @@ struct SortedAggregateFunction {
 			auto global_source = sort->GetGlobalSourceState(client, *global_sink);
 			auto local_source = sort->GetLocalSourceState(context, *global_source);
 
-			initialize(aggr, agg_state.data());
+			initialize(state_input, &agg_state_ptr, 1);
 			for (;;) {
 				OperatorSourceInput source {*global_source, *local_source, interrupt};
 				scanned.Reset();
@@ -453,7 +459,7 @@ struct SortedAggregateFunction {
 							destructor(agg_state_vec, aggr_bind_info, 1);
 						}
 
-						initialize(aggr, agg_state.data());
+						initialize(state_input, &agg_state_ptr, 1);
 					}
 					const auto input_count = MinValue(state_unprocessed[sorted], scanned.size() - consumed);
 					for (column_t col_idx = 0; col_idx < scanned.ColumnCount(); ++col_idx) {
@@ -498,7 +504,7 @@ struct SortedAggregateFunction {
 		}
 
 		for (; sorted < count; ++sorted) {
-			initialize(aggr, agg_state.data());
+			initialize(state_input, &agg_state_ptr, 1);
 
 			// Finalize a single value at the next offset
 			agg_state_vec.SetVectorType(states.GetVectorType());

@@ -13,11 +13,10 @@ ProfilerPrintFormat ParseProfilerPrintFormat(const Value &val) {
 	return ProfilerPrintFormat(StringUtil::Lower(val.GetValue<string>()));
 }
 
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, const optional<bool> &explain_analyze,
-                                                 const optional<vector<GenericCopyOption>> &explain_option_list,
-                                                 unique_ptr<SQLStatement> explainable_statements) {
-	auto explain_type = explain_analyze ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(
+    PEGTransformer &transformer, const optional<Identifier> &analyze_keyword,
+    const optional<vector<GenericCopyOption>> &explain_option_list, unique_ptr<SQLStatement> explainable_statements) {
+	auto explain_type = analyze_keyword ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
 	bool format_is_set = false;
 	auto format = ProfilerPrintFormat::Default();
 	if (explain_option_list) {
@@ -27,7 +26,17 @@ PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, co
 				if (format_is_set) {
 					throw InvalidInputException("FORMAT can not be provided more than once");
 				}
-				format = ParseProfilerPrintFormat(option.children[0]);
+				if (option.children.empty()) {
+					// no constant/identifier argument: either FORMAT was given nothing at all, or its argument is an
+					// expression the parser kept whole. A bare DEFAULT keyword parses as a DefaultExpression.
+					if (option.expression && option.expression->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
+						format = ProfilerPrintFormat::Default();
+					} else {
+						throw InvalidInputException("FORMAT requires a single format name, e.g. FORMAT json");
+					}
+				} else {
+					format = ParseProfilerPrintFormat(option.children[0]);
+				}
 				format_is_set = true;
 			} else if (option_name == "analyze") {
 				explain_type = ExplainType::EXPLAIN_ANALYZE;
@@ -40,8 +49,8 @@ PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, co
 	return make_uniq<ExplainStatement>(std::move(statement), explain_type, format);
 }
 
-bool PEGTransformerFactory::TransformExplainAnalyze(PEGTransformer &transformer) {
-	return true;
+Identifier PEGTransformerFactory::TransformExplainOptionName(PEGTransformer &transformer, ParseResult &choice_result) {
+	return transformer.Transform<Identifier>(choice_result);
 }
 
 unique_ptr<SQLStatement>

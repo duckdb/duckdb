@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.5...3.29)
 
 project(ParquetExtension)
 
+# Before any subdirectory or target, which would otherwise inherit the
+# directory-wide definition
+set_extension_version_sources(parquet parquet_extension.cpp)
+
 include_directories(
   include ../../third_party/lz4 ../../third_party/parquet
   ../../third_party/thrift ../../third_party/snappy

@@ -67,8 +67,13 @@ void TaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Tas
 }
 
 bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
+	const annotated_lock_guard<annotated_mutex> lock(token.producer_lock);
+	return GetTaskFromProducerLocked(token, task);
+}
+
+bool TaskScheduler::GetTaskFromProducerLocked(ProducerToken &token, shared_ptr<Task> &task) {
 	for (auto &queue : queues) {
-		if (queue->DequeueFromProducer(token, task)) {
+		if (queue->DequeueFromProducerLocked(token, task)) {
 			return true;
 		}
 	}

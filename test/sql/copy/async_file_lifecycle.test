@@ -11,7 +11,7 @@ statement ok
 SET async_threads=2;
 
 statement ok
-SET GLOBAL debug_local_file_system_delay_ms=1;
+SET GLOBAL debug_fs_delay_mean_ms=1.0;
 
 statement ok
 CREATE TABLE lifecycle AS
@@ -86,4 +86,4 @@ SELECT count(*) FROM read_parquet('{TEST_DIR}/async_lifecycle_sync.parquet');
 4096
 
 statement ok
-SET GLOBAL debug_local_file_system_delay_ms=0;
+SET GLOBAL debug_fs_delay_mean_ms=0.0;

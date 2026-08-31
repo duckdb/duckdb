@@ -85,7 +85,9 @@ void DictionaryCompressionCompressState::AddNull() {
 	current_segment->count++;
 }
 
-void DictionaryCompressionCompressState::AddLastLookup() {
+void DictionaryCompressionCompressState::AddLastLookup(string_t str) {
+	// the string is already in the dictionary - only additive stats (total_string_length) need updating
+	stats_writer.UpdateRepeated(str);
 	selection_buffer.push_back(latest_lookup_result);
 	current_segment->count++;
 }

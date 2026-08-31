@@ -13,6 +13,8 @@
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 
+#include "duckdb/storage/table/row_group_order_options.hpp"
+
 namespace duckdb {
 class DynamicTableFilterSet;
 

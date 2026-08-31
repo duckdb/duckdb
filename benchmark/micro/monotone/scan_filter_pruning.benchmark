@@ -1,0 +1,15 @@
+# name: benchmark/micro/monotone/scan_filter_pruning.benchmark
+# description: Row-group skipping for a monotone-function filter f(col) OP const (floor is not rewritten, so this exercises the scan-time CheckStatistics pruning path)
+# group: [monotone]
+
+name MonotoneScanFilterPruning
+group micro
+
+load
+CREATE TABLE ints AS SELECT range::INTEGER AS x FROM range(50000000);
+
+run
+SELECT count(*) FROM ints WHERE floor(x::DOUBLE) > 49999000;
+
+result I
+999

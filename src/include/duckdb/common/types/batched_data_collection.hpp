@@ -10,7 +10,7 @@
 
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/common/query_parameters.hpp"
 
 namespace duckdb {
 

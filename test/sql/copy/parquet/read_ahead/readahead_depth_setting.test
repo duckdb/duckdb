@@ -1,0 +1,31 @@
+# name: test/sql/copy/parquet/read_ahead/readahead_depth_setting.test
+# description: read_ahead_depth accepts -1 (automatic), 0 (disabled) or a positive value, anything else throws
+# group: [read_ahead]
+
+statement ok
+SET read_ahead_depth=-1
+
+statement ok
+SET read_ahead_depth=0
+
+statement ok
+SET read_ahead_depth=1099511627776
+
+statement ok
+SET read_ahead_depth=42
+
+statement error
+SET read_ahead_depth=-2
+----
+<REGEX>:Invalid Input Error.*read_ahead_depth must be.*
+
+statement error
+SET read_ahead_depth=-1099511627776
+----
+<REGEX>:Invalid Input Error.*read_ahead_depth must be.*
+
+# a rejected value must not be applied
+query I
+SELECT current_setting('read_ahead_depth')
+----
+42

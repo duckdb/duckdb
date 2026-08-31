@@ -5,7 +5,7 @@ VacuumParensOptions <- Parens(List(VacuumOption))
 VacuumLegacyOptions <- OptFull? OptFreeze? OptVerbose? OptAnalyze?
 VacuumOption <- OptAnalyze / OptFreeze / OptFull / OptVerbose / Identifier
 
-OptAnalyze <- 'ANALYZE'
+OptAnalyze <- AnalyzeKeyword
 OptFull <- 'FULL'
 OptFreeze <- 'FREEZE'
 OptVerbose <- 'VERBOSE'

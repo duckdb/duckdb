@@ -10,36 +10,20 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/enums/task_scheduler_type.hpp"
+#include "duckdb/parallel/task_scheduler_token.hpp"
 
 namespace duckdb {
 
-struct QueueProducerToken;
 class ClientContext;
 struct DBConfig;
 class DatabaseInstance;
 class TaskScheduler;
 class TaskSchedulerPool;
 class TaskSchedulerQueue;
-
-struct ProducerToken {
-public:
-	explicit ProducerToken(array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULER_TYPE_COUNT> &queues);
-	~ProducerToken();
-
-public:
-	QueueProducerToken &GetQueueProducerToken(TaskSchedulerType pool_type);
-
-public:
-	mutex producer_lock;
-
-private:
-	array<unique_ptr<QueueProducerToken>, TASK_SCHEDULER_TYPE_COUNT> tokens;
-};
 
 //! The TaskScheduler is responsible for managing tasks and threads
 class TaskScheduler {
@@ -72,6 +56,8 @@ public:
 	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks);
 	//! Fetches a task from a specific producer, returns true if successful or false if no tasks were available
 	bool GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task);
+	//! Fetches a task from a specific producer, returns whether a task was found and assigned to `task`.
+	bool GetTaskFromProducerLocked(ProducerToken &token, shared_ptr<Task> &task) DUCKDB_REQUIRES(token.producer_lock);
 	//! Run tasks forever until "marker" is set to false, "marker" must remain valid until the thread is joined
 	void ExecuteForever(atomic<bool> *marker);
 	void ExecuteForever(atomic<bool> *marker, TaskSchedulerType pool_type);

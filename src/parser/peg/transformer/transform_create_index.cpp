@@ -19,8 +19,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
 		throw NotImplementedException("Please provide an index name, e.g., CREATE INDEX my_name ...");
 	}
 	index_info->table = base_table_name->Table();
-	index_info->SetQualifiedName(QualifiedName(base_table_name->GetQualifiedName().Catalog(),
-	                                           base_table_name->GetQualifiedName().Schema(), *index_name));
+	// the index lives in the same (possibly nested) schema as the table it is created on
+	index_info->SetQualifiedName(base_table_name->GetQualifiedName().WithName(*index_name));
 	index_info->index_type = index_type ? index_type->GetIdentifierName() : "ART";
 	if (insert_column_list) {
 		for (auto &column : *insert_column_list) {

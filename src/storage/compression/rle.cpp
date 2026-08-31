@@ -102,7 +102,8 @@ bool RLEAnalyze(AnalyzeState &state, const Vector &input) {
 	input.ToUnifiedFormat(vdata);
 
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
-	for (idx_t i = 0; i < input.size(); i++) {
+	const auto count = input.size();
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		rle_state.state.Update(data, vdata.validity, idx);
 	}
@@ -258,15 +259,15 @@ struct RLEScanState : public SegmentScanState {
 	                    static_cast<idx_t>(sizeof(rle_count_t))) {
 		if (rle_count_offset < RLEConstants::RLE_HEADER_SIZE) {
 			//! This would make the index_pointer point into a region reserved for the header data
-			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw DataCorruptionException("Corrupted RLE segment: rle_count_offset is corrupted");
 		}
 		if (segment.GetBlockOffset() + rle_count_offset > segment.GetBlockSize()) {
 			//! This would make the index_pointer start outside of the segment
-			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw DataCorruptionException("Corrupted RLE segment: rle_count_offset is corrupted");
 		}
-		if ((rle_count_offset - RLEConstants::RLE_HEADER_SIZE) / sizeof(T) > max_entry_pos) {
+		if (rle_count_offset > AlignValue(RLEConstants::RLE_HEADER_SIZE + max_entry_pos * sizeof(T))) {
 			//! This would make the indexing of the index_pointer[entry_pos] reach outside of the segment
-			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw DataCorruptionException("Corrupted RLE segment: rle_count_offset is corrupted");
 		}
 	}
 

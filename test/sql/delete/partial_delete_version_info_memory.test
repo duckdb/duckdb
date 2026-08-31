@@ -1,0 +1,39 @@
+# name: test/sql/delete/partial_delete_version_info_memory.test
+# description: Partially deleted vectors compress per-row delete ids into a bitmask at checkpoint
+# group: [delete]
+
+# the BASE_TABLE byte thresholds below are calibrated for the default 256KB block size
+require block_size 262144
+
+# 10 full row groups == 600 vectors of 2048 rows
+statement ok
+CREATE TABLE a AS SELECT i FROM range(1228800) t(i)
+
+statement ok
+CHECKPOINT
+
+# delete every other row: each vector is partially deleted, materializing per-row delete id arrays
+query I
+DELETE FROM a WHERE i % 2 = 0
+----
+614400
+
+# the checkpoint compresses the fully-visible partial deletes into ~256 byte bitmasks
+statement ok
+CHECKPOINT
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM a
+----
+614400	1	1228799
+
+query I
+SELECT COUNT(*) FILTER (WHERE i % 2 = 0) FROM a
+----
+0
+
+# with per-row arrays retained this is ~9.6 MB; bitmasks keep it well under 2 MB
+query I
+SELECT COALESCE(SUM(memory_usage_bytes), 0) < 2000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true

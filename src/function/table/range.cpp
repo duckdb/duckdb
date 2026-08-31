@@ -56,7 +56,7 @@ struct RangeFunctionBindData : public TableFunctionData {
 
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::BIGINT);
 	if (GENERATE_SERIES) {
 		names.emplace_back("generate_series");
@@ -222,7 +222,7 @@ struct RangeDateTimeBindData : public TableFunctionData {
 
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.push_back(LogicalType::TIMESTAMP);
 	if (GENERATE_SERIES) {
 		names.emplace_back("generate_series");
@@ -279,6 +279,14 @@ struct RangeDateTimeLocalState : public LocalTableFunctionState {
 template <bool GENERATE_SERIES>
 static void GenerateRangeDateTimeParameters(DataChunk &input, idx_t row_id, RangeDateTimeLocalState &result) {
 	input.Flatten();
+
+	// The local state is reused for every input row, so empty_range must be reset
+	// here. Without this it is only ever set to true and never back to false, so
+	// once ONE row produces an empty range every subsequent row is treated as
+	// empty and silently emits nothing. The integer overload
+	// (GenerateRangeParameters) already resets it, which is why only the
+	// timestamp overload was affected.
+	result.empty_range = false;
 
 	for (idx_t c = 0; c < input.ColumnCount(); c++) {
 		if (FlatVector::IsNull(input.data[c], row_id)) {
@@ -375,6 +383,10 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 	}
 }
 
+static bool RangeIsRepeatable(optional_ptr<const FunctionData>) {
+	return true;
+}
+
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet range("range");
 
@@ -382,7 +394,9 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	                             RangeFunctionLocalInit);
 	range_function.in_out_function = RangeFunction<false>;
 	range_function.cardinality = RangeCardinality;
+	range_function.is_repeatable = RangeIsRepeatable;
 	range_function.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
+	range_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 
 	// single argument range: (end) - implicit start = 0 and increment = 1
 	range.AddFunction(range_function);
@@ -396,7 +410,9 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	                           RangeDateTimeBind<false>, nullptr, RangeDateTimeLocalInit);
 	range_in_out.in_out_function = RangeDateTimeFunction<false>;
 	range_in_out.cardinality = RangeDateTimeCardinality;
+	range_in_out.is_repeatable = RangeIsRepeatable;
 	range_in_out.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
+	range_in_out.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 	range.AddFunction(range_in_out);
 	set.AddFunction(range);
 	// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
@@ -413,6 +429,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction generate_series_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
 	                                     nullptr, RangeDateTimeBind<true>, nullptr, RangeDateTimeLocalInit);
 	generate_series_in_out.in_out_function = RangeDateTimeFunction<true>;
+	generate_series_in_out.is_repeatable = RangeIsRepeatable;
 	generate_series_in_out.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
 	generate_series_in_out.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 	generate_series.AddFunction(generate_series_in_out);

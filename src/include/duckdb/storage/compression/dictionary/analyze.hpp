@@ -16,7 +16,7 @@ public:
 public:
 	bool LookupString(string_t str);
 	void AddNewString(string_t str);
-	void AddLastLookup();
+	void AddLastLookup(string_t str);
 	void AddNull();
 	bool CalculateSpaceRequirements(bool new_string, idx_t string_size);
 	void Flush(bool final = false);

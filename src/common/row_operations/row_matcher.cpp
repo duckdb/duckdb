@@ -1,17 +1,17 @@
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/row_operations/row_matcher.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(row_matcher_validity)
 template <bool NO_MATCH_SEL, class T, class OP>
 #else
 template <bool NO_MATCH_SEL, class T, class OP, bool LHS_ALL_VALID, bool RHS_ALL_VALID>
@@ -26,7 +26,7 @@ static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, Selecti
 	const auto lhs_data = UnifiedVectorFormat::GetData<T>(lhs_format.unified);
 	const auto &lhs_validity = lhs_format.unified.validity;
 
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(row_matcher_validity)
 	const auto LHS_ALL_VALID = lhs_validity.CannotHaveNull();
 	const auto RHS_ALL_VALID = rhs_layout.CannotHaveNull();
 #endif
@@ -65,7 +65,7 @@ template <bool NO_MATCH_SEL, class T, class OP>
 static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
                             const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
                             const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(row_matcher_validity)
 	return TemplatedMatchLoop<NO_MATCH_SEL, T, OP>(lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx,
 	                                               no_match_sel, no_match_count);
 #else
@@ -164,13 +164,13 @@ static idx_t SelectComparison(const Vector &, const Vector &, const SelectionVec
 template <>
 idx_t SelectComparison<Equals>(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
                                SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel);
+	return VectorOperations::Equals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
 idx_t SelectComparison<NotEquals>(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::NestedNotEquals(left, right, &sel, count, true_sel, false_sel);
+	return VectorOperations::NotEquals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
@@ -381,8 +381,13 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 	ExpressionType child_predicate = predicate;
 	switch (predicate) {
 	case ExpressionType::COMPARE_EQUAL:
-		result.function = StructMatchEquality<NO_MATCH_SEL, Equals>;
-		child_predicate = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+		if (type.id() == LogicalTypeId::UNION) {
+			result.function = GenericNestedMatch<NO_MATCH_SEL, Equals>;
+		} else {
+			//	STRUCT equality always uses DISTINCT semantics for the internal columns
+			child_predicate = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+			result.function = StructMatchEquality<NO_MATCH_SEL, Equals>;
+		}
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
 		result.function = GenericNestedMatch<NO_MATCH_SEL, NotEquals>;
@@ -391,7 +396,11 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 		result.function = GenericNestedMatch<NO_MATCH_SEL, DistinctFrom>;
 		return result;
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		result.function = StructMatchEquality<NO_MATCH_SEL, NotDistinctFrom>;
+		if (type.id() == LogicalTypeId::UNION) {
+			result.function = GenericNestedMatch<NO_MATCH_SEL, NotDistinctFrom>;
+		} else {
+			result.function = StructMatchEquality<NO_MATCH_SEL, NotDistinctFrom>;
+		}
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
 		result.function = GenericNestedMatch<NO_MATCH_SEL, GreaterThan>;

@@ -123,7 +123,7 @@ SELECT a::ROW(a INT, b STRING) r FROM (VALUES (ROW(1, 'asdf')), (ROW(4, 'fdsa'))
 statement error
 SELECT struct_extract({'a': a}, a) FROM (SELECT a::VARCHAR AS a FROM range(10) tbl(a));
 ----
-<REGEX>:.*Binder Error.*Key name for struct_extract needs to be a constant string.*
+<REGEX>:.*Binder Error.*struct_extract.*must be a constant expression.*
 
 statement error
 SELECT struct_extract({'a': 42}, 42)

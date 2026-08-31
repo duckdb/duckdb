@@ -1,0 +1,247 @@
+# name: test/sql/copy/parquet/writer/parquet_union_list.test
+# description: Round-trip UNION columns containing LIST via parquet (issue #20037)
+# group: [writer]
+
+# Regression tests for issue #20037 ("Struct remap can only remap named structs"),
+# which no longer reproduces. Also pins related cases from PR #24172 review:
+# - JSON MAP read with explicit columns=
+# - COPY parquet UNION (with list member) into a typed table
+# - JSON UNION read with explicit columns=
+
+require parquet
+
+require json
+
+# Issue #20037: UNION with list member failed with
+# "Struct remap can only remap named structs" on read_parquet + CAST
+
+statement ok
+CREATE TABLE origin (id INT, ufield UNION(val VARCHAR[], omitted BOOLEAN));
+
+statement ok
+INSERT INTO origin VALUES
+(1, union_value(val := ['a', 'b']::VARCHAR[])),
+(2, union_value(val := []::VARCHAR[])),
+(3, union_value(val := [NULL, 'x']::VARCHAR[])),
+(4, union_value(omitted := true)),
+(5, union_value(omitted := false)),
+(6, NULL);
+
+statement ok
+COPY origin TO '{TEMP_DIR}/u.parquet' (FORMAT PARQUET);
+
+query I
+SELECT CAST(ufield AS UNION(val VARCHAR[], omitted BOOLEAN))
+FROM read_parquet('{TEMP_DIR}/u.parquet')
+ORDER BY id
+----
+[a, b]
+[]
+[NULL, x]
+true
+false
+NULL
+
+# Without explicit CAST (read as STRUCT from parquet)
+query I
+SELECT ufield
+FROM read_parquet('{TEMP_DIR}/u.parquet')
+ORDER BY id
+----
+{'element1': 0, 'val': [a, b], 'omitted': NULL}
+{'element1': 0, 'val': [], 'omitted': NULL}
+{'element1': 0, 'val': [NULL, x], 'omitted': NULL}
+{'element1': 1, 'val': NULL, 'omitted': true}
+{'element1': 1, 'val': NULL, 'omitted': false}
+NULL
+
+# UNION of INT[]
+statement ok
+CREATE TABLE origin_int (id INT, ufield UNION(nums INT[], flag BOOLEAN));
+
+statement ok
+INSERT INTO origin_int VALUES
+(1, union_value(nums := [1, 2, 3])),
+(2, union_value(nums := [])),
+(3, union_value(flag := true));
+
+statement ok
+COPY origin_int TO '{TEMP_DIR}/u_int.parquet' (FORMAT PARQUET);
+
+query I
+SELECT CAST(ufield AS UNION(nums INT[], flag BOOLEAN))
+FROM read_parquet('{TEMP_DIR}/u_int.parquet')
+ORDER BY id
+----
+[1, 2, 3]
+[]
+true
+
+# Nested STRUCT inside list member of UNION
+statement ok
+CREATE TABLE origin_struct (id INT, ufield UNION(items STRUCT(a INT, b VARCHAR)[], other BOOLEAN));
+
+statement ok
+INSERT INTO origin_struct VALUES
+(1, union_value(items := [{'a': 1, 'b': 'x'}, {'a': 2, 'b': 'y'}]::STRUCT(a INT, b VARCHAR)[])),
+(2, union_value(items := []::STRUCT(a INT, b VARCHAR)[])),
+(3, union_value(other := false));
+
+statement ok
+COPY origin_struct TO '{TEMP_DIR}/u_struct.parquet' (FORMAT PARQUET);
+
+query I
+SELECT CAST(ufield AS UNION(items STRUCT(a INT, b VARCHAR)[], other BOOLEAN))
+FROM read_parquet('{TEMP_DIR}/u_struct.parquet')
+ORDER BY id
+----
+[{'a': 1, 'b': x}, {'a': 2, 'b': y}]
+[]
+false
+
+# LIST of UNION
+statement ok
+CREATE TABLE origin_list_union (id INT, items UNION(str VARCHAR, num INT)[]);
+
+statement ok
+INSERT INTO origin_list_union VALUES
+(1, [1::UNION(str VARCHAR, num INT), 'one']),
+(2, []::UNION(str VARCHAR, num INT)[]),
+(3, NULL);
+
+statement ok
+COPY origin_list_union TO '{TEMP_DIR}/list_union.parquet' (FORMAT PARQUET);
+
+query I
+SELECT items FROM read_parquet('{TEMP_DIR}/list_union.parquet')
+ORDER BY id
+----
+[{'element1': 1, 'str': NULL, 'num': 1}, {'element1': 0, 'str': one, 'num': NULL}]
+[]
+NULL
+
+# UNION nested in LIST nested in STRUCT (issue #20037 nesting shape)
+statement ok
+CREATE TABLE origin_nested (id INT, s STRUCT(items UNION(val VARCHAR[], flag BOOLEAN)[], n INT));
+
+statement ok
+INSERT INTO origin_nested VALUES
+(1, {
+	'items': [
+		union_value(val := ['a']::VARCHAR[])::UNION(val VARCHAR[], flag BOOLEAN),
+		union_value(flag := true)::UNION(val VARCHAR[], flag BOOLEAN)
+	],
+	'n': 1
+}),
+(2, {'items': []::UNION(val VARCHAR[], flag BOOLEAN)[], 'n': 2});
+
+statement ok
+COPY origin_nested TO '{TEMP_DIR}/nested_union_list.parquet' (FORMAT PARQUET);
+
+query I
+SELECT s FROM read_parquet('{TEMP_DIR}/nested_union_list.parquet')
+ORDER BY id
+----
+{'items': [{'element1': 0, 'val': [a], 'flag': NULL}, {'element1': 1, 'val': NULL, 'flag': true}], 'n': 1}
+{'items': [], 'n': 2}
+
+# Single-member UNION with list
+statement ok
+CREATE TABLE origin_single (id INT, u UNION(vals INT[]));
+
+statement ok
+INSERT INTO origin_single VALUES
+(1, union_value(vals := [10, 20])),
+(2, NULL);
+
+statement ok
+COPY origin_single TO '{TEMP_DIR}/single_union.parquet' (FORMAT PARQUET);
+
+query I
+SELECT CAST(u AS UNION(vals INT[])) FROM read_parquet('{TEMP_DIR}/single_union.parquet') ORDER BY id
+----
+[10, 20]
+NULL
+
+# MAP nested under STRUCT (MAP must not require synthetic global children)
+statement ok
+CREATE TABLE origin_map (id INT, s STRUCT(m MAP(VARCHAR, INT[]), n INT));
+
+statement ok
+INSERT INTO origin_map VALUES
+(1, {'m': map(['a'], [[1, 2]]), 'n': 1}),
+(2, {'m': map([], []::INT[][]), 'n': 2});
+
+statement ok
+COPY origin_map TO '{TEMP_DIR}/map_list.parquet' (FORMAT PARQUET);
+
+query I
+SELECT s FROM read_parquet('{TEMP_DIR}/map_list.parquet')
+ORDER BY id
+----
+{'m': {a=[1, 2]}, 'n': 1}
+{'m': {}, 'n': 2}
+
+# MAP with STRUCT key / MAP in LIST
+statement ok
+CREATE TABLE origin_map_struct (id INT, m MAP(STRUCT(k INT), INT), lst MAP(VARCHAR, INT)[]);
+
+statement ok
+INSERT INTO origin_map_struct VALUES
+(1, map([{'k': 1}], [10]), [map(['x'], [1]), map(['y'], [2])]),
+(2, map([], []::INT[]), []::MAP(VARCHAR, INT)[]);
+
+statement ok
+COPY origin_map_struct TO '{TEMP_DIR}/map_struct.parquet' (FORMAT PARQUET);
+
+query II
+SELECT m, lst FROM read_parquet('{TEMP_DIR}/map_struct.parquet') ORDER BY id
+----
+{{'k': 1}=10}	[{x=1}, {y=2}]
+{}	[]
+
+# --- PR #24172 review repros (lnkuiper) ---
+# https://github.com/duckdb/duckdb/pull/24172#issuecomment-5090404646
+# https://github.com/duckdb/duckdb/pull/24172#issuecomment-5142218314
+
+# JSON MAP with explicit columns= (must not invent key/value global children)
+statement ok
+COPY (SELECT map(['a'], [1]) AS m) TO '{TEMP_DIR}/map.json' (FORMAT JSON);
+
+query I
+SELECT m['a'] FROM read_json('{TEMP_DIR}/map.json', columns = {m: 'MAP(VARCHAR, INTEGER)'});
+----
+1
+
+# COPY parquet UNION (list member) into a typed table
+statement ok
+CREATE TABLE source(u UNION(val INTEGER[], omitted BOOLEAN));
+
+statement ok
+INSERT INTO source VALUES (union_value(val := [1, 2])), (union_value(omitted := true));
+
+statement ok
+COPY source TO '{TEMP_DIR}/union_copy.parquet' (FORMAT PARQUET);
+
+statement ok
+CREATE TABLE target(u UNION(val INTEGER[], omitted BOOLEAN));
+
+statement ok
+COPY target FROM '{TEMP_DIR}/union_copy.parquet' (FORMAT PARQUET);
+
+query I
+SELECT u FROM target;
+----
+[1, 2]
+true
+
+# JSON UNION with explicit columns= (must not route UNION through remap_struct)
+statement ok
+COPY (SELECT union_value(element1 := 42)::UNION(element1 INTEGER, other BOOLEAN) AS data)
+TO '{TEMP_DIR}/union_element1.json' (FORMAT JSON);
+
+query I
+SELECT data FROM read_json('{TEMP_DIR}/union_element1.json',
+	columns = {data: 'UNION(element1 INTEGER, other BOOLEAN)'});
+----
+42

@@ -28,6 +28,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	    add_column.new_column.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
 		return std::move(result);
 	}
+	if (add_column.if_column_not_exists) {
+		// IF NOT EXISTS is not supported by the multi-statement rewrite - keep the plain ALTER
+		return std::move(result);
+	}
 	auto &column_entry = add_column.new_column;
 	auto null_column = column_entry.Copy();
 	null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
@@ -108,12 +112,10 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
 	return QualifiedName(std::move(schema_path), sequence_name);
 }
 
-unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceOptions(PEGTransformer &transformer,
-                                                                           ParseResult &choice_result) {
-	if (choice_result.name == "RenameAlter") {
-		return transformer.Transform<unique_ptr<AlterTableInfo>>(choice_result);
-	}
-	return transformer.Transform<unique_ptr<AlterInfo>>(choice_result);
+unique_ptr<AlterInfo>
+PEGTransformerFactory::TransformRenameAlterSequenceOptions(PEGTransformer &transformer,
+                                                           unique_ptr<AlterTableInfo> rename_alter) {
+	return std::move(rename_alter);
 }
 
 unique_ptr<AlterInfo>

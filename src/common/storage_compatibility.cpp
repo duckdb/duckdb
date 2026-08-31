@@ -49,7 +49,7 @@ StorageCompatibility StorageCompatibility::Default() {
 	res.manually_set = false;
 	return res;
 #else
-	auto res = FromString("v0.10.2");
+	auto res = FromIndex(StorageVersionInfo::GetStorageVersionDefault());
 	res.duckdb_version = "latest";
 	res.manually_set = false;
 	return res;
@@ -65,6 +65,10 @@ StorageCompatibility StorageCompatibility::Latest() {
 
 bool StorageCompatibility::Compare(StorageVersion property_version) const {
 	return property_version <= storage_version;
+}
+
+bool StorageCompatibility::CanPersistRowIdGaps() const {
+	return Compare(StorageVersion::V2_0_0);
 }
 
 bool StorageCompatibility::CompareVersionString(const string &property_version) const {

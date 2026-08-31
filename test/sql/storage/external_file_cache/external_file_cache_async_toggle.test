@@ -1,0 +1,54 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_async_toggle.test
+# description: Concurrent cache toggles must not invalidate file handles used by async Parquet reads
+# group: [external_file_cache]
+
+require parquet
+
+statement ok
+SET threads=4
+
+statement ok
+SET async_threads=4
+
+# Keep row-group I/O on the per-scan async path.
+statement ok
+SET read_ahead_depth=0
+
+statement ok
+SET cache_local_files=true
+
+statement ok
+SET GLOBAL debug_fs_random_seed=424242
+
+statement ok
+COPY (
+    SELECT i
+    FROM range(1000000) t(i)
+) TO '{TEST_DIR}/external_file_cache_async_toggle.parquet'
+(FORMAT PARQUET, ROW_GROUP_SIZE 50000)
+
+# Widen the interval between acquiring and using the shared file handle.
+statement ok
+SET GLOBAL debug_fs_delay_mean_ms=5
+
+statement ok
+SET GLOBAL debug_fs_delay_stddev_ms=5
+
+# Half the connections repeatedly disable the cache while the other half enable it.
+# Every connection also scans, so toggles overlap async reads from live CachingFileHandles.
+concurrentforeach enabled true false true false true false true false
+
+loop iteration 0 5
+
+statement ok
+SET enable_external_file_cache={enabled}
+
+query II
+SELECT count(*), sum(i)
+FROM read_parquet('{TEST_DIR}/external_file_cache_async_toggle.parquet', prefetch_strategy='whole_group')
+----
+1000000	499999500000
+
+endloop
+
+endloop

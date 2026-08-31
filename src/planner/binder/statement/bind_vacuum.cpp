@@ -53,7 +53,7 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 		// ignore generated column
 		if (col.Generated()) {
 			throw BinderException(
-			    "cannot vacuum or analyze generated column \"%s\" - specify non-generated columns to vacuum or analyze",
+			    "cannot vacuum or analyze generated column %s - specify non-generated columns to vacuum or analyze",
 			    col.GetName());
 		}
 		non_generated_column_names.emplace_back(col_name);

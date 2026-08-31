@@ -1,0 +1,252 @@
+module: sql_statement
+#
+# Turn a SQL string into individual statements. parse_sql parses and nothing
+# more: no binding, no catalog access, no transaction. The connection supplies
+# the parser state — its options and the parser extensions loaded on it — so a
+# statement parsed on one connection should be executed on that connection.
+# Statements are raw parser output; statement-level rewrites (pragma
+# reparsing, statement expansion, transaction wrapping) happen inside
+# statement_execute, so one user statement is always one handle.
+#
+# The iterator yields one owned statement per statement_iterator_next call.
+# Passing a statement to statement_execute does not consume it — a copy is
+# what runs — so the same statement can be executed again, possibly with a
+# different set of parameter values, and the caller always destroys it via
+# sql_statement_destroy. The statement handle is fully opaque; the
+# introspection that matters for execution (result type, statement type,
+# column schema) lives on the result handle.
+#
+# A parse error surfaces either from parse_sql, when the implementation parses
+# eagerly and so reports it up front and yields no statements, or from the
+# statement_iterator_next call that reaches the failing statement, when the
+# implementation is incremental and so yields the statements before it.
+# Callers must handle both, by checking every return code.
+
+handles:
+  sql_statement:
+    description: |
+      An opaque, owned handle to a single parsed SQL statement, produced by
+      statement_iterator_next. statement_execute runs it without consuming it;
+      the caller always destroys it via sql_statement_destroy.
+    cleanup_with: sql_statement_destroy
+  statement_iterator:
+    description: |
+      An opaque, owned handle to an iterator over the statements of a SQL
+      string, produced by parse_sql. Destroy it via statement_iterator_destroy;
+      statements it already yielded are independently owned and unaffected.
+    cleanup_with: statement_iterator_destroy
+functions:
+  parse_sql:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Parses a SQL string into an iterator over its statements.
+
+      Parses and nothing more: no binding, no catalog access, no transaction.
+      The connection supplies the parser options and parser extensions, and is
+      not otherwise touched. Statements are raw parser output; statement-level
+      rewrites happen inside statement_execute. The SQL string is copied, so
+      the caller may free it once this call returns. An input with no
+      statements — empty, whitespace, or separators only — yields an iterator
+      that is immediately exhausted.
+    role: constructor
+    belongs_to: statement_iterator
+    parameters:
+      conn:
+        type: connection
+        description: The connection supplying the parser state.
+      sql:
+        type: char
+        indirection: 1
+        const: true
+        description: Null-terminated SQL string; may contain any number of statements.
+      out_iterator:
+        type: statement_iterator
+        indirection: 1
+        kind: OUT
+        description: Receives the new iterator handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  statement_iterator_next:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Yields the next statement, or NULL when exhausted.
+
+      On success *out_statement receives the next owned statement, or NULL once
+      the iterator is exhausted — repeatedly, so calling again is harmless. A
+      parse error within the input surfaces no later than the call that reaches
+      the failing statement: an implementation that parses eagerly reports it
+      from parse_sql instead and yields no statements at all, while an
+      incremental one yields the statements ahead of the failure first. On
+      failure *out_statement is set to NULL.
+    role: method
+    belongs_to: statement_iterator
+    parameters:
+      iterator:
+        type: statement_iterator
+        description: The iterator to advance.
+      out_statement:
+        type: sql_statement
+        indirection: 1
+        kind: OUT
+        description: Receives an owned statement, or NULL when the iterator is exhausted.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  statement_bind:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Binds a parsed statement without executing, yielding its schema signature.
+
+      Preprocesses and binds the statement exactly as execution would, but runs
+      nothing: the result is the statement's signature as two schemas, not a
+      query result. The statement is borrowed, not consumed, so it can be bound
+      as often as you like and executed later. out_schema receives the output
+      schema (result columns) and is never empty, since a non-SELECT reports a
+      single status column: a BIGINT changed-rows count, or a BOOLEAN success.
+      out_parameters, when non-NULL, receives the input schema (parameter
+      types, ordered by binding index). Both are owned; destroy them via
+      schema_destroy.
+
+      Binding is read-only and does not disturb a live result: it begins no
+      query, claims no cursor, reuses an active transaction read-only, and runs
+      alongside a paused stream. It is single-consumer like the stepping
+      functions, so bind concurrently only on a second connection.
+      Prepare-time errors — binder, catalog, preprocessing — surface here. A
+      statement that preprocessing expands into a group (a dynamic PIVOT, or
+      statement-expanding DDL such as ALTER ADD COLUMN with a non-constant
+      DEFAULT) cannot be bound and is rejected with ERROR_INPUT_INVALID;
+      execute it instead.
+
+      *out_schema and *out_parameters are set to NULL on failure.
+    role: method
+    belongs_to: sql_statement
+    parameters:
+      conn:
+        type: connection
+        description: The connection supplying the catalog, transaction, and parser state.
+      statement:
+        type: sql_statement
+        description: The statement to bind. Borrowed; not consumed.
+      out_schema:
+        type: schema
+        indirection: 1
+        kind: OUT
+        description: Receives the owned output schema (result columns). Destroy via schema_destroy.
+      out_parameters:
+        type: schema
+        indirection: 1
+        kind: OUT
+        description: Optional. When non-NULL, receives the owned input schema (parameter types, ordered by binding index). Destroy via schema_destroy.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+#  statement_add_collection:
+#    lifecycle:
+#      - [ "stable", "v2.0.0", "2026-08-04" ]
+#    description: |
+#      Binds a filled column data collection to the statement under a name.
+#
+#      Makes the collection visible to the statement as a table named name, by
+#      injecting a common table expression into the parsed statement. The
+#      statement can then be bound, prepared, or executed through the existing
+#      surface; each execution scans the collection's contents at that moment.
+#      Supported statement types are SELECT, INSERT, UPDATE, DELETE, and MERGE
+#      INTO; any other type is rejected with ERROR_INPUT_INVALID.
+#
+#      name is a borrowed string view and must be non-empty. A name already
+#      present in the statement's CTE map (from the SQL text or a prior call) is
+#      rejected with ERROR_INPUT_INVALID. The binding shadows any catalog table
+#      named name, following standard CTE semantics.
+#
+#      By default the collection's columns bind as col1..colN. Pass column_names
+#      to bind them under caller-chosen names instead, so the statement can
+#      reference them directly (FROM buf) without an alias. When supplied,
+#      column_count must equal the collection's column count; a mismatch is
+#      rejected with ERROR_INPUT_INVALID. Pass (NULL, 0) for the col1..colN
+#      default.
+#
+#      The collection is borrowed: the caller keeps ownership and must keep it
+#      alive while the statement, any prepared statement created from it, and any
+#      result executed from it are live, and must not reset or destroy it while
+#      such a result is live, because result scans reference the collection's
+#      buffers. An empty collection is a valid binding. Multiple collections
+#      attach under distinct names.
+#    role: method
+#    belongs_to: sql_statement
+#    parameters:
+#      statement:
+#        type: sql_statement
+#        description: The statement to bind the collection into. Borrowed; mutated in place.
+#      name:
+#        type: identifier
+#        description: The non-empty identifier the statement references. The empty view {NULL, 0} is rejected.
+#      collection:
+#        type: column_data_collection
+#        description: The filled collection to make visible. Borrowed; the caller keeps ownership.
+#      column_names:
+#        type: identifier
+#        indirection: 1
+#        const: true
+#        description: Optional. An array of column_count names for the collection's columns, in order. Pass NULL to bind them as col1..colN.
+#      column_count:
+#        type: idx
+#        description: The number of names in column_names. Pass 0 to bind the columns as col1..colN; otherwise it must equal the collection's column count.
+#      err:
+#        type: error_info
+#        indirection: 1
+#        kind: OUT
+#        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+#    return_type: ERROR
+
+  sql_statement_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys a statement handle.
+
+      Null-safe: passing nullptr or a slot already set to nullptr is a no-op.
+      statement_execute does not consume a statement, so every statement is
+      destroyed here once it is no longer needed. On success the slot is set to
+      nullptr.
+    role: destructor
+    belongs_to: sql_statement
+    parameters:
+      statement:
+        type: sql_statement
+        indirection: 1
+        description: The statement to destroy.
+    return_type: ERROR
+
+  statement_iterator_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys a statement iterator handle.
+
+      Null-safe: passing nullptr or a slot already set to nullptr is a no-op.
+      Statements already yielded are independently owned and stay valid. On
+      success the slot is set to nullptr.
+    role: destructor
+    belongs_to: statement_iterator
+    parameters:
+      iterator:
+        type: statement_iterator
+        indirection: 1
+        description: The iterator to destroy.
+    return_type: ERROR

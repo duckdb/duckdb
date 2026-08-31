@@ -1,0 +1,130 @@
+# name: test/sql/table_function/external_resource_types.test
+# description: register_external_resource_type + duckdb_external_resource_types (append-only registry)
+# group: [table_function]
+
+# The registry starts empty.
+query I
+SELECT count(*) FROM duckdb_external_resource_types();
+----
+0
+
+# Register a minimal resource type (name positional; kind + create named). Optional callbacks are NULL.
+statement ok
+CALL register_external_resource_type('quack@aws:ec2', kind := 'catalog', create_function := 'quack_create');
+
+query TTTTTTT
+SELECT name, kind, create_function, status_function, destroy_function, resolve_function, origin FROM duckdb_external_resource_types();
+----
+quack@aws:ec2	catalog	quack_create	NULL	NULL	NULL	user
+
+# Register with all optional callbacks.
+statement ok
+CALL register_external_resource_type('pg@aws:rds', kind := 'catalog', create_function := 'pg_create',
+    status_function := 'pg_status', destroy_function := 'pg_destroy', resolve_function := 'pg_resolve');
+
+query TTT
+SELECT status_function, destroy_function, resolve_function FROM duckdb_external_resource_types() WHERE name = 'pg@aws:rds';
+----
+pg_status	pg_destroy	pg_resolve
+
+# kind is a free-form classification (not restricted to 'catalog').
+statement ok
+CALL register_external_resource_type('scratch_bucket', kind := 'storage', create_function := 's3_bucket_create', destroy_function := 's3_bucket_destroy');
+
+query TT
+SELECT kind, destroy_function FROM duckdb_external_resource_types() WHERE name = 'scratch_bucket';
+----
+storage	s3_bucket_destroy
+
+# First-wins: re-registering an existing name errors (a name is claimed once, no mutation).
+statement error
+CALL register_external_resource_type('quack@aws:ec2', kind := 'catalog', create_function := 'quack_create_v2');
+----
+<REGEX>:.*already registered.*
+
+# The original registration is unchanged: still one row, still the first definition.
+query TI
+SELECT create_function, count(*) OVER () FROM duckdb_external_resource_types() WHERE name = 'quack@aws:ec2';
+----
+quack_create	1
+
+# NULL required arguments are rejected.
+statement error
+CALL register_external_resource_type(NULL, kind := 'catalog', create_function := 'x');
+----
+<REGEX>:.*must not be NULL.*
+
+# Empty name is rejected.
+statement error
+CALL register_external_resource_type('', kind := 'catalog', create_function := 'x');
+----
+<REGEX>:.*must not be NULL or empty.*
+
+# Callback names are validated at registration: the registry is append-only, so an unusable name would squat
+# its type name until restart and only fail (confusingly) once create_external_resource ran it.
+
+# An empty quoted identifier names nothing.
+statement error
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := '""', status_function := 'st');
+----
+<REGEX>:.*'create_function' is not a valid function name.*
+
+# A bare separator names nothing either.
+statement error
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := '.');
+----
+<REGEX>:.*'create_function' is not a valid function name.*
+
+# Deeper than catalog.schema.name.
+statement error
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := 'a.b.c.d');
+----
+<REGEX>:.*'create_function' is not a valid function name.*
+
+# An unterminated quote fails to parse.
+statement error
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := '"unterminated');
+----
+<REGEX>:.*'create_function' is not a valid function name.*
+
+# Empty catalog/schema components.
+statement error
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := 'a..b');
+----
+<REGEX>:.*'create_function' has an empty catalog or schema component.*
+
+statement error
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := '.foo');
+----
+<REGEX>:.*'create_function' has an empty catalog or schema component.*
+
+# The optional callbacks are validated the same way when set.
+statement error
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := 'c', status_function := '""');
+----
+<REGEX>:.*'status_function' is not a valid function name.*
+
+statement error
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := 'c', destroy_function := 'a.b.c.d');
+----
+<REGEX>:.*'destroy_function' is not a valid function name.*
+
+statement error
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := 'c', resolve_function := '.foo');
+----
+<REGEX>:.*'resolve_function' has an empty catalog or schema component.*
+
+# None of the rejected registrations claimed the name.
+query I
+SELECT count(*) FROM duckdb_external_resource_types() WHERE name = 'q@x';
+----
+0
+
+# A qualified (and quoted) name is valid and stored verbatim.
+statement ok
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := 'my_catalog.my_schema."weird name"');
+
+query T
+SELECT create_function FROM duckdb_external_resource_types() WHERE name = 'q@x';
+----
+my_catalog.my_schema."weird name"

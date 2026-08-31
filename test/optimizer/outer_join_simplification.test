@@ -53,6 +53,114 @@ ORDER BY 1;
 ----
 logical_opt	<!REGEX>:.*LEFT.*
 
+query II
+EXPLAIN SELECT l.i
+FROM range(3) l(i)
+LEFT JOIN range(2) r(i) ON l.i = r.i
+WHERE r.i IS NULL
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*ANTI.*
+
+query II
+EXPLAIN SELECT li
+FROM (
+    SELECT l.i AS li, r.i AS ri
+    FROM range(3) l(i)
+    LEFT JOIN range(2) r(i) ON l.i = r.i
+) t
+WHERE ri IS NULL
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*ANTI.*
+
+query II
+EXPLAIN SELECT l.i, r.i
+FROM range(3) l(i)
+LEFT JOIN range(2) r(i) ON l.i = r.i
+WHERE r.i IS NULL
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*ANTI.*
+
+query II
+EXPLAIN SELECT l.i, r.v
+FROM (VALUES (1), (2), (3)) l(i)
+LEFT JOIN (VALUES (1, 10), (2, 20)) r(i, v) ON l.i = r.i
+WHERE r.i IS NULL
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*ANTI.*
+
+query II
+EXPLAIN SELECT l.i
+FROM (VALUES (1), (2), (3)) l(i)
+LEFT JOIN (VALUES (1), (2)) r(i) ON l.i = r.i
+WHERE CAST(r.i AS BIGINT) IS NULL
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*ANTI.*
+
+query II
+EXPLAIN SELECT l.i
+FROM (VALUES (1), (2), (3)) l(i)
+LEFT JOIN (VALUES (1), (2)) r(i) ON l.i = CAST(r.i AS BIGINT)
+WHERE CAST(r.i AS BIGINT) IS NULL
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*ANTI.*
+
+query II
+EXPLAIN SELECT l.s
+FROM (VALUES ('x'), ('2'), ('3')) l(s)
+LEFT JOIN (VALUES ('x'), ('2')) r(s) ON l.s = r.s
+WHERE TRY_CAST(r.s AS INTEGER) IS NULL
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*LEFT.*
+
+query II
+EXPLAIN SELECT l.s
+FROM (VALUES ('x'), ('2'), ('3')) l(s)
+LEFT JOIN (VALUES ('x'), ('2')) r(s) ON l.s = r.s
+WHERE CAST(r.s AS INTEGER) IS NULL
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*LEFT.*
+
+query II
+EXPLAIN SELECT l.i
+FROM (VALUES (1), (2), (3)) l(i)
+LEFT JOIN (VALUES (1, NULL), (2, 5)) r(i, v) ON l.i = r.i
+WHERE r.v IS NULL
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*LEFT.*
+
+query II
+EXPLAIN SELECT l.i
+FROM (VALUES (NULL), (1), (2)) l(i)
+LEFT JOIN (VALUES (NULL), (1)) r(i) ON l.i IS NOT DISTINCT FROM r.i
+WHERE r.i IS NULL
+ORDER BY 1 NULLS FIRST;
+----
+logical_opt	<REGEX>:.*LEFT.*
+
+query II
+EXPLAIN WITH sales AS (
+    SELECT y, l.i, sum(q) AS total_q
+    FROM (VALUES (2000, 1, 10), (2000, 2, 20), (2001, 3, 30)) l(y, i, q)
+    LEFT JOIN (VALUES (1), (3)) r(i) ON l.i = r.i
+    WHERE r.i IS NULL
+    GROUP BY y, l.i
+)
+SELECT *
+FROM sales
+WHERE y = 2000
+ORDER BY i;
+----
+logical_opt	<REGEX>:.*ANTI.*
+
 # Then a bunch of correct result checks
 query II
 SELECT l.i, r.i
@@ -84,6 +192,104 @@ ORDER BY 1;
 0	0
 1	1
 2	2
+
+query I
+SELECT l.i
+FROM (VALUES (NULL), (1), (2), (3)) l(i)
+LEFT JOIN (VALUES (NULL), (1), (1)) r(i) ON l.i = r.i
+WHERE r.i IS NULL
+ORDER BY 1 NULLS FIRST;
+----
+NULL
+2
+3
+
+query I
+SELECT li
+FROM (
+    SELECT l.i AS li, r.i AS ri
+    FROM range(3) l(i)
+    LEFT JOIN range(2) r(i) ON l.i = r.i
+) t
+WHERE ri IS NULL
+ORDER BY 1;
+----
+2
+
+query II
+SELECT l.i, r.i
+FROM range(3) l(i)
+LEFT JOIN range(2) r(i) ON l.i = r.i
+WHERE r.i IS NULL
+ORDER BY 1;
+----
+2	NULL
+
+query II
+SELECT l.i, r.v
+FROM (VALUES (1), (2), (3)) l(i)
+LEFT JOIN (VALUES (1, 10), (2, 20)) r(i, v) ON l.i = r.i
+WHERE r.i IS NULL
+ORDER BY 1;
+----
+3	NULL
+
+query I
+SELECT l.i
+FROM (VALUES (1), (2), (3)) l(i)
+LEFT JOIN (VALUES (1), (2)) r(i) ON l.i = r.i
+WHERE CAST(r.i AS BIGINT) IS NULL
+ORDER BY 1;
+----
+3
+
+query I
+SELECT l.i
+FROM (VALUES (1), (2), (3)) l(i)
+LEFT JOIN (VALUES (1), (2)) r(i) ON l.i = CAST(r.i AS BIGINT)
+WHERE CAST(r.i AS BIGINT) IS NULL
+ORDER BY 1;
+----
+3
+
+query I
+SELECT l.s
+FROM (VALUES ('x'), ('2'), ('3')) l(s)
+LEFT JOIN (VALUES ('x'), ('2')) r(s) ON l.s = r.s
+WHERE TRY_CAST(r.s AS INTEGER) IS NULL
+ORDER BY 1;
+----
+3
+x
+
+statement error
+SELECT l.s
+FROM (VALUES ('x'), ('2'), ('3')) l(s)
+LEFT JOIN (VALUES ('x'), ('2')) r(s) ON l.s = r.s
+WHERE CAST(r.s AS INTEGER) IS NULL
+ORDER BY 1;
+----
+<REGEX>:.*Could not convert string 'x' to INT32.*
+
+query I
+SELECT l.i
+FROM (VALUES (1), (2), (3)) l(i)
+LEFT JOIN (VALUES (1, NULL), (2, 5)) r(i, v) ON l.i = r.i
+WHERE r.v IS NULL
+ORDER BY 1;
+----
+1
+3
+
+query I
+SELECT l.i
+FROM (VALUES (NULL), (1), (2)) l(i)
+LEFT JOIN (VALUES (NULL), (1)) r(i) ON l.i IS NOT DISTINCT FROM r.i
+WHERE r.i IS NULL
+ORDER BY 1 NULLS FIRST;
+----
+NULL
+2
 
 query II
 SELECT l.i, r.i
@@ -136,3 +342,29 @@ ORDER BY sumsales NULLS FIRST,
 LIMIT 100;
 ----
 logical_opt	<!REGEX>:.*(LEFT|RIGHT).*
+
+# TPC-DS Q78
+query II
+EXPLAIN WITH ws AS
+  (SELECT d_year AS ws_sold_year,
+          ws_item_sk,
+          ws_bill_customer_sk ws_customer_sk,
+          sum(ws_quantity) ws_qty,
+          sum(ws_wholesale_cost) ws_wc,
+          sum(ws_sales_price) ws_sp
+   FROM web_sales
+   LEFT JOIN web_returns ON wr_order_number=ws_order_number
+   AND ws_item_sk=wr_item_sk
+   JOIN date_dim ON ws_sold_date_sk = d_date_sk
+   WHERE wr_order_number IS NULL
+   GROUP BY d_year,
+            ws_item_sk,
+            ws_bill_customer_sk )
+SELECT *
+FROM ws
+ORDER BY ws_sold_year,
+         ws_item_sk,
+         ws_customer_sk
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*ANTI.*

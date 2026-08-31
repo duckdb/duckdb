@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/array_ptr.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 class ExpressionExecutor;
@@ -27,9 +28,12 @@ public:
 
 public:
 	explicit ExpressionFilter(unique_ptr<Expression> expr);
+	ExpressionFilter(unique_ptr<Expression> expr, vector<ProjectionIndex> column_indexes);
 
 	//! The expression to evaluate
 	unique_ptr<Expression> expr;
+	//! For multi-column filters, maps BoundReferenceExpression indexes to scan projection indexes
+	vector<ProjectionIndex> column_indexes;
 
 public:
 	bool EvaluateWithConstant(ClientContext &context, const Value &val) const;
@@ -51,6 +55,14 @@ public:
 	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, const BaseStatistics &stats);
 	static FilterPropagateResult CheckExpressionStatistics(optional_ptr<ClientContext> context_p,
 	                                                       const Expression &expr, const BaseStatistics &stats);
+	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr,
+	                                                       array_ptr<const BaseStatistics> input_stats);
+	static FilterPropagateResult CheckExpressionStatistics(optional_ptr<ClientContext> context_p,
+	                                                       const Expression &expr,
+	                                                       array_ptr<const BaseStatistics> input_stats);
+	//! Derive statistics for an expression over one or more input columns
+	static unique_ptr<BaseStatistics> TryGetExpressionStatistics(ClientContext &context, const Expression &expr,
+	                                                             array_ptr<const BaseStatistics> input_stats);
 	//! Check if an expression tree contains an internal function with the given name
 	static bool ContainsInternalFunction(const Expression &expr, const string &func_name);
 	//! Check if an expression tree is entirely optional filter semantics

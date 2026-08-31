@@ -11,7 +11,6 @@
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 namespace duckdb {

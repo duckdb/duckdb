@@ -12,6 +12,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass
 from io import StringIO
@@ -472,6 +473,8 @@ def render_test_snippet(test_name: str | None, line_number: int | None):
     except OSError:
         return []
 
+    if line_number > len(file_lines):
+        return []
     start_idx = line_number - 1
     while start_idx > 0 and file_lines[start_idx - 1].strip():
         start_idx -= 1
@@ -480,9 +483,11 @@ def render_test_snippet(test_name: str | None, line_number: int | None):
 
 def render_snippet_window(file_lines: list[str], line_number: int, start_idx: int, end_idx: int | None):
     if end_idx is None:
-        end_idx = line_number
+        end_idx = min(line_number, len(file_lines))
         while end_idx < len(file_lines) and file_lines[end_idx].strip():
             end_idx += 1
+    start_idx = max(0, start_idx)
+    end_idx = min(end_idx, len(file_lines))
     window = [(idx + 1, file_lines[idx]) for idx in range(start_idx, end_idx)]
     while window and not window[0][1].strip():
         window.pop(0)
@@ -903,6 +908,15 @@ def format_signal_summary(returncode: int | None):
     return f"{signal_name} - {description}"
 
 
+def retarget_failing_test(new_test_name: str | None, test_name: str | None, line_number: int | None):
+    # a line number only applies to the test it was reported for - drop it when we blame another test
+    if not new_test_name:
+        return test_name, line_number
+    if new_test_name != test_name:
+        return new_test_name, None
+    return test_name, line_number
+
+
 def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, returncode: int | None = None):
     stderr_lines = strip_skipped_test_summary_lines(strip_ansi(stderr).splitlines())
     stdout_lines = strip_skipped_test_summary_lines(strip_ansi(stdout).splitlines())
@@ -972,22 +986,26 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
 
     preferred_assertion = stdout_info.preferred_assertion
     if preferred_assertion is not None:
-        test_name = preferred_assertion.test_name or stdout_info.last_started_test or test_name
+        # the assertion line number refers to the C++ source, it is only used for the assertion snippet
+        test_name, line_number = retarget_failing_test(
+            preferred_assertion.test_name or stdout_info.last_started_test, test_name, line_number
+        )
         reproduce_batch = [test_name] if test_name else list(batch)
-        line_number = preferred_assertion.line_number or line_number
         snippet_lines = preferred_assertion.snippet_lines
         if preferred_assertion.detail_lines:
             if detail_lines:
                 detail_lines.append("")
             detail_lines.extend(preferred_assertion.detail_lines)
-    if not snippet_lines and test_name is not None and line_number is not None:
-        snippet_lines = render_test_snippet(test_name, line_number)
     if not detail_lines:
         if stdout_info.fallback_failure_block:
             stdout_failure_test_name, stdout_failure_block = stdout_info.fallback_failure_block
-            test_name = stdout_failure_test_name or stdout_info.last_started_test or test_name
+            test_name, line_number = retarget_failing_test(
+                stdout_failure_test_name or stdout_info.last_started_test, test_name, line_number
+            )
             reproduce_batch = [test_name] if test_name else list(batch)
             detail_lines.extend(stdout_failure_block)
+    if not snippet_lines and test_name is not None and line_number is not None:
+        snippet_lines = render_test_snippet(test_name, line_number)
     if not detail_lines and stderr_info.failing_summary_block:
         detail_lines.extend(stderr_info.failing_summary_block)
     if not detail_lines:
@@ -1365,6 +1383,7 @@ def generate_coverage_report(source_root: Path, unittest_bin: str, profile_dir: 
             os.fspath(coverage_css_file),
             "--quiet",
             "--hierarchical",
+            "--no-function-coverage",
             "--filter",
             "region",
             "--ignore-errors",
@@ -1411,14 +1430,23 @@ def run_batch(config: TestRunnerConfig, batch):
         batch_file_path = Path(batch_file.name)
 
     command = build_test_command(config, shlex.quote(str(batch_file_path)))
+    # Capture the child's stdout/stderr to temp files rather than pipes, avoid deadlock
+    # between a process.wait() and a full unread pipe.
+    stdout_capture = tempfile.NamedTemporaryFile(mode="w+b", delete=False)
+    stderr_capture = tempfile.NamedTemporaryFile(mode="w+b", delete=False)
+
+    def read_captures():
+        stdout_capture.seek(0)
+        stderr_capture.seek(0)
+        out = normalize_output(stdout_capture.read().decode("utf8", "backslashreplace"))
+        err = normalize_output(stderr_capture.read().decode("utf8", "backslashreplace"))
+        return out, err
+
     try:
         proc = subprocess.Popen(
             shlex.split(command),
-            text=True,
-            encoding="utf8",
-            errors="backslashreplace",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=stdout_capture,
+            stderr=stderr_capture,
             env=child_env,
         )
         deadline = time.monotonic() + config.batch_timeout_seconds
@@ -1429,9 +1457,8 @@ def run_batch(config: TestRunnerConfig, batch):
                 peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
             if time.monotonic() >= deadline:
                 proc.kill()
-                stdout, stderr = proc.communicate()
-                stdout = normalize_output(stdout)
-                stderr = normalize_output(stderr)
+                proc.wait()
+                stdout, stderr = read_captures()
                 failed = True
                 message = f"batch timed out after {config.batch_timeout_seconds} seconds"
                 break
@@ -1439,9 +1466,8 @@ def run_batch(config: TestRunnerConfig, batch):
                 time.sleep(DEFAULT_RSS_POLL_INTERVAL_SECONDS)
 
         if message is None:
-            stdout, stderr = proc.communicate()
-            stdout = normalize_output(stdout)
-            stderr = normalize_output(stderr)
+            proc.wait()
+            stdout, stderr = read_captures()
             rss_bytes = get_process_rss_bytes(proc.pid)
             if rss_bytes is not None:
                 peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
@@ -1458,6 +1484,10 @@ def run_batch(config: TestRunnerConfig, batch):
         message = "failed to launch batch command"
     finally:
         batch_file_path.unlink(missing_ok=True)
+        stdout_capture.close()
+        stderr_capture.close()
+        Path(stdout_capture.name).unlink(missing_ok=True)
+        Path(stderr_capture.name).unlink(missing_ok=True)
 
     return {
         "failed": failed,
@@ -1593,7 +1623,7 @@ def parse_args(argv: list[str] | None = None):
     )
     parser.add_argument(
         "--track-runtime",
-        type=int,
+        type=float,
         nargs="?",
         const=DEFAULT_RUNTIME_THRESHOLD_SECONDS,
         default=None,
@@ -1869,6 +1899,7 @@ def main_impl(argv: list[str] | None = None):
                 )
             except Exception as exc:
                 print(f"error: {exc}")
+                traceback.print_exc()
                 run_result = ConfigRunResult(
                     returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0
                 )

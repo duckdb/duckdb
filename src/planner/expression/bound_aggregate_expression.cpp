@@ -19,6 +19,10 @@ BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction functi
 	D_ASSERT(!this->function.GetName().empty());
 }
 
+bool BoundAggregateExpression::IsVolatile() const {
+	return function.GetStability() == FunctionStability::VOLATILE || Expression::IsVolatile();
+}
+
 string BoundAggregateExpression::ToString() const {
 	auto distinct = IsDistinct();
 	auto &function_name = function.GetName();

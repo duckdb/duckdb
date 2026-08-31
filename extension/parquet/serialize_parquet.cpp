@@ -23,12 +23,12 @@ ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
 }
 
 void ChildShreddingTypes::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<identifier_map_t<ShreddingType>>(100, "types", types.operator*());
+	serializer.WritePropertyWithDefault<unordered_map<string, ShreddingType>>(100, "types", types.operator*());
 }
 
 ChildShreddingTypes ChildShreddingTypes::Deserialize(Deserializer &deserializer) {
 	ChildShreddingTypes result;
-	deserializer.ReadPropertyWithDefault<identifier_map_t<ShreddingType>>(100, "types", result.types.operator*());
+	deserializer.ReadPropertyWithDefault<unordered_map<string, ShreddingType>>(100, "types", result.types.operator*());
 	return result;
 }
 
@@ -86,6 +86,7 @@ void ParquetOptionsSerialization::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(106, "explicit_cardinality", parquet_options.explicit_cardinality, 0);
 	serializer.WritePropertyWithDefault<bool>(107, "can_have_nan", parquet_options.can_have_nan, false);
 	serializer.WritePropertyWithDefault<ParquetPrefetchStrategyOption>(108, "prefetch_strategy", parquet_options.prefetch_strategy, ParquetPrefetchStrategyOption::AUTO);
+	serializer.WritePropertyWithDefault<StringColumnReader::Utf8ValidationOption>(109, "utf8_validation", parquet_options.utf8_validation_option, StringColumnReader::Utf8ValidationOption::STRICT_UTF8);
 }
 
 ParquetOptionsSerialization ParquetOptionsSerialization::Deserialize(Deserializer &deserializer) {
@@ -99,6 +100,19 @@ ParquetOptionsSerialization ParquetOptionsSerialization::Deserialize(Deserialize
 	deserializer.ReadPropertyWithExplicitDefault<idx_t>(106, "explicit_cardinality", result.parquet_options.explicit_cardinality, 0);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(107, "can_have_nan", result.parquet_options.can_have_nan, false);
 	deserializer.ReadPropertyWithExplicitDefault<ParquetPrefetchStrategyOption>(108, "prefetch_strategy", result.parquet_options.prefetch_strategy, ParquetPrefetchStrategyOption::AUTO);
+	deserializer.ReadPropertyWithExplicitDefault<StringColumnReader::Utf8ValidationOption>(109, "utf8_validation", result.parquet_options.utf8_validation_option, StringColumnReader::Utf8ValidationOption::STRICT_UTF8);
+	return result;
+}
+
+void ParquetReaderProjectionExpression::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<ParquetReaderProjectionExpressionType>(100, "type", type);
+	serializer.WriteProperty<LogicalType>(101, "return_type", return_type);
+}
+
+ParquetReaderProjectionExpression ParquetReaderProjectionExpression::Deserialize(Deserializer &deserializer) {
+	ParquetReaderProjectionExpression result;
+	deserializer.ReadProperty<ParquetReaderProjectionExpressionType>(100, "type", result.type);
+	deserializer.ReadProperty<LogicalType>(101, "return_type", result.return_type);
 	return result;
 }
 

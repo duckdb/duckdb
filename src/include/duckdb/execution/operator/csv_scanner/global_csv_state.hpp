@@ -20,6 +20,29 @@
 namespace duckdb {
 struct MultiFileBindData;
 
+//! Local state of the CSV scan
+struct CSVLocalState : public LocalTableFunctionState {
+	//! Claims that die without ever being scanned still account their boundary lines
+	~CSVLocalState() override;
+
+	//! Constructs the scanner from the pending claim
+	void Materialize();
+
+	//! Lifecycle of the claim held by this local state
+	enum class ClaimState : uint8_t {
+		IDLE,        //! no claim held
+		PENDING,     //! claim fields are set, the scanner is not constructed yet
+		MATERIALIZED //! the scanner was constructed from the claim and owns its accounting
+	};
+
+	ClaimState claim_state = ClaimState::IDLE;
+	idx_t scanner_idx = 0;
+	CSVIterator iterator;
+	shared_ptr<CSVBufferUsage> buffer_tracker;
+	shared_ptr<CSVFileScan> file_scan;
+	unique_ptr<StringValueScanner> csv_reader;
+};
+
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {
 public:
@@ -29,10 +52,10 @@ public:
 	~CSVGlobalState() override {
 	}
 
-	//! Generates a CSV Scanner, with information regarding the piece of buffer it should be read.
-	//! In case it returns a nullptr it means we are done reading these files.
 	void FinishScan(unique_ptr<StringValueScanner> scanner);
-	unique_ptr<StringValueScanner> Next(shared_ptr<CSVFileScan> &file);
+	//! Claims the next piece of the current file to be read into the local state.
+	//! Returns false when we are done reading these files.
+	bool Next(shared_ptr<CSVFileScan> &file, CSVLocalState &lstate);
 	void FinishLaunchingTasks(CSVFileScan &scan);
 
 	void FillRejectsTable(CSVFileScan &scan);

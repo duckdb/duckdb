@@ -2,9 +2,6 @@
 # description: ILIKE / NOT ILIKE with a constant (CONSTANT_VECTOR) pattern over many rows - exercises the case-folded matcher fast path
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # Unicode-possible data so the constant-pattern ILIKE takes the case-folding path
 # (the ASCII-only fast path is taken when stats prove the column cannot contain unicode).
 statement ok

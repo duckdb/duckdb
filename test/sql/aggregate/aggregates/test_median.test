@@ -154,6 +154,15 @@ FROM (VALUES
 ----
 00:00:00-04:30
 
+query I
+SELECT MEDIAN(x)
+FROM (VALUES
+	(INTERVAL '1 day'),
+	(INTERVAL '10 days')
+) v(x);
+----
+5 days 12:00:00
+
 # Floored
 foreach type varchar
 

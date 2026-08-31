@@ -35,11 +35,13 @@ CONNECT plain_duckdb;
 statement ok
 DETACH plain_duckdb;
 
-# CONNECT '<connection_string>'; — string-literal form, not yet implemented.
+# CONNECT '<connection_string>'; — string-literal form. Attaches the URI under an ephemeral,
+# hidden alias and binds to it. A plain DuckDB target does not support CONNECT, so the implicit
+# attach is rolled back and the statement errors.
 statement error
-CONNECT 'connection_string_form';
+CONNECT ':memory:';
 ----
-Not implemented Error: CONNECT '<connection_string>' is not yet implemented
+<REGEX>:Invalid Input Error:.*does not support CONNECT.*
 
 # ========================= DISCONNECT =========================
 

@@ -75,6 +75,23 @@ select start, token_type, word from sql_tokenize($$select 1; -- this is a commen
 10	COMMENT	-- this is a comment
 
 query III
+select start, token_type, word from sql_tokenize($$SELECT 1 /* I /* love */ comments */ + 2;$$);
+----
+0	KEYWORD	SELECT
+7	NUMBER_LITERAL	1
+9	COMMENT	/* I /* love */ comments */
+37	OPERATOR	+
+39	NUMBER_LITERAL	2
+40	TERMINATOR	;
+
+query III
+select start, token_type, word from sql_tokenize($$SELECT 1 -- /* not a block */ rest$$);
+----
+0	KEYWORD	SELECT
+7	NUMBER_LITERAL	1
+9	COMMENT	-- /* not a block */ rest
+
+query III
 select start, token_type, word from sql_tokenize($$select * fro$$);
 ----
 0	KEYWORD	select

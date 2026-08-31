@@ -1,5 +1,5 @@
 # name: test/optimizer/contains_to_in_clause.test
-# description: Test that col IN [large_list] is rewritten to a hash join
+# description: Test contains/list_contains on a constant list (rewrite to IN, join vs scan, null/empty semantics)
 # group: [optimizer]
 
 statement ok
@@ -34,3 +34,57 @@ query II
 EXPLAIN FROM the_table WHERE the_id NOT IN [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
 ----
 logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+statement ok
+CREATE TABLE t AS SELECT * FROM (VALUES (1), (2), (NULL::INTEGER)) v(a);
+
+# FILTER on empty / null list becomes EMPTY_RESULT
+statement ok
+SET explain_output='physical_only';
+
+query II
+EXPLAIN SELECT * FROM t WHERE list_contains([], a)
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE list_has([], a)
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE array_contains([], a)
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE array_has([], a)
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE contains([], a)
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE list_contains(NULL::INTEGER[], a)
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+# NULL-only list: list_contains([NULL], a) should return false, not NULL
+query I
+SELECT list_contains([NULL], a) FROM (VALUES (1)) t(a);
+----
+false
+
+query II
+EXPLAIN SELECT * FROM t WHERE list_contains([NULL], a)
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+# Mixed list with NULLs: NULLs are stripped, non-NULL elements remain
+query II
+EXPLAIN SELECT * FROM t WHERE list_contains([1, NULL, 2], a)
+----
+physical_plan	<!REGEX>:.*EMPTY_RESULT.*

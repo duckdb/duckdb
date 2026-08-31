@@ -1,0 +1,182 @@
+# name: test/sql/catalog/nested_schema/nested_table_dml.test
+# description: Test inserting/querying/updating/deleting data in tables in nested schemas
+# group: [nested_schema]
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.child;
+
+statement ok
+CREATE TABLE s1.child.t1(i INTEGER, s VARCHAR);
+
+# insert into a nested table
+statement ok
+INSERT INTO s1.child.t1 VALUES (1, 'a'), (2, 'b');
+
+query II
+SELECT * FROM s1.child.t1 ORDER BY i;
+----
+1	a
+2	b
+
+# insert with an explicit column list
+statement ok
+INSERT INTO s1.child.t1 (s, i) VALUES ('c', 3);
+
+# insert from a query over the same nested table
+statement ok
+INSERT INTO s1.child.t1 SELECT i + 10, s FROM s1.child.t1;
+
+query I
+SELECT count(*) FROM s1.child.t1;
+----
+6
+
+# insert with RETURNING
+query II
+INSERT INTO s1.child.t1 VALUES (99, 'z') RETURNING i, s;
+----
+99	z
+
+# update
+statement ok
+UPDATE s1.child.t1 SET s = 'updated' WHERE i = 99;
+
+query I
+SELECT s FROM s1.child.t1 WHERE i = 99;
+----
+updated
+
+# delete
+statement ok
+DELETE FROM s1.child.t1 WHERE i > 10;
+
+query I
+SELECT count(*) FROM s1.child.t1;
+----
+3
+
+# aliases and joins over nested tables
+statement ok
+CREATE TABLE s1.child.t2(i INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO s1.child.t2 VALUES (1, 100), (2, 200);
+
+query III
+SELECT l.i, l.s, r.v FROM s1.child.t1 l JOIN s1.child.t2 r USING (i) ORDER BY l.i;
+----
+1	a	100
+2	b	200
+
+# COPY into and out of a nested table
+statement ok
+COPY s1.child.t1 TO '{TEST_DIR}/nested_table_dml.csv';
+
+statement ok
+COPY s1.child.t1 FROM '{TEST_DIR}/nested_table_dml.csv';
+
+query I
+SELECT count(*) FROM s1.child.t1;
+----
+6
+
+statement ok
+DELETE FROM s1.child.t1 WHERE rowid >= 3;
+
+# table info of a nested table
+query II
+SELECT name, type FROM pragma_table_info('s1.child.t1');
+----
+i	INTEGER
+s	VARCHAR
+
+# a dotted name is at most three components, so a nested table in an attached catalog is addressed by making that
+# catalog the default one
+statement ok
+CREATE SCHEMA db2.a;
+
+statement ok
+CREATE SCHEMA db2.a.b;
+
+statement ok
+USE db2;
+
+statement ok
+CREATE TABLE a.b.tt(x INTEGER);
+
+statement ok
+INSERT INTO a.b.tt VALUES (5), (6);
+
+query I
+SELECT sum(x) FROM a.b.tt;
+----
+11
+
+statement ok
+DELETE FROM a.b.tt WHERE x = 5;
+
+query I
+SELECT sum(x) FROM a.b.tt;
+----
+6
+
+statement ok
+USE memory;
+
+# the nested table is not visible as a top-level "child" schema
+statement error
+SELECT * FROM child.t1;
+----
+<REGEX>:.*does not exist.*
+
+statement error
+INSERT INTO child.t1 VALUES (1, 'a');
+----
+<REGEX>:.*does not exist.*
+
+# inserting into a table in a non-existent nested schema errors
+statement error
+INSERT INTO s1.nope.t1 VALUES (1, 'a');
+----
+<REGEX>:.*does not exist.*
+
+# the error names the full nested schema path
+statement error
+SELECT * FROM s1.nope.t1;
+----
+Table with name "s1.nope.t1" does not exist because schema "s1.nope" does not exist.
+
+# transactional behavior
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO s1.child.t1 VALUES (42, 'tx');
+
+query I
+SELECT count(*) FROM s1.child.t1;
+----
+4
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT count(*) FROM s1.child.t1;
+----
+3
+
+# dropping the nested schema with CASCADE removes the data as well
+statement ok
+DROP SCHEMA s1 CASCADE;
+
+statement error
+SELECT * FROM s1.child.t1;
+----
+<REGEX>:.*does not exist.*

@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/function/partition_stats.hpp"
 
 namespace duckdb {
 

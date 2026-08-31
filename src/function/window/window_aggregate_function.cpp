@@ -1,3 +1,4 @@
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
 
 #include "duckdb/common/enums/window_aggregation_mode.hpp"

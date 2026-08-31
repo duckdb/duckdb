@@ -36,9 +36,16 @@ public:
 
 	idx_t FileSize() const;
 
+	//! Whether buffer byte ranges follow deterministically from the file size
+	//! (i.e., seekable+uncompressed+utf-8+not a pipe)
+	bool HasKnownBufferRanges() const;
+
 	bool FinishedReading() const;
 
 	idx_t Read(void *buffer, idx_t nr_bytes);
+
+	//! Random-access read that bypasses the handle's seek state, only valid for files with known buffer ranges
+	void ReadAt(void *buffer, idx_t nr_bytes, idx_t position);
 
 	string ReadLine();
 

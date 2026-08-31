@@ -1,0 +1,59 @@
+module: extension
+#
+# The loader interface: what DuckDB hands a C extension when it loads it.
+#
+# A V2 extension exposes one symbol, <name>_init_c_api_v2, taking a single
+# extension_input. The entrypoint macro in duckdb_extension_v2.h.in unpacks it:
+# it fetches the function-pointer table through get_api, copies it into the
+# extension's vtable global, and then calls the extension's own body with the
+# remaining three fields. DuckDB fills the struct in, so the field order here
+# is ABI: both sides derive it from this spec.
+callbacks:
+  extension_get_api:
+    description: |
+      Hands back the function-pointer table for the API version the extension
+      was built against, or NULL if this DuckDB cannot serve it.
+
+      The extension calls it exactly once, first, through
+      DUCKDB_EXTENSION_API_INIT; nothing else in the API may be called before
+      it succeeds. A NULL return means the load has already failed and DuckDB
+      has recorded why, so the entrypoint must return without touching the
+      error slot. Statically linked extensions resolve DuckDB's symbols at link
+      time and never call it, so for those the field is NULL.
+    return_type: void
+    return_pointer: 1
+    return_const: true
+    parameters:
+      extension:
+        type: extension
+        description: The extension being loaded, as handed to the entrypoint.
+      version:
+        type: char
+        indirection: 1
+        const: true
+        description: The API version the extension was built against, e.g. "v2.0.0".
+structs:
+  extension_input:
+    description: |
+      The single argument to a V2 C extension entrypoint. Borrowed for the
+      duration of the call: none of its fields outlive the entrypoint, and the
+      extension destroys none of them.
+    fields:
+      - name: get_api
+        type: extension_get_api
+        description: Fetches the versioned function-pointer table. NULL for a statically linked extension.
+      - name: extension
+        type: extension
+        description: The extension being loaded, and the token get_api takes.
+      - name: context
+        type: context
+        description: A context to read and run queries through, with a transaction already active.
+      - name: err
+        type: error_info
+        pointer: 1
+        description: |
+          A live error slot: never NULL, and never pointing at NULL. Populate it
+          with error_info_set_code, and optionally error_info_set_text, to fail
+          the load. Do not destroy it -- DuckDB owns it. Pass a slot of your own
+          to calls whose failure you intend to handle, so only a failure you
+          mean to abort the load with lands here.

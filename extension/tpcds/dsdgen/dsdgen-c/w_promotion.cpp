@@ -48,7 +48,7 @@
 
 #include <stdio.h>
 
-struct W_PROMOTION_TBL g_w_promotion;
+thread_local struct W_PROMOTION_TBL g_w_promotion;
 
 /*
  * Routine: mk_promotion
@@ -70,7 +70,7 @@ int mk_w_promotion(void *info_arr, ds_key_t index) {
 	struct W_PROMOTION_TBL *r;
 
 	/* begin locals declarations */
-	static date_t start_date;
+	static thread_local date_t start_date;
 	ds_key_t nTemp;
 	int nFlags;
 	tdef *pTdef = getSimpleTdefsByNumber(PROMOTION);

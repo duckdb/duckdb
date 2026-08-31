@@ -39,7 +39,7 @@
 #include "decimal.h"
 #include "tables.h"
 
-extern char arBKeys[MAX_TABLE][17];
+extern thread_local char arBKeys[MAX_TABLE][17];
 int setSCDKeys(int nTableID, ds_key_t hgIndex, char *szBKey, ds_key_t *hgBeginDateKey, ds_key_t *hgEndDateKey);
 ds_key_t scd_join(int tbl, int col, ds_key_t jDate);
 ds_key_t matchSCDSK(ds_key_t kUnique, ds_key_t jDate, int nTable);

@@ -565,23 +565,23 @@ ORDER BY 1;
 ----
 1992-05-05	{'year': 1992, 'month': 5, 'day': 5}
 
-# Invalid parts
+# Zeroed parts
 
 foreach datepart hour minute second millisecond microsecond timezone timezone_hour timezone_minute
 
-statement error
+query II
 SELECT d, DATE_PART(['{datepart}'], d) AS parts
 FROM dates
+WHERE parts['{datepart}'] <> 0
 ORDER BY 1;
 ----
-not recognized
 
 endloop
 
-statement error
+query I
 SELECT DATE_PART(['hour', 'minute'], '2023-09-17'::DATE) AS parts
 ----
-not recognized
+{'hour': 0, 'minute': 0}
 
 #
 # Infinities

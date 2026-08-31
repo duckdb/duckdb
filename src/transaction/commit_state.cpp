@@ -22,6 +22,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
 
@@ -276,6 +277,15 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 		D_ASSERT(catalog.IsDuckCatalog());
 
 		auto &new_entry = old_entry.Parent();
+		if (old_entry.type == CatalogType::TABLE_ENTRY && new_entry.type == CatalogType::TABLE_ENTRY) {
+			auto &old_storage = old_entry.Cast<DuckTableEntry>().GetStorage();
+			auto &new_storage = new_entry.Cast<DuckTableEntry>().GetStorage();
+			if (!RefersToSameObject(old_storage, new_storage) && old_storage.IsMainTable()) {
+				throw TransactionException("Failed to alter table \"%s\" because the underlying table state was "
+				                           "reverted by a concurrent transaction",
+				                           old_entry.name);
+			}
+		}
 		if (new_entry.type == CatalogType::DEPENDENCY_ENTRY) {
 			auto &dep = new_entry.Cast<DependencyEntry>();
 			if (dep.Side() == DependencyEntryType::SUBJECT) {

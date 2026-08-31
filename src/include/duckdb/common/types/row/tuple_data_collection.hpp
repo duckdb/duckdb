@@ -13,6 +13,7 @@
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 
 namespace duckdb {
+class TaskScheduler;
 
 class TupleDataAllocator;
 struct TupleDataScatterFunction;

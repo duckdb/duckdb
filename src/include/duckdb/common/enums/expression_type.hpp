@@ -188,7 +188,7 @@ enum class ExpressionClass : uint8_t {
 	//===--------------------------------------------------------------------===//
 	BOUND_AGGREGATE = 25,
 	BOUND_CASE = 26,
-	BOUND_CAST = 27,
+	LEGACY_BOUND_CAST = 27,
 	BOUND_COLUMN_REF = 28,
 	LEGACY_BOUND_COMPARISON = 29,
 	BOUND_CONJUNCTION = 30,

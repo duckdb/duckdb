@@ -49,7 +49,7 @@
 
 #include <stdio.h>
 
-struct W_CUSTOMER_DEMOGRAPHICS_TBL g_w_customer_demographics;
+thread_local struct W_CUSTOMER_DEMOGRAPHICS_TBL g_w_customer_demographics;
 
 /*
  * mk_customer_demographics

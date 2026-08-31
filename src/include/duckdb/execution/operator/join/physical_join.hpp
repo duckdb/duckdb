@@ -31,7 +31,7 @@ public:
 	static void ConstructSemiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
 	static void ConstructAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
 	static void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
-	                                    bool has_null);
+	                                    bool has_null, optional_ptr<const bool> found_unknown = nullptr);
 
 	static vector<idx_t> FillProjectionMap(const PhysicalOperator &child,
 	                                       const vector<ProjectionIndex> &projection_map);

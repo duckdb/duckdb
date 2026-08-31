@@ -88,10 +88,15 @@ unique_ptr<TransformResultValue> TransformStack::ExecuteInternal(ParseResult &pa
 		case TransformFrameState::WAITING: {
 			auto result = frame.ops.finalize(transformer, *this, frame);
 			if (!result) {
-				throw InternalException("Trampoline transformer finalize for rule '%s' returned nullptr",
-				                        frame.ops.name);
+				if (frame_stack.empty() || frame_stack.back() == frame_index) {
+					throw InternalException(
+					    "Trampoline transformer finalize for rule '%s' returned nullptr without pushing a child frame",
+					    frame.ops.name);
+				}
+				break;
 			}
 			frame_stack.pop_back();
+			SetResultLocation(frame.parse_result, *result);
 			if (!frame.result_target) {
 				return result;
 			}
@@ -103,6 +108,22 @@ unique_ptr<TransformResultValue> TransformStack::ExecuteInternal(ParseResult &pa
 		}
 	}
 	throw InternalException("Trampoline transformer stack completed without a root result");
+}
+
+void TransformStack::SetResultLocation(ParseResult &parse_result, TransformResultValue &result) {
+	if (!parse_result.offset.IsValid()) {
+		return;
+	}
+	auto *expression_result = TryCastTransformResult<unique_ptr<ParsedExpression>>(result);
+	if (expression_result && expression_result->value && !expression_result->value->HasQueryLocation()) {
+		transformer.SetQueryLocation(*expression_result->value, parse_result.GetLocation());
+		return;
+	}
+	auto *table_ref_result = TryCastTransformResult<unique_ptr<TableRef>>(result);
+	if (table_ref_result && table_ref_result->value && !table_ref_result->value->query_location.IsValid()) {
+		transformer.SetQueryLocation(*table_ref_result->value, parse_result.GetLocation());
+		return;
+	}
 }
 
 void TransformStack::DeliverResult(TransformStackFrame &frame, unique_ptr<TransformResultValue> result) {
@@ -271,7 +292,6 @@ unique_ptr<SQLStatement> PEGTransformer::CreatePivotStatement(unique_ptr<SQLStat
 		result->statements.push_back(std::move(enum_stmt));
 	}
 	result->stmt_location = statement->stmt_location;
-	result->stmt_length = statement->stmt_length;
 	statement->query = statement->ToString();
 	result->statements.push_back(std::move(statement));
 	return std::move(result);
@@ -314,11 +334,11 @@ unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const Identifier &w
 	return unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
 }
 
-void PEGTransformer::SetQueryLocation(ParsedExpression &expr, optional_idx query_location) {
+void PEGTransformer::SetQueryLocation(ParsedExpression &expr, QueryLocation query_location) {
 	expr.SetQueryLocation(query_location);
 }
 
-void PEGTransformer::SetQueryLocation(TableRef &ref, optional_idx query_location) {
+void PEGTransformer::SetQueryLocation(TableRef &ref, QueryLocation query_location) {
 	ref.query_location = query_location;
 }
 

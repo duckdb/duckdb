@@ -729,8 +729,8 @@ bool FileSystem::IsManuallySet() {
 	return false;
 }
 
-bool FileSystem::SupportsPositionalWrites(FileHandle &handle) {
-	return false;
+FileWriteMode FileSystem::GetWriteMode(FileHandle &handle) {
+	return FileWriteMode::SEQUENTIAL;
 }
 
 unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) {
@@ -824,8 +824,8 @@ bool FileHandle::CanSeek() {
 	return file_system.CanSeek();
 }
 
-bool FileHandle::SupportsPositionalWrites() {
-	return file_system.SupportsPositionalWrites(*this);
+FileWriteMode FileHandle::GetWriteMode() {
+	return file_system.GetWriteMode(*this);
 }
 
 FileCompressionType FileHandle::GetFileCompressionType() {

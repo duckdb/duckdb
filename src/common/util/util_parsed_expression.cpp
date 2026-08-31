@@ -312,6 +312,7 @@ void ParsedExpression::CopyBase(const ParsedExpression &other) {
 	type = other.type;
 	alias = other.alias;
 	query_location = other.query_location;
+	query_location.length = other.query_location.length;
 }
 
 bool BetweenExpression::Equals(const ParsedExpression &other) const {

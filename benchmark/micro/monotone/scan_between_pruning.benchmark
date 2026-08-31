@@ -1,0 +1,15 @@
+# name: benchmark/micro/monotone/scan_between_pruning.benchmark
+# description: Row-group skipping for a monotone-function range filter f(col) BETWEEN a AND b (confined to a single row group in the middle of the table)
+# group: [monotone]
+
+name MonotoneScanBetweenPruning
+group micro
+
+load
+CREATE TABLE ints AS SELECT range::INTEGER AS x FROM range(50000000);
+
+run
+SELECT count(*) FROM ints WHERE floor(x::DOUBLE) BETWEEN 25000000 AND 25001000;
+
+result I
+1001

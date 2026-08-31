@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block_manager.hpp"
 
 namespace duckdb {

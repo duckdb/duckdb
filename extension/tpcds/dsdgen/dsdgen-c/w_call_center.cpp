@@ -57,8 +57,8 @@
 #include <stdio.h>
 #include <string.h>
 
-struct CALL_CENTER_TBL g_w_call_center;
-static struct CALL_CENTER_TBL g_OldValues;
+thread_local struct CALL_CENTER_TBL g_w_call_center;
+static thread_local struct CALL_CENTER_TBL g_OldValues;
 
 /*
  * Routine: mk_w_call_center()
@@ -76,15 +76,15 @@ static struct CALL_CENTER_TBL g_OldValues;
  * 20020830 jms Need to populate open and close dates
  */
 int mk_w_call_center(void *info_arr, ds_key_t index) {
-	static int32_t jDateStart, nDaysPerRevision;
+	static thread_local int32_t jDateStart, nDaysPerRevision;
 	int32_t nSuffix, bFirstRecord = 0, nFieldChangeFlags, jDateEnd, nDateRange;
 	char *cp, *sName1, *sName2;
-	static decimal_t dMinTaxPercentage, dMaxTaxPercentage;
+	static thread_local decimal_t dMinTaxPercentage, dMaxTaxPercentage;
 	tdef *pTdef = getSimpleTdefsByNumber(CALL_CENTER);
 
 	/* begin locals declarations */
 	date_t dTemp;
-	static double nScale;
+	static thread_local double nScale;
 	struct CALL_CENTER_TBL *r, *rOldValues = &g_OldValues;
 
 	r = &g_w_call_center;

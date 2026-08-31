@@ -1,0 +1,154 @@
+# name: test/sql/catalog/nested_schema/nested_export.test
+# description: EXPORT/IMPORT DATABASE round trip with nested schemas
+# group: [nested_schema]
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE SCHEMA s1.s2.s3;
+
+statement ok
+CREATE TABLE s1.s2.t(i INTEGER PRIMARY KEY, s VARCHAR);
+
+statement ok
+INSERT INTO s1.s2.t VALUES (1, 'a'), (2, 'b');
+
+statement ok
+CREATE VIEW s1.s2.v AS SELECT i * 10 AS x FROM s1.s2.t;
+
+statement ok
+CREATE SEQUENCE s1.s2.seq START 7;
+
+statement ok
+CREATE MACRO s1.s2.double(a) AS a * 2;
+
+# a table in the default schema, to make sure the default schema is still hidden
+statement ok
+CREATE TABLE top(i INTEGER);
+
+statement ok
+INSERT INTO top VALUES (99);
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/nested_export';
+
+# the exported schema.sql qualifies nested entries with their full path
+query I
+SELECT count(*) FROM read_text('{TEST_DIR}/nested_export/schema.sql') WHERE content LIKE '%CREATE SCHEMA s1.s2;%';
+----
+1
+
+query I
+SELECT count(*) FROM read_text('{TEST_DIR}/nested_export/schema.sql') WHERE content LIKE '%CREATE SCHEMA s1.s2.s3;%';
+----
+1
+
+query I
+SELECT count(*) FROM read_text('{TEST_DIR}/nested_export/schema.sql') WHERE content LIKE '%CREATE TABLE s1.s2.t(%';
+----
+1
+
+query I
+SELECT count(*) FROM read_text('{TEST_DIR}/nested_export/load.sql') WHERE content LIKE '%COPY s1.s2.t FROM%';
+----
+1
+
+# the default schema stays unqualified
+query I
+SELECT count(*) FROM read_text('{TEST_DIR}/nested_export/schema.sql') WHERE content LIKE '%CREATE TABLE top(%';
+----
+1
+
+# import into a fresh database
+statement ok
+ATTACH ':memory:' AS imported;
+
+statement ok
+USE imported;
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/nested_export';
+
+query II
+SELECT * FROM s1.s2.t ORDER BY i;
+----
+1	a
+2	b
+
+query I
+SELECT * FROM s1.s2.v ORDER BY x;
+----
+10
+20
+
+query I
+SELECT nextval('s1.s2.seq');
+----
+7
+
+query I
+SELECT s1.s2.double(21);
+----
+42
+
+query I
+SELECT * FROM top;
+----
+99
+
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas()
+WHERE database_name = 'imported' AND schema_name IN ('s1','s2','s3') ORDER BY schema_name;
+----
+s1	NULL
+s2	s1
+s3	s2
+
+statement error
+INSERT INTO s1.s2.t VALUES (1, 'c');
+----
+<REGEX>:.*primary key.*
+
+# COPY FROM DATABASE carries the nested schema path as well
+
+statement ok
+USE memory;
+
+statement ok
+ATTACH ':memory:' AS copied;
+
+statement ok
+COPY FROM DATABASE memory TO copied;
+
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas()
+WHERE database_name = 'copied' AND schema_name IN ('s1','s2','s3') ORDER BY schema_name;
+----
+s1	NULL
+s2	s1
+s3	s2
+
+# a dotted name is at most three components, so make the copy the default catalog to query its nested tables
+statement ok
+USE copied;
+
+query II
+SELECT * FROM s1.s2.t ORDER BY i;
+----
+1	a
+2	b
+
+query I
+SELECT * FROM s1.s2.v ORDER BY x;
+----
+10
+20
+
+query I
+SELECT count(*) FROM top;
+----
+1

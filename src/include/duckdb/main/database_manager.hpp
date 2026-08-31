@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/common/checked_integer.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -63,7 +64,6 @@ public:
 	Catalog &GetSystemCatalog();
 
 	static Identifier GetDefaultDatabase(ClientContext &context);
-	void SetDefaultDatabase(ClientContext &context, const string &new_value);
 
 	//! Inserts a path to name mapping to the database paths map
 	InsertDatabasePathResult InsertDatabasePath(const AttachInfo &info, AttachOptions &options);
@@ -103,8 +103,9 @@ public:
 	idx_t NextOid() {
 		return next_oid++;
 	}
-	bool HasDefaultDatabase() {
-		return !default_database.empty();
+	bool HasAttachedDatabase() {
+		lock_guard<mutex> guard(databases_lock);
+		return !databases.empty();
 	}
 	//! Gets a list of all attached database paths
 	vector<string> GetAttachedDatabasePaths();
@@ -131,8 +132,6 @@ private:
 	atomic<transaction_t> current_transaction_id;
 	//! Count of remote catalogs currently attached; used to skip the remote pushdown optimizer when zero
 	atomic<CheckedInteger<idx_t, InternalException>> remote_catalog_count;
-	//! The current default database
-	Identifier default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program
 	shared_ptr<DatabaseFilePathManager> path_manager;
 

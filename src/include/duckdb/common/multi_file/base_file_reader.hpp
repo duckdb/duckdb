@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
@@ -21,6 +22,8 @@ namespace duckdb {
 
 class BaseStatistics;
 class BaseUnionData;
+class AsyncResult;
+class DataChunk;
 struct GlobalTableFunctionState;
 struct LocalTableFunctionState;
 
@@ -56,9 +59,9 @@ public:
 	vector<ColumnIndex> column_indexes;
 	//! The set of table filters (adjusted to local indexes)
 	unique_ptr<TableFilterSet> filters;
-	//! Expression to execute for a given column (BEFORE executing the filter)
+	//! Expression to execute for a local scan-column position (BEFORE executing the filter)
 	//! NOTE: this is only set when we have filters - it can be ignored for readers that don't have filter pushdown
-	unordered_map<column_t, BaseFileReaderExpression> expression_map;
+	unordered_map<ProjectionIndex, BaseFileReaderExpression> expression_map;
 	//! The final types for various expressions - this is ONLY used if UseCastMap() is explicitly enabled
 	unordered_map<column_t, LogicalType> cast_map;
 
@@ -89,6 +92,8 @@ public:
 	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name);
 	//! Prepare reader for scanning
 	DUCKDB_API virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
+	//! Called after opening when the scan is driven by read-ahead, lets the reader pre-open scan resources
+	DUCKDB_API virtual void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &);
 
 	//! Try to initialize a scan over the reader - this is done while the global lock is held
 	virtual bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -105,6 +110,8 @@ public:
 	DUCKDB_API virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate);
 	//! Get progress within a given file
 	DUCKDB_API virtual double GetProgressInFile(ClientContext &context);
+	//! Get reader metadata, if available
+	DUCKDB_API virtual InsertionOrderPreservingMap<Value> GetMetadata() const;
 
 	virtual string GetReaderType() const = 0;
 

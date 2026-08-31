@@ -206,8 +206,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "BOUND_AGGREGATE";
 	case ExpressionClass::BOUND_CASE:
 		return "BOUND_CASE";
-	case ExpressionClass::BOUND_CAST:
-		return "BOUND_CAST";
+	case ExpressionClass::LEGACY_BOUND_CAST:
+		return "LEGACY_BOUND_CAST";
 	case ExpressionClass::BOUND_COLUMN_REF:
 		return "BOUND_COLUMN_REF";
 	case ExpressionClass::LEGACY_BOUND_COMPARISON:

@@ -10,6 +10,9 @@ statement ok
 SET threads=1
 
 statement ok
+SET read_ahead_depth=1
+
+statement ok
 SET parquet_prefetch_column_gap=16384
 
 statement ok

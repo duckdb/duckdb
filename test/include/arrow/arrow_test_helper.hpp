@@ -40,7 +40,7 @@ public:
 	                 bool big_result, ClientProperties options, ClientContext &context)
 	    : types(std::move(types_p)), names(std::move(names_p)), result(std::move(result_p)), big_result(big_result),
 	      options(std::move(options)), context(context) {
-		if (result->type == QueryResultType::ARROW_RESULT) {
+		if (result->GetResultType() == QueryResultType::ARROW_RESULT) {
 			auto &arrow_result = result->Cast<ArrowQueryResult>();
 			prefetched_chunks = arrow_result.ConsumeArrays();
 			chunk_iterator = prefetched_chunks.begin();

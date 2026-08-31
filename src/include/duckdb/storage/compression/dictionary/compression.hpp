@@ -33,7 +33,7 @@ public:
 	bool LookupString(string_t str);
 	void AddNewString(string_t str);
 	void AddNull();
-	void AddLastLookup();
+	void AddLastLookup(string_t str);
 	bool CalculateSpaceRequirements(bool new_string, idx_t string_size);
 	void Flush(bool final = false);
 	idx_t Finalize();

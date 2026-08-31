@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/type_matcher.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/function/function.hpp"
@@ -14,7 +15,10 @@ namespace duckdb {
 DatePartSimplificationRule::DatePartSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto func = make_uniq<FunctionExpressionMatcher>();
 	func->function = make_uniq<SpecificFunctionMatcher>("date_part");
-	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	auto specifier = make_uniq<ConstantExpressionMatcher>();
+	// only the single-part overload is simplified - the struct overload takes a constant LIST of part names
+	specifier->type = make_uniq<SpecificTypeMatcher>(LogicalType::VARCHAR);
+	func->matchers.push_back(std::move(specifier));
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::ORDERED;
 	root = std::move(func);

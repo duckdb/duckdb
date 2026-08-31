@@ -1,0 +1,29 @@
+# name: test/sql/join/left_outer/left_join_issue_23805.test
+# description: Issue #23805: Preserve payload columns when rewriting multiple dependent joins
+# group: [left_outer]
+
+statement ok
+CREATE TABLE t (id VARCHAR, c2 INTEGER);
+
+statement ok
+CREATE TABLE t3 (id VARCHAR);
+
+statement ok
+INSERT INTO t VALUES ('match', 42), ('other', 7);
+
+statement ok
+INSERT INTO t3 VALUES ('match'), ('missing');
+
+query ITT rowsort
+SELECT
+	t3.id,
+	b.c2 AS m1,
+	b.c2 AS m2
+FROM t3
+CROSS JOIN (SELECT 42 AS x) t2
+LEFT JOIN t a ON t3.id = a.id
+LEFT JOIN t b ON t3.id = b.id
+LEFT JOIN t c ON t3.id = c.id;
+----
+match	42	42
+missing	NULL	NULL

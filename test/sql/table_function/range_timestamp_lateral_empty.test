@@ -1,0 +1,91 @@
+# name: test/sql/table_function/range_timestamp_lateral_empty.test
+# description: TIMESTAMP range() table function in a LATERAL, where some rows produce an empty range
+# group: [table_function]
+
+# The TIMESTAMP/INTERVAL overload of the range() TABLE function drops (and
+# duplicates) rows when it is used in a correlated LATERAL and at least one
+# outer row produces an EMPTY range (start >= stop).
+#
+# A single empty range corrupts the output for UNRELATED rows: it is not a
+# truncation. The BIGINT overload of range() handles the same shape correctly,
+# as does the scalar range() (the one returning a LIST) when unnested.
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t AS
+SELECT i, TIMESTAMP '2024-01-01' + INTERVAL (i * 60) SECOND AS ts
+FROM generate_series(0, 9) s(i);
+
+# Baseline: every row yields exactly one step, and this is correct today.
+query I
+SELECT COUNT(*) FROM t, LATERAL range(ts, ts + INTERVAL '5 minutes', INTERVAL '10 minutes');
+----
+10
+
+# Now make exactly ONE row (i = 5) produce an empty range: its start is pushed
+# past its stop. Every other row is untouched and must still yield its one step,
+# so 9 rows are expected.
+query I
+SELECT COUNT(*) FROM t, LATERAL range(
+    ts + (CASE WHEN i = 5 THEN INTERVAL '7 minutes' ELSE INTERVAL '0 minutes' END),
+    ts + INTERVAL '5 minutes',
+    INTERVAL '10 minutes');
+----
+9
+
+# ...and it must be exactly the rows other than i = 5.
+query I
+SELECT list(i ORDER BY i) FROM t, LATERAL range(
+    ts + (CASE WHEN i = 5 THEN INTERVAL '7 minutes' ELSE INTERVAL '0 minutes' END),
+    ts + INTERVAL '5 minutes',
+    INTERVAL '10 minutes');
+----
+[0, 1, 2, 3, 4, 6, 7, 8, 9]
+
+# The empty range being the first or last row must not matter either.
+query I
+SELECT COUNT(*) FROM t, LATERAL range(
+    ts + (CASE WHEN i = 0 THEN INTERVAL '7 minutes' ELSE INTERVAL '0 minutes' END),
+    ts + INTERVAL '5 minutes',
+    INTERVAL '10 minutes');
+----
+9
+
+query I
+SELECT COUNT(*) FROM t, LATERAL range(
+    ts + (CASE WHEN i = 9 THEN INTERVAL '7 minutes' ELSE INTERVAL '0 minutes' END),
+    ts + INTERVAL '5 minutes',
+    INTERVAL '10 minutes');
+----
+9
+
+# Many interleaved empty ranges: the even rows yield one step, the odd rows none.
+statement ok
+CREATE TABLE t2 AS
+SELECT i,
+       TIMESTAMP '2024-01-01' + INTERVAL (i * 60) SECOND AS ts,
+       CASE WHEN i % 2 = 0 THEN 1 ELSE 7 END AS k
+FROM generate_series(0, 64) s(i);
+
+query I
+SELECT COUNT(*) FROM t2, LATERAL range(ts + to_minutes(k), ts + INTERVAL '5 minutes', INTERVAL '10 minutes');
+----
+33
+
+# The BIGINT overload gets the identical shape right, which is what makes this a
+# bug in the TIMESTAMP overload rather than in LATERAL itself.
+query I
+SELECT COUNT(*) FROM t2, LATERAL range(k::BIGINT, 5::BIGINT, 10::BIGINT);
+----
+33
+
+# The scalar range() (returns a LIST) is also correct when unnested, so the two
+# spellings of "the same" query disagree.
+query I
+SELECT COUNT(*) FROM t2, LATERAL (
+    SELECT UNNEST(range(ts + to_minutes(k), ts + INTERVAL '5 minutes', INTERVAL '10 minutes')) AS r
+) s;
+----
+33

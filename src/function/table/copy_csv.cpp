@@ -22,6 +22,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 
 namespace duckdb {
 
@@ -177,10 +178,8 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	auto bind_data = make_uniq<WriteCSVData>(names);
 
 	// check all the options in the copy info
-	for (auto &option : input.info.options) {
-		auto loption = StringUtil::Lower(option.first);
-		auto &set = option.second;
-		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(set));
+	for (auto &[option_name, option_values] : input.info.options) {
+		bind_data->options.SetWriteOption(option_name, ConvertVectorToValue(option_values));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
@@ -413,8 +412,7 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	cast_chunk.Initialize(Allocator::Get(context), types);
 
 	auto &original_types = collection->Types();
-	auto expressions =
-	    CreateCastExpressions(csv_data, context, StringsToIdentifiers(csv_data.options.name_list), original_types);
+	auto expressions = CreateCastExpressions(csv_data, context, csv_data.options.name_list, original_types);
 	ExpressionExecutor executor(context, expressions);
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 

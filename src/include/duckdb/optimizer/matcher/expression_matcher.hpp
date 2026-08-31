@@ -79,7 +79,7 @@ public:
 
 class CastExpressionMatcher : public ExpressionMatcher {
 public:
-	CastExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CAST) {
+	CastExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_FUNCTION) {
 	}
 	//! The matcher for the child expressions
 	unique_ptr<ExpressionMatcher> matcher;
@@ -101,8 +101,7 @@ public:
 
 class InUniformExpressionMatcher : public ExpressionMatcher {
 public:
-	InUniformExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_OPERATOR) {
-	}
+	InUniformExpressionMatcher();
 
 	//! The matchers for the probe and child expressions
 	unique_ptr<ExpressionMatcher> probe_matcher;

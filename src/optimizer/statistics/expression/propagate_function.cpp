@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/arg_properties.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -23,8 +24,9 @@ static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionEx
 
 //! Evaluate `func` at the lo/hi corner of each child's value range to derive output min/max.
 //! Decreasing args are swapped so f(lo_args) and f(hi_args) bracket the output range.
-static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &context, BoundFunctionExpression &func,
-                                                             const vector<BaseStatistics> &child_stats) {
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateMonotoneBounds(ClientContext &context,
+                                                                         const BoundFunctionExpression &func,
+                                                                         const vector<BaseStatistics> &child_stats) {
 	if (!func.Function().HasArgProperties() || func.GetChildren().empty()) {
 		return nullptr;
 	}
@@ -133,6 +135,9 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 	if (BoundComparisonExpression::IsComparison(func)) {
 		return PropagateComparison(func, expr_ptr);
 	}
+	if (BoundCastExpression::IsCast(func)) {
+		return PropagateCast(func, expr_ptr);
+	}
 	vector<BaseStatistics> stats;
 	stats.reserve(func.GetChildrenMutable().size());
 	for (idx_t i = 0; i < func.GetChildrenMutable().size(); i++) {
@@ -147,7 +152,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		FunctionStatisticsInput input(func, func.BindInfo().get(), stats, &expr_ptr);
 		return func.Function().GetStatisticsCallback()(context, input);
 	}
-	return TryPropagateMonotoneBounds(context, func, stats);
+	return PropagateMonotoneBounds(context, func, stats);
 }
 
 } // namespace duckdb

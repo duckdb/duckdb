@@ -12,7 +12,7 @@ struct GlobFunctionBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<GlobFunctionBindData>();
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	result->file_list = multi_file_reader->CreateFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY);

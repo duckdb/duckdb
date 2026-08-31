@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/block_manager.hpp"
@@ -50,8 +51,18 @@ public:
 	CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t buffer_size, idx_t global_csv_current_position,
 	          idx_t buffer_idx);
 
+	//! Constructor for random-access buffers with known byte ranges
+	CSVBuffer(ClientContext &context, idx_t requested_size, idx_t actual_size, idx_t global_csv_start, idx_t buffer_idx,
+	          bool last_buffer);
+
 	//! Creates a new buffer with the next part of the CSV File
 	shared_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, bool &has_seeked) const;
+
+	//! Allocates the buffer and fills it sequentially from the file handle's current position
+	void Load(CSVFileHandle &file_handle);
+
+	//! Allocates the buffer and fills it with a random-access read of its known byte range
+	void LoadRandomAccess(CSVFileHandle &file_handle);
 
 	//! Gets the buffer actual size
 	idx_t GetBufferSize() const;
@@ -66,6 +77,8 @@ public:
 	//! Wrapper for the Pin Function, if it can seek, it means that the buffer might have been destroyed, hence we must
 	//! Scan it from the disk file again.
 	shared_ptr<CSVBufferHandle> Pin(CSVFileHandle &file_handle, bool &has_seeked);
+	//! Pins the buffer only if it is in memory and no load is in flight; never performs I/O and never blocks
+	bool TryPin(shared_ptr<CSVBufferHandle> &pinned);
 	//! Wrapper for unpin
 	void Unpin();
 	const char *Ptr() const {
@@ -73,6 +86,10 @@ public:
 	}
 	bool IsUnloaded() const {
 		return block->GetMemory().IsUnloaded();
+	}
+	//! Whether the underlying block is loaded in memory
+	bool IsInMemory() const {
+		return block && (is_pipe || !block->GetMemory().IsUnloaded());
 	}
 
 	//! By default, we use CSV_BUFFER_SIZE to allocate each buffer
@@ -82,16 +99,21 @@ public:
 	bool last_buffer = false;
 
 private:
+	shared_ptr<CSVBufferHandle> CreatePin();
+
+private:
 	ClientContext &context;
+	//! Serializes loading and pinning of this buffer, so concurrent loads read the byte range only once
+	mutex load_lock;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
 	idx_t actual_buffer_size;
 	idx_t requested_size;
 	//! Global position from the CSV File where this buffer starts
 	idx_t global_csv_start = 0;
-	//! If we can seek in the file or not.
-	bool can_seek;
 	//! If this file is being fed by a pipe.
 	bool is_pipe;
+	//! If this is a random access buffer
+	bool random_access = false;
 	//! Buffer Index, used as a batch index for insertion-order preservation
 	idx_t buffer_idx = 0;
 	//! -------- Allocated Block ---------//

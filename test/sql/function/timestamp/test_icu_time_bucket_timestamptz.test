@@ -1165,9 +1165,11 @@ select time_bucket('1 microseconds'::interval, '290279-12-24 (BC) 19:59:05.22419
 ----
 290279-12-24 (BC) 12:06:07.224192-07:52
 
-statement error
+# bucketing the last representable instant by a microsecond leaves it where it is
+query I
 select time_bucket('1 microseconds'::interval, '294247-01-10 04:00:54.775+00'::timestamptz);
 ----
+294247-01-09 20:00:54.775-08
 
 statement error
 SELECT TIME_BUCKET(CAST('0.' AS INTERVAL), CAST('2000-01-01 00:00:00+00' AS TIMESTAMPTZ));

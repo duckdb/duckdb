@@ -6,6 +6,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
@@ -136,7 +138,10 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.FunctionMutable().SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
 	}
-	return nullptr;
+	// case conversion is not order- or length-preserving, but it never turns a valid string into NULL
+	auto result = StringStats::CreateUnknown(expr.GetReturnType());
+	result.CopyValidity(child_stats[0]);
+	return result.ToUnique();
 }
 
 ScalarFunction LowerFun::GetFunction() {

@@ -10,6 +10,24 @@
 
 namespace duckdb {
 
+static unique_ptr<Expression> TryRemoveEmptyStringConcat(ClientContext &context, BoundFunctionExpression &root) {
+	if (root.GetReturnType().id() != LogicalTypeId::VARCHAR) {
+		return nullptr;
+	}
+	auto &children = root.GetChildrenMutable();
+	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+		if (!children[child_idx]->IsFoldable()) {
+			continue;
+		}
+		auto value = ExpressionExecutor::EvaluateScalar(context, *children[child_idx]);
+		if (value.IsNull() || value.type().id() != LogicalTypeId::VARCHAR || !StringValue::Get(value).empty()) {
+			continue;
+		}
+		return std::move(children[1 - child_idx]);
+	}
+	return nullptr;
+}
+
 EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a FunctionExpression that has a foldable ConstantExpression
 	auto func = make_uniq<FunctionExpressionMatcher>();
@@ -17,7 +35,7 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::SOME;
 
-	identifier_set_t functions = {"prefix", "contains", "suffix"};
+	identifier_set_t functions = {"prefix", "contains", "suffix", "||"};
 	func->function = make_uniq<ManyFunctionMatcher>(functions);
 	root = std::move(func);
 }
@@ -26,6 +44,9 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
                                                      bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	D_ASSERT(root.GetChildren().size() == 2);
+	if (root.Function().GetName() == "||") {
+		return TryRemoveEmptyStringConcat(GetContext(), root);
+	}
 	auto &prefix_expr = bindings[2].get();
 
 	// the constant_expr is a scalar expression that we have to fold

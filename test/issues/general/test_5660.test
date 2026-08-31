@@ -5,10 +5,12 @@
 statement ok
 CREATE TABLE foo AS SELECT 'a, b, c' AS "x", '1' AS y;
 
-statement error
-SELECT y, UNLIST(string_split("x", ', ')) alias, COUNT(*) FROM foo GROUP BY y, alias;
+query TTI
+SELECT y, UNLIST(string_split("x", ', ')) alias, COUNT(*) FROM foo GROUP BY y, alias ORDER BY alias;
 ----
-Binder Error
+1	a	1
+1	b	1
+1	c	1
 
 statement ok
 select * from foo

@@ -44,6 +44,19 @@ class DataTable;
 class DuckTableEntry;
 class RowGroupIterationHelper;
 class TableScanState;
+class BoundIndex;
+
+//! How checkpoint vacuum handles table indexes when rowids may change.
+enum class VacuumIndexStrategy : uint8_t {
+	//! Indexes require stable rowids.
+	KEEP_ROW_IDS,
+	//! No index maintenance is needed.
+	NO_INDEXES,
+	//! Rebuild all indexes after vacuum.
+	REBUILD,
+	//! Incrementally remap affected index rowids.
+	REMAP
+};
 
 //! Snapshot state used to iterate row groups without holding the row-group segment-tree
 //! lock for the duration of the scan. Holding row_groups pins the snapshot alive; consistency
@@ -131,6 +144,11 @@ public:
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
+	//! Decides how vacuum handles this table's indexes.
+	VacuumIndexStrategy
+	GetVacuumIndexStrategy(AttachedDatabase &attached,
+	                       optional_ptr<vector<reference<BoundIndex>>> remap_indexes = nullptr) const;
+
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
 	                           optional_idx checkpoint_row_group_count);
 	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
@@ -146,7 +164,7 @@ public:
 	//! Drops every row group and immediately marks the blocks as modified.
 	void CommitDropTable();
 
-	vector<PartitionStatistics> GetPartitionStats() const;
+	vector<PartitionStatistics> GetPartitionStats(TransactionData transaction) const;
 	vector<ColumnSegmentInfo>
 	GetColumnSegmentInfo(const QueryContext &context,
 	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {}) const;
@@ -163,7 +181,8 @@ public:
 	                                         ExpressionExecutor &default_executor);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
-	                                         vector<StorageIndex> bound_columns, Expression &cast_expr);
+	                                         vector<StorageIndex> bound_columns, Expression &cast_expr,
+	                                         TransactionData transaction);
 	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
 
 	void SetStats(TableStatistics &new_stats);
@@ -233,6 +252,8 @@ private:
 	vector<MetaBlockPointer> metadata_pointers;
 	//! Controls whether the next append creates a new row group or reuses the existing one
 	RowGroupAppendMode row_group_append_mode;
+	//! Whether or not we can append to a checkpointed row group
+	bool can_append_to_checkpointed_row_group = true;
 };
 
 class RowGroupIterationHelper {

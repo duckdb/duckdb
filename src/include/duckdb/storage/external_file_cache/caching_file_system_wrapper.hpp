@@ -12,7 +12,6 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 

@@ -11,7 +11,6 @@
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
-#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 class Logger;

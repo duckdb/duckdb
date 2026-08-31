@@ -13,7 +13,7 @@ BUILD_BENCHMARK=1 BUILD_TPCH=1 make
 #### Run a single benchmark
 `build/release/benchmark/benchmark_runner benchmark/micro/nulls/no_nulls_addition.benchmark`
 
-The output will be printed to `stdout` in CSV format, in the following format:
+The output will be printed to `stderr` in CSV format, in the following format:
 
 ```
 name	run	timing
@@ -22,6 +22,12 @@ benchmark/micro/nulls/no_nulls_addition.benchmark	2	0.121702
 benchmark/micro/nulls/no_nulls_addition.benchmark	3	0.122948
 benchmark/micro/nulls/no_nulls_addition.benchmark	4	0.122534
 benchmark/micro/nulls/no_nulls_addition.benchmark	5	0.124102
+```
+
+By default, every benchmark emits five timed runs after one warmup run. You can override this using `--timed-runs n`:
+
+```
+build/release/benchmark/benchmark_runner benchmark/micro/nulls/no_nulls_addition.benchmark --timed-runs 20
 ```
 
 You can also specify an output file using the `--out` flag. This will write only the timings (delimited by newlines) to that file.
@@ -103,6 +109,5 @@ SELECT MIN(i + 1) FROM integers
 │          (0.08s)          │
 └───────────────────────────┘      
 ```
-
 
 

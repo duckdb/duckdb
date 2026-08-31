@@ -1,0 +1,520 @@
+# name: test/optimizer/pushdown/scalar_function_pushdown.test
+# description: Test Parquet With Pushing Down Scalar Functions
+# group: [pushdown]
+
+require parquet
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+# str has storage_index=1. This tests cases where column_index (i.e. 0 in
+# SELECT strlen(str)) is different from storage_index.
+statement ok
+CREATE TABLE pep_test (before INTEGER, str VARCHAR, after INTEGER);
+
+statement ok
+INSERT INTO pep_test VALUES (0, 'Hello', 0), (1, 'Hi', 1), (2, 'Hey', 2);
+
+statement ok
+COPY (SELECT * FROM pep_test) TO '{TEST_DIR}/pe-pushdown.parquet';
+
+query T
+SELECT str FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY str;
+----
+Hello
+Hey
+Hi
+
+# strlen is pushed down
+query II
+EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet';
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+# we need "order by" for test output to be deterministic
+query I
+SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY strlen(str);
+----
+2
+3
+5
+
+# explain: same for aliased columns
+query II
+EXPLAIN SELECT strlen(str) AS l FROM '{TEST_DIR}/pe-pushdown.parquet';
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT strlen(str) AS l FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY strlen(str);
+----
+2
+3
+5
+
+# explain: any filter on the column blocks length pushdown
+query II
+EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE strlen(str) > 2;
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+query I
+SELECT strlen(str) AS l FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE strlen(str) > 2
+ORDER BY strlen(str);
+----
+3
+5
+
+# Same, but filter expression has multiple children
+query I
+SELECT strlen(str) AS l FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE strlen(str) * 2 > 4
+ORDER BY strlen(str);
+----
+3
+5
+
+query I
+SELECT strlen(str) AS l FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE len(str) * 2 > 4
+ORDER BY strlen(str);
+----
+3
+5
+
+# strlen with filter using len, no pushdown
+query I
+SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE len(str) > 2
+ORDER BY strlen(str);
+----
+3
+5
+
+# explain: len() in WHERE conflicts with strlen() in SELECT, no pushdown
+query II
+EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet' WHERE len(str) > 2;
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# strlen with bare str: no pushdown
+query TI
+SELECT str, strlen(str) AS l FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE strlen(str) > 3 ORDER BY str;
+----
+Hello	5
+
+# explain: bare str in SELECT conflicts with strlen(), no pushdown
+query II
+EXPLAIN SELECT str, strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet';
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# pushdown of prefix() not supported
+query T
+SELECT prefix(str, 'H') FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY str;
+----
+true
+true
+true
+
+# conflict on str, no pushdown.
+query TI
+SELECT str, strlen(str) AS l FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE strlen(str) > 3 ORDER BY str;
+----
+Hello	5
+
+# conflict in SELECT, no pushdown
+query TI
+SELECT str, strlen(str) AS l FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY str;
+----
+Hello	5
+Hey	3
+Hi	2
+
+# same with aliased strlen()
+query IT
+SELECT strlen(str) AS l, str FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY str;
+----
+5	Hello
+3	Hey
+2	Hi
+
+# str as part of multi-arg ||, conflict
+query IT
+SELECT strlen(str) AS l, str || '!' AS s FROM '{TEST_DIR}/pe-pushdown.parquet'
+ORDER BY l;
+----
+2	Hi!
+3	Hey!
+5	Hello!
+
+query II
+EXPLAIN SELECT strlen(str), str || '!' FROM '{TEST_DIR}/pe-pushdown.parquet';
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# strlen() and a different multi-arg use of str (substr): no pushdown
+query IT
+SELECT strlen(str) AS l, substr(str, 1, 1) AS c FROM '{TEST_DIR}/pe-pushdown.parquet'
+ORDER BY l;
+----
+2	H
+3	H
+5	H
+
+# fn -> cte
+query I
+SELECT strlen(str) FROM (SELECT str FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY str);
+----
+5
+3
+2
+
+# fn -> cte -> cte
+query I
+WITH cte1 AS (SELECT str FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY str),
+     cte2 AS (SELECT str from cte1)
+SELECT strlen(str) FROM cte2;
+----
+5
+3
+2
+
+# cte -> fn -> cte
+query TI
+WITH cte1 AS (SELECT str FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY str),
+     cte2 AS (SELECT str, strlen(str) as l from cte1)
+SELECT str, l FROM cte2;
+----
+Hello	5
+Hey	3
+Hi	2
+
+statement ok
+CREATE VIEW pe1 AS SELECT str FROM '{TEST_DIR}/pe-pushdown.parquet';
+
+query T
+SELECT str FROM pe1 ORDER BY str;
+----
+Hello
+Hey
+Hi
+
+query I
+SELECT strlen(str) FROM pe1 ORDER BY strlen(str);
+----
+2
+3
+5
+
+query II
+EXPLAIN SELECT strlen(str) FROM pe1;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+# nested view
+statement ok
+CREATE VIEW pe2 AS SELECT str FROM pe1;
+
+query T
+SELECT str FROM pe2 ORDER BY str;
+----
+Hello
+Hey
+Hi
+
+query I
+SELECT strlen(str) FROM pe2 ORDER BY strlen(str);
+----
+2
+3
+5
+
+query TI
+SELECT str, strlen(str) FROM pe2 ORDER BY str;
+----
+Hello	5
+Hey	3
+Hi	2
+
+# fn -> cte with fn -> cte
+query I
+WITH cte1 AS (SELECT str FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY str),
+     cte2 AS (SELECT str, strlen(str) as l from cte1)
+SELECT strlen(str) FROM cte2;
+----
+5
+3
+2
+
+query II
+SELECT before, strlen(str) AS l FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY before;
+----
+0	5
+1	2
+2	3
+
+query II
+SELECT strlen(str) AS l, after FROM '{TEST_DIR}/pe-pushdown.parquet' ORDER BY after;
+----
+5	0
+2	1
+3	2
+
+# virtual columns don't block pushdown
+query II
+SELECT strlen(str) AS l, file_row_number FROM read_parquet('{TEST_DIR}/pe-pushdown.parquet', file_row_number=true) ORDER BY l DESC;
+----
+5	0
+3	2
+2	1
+
+query I
+SELECT strlen(str) AS l FROM pe2 ORDER BY l DESC;
+----
+5
+3
+2
+
+# no pushdown (two levels of indirection)
+query TI
+SELECT str, strlen(str) AS l FROM pe2 ORDER BY str;
+----
+Hello	5
+Hey	3
+Hi	2
+
+# explain: two levels of indirection, no pushdown
+query II
+EXPLAIN SELECT strlen(str) FROM pe2;
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# cte -> view -> pe2
+query I
+WITH cte AS (SELECT str FROM pe2)
+SELECT strlen(str) FROM cte ORDER BY str;
+----
+5
+3
+2
+
+# strlen(str) * 2 must be visited correctly in replace visitor
+query II
+SELECT strlen(str) AS a, strlen(str) * 2 AS b FROM pe1 ORDER BY a;
+----
+2	4
+3	6
+5	10
+
+# conflict in SELECT, no pushdown
+query II
+SELECT strlen(str) AS a, len(str) * 2 AS b FROM pe1 ORDER BY a;
+----
+2	4
+3	6
+5	10
+
+# constant comparison is pushed down as a complex filter so WHERE disappears.
+# This is only usage of str in SELECT so we push it down
+query II
+EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE str != '';
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE str != ''
+ORDER BY strlen(str);
+----
+2
+3
+5
+
+# prefix isn't pushed down as a complex filter so WHERE is not pushed down
+# although this is only usage of str in SELECT, we can't push strlen down
+# as there is usage in WHERE.
+# This also tests functions with multiple arguments using "str" inside
+query I
+SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE prefix("str", 'H') > 0
+ORDER BY strlen(str);
+----
+2
+3
+5
+
+query I
+SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE suffix(concat("str", 'y'), 'y') > 0
+ORDER BY strlen(str);
+----
+2
+3
+5
+
+# explain: prefix()/suffix() in WHERE are multi-arg uses of str, no pushdown
+query II
+EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet' WHERE prefix("str", 'H') > 0;
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# conflict with concat(), no pushdown
+query I
+SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE concat(str, str) = 'HelloHello'
+ORDER BY strlen(str);
+----
+5
+
+# both strlen()s are replaced correctly.
+query II
+SELECT strlen(str), strlen(str) * 2 FROM '{TEST_DIR}/pe-pushdown.parquet'
+ORDER BY strlen(str);
+----
+2	4
+3	6
+5	10
+
+query I
+SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet'
+WHERE str = 'Hello' ORDER BY strlen(str);
+----
+5
+
+# ConstantFilter on "str" blocks pushdown
+query II
+EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet' WHERE str = 'Hello';
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# function application conflict
+query II
+EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet' WHERE prefix(str, 'H');
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+statement ok
+CREATE TABLE pep_blob (before INTEGER, data BLOB, after INTEGER);
+
+statement ok
+INSERT INTO pep_blob VALUES (0, 'Hello'::BLOB, 0), (1, 'Hi'::BLOB, 1), (2, 'Hey'::BLOB, 2);
+
+statement ok
+COPY (SELECT * FROM pep_blob) TO '{TEST_DIR}/pe-blob.parquet';
+
+query II
+EXPLAIN SELECT octet_length(data) FROM '{TEST_DIR}/pe-blob.parquet';
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT octet_length(data) FROM '{TEST_DIR}/pe-blob.parquet' ORDER BY 1;
+----
+2
+3
+5
+
+query I
+SELECT octet_length(data) AS l FROM '{TEST_DIR}/pe-blob.parquet'
+WHERE octet_length(data) > 2 ORDER BY l;
+----
+3
+5
+
+query II
+EXPLAIN SELECT data, octet_length(data) FROM '{TEST_DIR}/pe-blob.parquet';
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# Test unsupported encoding rejects pushdown in any of files
+
+statement ok
+COPY (SELECT 'a'::VARCHAR AS s)
+TO '{TEST_DIR}/00_scalar_fn_plain.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
+
+statement ok
+COPY (SELECT range::VARCHAR AS s FROM range(30))
+TO '{TEST_DIR}/99_scalar_fn_delta.parquet' (FORMAT PARQUET, PARQUET_VERSION v2, DICTIONARY_SIZE_LIMIT 1);
+
+query I
+SELECT strlen(s)
+FROM '{TEST_DIR}/00_scalar_fn_plain.parquet'
+ORDER BY ALL;
+----
+1
+
+query I
+SELECT DISTINCT strlen(s)
+FROM read_parquet(['{TEST_DIR}/00_scalar_fn_plain.parquet', '{TEST_DIR}/99_scalar_fn_delta.parquet'])
+ORDER BY ALL;
+----
+1
+2
+
+query II
+EXPLAIN SELECT strlen(s)
+FROM read_parquet(['{TEST_DIR}/00_scalar_fn_plain.parquet', '{TEST_DIR}/99_scalar_fn_delta.parquet']);
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+statement ok
+COPY (SELECT {'x':0,'y':0} s, 'hello' v) TO '{TEST_DIR}/scalar-pushdown-nested.parquet' (PARQUET_VERSION V2);
+
+query I
+SELECT strlen(v)
+FROM '{TEST_DIR}/scalar-pushdown-nested.parquet'
+----
+5
+
+query II
+EXPLAIN SELECT strlen(v)
+FROM '{TEST_DIR}/scalar-pushdown-nested.parquet'
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+statement ok
+COPY (SELECT {'x': 'a', 'y': 'b'} s, 'hello' v)
+TO '{TEST_DIR}/scalar-pushdown-nested-2.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
+
+# pushdown-extract columns e.g s.x are not pushed down
+query II
+EXPLAIN SELECT strlen(s.x)
+FROM '{TEST_DIR}/scalar-pushdown-nested-2.parquet'
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+query I
+SELECT strlen(s.x)
+FROM '{TEST_DIR}/scalar-pushdown-nested-2.parquet';
+----
+1
+
+statement ok
+COPY (SELECT {'x': 'a', 'y': {'z': 'aa'}} s, 'hello' v)
+TO '{TEST_DIR}/scalar-pushdown-nested-3.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
+
+query II
+EXPLAIN SELECT strlen(s.y.z)
+FROM '{TEST_DIR}/scalar-pushdown-nested-3.parquet'
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+query I
+SELECT strlen(s.y.z)
+FROM '{TEST_DIR}/scalar-pushdown-nested-3.parquet';
+----
+2
+
+statement ok
+COPY (SELECT 'hello world ' || r AS s, r FROM range(3) t(r)) TO '{TEST_DIR}/scalar-pushdown-filter.parquet';
+
+query I
+SELECT strlen(s) FROM '{TEST_DIR}/scalar-pushdown-filter.parquet' WHERE r = 2;
+----
+13

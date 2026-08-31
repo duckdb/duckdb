@@ -212,21 +212,18 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 		}
 
 		// Try to default bind cast
-		LogicalType cast_type;
-		try {
-			cast_type = UnboundType::TryDefaultBind(cast.TargetType());
-		} catch (...) {
-			return false;
-		}
+		auto cast_type = UnboundType::TryDefaultBind(cast.TargetType());
 
-		if (cast_type == LogicalType::INVALID || cast_type == LogicalTypeId::UNBOUND) {
+		if (cast_type.id() == LogicalTypeId::INVALID || cast_type.id() == LogicalTypeId::UNBOUND) {
 			return false;
 		}
 
 		string error_message;
-		if (!dummy_value.DefaultTryCastAs(cast_type, value, &error_message)) {
+		auto cast_value = dummy_value.DefaultTryCastAs(cast_type, &error_message);
+		if (!cast_value) {
 			return false;
 		}
+		value = std::move(*cast_value);
 		return true;
 	}
 	default:
@@ -371,7 +368,7 @@ string PivotRef::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += SQLIdentifier(groups[i].GetIdentifierName());
+			result += SQLIdentifier(groups[i]);
 		}
 	}
 	result += ")";

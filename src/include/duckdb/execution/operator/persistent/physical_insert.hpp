@@ -17,6 +17,8 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/execution/row_id_deduplicator.hpp"
 
 namespace duckdb {
 
@@ -32,13 +34,15 @@ public:
 	DuckTableEntry &table;
 	idx_t insert_count;
 	ColumnDataCollection return_collection;
+	//! Leftover thread-local collections (smaller than a row group) that are compacted and merged in Finalize.
+	vector<PhysicalIndex> unmerged_collections;
 };
 
 class InsertLocalState : public LocalSinkState {
 public:
 public:
 	InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, OnConflictAction action_type);
 
 public:
 	ConstraintState &GetConstraintState(DataTable &table, TableCatalogEntry &table_ref);
@@ -52,7 +56,7 @@ public:
 	PhysicalIndex collection_index;
 	unique_ptr<OptimisticDataWriter> optimistic_writer;
 	// Rows that have been updated by a DO UPDATE conflict
-	unordered_set<row_t> updated_rows;
+	unique_ptr<RowIdDeduplicator> updated_rows;
 	idx_t update_count = 0;
 	unique_ptr<ConstraintState> constraint_state;
 	const vector<unique_ptr<BoundConstraint>> &bound_constraints;

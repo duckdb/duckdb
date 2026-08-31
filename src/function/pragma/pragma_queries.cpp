@@ -13,6 +13,7 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 
@@ -20,14 +21,19 @@ static string PragmaTableInfo(ClientContext &context, const FunctionParameters &
 	return StringUtil::Format("SELECT * FROM pragma_table_info(%s);", SQLString(parameters.values[0].ToString()));
 }
 
-string PragmaShowTables(const string &database, const string &schema) {
+string PragmaShowTables(const string &database, const string &schema, optional_idx schema_oid) {
 	string where_clause = "";
 	vector<string> where_conditions;
-	if (!database.empty()) {
-		where_conditions.push_back(StringUtil::Format("lower(database_name) = lower(%s)", SQLString(database)));
-	}
-	if (!schema.empty()) {
-		where_conditions.push_back(StringUtil::Format("lower(schema_name) = lower(%s)", SQLString(schema)));
+	if (schema_oid.IsValid()) {
+		// the schema was resolved to a (possibly nested) schema entry - filter on its oid
+		where_conditions.push_back(StringUtil::Format("schema_oid = %llu", schema_oid.GetIndex()));
+	} else {
+		if (!database.empty()) {
+			where_conditions.push_back(StringUtil::Format("lower(database_name) = lower(%s)", SQLString(database)));
+		}
+		if (!schema.empty()) {
+			where_conditions.push_back(StringUtil::Format("lower(schema_name) = lower(%s)", SQLString(schema)));
+		}
 	}
 	if (where_conditions.empty()) {
 		where_conditions.push_back("in_search_path(database_name, schema_name)");

@@ -4,6 +4,10 @@
 
 require parquet
 
+# this test calibrates exact memory-fit boundaries (the prefetch span must not fit, the synchronous
+# reads must fit), alternative-verify builds shift both sides of that margin
+require no_alternative_verify
+
 statement ok
 copy (select range i from range(16000000)) to '{TEST_DIR}/prefetch_tracked_big.parquet' (ROW_GROUP_SIZE 16000000);
 
