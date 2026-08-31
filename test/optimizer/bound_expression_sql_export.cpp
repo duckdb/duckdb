@@ -345,6 +345,7 @@ struct SyntheticSumOperation {
 
 static idx_t flipping_scalar_bind_count;
 static idx_t flipping_aggregate_bind_count;
+static idx_t flipping_bind_expression_count;
 
 static unique_ptr<FunctionData> BindFlippingScalar(BindScalarFunctionInput &input) {
 	flipping_scalar_bind_count++;
@@ -368,6 +369,13 @@ static unique_ptr<FunctionData> BindFlippingAggregate(BindAggregateFunctionInput
 	replacement.SetCatalogName(Identifier::SystemCatalog());
 	replacement.SetSchemaName(Identifier("synthetic_provenance_schema"));
 	input.GetBoundFunction().ReplaceImplementation(replacement);
+	return nullptr;
+}
+
+static unique_ptr<Expression> BindFlippingExpression(FunctionBindExpressionInput &input) {
+	flipping_bind_expression_count++;
+	input.children[0] = make_uniq<BoundConstantExpression>(flipping_bind_expression_count % 2 == 1 ? Value::INTEGER(7)
+	                                                                                               : Value::INTEGER(8));
 	return nullptr;
 }
 
@@ -729,6 +737,10 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	ScalarFunction flipping_scalar(Identifier("flipping_bind"), {LogicalType::INTEGER}, LogicalType::INTEGER,
 	                               ScalarFunction::NopFunction, BindFlippingScalar);
 	loader.RegisterFunction(std::move(flipping_scalar));
+	ScalarFunction flipping_bind_expression(Identifier("flipping_bind_expression"), {LogicalType::INTEGER},
+	                                        LogicalType::INTEGER, ScalarFunction::NopFunction);
+	flipping_bind_expression.SetBindExpressionCallback(BindFlippingExpression);
+	loader.RegisterFunction(std::move(flipping_bind_expression));
 	auto flipping_aggregate = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<0>>(
 	    LogicalType::INTEGER, LogicalType::BIGINT);
 	flipping_aggregate.SetName(Identifier("flipping_sum"));
@@ -793,6 +805,32 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	auto serialized_flipping_scalar = BinaryRoundTrip(*connection.context, *flipping_scalar_expression);
 	REQUIRE_FALSE(serialized_flipping_scalar->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
 	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_flipping_scalar, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	flipping_bind_expression_count = 0;
+	auto &flipping_bind_expression_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
+	    *connection.context, QualifiedName(catalog.GetName(), Identifier("synthetic_provenance_schema"),
+	                                       Identifier("flipping_bind_expression")));
+	vector<unique_ptr<Expression>> flipping_bind_expression_children;
+	flipping_bind_expression_children.push_back(Constant(Value::INTEGER(0)));
+	ErrorData flipping_bind_expression_error;
+	auto flipping_bind_expression_result = function_binder.BindScalarFunction(
+	    flipping_bind_expression_entry, std::move(flipping_bind_expression_children), flipping_bind_expression_error);
+	REQUIRE(flipping_bind_expression_result);
+	REQUIRE(flipping_bind_expression_count == 1);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *flipping_bind_expression_result) ==
+	        Value::INTEGER(7));
+	REQUIRE_FALSE(
+	    flipping_bind_expression_result->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*flipping_bind_expression_result, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	auto serialized_flipping_bind_expression = BinaryRoundTrip(*connection.context, *flipping_bind_expression_result);
+	REQUIRE(flipping_bind_expression_count == 2);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *serialized_flipping_bind_expression) ==
+	        Value::INTEGER(8));
+	REQUIRE_FALSE(
+	    serialized_flipping_bind_expression->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_flipping_bind_expression, context),
 	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	flipping_aggregate_bind_count = 0;

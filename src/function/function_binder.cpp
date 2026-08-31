@@ -1124,7 +1124,7 @@ FunctionBinder::ResolveScalarFunction(shared_ptr<const ScalarFunction> function_
 	CastToFunctionArguments(bound_function, arguments);
 	if (catalog_definition && bound_function.GetDefinition() == catalog_definition) {
 		bound_function.RestoreFunctionExpressionIdentity();
-		if (!function.HasBindCallback()) {
+		if (!function.HasBindCallback() && !function.HasBindExpressionCallback() && !function.HasBindLambdaCallback()) {
 			bound_function.RestoreRebindableDefinition();
 		}
 	}
