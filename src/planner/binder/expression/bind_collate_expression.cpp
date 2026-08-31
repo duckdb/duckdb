@@ -11,7 +11,7 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
-	auto &child = BoundExpression::GetExpression(*expr.ChildMutable());
+	auto child = GetBoundExpressions().Consume(*expr.ChildMutable());
 	if (child->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}

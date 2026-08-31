@@ -14,15 +14,13 @@
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/parser/expression/cast_expression.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/expression_binder.hpp"
 namespace duckdb {
 
 void AreOptionsEqual(char str_1, char str_2, const string &name_str_1, const string &name_str_2) {
@@ -125,48 +123,34 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 	bool has_dateformat = !formats[LogicalTypeId::DATE].IsNull();
 	bool has_timestampformat = !formats[LogicalTypeId::TIMESTAMP].IsNull();
 
-	// Create a binder
-	auto binder = Binder::CreateBinder(context);
-
-	auto &bind_context = binder->bind_context;
-	auto table_index = binder->GenerateTableIndex();
-	bind_context.AddGenericBinding(table_index, "copy_csv", names, sql_types);
-
-	// Create the ParsedExpressions (cast, strftime, etc..)
-	vector<unique_ptr<ParsedExpression>> unbound_expressions;
+	// Create the bound expressions (cast, strftime, etc..)
+	vector<unique_ptr<Expression>> expressions;
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		auto &type = sql_types[i];
 		auto &name = names[i];
+		auto column = make_uniq_base<Expression, BoundReferenceExpression>(name, type, i);
 
 		bool is_timestamp = type.id() == LogicalTypeId::TIMESTAMP || type.id() == LogicalTypeId::TIMESTAMP_TZ;
-		if (has_dateformat && type.id() == LogicalTypeId::DATE) {
+		unique_ptr<Expression> expr;
+		if ((has_dateformat && type.id() == LogicalTypeId::DATE) || (has_timestampformat && is_timestamp)) {
 			// strftime(<name>, 'format')
-			vector<unique_ptr<ParsedExpression>> children;
-			children.push_back(make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i)));
-			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::DATE]));
-			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
-			unbound_expressions.push_back(std::move(func));
-		} else if (has_timestampformat && is_timestamp) {
-			// strftime(<name>, 'format')
-			vector<unique_ptr<ParsedExpression>> children;
-			children.push_back(make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i)));
-			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::TIMESTAMP]));
-			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
-			unbound_expressions.push_back(std::move(func));
+			auto &format =
+			    type.id() == LogicalTypeId::DATE ? formats[LogicalTypeId::DATE] : formats[LogicalTypeId::TIMESTAMP];
+			vector<unique_ptr<Expression>> children;
+			children.push_back(std::move(column));
+			children.push_back(make_uniq<BoundConstantExpression>(format));
+			ErrorData error;
+			FunctionBinder function_binder(context);
+			expr = function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("strftime"),
+			                                          std::move(children), error, false);
+			if (!expr) {
+				error.Throw();
+			}
 		} else {
 			// CAST <name> AS VARCHAR
-			auto column = make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i));
-			auto expr = make_uniq_base<ParsedExpression, CastExpression>(LogicalType::VARCHAR, std::move(column));
-			unbound_expressions.push_back(std::move(expr));
+			expr = std::move(column);
 		}
-	}
-
-	// Create an ExpressionBinder, bind the Expressions
-	vector<unique_ptr<Expression>> expressions;
-	ExpressionBinder expression_binder(*binder, context);
-	expression_binder.target_type = LogicalType::VARCHAR;
-	for (auto &expr : unbound_expressions) {
-		expressions.push_back(expression_binder.Bind(expr));
+		expressions.push_back(BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::VARCHAR));
 	}
 
 	return expressions;

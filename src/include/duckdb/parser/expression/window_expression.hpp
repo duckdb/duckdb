@@ -54,8 +54,6 @@ public:
 	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 
-	bool HasBoundedParts() const;
-
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	void Serialize(Serializer &serializer) const override;
