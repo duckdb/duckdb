@@ -36,7 +36,8 @@ unique_ptr<QueryNode> InsertRelation::GetQueryNode() {
 }
 
 string InsertRelation::GetQuery() {
-	return string();
+	return "INSERT INTO " + ParseInfo::QualifierToString(catalog_name, schema_name, table_name) + " " +
+	       child->GetQuery();
 }
 
 const vector<ColumnDefinition> &InsertRelation::Columns() {

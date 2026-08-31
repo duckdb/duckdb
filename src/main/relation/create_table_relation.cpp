@@ -43,7 +43,13 @@ unique_ptr<QueryNode> CreateTableRelation::GetQueryNode() {
 }
 
 string CreateTableRelation::GetQuery() {
-	return string();
+	// reuse the catalog's prefix rendering for OR REPLACE / TEMP / IF NOT EXISTS
+	CreateTableInfo info;
+	info.on_conflict = on_conflict;
+	info.temporary = temporary;
+	return info.GetCreatePrefix("TABLE") +
+	       ParseInfo::QualifierToString(temporary ? "" : catalog_name, schema_name, table_name) + " AS " +
+	       child->GetQuery();
 }
 
 const vector<ColumnDefinition> &CreateTableRelation::Columns() {

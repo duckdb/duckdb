@@ -1,3 +1,4 @@
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/main/relation/write_parquet_relation.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -30,7 +31,11 @@ unique_ptr<QueryNode> WriteParquetRelation::GetQueryNode() {
 }
 
 string WriteParquetRelation::GetQuery() {
-	return string();
+	CopyInfo info;
+	info.format = "parquet";
+	info.is_format_auto_detected = false;
+	info.options = options;
+	return "COPY (" + child->GetQuery() + ") TO " + SQLString(parquet_file) + info.CopyOptionsToString();
 }
 
 const vector<ColumnDefinition> &WriteParquetRelation::Columns() {
