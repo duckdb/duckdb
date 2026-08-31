@@ -377,6 +377,11 @@ void PresetRegistry::Persist(ClientContext &context, const Preset &preset) {
 }
 
 Preset PresetRegistry::Resolve(ClientContext &context, const string &name) {
+	// the same rule INSTALL uses to tell an extension name from a file. Note it treats any dot as a
+	// path, so a preset name cannot contain one; file := '<path>' is the unambiguous form.
+	if (ExtensionHelper::IsFullPath(name)) {
+		return LoadFromFile(context, name);
+	}
 	auto &config = DBConfig::GetConfig(context);
 	// most local wins, so that a preset defined here overrides one shipped with DuckDB
 	Preset registered;

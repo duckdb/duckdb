@@ -4,7 +4,7 @@
 
 # settings are applied in the order the file lists them, with their JSON types
 query II
-SELECT setting, status FROM preset(file := 'test/sql/presets/example_preset.json')
+SELECT setting, status FROM preset('test/sql/presets/example_preset.json')
 ----
 threads	applied
 preserve_insertion_order	applied
@@ -31,24 +31,26 @@ statement ok
 SET max_expression_depth=9999
 
 query II
-SELECT setting, new_value FROM preset(file := 'test/sql/presets/example_preset.json') WHERE setting = 'max_expression_depth'
+SELECT setting, new_value FROM preset('test/sql/presets/example_preset.json') WHERE setting = 'max_expression_depth'
 ----
 max_expression_depth	1000
 
-# a name and a file are mutually exclusive
-statement error
-SELECT * FROM preset('host:shared', file := 'test/sql/presets/example_preset.json')
+# the positional argument accepts a path as well as a name
+query I
+SELECT new_value FROM preset('test/sql/presets/example_preset.json') WHERE setting = 'threads'
 ----
-<REGEX>:.*not both.*
+3
 
+# a value containing a dot, slash or backslash is a path, matching how INSTALL tells an
+# extension name from a file. A preset name therefore cannot contain a dot.
 statement error
-SELECT * FROM preset()
+CALL preset('compat:duckdb_1.1')
 ----
-<REGEX>:.*requires either a preset name or file.*
+<REGEX>:.*Preset file.*does not exist.*
 
 # malformed files are rejected
 statement error
-SELECT * FROM preset(file := 'test/sql/presets/does_not_exist.json')
+SELECT * FROM preset('test/sql/presets/does_not_exist.json')
 ----
 <REGEX>:.*does not exist.*
 
@@ -57,7 +59,7 @@ statement ok
 SET threads=7
 
 statement error
-SELECT * FROM preset(file := 'test/sql/presets/bad_preset.json')
+SELECT * FROM preset('test/sql/presets/bad_preset.json')
 ----
 <REGEX>:.*unrecognized configuration parameter.*
 

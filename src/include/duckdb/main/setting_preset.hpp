@@ -104,8 +104,10 @@ struct PresetRegistry {
 	DUCKDB_API static Preset Materialize(const PresetDefinition &definition, DBConfig &config);
 	//! Read a preset from a JSON file
 	DUCKDB_API static Preset LoadFromFile(ClientContext &context, const string &path);
-	//! Look up a preset by name. Most local wins: one registered this session, then a file in the
-	//! preset directory, then a built-in - so a preset defined locally overrides a shipped one.
+	//! Look up a preset. A value that names a file - by the same rule INSTALL uses - is loaded
+	//! from it; otherwise it is a preset name, resolved most-local-first: registered this session,
+	//! then a file in the preset directory, then a built-in, so a local preset overrides a shipped
+	//! one.
 	//! A namespaced name maps to a subdirectory, so "host:shared" is host/shared.json.
 	DUCKDB_API static Preset Resolve(ClientContext &context, const string &name);
 	//! The file a named preset would be stored in

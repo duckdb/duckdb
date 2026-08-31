@@ -4,6 +4,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/setting_preset.hpp"
 
 namespace duckdb {
@@ -125,10 +126,8 @@ struct PresetApplyData : public GlobalTableFunctionState {
 };
 
 struct PresetBindData : public TableFunctionData {
-	//! The name of a preset to look up, or empty when loading from a file
+	//! A preset name, or the path of a preset file
 	string name;
-	//! The path of a preset file, or empty when looking up by name
-	string file;
 };
 
 static unique_ptr<FunctionData> PresetBind(ClientContext &context, TableFunctionBindInput &input,
@@ -149,33 +148,17 @@ static unique_ptr<FunctionData> PresetBind(ClientContext &context, TableFunction
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	auto result = make_uniq<PresetBindData>();
-	if (!input.inputs.empty() && !input.inputs[0].IsNull()) {
-		result->name = input.inputs[0].ToString();
+	if (input.inputs.empty() || input.inputs[0].IsNull()) {
+		throw BinderException("preset requires the name of a preset, or the path of a preset file");
 	}
-	for (auto &entry : input.named_parameters) {
-		if (entry.second.IsNull()) {
-			continue;
-		}
-		if (entry.first == "file") {
-			result->file = entry.second.ToString();
-		} else if (entry.first == "name") {
-			result->name = entry.second.ToString();
-		}
-	}
-	if (result->name.empty() && result->file.empty()) {
-		throw BinderException("preset requires either a preset name or file := '<path>'");
-	}
-	if (!result->name.empty() && !result->file.empty()) {
-		throw BinderException("preset takes either a preset name or file := '<path>', not both");
-	}
+	result->name = input.inputs[0].ToString();
 	return std::move(result);
 }
 
 static unique_ptr<GlobalTableFunctionState> PresetInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<PresetBindData>();
 	auto result = make_uniq<PresetApplyData>();
-	auto preset = bind_data.file.empty() ? PresetRegistry::Resolve(context, bind_data.name)
-	                                     : PresetRegistry::LoadFromFile(context, bind_data.file);
+	auto preset = PresetRegistry::Resolve(context, bind_data.name);
 	result->results = PresetRegistry::Apply(context, preset);
 	return std::move(result);
 }
@@ -198,18 +181,9 @@ static void PresetFunction(ClientContext &context, TableFunctionInput &data_p, D
 }
 
 void PresetFun::RegisterFunction(BuiltinFunctions &set) {
-	TableFunctionSet functions("preset");
-	// preset('name'), and preset(name := ...) / preset(file := ...)
-	vector<vector<LogicalType>> signatures;
-	signatures.emplace_back();
-	signatures.push_back({LogicalType::VARCHAR});
-	for (auto &arguments : signatures) {
-		TableFunction function(arguments, PresetFunction, PresetBind, PresetInit);
-		function.named_parameters["name"] = LogicalType::VARCHAR;
-		function.named_parameters["file"] = LogicalType::VARCHAR;
-		functions.AddFunction(std::move(function));
-	}
-	set.AddFunction(functions);
+	// one argument: a preset name, or the path of a preset file. Names may not contain a dot,
+	// slash or backslash, so the two can always be told apart.
+	set.AddFunction(TableFunction("preset", {LogicalType::VARCHAR}, PresetFunction, PresetBind, PresetInit));
 }
 
 
@@ -246,6 +220,11 @@ static unique_ptr<FunctionData> RegisterPresetBind(ClientContext &context, Table
 		throw BinderException("register_preset requires a name and a struct of settings");
 	}
 	result->preset.name = input.inputs[0].ToString();
+	if (ExtensionHelper::IsFullPath(result->preset.name)) {
+		// such a name would be read back as a file path and could never be resolved
+		throw BinderException("Preset name \"%s\" may not contain a dot, slash or backslash",
+		                      result->preset.name);
+	}
 	result->preset.source = "session";
 
 	auto &settings = input.inputs[1];

@@ -68,6 +68,12 @@ SELECT setting, new_value FROM preset('memory:no_spill')
 ----
 threads	5
 
+# a name that would be read back as a path is rejected up front
+statement error
+CALL register_preset('compat:duckdb_1.1', {'threads': 2})
+----
+<REGEX>:.*may not contain a dot.*
+
 # a preset must name at least one setting
 statement error
 CALL register_preset('quack:empty', {})
