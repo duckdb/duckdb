@@ -1,4 +1,4 @@
-commit a25824e34450b334fe246f4c12958deea416254b
+commit d9d2f8844f67c565fa12955a53031855ef749dfa
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
@@ -40,7 +40,7 @@ index eaf3e10..a5db536 100644
  	    url, header_map, http_params, [&](const HTTPResponse &response) { return context.HandleResponse(response); },
  	    [&](const_data_ptr_t data, idx_t data_length) { return context.HandleContent(data, data_length); });
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 0fc503a..de01184 100644
+index 0fc503a..0a480af 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -7,8 +7,14 @@
@@ -90,7 +90,7 @@ index 0fc503a..de01184 100644
  		return download->Finalize();
  	}
  }
-@@ -574,6 +598,180 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -574,6 +598,184 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
@@ -242,9 +242,13 @@ index 0fc503a..de01184 100644
 +                                      timestamp_t response_time) {
 +	auto response_valid_until =
 +	    HTTPFileSystem::ComputeCacheValidUntil(response.headers, request_time, response_time);
-+	// TODO(hjiang): Prevent shared reuse of private responses and authenticated requests without explicit permission.
++	// TODO(hjiang): Prevent shared reuse of authenticated requests without explicit permission.
 +	if (HasCacheControlDirective(response.headers, "no-store")) {
 +		// no-store applies to this response, so only blocks populated by this read are retired.
++		response_valid_until = timestamp_t::ninfinity();
++	}
++	if (HasCacheControlDirective(response.headers, "private")) {
++		// Private responses cannot be stored in caches shared across connections.
 +		response_valid_until = timestamp_t::ninfinity();
 +	}
 +	if (response.headers.HasHeader("Vary")) {
@@ -271,7 +275,7 @@ index 0fc503a..de01184 100644
  struct HTTPFileInfoParser {
  	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
  		if (!headers.HasHeader("Content-Range")) {
-@@ -626,8 +824,11 @@ bool HTTPFileHandle::TryLoadFileInfoWithoutRequest() {
+@@ -626,8 +828,11 @@ bool HTTPFileHandle::TryLoadFileInfoWithoutRequest() {
  	return false;
  }
  
@@ -284,7 +288,7 @@ index 0fc503a..de01184 100644
  	if (response->status == HTTPStatusCode::OK_200) {
  		return response;
  	}
-@@ -641,14 +842,17 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RequestFileInfo(HTTPFileSystem &hfs) {
+@@ -641,14 +846,17 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RequestFileInfo(HTTPFileSystem &hfs) {
  	}
  	if (flags.OpenForReading() && response->status != HTTPStatusCode::NotFound_404 &&
  	    response->status != HTTPStatusCode::MovedPermanently_301) {
@@ -304,7 +308,7 @@ index 0fc503a..de01184 100644
  	if (response->status == HTTPStatusCode::PartialContent_206 || response->status == HTTPStatusCode::Accepted_202 ||
  	    response->status == HTTPStatusCode::OK_200) {
  		return response;
-@@ -660,7 +864,7 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RetryFileInfoWithRange(HTTPFileSystem &
+@@ -660,7 +868,7 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RetryFileInfoWithRange(HTTPFileSystem &
  	throw hfs.GetHTTPError(*this, *response, path);
  }
  
@@ -313,7 +317,7 @@ index 0fc503a..de01184 100644
  	length = 0;
  	auto content_size = HTTPFileInfoParser::TryParseContentRange(response.headers);
  	if (!content_size.IsValid()) {
-@@ -675,6 +879,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -675,6 +883,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
@@ -321,7 +325,7 @@ index 0fc503a..de01184 100644
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -694,9 +899,11 @@ void HTTPFileHandle::LoadFileInfo() {
+@@ -694,9 +903,11 @@ void HTTPFileHandle::LoadFileInfo() {
  		return;
  	}
  	auto &hfs = file_system.Cast<HTTPFileSystem>();
@@ -335,7 +339,7 @@ index 0fc503a..de01184 100644
  	}
  }
  
-@@ -716,6 +923,10 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -716,6 +927,10 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -346,7 +350,7 @@ index 0fc503a..de01184 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -726,6 +937,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -726,6 +941,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
@@ -354,7 +358,7 @@ index 0fc503a..de01184 100644
  	result.version_id = GetVersionId();
  	// TODO: handle properties
  	return result;
-@@ -793,7 +1005,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+@@ -793,7 +1009,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
  		if (should_full_download) {
  			length = hfs.FullDownload(*this, GetReadConfig(), should_write_cache)->GetSize();
  		}
