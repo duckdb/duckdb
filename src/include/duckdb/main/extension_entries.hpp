@@ -394,6 +394,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"iceberg_metadata", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_partition_stats", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_rewrite_data_files", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"iceberg_rollback_to_snapshot", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_scan", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_schema_properties", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_snapshots", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
