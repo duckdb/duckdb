@@ -12,7 +12,6 @@ CALL quack_serve(token='test_token');
 statement ok
 ATTACH 'quack:localhost' AS qk (TOKEN 'test_token');
 
-# local table - the statement is not pushed down
 statement ok
 CREATE TABLE tbl(i INTEGER, j INTEGER);
 
@@ -24,7 +23,6 @@ SELECT comment FROM duckdb_columns() WHERE table_name = 'tbl' AND column_name = 
 ----
 local column comment
 
-# local view - the target type is only known at bind time
 statement ok
 CREATE VIEW v AS SELECT i AS vi, j AS vj FROM tbl;
 
@@ -36,7 +34,6 @@ SELECT comment FROM duckdb_columns() WHERE table_name = 'v' AND column_name = 'v
 ----
 local view column comment
 
-# fully qualified local target
 statement ok
 COMMENT ON COLUMN memory.main.tbl.j IS 'qualified local column comment';
 
@@ -45,7 +42,6 @@ SELECT comment FROM duckdb_columns() WHERE table_name = 'tbl' AND column_name = 
 ----
 qualified local column comment
 
-# a target that exists nowhere is a regular catalog error
 statement error
 COMMENT ON COLUMN missing_tbl.i IS 'no such table';
 ----
