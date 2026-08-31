@@ -67,7 +67,7 @@ public:
 	//! Returns whether or not a single row in the ChunkVectorInfo should be used or not for the given transaction
 	bool Fetch(TransactionData transaction, row_t row);
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end);
-	bool Cleanup(transaction_t lowest_transaction) const;
+	bool Cleanup(transaction_t lowest_snapshot_bound) const;
 	string ToString(idx_t max_count) const;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
@@ -82,8 +82,8 @@ public:
 
 	//! Attempts to compress the per-row insert/delete ids into constants
 	//! This is possible when the ids behave identically for all transactions with a start time of at least
-	//! lowest_active_start (i.e. all active and future transactions)
-	VersionCompressionResult CompressVersionIds(transaction_t lowest_active_start);
+	//! lowest_snapshot_bound (i.e. all active and future transactions)
+	VersionCompressionResult CompressVersionIds(transaction_t lowest_snapshot_bound);
 	//! Whether a compression pass could achieve anything for this vector (see recheck_compression)
 	bool RecheckCompression() const {
 		return recheck_compression;
@@ -92,7 +92,7 @@ public:
 	//! compressible now or in the future without a modification that re-arms the check
 	void VerifyCachedCompressionState() const;
 
-	bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const;
+	bool HasDeletes(transaction_t snapshot_bound = MAX_TRANSACTION_ID) const;
 	bool HasUncommittedChanges() const;
 	bool AnyDeleted() const;
 	bool HasConstantInsertionId() const;
@@ -100,12 +100,12 @@ public:
 	bool HasConstantDeleteId() const;
 	transaction_t ConstantDeleteId() const;
 
-	void Write(WriteStream &writer, transaction_t transaction_id) const;
+	void Write(WriteStream &writer, transaction_t snapshot_bound) const;
 	static unique_ptr<ChunkVectorInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
 
 private:
 	template <class INSERT_OP, class DELETE_OP>
-	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
+	idx_t TemplatedGetSelVector(transaction_t snapshot_bound, transaction_t transaction_id,
 	                            optional_ptr<SelectionVector> sel_vector, idx_t max_count) const;
 
 	IndexPointer GetInsertedPointer() const;

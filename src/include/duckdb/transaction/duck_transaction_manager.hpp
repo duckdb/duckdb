@@ -21,8 +21,8 @@ struct UndoBufferProperties;
 //! CleanupInfo collects transactions awaiting cleanup.
 //! This ensures we can clean up after releasing the transaction lock.
 struct DuckCleanupInfo {
-	//! All transactions in a cleanup info share the same lowest_start_time.
-	transaction_t lowest_start_time;
+	//! All transactions in a cleanup info share the same lowest_snapshot_bound.
+	transaction_t lowest_snapshot_bound;
 	vector<unique_ptr<DuckTransaction>> transactions;
 
 	void Cleanup();
@@ -51,16 +51,20 @@ public:
 	transaction_t LowestActiveId() const {
 		return lowest_active_id;
 	}
-	transaction_t LowestActiveStart() const {
-		return lowest_active_start;
+	transaction_t LowestSnapshotBound() const {
+		return lowest_snapshot_bound;
 	}
 	transaction_t GetLastCommit() const {
 		return last_commit;
 	}
-	transaction_t GetActiveCheckpoint() const {
-		return active_checkpoint;
+	optional_idx GetActiveCheckpoint() const {
+		auto id = active_checkpoint.load();
+		return id == 0 ? optional_idx() : optional_idx(id);
 	}
-	void SetActiveCheckpoint(transaction_t checkpoint_id);
+	idx_t NextCheckpointId() {
+		return ++next_checkpoint_id;
+	}
+	void SetActiveCheckpoint(idx_t checkpoint_id);
 	void ResetActiveCheckpoint();
 
 	bool IsDuckTransactionManager() override {
@@ -125,11 +129,13 @@ private:
 	//! The lowest active transaction id
 	atomic<transaction_t> lowest_active_id;
 	//! The lowest active transaction timestamp
-	atomic<transaction_t> lowest_active_start;
+	atomic<transaction_t> lowest_snapshot_bound;
 	//! The last commit timestamp
 	atomic<transaction_t> last_commit;
-	//! The currently active checkpoint
-	atomic<transaction_t> active_checkpoint;
+	//! The currently active checkpoint, zero when none is running
+	atomic<idx_t> active_checkpoint;
+	//! Source of checkpoint identities
+	atomic<idx_t> next_checkpoint_id = {0};
 	//! Set of currently running transactions
 	vector<unique_ptr<DuckTransaction>> active_transactions;
 	//! Set of recently committed transactions

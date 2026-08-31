@@ -34,17 +34,17 @@ public:
 	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end);
 	void CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count);
 	void RevertAppend(idx_t new_count);
-	void CleanupAppend(transaction_t lowest_active_transaction, idx_t row_group_start, idx_t count);
+	void CleanupAppend(transaction_t lowest_snapshot_bound, idx_t row_group_start, idx_t count);
 
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
 
 	//! Attempts to compress the per-row insert/delete ids of each vector into constants
 	//! This is possible when the ids behave identically for all transactions with a start time of at least
-	//! lowest_active_start (i.e. all active and future transactions)
+	//! lowest_snapshot_bound (i.e. all active and future transactions)
 	//! Cheap when nothing can have changed: the pass only runs when version ids were modified since the
 	//! last pass, or when a previous pass left ids that can still compress once older transactions finish
-	void CompressVersionIds(transaction_t lowest_active_start);
+	void CompressVersionIds(transaction_t lowest_snapshot_bound);
 
 	vector<MetaBlockPointer> Checkpoint(RowGroupWriter &writer);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);

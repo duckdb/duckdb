@@ -1072,7 +1072,7 @@ void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType
 		start_ts = transaction_manager.GetLastCommit() + 1;
 		transaction_id = MAX_TRANSACTION_ID;
 	} else {
-		start_ts = transaction_manager.LowestActiveStart();
+		start_ts = transaction_manager.LowestSnapshotBound();
 		transaction_id = transaction_manager.LowestActiveId();
 	}
 	TransactionData transaction(transaction_id, start_ts);
@@ -1292,9 +1292,9 @@ void RowGroup::FinalizeAppend(RowGroupAppendState &state) {
 	}
 }
 
-void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+void RowGroup::CleanupAppend(transaction_t lowest_snapshot_bound, idx_t start, idx_t count) {
 	auto &vinfo = GetOrCreateVersionInfo();
-	vinfo.CleanupAppend(lowest_transaction, start, count);
+	vinfo.CleanupAppend(lowest_snapshot_bound, start, count);
 }
 
 void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, DataChunk &update_chunk, row_t *ids,
@@ -1918,7 +1918,7 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) co
 	return result;
 }
 
-void RowGroup::CompressVersionInfo(transaction_t lowest_active_start) {
+void RowGroup::CompressVersionInfo(transaction_t lowest_snapshot_bound) {
 	if (HasUnloadedDeletes()) {
 		// deletes were not loaded - they are still stored in their compact serialized form
 		return;
@@ -1927,7 +1927,7 @@ void RowGroup::CompressVersionInfo(transaction_t lowest_active_start) {
 	if (!vinfo) {
 		return;
 	}
-	vinfo->CompressVersionIds(lowest_active_start);
+	vinfo->CompressVersionIds(lowest_snapshot_bound);
 }
 
 vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {

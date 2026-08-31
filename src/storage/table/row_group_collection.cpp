@@ -819,7 +819,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 	D_ASSERT(next_row_id.load() >= total_rows.load());
 }
 
-void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+void RowGroupCollection::CleanupAppend(transaction_t lowest_snapshot_bound, idx_t start, idx_t count) {
 	auto row_groups = GetRowGroups();
 	auto row_group = row_groups->GetSegment(start);
 	D_ASSERT(row_group);
@@ -830,7 +830,7 @@ void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t s
 		idx_t start_in_row_group = current_row - row_group->GetRowStart();
 		idx_t append_count = MinValue<idx_t>(current_row_group.count - start_in_row_group, remaining);
 
-		current_row_group.CleanupAppend(lowest_transaction, start_in_row_group, append_count);
+		current_row_group.CleanupAppend(lowest_snapshot_bound, start_in_row_group, append_count);
 
 		current_row += append_count;
 		remaining -= append_count;
@@ -1710,7 +1710,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	InitializeVacuumState(checkpoint_state, vacuum_state, writer.GetRowGroupCount());
 
 	auto &transaction_manager = DuckTransactionManager::Get(GetAttached());
-	auto lowest_active_start = transaction_manager.LowestActiveStart();
+	auto lowest_snapshot_bound = transaction_manager.LowestSnapshotBound();
 	try {
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
@@ -1734,7 +1734,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
 			}
 			// the row group is kept as-is: try to compress its version information
-			row_group.CompressVersionInfo(lowest_active_start);
+			row_group.CompressVersionInfo(lowest_snapshot_bound);
 			if (writer.GetCheckpointOptions().type != CheckpointType::VACUUM_ONLY) {
 				DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx,
 				           row_group, vacuum_state.row_start);

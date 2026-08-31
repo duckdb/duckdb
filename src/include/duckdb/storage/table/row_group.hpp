@@ -184,7 +184,7 @@ public:
 	//! Revert a previous append made by RowGroup::AppendVersionInfo
 	void RevertAppend(idx_t new_count);
 	//! Clean up append states that can either be compressed or deleted
-	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void CleanupAppend(transaction_t lowest_snapshot_bound, idx_t start, idx_t count);
 
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *row_ids, idx_t count,
@@ -250,8 +250,8 @@ public:
 	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
 	//! Attempts to compress the version information of the row group
 	//! Per-row insert/delete ids that behave identically for all transactions with a start time of at least
-	//! lowest_active_start (i.e. all active and future transactions) are compressed into constants
-	void CompressVersionInfo(transaction_t lowest_active_start);
+	//! lowest_snapshot_bound (i.e. all active and future transactions) are compressed into constants
+	void CompressVersionInfo(transaction_t lowest_snapshot_bound);
 
 	//! Direct accessors, fall outside of general use but can be useful to some extensions
 	ColumnData &GetRawColumnData(const StorageIndex &c) const;

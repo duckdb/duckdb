@@ -418,8 +418,8 @@ void DataTableInfo::VerifyIndexBuffers() const {
 	indexes.VerifyBuffers();
 }
 
-void DataTable::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
-	row_groups->CleanupAppend(lowest_transaction, start, count);
+void DataTable::CleanupAppend(transaction_t lowest_snapshot_bound, idx_t start, idx_t count) {
+	row_groups->CleanupAppend(lowest_snapshot_bound, start, count);
 }
 
 bool DataTable::IndexNameIsUnique(const string &name) {
@@ -1061,13 +1061,13 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 	}
 }
 
-bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id) {
-	if (checkpoint_id == MAX_TRANSACTION_ID) {
+bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, optional_idx checkpoint_id) {
+	if (!checkpoint_id.IsValid()) {
 		// no active checkpoint
 		return false;
 	}
 	auto current_segment_count = collection.GetSegmentCount();
-	if (last_seen_checkpoint.IsValid() && last_seen_checkpoint.GetIndex() == checkpoint_id) {
+	if (last_seen_checkpoint.IsValid() && last_seen_checkpoint.GetIndex() == checkpoint_id.GetIndex()) {
 		// we have already seen this checkpoint
 		// however, we might still need to append a new row group if a previous append was reverted
 		return current_segment_count <= checkpoint_row_group_count.GetIndex();
@@ -1080,7 +1080,8 @@ bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, tr
 }
 
 optional_idx DataTableInfo::CheckpointRowGroupCount(const CheckpointOptions &options) const {
-	if (!last_seen_checkpoint.IsValid() || last_seen_checkpoint.GetIndex() != options.transaction_id) {
+	if (!last_seen_checkpoint.IsValid() || !options.checkpoint_id.IsValid() ||
+	    last_seen_checkpoint.GetIndex() != options.checkpoint_id.GetIndex()) {
 		return optional_idx();
 	}
 	return checkpoint_row_group_count;

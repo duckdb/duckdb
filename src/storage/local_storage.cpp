@@ -161,8 +161,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		mapped_column_ids.emplace_back(col);
 	}
 	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
-	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
-	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
+	auto checkpoint_id = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
 
 	// The bound expressions of the indexes (and their bound column references) are in relation to
 	// ALL table columns, so we create an empty table chunk based on the table types. It references

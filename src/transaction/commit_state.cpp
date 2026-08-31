@@ -1,4 +1,5 @@
 #include "duckdb/transaction/commit_state.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
@@ -115,8 +116,7 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 	// set up the row identifiers vector
 	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers), count);
 
-	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
-	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
+	auto checkpoint_id = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
 	// delete the tuples from all the indexes.
 	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
 	// data, hence the transaction cannot be guaranteed.
@@ -139,6 +139,7 @@ CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id
     : transaction(transaction_p), commit_id(commit_id),
       index_data_remover(transaction, *transaction.context.lock(),
                          GetIndexRemovalType(transaction_state, commit_mode)) {
+	D_ASSERT(commit_mode != CommitMode::COMMIT || IsCommitted(commit_id));
 }
 
 IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode) {
