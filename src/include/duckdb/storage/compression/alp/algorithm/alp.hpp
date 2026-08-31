@@ -390,8 +390,8 @@ struct AlpCompression {
 
 template <class T>
 struct AlpDecompression {
-	static void Decompress(uint8_t *for_encoded, T *output, idx_t count, AlpConstants::FACTOR_TYPE vector_factor,
-	                       AlpConstants::EXPONENT_TYPE vector_exponent,
+	static void Decompress(const_data_ptr_t for_encoded, T *output, idx_t count,
+	                       AlpConstants::FACTOR_TYPE vector_factor, AlpConstants::EXPONENT_TYPE vector_exponent,
 	                       AlpConstants::EXCEPTIONS_COUNT_TYPE exceptions_count, T *exceptions,
 	                       const AlpConstants::EXCEPTION_POSITION_TYPE *exceptions_positions,
 	                       AlpConstants::FRAME_OF_REFERENCE_TYPE frame_of_reference,
