@@ -92,3 +92,38 @@ query I
 SELECT sum(x) FROM tb WHERE NOT b;
 ----
 11533312
+
+# Nullable row groups:
+# Row group 0: b is TRUE or NULL
+# Row group 1: b is FALSE or NULL
+# Row group 2: b alternates TRUE / FALSE
+statement ok
+CREATE TABLE nullable_tb AS SELECT
+  CASE WHEN range // 2048 = 0 THEN CASE WHEN range % 2 = 0 THEN TRUE ELSE NULL END
+       WHEN range // 2048 = 1 THEN CASE WHEN range % 2 = 0 THEN FALSE ELSE NULL END
+       ELSE (range % 2 = 0) END AS b,
+  range::INTEGER AS x
+FROM range(6144);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM nullable_tb WHERE b OR x < 0;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT count(*) FROM nullable_tb WHERE b OR x < 0;
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM nullable_tb WHERE NOT b OR x < 0;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT count(*) FROM nullable_tb WHERE NOT b OR x < 0;
+----
+2048
