@@ -159,6 +159,15 @@ MetadataResult LaunchServer(ShellState &state, const vector<string> &args) {
 MetadataResult MarkClientMode(ShellState &state, const vector<string> &args) {
 	// the shell is a client for the remainder of the session - Ctrl-D exits instead of disconnecting
 	state.started_as_client = true;
+	if (args.size() > 1) {
+		if (args[1].empty()) {
+			state.PrintF(PrintOutput::STDERR, "%s: Error: empty argument for '-connect': expected a database type\n",
+			             state.program_name);
+			ShellState::Exit(1);
+			return MetadataResult::EXIT;
+		}
+		state.command_parameters["type"] = args[1];
+	}
 	return MetadataResult::SUCCESS;
 }
 
@@ -296,8 +305,8 @@ static const CommandLineOption command_line_options[] = {
     {"box", 0, "", nullptr, ToggleOutputMode<RenderMode::BOX>, "set output mode to 'box'"},
     {"column", 0, "", nullptr, ToggleOutputMode<RenderMode::COLUMN>, "set output mode to 'column'"},
     {"cmd", 1, "COMMAND", nullptr, RunCommand<false>, "run \"COMMAND\" before reading stdin"},
-    {"connect", 0, "", MarkClientMode, ConnectToServer,
-     "connect to a server started with -serve (configurable with .connect_command)"},
+    {"connect", 0, "[TYPE]", MarkClientMode, ConnectToServer,
+     "connect to a database of the given type. Default: 'quack' (configurable with .connect_command)", true},
     {"csv", 0, "", nullptr, ToggleCSVMode, "set output mode to 'csv'"},
     {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"dark-mode", 0, "", SetColorScheme<HighlightMode::DARK_MODE>, SetColorScheme<HighlightMode::DARK_MODE>,

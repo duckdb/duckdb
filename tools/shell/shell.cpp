@@ -3486,6 +3486,10 @@ int RunShell(int argc, const char **argv) {
 			}
 			arguments.emplace_back(argv[++i]);
 		}
+		if (option.optional_argument && i + 1 < argc && argv[i + 1][0] != '-') {
+			// an optional argument is only consumed when it is not an option itself
+			arguments.emplace_back(argv[++i]);
+		}
 		if (option.pre_init_callback) {
 			// invoke the pre-init callback (if any)
 			auto result = option.pre_init_callback(data, arguments);

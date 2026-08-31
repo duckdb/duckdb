@@ -89,7 +89,7 @@ def test_storage_version_error(shell):
 # `-serve`/`-connect` only expand their command template - quack resolves the secret, its token and the
 # endpoint on its own. The probes print the expanded command instead of running it.
 SERVE_PROBE = '.serve_command ".print serve -> quack_serve(create_secret_if_not_exists=true{serve_secret|})"'
-CONNECT_PROBE = '.connect_command ".print connect -> CONNECT quack:{connect_secret|}"'
+CONNECT_PROBE = '.connect_command ".print connect -> CONNECT {type|quack}:{connect_secret|}"'
 
 def test_serve_defaults(shell):
     result = ShellTest(shell).add_argument("-cmd", SERVE_PROBE, "-serve", "-no-stdin").run()
@@ -123,6 +123,29 @@ def test_serve_missing_parameter(shell):
     result = test.run()
     result.check_stderr("no value provided for parameter 'unknown_parameter'")
 
+def test_connect_type_defaults_to_quack(shell):
+    result = ShellTest(shell).add_argument("-cmd", CONNECT_PROBE, "-connect", "-no-stdin").run()
+    result.check_stdout("connect -> CONNECT quack:")
+
+def test_connect_type_argument(shell):
+    result = ShellTest(shell).add_argument("-cmd", CONNECT_PROBE, "-connect", "postgres", "-no-stdin").run()
+    result.check_stdout("connect -> CONNECT postgres:")
+
+def test_connect_type_does_not_swallow_an_option(shell):
+    # the optional argument is only taken when it is not an option itself
+    result = ShellTest(shell).add_argument("-cmd", CONNECT_PROBE, "-connect", "-no-stdin").run()
+    result.check_stdout("connect -> CONNECT quack:")
+
+def test_connect_type_with_secret(shell):
+    test = ShellTest(shell).add_argument("-cmd", CONNECT_PROBE, "-connect", "postgres", "-secret", "s1", "-no-stdin")
+    result = test.run()
+    result.check_stdout("connect -> CONNECT postgres:")
+    result.check_stdout("SECRET s1")
+
+def test_connect_empty_type(shell):
+    result = ShellTest(shell).add_argument("-connect", "", "-no-stdin").run()
+    result.check_stderr("empty argument for '-connect'")
+
 def test_connect_rejects_a_database_argument(shell, tmp_path):
     db = tmp_path / "some.db"
     test = ShellTest(shell).add_argument(str(db), "-connect", "-no-stdin")
@@ -132,11 +155,12 @@ def test_connect_rejects_a_database_argument(shell, tmp_path):
     # the database is rejected before it is opened, so it is never created
     assert not db.exists()
 
-def test_connect_rejects_a_database_argument_in_any_order(shell, tmp_path):
+def test_connect_argument_after_the_flag_is_a_type(shell, tmp_path):
+    # `-connect X` always means "connect using type X" - a database has to come before the flag
     db = tmp_path / "some.db"
-    test = ShellTest(shell).add_argument("-connect", str(db), "-no-stdin")
+    test = ShellTest(shell).add_argument("-cmd", CONNECT_PROBE, "-connect", str(db), "-no-stdin")
     result = test.run()
-    result.check_stderr("cannot open a database")
+    result.check_stdout(f"connect -> CONNECT {db}:")
     assert not db.exists()
 
 def test_serve_accepts_a_database_argument(shell, tmp_path):

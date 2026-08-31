@@ -120,6 +120,8 @@ struct CommandLineOption {
 	metadata_command_t pre_init_callback;
 	metadata_command_t post_init_callback;
 	const char *description;
+	//! Whether one more argument is consumed when the next one is not an option itself
+	bool optional_argument;
 };
 
 struct MetadataCommand {
@@ -203,8 +205,9 @@ public:
 	//! The command to execute when `-serve` is passed in - `create_secret_if_not_exists` persists the
 	//! token the server picks, so that `-connect` works without any configuration
 	string serve_command = "CALL quack_serve(create_secret_if_not_exists=true{serve_secret|})";
-	//! The command to execute when `-connect` is passed in
-	string connect_command = "CONNECT 'quack:'{connect_secret|}";
+	//! The command to execute when `-connect` is passed in - `{type}` is the database type given to
+	//! `-connect`, and decides which extension the connection goes through
+	string connect_command = "CONNECT '{type|quack}:'{connect_secret|}";
 	//! Parameters used to expand placeholders in the serve/connect commands
 	unordered_map<string, string> command_parameters;
 	//! Whether the shell was launched as a client using `-connect` - Ctrl-D then exits instead of disconnecting
