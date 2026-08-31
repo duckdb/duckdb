@@ -27,14 +27,31 @@ bool StatementIterator::Peek() {
 	if (buffer_cursor < buffer.size()) {
 		return true;
 	}
+	if (pending_statement) {
+		return true;
+	}
 	// Otherwise, is there another parse-facing statement to pull? Parses ahead, does NOT preprocess
 	// — safe to use as a lookahead.
-	return source.Peek();
+	parser_timer.Start();
+	if (!source.Peek()) {
+		parser_timer.Reset();
+		return false;
+	}
+	parser_timer.End();
+	pending_statement = source.GetStatement();
+	if (!pending_statement) {
+		parser_timer.Reset();
+		return false;
+	}
+	return true;
 }
 
 bool StatementIterator::HasMore() {
 	// Buffered engine statements from the current peel still remain?
 	if (buffer_cursor < buffer.size()) {
+		return true;
+	}
+	if (pending_statement) {
 		return true;
 	}
 	// Otherwise defer to the parse-facing source's grammar-free existence check.
@@ -47,10 +64,10 @@ unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<Cl
 		return std::move(buffer[buffer_cursor++]);
 	}
 	// Pull the next parse-facing statement.
-	if (!source.Peek()) {
+	if (!pending_statement && !Peek()) {
 		return nullptr; // exhausted
 	}
-	auto stmt = source.GetStatement();
+	auto stmt = std::move(pending_statement);
 	if (!stmt) {
 		return nullptr;
 	}
@@ -59,6 +76,8 @@ unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<Cl
 	// was not enabled globally before the statement was parsed.
 	auto &profiler = QueryProfiler::Get(context);
 	profiler.StartQuery(stmt->query, IsExplainAnalyzeForIterator(stmt.get()));
+	profiler.AddParserTime(parser_timer);
+	parser_timer.Reset();
 	buffer.clear();
 	buffer_cursor = 0;
 	buffer.push_back(std::move(stmt));

@@ -1,10 +1,8 @@
 #include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/database.hpp"
 
-#include "duckdb/common/profiler.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
-#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/token_iterator.hpp"
@@ -38,10 +36,6 @@ bool ParseIterator::Peek() {
 	if (exhausted) {
 		return false;
 	}
-	// The query profiler owns the accumulated parser metric. This timer is local because parsing can
-	// happen before the per-statement profiler is started.
-	Profiler parser_timer;
-	parser_timer.Start();
 	auto options = client_context.GetParserOptions();
 	// On the very first Peek, give `parser_override` extensions a chance to claim the whole
 	// query. If one does, we yield its statements one at a time and skip the PEG path entirely.
@@ -81,12 +75,9 @@ bool ParseIterator::Peek() {
 	if (overridden_statements) {
 		if (override_cursor >= overridden_statements->size()) {
 			exhausted = true;
-			parser_timer.End();
 			return false;
 		}
 		current_statement = std::move((*overridden_statements)[override_cursor++]);
-		parser_timer.End();
-		QueryProfiler::Get(client_context).AddParserTime(parser_timer.ElapsedNanos());
 		return true;
 	}
 	if (!parser) {
@@ -100,7 +91,6 @@ bool ParseIterator::Peek() {
 	while (true) {
 		if (token_iterator->AtEnd()) {
 			exhausted = true;
-			parser_timer.End();
 			return false;
 		}
 		unique_ptr<SQLStatement> stmt;
@@ -134,13 +124,10 @@ bool ParseIterator::Peek() {
 				create.info->sql = stmt->query;
 			}
 			current_statement = std::move(stmt);
-			parser_timer.End();
-			QueryProfiler::Get(client_context).AddParserTime(parser_timer.ElapsedNanos());
 			return true;
 		}
 		if (token_iterator->AtEnd()) {
 			exhausted = true;
-			parser_timer.End();
 			return false;
 		}
 		// separator-only TLS in the middle of the input — loop and try the next.

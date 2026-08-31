@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/profiler.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/parse_iterator.hpp"
@@ -70,6 +71,10 @@ private:
 	ParseIterator source;
 	//! The bound context, inherited from `source`. Used for preprocessing / transaction state / locking.
 	ClientContext &context;
+	//! The parse-facing statement buffered by Peek, waiting to be handed to preprocessing.
+	unique_ptr<SQLStatement> pending_statement;
+	//! Stores the parser timing until the statement is handed to the engine-facing iterator.
+	Profiler parser_timer;
 	//! Engine-facing statements produced by preprocessing one parse-facing peel. Drained
 	//! one-at-a-time across GetStatement calls before pulling + preprocessing the next peel.
 	vector<unique_ptr<SQLStatement>> buffer;
