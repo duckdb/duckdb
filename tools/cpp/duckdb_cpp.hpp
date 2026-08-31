@@ -178,9 +178,15 @@ struct is_equality_comparable<T, std::void_t<decltype(std::declval<const T &>() 
 /// which makes the engine fall back to comparing the slots by identity.
 /// @internal
 /// Names `const Vector &` once per element of a type pack: lets a function declare exactly one vector parameter per
-/// argument type.
+/// argument type. Routed through a class template so the pack expansion is a non-deduced context on every compiler:
+/// MSVC misaligns a plain alias-template pack against the call arguments instead of fixing its length from the
+/// explicitly given type list.
 template <class T>
-using VectorPerArg = const Vector &;
+struct VectorPerArgImpl {
+	using type = const Vector &;
+};
+template <class T>
+using VectorPerArg = typename VectorPerArgImpl<T>::type;
 
 template <class T>
 constexpr auto SelectEquals() -> bool (*)(void *, void *) {
