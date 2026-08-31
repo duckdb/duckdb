@@ -5,26 +5,19 @@
 
 namespace duckdb {
 
-class DuckDBKeywordHelper : public PEGKeywordHelper {
-private:
-	DuckDBKeywordHelper();
+class ParsedGrammar;
+
+class ParsedGrammarKeywordHelper : public PEGKeywordHelper {
+public:
+	explicit ParsedGrammarKeywordHelper(const ParsedGrammar &grammar);
 
 public:
-	static const DuckDBKeywordHelper &Instance();
-
-public:
-	bool KeywordCategoryType(const std::string &text, const PEGKeywordCategory type) const override;
+	bool KeywordCategoryType(const string &text, PEGKeywordCategory type) const override;
 	bool IsKeyword(const string &text) const override;
 	vector<ParserKeyword> KeywordList() const override;
 
 private:
-	void InitializeKeywordMaps();
-
-private:
 	DefaultKeywordMaps keyword_maps;
-
-private:
-	bool initialized;
 };
 
 } // namespace duckdb
