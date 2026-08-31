@@ -49,13 +49,13 @@ public:
 	idx_t index;
 	T decoded_values[AlpConstants::ALP_VECTOR_SIZE];
 	T exceptions[AlpConstants::ALP_VECTOR_SIZE];
-	uint16_t exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
+	AlpConstants::EXCEPTION_POSITION_TYPE exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
 	uint8_t for_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
-	uint8_t v_exponent;
-	uint8_t v_factor;
-	uint16_t exceptions_count;
-	uint64_t frame_of_reference;
-	uint8_t bit_width;
+	AlpConstants::EXPONENT_TYPE v_exponent;
+	AlpConstants::FACTOR_TYPE v_factor;
+	AlpConstants::EXCEPTIONS_COUNT_TYPE exceptions_count;
+	AlpConstants::FRAME_OF_REFERENCE_TYPE frame_of_reference;
+	AlpConstants::BIT_WIDTH_TYPE bit_width;
 };
 
 template <class T>
@@ -69,7 +69,7 @@ public:
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		segment_data = handle.GetDataMutable() + segment.GetBlockOffset();
-		auto metadata_offset = Load<uint32_t>(segment_data);
+		auto metadata_offset = Load<AlpConstants::METADATA_POINTER_TYPE>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
 	}
 
@@ -124,7 +124,7 @@ public:
 
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
-		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
+		auto data_byte_offset = Load<AlpConstants::METADATA_POINTER_TYPE>(metadata_ptr);
 		const auto block_size = segment.GetBlockSize();
 
 		if (data_byte_offset >= block_size) {
@@ -138,7 +138,7 @@ public:
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
 		// Load the vector data
-		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
+		vector_state.v_exponent = Load<AlpConstants::EXPONENT_TYPE>(vector_ptr);
 		vector_ptr += AlpConstants::EXPONENT_SIZE;
 
 		const bool uncompressed_mode = vector_state.v_exponent == AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
@@ -157,16 +157,16 @@ public:
 			}
 			return;
 		}
-		vector_state.v_factor = Load<uint8_t>(vector_ptr);
+		vector_state.v_factor = Load<AlpConstants::FACTOR_TYPE>(vector_ptr);
 		vector_ptr += AlpConstants::FACTOR_SIZE;
 
-		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
+		vector_state.exceptions_count = Load<AlpConstants::EXCEPTIONS_COUNT_TYPE>(vector_ptr);
 		vector_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
 
-		vector_state.frame_of_reference = Load<uint64_t>(vector_ptr);
+		vector_state.frame_of_reference = Load<AlpConstants::FRAME_OF_REFERENCE_TYPE>(vector_ptr);
 		vector_ptr += AlpConstants::FOR_SIZE;
 
-		vector_state.bit_width = Load<uint8_t>(vector_ptr);
+		vector_state.bit_width = Load<AlpConstants::BIT_WIDTH_TYPE>(vector_ptr);
 		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
 		if (vector_state.exceptions_count > vector_size) {
@@ -177,7 +177,7 @@ public:
 			throw DataCorruptionException("Corrupted ALP segment: v_factor (%d) exceeds v_exponent (%d)",
 			                              vector_state.v_factor, vector_state.v_exponent);
 		}
-		if (vector_state.bit_width > sizeof(uint64_t) * 8) {
+		if (vector_state.bit_width > AlpConstants::MAX_BIT_WIDTH) {
 			throw DataCorruptionException("Corrupted ALP segment: Invalid bit_width encountered: %d",
 			                              vector_state.bit_width);
 		}

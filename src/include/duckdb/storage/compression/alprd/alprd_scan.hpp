@@ -55,12 +55,12 @@ public:
 	uint8_t left_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
 	uint8_t right_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
 	EXACT_TYPE decoded_values[AlpRDConstants::ALP_VECTOR_SIZE];
-	uint16_t exceptions[AlpRDConstants::ALP_VECTOR_SIZE];
-	uint16_t exceptions_positions[AlpRDConstants::ALP_VECTOR_SIZE];
-	uint16_t exceptions_count;
-	uint8_t right_bit_width;
-	uint8_t left_bit_width;
-	uint16_t left_parts_dict[AlpRDConstants::MAX_DICTIONARY_SIZE];
+	AlpRDConstants::EXCEPTION_TYPE exceptions[AlpRDConstants::ALP_VECTOR_SIZE];
+	AlpRDConstants::EXCEPTION_POSITION_TYPE exceptions_positions[AlpRDConstants::ALP_VECTOR_SIZE];
+	AlpRDConstants::EXCEPTIONS_COUNT_TYPE exceptions_count;
+	AlpRDConstants::BIT_WIDTH_TYPE right_bit_width;
+	AlpRDConstants::BIT_WIDTH_TYPE left_bit_width;
+	AlpRDConstants::DICTIONARY_ELEMENT_TYPE left_parts_dict[AlpRDConstants::MAX_DICTIONARY_SIZE];
 };
 
 template <class T>
@@ -78,7 +78,7 @@ public:
 		const auto block_size = segment.GetBlockSize();
 
 		idx_t total_segment_offset = segment.GetBlockOffset();
-		auto metadata_offset = Load<uint32_t>(segment_data);
+		auto metadata_offset = Load<AlpRDConstants::METADATA_POINTER_TYPE>(segment_data);
 		auto segment_ptr = segment_data + AlpRDConstants::METADATA_POINTER_SIZE;
 		total_segment_offset += AlpRDConstants::METADATA_POINTER_SIZE;
 
@@ -93,13 +93,14 @@ public:
 		}
 
 		// Load the Right Bit Width which is in the segment header after the pointer to the first metadata
-		vector_state.right_bit_width = Load<uint8_t>(segment_ptr);
+		vector_state.right_bit_width = Load<AlpRDConstants::BIT_WIDTH_TYPE>(segment_ptr);
 		segment_ptr += AlpRDConstants::RIGHT_BIT_WIDTH_SIZE;
 
-		vector_state.left_bit_width = Load<uint8_t>(segment_ptr);
+		vector_state.left_bit_width = Load<AlpRDConstants::BIT_WIDTH_TYPE>(segment_ptr);
 		segment_ptr += AlpRDConstants::LEFT_BIT_WIDTH_SIZE;
 
-		uint8_t actual_dictionary_size = Load<uint8_t>(segment_ptr);
+		AlpRDConstants::DICTIONARY_COUNT_TYPE actual_dictionary_size =
+		    Load<AlpRDConstants::DICTIONARY_COUNT_TYPE>(segment_ptr);
 		segment_ptr += AlpRDConstants::N_DICTIONARY_ELEMENTS_SIZE;
 
 		total_segment_offset += AlpRDConstants::HEADER_SIZE;
@@ -170,7 +171,7 @@ public:
 
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
-		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
+		auto data_byte_offset = Load<AlpRDConstants::METADATA_POINTER_TYPE>(metadata_ptr);
 		const auto block_size = segment.GetBlockSize();
 		if (data_byte_offset >= block_size) {
 			throw IOException(
@@ -183,7 +184,7 @@ public:
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
 		// Load the vector data
-		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
+		vector_state.exceptions_count = Load<AlpRDConstants::EXCEPTIONS_COUNT_TYPE>(vector_ptr);
 		vector_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		const bool uncompressed_mode = vector_state.exceptions_count == AlpRDConstants::UNCOMPRESSED_MODE_SENTINEL;
