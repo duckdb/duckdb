@@ -73,14 +73,8 @@ string FunctionExpression::ToString() const {
 			                          arguments[1].ToString());
 		}
 	}
-	// standard function call
-	string result;
-	if (!qualified_name.Catalog().empty()) {
-		result += SQLIdentifier(qualified_name.Catalog()) + ".";
-	}
-	if (!qualified_name.Schema().empty()) {
-		result += SQLIdentifier(qualified_name.Schema()) + ".";
-	}
+	// standard function call - render the full qualification, the schema path can be nested (e.g. s1.s2.s3.my_macro)
+	string result = qualified_name.QualificationToString();
 	result += SQLIdentifier(qualified_name.Name());
 	result += "(";
 	if (distinct) {
@@ -159,6 +153,11 @@ void FunctionExpression::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<vector<FunctionArgument>>(209, "arguments", arguments);
 	}
+
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || qualified_name.Path().size() > 3) {
+		// the catalog/schema properties above cannot represent a nested schema path
+		serializer.WriteProperty<QualifiedName>(210, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deserializer) {
@@ -192,6 +191,11 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 	// New children deserialization
 	if (children.empty()) {
 		deserializer.ReadPropertyWithDefault<vector<FunctionArgument>>(209, "arguments", result->arguments);
+	}
+
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(210, "qualified_name", QualifiedName());
+	if (!qualified_name.Path().empty()) {
+		result->SetQualifiedName(std::move(qualified_name));
 	}
 
 	return std::move(result);

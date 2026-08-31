@@ -18,10 +18,7 @@ QualifiedName QualifiedName::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
-string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
-	if (path.empty()) {
-		return string();
-	}
+string QualifiedName::QualificationToString(QualifiedNameToStringMode mode) const {
 	string result;
 	// render every qualification component (the path can hold a nested schema chain)
 	for (idx_t i = 0; i + 1 < path.size(); i++) {
@@ -36,8 +33,14 @@ string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 		}
 		result += SQLIdentifier(component) + ".";
 	}
-	result += SQLIdentifier(Name());
 	return result;
+}
+
+string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
+	if (path.empty()) {
+		return string();
+	}
+	return QualificationToString(mode) + SQLIdentifier(Name());
 }
 
 //! This parses a superset of the strings that the actual SQL parser accepts: it allows whitespace, most special

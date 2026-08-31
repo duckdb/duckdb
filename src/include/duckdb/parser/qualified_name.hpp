@@ -118,6 +118,8 @@ struct QualifiedName {
 	static QualifiedName Parse(const string &input);
 	static vector<Identifier> ParseComponents(const string &input);
 	string ToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
+	//! Render only the qualification (every component before the name), with a trailing "." after each component
+	string QualificationToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
 
 	hash_t Hash() const;
 	bool operator==(const QualifiedName &rhs) const;
