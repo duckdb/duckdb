@@ -475,7 +475,6 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
-	profiler.StartQuery(statement->query, IsExplainAnalyze(statement.get()));
 	Planner logical_planner(*this);
 	if (parameters.parameters) {
 		auto &parameter_values = *parameters.parameters;
@@ -539,6 +538,10 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock,
                                                                          unique_ptr<SQLStatement> statement,
                                                                          PendingQueryParameters parameters) {
+	auto &profiler = QueryProfiler::Get(*this);
+	profiler.StartQuery(statement->query, IsExplainAnalyze(statement.get()));
+	profiler.AddParserTime(statement->parser_timer);
+
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
 	for (auto &state : registered_state->States()) {

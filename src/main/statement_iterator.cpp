@@ -1,18 +1,9 @@
 #include "duckdb/main/statement_iterator.hpp"
 
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/parser/statement/explain_statement.hpp"
 
 namespace duckdb {
-
-static bool IsExplainAnalyzeForIterator(SQLStatement *statement) {
-	if (!statement || statement->type != StatementType::EXPLAIN_STATEMENT) {
-		return false;
-	}
-	return statement->Cast<ExplainStatement>().explain_type == ExplainType::EXPLAIN_ANALYZE;
-}
 
 StatementIterator::StatementIterator(ParseIterator &&parse_iterator)
     : source(std::move(parse_iterator)), context(source.GetClientContext()) {
@@ -27,31 +18,14 @@ bool StatementIterator::Peek() {
 	if (buffer_cursor < buffer.size()) {
 		return true;
 	}
-	if (pending_statement) {
-		return true;
-	}
 	// Otherwise, is there another parse-facing statement to pull? Parses ahead, does NOT preprocess
 	// — safe to use as a lookahead.
-	parser_timer.Start();
-	if (!source.Peek()) {
-		parser_timer.Reset();
-		return false;
-	}
-	parser_timer.End();
-	pending_statement = source.GetStatement();
-	if (!pending_statement) {
-		parser_timer.Reset();
-		return false;
-	}
-	return true;
+	return source.Peek();
 }
 
 bool StatementIterator::HasMore() {
 	// Buffered engine statements from the current peel still remain?
 	if (buffer_cursor < buffer.size()) {
-		return true;
-	}
-	if (pending_statement) {
 		return true;
 	}
 	// Otherwise defer to the parse-facing source's grammar-free existence check.
@@ -64,20 +38,11 @@ unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<Cl
 		return std::move(buffer[buffer_cursor++]);
 	}
 	// Pull the next parse-facing statement.
-	if (!pending_statement && !Peek()) {
+	if (!source.Peek()) {
 		return nullptr; // exhausted
 	}
-	auto stmt = std::move(pending_statement);
-	if (!stmt) {
-		return nullptr;
-	}
-	// Parsing happens before the statement is preprocessed or planned. Start the profiler here so
-	// the parser duration is charged to this statement, including EXPLAIN ANALYZE when profiling
-	// was not enabled globally before the statement was parsed.
-	auto &profiler = QueryProfiler::Get(context);
-	profiler.StartQuery(stmt->query, IsExplainAnalyzeForIterator(stmt.get()));
-	profiler.AddParserTime(parser_timer);
-	parser_timer.Reset();
+	auto stmt = source.GetStatement();
+	auto parser_timer = stmt->parser_timer;
 	buffer.clear();
 	buffer_cursor = 0;
 	buffer.push_back(std::move(stmt));
@@ -88,6 +53,7 @@ unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<Cl
 		// Preprocessing swallowed the peel — caller skips with `continue`; the next Get pulls on.
 		return nullptr;
 	}
+	buffer[0]->parser_timer = parser_timer;
 	buffer_cursor = 1;
 	return std::move(buffer[0]);
 }

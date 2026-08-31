@@ -13,6 +13,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/profiler.hpp"
 #include "duckdb/common/query_location.hpp"
 
 namespace duckdb {
@@ -38,6 +39,8 @@ public:
 	bool has_anonymous_parameters = false;
 	//! The query text that corresponds to this SQL statement
 	string query;
+	//! Parser timing collected before the statement is handed to the engine
+	Profiler parser_timer;
 
 protected:
 	SQLStatement(const SQLStatement &other) = default;
