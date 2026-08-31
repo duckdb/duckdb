@@ -6,6 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -294,6 +295,24 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 		}
 
 		return nullptr;
+	}
+	case ExpressionClass::BOUND_CASE: {
+		// Output range is the union of the ELSE and every THEN branch.
+		auto &case_expr = expr.Cast<BoundCaseExpression>();
+		auto else_stats = TryGetExpressionStats(context_p, case_expr.Else(), input_stats, owned_stats);
+		if (!else_stats) {
+			return nullptr;
+		}
+		auto merged = else_stats->ToUnique();
+		for (auto &check : case_expr.CaseChecks()) {
+			auto then_stats = TryGetExpressionStats(context_p, *check.then_expr, input_stats, owned_stats);
+			if (!then_stats) {
+				return nullptr;
+			}
+			merged->Merge(*then_stats);
+		}
+		owned_stats.push_back(std::move(merged));
+		return owned_stats.back().get();
 	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op = expr.Cast<BoundOperatorExpression>();
