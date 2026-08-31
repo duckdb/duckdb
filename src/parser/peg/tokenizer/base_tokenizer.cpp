@@ -575,8 +575,10 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 
 	switch (state) {
 	case TokenizeState::SINGLE_LINE_COMMENT:
-	case TokenizeState::MULTI_LINE_COMMENT:
 		behavior.PushToken(last_pos, sql.size(), TokenType::COMMENT);
+		return false;
+	case TokenizeState::MULTI_LINE_COMMENT:
+		behavior.PushToken(last_pos, sql.size(), TokenType::COMMENT, true);
 		return false;
 	case TokenizeState::OPERATOR:
 		PushOperatorToken(behavior, last_pos, sql.size());
