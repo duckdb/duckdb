@@ -15,6 +15,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/compression/compression_segment_reader.hpp"
 
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -68,25 +69,22 @@ struct AlpRDScanState : public SegmentScanState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	explicit AlpRDScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-
-		handle = buffer_manager.Pin(segment.GetBlockHandle());
+	explicit AlpRDScanState(BufferHandle handle_p, ColumnSegment &segment)
+	    : handle(std::move(handle_p)), reader(CompressionSegmentReader::FromSegment(handle, segment, "ALPRD segment")),
+	      segment(segment), count(segment.count) {
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		segment_data = handle.GetDataMutable() + segment.GetBlockOffset();
 		const auto block_size = segment.GetBlockSize();
 
 		idx_t total_segment_offset = segment.GetBlockOffset();
-		auto metadata_offset = Load<AlpRDConstants::METADATA_POINTER_TYPE>(segment_data);
+		auto metadata_end = reader.template Read<AlpRDConstants::METADATA_POINTER_TYPE>();
+		reader = reader.GetSubReader(0, metadata_end, "ALPRD segment");
 		auto segment_ptr = segment_data + AlpRDConstants::METADATA_POINTER_SIZE;
 		total_segment_offset += AlpRDConstants::METADATA_POINTER_SIZE;
 
-		metadata_ptr = segment_data + metadata_offset;
-		const idx_t metadata_ptr_offset = segment.GetBlockOffset() + metadata_offset;
-		if (metadata_ptr_offset > block_size) {
-			throw DataCorruptionException("Corrupted ALPRD segment: metadata_offset value is corrupted");
-		}
+		metadata_ptr = segment_data + metadata_end;
+		const idx_t metadata_ptr_offset = segment.GetBlockOffset() + metadata_end;
 
 		if (total_segment_offset + AlpRDConstants::HEADER_SIZE > block_size) {
 			throw DataCorruptionException("Corrupted ALPRD segment: reading header bytes would exceed block space");
@@ -121,6 +119,7 @@ public:
 	}
 
 	BufferHandle handle;
+	CompressionSegmentReader reader;
 	data_ptr_t metadata_ptr;
 	data_ptr_t segment_data;
 	idx_t total_value_count = 0;
@@ -289,7 +288,9 @@ public:
 
 template <class T>
 unique_ptr<SegmentScanState> AlpRDInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto result = make_uniq_base<SegmentScanState, AlpRDScanState<T>>(segment);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
+	auto result = make_uniq_base<SegmentScanState, AlpRDScanState<T>>(std::move(handle), segment);
 	return result;
 }
 
