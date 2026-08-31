@@ -985,6 +985,34 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 }
 
 template <bool COLLECT_METRICS>
+void RecursiveCTEState::ApplyPreaggregatedUsingKeyUpdates(GroupedAggregateHashTable &epoch_ht, idx_t &delta_work_ns) {
+	AggregateHTScanState epoch_scan_state;
+	epoch_ht.InitializeScan(epoch_scan_state);
+	while (epoch_ht.ScanGroups(epoch_scan_state, distinct_rows)) {
+		if (distinct_rows.size() == 0) {
+			continue;
+		}
+		const auto snapshot_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		SnapshotPreaggregatedUsingKeyDeltaGroups(distinct_rows);
+		if constexpr (COLLECT_METRICS) {
+			const auto snapshot_end = std::chrono::steady_clock::now();
+			delta_work_ns += NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::nanoseconds>(snapshot_end - snapshot_start).count());
+		}
+	}
+
+	const auto combine_start =
+	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	ht->Combine(epoch_ht);
+	if constexpr (COLLECT_METRICS) {
+		const auto combine_end = std::chrono::steady_clock::now();
+		GetEpochMetrics().RecordKeyPreaggregationCombine(NumericCast<idx_t>(
+		    std::chrono::duration_cast<std::chrono::nanoseconds>(combine_end - combine_start).count()));
+	}
+}
+
+template <bool COLLECT_METRICS>
 void RecursiveCTEState::CommitMixedUsingKeyUpdatesInternal(unique_ptr<GroupedAggregateHashTable> epoch_ht,
                                                            idx_t preaggregated_candidate_count) {
 	D_ASSERT(op.using_key && !op.union_all && key_delta && epoch_ht && preaggregated_candidate_count > 0);
@@ -1037,30 +1065,7 @@ void RecursiveCTEState::CommitMixedUsingKeyUpdatesInternal(unique_ptr<GroupedAgg
 		}
 	}
 
-	AggregateHTScanState epoch_scan_state;
-	epoch_ht->InitializeScan(epoch_scan_state);
-	while (epoch_ht->ScanGroups(epoch_scan_state, distinct_rows)) {
-		if (distinct_rows.size() == 0) {
-			continue;
-		}
-		const auto snapshot_start =
-		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-		SnapshotPreaggregatedUsingKeyDeltaGroups(distinct_rows);
-		if constexpr (COLLECT_METRICS) {
-			const auto snapshot_end = std::chrono::steady_clock::now();
-			delta_work_ns += NumericCast<idx_t>(
-			    std::chrono::duration_cast<std::chrono::nanoseconds>(snapshot_end - snapshot_start).count());
-		}
-	}
-
-	const auto combine_start =
-	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-	ht->Combine(*epoch_ht);
-	if constexpr (COLLECT_METRICS) {
-		const auto combine_end = std::chrono::steady_clock::now();
-		GetEpochMetrics().RecordKeyPreaggregationCombine(NumericCast<idx_t>(
-		    std::chrono::duration_cast<std::chrono::nanoseconds>(combine_end - combine_start).count()));
-	}
+	ApplyPreaggregatedUsingKeyUpdates<COLLECT_METRICS>(*epoch_ht, delta_work_ns);
 
 	const auto finalize_start =
 	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
@@ -1126,30 +1131,7 @@ void RecursiveCTEState::CommitPreaggregatedUsingKeyUpdatesInternal() {
 	if constexpr (COLLECT_METRICS) {
 		GetEpochMetrics().RecordKeyPreaggregation(delta_candidate_count, epoch_ht->Count(), preaggregation_work_ns);
 	}
-	AggregateHTScanState epoch_scan_state;
-	epoch_ht->InitializeScan(epoch_scan_state);
-	while (epoch_ht->ScanGroups(epoch_scan_state, distinct_rows)) {
-		if (distinct_rows.size() == 0) {
-			continue;
-		}
-		const auto snapshot_start =
-		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-		SnapshotPreaggregatedUsingKeyDeltaGroups(distinct_rows);
-		if constexpr (COLLECT_METRICS) {
-			const auto snapshot_end = std::chrono::steady_clock::now();
-			delta_work_ns += NumericCast<idx_t>(
-			    std::chrono::duration_cast<std::chrono::nanoseconds>(snapshot_end - snapshot_start).count());
-		}
-	}
-
-	const auto hash_start =
-	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-	ht->Combine(*epoch_ht);
-	if constexpr (COLLECT_METRICS) {
-		const auto hash_end = std::chrono::steady_clock::now();
-		GetEpochMetrics().RecordKeyPreaggregationCombine(
-		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count()));
-	}
+	ApplyPreaggregatedUsingKeyUpdates<COLLECT_METRICS>(*epoch_ht, delta_work_ns);
 
 	const auto finalize_start =
 	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();

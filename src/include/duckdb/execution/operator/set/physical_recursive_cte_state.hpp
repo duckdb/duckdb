@@ -330,6 +330,8 @@ private:
 	void CommitMixedUsingKeyUpdatesInternal(unique_ptr<GroupedAggregateHashTable> epoch_ht,
 	                                        idx_t preaggregated_candidate_count);
 	template <bool COLLECT_METRICS>
+	void ApplyPreaggregatedUsingKeyUpdates(GroupedAggregateHashTable &epoch_ht, idx_t &delta_work_ns);
+	template <bool COLLECT_METRICS>
 	idx_t PreaggregateUsingKeyUpdates(GroupedAggregateHashTable &epoch_ht);
 	unique_ptr<GroupedAggregateHashTable> CreateUsingKeyHashTable() const;
 	void ExtractUsingKeyKeys(DataChunk &input);
