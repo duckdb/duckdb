@@ -192,21 +192,43 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 	result.Verify();
 }
 
-void CompressedStringScanState::Select(Vector &result, idx_t start, const SelectionVector &sel, idx_t sel_count) {
-	D_ASSERT(!dictionary);
-	D_ASSERT(mode == DictFSSTMode::FSST_ONLY);
-	idx_t start_offset = start + 1;
-	auto result_data = FlatVector::Writer<string_t>(result, sel_count);
-	for (idx_t i = 0; i < sel_count; i++) {
-		// Lookup dict offset in index buffer
-		auto string_number = start_offset + sel.get_index(i);
-		if (decompress_position > string_number) {
-			throw InternalException("DICT_FSST: not performing a sequential scan?");
+void CompressedStringScanState::Select(Vector &result, idx_t result_offset, idx_t start, const SelectionVector &sel,
+                                       idx_t sel_count) {
+	D_ASSERT(sel_count > 0);
+	auto &selvec = GetSelVec(start, sel.get_index(sel_count - 1) + 1);
+
+	//! (index 0 is reserved for NULL, which we don't have in this mode)
+	const idx_t start_offset = mode == DictFSSTMode::FSST_ONLY ? start + 1 : 0;
+
+	auto result_data = FlatVector::Writer<string_t>(result, sel_count, result_offset);
+	if (dictionary) {
+		// We have prepared the full dictionary, we can reference these strings directly
+		auto dictionary_values = FlatVector::GetData<string_t>(dictionary->data);
+		for (idx_t i = 0; i < sel_count; i++) {
+			// Lookup dict offset in index buffer
+			auto string_number = selvec.get_index(start_offset + sel.get_index(i));
+			if (string_number == 0) {
+				result_data.WriteNull();
+				continue;
+			}
+			result_data.WriteStringRef(dictionary_values[string_number]);
 		}
-		for (; decompress_position < string_number; decompress_position++) {
-			decompress_offset += string_lengths[decompress_position];
+	} else {
+		for (idx_t i = 0; i < sel_count; i++) {
+			// Lookup dict offset in index buffer
+			auto string_number = selvec.get_index(start_offset + sel.get_index(i));
+			if (string_number == 0) {
+				result_data.WriteNull();
+				continue;
+			}
+			if (decompress_position > string_number) {
+				throw InternalException("DICT_FSST: not performing a sequential scan?");
+			}
+			for (; decompress_position < string_number; decompress_position++) {
+				decompress_offset += string_lengths[decompress_position];
+			}
+			result_data.WriteStringRef(FetchStringFromDict(result, decompress_offset, string_number));
 		}
-		result_data.WriteValue(FetchStringFromDict(result, decompress_offset, string_number));
 	}
 }
 

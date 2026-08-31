@@ -261,23 +261,71 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 }
 
 void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
-                              idx_t sel_count) {
+                              idx_t sel_count, ScanVectorType scan_type) {
 	BeginScanVectorInternal(state);
-	auto &current = state.current->GetNode();
-	if (state.current->GetRowStart() + current.count - state.offset_in_column < target_count) {
-		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
-	}
-	if (state.scan_options && state.scan_options->force_fetch_row) {
-		for (idx_t i = 0; i < sel_count; i++) {
-			auto source_idx = sel.get_index(i);
-			ColumnFetchState fetch_state;
-			current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + source_idx), result, i);
+	// scratch space to rebase the selection vector to the start of a segment scan
+	// this owns its data, as compression functions can retain the selection vector (e.g. by slicing the result)
+	SelectionVector rebased_sel;
+	idx_t sel_offset = 0;
+	idx_t scanned_count = 0;
+	// the position up to which the scan state of the current segment has been advanced
+	// segments without any selected rows are not scanned, so they must be skipped in the next scan
+	idx_t segment_internal_index = state.offset_in_column;
+	while (scanned_count < target_count) {
+		auto &current = state.current->GetNode();
+		auto current_start = state.current->GetRowStart();
+		idx_t scan_count =
+		    MinValue<idx_t>(target_count - scanned_count, current_start + current.count - state.offset_in_column);
+		segment_internal_index = state.offset_in_column;
+		// gather the selected rows that fall within this segment
+		idx_t segment_sel_count = 0;
+		while (sel_offset + segment_sel_count < sel_count &&
+		       sel.get_index(sel_offset + segment_sel_count) < scanned_count + scan_count) {
+			segment_sel_count++;
 		}
-	} else {
-		current.Select(state, target_count, result, sel, sel_count);
+		if (segment_sel_count > 0) {
+			// the indices must be relative to the start of the segment scan - for the first segment this is
+			// already the case, so we can forward the selection vector of the caller directly
+			reference<const SelectionVector> segment_sel(sel);
+			if (scanned_count > 0) {
+				if (!rebased_sel.IsSet()) {
+					rebased_sel.Initialize();
+				}
+				for (idx_t i = 0; i < segment_sel_count; i++) {
+					rebased_sel.set_index(i, sel.get_index(sel_offset + i) - scanned_count);
+				}
+				segment_sel = rebased_sel;
+			}
+			if (state.scan_options && state.scan_options->force_fetch_row) {
+				for (idx_t i = 0; i < segment_sel_count; i++) {
+					ColumnFetchState fetch_state;
+					auto source_idx = state.offset_in_column + segment_sel.get().get_index(i) - current_start;
+					current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(source_idx), result, sel_offset + i);
+				}
+			} else {
+				current.Select(state, scan_count, result, segment_sel.get(), segment_sel_count, sel_offset, scan_type);
+			}
+			segment_internal_index = state.offset_in_column + scan_count;
+		}
+		sel_offset += segment_sel_count;
+		scanned_count += scan_count;
+		state.offset_in_column += scan_count;
+		if (scanned_count < target_count) {
+			auto next = data.GetNextSegment(*state.current);
+			if (!next) {
+				break;
+			}
+			state.previous_states.emplace_back(std::move(state.scan_state));
+			state.current = next;
+			state.current->GetNode().InitializeScan(state);
+			state.segment_checked = false;
+		}
 	}
-	state.offset_in_column += target_count;
-	state.internal_index = state.offset_in_column;
+	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR) {
+		// not every compression function sets the size of the result
+		FlatVector::SetSize(result, count_t(sel_count));
+	}
+	state.internal_index = segment_internal_index;
 }
 
 void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,

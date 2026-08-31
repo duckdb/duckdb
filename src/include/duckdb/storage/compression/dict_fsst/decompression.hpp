@@ -26,7 +26,7 @@ public:
 	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
 	                            idx_t scan_count);
 	const SelectionVector &GetSelVec(idx_t start, idx_t scan_count);
-	void Select(Vector &result, idx_t start, const SelectionVector &sel, idx_t sel_count);
+	void Select(Vector &result, idx_t result_offset, idx_t start, const SelectionVector &sel, idx_t sel_count);
 
 	bool AllowDictionaryScan(idx_t scan_count);
 

@@ -412,17 +412,18 @@ void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, V
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-               const SelectionVector &sel, idx_t sel_count) {
+               const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType scan_type) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	// If we are scanning an entire Vector and it contains only a single run we don't need to select at all
-	if (CanEmitConstantVector<true>(scan_state.position_in_entry, scan_state.index_pointer[scan_state.entry_pos],
+	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR &&
+	    CanEmitConstantVector<true>(scan_state.position_in_entry, scan_state.index_pointer[scan_state.entry_pos],
 	                                vector_count)) {
 		RLEScanConstant<T>(scan_state, vector_count, result);
 		return;
 	}
 
-	auto result_data = FlatVector::Writer<T>(result, sel_count);
+	auto result_data = FlatVector::Writer<T>(result, sel_count, result_offset);
 
 	idx_t prev_idx = 0;
 	for (idx_t i = 0; i < sel_count; i++) {
