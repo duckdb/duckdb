@@ -58,10 +58,9 @@ jobs:
   # Build the extensions from the main extension shards and the Rust-based config
   extensions-build:
     name: Build extensions
-    uses: smvv/extension-ci-tools/.github/workflows/build.yml@group-matrix
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
       duckdb_version: ${{ inputs.duckdb_commit }}
-      ci_tools_version: group-matrix
       image_version: ${{ inputs.image_version }}
       groups: |
         core:
@@ -90,7 +89,8 @@ jobs:
           toolchain: rust
       extension_repository: duckdb/extension-template
       extension_ref: main
-      ci_tools_repository: smvv/extension-ci-tools
+      ci_tools_repository: duckdb/extension-ci-tools
+      ci_tools_version: main
       exclude_archs: ${{ inputs.extra_exclude_archs }}
       allow_failure_archs: ${{ inputs.allow_failure_archs }}
       reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
