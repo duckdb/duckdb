@@ -47,54 +47,29 @@ static void PopulateKeywordMap(const ParsedGrammar &grammar, const string &root_
 }
 
 ParsedGrammarKeywordHelper::ParsedGrammarKeywordHelper(const ParsedGrammar &grammar) {
-	unordered_map<string, reference<case_insensitive_set_t>> keyword_maps {
-	    {"ReservedKeyword", reserved_keyword_map},  {"UnreservedKeyword", unreserved_keyword_map},
-	    {"ColumnNameKeyword", colname_keyword_map}, {"TypeFuncKeyword", typefunc_keyword_map},
-	    {"TypeNameKeyword", typename_keyword_map},
+	unordered_map<string, reference<case_insensitive_set_t>> mapping {
+	    {"ReservedKeyword", keyword_maps.reserved_keyword_map},
+	    {"UnreservedKeyword", keyword_maps.unreserved_keyword_map},
+	    {"ColumnNameKeyword", keyword_maps.colname_keyword_map},
+	    {"TypeFuncKeyword", keyword_maps.typefunc_keyword_map},
+	    {"TypeNameKeyword", keyword_maps.typename_keyword_map},
 	};
-	for (auto &entry : keyword_maps) {
+	for (auto &entry : mapping) {
 		case_insensitive_set_t active_rules;
 		PopulateKeywordMap(grammar, entry.first, entry.first, entry.second.get(), active_rules);
 	}
 }
 
-bool ParsedGrammarKeywordHelper::KeywordCategoryType(const string &text, PEGKeywordCategory type) const {
-	switch (type) {
-	case PEGKeywordCategory::KEYWORD_RESERVED:
-		return reserved_keyword_map.count(text) != 0;
-	case PEGKeywordCategory::KEYWORD_UNRESERVED:
-		return unreserved_keyword_map.count(text) != 0;
-	case PEGKeywordCategory::KEYWORD_TYPE_FUNC:
-		return typefunc_keyword_map.count(text) != 0;
-	case PEGKeywordCategory::KEYWORD_COL_NAME:
-		return colname_keyword_map.count(text) != 0;
-	case PEGKeywordCategory::KEYWORD_TYPE_NAME:
-		return typename_keyword_map.count(text) != 0;
-	default:
-		return false;
-	}
+bool ParsedGrammarKeywordHelper::KeywordCategoryType(const string &text, PEGKeywordCategory category) const {
+	return keyword_maps.IsKeywordOfCategory(text, category);
 }
 
 bool ParsedGrammarKeywordHelper::IsKeyword(const string &text) const {
-	return reserved_keyword_map.count(text) != 0 || unreserved_keyword_map.count(text) != 0 ||
-	       colname_keyword_map.count(text) != 0 || typefunc_keyword_map.count(text) != 0;
+	return keyword_maps.IsKeyword(text);
 }
 
 vector<ParserKeyword> ParsedGrammarKeywordHelper::KeywordList() const {
-	vector<ParserKeyword> result;
-	for (auto &kw : reserved_keyword_map) {
-		result.push_back({kw, KeywordCategory::KEYWORD_RESERVED});
-	}
-	for (auto &kw : unreserved_keyword_map) {
-		result.push_back({kw, KeywordCategory::KEYWORD_UNRESERVED});
-	}
-	for (auto &kw : typefunc_keyword_map) {
-		result.push_back({kw, KeywordCategory::KEYWORD_TYPE_FUNC});
-	}
-	for (auto &kw : colname_keyword_map) {
-		result.push_back({kw, KeywordCategory::KEYWORD_COL_NAME});
-	}
-	return result;
+	return keyword_maps.ToList();
 }
 
 } // namespace duckdb
