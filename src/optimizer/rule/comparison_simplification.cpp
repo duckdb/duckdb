@@ -38,7 +38,6 @@ static bool DateTimestampComparisonIsInvertible(BoundComparisonExpression &expr,
 	default:
 		break;
 	}
-
 	// The examples describe the column-left form; column-right comparisons invert the day bump.
 	bool add_one_day;
 	switch (op) {
