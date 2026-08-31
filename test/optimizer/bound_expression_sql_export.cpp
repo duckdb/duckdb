@@ -379,6 +379,34 @@ static unique_ptr<Expression> BindFlippingExpression(FunctionBindExpressionInput
 	return nullptr;
 }
 
+static void SerializeSyntheticScalar(Serializer &, const optional_ptr<FunctionData>, const BoundScalarFunction &) {
+}
+
+static unique_ptr<FunctionData> DeserializeSyntheticScalar(Deserializer &, BoundScalarFunction &) {
+	return nullptr;
+}
+
+static unique_ptr<FunctionData> DeserializeMutatingScalar(Deserializer &, BoundScalarFunction &function) {
+	function.SetFunctionCallback(ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
+	return nullptr;
+}
+
+static void SerializeSyntheticAggregate(Serializer &, const optional_ptr<FunctionData>,
+                                        const BoundAggregateFunction &) {
+}
+
+static unique_ptr<FunctionData> DeserializeSyntheticAggregate(Deserializer &, BoundAggregateFunction &) {
+	return nullptr;
+}
+
+static unique_ptr<FunctionData> DeserializeMutatingAggregate(Deserializer &, BoundAggregateFunction &function) {
+	auto replacement = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<1>>(
+	    LogicalType::INTEGER, LogicalType::BIGINT);
+	replacement.SetName(Identifier("deserialize_sum_plus_one"));
+	function.ReplaceImplementation(replacement);
+	return nullptr;
+}
+
 static void RequireInvalidExpressionTypes(const Expression &expression, const BoundExpressionSQLExportContext &context,
                                           const string &label) {
 	LogicalPlanVerificationPath path;
@@ -975,6 +1003,107 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE(mutated_aggregate.Function().GetCallbacks() !=
 	        mutated_aggregate.Function().GetDefinition()->GetCallbacks());
 	RequireIssue(BoundExpressionSQLExporter::Export(mutated_aggregate, context),
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+	connection.Rollback();
+}
+
+TEST_CASE("Bound expression SQL export preserves deserializer provenance invalidation",
+          "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	ExtensionLoader loader(*db.instance, "synthetic_deserializer_provenance_extension");
+	loader.UseDedicatedSchemaForExtension(Identifier("synthetic_deserializer_provenance_schema"));
+
+	ScalarFunction stable_scalar(Identifier("deserialize_identity"), {LogicalType::INTEGER}, LogicalType::INTEGER,
+	                             ScalarFunction::NopFunction);
+	stable_scalar.SetSerializeCallback(SerializeSyntheticScalar);
+	stable_scalar.SetDeserializeCallback(DeserializeSyntheticScalar);
+	loader.RegisterFunction(std::move(stable_scalar));
+
+	ScalarFunction mutated_scalar(Identifier("deserialize_mutation"), {LogicalType::INTEGER}, LogicalType::INTEGER,
+	                              ScalarFunction::NopFunction);
+	mutated_scalar.SetSerializeCallback(SerializeSyntheticScalar);
+	mutated_scalar.SetDeserializeCallback(DeserializeMutatingScalar);
+	loader.RegisterFunction(std::move(mutated_scalar));
+
+	auto stable_sum = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<0>>(
+	    LogicalType::INTEGER, LogicalType::BIGINT);
+	stable_sum.SetName(Identifier("deserialize_sum"));
+	stable_sum.SetSerializeCallback(SerializeSyntheticAggregate);
+	stable_sum.SetDeserializeCallback(DeserializeSyntheticAggregate);
+	loader.RegisterFunction(std::move(stable_sum));
+
+	auto mutated_sum = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<0>>(
+	    LogicalType::INTEGER, LogicalType::BIGINT);
+	mutated_sum.SetName(Identifier("deserialize_mutation_sum"));
+	mutated_sum.SetSerializeCallback(SerializeSyntheticAggregate);
+	mutated_sum.SetDeserializeCallback(DeserializeMutatingAggregate);
+	loader.RegisterFunction(std::move(mutated_sum));
+
+	auto plus_one_sum = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<1>>(
+	    LogicalType::INTEGER, LogicalType::BIGINT);
+	plus_one_sum.SetName(Identifier("deserialize_sum_plus_one"));
+	loader.RegisterFunction(plus_one_sum);
+	loader.RefreshSearchPath(*connection.context);
+	connection.BeginTransaction();
+
+	auto plan = BindExportQuery(
+	    connection, "SELECT synthetic_deserializer_provenance_schema.deserialize_identity(CAST(7 AS INTEGER)), "
+	                "synthetic_deserializer_provenance_schema.deserialize_mutation(CAST(7 AS INTEGER)), "
+	                "synthetic_deserializer_provenance_schema.deserialize_sum(CAST(7 AS INTEGER)), "
+	                "synthetic_deserializer_provenance_schema.deserialize_mutation_sum(CAST(7 AS INTEGER))");
+	BoundExpressionSQLExportContext context;
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+
+	auto stable_scalar_expression = FindExpression(*plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+		       expression.Cast<BoundFunctionExpression>().Function().GetName() == "deserialize_identity";
+	});
+	REQUIRE(stable_scalar_expression);
+	auto serialized_stable_scalar = BinaryRoundTrip(*connection.context, *stable_scalar_expression);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *serialized_stable_scalar) == Value::INTEGER(7));
+	auto &serialized_stable_function = serialized_stable_scalar->Cast<BoundFunctionExpression>();
+	REQUIRE(serialized_stable_function.Function().HasRebindableDefinition());
+	RequireRoundTrip(connection, *serialized_stable_scalar, context, string(),
+	                 "synthetic_deserializer_provenance_schema.deserialize_identity(CAST(7 AS INTEGER))");
+
+	auto mutated_scalar_expression = FindExpression(*plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+		       expression.Cast<BoundFunctionExpression>().Function().GetName() == "deserialize_mutation";
+	});
+	REQUIRE(mutated_scalar_expression);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *mutated_scalar_expression) == Value::INTEGER(7));
+	auto serialized_mutated_scalar = BinaryRoundTrip(*connection.context, *mutated_scalar_expression);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *serialized_mutated_scalar) == Value::INTEGER(8));
+	REQUIRE_FALSE(serialized_mutated_scalar->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_mutated_scalar, context),
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	auto stable_aggregate_expression = FindExpression(*plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
+		       expression.Cast<BoundAggregateExpression>().Function().GetName() == "deserialize_sum";
+	});
+	REQUIRE(stable_aggregate_expression);
+	auto serialized_stable_aggregate = BinaryRoundTrip(*connection.context, *stable_aggregate_expression);
+	REQUIRE(serialized_stable_aggregate->Cast<BoundAggregateExpression>().Function().HasRebindableDefinition());
+	RequireRoundTrip(connection, *serialized_stable_aggregate, context, string(),
+	                 "synthetic_deserializer_provenance_schema.deserialize_sum(CAST(7 AS INTEGER))");
+
+	auto mutated_aggregate_expression = FindExpression(*plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
+		       expression.Cast<BoundAggregateExpression>().Function().GetName() == "deserialize_mutation_sum";
+	});
+	REQUIRE(mutated_aggregate_expression);
+	auto serialized_mutated_aggregate = BinaryRoundTrip(*connection.context, *mutated_aggregate_expression);
+	auto &serialized_mutated_sum = serialized_mutated_aggregate->Cast<BoundAggregateExpression>();
+	REQUIRE(serialized_mutated_sum.Function().GetCallbacks() == plus_one_sum.GetCallbacks());
+	auto callback_oracle = connection.Query(
+	    "SELECT synthetic_deserializer_provenance_schema.deserialize_sum_plus_one(CAST(7 AS INTEGER))");
+	REQUIRE_FALSE(callback_oracle->HasError());
+	REQUIRE(callback_oracle->GetValue(0, 0) == Value::BIGINT(8));
+	REQUIRE_FALSE(serialized_mutated_sum.Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(serialized_mutated_sum, context),
 	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	connection.Rollback();
 }
