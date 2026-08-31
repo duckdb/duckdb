@@ -955,28 +955,40 @@ struct RoundDecimalOperator {
 struct RoundIntegerOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB precision) {
-		if (precision < 0) {
-			//	Do all the arithmetic at higher precision
-			using POWERS_OF_TEN_CLASS = typename DecimalCastTraits<TA>::POWERS_OF_TEN_CLASS;
-			if (precision <= -POWERS_OF_TEN_CLASS::CACHED_POWERS_OF_TEN) {
-				return 0;
-			}
-			const auto power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-precision];
-			auto addition = power_of_ten / 2;
-			if (input < 0) {
-				addition = -addition;
-			}
-			addition += input;
-			addition /= power_of_ten;
-			if (addition) {
-				return UnsafeNumericCast<TR>(addition * power_of_ten);
-			} else {
-				return 0;
-			}
-		} else {
-			//	Rounding integers to higher precision is a NOP
+		if (precision >= 0) {
+			// Rounding integers to higher precision is a NOP
 			return input;
 		}
+		if (precision <= -Hugeint::CACHED_POWERS_OF_TEN) {
+			return 0;
+		}
+		const auto power_of_ten = Hugeint::POWERS_OF_TEN[-precision];
+		const auto half = power_of_ten / 2;
+		hugeint_t wide_input = 0;
+		if constexpr (std::is_same<TA, hugeint_t>::value) {
+			wide_input = input;
+		} else {
+			wide_input = Hugeint::Convert(input);
+		}
+		auto rounded = wide_input / power_of_ten;
+		const auto remainder = wide_input % power_of_ten;
+		if (remainder >= half) {
+			rounded = Hugeint::Add(rounded, 1);
+		} else if (remainder <= -half) {
+			rounded = Hugeint::Subtract(rounded, 1);
+		}
+		if (rounded == 0) {
+			return 0;
+		}
+		hugeint_t rounded_value = 0;
+		if (!Hugeint::TryMultiply(rounded, power_of_ten, rounded_value)) {
+			throw OutOfRangeException("Overflow in ROUND of integer");
+		}
+		TR result;
+		if (!TryCast::Operation(rounded_value, result)) {
+			throw OutOfRangeException("Overflow in ROUND of integer");
+		}
+		return result;
 	}
 };
 
@@ -1090,6 +1102,9 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			// rounding a DECIMAL can overflow
 			round_function.SetFallible();
+			round_prec_function.SetFallible();
+		} else if (type.IsIntegral()) {
+			// rounding an integer to a negative precision can overflow
 			round_prec_function.SetFallible();
 		}
 		round.AddFunction(std::move(round_function));
