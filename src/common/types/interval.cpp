@@ -170,11 +170,10 @@ interval_parse_time : {
 	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time)) {
 		return false;
 	}
-	result.micros += time.value;
-	found_any = true;
-	if (negative) {
-		result.micros = -result.micros;
+	if (!IntervalTryAddition<int64_t>(result.micros, negative ? -time.value : time.value, 1, error_message)) {
+		return false;
 	}
+	found_any = true;
 	goto end_of_string;
 }
 interval_parse_identifier:
