@@ -14,7 +14,7 @@ void hmac256(EncryptionUtil &encryption_util, const std::string &message, const_
 	                     message.size(), out);
 }
 
-void hmac256(EncryptionUtil &encryption_util, std::string message, hash_bytes secret, hash_bytes &out) {
+void hmac256(EncryptionUtil &encryption_util, const std::string &message, hash_bytes secret, hash_bytes &out) {
 	hmac256(encryption_util, message, secret, sizeof(hash_bytes), out);
 }
 
