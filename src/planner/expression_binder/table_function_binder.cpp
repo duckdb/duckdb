@@ -58,15 +58,18 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	if (accept_sql_value_functions) {
 		auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back());
 		if (value_function) {
-			return BindExpression(value_function, depth, root_expression);
+			auto result = BindExpression(value_function, depth, root_expression);
+			// the value function expression is destroyed on return: erase any entries left for its children
+			GetBoundExpressions().EraseSubtree(*value_function);
+			return result;
 		}
 	}
 
 	auto result = BindCorrelatedColumns(expr_ptr, ErrorData("error"));
 	if (!result.HasError()) {
-		auto &bound_expr = expr_ptr->Cast<BoundExpression>();
-		ExtractCorrelatedExpressions(binder, *bound_expr.expr);
-		result.expression = std::move(bound_expr.expr);
+		auto bound_expr = GetBoundExpressions().Consume(*expr_ptr);
+		ExtractCorrelatedExpressions(binder, *bound_expr);
+		result.expression = std::move(bound_expr);
 		return result;
 	}
 

@@ -21,7 +21,7 @@ namespace duckdb {
 class ARTOperator {
 public:
 	//! Lookup returns the leaf matching the key, or an empty OptionalNodePtr if no such leaf exists.
-	static OptionalNodePtr Lookup(ART &art, const NodePtr &node, const ARTKey &key, idx_t depth) {
+	static OptionalNodePtr Lookup(const ART &art, const NodePtr &node, const ARTKey &key, idx_t depth) {
 		NodePtr current(node);
 
 		while (current.HasMetadata()) {
@@ -60,15 +60,15 @@ public:
 	//! LookupInLeaf returns true if the rowid is in the leaf:
 	//! 1) If the leaf is an inlined leaf, check if the rowid matches.
 	//! 2) If the leaf is a gate node, perform a search in the nested ART for the rowid.
-	static bool LookupInLeaf(ART &art, const NodePtr &node, const ARTKey &rowid) {
-		reference<const NodePtr> current_ref(node);
+	static bool LookupInLeaf(const ART &art, const NodePtr &node, const ARTKey &rowid) {
+		NodePtr current(node);
 		idx_t depth = 0;
 
-		while (current_ref.get().HasMetadata()) {
-			const auto type = current_ref.get().GetType();
+		while (current.HasMetadata()) {
+			const auto type = current.GetType();
 			switch (type) {
 			case NType::LEAF_INLINED: {
-				return current_ref.get().GetRowId() == rowid.GetRowId();
+				return current.GetRowId() == rowid.GetRowId();
 			}
 			case NType::LEAF: {
 				throw InternalException("Invalid node type (LEAF) for ARTOperator::NestedLookup.");
@@ -78,25 +78,25 @@ public:
 			case NType::NODE_256_LEAF: {
 				D_ASSERT(depth + 1 == Prefix::ROW_ID_SIZE);
 				const auto byte = rowid[Prefix::ROW_ID_COUNT];
-				return current_ref.get().HasByte(art, byte);
+				return current.HasByte(art, byte);
 			}
 			case NType::NODE_4:
 			case NType::NODE_16:
 			case NType::NODE_48:
 			case NType::NODE_256: {
 				D_ASSERT(depth < Prefix::ROW_ID_SIZE);
-				auto child = current_ref.get().GetChild(art, rowid[depth]);
+				auto child = current.GetChildNode(art, rowid[depth]);
 				if (child) {
 					// Continue in the child.
-					current_ref = *child;
+					current = child.Get();
 					depth++;
-					D_ASSERT(current_ref.get().HasMetadata());
+					D_ASSERT(current.HasMetadata());
 					continue;
 				}
 				return false;
 			}
 			case NType::PREFIX: {
-				Prefix prefix(art, current_ref.get());
+				Prefix prefix(art, current);
 				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 					if (prefix.data[i] != rowid[depth]) {
 						// The key and the prefix don't match.
@@ -104,7 +104,7 @@ public:
 					}
 					depth++;
 				}
-				current_ref = *prefix.child_slot;
+				current = *prefix.child_slot;
 			}
 			}
 		}

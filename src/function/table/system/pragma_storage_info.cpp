@@ -114,6 +114,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	CatalogEntryRetriever retriever(context);
 	qname = Binder::BindTableName(retriever, qname);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname);
+	Binder::RegisterEntryRead(input.binder, context, table_entry);
 	return make_uniq<PragmaStorageFunctionData>(table_entry, options);
 }
 

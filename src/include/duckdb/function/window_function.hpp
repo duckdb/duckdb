@@ -59,38 +59,40 @@ struct WindowFunctionInfo {
 
 class BindWindowFunctionInput : public BindFunctionInput {
 public:
-	using OptionalOrdering = optional_ptr<vector<OrderByNode>>;
+	using OptionalOrderTypes = optional_ptr<vector<LogicalType>>;
 
 	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundWindowFunction.
 	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
 	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
-	                        OptionalOrdering orders_p = nullptr, OptionalOrdering arg_orders_p = nullptr);
+	                        OptionalOrderTypes order_types_p = nullptr, OptionalOrderTypes arg_order_types_p = nullptr);
 
 	//! Construct without argument names - looking arguments up by name is not available in this case.
 	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrdering orders_p = nullptr,
-	                        OptionalOrdering arg_orders_p = nullptr);
+	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrderTypes order_types_p = nullptr,
+	                        OptionalOrderTypes arg_order_types_p = nullptr);
 
 	BoundWindowFunction &GetBoundFunction() const {
 		return bound_function;
 	}
 	bool HasOrders() const {
-		return orders.get();
+		return order_types.get();
 	}
-	const vector<OrderByNode> &GetOrders() const {
-		return *orders;
+	const vector<LogicalType> &GetOrderTypes() const {
+		return *order_types;
 	}
 	bool HasArgumentOrders() const {
-		return arg_orders.get();
+		return arg_order_types.get();
 	}
-	const vector<OrderByNode> &GetArgumentOrders() const {
-		return *arg_orders;
+	const vector<LogicalType> &GetArgumentOrderTypes() const {
+		return *arg_order_types;
 	}
 
 private:
 	BoundWindowFunction &bound_function;
-	OptionalOrdering orders;
-	OptionalOrdering arg_orders;
+	//! The types of the window's ORDER BY expressions (if provided by the binder)
+	OptionalOrderTypes order_types;
+	//! The types of the function's argument ORDER BY expressions (if provided by the binder)
+	OptionalOrderTypes arg_order_types;
 };
 
 //! Binds the window function and creates the function data
