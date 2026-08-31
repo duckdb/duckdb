@@ -10,6 +10,7 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -546,6 +547,15 @@ interval_t Interval::FromMicro(int64_t delta_us) {
 }
 
 interval_t Interval::Invert(interval_t interval) {
+	if (interval.days == NumericLimits<int32_t>::Minimum()) {
+		throw OutOfRangeException("Interval days value out of range");
+	}
+	if (interval.micros == NumericLimits<int64_t>::Minimum()) {
+		throw OutOfRangeException("Interval micros value out of range");
+	}
+	if (interval.months == NumericLimits<int32_t>::Minimum()) {
+		throw OutOfRangeException("Interval months value out of range");
+	}
 	interval.days = -interval.days;
 	interval.micros = -interval.micros;
 	interval.months = -interval.months;
