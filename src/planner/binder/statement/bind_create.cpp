@@ -270,6 +270,14 @@ QualifiedName Binder::BindTableName(const QualifiedName &name) {
 	return BindTableName(retriever, name);
 }
 
+void Binder::RegisterEntryRead(optional_ptr<Binder> binder, ClientContext &context, CatalogEntry &entry) {
+	if (!binder) {
+		// no binder available (e.g. when re-binding a deserialized plan) - nothing is cached in that case
+		return;
+	}
+	binder->GetStatementProperties().RegisterDBRead(entry.ParentCatalog(), context);
+}
+
 void Binder::BindCreateSchema(CreateSchemaInfo &info) {
 	// the qualified name carries the dotted path with the new schema as the last component; resolve its leading
 	// component into a catalog (prepending the default catalog when it is a schema)
@@ -545,6 +553,8 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			// create a copy of the expression because we do not want to alter the original
 			auto expression = function->Cast<ScalarMacroFunction>().expression->Copy();
 			ExpressionBinder::QualifyColumnNames(*this, expression);
+			// scope for the map entries of this bind: the bound result is only used for verification
+			BoundExpressionScope verify_scope(GetBoundExpressions());
 			try {
 				error = binder.Bind(expression, 0, false);
 				if (error.HasError()) {

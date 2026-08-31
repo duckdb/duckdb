@@ -188,29 +188,29 @@ public:
 
 	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(shared_ptr<const WindowFunction> function, vector<unique_ptr<Expression>> children,
-	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<OrderByNode> &orders,
-	                   vector<OrderByNode> &arg_orders);
+	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<LogicalType> &order_types,
+	                   vector<LogicalType> &arg_order_types);
 
 	//! Bind a function that does not come from a function set - the function is copied into a definition of its own
 	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
-	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<OrderByNode> &orders,
-	                   vector<OrderByNode> &arg_orders);
+	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<LogicalType> &order_types,
+	                   vector<LogicalType> &arg_order_types);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression> BindWindowFunction(shared_ptr<const WindowFunction> function,
 	                                                                vector<unique_ptr<Expression>> children,
-	                                                                vector<OrderByNode> &orders,
-	                                                                vector<OrderByNode> &arg_orders);
+	                                                                vector<LogicalType> &order_types,
+	                                                                vector<LogicalType> &arg_order_types);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression> BindWindowFunction(const WindowFunction &function,
 	                                                                vector<unique_ptr<Expression>> children,
-	                                                                vector<OrderByNode> &orders,
-	                                                                vector<OrderByNode> &arg_orders);
+	                                                                vector<LogicalType> &order_types,
+	                                                                vector<LogicalType> &arg_order_types);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(const WindowFunctionCatalogEntry &function,
 	                   vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error,
-	                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
+	                   vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types);
 
 	//! Turn a function into a BoundScalarFunction bound to the given arguments. The function is kept as the
 	//! definition of the resulting bound function - see BoundScalarFunction::GetDefinition().
@@ -260,8 +260,8 @@ public:
 	pair<BoundWindowFunction, unique_ptr<FunctionData>>
 	ResolveFunction(shared_ptr<const WindowFunction> function, vector<unique_ptr<Expression>> &children,
 	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                optional_ptr<vector<OrderByNode>> orders = nullptr,
-	                optional_ptr<vector<OrderByNode>> arg_orders = nullptr);
+	                optional_ptr<vector<LogicalType>> order_types = nullptr,
+	                optional_ptr<vector<LogicalType>> arg_order_types = nullptr);
 
 	pair<BoundWindowFunction, unique_ptr<FunctionData>> ResolveFunction(shared_ptr<const WindowFunction> function,
 	                                                                    vector<unique_ptr<Expression>> &children) {
@@ -272,9 +272,10 @@ public:
 	pair<BoundWindowFunction, unique_ptr<FunctionData>>
 	ResolveFunction(const WindowFunction &function, vector<unique_ptr<Expression>> &children,
 	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                optional_ptr<vector<OrderByNode>> orders = nullptr,
-	                optional_ptr<vector<OrderByNode>> arg_orders = nullptr) {
-		return ResolveFunction(make_shared_ptr<WindowFunction>(function), children, keyword_args, orders, arg_orders);
+	                optional_ptr<vector<LogicalType>> order_types = nullptr,
+	                optional_ptr<vector<LogicalType>> arg_order_types = nullptr) {
+		return ResolveFunction(make_shared_ptr<WindowFunction>(function), children, keyword_args, order_types,
+		                       arg_order_types);
 	}
 
 	pair<BoundWindowFunction, unique_ptr<FunctionData>> ResolveFunction(const WindowFunction &function,

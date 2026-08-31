@@ -1,0 +1,28 @@
+# name: test/optimizer/statistics/statistics_unsigned_arithmetic_pruning.test
+# description: unsigned integer columns propagate stats
+# group: [statistics]
+
+statement ok
+ATTACH '{TEST_DIR}/uint_arith_pruning.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+statement ok
+CREATE TABLE tu(x UINTEGER NOT NULL);
+
+statement ok
+INSERT INTO tu SELECT range::UINTEGER FROM range(0, 10240);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN SELECT count(*) FROM (SELECT (x + 100::UINTEGER) AS y FROM tu) WHERE y > 100000::UINTEGER;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT (x + 100::UINTEGER) AS y FROM tu) WHERE y > 100000::UINTEGER;
+----
+0
