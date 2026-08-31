@@ -228,9 +228,11 @@ public:
 		// Otherwise, construct the bound function from its parts
 		FUNC bound_function(function);
 		bound_function.GetArguments() = std::move(arguments);
-		// Authenticate before the mutable callback so implementation changes invalidate SQL provenance.
 		RestoreFunctionIdentity(bound_function, sql_definition);
-		auto function_before_deserialize = bound_function;
+		auto definition = GetFunctionDefinition(bound_function);
+		auto preserves_function_identity = DeserializationPreservesFunctionIdentity(bound_function);
+		auto restore_rebindable_definition = preserves_function_identity && HasRebindableDefinition(bound_function);
+		ConsumeFunctionIdentity(bound_function);
 
 		// Invoke deserialization function
 		deserializer.Set<const LogicalType &>(return_type);
@@ -238,12 +240,12 @@ public:
 		deserializer.Unset<LogicalType>();
 
 		const FUNC &const_bound_function = bound_function;
-		auto restore_rebindable_definition =
-		    CanRestoreRebindableDefinition(function_before_deserialize, const_bound_function);
+		auto definition_unchanged = GetFunctionDefinition(const_bound_function) == definition;
 		if (TypeRequiresAssignment(const_bound_function.GetReturnType())) {
 			bound_function.SetReturnType(std::move(return_type));
 		}
-		RestoreFunctionIdentityAfterDeserialization(bound_function, restore_rebindable_definition);
+		RestoreFunctionIdentityAfterDeserialization(bound_function, preserves_function_identity && definition_unchanged,
+		                                            restore_rebindable_definition && definition_unchanged);
 
 		return make_pair(std::move(bound_function), std::move(bound_data));
 	}
@@ -309,47 +311,66 @@ private:
 		}
 		function.InvalidateRebindableDefinition();
 	}
-	static bool HaveSameImplementation(const BoundAggregateFunction &left, const BoundAggregateFunction &right) {
-		return left == right && left.GetName() == right.GetName() && left.GetCatalogName() == right.GetCatalogName() &&
-		       left.GetSchemaName() == right.GetSchemaName() && left.GetExtraInfo() == right.GetExtraInfo() &&
-		       left.GetFunctionInfo() == right.GetFunctionInfo() && left.GetDefinition() == right.GetDefinition();
+	static shared_ptr<const ScalarFunction> GetFunctionDefinition(const BoundScalarFunction &function) {
+		return function.GetDefinition();
 	}
-	static bool CanRestoreRebindableDefinition(const BoundScalarFunction &before, const BoundScalarFunction &after) {
-		return before.HasRebindableDefinition() && after.HasRebindableDefinition();
+	static shared_ptr<const AggregateFunction> GetFunctionDefinition(const BoundAggregateFunction &function) {
+		return function.GetDefinition();
 	}
-	static bool CanRestoreRebindableDefinition(const BoundAggregateFunction &before,
-	                                           const BoundAggregateFunction &after) {
-		return before.HasRebindableDefinition() &&
-		       (after.HasRebindableDefinition() ||
-		        (before.GetDefinition() && before.GetName() != before.GetDefinition()->GetName() &&
-		         HaveSameImplementation(before, after)));
+	static bool HasRebindableDefinition(const BoundScalarFunction &function) {
+		return function.HasRebindableDefinition();
+	}
+	static bool HasRebindableDefinition(const BoundAggregateFunction &function) {
+		return function.HasRebindableDefinition();
+	}
+	static bool DeserializationPreservesFunctionIdentity(const BoundScalarFunction &function) {
+		return function.DeserializationPreservesFunctionIdentity();
+	}
+	static bool DeserializationPreservesFunctionIdentity(const BoundAggregateFunction &function) {
+		return function.DeserializationPreservesFunctionIdentity();
+	}
+	static void ConsumeFunctionIdentity(BoundScalarFunction &function) {
+		function.InvalidateFunctionExpressionIdentity();
+	}
+	static void ConsumeFunctionIdentity(BoundAggregateFunction &function) {
+		function.InvalidateRebindableDefinition();
 	}
 	static void RestoreFunctionIdentityAfterDeserialization(BoundScalarFunction &function,
+	                                                        bool restore_expression_identity,
 	                                                        bool restore_rebindable_definition) {
-		function.RestoreFunctionExpressionIdentity();
+		if (restore_expression_identity) {
+			function.RestoreFunctionExpressionIdentity();
+		}
 		if (restore_rebindable_definition) {
 			function.RestoreRebindableDefinition();
-		} else {
-			function.InvalidateRebindableDefinition();
 		}
 	}
-	static void RestoreFunctionIdentityAfterDeserialization(BoundAggregateFunction &function,
+	static void RestoreFunctionIdentityAfterDeserialization(BoundAggregateFunction &function, bool,
 	                                                        bool restore_rebindable_definition) {
 		if (restore_rebindable_definition) {
 			function.RestoreRebindableDefinition();
-		} else {
-			function.InvalidateRebindableDefinition();
 		}
 	}
 	template <class FUNC, class DEFINITION>
 	static void RestoreFunctionIdentity(FUNC &, DEFINITION) {
 	}
 	template <class FUNC>
-	static bool CanRestoreRebindableDefinition(const FUNC &, const FUNC &) {
+	static bool HasRebindableDefinition(const FUNC &) {
 		return false;
 	}
 	template <class FUNC>
-	static void RestoreFunctionIdentityAfterDeserialization(FUNC &, bool) {
+	static bool DeserializationPreservesFunctionIdentity(const FUNC &) {
+		return false;
+	}
+	template <class FUNC>
+	static nullptr_t GetFunctionDefinition(const FUNC &) {
+		return nullptr;
+	}
+	template <class FUNC>
+	static void ConsumeFunctionIdentity(FUNC &) {
+	}
+	template <class FUNC>
+	static void RestoreFunctionIdentityAfterDeserialization(FUNC &, bool, bool) {
 	}
 };
 

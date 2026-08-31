@@ -55,6 +55,10 @@ enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_H
 //! VOLATILE                -> the result of this function might change per row (e.g. RANDOM())
 enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTENT_WITHIN_QUERY = 2 };
 
+//! Whether an already-authenticated SQL identity may cross a mutable callback boundary
+//! This contract does not authenticate a function definition by itself
+enum class FunctionIdentityPropagation : uint8_t { INVALIDATE = 0, PRESERVE };
+
 //! How to handle collations
 //! PROPAGATE_COLLATIONS        -> this function combines collation from its inputs and emits them again (default)
 //! PUSH_COMBINABLE_COLLATIONS  -> combinable collations are executed for the input arguments

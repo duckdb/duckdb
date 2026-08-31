@@ -110,7 +110,7 @@ ScalarFunction MapExtractValueFun::GetFunction() {
 	auto val_type = LogicalType::TEMPLATE("V");
 
 	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, val_type, MapExtractValueFunc);
-	fun.SetStatisticsCallback(MapExtractValueStats);
+	fun.SetStatisticsCallback(MapExtractValueStats, FunctionIdentityPropagation::PRESERVE);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

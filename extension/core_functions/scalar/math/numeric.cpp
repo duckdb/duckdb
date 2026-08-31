@@ -243,14 +243,14 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT: {
 			ScalarFunction function({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
-			function.SetStatisticsCallback(PropagateAbsStats);
+			function.SetStatisticsCallback(PropagateAbsStats, FunctionIdentityPropagation::PRESERVE);
 			abs.AddFunction(function);
 			break;
 		}
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE: {
 			ScalarFunction function({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type));
-			function.SetStatisticsCallback(PropagateAbsStats);
+			function.SetStatisticsCallback(PropagateAbsStats, FunctionIdentityPropagation::PRESERVE);
 			abs.AddFunction(function);
 			break;
 		}
@@ -459,7 +459,7 @@ ScalarFunctionSet SignFun::GetFunctions() {
 		}
 		ScalarFunction function({type}, LogicalType::TINYINT,
 		                        ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type));
-		function.SetStatisticsCallback(PropagateSignStats);
+		function.SetStatisticsCallback(PropagateSignStats, FunctionIdentityPropagation::PRESERVE);
 		sign.AddFunction(function);
 	}
 	return sign;
@@ -1218,7 +1218,7 @@ unique_ptr<BaseStatistics> PropagatePowStats(ClientContext &context, FunctionSta
 ScalarFunction PowOperatorFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingBinary<PowOperator, IEEEPowOperator>);
-	function.SetStatisticsCallback(PropagatePowStats);
+	function.SetStatisticsCallback(PropagatePowStats, FunctionIdentityPropagation::PRESERVE);
 	function.SetFallible();
 	return function;
 }
@@ -1515,11 +1515,11 @@ ScalarFunctionSet IsNanFun::GetFunctions() {
 	ScalarFunctionSet funcs;
 	ScalarFunction float_function({LogicalType::FLOAT}, LogicalType::BOOLEAN,
 	                              ScalarFunction::UnaryFunction<float, bool, IsNanOperator>);
-	float_function.SetStatisticsCallback(PropagateIsNanStats);
+	float_function.SetStatisticsCallback(PropagateIsNanStats, FunctionIdentityPropagation::PRESERVE);
 	funcs.AddFunction(float_function);
 	ScalarFunction double_function({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
 	                               ScalarFunction::UnaryFunction<double, bool, IsNanOperator>);
-	double_function.SetStatisticsCallback(PropagateIsNanStats);
+	double_function.SetStatisticsCallback(PropagateIsNanStats, FunctionIdentityPropagation::PRESERVE);
 	funcs.AddFunction(double_function);
 	return funcs;
 }

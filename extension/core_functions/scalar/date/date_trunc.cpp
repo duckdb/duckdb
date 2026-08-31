@@ -568,10 +568,12 @@ unique_ptr<FunctionData> DateTruncBind(BindScalarFunctionInput &input) {
 
 	switch (bound_function.GetArguments()[1].id()) {
 	case LogicalType::TIMESTAMP:
-		bound_function.SetStatisticsCallback(DateTruncStats<timestamp_t, timestamp_t>(part_code));
+		bound_function.SetStatisticsCallback(DateTruncStats<timestamp_t, timestamp_t>(part_code),
+		                                     FunctionIdentityPropagation::PRESERVE);
 		break;
 	case LogicalType::DATE:
-		bound_function.SetStatisticsCallback(DateTruncStats<date_t, timestamp_t>(part_code));
+		bound_function.SetStatisticsCallback(DateTruncStats<date_t, timestamp_t>(part_code),
+		                                     FunctionIdentityPropagation::PRESERVE);
 		break;
 	default:
 		throw NotImplementedException("Temporal argument type for DATETRUNC");

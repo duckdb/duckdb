@@ -246,13 +246,32 @@ public:
 
 	bool HasStatisticsCallback() const { return statistics != nullptr; }
 	aggregate_statistics_t GetStatisticsCallback() const { return statistics; }
-	void SetStatisticsCallback(aggregate_statistics_t callback) { statistics = callback; }
+	bool StatisticsPreservesFunctionIdentity() const {
+		return statistics_identity == FunctionIdentityPropagation::PRESERVE;
+	}
+	void SetStatisticsCallback(
+	    aggregate_statistics_t callback,
+	    FunctionIdentityPropagation identity = FunctionIdentityPropagation::INVALIDATE) {
+		statistics = callback;
+		statistics_identity = identity;
+	}
+	void SetStatisticsIdentityPropagation(FunctionIdentityPropagation identity) {
+		statistics_identity = identity;
+	}
 
 	bool HasSerializationCallbacks() const { return serialize != nullptr && deserialize != nullptr; }
 	void SetSerializeCallback(aggregate_serialize_t callback) { serialize = callback; }
-	void SetDeserializeCallback(aggregate_deserialize_t callback) { deserialize = callback; }
+	void SetDeserializeCallback(
+	    aggregate_deserialize_t callback,
+	    FunctionIdentityPropagation identity = FunctionIdentityPropagation::INVALIDATE) {
+		deserialize = callback;
+		deserialize_identity = identity;
+	}
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
+	bool DeserializationPreservesFunctionIdentity() const {
+		return deserialize_identity == FunctionIdentityPropagation::PRESERVE;
+	}
 
 	bool HasDirectRewriteCallback() const { return direct_rewrite != nullptr; }
 	aggregate_direct_rewrite_t GetDirectRewriteCallback() const { return direct_rewrite; }
@@ -305,10 +324,12 @@ public:
 
 	//! The statistics propagation function (may be null)
 	aggregate_statistics_t statistics = nullptr;
+	FunctionIdentityPropagation statistics_identity = FunctionIdentityPropagation::INVALIDATE;
 
 	aggregate_serialize_t serialize = nullptr;
 
 	aggregate_deserialize_t deserialize = nullptr;
+	FunctionIdentityPropagation deserialize_identity = FunctionIdentityPropagation::INVALIDATE;
 
 	//! Optional expression rewrite that remains inside the original aggregate operator.
 	aggregate_direct_rewrite_t direct_rewrite = nullptr;
@@ -443,13 +464,16 @@ public: // Callbacks
 
 	auto HasStatisticsCallback() const -> bool { return callbacks.statistics != nullptr; }
 	auto GetStatisticsCallback() const -> aggregate_statistics_t { return callbacks.statistics; }
-	auto SetStatisticsCallback(aggregate_statistics_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.statistics = callback; }
+	auto SetStatisticsCallback(aggregate_statistics_t callback, FunctionIdentityPropagation identity = FunctionIdentityPropagation::INVALIDATE) -> void { InvalidateDefinitionRebindability(); callbacks.SetStatisticsCallback(callback, identity); }
+	auto StatisticsPreservesFunctionIdentity() const -> bool { return callbacks.StatisticsPreservesFunctionIdentity(); }
+	auto SetStatisticsIdentityPropagation(FunctionIdentityPropagation identity) -> void { InvalidateDefinitionRebindability(); callbacks.SetStatisticsIdentityPropagation(identity); }
 
 	auto HasSerializationCallbacks() const -> bool { return callbacks.serialize != nullptr && callbacks.deserialize != nullptr; }
 	auto SetSerializeCallback(aggregate_serialize_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.serialize = callback; }
-	auto SetDeserializeCallback(aggregate_deserialize_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.deserialize = callback; }
+	auto SetDeserializeCallback(aggregate_deserialize_t callback, FunctionIdentityPropagation identity = FunctionIdentityPropagation::INVALIDATE) -> void { InvalidateDefinitionRebindability(); callbacks.SetDeserializeCallback(callback, identity); }
 	auto GetSerializeCallback() const -> aggregate_serialize_t { return callbacks.serialize; }
 	auto GetDeserializeCallback() const -> aggregate_deserialize_t { return callbacks.deserialize; }
+	auto DeserializationPreservesFunctionIdentity() const -> bool { return callbacks.DeserializationPreservesFunctionIdentity(); }
 
 	auto HasDirectRewriteCallback() const -> bool { return callbacks.direct_rewrite != nullptr; }
 	auto GetDirectRewriteCallback() const -> aggregate_direct_rewrite_t { return callbacks.direct_rewrite; }
@@ -502,17 +526,17 @@ public: // Extra function info
 
 protected:
 	void InvalidateDefinitionRebindability() {
-		definition_is_rebindable = false;
+		rebindable_definition.reset();
 	}
-	void RestoreDefinitionRebindability() {
-		definition_is_rebindable = true;
+	void RestoreDefinitionRebindability(shared_ptr<const AggregateFunction> definition) {
+		rebindable_definition = std::move(definition);
 	}
-	bool HasRebindableDefinitionInternal() const {
-		return definition_is_rebindable;
+	bool HasRebindableDefinitionInternal(const shared_ptr<const AggregateFunction> &definition) const {
+		return definition && rebindable_definition == definition;
 	}
 
-	//! Set only after the definition has been authenticated against the live catalog.
-	bool definition_is_rebindable = false;
+	//! Immutable catalog definition authenticated and transferred only by its owning boundaries
+	shared_ptr<const AggregateFunction> rebindable_definition;
 	AggregateFunctionProperties properties;
 	AggregateFunctionCallbacks callbacks;
 	shared_ptr<AggregateFunctionInfo> function_info;
@@ -879,7 +903,7 @@ public:
 		definition = std::move(definition_p);
 	}
 	bool HasRebindableDefinition() const {
-		return HasRebindableDefinitionInternal();
+		return HasRebindableDefinitionInternal(definition);
 	}
 
 	const vector<LogicalType> &GetArguments() const {
@@ -917,7 +941,7 @@ public:
 private:
 	void RestoreRebindableDefinition() {
 		if (definition && !definition->GetCallbacks().HasBindCallback()) {
-			RestoreDefinitionRebindability();
+			RestoreDefinitionRebindability(definition);
 		} else {
 			InvalidateDefinitionRebindability();
 		}
@@ -929,6 +953,7 @@ private:
 	friend class FunctionBinder;
 	friend class FunctionSerializer;
 	friend class StatisticsPropagator;
+	friend class BoundAggregateExpression;
 	friend struct ExportAggregateFunction;
 
 	shared_ptr<const AggregateFunction> definition;

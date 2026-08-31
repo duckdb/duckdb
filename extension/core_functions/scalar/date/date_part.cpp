@@ -2150,7 +2150,8 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 	}
 	bound_function.SetFunctionCallback(DatePartUnaryCallback(part_code, type));
-	bound_function.SetStatisticsCallback(DatePartUnaryStatistics(part_code, type));
+	bound_function.SetStatisticsCallback(DatePartUnaryStatistics(part_code, type),
+	                                     FunctionIdentityPropagation::PRESERVE);
 
 	return nullptr;
 }
@@ -2160,10 +2161,14 @@ ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar
                                              scalar_function_t interval_func, function_statistics_t date_stats,
                                              function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set;
-	operator_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr,
-	                                        date_stats, DATE_CACHE));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr,
-	                                        ts_stats, DATE_CACHE));
+	ScalarFunction date_function({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, date_stats,
+	                             DATE_CACHE);
+	date_function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
+	operator_set.AddFunction(std::move(date_function));
+	ScalarFunction timestamp_function({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr,
+	                                  ts_stats, DATE_CACHE);
+	timestamp_function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
+	operator_set.AddFunction(std::move(timestamp_function));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
 	operator_set.SetFallible();
 	return operator_set;
@@ -2184,17 +2189,23 @@ ScalarFunctionSet GetGenericTimePartFunction(const LogicalType &result_type, sca
                                              function_statistics_t ts_stats, function_statistics_t time_stats,
                                              function_statistics_t time_ns_stats, function_statistics_t timetz_stats) {
 	ScalarFunctionSet operator_set;
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, result_type, std::move(date_func), nullptr, date_stats));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, result_type, std::move(ts_func), nullptr, ts_stats));
+	ScalarFunction date_function({LogicalType::DATE}, result_type, std::move(date_func), nullptr, date_stats);
+	date_function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
+	operator_set.AddFunction(std::move(date_function));
+	ScalarFunction timestamp_function({LogicalType::TIMESTAMP}, result_type, std::move(ts_func), nullptr, ts_stats);
+	timestamp_function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
+	operator_set.AddFunction(std::move(timestamp_function));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, result_type, std::move(interval_func)));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIME}, result_type, std::move(time_func), nullptr, time_stats));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIME_NS}, result_type, std::move(time_ns_func), nullptr, time_ns_stats));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIME_TZ}, result_type, std::move(timetz_func), nullptr, timetz_stats));
+	ScalarFunction time_function({LogicalType::TIME}, result_type, std::move(time_func), nullptr, time_stats);
+	time_function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
+	operator_set.AddFunction(std::move(time_function));
+	ScalarFunction time_ns_function({LogicalType::TIME_NS}, result_type, std::move(time_ns_func), nullptr,
+	                                time_ns_stats);
+	time_ns_function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
+	operator_set.AddFunction(std::move(time_ns_function));
+	ScalarFunction timetz_function({LogicalType::TIME_TZ}, result_type, std::move(timetz_func), nullptr, timetz_stats);
+	timetz_function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
+	operator_set.AddFunction(std::move(timetz_function));
 	return operator_set;
 }
 

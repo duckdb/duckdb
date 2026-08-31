@@ -199,6 +199,7 @@ public:
 	init_local_state_t init_local_state = nullptr;
 	//! The statistics propagation function (if any)
 	function_statistics_t statistics = nullptr;
+	FunctionIdentityPropagation statistics_identity = FunctionIdentityPropagation::INVALIDATE;
 	//! The lambda bind function (if any)
 	bind_lambda_function_t bind_lambda = nullptr;
 	//! Function to bind the result function expression directly (if any)
@@ -212,6 +213,7 @@ public:
 
 	function_serialize_t serialize = nullptr;
 	function_deserialize_t deserialize = nullptr;
+	FunctionIdentityPropagation deserialize_identity = FunctionIdentityPropagation::INVALIDATE;
 
 	function_legacy_serialize_t legacy_serialize = nullptr;
 
@@ -295,7 +297,9 @@ public: // Callbacks
 
 	auto HasStatisticsCallback() const -> bool { return callbacks.statistics != nullptr; }
 	auto GetStatisticsCallback() const -> function_statistics_t { return callbacks.statistics; }
-	auto SetStatisticsCallback(function_statistics_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.statistics = callback; }
+	auto StatisticsPreservesFunctionIdentity() const -> bool { return callbacks.statistics_identity == FunctionIdentityPropagation::PRESERVE; }
+	auto SetStatisticsCallback(function_statistics_t callback, FunctionIdentityPropagation identity = FunctionIdentityPropagation::INVALIDATE) -> void { InvalidateFunctionExpressionIdentity(); callbacks.statistics = callback; callbacks.statistics_identity = identity; }
+	auto SetStatisticsIdentityPropagation(FunctionIdentityPropagation identity) -> void { InvalidateFunctionExpressionIdentity(); callbacks.statistics_identity = identity; }
 
 	auto HasModifiedDatabasesCallback() const -> bool { return callbacks.get_modified_databases != nullptr; }
 	auto GetModifiedDatabasesCallback() const -> get_modified_databases_t { return callbacks.get_modified_databases; }
@@ -303,9 +307,10 @@ public: // Callbacks
 
 	auto HasSerializationCallbacks() const -> bool { return callbacks.serialize != nullptr && callbacks.deserialize != nullptr; }
 	auto SetSerializeCallback(function_serialize_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.serialize = callback; }
-	auto SetDeserializeCallback(function_deserialize_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.deserialize = callback; }
+	auto SetDeserializeCallback(function_deserialize_t callback, FunctionIdentityPropagation identity = FunctionIdentityPropagation::INVALIDATE) -> void { InvalidateFunctionExpressionIdentity(); callbacks.deserialize = callback; callbacks.deserialize_identity = identity; }
 	auto GetSerializeCallback() const -> function_serialize_t { return callbacks.serialize; }
 	auto GetDeserializeCallback() const -> function_deserialize_t { return callbacks.deserialize; }
+	auto DeserializationPreservesFunctionIdentity() const -> bool { return callbacks.deserialize_identity == FunctionIdentityPropagation::PRESERVE; }
 
 	auto HasFilterPruneCallback() const -> bool { return callbacks.filter_prune != nullptr; }
 	auto SetFilterPruneCallback(propagate_filter_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.filter_prune = callback; }
@@ -625,11 +630,11 @@ public:
 	}
 	//! Restore the definition after the bound function has been replaced wholesale
 	void SetDefinition(shared_ptr<const ScalarFunction> definition_p) {
-		definition_is_rebindable = false;
+		rebindable_definition.reset();
 		definition = std::move(definition_p);
 	}
 	bool HasRebindableDefinition() const {
-		return definition_is_rebindable;
+		return definition && rebindable_definition == definition;
 	}
 	bool HasFunctionExpressionIdentity(ExpressionType type) const {
 		return function_expression_type == type;
@@ -660,26 +665,31 @@ private:
 	}
 	void InvalidateFunctionExpressionIdentity() {
 		function_expression_type = ExpressionType::INVALID;
-		definition_is_rebindable = false;
+		rebindable_definition.reset();
 	}
 	void RestoreFunctionExpressionIdentity() {
 		function_expression_type = definition ? definition->function_expression_type : ExpressionType::INVALID;
 	}
 	void RestoreRebindableDefinition() {
-		definition_is_rebindable = definition && !definition->HasBindCallback() &&
-		                           !definition->HasBindExpressionCallback() && !definition->HasBindLambdaCallback();
+		if (definition && !definition->HasBindCallback() && !definition->HasBindExpressionCallback() &&
+		    !definition->HasBindLambdaCallback()) {
+			rebindable_definition = definition;
+		} else {
+			rebindable_definition.reset();
+		}
 	}
 	void InvalidateRebindableDefinition() {
-		definition_is_rebindable = false;
+		rebindable_definition.reset();
 	}
 
 private:
 	shared_ptr<const ScalarFunction> definition;
 	ExpressionType function_expression_type = ExpressionType::INVALID;
-	//! Set only after the definition has been authenticated against the live catalog.
-	bool definition_is_rebindable = false;
+	//! Immutable catalog definition authenticated and transferred only by its owning boundaries
+	shared_ptr<const ScalarFunction> rebindable_definition;
 
 	friend class BaseScalarFunction<BoundScalarFunction>;
+	friend class BoundFunctionExpression;
 	friend class FunctionBinder;
 	friend class FunctionSerializer;
 	friend class StatisticsPropagator;

@@ -146,18 +146,22 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 	}
 	if (func.Function().HasStatisticsCallback()) {
 		auto definition = func.Function().GetDefinition();
-		auto restore_rebindability = func.Function().HasRebindableDefinition();
-		auto restore_expression_identity = func.Function().HasFunctionExpressionIdentity(func.GetExpressionType());
+		auto preserves_function_identity = func.Function().StatisticsPreservesFunctionIdentity();
+		auto restore_rebindability = preserves_function_identity && func.Function().HasRebindableDefinition();
+		auto restore_expression_identity =
+		    preserves_function_identity && func.Function().HasFunctionExpressionIdentity(func.GetExpressionType());
 		optional_ptr<Expression> original_expression(expr_ptr);
 		FunctionStatisticsInput input(func, func.BindInfo().get(), stats, &expr_ptr);
+		(void)func.FunctionMutable();
 		auto result = func.Function().GetStatisticsCallback()(context, input);
 		if (optional_ptr<Expression>(expr_ptr) == original_expression &&
 		    func.Function().GetDefinition() == definition) {
+			auto &bound_function = func.FunctionMutable();
 			if (restore_expression_identity) {
-				func.FunctionMutable().RestoreFunctionExpressionIdentity();
+				bound_function.RestoreFunctionExpressionIdentity();
 			}
 			if (restore_rebindability) {
-				func.FunctionMutable().RestoreRebindableDefinition();
+				bound_function.RestoreRebindableDefinition();
 			}
 		}
 		return result;

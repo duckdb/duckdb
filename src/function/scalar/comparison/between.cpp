@@ -219,7 +219,7 @@ ScalarFunction BetweenFun::GetFunction() {
 	between_fun.SetGetExpressionTypeCallback(BetweenGetExpressionType);
 	between_fun.SetLegacySerializeCallback(BetweenLegacySerializeCallback);
 	between_fun.SetSerializeCallback(BetweenFunctionSerialize);
-	between_fun.SetDeserializeCallback(BetweenFunctionDeserialize);
+	between_fun.SetDeserializeCallback(BetweenFunctionDeserialize, FunctionIdentityPropagation::PRESERVE);
 #if !DUCKDB_SMALLER_BINARY(between_select)
 	between_fun.SetSelectCallback(BetweenSelect);
 #endif

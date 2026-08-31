@@ -162,9 +162,9 @@ ScalarFunction CastFun::GetFunction() {
 	cast_fun.SetGetExpressionTypeCallback(CastGetExpressionType);
 	cast_fun.SetLegacySerializeCallback(CastLegacySerializeCallback);
 	cast_fun.SetSerializeCallback(CastFunctionSerialize);
-	cast_fun.SetDeserializeCallback(CastFunctionDeserialize);
+	cast_fun.SetDeserializeCallback(CastFunctionDeserialize, FunctionIdentityPropagation::PRESERVE);
 	cast_fun.SetInitStateCallback(CastInitLocalState);
-	cast_fun.SetStatisticsCallback(CastPropagateStatistics);
+	cast_fun.SetStatisticsCallback(CastPropagateStatistics, FunctionIdentityPropagation::PRESERVE);
 	cast_fun.SetFunctionExpressionIdentity(ExpressionType::OPERATOR_CAST);
 	return cast_fun;
 }

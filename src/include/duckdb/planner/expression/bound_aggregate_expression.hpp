@@ -32,6 +32,7 @@ public:
 		return function;
 	}
 	BoundAggregateFunction &FunctionMutable() {
+		function.InvalidateRebindableDefinition();
 		return function;
 	}
 	const vector<unique_ptr<Expression>> &GetChildren() const {
