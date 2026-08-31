@@ -51,7 +51,8 @@ public:
 	T decoded_values[AlpConstants::ALP_VECTOR_SIZE];
 	T exceptions[AlpConstants::ALP_VECTOR_SIZE];
 	AlpConstants::EXCEPTION_POSITION_TYPE exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
-	uint8_t for_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
+	//! BitpackingPrimitives::UnPackBuffer<uint64_t> reads the packed input through aligned integer pointers, so this must be aligned
+	alignas(AlpConstants::FRAME_OF_REFERENCE_TYPE) uint8_t for_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
 	AlpConstants::EXPONENT_TYPE v_exponent;
 	AlpConstants::FACTOR_TYPE v_factor;
 	AlpConstants::EXCEPTIONS_COUNT_TYPE exceptions_count;
@@ -63,27 +64,45 @@ template <class T>
 struct AlpScanState : public SegmentScanState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
+	using METADATA_POINTER_TYPE = AlpConstants::METADATA_POINTER_TYPE;
+
+	struct SegmentLayout {
+		//! Vector data between the segment header and reverse offset table.
+		CompressionSegmentReader data;
+		//! Reverse vector offsets read from disk after the complete table was validated.
+		unsafe_array_ptr<const METADATA_POINTER_TYPE> vector_offsets;
+	};
+
+	static SegmentLayout ReadSegmentLayout(const BufferHandle &handle, ColumnSegment &segment, idx_t count) {
+		auto reader = CompressionSegmentReader::FromSegment(handle, segment, "ALP segment");
+		auto metadata_end = reader.template Read<METADATA_POINTER_TYPE>();
+		if (metadata_end < AlpConstants::HEADER_SIZE) {
+			throw DataCorruptionException("Corrupted ALP segment: metadata ends before the segment header");
+		}
+		reader = reader.GetSubReader(0, metadata_end, "ALP segment");
+
+		auto vector_count = count / AlpConstants::ALP_VECTOR_SIZE + (count % AlpConstants::ALP_VECTOR_SIZE != 0);
+		if (vector_count > (metadata_end - AlpConstants::HEADER_SIZE) / AlpConstants::METADATA_POINTER_SIZE) {
+			throw DataCorruptionException("Corrupted ALP segment: metadata offset table exceeds the segment");
+		}
+		auto metadata_size = vector_count * AlpConstants::METADATA_POINTER_SIZE;
+		auto metadata_start = metadata_end - metadata_size;
+		auto data = reader.GetSubReader(AlpConstants::HEADER_SIZE, metadata_start - AlpConstants::HEADER_SIZE,
+		                                "ALP data");
+		auto vector_offsets = reader.template GetArray<METADATA_POINTER_TYPE>(metadata_start, vector_count);
+		return {data, vector_offsets};
+	}
 
 	explicit AlpScanState(BufferHandle handle_p, ColumnSegment &segment)
-	    : handle(std::move(handle_p)), reader(CompressionSegmentReader::FromSegment(handle, segment, "ALP segment")),
-	      segment(segment), count(segment.count) {
-		// ScanStates never exceed the boundaries of a Segment,
-		// but are not guaranteed to start at the beginning of the Block
-		segment_data = handle.GetDataMutable() + segment.GetBlockOffset();
-		auto metadata_offset = reader.Read<AlpConstants::METADATA_POINTER_TYPE>();
-		reader = reader.GetSubReader(0, metadata_offset, "ALP segment");
-		metadata_ptr = segment_data + metadata_offset;
+	    : handle(std::move(handle_p)), count(segment.count), layout(ReadSegmentLayout(handle, segment, count)) {
 	}
 
 	BufferHandle handle;
-	CompressionSegmentReader reader;
-	data_ptr_t metadata_ptr;
-	data_ptr_t segment_data;
+	//! Segment row count read from disk, used to derive the vector count and final vector size.
+	idx_t count;
+	SegmentLayout layout;
 	idx_t total_value_count = 0;
 	AlpVectorState<T> vector_state;
-
-	ColumnSegment &segment;
-	idx_t count;
 
 	idx_t LeftInVector() const {
 		return AlpConstants::ALP_VECTOR_SIZE - (total_value_count % AlpConstants::ALP_VECTOR_SIZE);
@@ -91,6 +110,34 @@ public:
 
 	inline bool VectorFinished() const {
 		return (total_value_count % AlpConstants::ALP_VECTOR_SIZE) == 0;
+	}
+
+	//! Returns a vector offset read from the bounded reverse metadata table.
+	METADATA_POINTER_TYPE GetVectorOffset(idx_t vector_index) const {
+		D_ASSERT(vector_index < layout.vector_offsets.size());
+		return layout.vector_offsets[layout.vector_offsets.size() - 1 - vector_index];
+	}
+
+	CompressionSegmentReader GetVectorReader(idx_t vector_index) const {
+		D_ASSERT(vector_index < layout.vector_offsets.size());
+		auto vector_start = GetVectorOffset(vector_index);
+		if (vector_start < AlpConstants::HEADER_SIZE) {
+			throw DataCorruptionException("Corrupted ALP segment: vector offset is outside the data region");
+		}
+		auto data_start = vector_start - AlpConstants::HEADER_SIZE;
+
+		auto data_end = layout.data.Size();
+		if (vector_index + 1 < layout.vector_offsets.size()) {
+			auto vector_end = GetVectorOffset(vector_index + 1);
+			if (vector_end < AlpConstants::HEADER_SIZE) {
+				throw DataCorruptionException("Corrupted ALP segment: vector offset is outside the data region");
+			}
+			data_end = vector_end - AlpConstants::HEADER_SIZE;
+		}
+		if (data_start > data_end || data_end > layout.data.Size()) {
+			throw DataCorruptionException("Corrupted ALP segment: vector offsets do not describe a data range");
+		}
+		return layout.data.GetSubReader(data_start, data_end - data_start, "ALP vector");
 	}
 
 	// Scan up to a vector boundary
@@ -115,8 +162,6 @@ public:
 
 	// Using the metadata, we can avoid loading any of the data if we don't care about the vector at all
 	void SkipVector() {
-		// Skip the offset indicating where the data starts
-		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, count - total_value_count);
 		total_value_count += vector_size;
 	}
@@ -125,52 +170,28 @@ public:
 	void LoadVector(T *value_buffer) {
 		vector_state.Reset();
 
-		// Load the offset (metadata) indicating where the vector data starts
-		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
-		auto data_byte_offset = Load<AlpConstants::METADATA_POINTER_TYPE>(metadata_ptr);
-		const auto block_size = segment.GetBlockSize();
-
-		if (data_byte_offset >= block_size) {
-			throw IOException(
-			    "Corrupted ALP segment: stored data_byte_offset (%d) exceeds the segments block size (%d)",
-			    data_byte_offset, block_size);
-		}
-
+		auto vector_index = total_value_count / AlpConstants::ALP_VECTOR_SIZE;
+		auto vector_reader = GetVectorReader(vector_index);
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 
-		data_ptr_t vector_ptr = segment_data + data_byte_offset;
-
 		// Load the vector data
-		vector_state.v_exponent = Load<AlpConstants::EXPONENT_TYPE>(vector_ptr);
-		vector_ptr += AlpConstants::EXPONENT_SIZE;
+		vector_state.v_exponent = vector_reader.template Read<AlpConstants::EXPONENT_TYPE>();
 
 		const bool uncompressed_mode = vector_state.v_exponent == AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
 		if (uncompressed_mode) {
+			const idx_t value_buffer_copy_size = sizeof(T) * vector_size;
 			if (!SKIP) {
 				// Read uncompressed values
-				const idx_t value_buffer_copy_size = sizeof(T) * vector_size;
-				if (vector_ptr + value_buffer_copy_size > segment_data + block_size) {
-					const auto bytes_remaining_in_block = (segment_data + block_size) - vector_ptr;
-					throw DataCorruptionException(
-					    "Corrupted ALP segment: stored vector_size is invalid, to-copy bytes (%d) "
-					    "would exceed bytes remaining in the block (%d)",
-					    value_buffer_copy_size, bytes_remaining_in_block);
-				}
-				memcpy(value_buffer, vector_ptr, value_buffer_copy_size);
+				vector_reader.ReadBytesInto(data_ptr_cast(value_buffer), value_buffer_copy_size);
+			} else {
+				vector_reader.Skip(value_buffer_copy_size);
 			}
 			return;
 		}
-		vector_state.v_factor = Load<AlpConstants::FACTOR_TYPE>(vector_ptr);
-		vector_ptr += AlpConstants::FACTOR_SIZE;
-
-		vector_state.exceptions_count = Load<AlpConstants::EXCEPTIONS_COUNT_TYPE>(vector_ptr);
-		vector_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
-
-		vector_state.frame_of_reference = Load<AlpConstants::FRAME_OF_REFERENCE_TYPE>(vector_ptr);
-		vector_ptr += AlpConstants::FOR_SIZE;
-
-		vector_state.bit_width = Load<AlpConstants::BIT_WIDTH_TYPE>(vector_ptr);
-		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
+		vector_state.v_factor = vector_reader.template Read<AlpConstants::FACTOR_TYPE>();
+		vector_state.exceptions_count = vector_reader.template Read<AlpConstants::EXCEPTIONS_COUNT_TYPE>();
+		vector_state.frame_of_reference = vector_reader.template Read<AlpConstants::FRAME_OF_REFERENCE_TYPE>();
+		vector_state.bit_width = vector_reader.template Read<AlpConstants::BIT_WIDTH_TYPE>();
 
 		if (vector_state.exceptions_count > vector_size) {
 			throw DataCorruptionException("Corrupted ALP segment: exceptions_count (%d) exceeds vector_size (%d)",
@@ -185,42 +206,17 @@ public:
 			                              vector_state.bit_width);
 		}
 
-		idx_t read_bytes = 0;
 		if (vector_state.bit_width > 0) {
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
-
-			const idx_t max_encoded = sizeof(vector_state.for_encoded);
-			if (bp_size > max_encoded || data_byte_offset + read_bytes + bp_size > block_size) {
-				throw DataCorruptionException("Corrupted ALP segment: encoded payload too large");
-			}
-			memcpy(vector_state.for_encoded, (void *)vector_ptr, bp_size);
-			vector_ptr += bp_size;
-			read_bytes += bp_size;
+			vector_reader.ReadIntoArray(vector_state.for_encoded, bp_size);
 		}
 
 		if (vector_state.exceptions_count > 0) {
 			//! Load the exceptions
-			const idx_t max_exceptions_size = sizeof(vector_state.exceptions);
-			const idx_t exceptions_copy_size = sizeof(EXACT_TYPE) * vector_state.exceptions_count;
-			if (exceptions_copy_size > max_exceptions_size ||
-			    data_byte_offset + read_bytes + exceptions_copy_size > block_size) {
-				throw DataCorruptionException("Corrupted ALP segment: exceptions payload too large");
-			}
-			memcpy(vector_state.exceptions, (void *)vector_ptr, exceptions_copy_size);
-			vector_ptr += exceptions_copy_size;
-			read_bytes += exceptions_copy_size;
+			vector_reader.ReadIntoArray(vector_state.exceptions, vector_state.exceptions_count);
 
 			//! Load the exceptions_positions
-			const idx_t max_exceptions_positions_size = sizeof(vector_state.exceptions_positions);
-			const idx_t exceptions_positions_copy_size =
-			    AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count;
-			if (exceptions_positions_copy_size > max_exceptions_positions_size ||
-			    data_byte_offset + read_bytes + exceptions_positions_copy_size > block_size) {
-				throw DataCorruptionException("Corrupted ALP segment: exceptions_positions payload too large");
-			}
-			memcpy(vector_state.exceptions_positions, (void *)vector_ptr, exceptions_positions_copy_size);
-			vector_ptr += exceptions_positions_copy_size;
-			read_bytes += exceptions_positions_copy_size;
+			vector_reader.ReadIntoArray(vector_state.exceptions_positions, vector_state.exceptions_count);
 
 			//! The exception positions index into the decoded vector, so they must stay within its bounds
 			for (idx_t i = 0; i < vector_state.exceptions_count; i++) {
