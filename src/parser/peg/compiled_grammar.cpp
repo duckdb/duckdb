@@ -167,7 +167,7 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context
 	return Create(selected_extensions, parser_version);
 }
 
-shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<const ClientContext> context) {
+shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> context) {
 	if (context) {
 		auto &client_config = ClientConfig::GetConfig(*context);
 		shared_ptr<CompiledGrammar> result = client_config.cached_grammar;

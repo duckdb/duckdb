@@ -1598,7 +1598,7 @@ SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index,
 	return config.user_settings.TryGetSetting(db_config.user_settings, setting_index, result);
 }
 
-ParserOptions ClientContext::GetParserOptions() const {
+ParserOptions ClientContext::GetParserOptions() {
 	ParserOptions options;
 	options.identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);

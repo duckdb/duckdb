@@ -69,7 +69,7 @@ public:
 	ParserCache();
 
 public:
-	shared_ptr<CompiledGrammar> GetMatcher(optional_ptr<const ClientContext> context = nullptr);
+	shared_ptr<CompiledGrammar> GetMatcher(optional_ptr<ClientContext> context = nullptr);
 	void Invalidate();
 
 public:
