@@ -151,14 +151,8 @@ jobs:
             github:
               - .github/**
             osx:
-              - '**'
-              - '!**.md'
-              - '!test/configs/**'
-              - '!tools/**'
-              - 'tools/shell/**'
-              - '!.github/patches/duckdb-wasm/**'
-              - '!.github/workflows/**'
               - '.github/workflows/OSX.yml'
+              - tools/swift/**
             extensions:
               - .github/config/**
               - .github/patches/**
@@ -873,6 +867,7 @@ jobs:
     with:
       override_git_describe: ${{ needs.prepare.outputs.effective_git_describe }}
       git_ref: ${{ needs.prepare.outputs.git_sha }}
+      runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_arm64 }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
