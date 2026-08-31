@@ -13,11 +13,23 @@ CompressionSegmentReader CompressionSegmentReader::FromSegment(const BufferHandl
 	if (DUCKDB_UNLIKELY(block_offset > block_size)) {
 		ThrowOffsetExceedsBlockSize(context);
 	}
-	return CompressionSegmentReader(handle.Ptr() + block_offset, block_size - block_offset, context);
+	auto reader_size = block_size - block_offset;
+	auto &byte_size = segment.GetByteSize();
+	if (byte_size) {
+		if (DUCKDB_UNLIKELY(*byte_size > reader_size)) {
+			ThrowByteSizeExceedsBlockSize(context);
+		}
+		reader_size = *byte_size;
+	}
+	return CompressionSegmentReader(handle.Ptr() + block_offset, reader_size, context);
 }
 
 void CompressionSegmentReader::ThrowOffsetExceedsBlockSize(const char *context) {
 	throw DataCorruptionException("Corrupted %s: block offset exceeds the block size", context);
+}
+
+void CompressionSegmentReader::ThrowByteSizeExceedsBlockSize(const char *context) {
+	throw DataCorruptionException("Corrupted %s: segment byte size exceeds the remaining block size", context);
 }
 
 void CompressionSegmentReader::ThrowForwardReadOutOfBounds() const {

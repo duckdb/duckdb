@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/scan_vector_type.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -42,7 +43,8 @@ public:
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const ColumnSegmentType segment_type,
 	              const idx_t count, const CompressionFunction &function_p, BaseStatistics statistics,
 	              const block_id_t block_id_p, const idx_t offset, const idx_t segment_size_p,
-	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
+	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr,
+	              optional<uint32_t> byte_size_p = optional<uint32_t>());
 	//! Construct a column segment from another column segment.
 	//! The other column segment becomes invalid (std::move).
 	ColumnSegment(ColumnSegment &other);
@@ -53,7 +55,8 @@ public:
 	                                                         block_id_t id, idx_t offset, idx_t count,
 	                                                         CompressionType compression_type,
 	                                                         BaseStatistics statistics,
-	                                                         unique_ptr<ColumnSegmentState> segment_state);
+	                                                         unique_ptr<ColumnSegmentState> segment_state,
+	                                                         optional<uint32_t> byte_size = optional<uint32_t>());
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const CompressionFunction &function,
 	                                                        const LogicalType &type, const idx_t segment_size,
 	                                                        BlockManager &block_manager);
@@ -125,6 +128,14 @@ public:
 		return offset;
 	}
 
+	const optional<uint32_t> &GetByteSize() const {
+		return byte_size;
+	}
+
+	void SetByteSize(uint32_t byte_size_p) {
+		byte_size = byte_size_p;
+	}
+
 	optional_ptr<CompressedSegmentState> GetSegmentState() const {
 		return segment_state.get();
 	}
@@ -174,6 +185,8 @@ private:
 	idx_t offset;
 	//! The allocated segment size, which is bounded by Storage::BLOCK_SIZE
 	idx_t segment_size;
+	//! Number of bytes occupied by this segment within its block, if recorded
+	optional<uint32_t> byte_size;
 	//! Storage associated with the compressed segment
 	unique_ptr<CompressedSegmentState> segment_state;
 	//! The statistics for the segment

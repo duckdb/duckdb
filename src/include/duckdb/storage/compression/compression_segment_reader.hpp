@@ -26,7 +26,7 @@ public:
 	    : data(data), size(size), position(0), context(context) {
 	}
 
-	//! Validates the block offset and returns a reader over the remaining block bytes.
+	//! Returns a reader over the recorded segment bytes, or the remaining block bytes for legacy segments.
 	static CompressionSegmentReader FromSegment(const BufferHandle &handle, const ColumnSegment &segment,
 	                                            const char *context);
 
@@ -186,6 +186,7 @@ private:
 
 	//! Keep exception construction out of bounds-checking paths.
 	[[noreturn]] static void ThrowOffsetExceedsBlockSize(const char *context);
+	[[noreturn]] static void ThrowByteSizeExceedsBlockSize(const char *context);
 	[[noreturn]] void ThrowForwardReadOutOfBounds() const;
 	[[noreturn]] void ThrowBackwardReadOutOfBounds() const;
 	[[noreturn]] void ThrowOffsetOutOfBounds() const;
