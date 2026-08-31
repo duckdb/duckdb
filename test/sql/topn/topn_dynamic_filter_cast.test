@@ -2,11 +2,11 @@
 # description: Test Top-N dynamic filter pushdown across type-changing casts
 # group: [topn]
 
-# The Top-N dynamic filter pushdown may only fire when the sort key column is identical to the raw
-# scan column. When the sort key reaches the scan through a type-changing cast (aggregate GROUP BY
-# CAST / projected cast column / set-op child projection), the filter constants are built in the
-# sort key's type and would be reinterpreted against a different storage type at runtime - bail out
-# instead of pushing.
+# The Top-N dynamic filter pushdown reconstructs the sort key on top of the raw scan column before
+# evaluating the filter (mirroring join filter pushdown). When the sort key reaches the scan through
+# a type-changing integral cast (aggregate GROUP BY CAST / projected cast column / set-op child
+# projection), the boundary constant - built in the sort key's type - is compared against values
+# cast to that same type, so the filter is pushed instead of bailing out.
 
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
@@ -16,7 +16,7 @@ require no_alternative_verify
 statement ok
 SET threads TO 1;
 
-# positive: plain column sort key - the dynamic filter is still pushed and results stay correct
+# positive: plain column sort key - the dynamic filter is pushed and results stay correct
 statement ok
 CREATE TABLE t AS SELECT i AS k FROM range(0, 100000) t(i);
 
@@ -32,14 +32,15 @@ SELECT k FROM t ORDER BY k LIMIT 3;
 1
 2
 
-# negative: sort key passes through an aggregate GROUP BY CAST(...) - no dynamic filter may be pushed
+# positive: sort key passes through an aggregate GROUP BY CAST(...) - the dynamic filter is pushed
+# with the cast reconstructed on top of the raw scan column
 statement ok
 CREATE TABLE tint AS SELECT i::INTEGER AS k FROM range(0, 204800) t(i);
 
 query II
 EXPLAIN ANALYZE SELECT CAST(k AS BIGINT) AS x, count(*) FROM tint GROUP BY CAST(k AS BIGINT) ORDER BY x LIMIT 10;
 ----
-analyzed_plan	<!REGEX>:(?s).*Dynamic Filter.*
+analyzed_plan	<REGEX>:(?s).*Dynamic Filter.*
 
 query II
 SELECT CAST(k AS BIGINT) AS x, count(*) FROM tint GROUP BY CAST(k AS BIGINT) ORDER BY x LIMIT 3;
@@ -48,11 +49,11 @@ SELECT CAST(k AS BIGINT) AS x, count(*) FROM tint GROUP BY CAST(k AS BIGINT) ORD
 1	1
 2	1
 
-# negative: sort key is a bare reference to a projected cast column
+# positive: sort key is a bare reference to a projected cast column
 query II
 EXPLAIN ANALYZE SELECT CAST(k AS BIGINT) AS x FROM tint ORDER BY x LIMIT 5;
 ----
-analyzed_plan	<!REGEX>:(?s).*Dynamic Filter.*
+analyzed_plan	<REGEX>:(?s).*Dynamic Filter.*
 
 query I
 SELECT CAST(k AS BIGINT) AS x FROM tint ORDER BY x LIMIT 3;
@@ -61,7 +62,8 @@ SELECT CAST(k AS BIGINT) AS x FROM tint ORDER BY x LIMIT 3;
 1
 2
 
-# negative: casts recorded through set-op child projections
+# positive: casts recorded through set-op child projections - each child scan gets its own
+# reconstructed filter
 statement ok
 CREATE TABLE ta AS SELECT i::INTEGER AS k FROM range(0, 100000) t(i);
 
@@ -71,7 +73,7 @@ CREATE TABLE tb AS SELECT (100000 + i)::INTEGER AS k FROM range(100000, 200000) 
 query II
 EXPLAIN ANALYZE SELECT k FROM (SELECT CAST(k AS BIGINT) AS k FROM ta UNION ALL SELECT CAST(k AS BIGINT) AS k FROM tb) st ORDER BY k LIMIT 5;
 ----
-analyzed_plan	<!REGEX>:(?s).*Dynamic Filter.*
+analyzed_plan	<REGEX>:(?s).*Dynamic Filter.*
 
 query I
 SELECT k FROM (SELECT CAST(k AS BIGINT) AS k FROM ta UNION ALL SELECT CAST(k AS BIGINT) AS k FROM tb) st ORDER BY k LIMIT 3;
@@ -79,3 +81,54 @@ SELECT k FROM (SELECT CAST(k AS BIGINT) AS k FROM ta UNION ALL SELECT CAST(k AS 
 0
 1
 2
+
+# positive: a failing TRY_CAST yields a NULL sort key; with the default NULLS LAST order those rows
+# sort last and are not part of the top-N, so the filter may drop them
+query II
+EXPLAIN ANALYZE SELECT TRY_CAST(k AS TINYINT) AS x FROM tint ORDER BY x LIMIT 5;
+----
+analyzed_plan	<REGEX>:(?s).*Dynamic Filter.*
+
+query I
+SELECT TRY_CAST(k AS TINYINT) AS x FROM tint ORDER BY x LIMIT 3;
+----
+0
+1
+2
+
+# positive: with NULLS FIRST, rows whose sort key is NULL (or whose cast fails) must survive the
+# pushed filter
+statement ok
+CREATE TABLE tnull AS SELECT CASE WHEN i % 1000 = 0 THEN NULL ELSE i::INTEGER END AS k FROM range(0, 100000) t(i);
+
+query II
+EXPLAIN ANALYZE SELECT CAST(k AS BIGINT) AS x FROM tnull ORDER BY x NULLS FIRST LIMIT 5;
+----
+analyzed_plan	<REGEX>:(?s).*Dynamic Filter.*
+
+query I
+SELECT CAST(k AS BIGINT) AS x FROM tnull ORDER BY x NULLS FIRST LIMIT 3;
+----
+NULL
+NULL
+NULL
+
+query I
+SELECT CAST(k AS BIGINT) AS x FROM tnull ORDER BY x NULLS LAST LIMIT 3;
+----
+1
+2
+3
+
+# positive: descending order with a cast in between
+query II
+EXPLAIN ANALYZE SELECT CAST(k AS BIGINT) AS x FROM tint ORDER BY x DESC LIMIT 5;
+----
+analyzed_plan	<REGEX>:(?s).*Dynamic Filter.*
+
+query I
+SELECT CAST(k AS BIGINT) AS x FROM tint ORDER BY x DESC LIMIT 3;
+----
+204799
+204798
+204797
