@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 
 #include <iostream>
 #include <thread>
@@ -54,6 +55,33 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 	REQUIRE(output.size() > 0);
 	query_not_found_in_output = output.find(query) == std::string::npos;
 	REQUIRE(query_not_found_in_output);
+}
+
+TEST_CASE("Test parser timing is reported per statement", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableProfiling();
+	con.context->config.profiler_save_location = TestCreatePath("test_query_profiler_parser_output.txt");
+	con.context->config.tracked_metrics = {"parser.total_time", "query.sql"};
+
+	REQUIRE_NO_FAIL(con.Query("SELECT 7;"));
+	auto single_statement_output = con.GetProfilingInformation(ProfilerPrintFormat::JSON());
+	REQUIRE(single_statement_output.find("\"parser\"") != std::string::npos);
+	REQUIRE(single_statement_output.find("SELECT 7;") != std::string::npos);
+
+	auto iterator = con.context->IterateStatements("SELECT 42; SELECT 43;");
+	for (const auto expected_query : {"SELECT 42; ", "SELECT 43;"}) {
+		REQUIRE(iterator.Peek());
+		auto statement = iterator.GetStatement();
+		REQUIRE(statement);
+		REQUIRE(statement->query == expected_query);
+		REQUIRE_NO_FAIL(con.Query(std::move(statement)));
+
+		auto output = con.GetProfilingInformation(ProfilerPrintFormat::JSON());
+		REQUIRE(output.find("\"parser\"") != std::string::npos);
+		REQUIRE(output.find(expected_query) != std::string::npos);
+	}
+	REQUIRE_FALSE(iterator.Peek());
 }
 
 TEST_CASE("Test latency when interrupting query", "[api]") {

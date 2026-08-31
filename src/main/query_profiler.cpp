@@ -120,10 +120,15 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 }
 
 void QueryProfiler::Start(const string &query) {
+	auto parser_time_ns = pending_parser_time_ns;
+	pending_parser_time_ns = 0;
 	Reset();
 	running = true;
 	query_metrics.query_sql = query;
 	query_metrics.latency_timer = make_uniq<MetricsTimer>(StartTimer<MetricQueryTotalTime>());
+	if (parser_time_ns) {
+		query_metrics.UpdateMetric(MetricParserTotalTime::Name, parser_time_ns);
+	}
 }
 
 void QueryProfiler::Reset() {
@@ -134,6 +139,7 @@ void QueryProfiler::Reset() {
 	query_metrics.Reset();
 	result_tree.reset();
 	metrics_finalized = false;
+	pending_parser_time_ns = 0;
 }
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
@@ -145,6 +151,7 @@ void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, b
 		StartExplainAnalyze();
 	}
 	if (!IsEnabled()) {
+		pending_parser_time_ns = 0;
 		return;
 	}
 	if (start_at_optimizer && !PrintOptimizerOutput()) {
@@ -152,11 +159,27 @@ void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, b
 		return;
 	}
 	if (running) {
-		// Called while already running: this should only happen when we print optimizer output
+		// Called while already running: this happens when statement setup follows parser timing,
+		// or when we print optimizer output.
 		// D_ASSERT(PrintOptimizerOutput());
+		query_metrics.query_sql = query;
 		return;
 	}
 	Start(query);
+}
+
+void QueryProfiler::AddParserTime(idx_t parser_time_ns) {
+	if (!parser_time_ns) {
+		return;
+	}
+	if (!running) {
+		pending_parser_time_ns += parser_time_ns;
+		return;
+	}
+	if (!IsEnabled()) {
+		return;
+	}
+	query_metrics.UpdateMetric(MetricParserTotalTime::Name, parser_time_ns);
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {

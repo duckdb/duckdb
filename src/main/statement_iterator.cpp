@@ -1,9 +1,18 @@
 #include "duckdb/main/statement_iterator.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 
 namespace duckdb {
+
+static bool IsExplainAnalyzeForIterator(SQLStatement *statement) {
+	if (!statement || statement->type != StatementType::EXPLAIN_STATEMENT) {
+		return false;
+	}
+	return statement->Cast<ExplainStatement>().explain_type == ExplainType::EXPLAIN_ANALYZE;
+}
 
 StatementIterator::StatementIterator(ParseIterator &&parse_iterator)
     : source(std::move(parse_iterator)), context(source.GetClientContext()) {
@@ -42,6 +51,14 @@ unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<Cl
 		return nullptr; // exhausted
 	}
 	auto stmt = source.GetStatement();
+	if (!stmt) {
+		return nullptr;
+	}
+	// Parsing happens before the statement is preprocessed or planned. Start the profiler here so
+	// the parser duration is charged to this statement, including EXPLAIN ANALYZE when profiling
+	// was not enabled globally before the statement was parsed.
+	auto &profiler = QueryProfiler::Get(context);
+	profiler.StartQuery(stmt->query, IsExplainAnalyzeForIterator(stmt.get()));
 	buffer.clear();
 	buffer_cursor = 0;
 	buffer.push_back(std::move(stmt));
