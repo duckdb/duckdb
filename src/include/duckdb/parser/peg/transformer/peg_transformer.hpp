@@ -3626,6 +3626,10 @@ public:
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeInstallStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeInstallAndLoadTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                               TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeInstallAndLoadTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                          TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer,
@@ -3648,6 +3652,30 @@ public:
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeVersionNumberTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeExtensionRepositoryStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeExtensionRepositoryStatementTrampoline(PEGTransformer &transformer,
+	                                                                                       TransformStack &stack,
+	                                                                                       TransformStackFrame &frame);
+	static void InitializeCreateExtensionRepositoryStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCreateExtensionRepositoryStmtTrampoline(PEGTransformer &transformer,
+	                                                                                        TransformStack &stack,
+	                                                                                        TransformStackFrame &frame);
+	static void InitializeRepositoryPrefixTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeRepositoryPrefixTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeRepositoryPublicKeyTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeRepositoryPublicKeyTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
+	static void InitializeDropExtensionRepositoryStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeDropExtensionRepositoryStmtTrampoline(PEGTransformer &transformer,
+	                                                                                      TransformStack &stack,
+	                                                                                      TransformStackFrame &frame);
 	static void InitializeMergeIntoStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                   TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeMergeIntoStatementTrampoline(PEGTransformer &transformer,
@@ -7510,6 +7538,7 @@ public:
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformLoadStatement(PEGTransformer &transformer,
 	                                                       const Identifier &col_id_or_string,
+	                                                       const optional<ExtensionRepositoryInfo> &from_source,
 	                                                       const optional<Identifier> &extension_alias);
 	static unique_ptr<TransformResultValue> TransformExtensionAliasInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
@@ -7517,9 +7546,13 @@ public:
 	static unique_ptr<TransformResultValue> TransformInstallStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformInstallStatement(PEGTransformer &transformer, const bool &has_result,
+	                                                          const optional<bool> &install_and_load,
 	                                                          const QualifiedName &identifier_or_string_literal,
 	                                                          const optional<ExtensionRepositoryInfo> &from_source,
 	                                                          const optional<string> &version_number);
+	static unique_ptr<TransformResultValue> TransformInstallAndLoadInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static bool TransformInstallAndLoad(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformUpdateExtensionsStatementInternal(PEGTransformer &transformer,
 	                                                                                   ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformUpdateExtensionsStatement(PEGTransformer &transformer,
@@ -7537,6 +7570,28 @@ public:
 	                                                                       ParseResult &parse_result);
 	static string TransformVersionNumber(PEGTransformer &transformer,
 	                                     const QualifiedName &identifier_or_string_literal);
+	static unique_ptr<TransformResultValue> TransformExtensionRepositoryStatementInternal(PEGTransformer &transformer,
+	                                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCreateExtensionRepositoryStmtInternal(PEGTransformer &transformer,
+	                                                                                       ParseResult &parse_result);
+	static unique_ptr<SQLStatement>
+	TransformCreateExtensionRepositoryStmt(PEGTransformer &transformer, const optional<bool> &or_replace,
+	                                       const optional<bool> &if_not_exists, const Identifier &col_id_or_string,
+	                                       const string &repository_prefix,
+	                                       const optional<vector<string>> &repository_public_key);
+	static unique_ptr<TransformResultValue> TransformRepositoryPrefixInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static string TransformRepositoryPrefix(PEGTransformer &transformer, const bool &has_result,
+	                                        const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformRepositoryPublicKeyInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static vector<string> TransformRepositoryPublicKey(PEGTransformer &transformer, const bool &has_result,
+	                                                   const vector<string> &string_literal);
+	static unique_ptr<TransformResultValue> TransformDropExtensionRepositoryStmtInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformDropExtensionRepositoryStmt(PEGTransformer &transformer,
+	                                                                     const optional<bool> &if_exists,
+	                                                                     const Identifier &col_id_or_string);
 	static unique_ptr<TransformResultValue> TransformMergeIntoStatementInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static unique_ptr<SQLStatement>

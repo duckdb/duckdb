@@ -10,6 +10,7 @@ add_library_unity(
   duckdb_dependencies.cpp
   duckdb_dialects.cpp
   create_external_resource.cpp
+  duckdb_extension_repositories.cpp
   duckdb_extensions.cpp
   duckdb_external_file_cache.cpp
   external_resource_types.cpp

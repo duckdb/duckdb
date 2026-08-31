@@ -480,13 +480,7 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 	auto &indexes = info->GetIndexes();
 
 	// Collect column IDs from unique indexes
-	unordered_set<column_t> indexed_column_ids;
-	for (auto &index : indexes.Indexes()) {
-		if (index.IsUnique()) {
-			auto &col_ids = index.GetColumnIdSet();
-			indexed_column_ids.insert(col_ids.begin(), col_ids.end());
-		}
-	}
+	auto indexed_column_ids = indexes.GetUniqueIndexColumns();
 
 	if (indexed_column_ids.empty()) {
 		return;

@@ -158,6 +158,19 @@ idx_t StringUtil::GetCommonPrefixSize(const string &left, const string &right) {
 	return prefix_size;
 }
 
+bool StringUtil::FindNextPrefix(string &prefix) {
+	for (idx_t idx = prefix.size(); idx > 0; idx--) {
+		auto byte = static_cast<uint8_t>(prefix[idx - 1]);
+		if (byte == 0xFF) {
+			continue;
+		}
+		prefix[idx - 1] = static_cast<char>(byte + 1);
+		prefix.resize(idx);
+		return true;
+	}
+	return false;
+}
+
 string StringUtil::Repeat(const string &str, idx_t n) {
 	std::ostringstream os;
 	for (idx_t i = 0; i < n; i++) {
