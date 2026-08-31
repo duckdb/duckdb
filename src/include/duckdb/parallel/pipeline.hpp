@@ -89,7 +89,7 @@ public:
 	//! The dependencies of this pipeline on pipelines of other MetaPipelines
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
 	//! All pipelines this pipeline waits on before it can start: 'intra_dependencies' and 'dependencies'
-	vector<reference<Pipeline>> GetAllDependencies() const;
+	vector<shared_ptr<Pipeline>> GetAllDependencies() const;
 
 	void Ready();
 	void Reset();
