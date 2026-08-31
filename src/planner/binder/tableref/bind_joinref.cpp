@@ -11,7 +11,6 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -25,7 +24,9 @@ static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &co
 	auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
 	auto result = expr_binder.Bind(expr);
-	return make_uniq<BoundExpression>(std::move(result));
+	// store the bound column in the map, keyed by the parsed column reference placed in the join condition
+	binder.GetBoundExpressions().Insert(*expr, std::move(result));
+	return expr;
 }
 
 static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
@@ -235,6 +236,8 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		}
 	}
 
+	// scope for the bound USING/NATURAL join columns seeded into the map by BindColumn
+	BoundExpressionScope using_column_scope(GetBoundExpressions());
 	vector<unique_ptr<ParsedExpression>> extra_conditions;
 	vector<Identifier> extra_using_columns;
 	switch (ref.ref_type) {

@@ -16,7 +16,7 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	// Right now just considering its DEFAULT_SCHEMA always
 	binder.BindLogicalType(expr.TargetTypeMutable());
 	// the children have been successfully resolved
-	auto &child = BoundExpression::GetExpression(*expr.ChildMutable());
+	auto child = GetBoundExpressions().Consume(*expr.ChildMutable());
 	if (expr.IsTryCast()) {
 		if (ExpressionBinder::GetExpressionReturnType(*child) == expr.TargetType()) {
 			// no cast required: type matches

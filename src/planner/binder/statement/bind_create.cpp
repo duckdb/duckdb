@@ -553,6 +553,8 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			// create a copy of the expression because we do not want to alter the original
 			auto expression = function->Cast<ScalarMacroFunction>().expression->Copy();
 			ExpressionBinder::QualifyColumnNames(*this, expression);
+			// scope for the map entries of this bind: the bound result is only used for verification
+			BoundExpressionScope verify_scope(GetBoundExpressions());
 			try {
 				error = binder.Bind(expression, 0, false);
 				if (error.HasError()) {
