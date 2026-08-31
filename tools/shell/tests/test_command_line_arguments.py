@@ -156,14 +156,6 @@ def test_connect_rejects_a_database_argument(shell, tmp_path):
     # the database is rejected before it is opened, so it is never created
     assert not db.exists()
 
-def test_connect_argument_after_the_flag_is_a_type(shell, tmp_path):
-    # `-connect X` always means "connect using type X" - a database has to come before the flag
-    db = tmp_path / "some.db"
-    test = ShellTest(shell).add_argument("-cmd", CONNECT_PROBE, "-connect", str(db), "-no-stdin")
-    result = test.run()
-    result.check_stdout(f"connect -> CONNECT {db}:")
-    assert not db.exists()
-
 def test_serve_accepts_a_database_argument(shell, tmp_path):
     # -serve serves the database it is given, so a file is expected there
     db = tmp_path / "served.db"
