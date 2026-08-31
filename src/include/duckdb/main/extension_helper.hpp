@@ -182,11 +182,9 @@ public:
 	static vector<string> GetTrustedPublicKeys(DatabaseInstance &db, ExtensionRepositoryType repository_type,
 	                                           const string &repository_name);
 
-	//! The origin whose signing keys a load trusts. With an explicit FROM the named origin is used. An autoload
-	//! (core_only) trusts only the core keys - every autoloadable extension is a core extension, so it never needs to
-	//! accept a community or user-provided origin. A plain bare LOAD trusts the fixed core and community keys (a
-	//! community extension keeps its community keys), but never a user-provided repository's own keys - those, and a
-	//! user-provided repository that merely redeploys an extension, are verified against the core keys instead.
+	//! The origin whose signing keys a load trusts: an explicit FROM trusts the named origin, an autoload (core_only)
+	//! trusts the core keys only, and a plain bare LOAD trusts the core keys plus the community keys for a community
+	//! extension - never a user-provided repository's own keys
 	static ExtensionRepositoryType ResolveTrustedSignatureOrigin(bool has_from_clause, bool core_only,
 	                                                             ExtensionRepositoryType recorded_origin);
 

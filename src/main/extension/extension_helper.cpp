@@ -227,7 +227,7 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, 
 	return base_error;
 }
 
-// autoloading only ever targets core extensions, so the load trusts the core keys exclusively
+// autoloading only ever targets core extensions, so it trusts the core keys exclusively
 static ExtensionLoadOptions AutoLoadOptions(const string &extension_name) {
 	ExtensionLoadOptions options(extension_name);
 	options.core_only = true;
@@ -947,7 +947,7 @@ ExtensionRepositoryType ExtensionHelper::ResolveTrustedSignatureOrigin(bool has_
 		return recorded_origin;
 	}
 	if (core_only) {
-		// autoloading only ever targets core extensions, so it trusts nothing but the core keys - not even community
+		// autoloading only ever targets core extensions - not even community keys are trusted
 		return ExtensionRepositoryType::CORE;
 	}
 	// a plain bare load trusts the fixed core and community keys: a community extension keeps its community keys, every

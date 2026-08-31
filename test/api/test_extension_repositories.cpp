@@ -223,31 +223,27 @@ TEST_CASE("Test which signing keys a load trusts", "[api]") {
 	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, false, T::COMMUNITY) == T::COMMUNITY);
 	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, false, T::USER_PROVIDED) == T::USER_PROVIDED);
 
-	// a plain bare LOAD trusts the fixed core/community keys: core stays core, a community extension keeps its
-	// community keys, and a user-provided origin is verified against the core keys - never the repository's own. This
-	// stops a repointed extension_directory from loading native code under a user-provided key off an on-disk .info
+	// a plain bare LOAD keeps the community keys for a community extension, but verifies a user-provided origin
+	// against the core keys - so a repointed extension_directory cannot load code under a user-provided key
 	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, false, T::CORE) == T::CORE);
 	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, false, T::COMMUNITY) == T::COMMUNITY);
 	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, false, T::USER_PROVIDED) == T::CORE);
 
-	// an autoload (core_only) targets only core extensions, so it trusts nothing but the core keys - not even a
-	// community origin can be autoloaded, closing the last way a non-core-signed extension could be loaded implicitly
+	// an autoload targets only core extensions, so nothing but the core keys is trusted - not even community
 	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, true, T::CORE) == T::CORE);
 	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, true, T::COMMUNITY) == T::CORE);
 	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, true, T::USER_PROVIDED) == T::CORE);
 }
 
-// A test legitimately stages the on-disk state an install would produce, so it writes the reserved
-// '.duckdb_extension' trust domain the way INSTALL does
+// Stages the on-disk state an install would produce, writing to the reserved '.duckdb_extension' domain like INSTALL
 static void WriteExtensionFile(FileSystem &fs, const string &path, void *data, idx_t size) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
 	                                    FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
 	handle->Write(data, size);
 }
 
-// Stage <extension_directory>/<version>/<platform>/<name>.duckdb_extension plus a .info recording a user-provided
-// origin, in the flat top-level layout a bare load resolves - as pointing extension_directory at a repository's own
-// prefix would expose. The binary is a stub: these tests assert the origin handling, not a real load.
+// Stage an extension plus a .info recording a user-provided origin, in the flat layout a bare load resolves. The
+// binary is a stub: these tests assert the origin handling, not a real load
 static void StageUserRepoExtensionFlat(DatabaseInstance &db, const string &name, const string &repository_name) {
 	auto fs = FileSystem::CreateLocal();
 	string dir = ExtensionHelper::ExtensionDirectory(db, *fs);
@@ -271,9 +267,8 @@ TEST_CASE("Test that a user repository does not block an unsigned load", "[api]"
 	auto repository_directory = TestCreatePath("ext_repo_devflow");
 	auto extension_directory = TestCreatePath("ext_repo_devflow_ext");
 
-	// pointing at a build folder (or a repository prefix) to test autoloading is a real workflow: when the signature
-	// trust model is off (allow_unsigned_extensions), a user-provided origin must NOT impose an extra load barrier -
-	// the extension load is attempted like any other and fails only on the stub binary, not on an origin rule
+	// pointing at a build folder to test autoloading is a real workflow: with allow_unsigned_extensions the trust
+	// model is off, so a user-provided origin must not impose an extra load barrier
 	DBConfig config;
 	config.SetOptionByName("extension_repository_directory", repository_directory);
 	config.SetOptionByName("extension_directory", extension_directory);
