@@ -7,7 +7,7 @@ require vector_size 2048
 require block_size 262144
 
 statement ok
-ATTACH '{TEST_DIR}/prefetch_run_cap.db' AS cap_db (ROW_GROUP_SIZE 8388608)
+ATTACH '{TEST_DIR}/prefetch_run_cap.db' AS cap_db (ROW_GROUP_SIZE 8388608, STORAGE_VERSION 'v1.2.0')
 
 # a single uncompressed 8M row double column makes one row group hold 257 contiguous blocks, ~64MB
 statement ok
