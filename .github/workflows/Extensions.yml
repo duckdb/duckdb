@@ -195,6 +195,7 @@ jobs:
       allow_failure_archs: ${{ inputs.allow_failure_archs }}
       extra_toolchains: ${{ matrix.extra_toolchains }}
       use_merged_vcpkg_manifest: '1'
+      vcpkg_commit: 9e593bb18ea69cc5095e012465dcd675a822ed0d # Release 2026.07.29
       duckdb_tag: ${{ inputs.override_git_describe }}
       skip_tests: ${{ inputs.skip_tests }}
       save_cache: ${{ (github.event_name == 'workflow_call' && inputs.save_cache) || (github.event_name != 'workflow_call' && (github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name))) }}
