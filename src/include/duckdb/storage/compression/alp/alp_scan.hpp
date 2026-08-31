@@ -13,6 +13,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/compression/compression_segment_reader.hpp"
 
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -63,17 +64,19 @@ struct AlpScanState : public SegmentScanState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	explicit AlpScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-		handle = buffer_manager.Pin(segment.GetBlockHandle());
+	explicit AlpScanState(BufferHandle handle_p, ColumnSegment &segment)
+	    : handle(std::move(handle_p)), reader(CompressionSegmentReader::FromSegment(handle, segment, "ALP segment")),
+	      segment(segment), count(segment.count) {
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		segment_data = handle.GetDataMutable() + segment.GetBlockOffset();
-		auto metadata_offset = Load<AlpConstants::METADATA_POINTER_TYPE>(segment_data);
+		auto metadata_offset = reader.Read<AlpConstants::METADATA_POINTER_TYPE>();
+		reader = reader.GetSubReader(0, metadata_offset, "ALP segment");
 		metadata_ptr = segment_data + metadata_offset;
 	}
 
 	BufferHandle handle;
+	CompressionSegmentReader reader;
 	data_ptr_t metadata_ptr;
 	data_ptr_t segment_data;
 	idx_t total_value_count = 0;
@@ -260,7 +263,9 @@ public:
 
 template <class T>
 unique_ptr<SegmentScanState> AlpInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto result = make_uniq_base<SegmentScanState, AlpScanState<T>>(segment);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
+	auto result = make_uniq_base<SegmentScanState, AlpScanState<T>>(std::move(handle), segment);
 	return result;
 }
 
