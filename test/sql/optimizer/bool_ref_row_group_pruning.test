@@ -97,12 +97,14 @@ SELECT sum(x) FROM tb WHERE NOT b;
 # Row group 0: b is TRUE or NULL
 # Row group 1: b is FALSE or NULL
 # Row group 2: b alternates TRUE/FALSE
+# Row group 3: b is NULL
 statement ok
 CREATE TABLE nullable_tb AS SELECT
   CASE WHEN range // 2048 = 0 THEN CASE WHEN range % 2 = 0 THEN TRUE ELSE NULL END
        WHEN range // 2048 = 1 THEN CASE WHEN range % 2 = 0 THEN FALSE ELSE NULL END
-       ELSE (range % 2 = 0) END AS b
-FROM range(6144);
+       WHEN range // 2048 = 2 THEN (range % 2 = 0)
+       ELSE NULL END AS b
+FROM range(8192);
 
 statement ok
 CHECKPOINT;
@@ -110,7 +112,7 @@ CHECKPOINT;
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM nullable_tb WHERE b;
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
 
 query I
 SELECT count(*) FROM nullable_tb WHERE b;
@@ -120,7 +122,7 @@ SELECT count(*) FROM nullable_tb WHERE b;
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM nullable_tb WHERE NOT b;
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
 
 query I
 SELECT count(*) FROM nullable_tb WHERE NOT b;
