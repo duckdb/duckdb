@@ -625,10 +625,12 @@ static FilterPropagateResult CheckBoolRefStatistics(const Expression &expr, arra
 	if (min_v != max_v) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if ((negated ? !min_v : min_v) == false) {
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	const bool value = negated ? !min_v : min_v;
+	if (!value) {
+		return stats.CanHaveNull() ? FilterPropagateResult::FILTER_FALSE_OR_NULL
+		                           : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	return stats.CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	return stats.CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 }
 
 static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientContext> context_p,
@@ -694,8 +696,9 @@ static FilterPropagateResult CheckConjunctionStatistics(optional_ptr<ClientConte
 		}
 		return result;
 	}
-	case ExpressionType::CONJUNCTION_OR:
+	case ExpressionType::CONJUNCTION_OR: {
 		D_ASSERT(!conj.GetChildren().empty());
+		auto result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		for (auto &child : conj.GetChildren()) {
 			auto prune_result = ExpressionFilter::CheckExpressionStatistics(context_p, *child, input_stats);
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
@@ -704,8 +707,15 @@ static FilterPropagateResult CheckConjunctionStatistics(optional_ptr<ClientConte
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 				return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 			}
+			if (prune_result == FilterPropagateResult::FILTER_TRUE_OR_NULL) {
+				result = FilterPropagateResult::FILTER_TRUE_OR_NULL;
+			} else if (prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL &&
+			           result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				result = FilterPropagateResult::FILTER_FALSE_OR_NULL;
+			}
 		}
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		return result;
+	}
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
