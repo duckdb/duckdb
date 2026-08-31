@@ -101,6 +101,8 @@ public:
 	static constexpr const char *TRANSACTION_STORAGE_NAME = "transaction";
 	//! Connection-scoped storage: secrets live only for the creating connection and are reaped when it closes.
 	static constexpr const char *CONNECTION_STORAGE_NAME = "connection";
+	//! Session-scoped storage holding refreshed copies of secrets that live in another storage
+	static constexpr const char *REFRESH_STORAGE_NAME = "refresh";
 
 	//! Static Helper Functions
 	DUCKDB_API static SecretManager &Get(ClientContext &context);

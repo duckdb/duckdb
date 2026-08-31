@@ -40,6 +40,7 @@ public:
 	//! Default storage backend offsets. Lower offsets win tie-breaks (equal path-match score), so the connection-scoped
 	//! storage is preferred over the global ones when a connection secret and a global secret match equally well.
 	static const int64_t TRANSACTION_STORAGE_OFFSET = 0;
+	static const int64_t REFRESH_STORAGE_OFFSET = 1;
 	static const int64_t CONNECTION_STORAGE_OFFSET = 5;
 	static const int64_t TEMPORARY_STORAGE_OFFSET = 10;
 	static const int64_t LOCAL_FILE_STORAGE_OFFSET = 20;
@@ -74,6 +75,12 @@ public:
 
 	virtual bool Persistent() const {
 		return persistent;
+	}
+
+	//! Whether this storage shadows the others. A shadowing storage holds a transient copy of a secret that also lives
+	//! in another storage, so by-name resolution reaches it first instead of reporting the two copies as ambiguous.
+	virtual bool Shadowing() const {
+		return false;
 	}
 
 protected:
@@ -195,7 +202,8 @@ protected:
 //! aborted transaction is undone, like in the global storages.
 class ConnectionSecretStorage : public SecretStorage {
 public:
-	explicit ConnectionSecretStorage(const string &name_p) : SecretStorage(name_p, CONNECTION_STORAGE_OFFSET) {
+	explicit ConnectionSecretStorage(const string &name_p, const int64_t offset = CONNECTION_STORAGE_OFFSET)
+	    : SecretStorage(name_p, offset), state_key("connection_secret_storage_" + name_p) {
 		// persistent stays false (base default): these secrets are connection-lifetime only.
 	}
 
@@ -209,6 +217,26 @@ public:
 	                         optional_ptr<CatalogTransaction> transaction = nullptr) override;
 	unique_ptr<SecretEntry> GetSecretByName(const string &name,
 	                                        optional_ptr<CatalogTransaction> transaction = nullptr) override;
+
+protected:
+	//! RegisteredStateManager key for this storage's per-connection container. Derived from the storage name so that
+	//! two connection-scoped storages on one context keep separate secrets.
+	string state_key;
+};
+
+//! Session-scoped storage holding refreshed copies of secrets that live in another storage. Re-resolved credential
+//! material is session-local: writing it back to its origin storage throws where the session cannot write, and
+//! durably mutates a shared store where it can. Refreshes land here instead, shadowing the origin so that one secret
+//! name stays unambiguous.
+class RefreshSecretStorage : public ConnectionSecretStorage {
+public:
+	explicit RefreshSecretStorage(const string &name_p) : ConnectionSecretStorage(name_p, REFRESH_STORAGE_OFFSET) {
+	}
+
+public:
+	bool Shadowing() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

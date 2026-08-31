@@ -281,6 +281,10 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 	if (info.persist_type == SecretPersistType::TRANSACTION || info.storage_type == TRANSACTION_STORAGE_NAME) {
 		throw BinderException("Transaction-scoped secrets cannot be created through SQL");
 	}
+	if (info.storage_type == REFRESH_STORAGE_NAME) {
+		throw BinderException("The '%s' secret storage is written by credential refreshes, not through SQL",
+		                      REFRESH_STORAGE_NAME);
+	}
 	InitializeSecrets(transaction);
 
 	auto type = info.type;
@@ -389,7 +393,21 @@ unique_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transa
 		return storage_lookup->GetSecretByName(name, &transaction);
 	}
 
+	// A shadowing storage holds a transient copy of a secret that also lives elsewhere, so it answers first rather
+	// than counting as a second match below.
 	for (const auto &storage_ref : GetSecretStorages()) {
+		if (!storage_ref.get().Shadowing()) {
+			continue;
+		}
+		if (auto lookup = storage_ref.get().GetSecretByName(name, &transaction)) {
+			return lookup;
+		}
+	}
+
+	for (const auto &storage_ref : GetSecretStorages()) {
+		if (storage_ref.get().Shadowing()) {
+			continue;
+		}
 		auto lookup = storage_ref.get().GetSecretByName(name, &transaction);
 		if (lookup) {
 			if (found) {
@@ -435,6 +453,12 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const Ident
 		matches.push_back(*storage_lookup.get());
 	} else {
 		for (const auto &storage_ref : GetSecretStorages()) {
+			// A shadow must not outlive the secret it shadows, and must not read as a second match: drop it here
+			// rather than collecting it.
+			if (storage_ref.get().Shadowing()) {
+				storage_ref.get().DropSecretByName(name, OnEntryNotFound::RETURN_NULL, &transaction);
+				continue;
+			}
 			if (persist_type == SecretPersistType::PERSISTENT && !storage_ref.get().Persistent()) {
 				continue;
 			}
@@ -623,6 +647,10 @@ void SecretManager::InitializeSecrets(CatalogTransaction transaction) {
 		// load the connection-scoped storage: secrets created `IN connection_storage` are visible only to the
 		// connection that created them, and are dropped automatically when that connection closes.
 		LoadSecretStorageInternal(make_uniq<ConnectionSecretStorage>(CONNECTION_STORAGE_NAME));
+
+		// load the refresh overlay: a credential refresh re-resolves session-local material, so the refreshed copy
+		// lands here instead of being written back to the storage the secret was loaded from.
+		LoadSecretStorageInternal(make_uniq<RefreshSecretStorage>(REFRESH_STORAGE_NAME));
 
 		if (config.allow_persistent_secrets) {
 			// load the persistent storage if enabled
