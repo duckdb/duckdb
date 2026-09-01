@@ -340,7 +340,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &functions = scalar_function.functions.functions;
 		optional_idx best_index;
 		for (idx_t i = 0; i < functions.size(); i++) {
-			const auto &sig = functions[i].GetSignature();
+			const auto &sig = functions[i]->GetSignature();
 			if (sig.GetParameterCount() != types.size()) {
 				continue;
 			}
@@ -362,9 +362,11 @@ struct ICUStrptime : public ICUDateFunc {
 		if (!best_index.IsValid()) {
 			throw InternalException("ICU - Function for TailPatch not found");
 		}
-		auto &bound_function = functions[best_index.GetIndex()];
-		bind_strptime = bound_function.GetBindCallback();
-		bound_function.SetBindCallback(StrpTimeBindFunction);
+		// the overloads are immutable - swap in a patched copy
+		auto patched = make_shared_ptr<ScalarFunction>(*functions[best_index.GetIndex()]);
+		bind_strptime = patched->GetBindCallback();
+		patched->SetBindCallback(StrpTimeBindFunction);
+		functions[best_index.GetIndex()] = std::move(patched);
 	}
 
 	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {

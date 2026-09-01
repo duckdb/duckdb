@@ -1,0 +1,211 @@
+# name: test/parquet/utf8_validation_plain_dba_dlba_dict.test
+# description: Test UTF8 validation of strings in parquet files encoded as PLAIN, DELTA_LENGTH_BYTE_ARRAY, dba and dictionary
+# group: [parquet]
+
+require parquet
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid.parquet', utf8_validation='strict');
+----
+Invalid Input Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid.parquet', utf8_validation='duck');
+----
+Binder Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid.parquet');
+----
+Invalid Input Error
+
+query T 
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid.parquet', utf8_validation='ignore');
+----
+TREL
+
+query T
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid.parquet', utf8_validation='replace');
+----
+TREL?
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet', utf8_validation='strict');
+----
+Invalid Input Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet', utf8_validation='duck');
+----
+Binder Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet');
+----
+Invalid Input Error
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet', utf8_validation='ignore');
+----
+TREL
+hello world
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet', utf8_validation='replace');
+----
+TREL?
+hello world
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dba.parquet', utf8_validation='strict');
+----
+Invalid Input Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dba.parquet', utf8_validation='duck');
+----
+Binder Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dba.parquet');
+----
+Invalid Input Error
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dba.parquet', utf8_validation='ignore');
+----
+TREL
+hello world
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dba.parquet', utf8_validation='replace');
+----
+TREL?
+hello world
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dictionary.parquet', utf8_validation='strict');
+----
+Invalid Input Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dictionary.parquet', utf8_validation='duck');
+----
+Binder Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dictionary.parquet');
+----
+Invalid Input Error
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dictionary.parquet', utf8_validation='ignore');
+----
+TREL
+hello world
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dictionary.parquet', utf8_validation='replace');
+----
+TREL?
+hello world
+
+query T
+SELECT * FROM parquet_scan(
+             'data/parquet-testing/binary_string.parquet',
+             binary_as_string=false
+         );
+----
+foo
+bar
+baz
+
+statement ok
+SET debug_verify_serializer=true
+
+query T
+SELECT * FROM read_parquet(
+    'data/parquet-testing/invalid.parquet',
+    utf8_validation='replace'
+)
+----
+TREL?
+
+query T
+SELECT * FROM read_parquet(
+    'data/parquet-testing/invalid.parquet',
+    utf8_validation='ignore'
+)
+----
+TREL
+
+statement ok
+SET debug_verify_serializer=false
+
+query T
+SELECT * FROM read_parquet(
+    'data/parquet-testing/invalid.parquet',
+    utf8_validation='iGnOrE'
+)
+----
+TREL
+
+query T
+SELECT hex(decode(from_hex('C328'), 'ignore'));
+----
+28
+
+query T
+SELECT hex(decode(from_hex('E228A1'), 'ignore'));
+----
+28
+
+query T
+SELECT hex(decode(from_hex('E28228'), 'ignore'));
+----
+28
+
+query T
+SELECT hex(decode(from_hex('F0288CBC'), 'ignore'));
+----
+28
+
+query T
+SELECT hex(decode(from_hex('C2FF28'), 'ignore'));
+----
+28
+
+query T
+SELECT hex(decode(from_hex('C2FF28'), 'replace'));
+----
+3F3F28
+
+query T
+SELECT hex(decode(from_hex('C08041'), 'ignore'));
+----
+41
+
+query T
+SELECT hex(decode(from_hex('EDA08041'), 'ignore'));
+----
+41
+
+query T
+SELECT hex(decode(from_hex('EDA08041'), 'replace'));
+----
+3F3F3F41
+
+query T
+SELECT hex(decode(from_hex('F490808041'), 'ignore'));
+----
+41
+
+query T
+SELECT hex(decode(from_hex('41E2FF42C08043'), 'ignore'));
+----
+414243
+
+query T
+SELECT hex(decode(from_hex('41E2'), 'ignore'));
+----
+41

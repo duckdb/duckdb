@@ -56,6 +56,7 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer,
                                                  unique_ptr<ParsedExpression> type_variations,
                                                  const optional<vector<int64_t>> &array_bounds) {
+	auto array_depth_guard = transformer.StackCheck(array_bounds ? array_bounds->size() : 0);
 	auto type = std::move(type_variations);
 	if (array_bounds) {
 		for (auto array_size : *array_bounds) {
@@ -139,7 +140,14 @@ PEGTransformerFactory::TransformTimeType(PEGTransformer &transformer, const Logi
 		if (modifiers[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw ParserException("Expected a constant expression for timestamp precision");
 		}
-		auto timestamp_precision = modifiers[0]->Cast<ConstantExpression>().GetValue().GetValue<int64_t>();
+		auto precision_value = modifiers[0]->Cast<ConstantExpression>().GetValue();
+		if (precision_value.IsNull()) {
+			throw ParserException("TIMESTAMP precision cannot be NULL");
+		}
+		if (!precision_value.type().IsIntegral()) {
+			throw ParserException("TIMESTAMP precision must be an integral type");
+		}
+		auto timestamp_precision = precision_value.GetValue<int64_t>();
 		if (timestamp_precision > 10) {
 			throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
 		}

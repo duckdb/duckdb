@@ -316,10 +316,6 @@ static void ComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t
                                  const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
                                  const ExpressionType comp, ValidityMask &validity);
 
-static void InequalityComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t *result_data,
-                                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
-                                           idx_t sel_count, const ExpressionType comp, ValidityMask &validity);
-
 static idx_t NestedValidity(const VectorValidityIterator &left_validity, const VectorValidityIterator &right_validity,
                             int8_t *result_data, const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
                             idx_t sel_count, SelectionVector &remaining_lhs_sel, SelectionVector &remaining_rhs_sel,
@@ -389,6 +385,85 @@ static idx_t NestedScatter(const int8_t *child_result, int8_t *result_data, idx_
 	return new_remaining_count;
 }
 
+static void StructComparator(const Vector &left, const Vector &right, int8_t *result_data,
+                             const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
+                             const ExpressionType comp, optional_ptr<ValidityMask> result_validity = nullptr) {
+	//	STRUCT comparisons use ordering semantics, so the result is never NULL
+	D_ASSERT(left.GetType().id() != LogicalTypeId::UNION);
+	if (sel_count == 0) {
+		return;
+	}
+	auto &lchildren = StructVector::GetEntries(left);
+	auto &rchildren = StructVector::GetEntries(right);
+	D_ASSERT(lchildren.size() == rchildren.size());
+
+	// step 1: handle struct-level validity and initialize results
+	auto left_validity = left.Validity();
+	auto right_validity = right.Validity();
+
+	// remaining tracks which rows still need child comparison
+	// along with their corresponding lhs/rhs selection indices
+	SelectionVector remaining_lhs_sel(sel_count);
+	SelectionVector remaining_rhs_sel(sel_count);
+	SelectionVector remaining_result_sel(sel_count);
+	idx_t remaining_count = NestedValidity(left_validity, right_validity, result_data, lhs_sel, rhs_sel, sel_count,
+	                                       remaining_lhs_sel, remaining_rhs_sel, remaining_result_sel, result_validity);
+
+	// step 2: compare child vectors one by one
+	// child results are written densely, then scattered back to the correct output positions
+	auto child_result = make_unsafe_uniq_array<int8_t>(remaining_count);
+	ValidityMask child_validity(remaining_count);
+	for (idx_t child_idx = 0; child_idx < lchildren.size() && remaining_count > 0; child_idx++) {
+		switch (comp) {
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			DistinctComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(),
+			                             remaining_lhs_sel, remaining_rhs_sel, remaining_count);
+			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
+			                                remaining_rhs_sel, remaining_result_sel, child_validity, nullptr,
+			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL || n; });
+			break;
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOTEQUAL:
+			child_validity.SetAllValid(remaining_count);
+			ComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(), remaining_lhs_sel,
+			                     remaining_rhs_sel, remaining_count, comp, child_validity);
+			//	STRUCT columns all interact, so for [not] equals,
+			//	we can only finalize rows that we know to be not equal and not NULL
+			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
+			                                remaining_rhs_sel, remaining_result_sel, child_validity, nullptr,
+			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL && !n; });
+			break;
+		default:
+			throw InternalException("Invalid STRUCT Comparison");
+		}
+	}
+
+	//	NULL cleanup pass
+	switch (comp) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOTEQUAL:
+		//	The remaining rows are all not distinct, so check for NULLs
+		for (idx_t child_idx = 0; child_idx < lchildren.size() && remaining_count > 0; child_idx++) {
+			child_validity.SetAllValid(remaining_count);
+			DistinctComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(),
+			                             remaining_lhs_sel, remaining_rhs_sel, remaining_count);
+
+			// partition active into resolved vs still-remaining
+			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
+			                                remaining_rhs_sel, remaining_result_sel, child_validity, nullptr,
+			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL || n; });
+		}
+		break;
+	default:
+		break;
+	}
+}
+
 static idx_t UnionScatter(const Vector &key, const idx_t child_idx, const int8_t *child_result, int8_t *result_data,
                           const idx_t remaining_count, SelectionVector &remaining_lhs_sel,
                           SelectionVector &remaining_rhs_sel, SelectionVector &remaining_result_sel,
@@ -426,9 +501,11 @@ static idx_t UnionScatter(const Vector &key, const idx_t child_idx, const int8_t
 	return new_remaining_count;
 }
 
-static void StructComparator(const Vector &left, const Vector &right, int8_t *result_data,
-                             const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
-                             const ExpressionType comp, optional_ptr<ValidityMask> result_validity = nullptr) {
+static void UnionComparator(const Vector &left, const Vector &right, int8_t *result_data,
+                            const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
+                            const ExpressionType comp, optional_ptr<ValidityMask> result_validity = nullptr) {
+	//	UNION data columns are independent, so we can just treat them as disjoint single columns
+	D_ASSERT(left.GetType().id() == LogicalTypeId::UNION);
 	if (sel_count == 0) {
 		return;
 	}
@@ -452,9 +529,7 @@ static void StructComparator(const Vector &left, const Vector &right, int8_t *re
 	// child results are written densely, then scattered back to the correct output positions
 	auto child_result = make_unsafe_uniq_array<int8_t>(remaining_count);
 	ValidityMask child_validity(remaining_count);
-	const bool is_union = (left.GetType().id() == LogicalTypeId::UNION);
 	for (idx_t child_idx = 0; child_idx < lchildren.size() && remaining_count > 0; child_idx++) {
-		const auto as_union = is_union && child_idx && result_validity;
 		switch (comp) {
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
@@ -464,34 +539,20 @@ static void StructComparator(const Vector &left, const Vector &right, int8_t *re
 			break;
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOTEQUAL:
-			child_validity.SetAllValid(remaining_count);
-			ComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(), remaining_lhs_sel,
-			                     remaining_rhs_sel, remaining_count, comp, child_validity);
-			//	UNION data columns are independent, so we can just treat them as disjoint single columns
-			if (is_union) {
-				break;
-			}
-			//	STRUCT columns interact, so for [not] equals,
-			//	we can only finalize rows that we know to be not equal and not NULL
-			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
-			                                remaining_rhs_sel, remaining_result_sel, child_validity, result_validity,
-			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL && !n; });
-			continue;
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			child_validity.SetAllValid(remaining_count);
-			//	For inequalities of nested types, we only return NULL for nested op NULL comparisons.
-			InequalityComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(),
-			                               remaining_lhs_sel, remaining_rhs_sel, remaining_count, comp, child_validity);
+			ComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(), remaining_lhs_sel,
+			                     remaining_rhs_sel, remaining_count, comp, child_validity);
 			break;
 		default:
-			throw InternalException("Invalid STRUCT Comparison");
+			throw InternalException("Invalid UNION Comparison");
 		}
 
 		//	Scatter back
-		if (as_union) {
+		if (child_idx && result_validity) {
 			remaining_count = UnionScatter(lchildren[0], child_idx, child_result.get(), result_data, remaining_count,
 			                               remaining_lhs_sel, remaining_rhs_sel, remaining_result_sel, child_validity,
 			                               *result_validity);
@@ -500,28 +561,6 @@ static void StructComparator(const Vector &left, const Vector &right, int8_t *re
 			                                remaining_rhs_sel, remaining_result_sel, child_validity, result_validity,
 			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL || n; });
 		}
-	}
-
-	//	NULL result pass
-	switch (comp) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOTEQUAL:
-		if (is_union) {
-			//	UNIONs have already been evaluated
-			break;
-		}
-		//	The remaining rows are either NULL or True, so extract the NULLs
-		for (idx_t child_idx = 0; child_idx < lchildren.size() && remaining_count > 0; child_idx++) {
-			child_validity.SetAllValid(remaining_count);
-			ComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(), remaining_lhs_sel,
-			                     remaining_rhs_sel, remaining_count, comp, child_validity);
-			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
-			                                remaining_rhs_sel, remaining_result_sel, child_validity, result_validity,
-			                                [](int8_t c, bool n) { return n; });
-		}
-		break;
-	default:
-		break;
 	}
 }
 
@@ -608,6 +647,7 @@ static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_
 	// FlattenChild is a no-op; ToUnifiedFormat handles all vector types in the recursive comparators
 	accessor.FlattenChild(left);
 	accessor.FlattenChild(right);
+
 	// step 1: handle top-level validity
 	auto left_validity = left.Validity();
 	auto right_validity = right.Validity();
@@ -648,9 +688,16 @@ static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_
 		switch (comp) {
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			D_ASSERT(!result_validity);
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			DistinctComparatorTypeSwitch(left_child, right_child, child_result.get(), left_child_sel, right_child_sel,
 			                             active_count);
+			// partition active into resolved vs still-remaining
+			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
+			                                remaining_rhs_sel, remaining_result_sel, child_validity, nullptr,
+			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL || n; });
 			break;
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOTEQUAL:
@@ -659,29 +706,15 @@ static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_
 			                     active_count, comp, child_validity);
 			//	Only keep values we know are not equal.
 			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
-			                                remaining_rhs_sel, remaining_result_sel, child_validity, result_validity,
+			                                remaining_rhs_sel, remaining_result_sel, child_validity, nullptr,
 			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL && !n; });
-			continue;
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			child_validity.SetAllValid(remaining_count);
-			//	For inequalities of nested types, we only return NULL for nested op NULL comparisons.
-			InequalityComparatorTypeSwitch(left_child, right_child, child_result.get(), left_child_sel, right_child_sel,
-			                               active_count, comp, child_validity);
 			break;
 		default:
 			throw InternalException("Invalid LIST Comparison");
 		}
-
-		// partition active into resolved vs still-remaining
-		remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
-		                                remaining_rhs_sel, remaining_result_sel, child_validity, result_validity,
-		                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL || n; });
 	}
 
-	//	NULL result pass
+	//	NULL cleanup pass
 	switch (comp) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOTEQUAL:
@@ -696,12 +729,12 @@ static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_
 			}
 
 			child_validity.SetAllValid(remaining_count);
-			ComparatorTypeSwitch(left_child, right_child, child_result.get(), left_child_sel, right_child_sel,
-			                     active_count, comp, child_validity);
+			DistinctComparatorTypeSwitch(left_child, right_child, child_result.get(), left_child_sel, right_child_sel,
+			                             active_count);
 
 			// partition active into resolved vs still-remaining
 			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
-			                                remaining_rhs_sel, remaining_result_sel, child_validity, result_validity,
+			                                remaining_rhs_sel, remaining_result_sel, child_validity, nullptr,
 			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL || n; });
 		}
 		break;
@@ -774,7 +807,11 @@ static void DistinctComparatorTypeSwitch(const Vector &left, const Vector &right
 		DistinctComparatorExecute::Execute<string_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::STRUCT:
-		StructComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, comp);
+		if (left.GetType().id() == LogicalTypeId::UNION) {
+			UnionComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, comp);
+		} else {
+			StructComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, comp);
+		}
 		break;
 	case PhysicalType::LIST:
 		ListComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, comp);
@@ -836,7 +873,11 @@ static void ComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t
 		StandardComparatorExecute::Execute<string_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count, validity);
 		break;
 	case PhysicalType::STRUCT:
-		StructComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, comp, validity);
+		if (left.GetType().id() == LogicalTypeId::UNION) {
+			UnionComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, comp, validity);
+		} else {
+			StructComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, comp, validity);
+		}
 		break;
 	case PhysicalType::LIST:
 		ListComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, comp, validity);
@@ -846,24 +887,6 @@ static void ComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t
 		break;
 	default:
 		throw InternalException("Invalid type for comparator");
-	}
-}
-
-static void InequalityComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t *result_data,
-                                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
-                                           idx_t sel_count, const ExpressionType comp, ValidityMask &validity) {
-	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType());
-	switch (left.GetType().InternalType()) {
-	case PhysicalType::STRUCT:
-	case PhysicalType::LIST:
-	case PhysicalType::ARRAY:
-		//	For nested types, we propagate the inequality setting
-		ComparatorTypeSwitch(left, right, result_data, lhs_sel, rhs_sel, sel_count, comp, validity);
-		break;
-	default:
-		//	For scalars inside nested types, we use NULLS LAST semantics
-		DistinctComparatorTypeSwitch(left, right, result_data, lhs_sel, rhs_sel, sel_count);
-		break;
 	}
 }
 

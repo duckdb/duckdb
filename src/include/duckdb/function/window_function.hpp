@@ -21,6 +21,12 @@ class LocalSinkState;
 class WindowCollection;
 class BoundWindowFunction;
 
+class WindowExecutorStreamingState : public LocalSourceState {
+public:
+	//! The constant offset
+	int64_t offset = 0;
+};
+
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t {
 	PARTITION_BEGIN,
@@ -59,38 +65,40 @@ struct WindowFunctionInfo {
 
 class BindWindowFunctionInput : public BindFunctionInput {
 public:
-	using OptionalOrdering = optional_ptr<vector<OrderByNode>>;
+	using OptionalOrderTypes = optional_ptr<vector<LogicalType>>;
 
 	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundWindowFunction.
 	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
 	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
-	                        OptionalOrdering orders_p = nullptr, OptionalOrdering arg_orders_p = nullptr);
+	                        OptionalOrderTypes order_types_p = nullptr, OptionalOrderTypes arg_order_types_p = nullptr);
 
 	//! Construct without argument names - looking arguments up by name is not available in this case.
 	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrdering orders_p = nullptr,
-	                        OptionalOrdering arg_orders_p = nullptr);
+	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrderTypes order_types_p = nullptr,
+	                        OptionalOrderTypes arg_order_types_p = nullptr);
 
 	BoundWindowFunction &GetBoundFunction() const {
 		return bound_function;
 	}
 	bool HasOrders() const {
-		return orders.get();
+		return order_types.get();
 	}
-	const vector<OrderByNode> &GetOrders() const {
-		return *orders;
+	const vector<LogicalType> &GetOrderTypes() const {
+		return *order_types;
 	}
 	bool HasArgumentOrders() const {
-		return arg_orders.get();
+		return arg_order_types.get();
 	}
-	const vector<OrderByNode> &GetArgumentOrders() const {
-		return *arg_orders;
+	const vector<LogicalType> &GetArgumentOrderTypes() const {
+		return *arg_order_types;
 	}
 
 private:
 	BoundWindowFunction &bound_function;
-	OptionalOrdering orders;
-	OptionalOrdering arg_orders;
+	//! The types of the window's ORDER BY expressions (if provided by the binder)
+	OptionalOrderTypes order_types;
+	//! The types of the function's argument ORDER BY expressions (if provided by the binder)
+	OptionalOrderTypes arg_order_types;
 };
 
 //! Binds the window function and creates the function data
@@ -129,12 +137,12 @@ typedef void (*window_evaluate_function_t)(ExecutionContext &context, DataChunk 
 typedef bool (*window_canstream_function_t)(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta);
 
 //! Constructs a thread local state for the streaming function
-typedef unique_ptr<LocalSourceState> (*window_streaming_state_function_t)(ClientContext &client, DataChunk &input,
-                                                                          const BoundWindowExpression &wexpr);
+typedef unique_ptr<WindowExecutorStreamingState> (*window_streaming_state_function_t)(
+    ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr);
 
 //! Evaluates the next chunk of the streaming function
 typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                         idx_t delayed_capacity, Vector &result, LocalSourceState &lstate);
+                                         idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &lstate);
 
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -354,12 +362,26 @@ public:
 class BoundWindowFunction : public BaseWindowFunction, public BoundSimpleFunction {
 public:
 	explicit BoundWindowFunction(const WindowFunction &base);
+	explicit BoundWindowFunction(shared_ptr<const WindowFunction> base);
 
 public:
 	const ExpressionType window_enum;
 
 	DUCKDB_API bool operator==(const BoundWindowFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundWindowFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by later mutation of the bound function. For a function bound
+	//! from a WindowFunctionSet this is the set's own overload, so it compares equal by pointer across binds.
+	//! Functions bound outside of a set are copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const WindowFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale
+	void SetDefinition(shared_ptr<const WindowFunction> definition_p) {
+		definition = std::move(definition_p);
+	}
 
 public:
 	void GetBounds(WindowBoundsSet &bounds, const BoundWindowExpression &wexpr) const {
@@ -406,17 +428,20 @@ public:
 		return GetCanStreamCallback()(client, wexpr, max_delta);
 	}
 
-	unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                               const BoundWindowExpression &wexpr) const {
+	unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                           const BoundWindowExpression &wexpr) const {
 		D_ASSERT(HasStreamingStateCallback());
 		return GetStreamingStateCallback()(client, input, wexpr);
 	}
 
 	void GetStreamingData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                      Vector &result, LocalSourceState &lstate) const {
+	                      Vector &result, WindowExecutorStreamingState &lstate) const {
 		D_ASSERT(HasStreamingDataCallback());
 		GetStreamingDataCallback()(context, input, delayed, delayed_capacity, result, lstate);
 	}
+
+private:
+	shared_ptr<const WindowFunction> definition;
 };
 
 } // namespace duckdb

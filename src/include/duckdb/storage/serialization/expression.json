@@ -236,6 +236,11 @@
         "id": 203,
         "name": "parameter_count",
         "type": "idx_t"
+      },
+      {
+        "id": 204,
+        "name": "parameter_names",
+        "type": "vector<Identifier>"
       }
     ],
     "constructor": ["type", "return_type", "lambda_expr", "parameter_count"]

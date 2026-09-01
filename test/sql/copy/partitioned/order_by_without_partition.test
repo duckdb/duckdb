@@ -151,21 +151,21 @@ COPY ordered_only_source
 TO '{TEST_DIR}/ordered_only_tmp'
 (FORMAT PARQUET, ORDER_BY (v), USE_TMP_FILE false);
 ----
-Can't combine USE_TMP_FILE and ORDER_BY for COPY
+Can't combine USE_TMP_FILE and ORDER BY for COPY
 
 statement error
 COPY ordered_only_source
 TO '{TEST_DIR}/ordered_only_per_thread'
 (FORMAT PARQUET, ORDER_BY (v), PER_THREAD_OUTPUT);
 ----
-Can't combine PER_THREAD_OUTPUT and ORDER_BY for COPY
+Can't combine PER_THREAD_OUTPUT and ORDER BY for COPY
 
 statement error
 COPY ordered_only_source
 TO '{TEST_DIR}/ordered_only_skip_empty'
 (FORMAT PARQUET, ORDER_BY (v), WRITE_EMPTY_FILE false);
 ----
-Can't combine WRITE_EMPTY_FILE false with ORDER_BY
+Can't combine WRITE_EMPTY_FILE false with ORDER BY
 
 statement error
 COPY ordered_only_source

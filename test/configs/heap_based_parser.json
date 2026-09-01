@@ -1,0 +1,10 @@
+{
+  "description": "Run tests with the experimental heap-based PEG parser enabled",
+  "settings": [
+    {
+      "name": "debug_heap_based_parser",
+      "value": "true"
+    }
+  ],
+  "skip_compiled": true
+}

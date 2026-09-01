@@ -1,0 +1,113 @@
+# name: test/sql/copy/parquet/parquet_filter_narrowing_cast.test
+# description: Filter pushdown into Parquet with a narrowing cast
+# group: [parquet]
+
+require parquet
+
+# the file stores FLOAT but is read as DOUBLE, so the scan yields 0.10000000149011612 - pushing the
+# filter must not round the constant down to FLOAT and make that row compare equal to 0.1
+
+statement ok
+COPY (SELECT 0.1::FLOAT AS c) TO '{TEST_DIR}/narrow_float.parquet' (FORMAT parquet)
+
+statement ok
+CREATE VIEW f AS SELECT * FROM read_parquet('{TEST_DIR}/narrow_float.parquet',
+	schema=map{'c': {'name': 'c', 'type': 'DOUBLE', 'default_value': NULL}})
+
+query I
+SELECT c FROM f
+----
+0.10000000149011612
+
+query I
+SELECT COUNT(*) FROM f WHERE c > 0.1
+----
+1
+
+query I
+SELECT COUNT(*) FROM f WHERE c >= 0.1
+----
+1
+
+query I
+SELECT COUNT(*) FROM f WHERE c = 0.1
+----
+0
+
+query I
+SELECT COUNT(*) FROM f WHERE c <> 0.1
+----
+1
+
+query I
+SELECT COUNT(*) FROM f WHERE c IN (0.1)
+----
+0
+
+query I
+SELECT COUNT(*) FROM f WHERE c < 0.1
+----
+0
+
+# a constant that rounds the other way: (FLOAT 0.7)::DOUBLE = 0.699999988079071 < 0.7
+
+statement ok
+COPY (SELECT 0.7::FLOAT AS c) TO '{TEST_DIR}/narrow_float7.parquet' (FORMAT parquet)
+
+statement ok
+CREATE VIEW f7 AS SELECT * FROM read_parquet('{TEST_DIR}/narrow_float7.parquet',
+	schema=map{'c': {'name': 'c', 'type': 'DOUBLE', 'default_value': NULL}})
+
+query I
+SELECT COUNT(*) FROM f7 WHERE c < 0.7
+----
+1
+
+query I
+SELECT COUNT(*) FROM f7 WHERE c >= 0.7
+----
+0
+
+# the filter must survive alongside row group pruning rather than being masked by it
+
+statement ok
+COPY (SELECT unnest([0.1, 0.5])::FLOAT AS c) TO '{TEST_DIR}/narrow_two_rows.parquet' (FORMAT parquet)
+
+query I
+SELECT c FROM read_parquet('{TEST_DIR}/narrow_two_rows.parquet',
+	schema=map{'c': {'name': 'c', 'type': 'DOUBLE', 'default_value': NULL}})
+WHERE c > 0.1 ORDER BY c
+----
+0.10000000149011612
+0.5
+
+# integer files under a floating schema round the same way
+
+statement ok
+COPY (SELECT 2::BIGINT AS c) TO '{TEST_DIR}/narrow_bigint.parquet' (FORMAT parquet)
+
+statement ok
+CREATE VIEW b AS SELECT * FROM read_parquet('{TEST_DIR}/narrow_bigint.parquet',
+	schema=map{'c': {'name': 'c', 'type': 'DOUBLE', 'default_value': NULL}})
+
+query I
+SELECT COUNT(*) FROM b WHERE c > 1.5
+----
+1
+
+query I
+SELECT COUNT(*) FROM b WHERE c = 1.5
+----
+0
+
+# a decimal file read at a finer scale
+
+statement ok
+COPY (SELECT 1.25::DECIMAL(18,2) AS c) TO '{TEST_DIR}/narrow_decimal.parquet' (FORMAT parquet)
+
+query I
+SELECT COUNT(*) FROM read_parquet('{TEST_DIR}/narrow_decimal.parquet',
+	schema=map{'c': {'name': 'c', 'type': 'DECIMAL(18,3)', 'default_value': NULL}})
+WHERE c > 1.245
+----
+1

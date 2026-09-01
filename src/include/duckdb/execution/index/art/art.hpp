@@ -17,7 +17,6 @@ namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1 };
-enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
 
 class ConflictManager;
 class ARTKey;
@@ -29,10 +28,10 @@ struct ARTIndexScanState;
 struct DeleteIndexInfo {
 	DeleteIndexInfo() : delete_indexes(nullptr) {
 	}
-	explicit DeleteIndexInfo(vector<reference<BoundIndex>> &delete_indexes) : delete_indexes(delete_indexes) {
+	explicit DeleteIndexInfo(vector<reference<const BoundIndex>> &delete_indexes) : delete_indexes(delete_indexes) {
 	}
 
-	optional_ptr<vector<reference<BoundIndex>>> delete_indexes;
+	optional_ptr<vector<reference<const BoundIndex>>> delete_indexes;
 };
 
 class ART : public BoundIndex {
@@ -64,7 +63,7 @@ public:
 	static IndexType GetARTIndexType();
 
 	//! Root of the tree.
-	Node tree = Node();
+	NodePtr tree = NodePtr();
 	//! Fixed-size allocators holding the ART nodes.
 	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data.
@@ -74,11 +73,11 @@ public:
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
-	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
+	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr) const;
 	unique_ptr<IndexScanState> InitializeFullScan();
 	//! Perform a lookup on the ART, fetching up to max_count row IDs.
 	//! If all row IDs were fetched, it return true, else false.
-	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
+	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids) const;
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.
@@ -139,14 +138,18 @@ public:
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
 
 	//! Returns the in-memory usage of the ART.
-	idx_t GetInMemorySize(IndexLock &index_lock) override;
+	idx_t GetInMemorySize(IndexLock &index_lock) const override;
 
 	bool SupportsDeltaIndexes() const override;
-	unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const override;
 
+protected:
+	unique_ptr<BoundIndex> CreateEmptyCopy(IndexConstraintType constraint_type) const override;
+	ErrorData MergeCheckpointDelta(IndexDeltaType type, BoundIndex &delta_index) override;
+
+public:
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
-	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const;
 	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
 	                        unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
 	//! Returns true if this ART may hold GEOMETRY keys in the legacy pre-v1.5.0 encoding,
@@ -172,23 +175,23 @@ private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
-	bool FullScan(idx_t max_count, set<row_t> &row_ids);
-	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
-	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids);
-	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);
-	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
-	                      set<row_t> &row_ids);
+	bool FullScan(idx_t max_count, set<row_t> &row_ids) const;
+	bool SearchEqual(const ARTKey &key, idx_t max_count, set<row_t> &row_ids) const;
+	bool SearchGreater(const ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) const;
+	bool SearchLess(const ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) const;
+	bool SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal, bool right_equal,
+	                      idx_t max_count, set<row_t> &row_ids) const;
 
-	string GenerateErrorKeyName(DataChunk &input, idx_t row);
-	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
-	                optional_idx &conflict_idx, idx_t i);
+	string GenerateErrorKeyName(DataChunk &input, idx_t row) const;
+	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) const;
+	void VerifyLeaf(const NodePtr &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
+	                optional_idx &conflict_idx, idx_t i) const;
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
-	                                     DataChunk &input) override;
+	                                     DataChunk &input) const override;
 
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
-	void InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMerge(NodePtr &other_tree, unsafe_vector<idx_t> &upper_bounds);
 
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);
@@ -206,9 +209,9 @@ private:
 };
 
 template <>
-void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const;
 
 template <>
-void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const;
 
 } // namespace duckdb

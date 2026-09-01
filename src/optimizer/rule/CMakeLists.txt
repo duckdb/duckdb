@@ -15,6 +15,7 @@ add_library_unity(
   equal_or_null_simplification.cpp
   in_clause_simplification_rule.cpp
   join_dependent_filter.cpp
+  least_greatest_simplification.cpp
   string_prefix.cpp
   like_optimizations.cpp
   list_comprehension_rewrite.cpp
@@ -25,6 +26,7 @@ add_library_unity(
   ordered_aggregate_optimizer.cpp
   predicate_factoring.cpp
   regex_optimizations.cpp
+  struct_extract_struct_pack_folding.cpp
   timestamp_comparison.cpp
   constant_order_normalization.cpp
   contains_to_in_clause.cpp)

@@ -1,0 +1,52 @@
+# name: test/sql/extensions/extension_repository_not_autoloaded.test
+# description: A user-provided repository is invisible to a bare LOAD, and therefore to autoloading
+# group: [extensions]
+
+# Autoloading always performs a bare load: ExtensionHelper::AutoLoadExtension takes only an extension name, so it can
+# never name a repository. A bare load resolves the flat top-level layout, while a user-provided repository installs
+# into a per-repository subfolder - which is what keeps an extension from a user repository out of autoloading.
+
+statement ok
+SET extension_directory='{TEST_DIR}/repo_not_autoloaded'
+
+statement ok
+SET extension_repository_directory='{TEST_DIR}/repo_not_autoloaded_repos'
+
+statement ok
+CREATE EXTENSION REPOSITORY myrepo WITH PREFIX '{TEST_DIR}/repo_not_autoloaded_prefix' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+
+# installing from a user-provided repository targets the per-repository subfolder: the install fails on the (empty)
+# prefix, but it has already created the directory it would have installed into
+statement error
+INSTALL some_ext FROM myrepo
+----
+<REGEX>:.*repo_not_autoloaded_prefix.*some_ext\.duckdb_extension.*
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/repo_not_autoloaded/*/*/repositories/myrepo')
+----
+1
+
+# a load with an explicit FROM resolves the per-repository subfolder
+statement error
+LOAD some_ext FROM myrepo
+----
+<REGEX>:.*repo_not_autoloaded[/\\][^/\\]*[/\\][^/\\]*[/\\]repositories[/\\]myrepo[/\\]some_ext\.duckdb_extension.*not found.*
+
+# a bare load resolves only the flat <version>/<platform> layout: there is no 'repositories' segment, so nothing that
+# was installed from a user repository can be reached this way
+statement error
+LOAD some_ext
+----
+<REGEX>:.*repo_not_autoloaded[/\\][^/\\]*[/\\][^/\\]*[/\\]some_ext\.duckdb_extension.*not found.*
+
+# repointing extension_directory at the repository subfolder does not help either: the <version> and <platform>
+# components are always appended to the configured directory, so the flat search path can never be aliased onto a
+# repository subfolder
+statement ok
+SET extension_directory='{TEST_DIR}/repo_not_autoloaded/v0/plat/repositories/myrepo'
+
+statement error
+LOAD some_ext
+----
+<REGEX>:.*repositories[/\\]myrepo[/\\][^/\\]*[/\\][^/\\]*[/\\]some_ext\.duckdb_extension.*not found.*

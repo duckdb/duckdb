@@ -90,7 +90,8 @@ enum class ExceptionType : uint8_t {
 	SEQUENCE = 41,
 	INVALID_CONFIGURATION =
 	    42, // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
-	DATA_CORRUPTION = 43 // Data corruption was detected in persistent storage
+	DATA_CORRUPTION = 43, // Data corruption was detected in persistent storage
+	RESOURCE_IN_USE = 44  // A resource is already in use
 };
 
 class Exception : public std::runtime_error {
@@ -257,6 +258,16 @@ public:
 	template <typename... ARGS>
 	explicit DataCorruptionException(const string &msg, ARGS &&...params)
 	    : DataCorruptionException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
+	}
+};
+
+class ResourceInUseException : public Exception {
+public:
+	DUCKDB_API explicit ResourceInUseException(const string &msg);
+
+	template <typename... ARGS>
+	explicit ResourceInUseException(const string &msg, ARGS &&...params)
+	    : ResourceInUseException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 };
 

@@ -1,0 +1,70 @@
+# name: test/sql/optimizer/contains_row_group_pruning.test
+# description: Row-group pruning through contains when all values in a row group are identical
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/contains_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# 3 row groups: varying 'apple_N' values, a constant 'duckdb' group, and varying 'zebra_N' values
+statement ok
+CREATE TABLE t AS
+    SELECT CASE
+        WHEN range < 2048 THEN 'apple_' || range::VARCHAR
+        WHEN range < 4096 THEN 'duckdb'
+        ELSE 'zebra_' || range::VARCHAR END AS s
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM t WHERE contains(s, 'python');
+----
+0
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE contains(s, 'python');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+# needle found in the constant value: the filter is always true for that row group
+query I
+SELECT count(*) FROM t WHERE contains(s, 'ckd');
+----
+2048
+
+# empty needle is always true
+query I
+SELECT count(*) FROM t WHERE contains(s, '');
+----
+6144
+
+# NULLs in a constant row group must not be turned into matches by the always-true path
+statement ok
+CREATE TABLE with_nulls AS
+    SELECT CASE WHEN range % 4 = 0 THEN NULL ELSE 'duckdb' END AS s
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM with_nulls WHERE contains(s, 'ckd');
+----
+4608
+
+query I
+SELECT count(*) FROM with_nulls WHERE contains(s, 'python');
+----
+0
+
+# strings longer than the stats prefix are not exact: no pruning, but results stay correct
+statement ok
+CREATE TABLE long_strings AS SELECT 'duckduckgo_search' AS s FROM range(6144);
+
+query I
+SELECT count(*) FROM long_strings WHERE contains(s, 'go_search');
+----
+6144
+
+query I
+SELECT count(*) FROM long_strings WHERE contains(s, 'python');
+----
+0

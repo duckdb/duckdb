@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/using_key_union_preaggregation.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=using_key_union_preaggregation
+BENCHMARK_NAME=USING KEY UNION stable duplicate preaggregation
+DESCRIPTION=Protect epoch preaggregation across stable duplicate-heavy keyed updates

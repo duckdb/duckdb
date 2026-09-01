@@ -124,10 +124,12 @@ endloop
 query II
 select typeof(createdAt), createdAt from '{DATA_DIR}/json/timestamp_example.json'
 ----
-TIMESTAMP	2023-02-07 19:12:28
+TIMESTAMP WITH TIME ZONE	2023-02-07 19:12:28+00
 
-# ISO 8601 timestamps with fractional seconds and/or timezone offsets should also be inferred as TIMESTAMP
-# These are all valid ISO 8601 representations that read_json_auto currently fails to detect
+# ISO 8601 timestamps with timezone offsets / Z should be inferred as TIMESTAMPTZ (issue #14919)
+# Plain timestamps without offset remain TIMESTAMP.
+# Mixed offset + plain (same field) fall back to VARCHAR — no single safe temporal type
+# (TIMESTAMPTZ would invent a session TZ for naive values; TIMESTAMP would drop offsets).
 
 # ISO 8601 with fractional seconds + Z suffix: "2023-02-07T19:12:28.123Z"
 statement ok
@@ -136,7 +138,16 @@ copy (select * from (values ('{"ts":"2023-02-07T19:12:28.123Z"}'))) to '{TEMP_DI
 query II
 select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_z.json')
 ----
-TIMESTAMP	2023-02-07 19:12:28.123
+TIMESTAMP WITH TIME ZONE	2023-02-07 19:12:28.123+00
+
+# Lowercase z is not accepted by Timestamp::TryConvertTimestampTZ (same as CAST) -> VARCHAR
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.123z"}'))) to '{TEMP_DIR}/iso8601_frac_lower_z.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_lower_z.json')
+----
+VARCHAR	2023-02-07T19:12:28.123z
 
 # ISO 8601 with UTC timezone offset (+00:00): "2023-02-07T19:12:28+00:00"
 statement ok
@@ -145,7 +156,7 @@ copy (select * from (values ('{"ts":"2023-02-07T19:12:28+00:00"}'))) to '{TEMP_D
 query II
 select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_tz.json')
 ----
-TIMESTAMP	2023-02-07 19:12:28
+TIMESTAMP WITH TIME ZONE	2023-02-07 19:12:28+00
 
 # ISO 8601 with fractional seconds + UTC timezone offset: "2023-02-07T19:12:28.456+00:00"
 statement ok
@@ -154,7 +165,7 @@ copy (select * from (values ('{"ts":"2023-02-07T19:12:28.456+00:00"}'))) to '{TE
 query II
 select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_tz.json')
 ----
-TIMESTAMP	2023-02-07 19:12:28.456
+TIMESTAMP WITH TIME ZONE	2023-02-07 19:12:28.456+00
 
 # ISO 8601 with positive offset: "2023-02-07T14:12:28+05:00" -> UTC 09:12:28
 statement ok
@@ -163,7 +174,7 @@ copy (select * from (values ('{"ts":"2023-02-07T14:12:28+05:00"}'))) to '{TEMP_D
 query II
 select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_pos_offset.json')
 ----
-TIMESTAMP	2023-02-07 09:12:28
+TIMESTAMP WITH TIME ZONE	2023-02-07 09:12:28+00
 
 # ISO 8601 with negative offset + fractional seconds: "2023-02-07T19:12:28.789-07:00" -> UTC 2023-02-08 02:12:28.789
 statement ok
@@ -172,9 +183,34 @@ copy (select * from (values ('{"ts":"2023-02-07T19:12:28.789-07:00"}'))) to '{TE
 query II
 select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_neg_offset.json')
 ----
-TIMESTAMP	2023-02-08 02:12:28.789
+TIMESTAMP WITH TIME ZONE	2023-02-08 02:12:28.789+00
+
+# Offset spellings: +05:30, +0530, -08:00
+statement ok
+copy (select * from (values
+	('{"ts":"2023-02-07T14:12:28+05:30"}'),
+	('{"ts":"2023-02-07T14:12:28+0530"}'),
+	('{"ts":"2023-02-07T11:12:28-08:00"}')
+)) to '{TEMP_DIR}/iso8601_offset_spellings.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_offset_spellings.json') order by ts
+----
+TIMESTAMP WITH TIME ZONE	2023-02-07 08:42:28+00
+TIMESTAMP WITH TIME ZONE	2023-02-07 08:42:28+00
+TIMESTAMP WITH TIME ZONE	2023-02-07 19:12:28+00
+
+# E7: plain timestamp without offset must not become TIMESTAMPTZ
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28"}'))) to '{TEMP_DIR}/iso8601_plain.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_plain.json')
+----
+TIMESTAMP	2023-02-07 19:12:28
 
 # Multiple timestamp formats in single JSON (issue 22103)
+# Separate columns: ts1-ts3 have offsets -> TIMESTAMPTZ; ts4 has no offset -> TIMESTAMP
 statement ok
 copy (select * from (values ('{"ts1":"2026-04-01T06:01:00.010000+00:00", "ts2":"2026-04-02T06:03:00+00:01", "ts3":"2026-04-03T06:03:00Z", "ts4":"2026-04-04T06:04:00"}'))) to '{TEMP_DIR}/issue_22103.json' (format csv, quote '', header 0)
 
@@ -182,12 +218,160 @@ query IIIIIIII
 SELECT typeof(ts1), ts1, typeof(ts2), ts2, typeof(ts3), ts3, typeof(ts4), ts4
 FROM read_json_auto('{TEMP_DIR}/issue_22103.json')
 ----
-TIMESTAMP	2026-04-01 06:01:00.01	TIMESTAMP	2026-04-02 06:02:00	TIMESTAMP	2026-04-03 06:03:00	TIMESTAMP	2026-04-04 06:04:00
+TIMESTAMP WITH TIME ZONE	2026-04-01 06:01:00.01+00	TIMESTAMP WITH TIME ZONE	2026-04-02 06:02:00+00	TIMESTAMP WITH TIME ZONE	2026-04-03 06:03:00+00	TIMESTAMP	2026-04-04 06:04:00
+
+# Mixed-value same field: offset, null, and plain timestamp across rows.
+# Intended fallback is VARCHAR (do not guess TIMESTAMPTZ or drop offsets to TIMESTAMP).
+statement ok
+copy (select * from (values
+	('{"ts":"2024-01-01T00:00:00Z"}'),
+	('{"ts":null}'),
+	('{"ts":"2024-01-01T00:00:00"}')
+)) to '{TEMP_DIR}/iso8601_mixed_same_field.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_mixed_same_field.json') order by ts nulls first
+----
+VARCHAR	NULL
+VARCHAR	2024-01-01T00:00:00
+VARCHAR	2024-01-01T00:00:00Z
+
+# E3: all-NULL column must not become TIMESTAMPTZ (stays SQLNULL / "NULL")
+statement ok
+copy (select * from (values ('{"ts":null}'), ('{"ts":null}'))) to '{TEMP_DIR}/iso8601_all_null.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_all_null.json')
+----
+"NULL"	NULL
+"NULL"	NULL
+
+# Sticky elimination across a vector boundary (STANDARD_VECTOR_SIZE = 2048):
+# first 2048 rows are offset timestamps; row 2049 is plain (no offset) -> permanently drop TIMESTAMPTZ.
+# Mixed sample => VARCHAR.
+statement ok
+copy (
+	select json_object('ts', CASE WHEN i <= 2048 THEN '2024-01-01T00:00:00Z' ELSE '2024-01-01T00:00:00' END)
+	from generate_series(1, 2049) t(i)
+) to '{TEMP_DIR}/iso8601_vector_boundary.json' (format csv, quote '', header 0);
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_vector_boundary.json') limit 1
+----
+VARCHAR
+
+# Same boundary but all rows keep an offset -> TIMESTAMPTZ
+statement ok
+copy (
+	select json_object('ts', '2024-01-01T00:00:00Z')
+	from generate_series(1, 2049) t(i)
+) to '{TEMP_DIR}/iso8601_vector_boundary_all_tz.json' (format csv, quote '', header 0);
+
+query II
+select typeof(ts), count(*) from read_json_auto('{TEMP_DIR}/iso8601_vector_boundary_all_tz.json') group by 1
+----
+TIMESTAMP WITH TIME ZONE	2049
+
+# Offset rows then nulls across the vector boundary must keep TIMESTAMPTZ (nulls are not evidence against TZ)
+statement ok
+copy (
+	select CASE WHEN i <= 2048 THEN json_object('ts', '2024-01-01T00:00:00Z') ELSE json_object('ts', NULL) END
+	from generate_series(1, 2049) t(i)
+) to '{TEMP_DIR}/iso8601_vector_boundary_tz_then_null.json' (format csv, quote '', header 0);
+
+query II
+select typeof(ts), count(*) filter (where ts is not null) from read_json_auto('{TEMP_DIR}/iso8601_vector_boundary_tz_then_null.json') group by 1
+----
+TIMESTAMP WITH TIME ZONE	2048
+
+# Date specials (±infinity, epoch) are not timezone-offset evidence.
+# TryConvertTimestampTZ reuses has_offset as Date::TryConvertDate's "special" flag.
+
+# Reviewer repro: naive timestamp + ±infinity must stay TIMESTAMP, not VARCHAR
+statement ok
+copy (select * from (values
+	('{"ts":"2024-01-01T00:00:00"}'),
+	('{"ts":"infinity"}'),
+	('{"ts":"-infinity"}')
+)) to '{TEMP_DIR}/iso8601_plain_infinity.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_plain_infinity.json') limit 1
+----
+TIMESTAMP
+
+query I
+select ts from read_json_auto('{TEMP_DIR}/iso8601_plain_infinity.json')
+where ts = TIMESTAMP '2024-01-01 00:00:00'
+----
+2024-01-01 00:00:00
+
+# Offset/Z + ±infinity stays TIMESTAMPTZ
+statement ok
+copy (select * from (values
+	('{"ts":"2024-01-01T00:00:00Z"}'),
+	('{"ts":"infinity"}'),
+	('{"ts":"-infinity"}')
+)) to '{TEMP_DIR}/iso8601_offset_infinity.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_offset_infinity.json') limit 1
+----
+TIMESTAMP WITH TIME ZONE
+
+# True mix: offset + plain + infinity still falls back to VARCHAR
+statement ok
+copy (select * from (values
+	('{"ts":"2024-01-01T00:00:00Z"}'),
+	('{"ts":"2024-01-01T00:00:00"}'),
+	('{"ts":"infinity"}')
+)) to '{TEMP_DIR}/iso8601_mixed_infinity.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_mixed_infinity.json') limit 1
+----
+VARCHAR
+
+# epoch hits the same special flag and must not vote
+statement ok
+copy (select * from (values
+	('{"ts":"epoch"}'),
+	('{"ts":"2024-01-01T00:00:00"}')
+)) to '{TEMP_DIR}/iso8601_epoch_plain.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_epoch_plain.json') limit 1
+----
+TIMESTAMP
+
+statement ok
+copy (select * from (values
+	('{"ts":"epoch"}'),
+	('{"ts":"2024-01-01T00:00:00Z"}')
+)) to '{TEMP_DIR}/iso8601_epoch_offset.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_epoch_offset.json') limit 1
+----
+TIMESTAMP WITH TIME ZONE
+
+# Specials across a vector boundary must not stick WITH_OFFSET onto a later plain timestamp
+statement ok
+copy (
+	select json_object('ts', CASE WHEN i <= 2048 THEN 'infinity' ELSE '2024-01-01T00:00:00' END)
+	from generate_series(1, 2049) t(i)
+) to '{TEMP_DIR}/iso8601_vector_boundary_infinity_then_plain.json' (format csv, quote '', header 0);
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_vector_boundary_infinity_then_plain.json') limit 1
+----
+TIMESTAMP
 
 # -----------------------------------------------------------------------------
 # Named timestamp_format produces a single-format list: only matching values
-# are typed as TIMESTAMP; others remain VARCHAR, confirming that default list
-# is ignored.
+# are typed as TIMESTAMP; others remain VARCHAR. options.timestamp_format is
+# non-empty only when the user passed timestamp_format= (not when auto-detect
+# converges on one format), so TIMESTAMPTZ auto-detect is skipped.
 #
 
 statement ok

@@ -7,7 +7,7 @@ from python_helpers import open_utf8, normalize_path
 import shutil
 
 src_dir = 'src'
-compile_directories = [src_dir] + package_build.third_party_sources() + ['extension/loader']
+compile_directories = [src_dir] + package_build.third_party_sources() + [normalize_path('extension/loader')]
 include_dir = os.path.join(src_dir, 'include')
 include_paths = [include_dir] + package_build.third_party_includes()
 excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp']

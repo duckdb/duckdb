@@ -69,6 +69,8 @@ public:
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Read and record time
 	DUCKDB_API void ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location);
+	//! Whether responses observed by this handle prohibit sharing cached data (e.g., HTTP no-store/Vary)
+	DUCKDB_API bool IsCacheReuseProhibited();
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
@@ -87,6 +89,11 @@ private:
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
+	//! Whether validation metadata permits using cached blocks.
+	bool CanUseCache();
+	//! Reconcile cached blocks with validation metadata observed while reading them.
+	void ReconcileCacheAfterRead(CachedFile &cached_file, idx_t first_block,
+	                             const vector<shared_ptr<CacheBlock>> &blocks);
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
 
@@ -112,9 +119,8 @@ private:
 	annotated_mutex file_handle_mutex;
 	//! File handle for the internal filesystem.
 	shared_ptr<FileHandle> file_handle;
-	//! Last modified time and version tag (if FileHandle is opened)
-	timestamp_t last_modified;
-	string version_tag;
+	//! Metadata snapshot taken with a single Stats call when the file handle is opened.
+	CacheValidationInfo validation_info;
 
 	//! Current position (if non-seeking reads)
 	idx_t position;

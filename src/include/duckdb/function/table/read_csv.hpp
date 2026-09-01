@@ -42,7 +42,7 @@ struct BaseCSVData : public TableFunctionData {
 
 struct WriteCSVData : public BaseCSVData {
 	explicit WriteCSVData(const vector<Identifier> &names) {
-		options.name_list = IdentifiersToStrings(names);
+		options.name_list = names;
 		if (options.dialect_options.state_machine_options.escape == '\0') {
 			options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
 		}

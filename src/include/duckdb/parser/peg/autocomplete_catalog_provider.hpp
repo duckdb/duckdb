@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 
 namespace duckdb {
 
@@ -18,6 +18,7 @@ struct AutoCompleteParameters {
 	idx_t max_file_suggestion_count = 1;
 	idx_t max_exact_suggestion_count = 100;
 	bool suggestion_contains_files = false;
+	bool use_heap_based_parser = false;
 };
 
 //! Abstract interface for providing catalog-aware autocomplete suggestions.
@@ -38,8 +39,8 @@ public:
 	virtual vector<AutoCompleteCandidate> SuggestPragmaName() = 0;
 	virtual vector<AutoCompleteCandidate> SuggestSettingName() = 0;
 
-	//! Get the PEG matcher for syntax-level autocomplete.
-	virtual shared_ptr<PEGMatcher> GetPEGMatcher() = 0;
+	//! Get the parser cache for syntax-level autocomplete.
+	virtual shared_ptr<CompiledGrammar> GetCompiledGrammar() = 0;
 };
 
 //! Empty provider — returns no catalog suggestions.
@@ -76,12 +77,16 @@ public:
 	vector<AutoCompleteCandidate> SuggestSettingName() override {
 		return {};
 	}
-	shared_ptr<PEGMatcher> GetPEGMatcher() override {
-		return cache.GetMatcher();
+	shared_ptr<CompiledGrammar> GetCompiledGrammar() override {
+		if (!compiled_grammar) {
+			compiled_grammar = cache.GetMatcher(nullptr);
+		}
+		return compiled_grammar;
 	}
 
 private:
 	ParserCache cache;
+	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 
 //! Get a human-readable string for a suggestion type.

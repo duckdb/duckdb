@@ -84,7 +84,15 @@ struct DuckDBDependenciesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBDialectsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBExtensionsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBExtensionRepositoriesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

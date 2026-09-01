@@ -1,5 +1,5 @@
 // #define CATCH_CONFIG_RUNNER
-#include "catch.hpp"
+#include "test_reporter.hpp"
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/path.hpp"
@@ -383,7 +383,7 @@ static string ResolveTestId() {
 	}
 	string name;
 	try {
-		name = Catch::getResultCapture().getCurrentTestName();
+		name = TestReporter::Get().CurrentTestName();
 	} catch (...) {
 		name = "";
 	}

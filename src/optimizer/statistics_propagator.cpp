@@ -10,20 +10,24 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
 
-StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, LogicalOperator &root_p)
-    : optimizer(optimizer_p), context(optimizer.context), root(&root_p) {
+StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, LogicalOperator &root_p,
+                                           StatisticsPropagationMode mode_p)
+    : optimizer(optimizer_p), context(optimizer.context), mode(mode_p), root(&root_p) {
 	root->ResolveOperatorTypes();
 }
 
@@ -52,6 +56,12 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		result = PropagateStatistics(node.Cast<LogicalCrossProduct>(), node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+		result = PropagateStatistics(node.Cast<LogicalCTERef>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		result = PropagateStatistics(node.Cast<LogicalMaterializedCTE>(), node_ptr);
+		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = PropagateStatistics(node.Cast<LogicalFilter>(), node_ptr);
 		break;
@@ -60,6 +70,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = PropagateStatistics(node.Cast<LogicalProjection>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		result = PropagateStatistics(node.Cast<LogicalSecureView>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
@@ -86,7 +99,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		result = PropagateChildren(node, node_ptr);
 	}
 
-	if (!optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
+	if (mode == StatisticsPropagationMode::FULL &&
+	    !optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
 		// compress data based on statistics for materializing operators
 		CompressedMaterialization compressed_materialization(optimizer, *root, statistics_map);
 		compressed_materialization.Compress(node_ptr);

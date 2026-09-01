@@ -10,6 +10,7 @@ add_subdirectory(statistics)
 add_library_unity(
   duckdb_optimizer
   OBJECT
+  aggregate_rewrite.cpp
   aggregate_function_rewriter.cpp
   aggregate_reuse.cpp
   materialized_aggregate_reuse.cpp
@@ -25,15 +26,17 @@ add_library_unity(
   cte_filter_pusher.cpp
   cte_inlining.cpp
   deliminator.cpp
-  distinct_aggregate_rewriter.cpp
+  multi_stage_aggregate_rewriter.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
+  filter_statistics.cpp
   filter_combiner.cpp
   filter_pullup.cpp
   filter_pushdown.cpp
   grouping_sets_optimizer.cpp
   in_clause_rewriter.cpp
   join_filter_pushdown_optimizer.cpp
+  runtime_filter_cast.cpp
   late_materialization.cpp
   late_materialization_helper.cpp
   optimizer.cpp

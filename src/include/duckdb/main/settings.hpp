@@ -171,6 +171,21 @@ struct AllowCommunityExtensionsSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct AllowExtensionRepositoriesSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "allow_extension_repositories";
+	static constexpr const char *Description =
+	    "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing "
+	    "repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones). "
+	    "While the database is running the setting can only move from 'undecided' to 'allowed' or 'forbidden', or from "
+	    "'allowed' to 'forbidden'";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "undecided";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct AllowExtensionsMetadataMismatchSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
@@ -427,8 +442,9 @@ struct CheckpointOnDetachSetting {
 	using RETURN_TYPE = CheckpointOnDetach;
 	static constexpr const char *Name = "checkpoint_on_detach";
 	static constexpr const char *Description =
-	    "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never "
-	    "checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.";
+	    "Override checkpoint behavior when detaching a database. ENABLED requests a checkpoint, but the checkpoint "
+	    "does not occur if another connection still references the database. DISABLED never checkpoints, DEFAULT "
+	    "defers to the global checkpoint_on_shutdown setting.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "DEFAULT";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
@@ -455,6 +471,17 @@ struct ConfigureProfilingSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct CurrentDialectSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "current_dialect";
+	static constexpr const char *Description = "The SQL dialect used by the parser";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "duckdb";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct CurrentTransactionInvalidationPolicySetting {
@@ -596,6 +623,16 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugHeapBasedParserSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_heap_based_parser";
+	static constexpr const char *Description = "DEBUG SETTING: use the experimental heap-based PEG parser";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugOrderVerificationSetting {
 	using RETURN_TYPE = DebugOrderVerification;
 	static constexpr const char *Name = "debug_order_verification";
@@ -626,16 +663,6 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct DebugTransformerTrampolineStyleSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "debug_transformer_trampoline_style";
-	static constexpr const char *Description = "Use the experimental trampoline-style parser transformer";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -833,17 +860,6 @@ struct DelimJoinAsCteSetting {
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct DeprecatedUsingKeySyntaxSetting {
-	using RETURN_TYPE = DeprecatedUsingKeySyntax;
-	static constexpr const char *Name = "deprecated_using_key_syntax";
-	static constexpr const char *Description = "Configures the use of the deprecated union syntax for USING KEY CTEs.";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "DEFAULT";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DialectCompatibilityModeSetting {
@@ -1158,6 +1174,20 @@ struct ExtensionDirectorySetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct ExtensionRepositoryDirectorySetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "extension_repository_directory";
+	static constexpr const char *Description =
+	    "Set the directory in which trusted extension repositories are stored. This is the trust anchor for "
+	    "user-provided repositories, so while signature checking is enabled (allow_unsigned_extensions=false) it can "
+	    "only be set at startup, not while the database is running";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct ExternalFileCacheLocalBlockSizeSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "external_file_cache_local_block_size";
@@ -1180,6 +1210,18 @@ struct ExternalFileCacheRemoteBlockSizeSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct ExternalFileCacheSpillSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "external_file_cache_spill";
+	static constexpr const char *Description =
+	    "Whether evicted external file cache blocks of remote files spill to the temporary directory instead of being "
+	    "dropped, so that they are re-read from there rather than re-fetched from the source";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct ExternalThreadsSetting {
@@ -1576,6 +1618,16 @@ struct NestedLoopJoinThresholdSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct NullOnDivisionByZeroSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "null_on_division_by_zero";
+	static constexpr const char *Description = "Return NULL instead of throwing an error when dividing by zero.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct OldImplicitCastingSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "old_implicit_casting";
@@ -1716,14 +1768,15 @@ struct PreferRangeJoinsSetting {
 };
 
 struct PreserveIdentifierCaseSetting {
-	using RETURN_TYPE = bool;
+	using RETURN_TYPE = IdentifierCaseMode;
 	static constexpr const char *Name = "preserve_identifier_case";
-	static constexpr const char *Description =
-	    "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "true";
+	static constexpr const char *Description = "How to fold non-quoted identifiers: 'preserve_case' keeps the case as "
+	                                           "written, 'lowercase' lowercases them, 'uppercase' uppercases them";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "preserve_case";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct PreserveInsertionOrderSetting {
@@ -1883,6 +1936,19 @@ struct SecretDirectorySetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct ShowBehaviorSetting {
+	using RETURN_TYPE = ShowBehaviorType;
+	static constexpr const char *Name = "show_behavior";
+	static constexpr const char *Description =
+	    "How SHOW resolves a bare identifier: 'auto' (describe a table if one exists, else a setting; deprecated), "
+	    "'table' (always a table), or 'setting' (always a setting)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "AUTO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct StandardVectorSizeSetting {

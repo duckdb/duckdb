@@ -1,0 +1,100 @@
+# name: test/sql/parser/adjacent_string_literal.test
+# description: Test adjacent string literals separated by a newline
+# group: [parser]
+
+query I
+SELECT 'foo'
+'bar';
+----
+foobar
+
+query I
+SELECT 'one' -- comment
+'two';
+----
+onetwo
+
+statement error
+SELECT 'one' /* comment
+*/ 'two';
+----
+Parser Error: syntax error at or near "'two'"
+
+statement error
+SELECT 'one' /* comment */
+'two';
+----
+Parser Error: syntax error at or near "'two'"
+
+query I
+SELECT 'one'
+'two'
+'three';
+----
+onetwothree
+
+query I
+SELECT DATE '2020-'
+'01-01'::VARCHAR;
+----
+2020-01-01
+
+query I
+SELECT N'national'
+' string';
+----
+national string
+
+query I
+SELECT E'escape\n'
+'string' = 'escape' || chr(10) || 'string';
+----
+true
+
+query I
+SELECT X'48656C6C6F'
+'20576F726C64'::VARCHAR;
+----
+Hello World
+
+query I
+SELECT B'1010'
+'0101';
+----
+b10100101
+
+statement error
+SELECT 'same-line' 'whitespace';
+----
+Parser Error: syntax error at or near "'whitespace'"
+
+statement error
+SELECT 'same-line' /* comment */ 'block comment';
+----
+Parser Error: syntax error at or near "'block comment'"
+
+# A newline inside a dollar-quoted literal is not a separator between literals
+statement error
+SELECT $tag$a
+$tag$'b';
+----
+Parser Error: syntax error at or near "'b'"
+
+# Dollar-quoted literals do not participate in adjacent literal concatenation
+statement error
+SELECT $tag$a$tag$
+'b';
+----
+Parser Error: syntax error at or near "'b'"
+
+statement error
+SELECT 'a'
+$tag$b$tag$;
+----
+Parser Error: syntax error at or near "$tag$b$tag$"
+
+statement error
+SELECT $tag$a$tag$
+$other$b$other$;
+----
+Parser Error: syntax error at or near "$other$b$other$"

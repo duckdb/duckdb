@@ -46,6 +46,9 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
+	names.emplace_back("typed_value");
+	return_types.emplace_back(LogicalType::VARIANT());
+
 	return nullptr;
 }
 
@@ -133,6 +136,8 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 	auto &scope = output.data[4];
 	// aliases, LogicalType::VARCHAR[]
 	auto &aliases = output.data[5];
+	// value, LogicalType::VARIANT
+	auto &typed_value = output.data[6];
 
 	while (data.offset < data.settings.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.settings[data.offset++];
@@ -143,6 +148,7 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		input_type.Append(Value(entry.input_type));
 		scope.Append(Value(entry.scope));
 		aliases.Append(Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
+		typed_value.Append(entry.value.CastAs(context, LogicalType::VARIANT()));
 		count++;
 	}
 }
