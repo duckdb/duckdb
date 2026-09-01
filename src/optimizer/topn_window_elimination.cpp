@@ -897,6 +897,12 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 			break;
 		}
 	}
+	// A compound ORDER BY expression (NULLIF, arithmetic, cast, ...) can produce NULLs even when its input
+	// columns are non-null. Only a direct column reference inherits the column's known nullability, so treat a
+	// non-column-reference as potentially null to keep the nulls-last aggregate variant.
+	if (window_expr.OrderBy()[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		params.can_be_null = true;
+	}
 	column_references.clear();
 
 	return params;

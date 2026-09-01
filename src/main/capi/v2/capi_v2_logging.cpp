@@ -36,10 +36,8 @@ using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR duckdb_v2_context_log(duckdb_v2_context_handle ctx, DUCKDB_V2_LOG_LEVEL level, duckdb_v2_str log_type,
                                       duckdb_v2_str message, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(ctx);
 	return WithErrorHandler(err, [&]() {
-		if (!ctx) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_context_log");
-		}
 		const auto log_level = ConvertLogLevel(level);
 		// ShouldLog/WriteLog take a C string, so the borrowed view has to be materialized.
 		const duckdb::string type(Convert(log_type));

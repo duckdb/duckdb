@@ -2836,6 +2836,24 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
 	return static_cast<HLLStorageType>(StringUtil::StringToEnum(GetHLLStorageTypeValues(), 2, "HLLStorageType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetHTTPClientCachePolicyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(HTTPClientCachePolicy::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(HTTPClientCachePolicy::BYPASS_CACHE), "BYPASS_CACHE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<HTTPClientCachePolicy>(HTTPClientCachePolicy value) {
+	return StringUtil::EnumToString(GetHTTPClientCachePolicyValues(), 2, "HTTPClientCachePolicy", static_cast<uint32_t>(value));
+}
+
+template<>
+HTTPClientCachePolicy EnumUtil::FromString<HTTPClientCachePolicy>(const char *value) {
+	return static_cast<HTTPClientCachePolicy>(StringUtil::StringToEnum(GetHTTPClientCachePolicyValues(), 2, "HTTPClientCachePolicy", value));
+}
+
 const StringUtil::EnumStringLiteral *GetHTTPStatusCodeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(HTTPStatusCode::INVALID), "INVALID" },

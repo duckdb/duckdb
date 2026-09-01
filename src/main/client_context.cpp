@@ -50,6 +50,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/common/enums/current_transaction_state.hpp"
@@ -445,11 +446,12 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	auto &prepared = *active_query->prepared;
 	bool create_stream_result =
 	    prepared.properties.output_type == QueryResultOutputType::ALLOW_STREAMING && pending.allow_stream_result;
+	const bool keep_result_open = create_stream_result || executor.HasStreamingResultCollector();
 	unique_ptr<QueryResult> result;
 	D_ASSERT(executor.HasResultCollector());
 	// we have a result collector - fetch the result directly from the result collector
 	result = executor.GetResult();
-	if (!create_stream_result) {
+	if (!keep_result_open) {
 		CleanupInternal(lock, result.get(), false);
 	} else {
 		active_query->SetOpenResult(*result);
@@ -809,7 +811,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 		plan = optimizer.Optimize(std::move(plan));
 
 		ColumnBindingResolver resolver;
-		resolver.Verify(*this, *plan);
+		LogicalPlanVerifier::Verify(*this, *plan);
 		resolver.VisitOperator(*plan);
 
 		plan->ResolveOperatorTypes();
