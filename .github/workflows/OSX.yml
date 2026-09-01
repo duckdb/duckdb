@@ -2,9 +2,9 @@ name: OSX
 on:
   workflow_call:
     inputs:
-      override_git_describe:
+      duckdb_version:
         type: string
-      git_ref:
+      duckdb_commit:
         type: string
       runner_macos_arm64:
         type: string
@@ -14,12 +14,13 @@ on:
         type: boolean
 
 concurrency:
-  group: osx-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  group: osx-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.duckdb_version }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+  DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+  DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
 
 jobs:
   xcode-debug:
@@ -36,7 +37,7 @@ jobs:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+        ref: ${{ inputs.duckdb_commit }}
 
     - uses: actions/setup-python@v6
       with:
@@ -78,7 +79,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ inputs.duckdb_commit }}
 
       - uses: actions/setup-python@v6
         with:
@@ -91,7 +92,7 @@ jobs:
 
       - name: Install pytest
         run: |
-          python3 scripts/ci/retry.py -- python -m pip install pytest
+          python3 scripts/ci/retry.py -- python -m pip install --break-system-packages pytest
 
       - name: Build
         run: python3 scripts/ci/retry.py -- make

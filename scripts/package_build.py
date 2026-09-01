@@ -139,83 +139,31 @@ def get_relative_path(source_dir, target_file):
     return target_file
 
 
-######
-# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
-# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
-# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
-# - CMakeLists.txt
-# - scripts/package_build.py
-######
-MAIN_BRANCH_VERSIONING = True
-if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
-    MAIN_BRANCH_VERSIONING = False
-if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
-    MAIN_BRANCH_VERSIONING = True
+def release_version():
+    version_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ci', 'release_version.txt')
+    with open_utf8(version_path, 'r') as version_file:
+        version = version_file.read().strip()
+    if re.fullmatch(r'[0-9]+\.[0-9]+', version) is None:
+        raise ValueError("Invalid release version '{}' in {}".format(version, version_path))
+    return version
 
 
-def get_git_describe():
-    override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
-    versioning_tag_match = 'v*.*.*'
-    if MAIN_BRANCH_VERSIONING:
-        versioning_tag_match = 'v*.*.0*'
-    # empty override_git_describe, either since env was empty string or not existing
-    # -> ask git (that can fail, so except in place)
-    if len(override_git_describe) == 0:
-        try:
-            return (
-                subprocess.check_output(
-                    ['git', 'describe', '--tags', '--long', '--debug', '--match', versioning_tag_match]
-                )
-                .strip()
-                .decode('utf8')
-            )
-        except subprocess.CalledProcessError:
-            return "v0.0.0-0-gdeadbeeff"
-    if is_explicit_prerelease_version(override_git_describe):
-        return override_git_describe
-    if parse_git_describe(override_git_describe):
-        return override_git_describe
-    if len(override_git_describe.split('-')) == 1:
-        override_git_describe += "-0"
-    assert len(override_git_describe.split('-')) == 2
+def git_commit_count():
     try:
-        return (
-            override_git_describe
-            + "-g"
-            + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
-        )
-    except subprocess.CalledProcessError:
-        return override_git_describe + "-g" + "deadbeeff"
-
-
-def is_explicit_prerelease_version(version):
-    return re.match(r"^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|rc)[0-9]+$", version) is not None
-
-
-def parse_git_describe(version):
-    match = re.match(r"^v([0-9]+)\.([0-9]+)\.([0-9]+)(-(alpha|rc)[0-9]+)?-([0-9]+)-g([a-f0-9]+)$", version)
-    if match is None:
-        return None
-    return {
-        'major': match.group(1),
-        'minor': match.group(2),
-        'patch': match.group(3),
-        'prerelease': match.group(4) or '',
-        'dev': match.group(6),
-        'hash': match.group(7),
-    }
+        return subprocess.check_output(['git', 'rev-list', '--count', 'HEAD'], text=True).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return '0'
 
 
 def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
-        return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
+        return os.environ['SETUPTOOLS_SCM_PRETEND_HASH'][:10]
+    if os.getenv('DUCKDB_COMMIT'):
+        return os.environ['DUCKDB_COMMIT'][:10]
     try:
-        git_describe = get_git_describe()
-        if is_explicit_prerelease_version(git_describe):
-            return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
-        return parse_git_describe(git_describe)['hash']
-    except:
-        return "deadbeeff"
+        return subprocess.check_output(['git', 'log', '-1', '--format=%H'], text=True).strip()[:10]
+    except (OSError, subprocess.CalledProcessError):
+        return "0123456789"
 
 
 def prefix_version(version):
@@ -228,28 +176,13 @@ def prefix_version(version):
 def git_dev_version():
     if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
         return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
-    try:
-        long_version = get_git_describe()
-        if is_explicit_prerelease_version(long_version):
-            return long_version
-        version = parse_git_describe(long_version)
-        version_splits = [version['major'], version['minor'], version['patch']]
-        dev_version = version['dev']
-        if int(dev_version) == 0:
-            # directly on a tag: emit the regular version
-            return "v" + '.'.join(version_splits) + version['prerelease']
-        else:
-            # not on a tag: add a -devX suffix and bump non-prerelease tags
-            # this needs to keep in sync with changes to CMakeLists.txt
-            if not version['prerelease'] and MAIN_BRANCH_VERSIONING == True:
-                # increment minor version
-                version_splits[1] = str(int(version_splits[1]) + 1)
-            elif not version['prerelease']:
-                # increment patch version
-                version_splits[2] = str(int(version_splits[2]) + 1)
-            return "v" + '.'.join(version_splits) + "-dev" + dev_version
-    except:
-        return "v0.0.0"
+    if os.getenv('DUCKDB_VERSION'):
+        return prefix_version(os.environ['DUCKDB_VERSION'])
+    if os.getenv('OVERRIDE_GIT_DESCRIBE'):
+        return prefix_version(os.environ['OVERRIDE_GIT_DESCRIBE'])
+    if os.getenv('DUCKDB_EXPLICIT_VERSION'):
+        return prefix_version(os.environ['DUCKDB_EXPLICIT_VERSION'])
+    return 'v{}.0-dev{}'.format(release_version(), git_commit_count())
 
 
 def include_package(pkg_name, pkg_dir, include_files, include_list, source_list):
