@@ -207,10 +207,11 @@ SELECT l.*, count(r.*) FROM l LEFT JOIN r ON l.id = r.id GROUP BY l.id ORDER BY 
 3	1
 
 # correlated scalar subquery
+# note: the empty group (which must return 0, not NULL) is covered in
+# test/sql/subquery/scalar/test_count_star_subquery.test
 query II
-SELECT l.id, (SELECT count(r.*) FROM r WHERE r.id = l.id) FROM l ORDER BY 1;
+SELECT l.id, (SELECT count(r.*) FROM r WHERE r.id = l.id) FROM l WHERE l.id > 1 ORDER BY 1;
 ----
-1	0
 2	1
 3	1
 
