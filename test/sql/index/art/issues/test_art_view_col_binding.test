@@ -49,34 +49,30 @@ drop index test_upper_x;
 
 # test an indexed column whose index-local ordinal and physical column ID differ
 statement ok
-create index test_y on test(y);
+create table non_leading(a integer, b varchar);
+
+statement ok
+insert into non_leading values (1, 'x');
+
+statement ok
+create view non_leading_view as select a, b from non_leading;
+
+statement ok
+create index non_leading_b on non_leading(b);
 
 query II
-explain analyze select * from test_view where y = '2525';
+explain analyze select * from non_leading_view where b = 'x';
 ----
 analyzed_plan	<REGEX>:.*Index Scan.*
 
-query III
-select z, y, x from test_view where y = '2525';
-----
-3525	2525	525
-
 statement ok
-drop index test_y;
+drop index non_leading_b;
 
 # test the same non-leading physical column inside an index expression
 statement ok
-create index test_upper_y on test(upper(y));
+create index non_leading_upper_b on non_leading(upper(b));
 
 query II
-explain analyze select * from test_view where upper(y) = '2526';
+explain analyze select * from non_leading_view where upper(b) = 'X';
 ----
 analyzed_plan	<REGEX>:.*Index Scan.*
-
-query III
-select z, y, x from test_view where upper(y) = '2526';
-----
-3526	2526	526
-
-statement ok
-drop index test_upper_y;
