@@ -46,3 +46,37 @@ select z, y, x from test_view where upper(x) = '526';
 
 statement ok
 drop index test_upper_x;
+
+# test an indexed column whose index-local ordinal and physical column ID differ
+statement ok
+create index test_y on test(y);
+
+query II
+explain analyze select * from test_view where y = '2525';
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+query III
+select z, y, x from test_view where y = '2525';
+----
+3525	2525	525
+
+statement ok
+drop index test_y;
+
+# test the same non-leading physical column inside an index expression
+statement ok
+create index test_upper_y on test(upper(y));
+
+query II
+explain analyze select * from test_view where upper(y) = '2526';
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+query III
+select z, y, x from test_view where upper(y) = '2526';
+----
+3526	2526	526
+
+statement ok
+drop index test_upper_y;

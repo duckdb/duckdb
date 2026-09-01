@@ -1,6 +1,6 @@
-# name: test/issues/general/test_24246.test
+# name: test/sql/index/art/issues/test_art_issue_24246.test
 # description: Index scans map physical column IDs past generated columns correctly
-# group: [general]
+# group: [issues]
 
 # An index after a generated column must not be mistaken for the preceding
 # logical column.
@@ -26,6 +26,11 @@ SELECT a FROM indexed_strings WHERE b >= 42 ORDER BY a
 2
 
 # The index remains usable for its actual column.
+query II
+EXPLAIN ANALYZE SELECT a FROM indexed_strings WHERE c = 100002
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
 query I
 SELECT a FROM indexed_strings WHERE c = 100002
 ----
