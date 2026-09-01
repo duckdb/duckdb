@@ -64,7 +64,6 @@ namespace duckdb {
 
 // Forward declare
 struct QualifiedName;
-struct CompiledGrammar;
 struct MatcherToken;
 struct GroupingExpressionMap;
 class Matcher;

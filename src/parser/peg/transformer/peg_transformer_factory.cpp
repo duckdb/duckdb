@@ -1,5 +1,4 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
-#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/common/query_location.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
