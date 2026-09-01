@@ -10,21 +10,17 @@
 
 namespace duckdb {
 
-CompiledGrammar::CompiledGrammar(const ParsedGrammar &grammar, bool has_grammar_changes_p, idx_t version_p)
+CompiledGrammar::CompiledGrammar(const ParsedGrammar &grammar, bool has_grammar_changes_p)
     : owned_keyword_helper(make_uniq<ParsedGrammarKeywordHelper>(grammar)), keyword_helper(*owned_keyword_helper),
-      tokenizer(keyword_helper), has_grammar_changes(has_grammar_changes_p), version(version_p) {
-}
-
-idx_t CompiledGrammar::Version() const {
-	return version;
+      tokenizer(keyword_helper), has_grammar_changes(has_grammar_changes_p) {
 }
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
-	auto &db = DatabaseInstance::GetDatabase(context);
-	return db.GetParserCache().GetMatcher(context);
-}
-
-ParserCache::ParserCache() : version(0) {
+	auto &client_config = ClientConfig::GetConfig(context);
+	if (client_config.cached_grammar) {
+		return client_config.cached_grammar;
+	}
+	return DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher();
 }
 
 static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {
@@ -123,8 +119,7 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 }
 
 shared_ptr<CompiledGrammar>
-CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions,
-                        idx_t parser_version) {
+CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions) {
 	auto grammar = ParsedGrammar::CreateDefault();
 	for (auto &[_, extension] : grammar_extensions) {
 		auto changes = extension.get().GetChanges();
@@ -139,8 +134,7 @@ CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>
 		CheckReference(grammar, parsed_rule, expression);
 	}
 
-	auto new_matcher =
-	    shared_ptr<CompiledGrammar>(new CompiledGrammar(grammar, !grammar_extensions.empty(), parser_version));
+	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(grammar, !grammar_extensions.empty()));
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
 		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform));
@@ -154,12 +148,6 @@ CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
                                                     const case_insensitive_set_t &active_extensions) {
-	return Create(context, active_extensions, context.db->GetParserCache().LatestParserVersion());
-}
-
-shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
-                                                    const case_insensitive_set_t &active_extensions,
-                                                    idx_t parser_version) {
 	case_insensitive_map_t<reference<GrammarExtension>> selected_extensions;
 	auto &callback_manager = ExtensionCallbackManager::Get(context);
 	for (auto &name : active_extensions) {
@@ -168,38 +156,23 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context
 			selected_extensions.emplace(name, *grammar_extension);
 		}
 	}
-	return Create(selected_extensions, parser_version);
+	return Create(selected_extensions);
 }
 
-shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> context) {
-	if (context) {
-		auto &client_config = ClientConfig::GetConfig(*context);
-		shared_ptr<CompiledGrammar> result = client_config.cached_grammar;
-		if (!result || result->Version() != LatestParserVersion()) {
-			result = CompiledGrammar::Create(*context, client_config.active_grammar_extensions, LatestParserVersion());
-			client_config.cached_grammar = result;
-		}
-		return result;
-	}
-
-	idx_t parser_version;
+shared_ptr<CompiledGrammar> ParserCache::GetMatcher() {
 	{
 		std::unique_lock<std::mutex> lock(mutex);
 		if (matcher) {
 			return matcher;
 		}
-		parser_version = version;
 	}
-	auto new_matcher = CompiledGrammar::Create({}, parser_version);
+	auto new_matcher = CompiledGrammar::Create({});
 
 	std::unique_lock<std::mutex> lock(mutex);
-	if (version == parser_version) {
-		if (matcher) {
-			return matcher;
-		}
-		matcher = new_matcher;
+	if (!matcher) {
+		matcher = std::move(new_matcher);
 	}
-	return new_matcher;
+	return matcher;
 }
 
 optional_ptr<const CompiledGrammarRule> CompiledGrammar::GetRule(const string &rule_name) const {
@@ -208,16 +181,6 @@ optional_ptr<const CompiledGrammarRule> CompiledGrammar::GetRule(const string &r
 		return nullptr;
 	}
 	return *entry->second;
-}
-
-idx_t ParserCache::LatestParserVersion() const {
-	return version;
-}
-
-void ParserCache::Invalidate() {
-	std::unique_lock<std::mutex> lock(mutex);
-	matcher = nullptr;
-	++version;
 }
 
 } // namespace duckdb

@@ -1779,9 +1779,6 @@ void CurrentDialectSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (!info.config.GetCallbackManager().HasDialectExtension(dialect_name)) {
 		throw InvalidInputException("Dialect \"%s\" is not installed", dialect_name);
 	}
-	if (info.db) {
-		info.db->GetParserCache().Invalidate();
-	}
 }
 
 void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1791,10 +1788,8 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 	auto &client_config = ClientConfig::GetConfig(context);
 
 	if (input.IsNull()) {
-		case_insensitive_set_t selected_extensions;
-		auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
-		client_config.active_grammar_extensions = std::move(selected_extensions);
-		client_config.cached_grammar = std::move(compiled_grammar);
+		client_config.active_grammar_extensions.clear();
+		client_config.cached_grammar.reset();
 		return;
 	}
 
@@ -1829,6 +1824,11 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 		throw InvalidInputException("Can't set 'active_grammar_extensions', the following extensions don't exist: %s",
 		                            missing_list);
 	}
+	if (selected_extensions.empty()) {
+		client_config.active_grammar_extensions.clear();
+		client_config.cached_grammar.reset();
+		return;
+	}
 
 	auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
 	client_config.active_grammar_extensions = std::move(selected_extensions);
@@ -1839,11 +1839,9 @@ void ActiveGrammarExtensionsSetting::ResetLocal(ClientContext &context) {
 	if (!OnLocalReset(context)) {
 		return;
 	}
-	case_insensitive_set_t selected_extensions;
-	auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
 	auto &client_config = ClientConfig::GetConfig(context);
-	client_config.active_grammar_extensions = std::move(selected_extensions);
-	client_config.cached_grammar = std::move(compiled_grammar);
+	client_config.active_grammar_extensions.clear();
+	client_config.cached_grammar.reset();
 }
 
 bool ActiveGrammarExtensionsSetting::OnLocalSet(ClientContext &context, const Value &input) {

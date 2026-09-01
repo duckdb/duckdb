@@ -79,7 +79,7 @@ public:
 	}
 	shared_ptr<CompiledGrammar> GetCompiledGrammar() override {
 		if (!compiled_grammar) {
-			compiled_grammar = cache.GetMatcher(nullptr);
+			compiled_grammar = cache.GetMatcher();
 		}
 		return compiled_grammar;
 	}

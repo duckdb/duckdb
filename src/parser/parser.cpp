@@ -38,8 +38,11 @@ ParserCache &Parser::GetCache() {
 
 CompiledGrammar &Parser::GetGrammar() {
 	if (!compiled_grammar) {
-		auto &cache = GetCache();
-		compiled_grammar = cache.GetMatcher(options.context);
+		if (options.context) {
+			compiled_grammar = CompiledGrammar::Get(*options.context);
+		} else {
+			compiled_grammar = GetCache().GetMatcher();
+		}
 	}
 	return *compiled_grammar;
 }

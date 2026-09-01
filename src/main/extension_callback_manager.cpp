@@ -1,7 +1,6 @@
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
-#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/dialect_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
@@ -244,7 +243,6 @@ void ParserExtension::Register(DBConfig &config, ParserExtension extension) {
 
 void GrammarExtension::Register(DatabaseInstance &db, shared_ptr<GrammarExtension> extension) {
 	DBConfig::GetConfig(db).GetCallbackManager().Register(std::move(extension));
-	db.GetParserCache().Invalidate();
 }
 
 void DialectExtension::Register(DBConfig &config, DialectExtension extension) {
