@@ -92,7 +92,7 @@ jobs:
 
       - name: Install pytest
         run: |
-          python3 scripts/ci/retry.py -- python -m pip install pytest
+          python3 scripts/ci/retry.py -- python -m pip install --break-system-packages pytest
 
       - name: Build
         run: python3 scripts/ci/retry.py -- make
