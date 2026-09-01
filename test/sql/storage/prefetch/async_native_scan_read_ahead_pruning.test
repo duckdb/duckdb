@@ -46,6 +46,10 @@ true
 statement ok
 SET read_ahead_depth=0
 
+# the per-thread path only logs I/O it schedules, so override a forced-synchronous scan strategy
+statement ok
+SET debug_physical_table_scan_execution_strategy=DEFAULT
+
 statement ok
 CALL enable_logging('AsyncTaskSchedule')
 
