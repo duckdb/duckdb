@@ -20,6 +20,93 @@
 
 namespace duckdb {
 
+//! Names that the parser rewrites into a syntax node instead of a catalog function call.
+//! Every path that can name a function must go through this, or the paths disagree.
+//! Returns nullptr when the name is an ordinary function.
+static unique_ptr<ParsedExpression> TransformParserFunctionRewrite(const string &lowercase_name,
+                                                                   vector<FunctionArgument> &function_children) {
+	auto reject_named_arguments = [&function_children](const char *context) {
+		for (auto &arg : function_children) {
+			if (arg.HasName()) {
+				throw ParserException("Named arguments are not supported in %s", context);
+			}
+		}
+	};
+
+	if (lowercase_name == "if") {
+		if (function_children.size() != 3) {
+			throw ParserException("Wrong number of arguments to IF.");
+		}
+		reject_named_arguments("IF expressions");
+
+		auto expr = make_uniq<CaseExpression>();
+		CaseCheck check;
+		check.when_expr = std::move(function_children[0].GetExpressionMutable());
+		check.then_expr = std::move(function_children[1].GetExpressionMutable());
+		expr->CaseChecksMutable().push_back(std::move(check));
+		expr->ElseMutable() = std::move(function_children[2].GetExpressionMutable());
+		return std::move(expr);
+	}
+	if (lowercase_name == "unpack") {
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments to the UNPACK operator");
+		}
+		reject_named_arguments("UNPACK operator");
+		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
+		for (auto &arg : function_children) {
+			expr->GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
+		}
+		return std::move(expr);
+	}
+	if (lowercase_name == "try") {
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to TRY expression");
+		}
+		reject_named_arguments("TRY expression");
+		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
+		for (auto &arg : function_children) {
+			try_expression->GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
+		}
+		return std::move(try_expression);
+	}
+	if (lowercase_name == "construct_array") {
+		reject_named_arguments("array constructors");
+		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
+		for (auto &arg : function_children) {
+			construct_array->GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
+		}
+		return std::move(construct_array);
+	}
+	if (lowercase_name == "ifnull") {
+		if (function_children.size() != 2) {
+			throw ParserException("Wrong number of arguments to IFNULL.");
+		}
+		reject_named_arguments("IFNULL expressions");
+
+		//  Two-argument COALESCE
+		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+		coalesce_op->GetChildrenMutable().push_back(std::move(function_children[0].GetExpressionMutable()));
+		coalesce_op->GetChildrenMutable().push_back(std::move(function_children[1].GetExpressionMutable()));
+		return std::move(coalesce_op);
+	}
+	if (lowercase_name == "coalesce") {
+		reject_named_arguments("COALESCE expressions");
+		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+		for (auto &arg : function_children) {
+			coalesce_op->GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
+		}
+		return std::move(coalesce_op);
+	}
+	if (lowercase_name == "date") {
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to DATE function");
+		}
+		return std::move(
+		    make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0].GetExpressionMutable())));
+	}
+	return nullptr;
+}
+
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
                                                     vector<unique_ptr<ParsedExpression>> expression_alias) {
@@ -103,15 +190,11 @@ PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer,
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 			auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
 			function_expr->GetArgumentsMutable().insert(function_expr->GetArgumentsMutable().begin(), std::move(expr));
-			// Method-chained calls (a.f(b)) bypass the special-case name handling in TransformFunctionExpression.
-			// ifnull is a parser rewrite to a two-argument COALESCE (not a catalog function), so apply it here too.
-			auto &function_args = function_expr->GetArgumentsMutable();
-			if (StringUtil::Lower(function_expr->FunctionName().GetIdentifierName()) == "ifnull" &&
-			    function_args.size() == 2 && !function_args[0].HasName() && !function_args[1].HasName()) {
-				auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-				coalesce_op->GetChildrenMutable().push_back(std::move(function_args[0].GetExpressionMutable()));
-				coalesce_op->GetChildrenMutable().push_back(std::move(function_args[1].GetExpressionMutable()));
-				expr = std::move(coalesce_op);
+			// A method-chained call names a function too, so it takes the same rewrites.
+			auto lowercase_name = StringUtil::Lower(function_expr->FunctionName().GetIdentifierName());
+			if (auto rewritten =
+			        TransformParserFunctionRewrite(lowercase_name, function_expr->GetArgumentsMutable())) {
+				expr = std::move(rewritten);
 			} else {
 				expr = std::move(function_expr);
 			}
@@ -238,82 +321,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		lowercase_name = "count_star";
 	}
 
-	if (lowercase_name == "if") {
-		if (function_children.size() != 3) {
-			throw ParserException("Wrong number of arguments to IF.");
-		}
-		for (auto &arg : function_children) {
-			if (arg.HasName()) {
-				throw ParserException("Named arguments are not supported in IF expressions");
-			}
-		}
-
-		auto expr = make_uniq<CaseExpression>();
-		CaseCheck check;
-		check.when_expr = std::move(function_children[0].GetExpressionMutable());
-		check.then_expr = std::move(function_children[1].GetExpressionMutable());
-		expr->CaseChecksMutable().push_back(std::move(check));
-		expr->ElseMutable() = std::move(function_children[2].GetExpressionMutable());
-		return std::move(expr);
-	}
-	if (lowercase_name == "unpack") {
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments to the UNPACK operator");
-		}
-		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
-		for (auto &arg : function_children) {
-			if (arg.HasName()) {
-				throw ParserException("Named arguments are not supported in UNPACK operator");
-			}
-			expr->GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
-		}
-		return std::move(expr);
-	}
-	if (lowercase_name == "try") {
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments provided to TRY expression");
-		}
-		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
-		for (auto &arg : function_children) {
-			if (arg.HasName()) {
-				throw ParserException("Named arguments are not supported in TRY expression");
-			}
-			try_expression->GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
-		}
-		return std::move(try_expression);
-	}
-	if (lowercase_name == "construct_array") {
-		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
-		for (auto &arg : function_children) {
-			if (arg.HasName()) {
-				throw ParserException("Named arguments are not supported in array constructors");
-			}
-			construct_array->GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
-		}
-		return std::move(construct_array);
-	}
-	if (lowercase_name == "ifnull") {
-		if (function_children.size() != 2) {
-			throw ParserException("Wrong number of arguments to IFNULL.");
-		}
-		for (auto &arg : function_children) {
-			if (arg.HasName()) {
-				throw ParserException("Named arguments are not supported in IFNULL expressions");
-			}
-		}
-
-		//  Two-argument COALESCE
-		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-		coalesce_op->GetChildrenMutable().push_back(std::move(function_children[0].GetExpressionMutable()));
-		coalesce_op->GetChildrenMutable().push_back(std::move(function_children[1].GetExpressionMutable()));
-		return std::move(coalesce_op);
-	}
-	if (lowercase_name == "date") {
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments provided to DATE function");
-		}
-		return std::move(
-		    make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0].GetExpressionMutable())));
+	if (auto rewritten = TransformParserFunctionRewrite(lowercase_name, function_children)) {
+		return rewritten;
 	}
 	if (function_expression_arguments.has_ignore_nulls) {
 		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
