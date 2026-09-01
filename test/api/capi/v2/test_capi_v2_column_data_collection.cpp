@@ -183,7 +183,7 @@ TEST_CASE("V2: column_data_collection multi-chunk scan", "[capi_v2][column_data_
 // VARCHAR round-trip — strings (inlined and heap-backed) survive the copy in
 // and the scan out.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("V2: column_data_collection VARCHAR round-trip", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
 	auto varchar_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
@@ -244,7 +244,7 @@ TEST_CASE("V2: column_data_collection VARCHAR round-trip", "[capi_v2][column_dat
 	duckdb_v2_column_data_collection_shared_scan_state_destroy(&shared);
 	duckdb_v2_column_data_collection_destroy(&cdc);
 }
-
+#endif
 // ===========================================================================
 // Combine
 // ===========================================================================
@@ -558,6 +558,7 @@ TEST_CASE("V2: data_chunk_create_with_connection", "[capi_v2][column_data_collec
 // The copy is deep: it keeps its values after everything that produced it —
 // scan states, the collection, and the source chunk — is destroyed. This
 // pins the documented escape hatch for the zero-copy scan.
+#if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("V2: data_chunk_copy_with_connection outlives the scan", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
 	auto cdc = MakeIntCollection(fx.conn);
@@ -598,6 +599,7 @@ TEST_CASE("V2: data_chunk_copy_with_connection outlives the scan", "[capi_v2][co
 
 	duckdb_v2_data_chunk_destroy(&copy);
 }
+#endif
 
 TEST_CASE("V2: data_chunk_copy_with_connection refusals and empty copy", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;

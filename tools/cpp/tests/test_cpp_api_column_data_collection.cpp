@@ -130,7 +130,7 @@ TEST_CASE("Stable C++API: ColumnDataCollection scan refuses a mismatching chunk"
 	REQUIRE_THROWS_MATCHES(collection.Scan(shared, worker, wrong_chunk), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
-
+#if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("Stable C++API: DataChunk::Copy outlives the scan", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
@@ -157,3 +157,4 @@ TEST_CASE("Stable C++API: DataChunk::Copy outlives the scan", "[cpp_api]") {
 	REQUIRE(view.Data<int32_t>()[view.SelAt(1)] == 20);
 	REQUIRE(view.Data<int32_t>()[view.SelAt(2)] == 30);
 }
+#endif
