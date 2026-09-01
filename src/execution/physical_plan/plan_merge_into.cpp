@@ -210,6 +210,9 @@ static unique_ptr<MergeIntoOperator> PlanGenericMergeIntoAction(ClientContext &c
 	result->condition = std::move(action.condition);
 
 	auto &catalog = op.table.catalog;
+	// the operators of an action emit the same rows as those of a regular INSERT/UPDATE/DELETE - resolve the types
+	// and cardinality of the logical operators in the same manner
+	auto cardinality = op.EstimateCardinality(context);
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE: {
 		// a regular UPDATE reads the new values of a row followed by its row id - project the rows of the action into
@@ -236,6 +239,8 @@ static unique_ptr<MergeIntoOperator> PlanGenericMergeIntoAction(ClientContext &c
 		for (auto &def : op.bound_defaults) {
 			update.bound_defaults.push_back(def->Copy());
 		}
+		update.estimated_cardinality = cardinality;
+		update.ResolveOperatorTypes();
 		result->op = catalog.PlanUpdate(context, planner, update, action_input);
 		break;
 	}
@@ -246,6 +251,8 @@ static unique_ptr<MergeIntoOperator> PlanGenericMergeIntoAction(ClientContext &c
 		LogicalDelete delete_op(op.table, TableIndex(0));
 		delete_op.expressions = PlanMergeRowIdReferences(op, plan);
 		delete_op.bound_constraints = CopyBoundConstraints(op);
+		delete_op.estimated_cardinality = cardinality;
+		delete_op.ResolveOperatorTypes();
 		result->op = catalog.PlanDelete(context, planner, delete_op, action_input);
 		break;
 	}
@@ -275,6 +282,8 @@ static unique_ptr<MergeIntoOperator> PlanGenericMergeIntoAction(ClientContext &c
 		for (auto &def : op.bound_defaults) {
 			insert.bound_defaults.push_back(def->Copy());
 		}
+		insert.estimated_cardinality = cardinality;
+		insert.ResolveOperatorTypes();
 		result->op = catalog.PlanInsert(context, planner, insert, action_input);
 		break;
 	}
