@@ -179,8 +179,8 @@ struct WindowValueExecutor {
 	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 	//! Streaming APIs
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowValueStreamingState>(client, input, wexpr);
 	}
 };
@@ -533,12 +533,12 @@ public:
 		}
 		return false;
 	}
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowLeadLagStreamingState>(client, wexpr);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state) {
+	                       Vector &result, WindowExecutorStreamingState &state) {
 		state.Cast<WindowLeadLagStreamingState>().Execute(context, input, delayed, delayed_capacity, result);
 	}
 };
@@ -796,11 +796,11 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 		        wexpr.WindowEnd() == WindowBoundary::UNBOUNDED_FOLLOWING);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state);
+	                       Vector &result, WindowExecutorStreamingState &state);
 };
 
 void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                          idx_t delayed_capacity, Vector &result, LocalSourceState &state) {
+                                          idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &state) {
 	auto &sstate = state.Cast<WindowValueStreamingState>();
 	auto &wexpr = sstate.wexpr;
 	const auto count = input.size();
@@ -918,11 +918,11 @@ struct WindowLastValueExecutor : public WindowValueExecutor {
 		       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state);
+	                       Vector &result, WindowExecutorStreamingState &state);
 };
 
 void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                         idx_t delayed_capacity, Vector &result, LocalSourceState &state) {
+                                         idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &state) {
 	//	Evaluate the argument and copy the values
 	auto &sstate = state.Cast<WindowValueStreamingState>();
 	auto &wexpr = sstate.wexpr;
@@ -1086,12 +1086,12 @@ struct WindowNthValueExecutor : public WindowValueExecutor {
 		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
 		       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 	}
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowNthValueStreamingState>(client, input, wexpr);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state) {
+	                       Vector &result, WindowExecutorStreamingState &state) {
 		state.Cast<WindowNthValueStreamingState>().StreamData(context, input, result);
 	}
 };

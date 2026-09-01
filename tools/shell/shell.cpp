@@ -3020,9 +3020,11 @@ int ShellState::ProcessInput(InputMode mode) {
 		zLine = OneInputLine(in, zLine, nSql > 0);
 		if (!zLine) {
 			/* End of input */
-			if (!in && stdin_is_interactive && conn && conn->context && conn->context->IsConnected()) {
+			if (!in && stdin_is_interactive && !started_as_client && conn && conn->context &&
+			    conn->context->IsConnected()) {
 				// First Ctrl-D while CONNECT-ed: implicit DISCONNECT instead of exiting. A second
-				// Ctrl-D (now unbound) will exit normally.
+				// Ctrl-D (now unbound) will exit normally. Shells launched with `-connect` skip this
+				// and exit right away - disconnecting would leave a local shell that was never asked for.
 				printf("\n");
 				conn->Query("DISCONNECT");
 				nSql = 0;
@@ -3490,6 +3492,10 @@ int RunShell(int argc, const char **argv) {
 			}
 			arguments.emplace_back(argv[++i]);
 		}
+		if (option.optional_argument && i + 1 < argc && argv[i + 1][0] != '-') {
+			// an optional argument is only consumed when it is not an option itself
+			arguments.emplace_back(argv[++i]);
+		}
 		if (option.pre_init_callback) {
 			// invoke the pre-init callback (if any)
 			auto result = option.pre_init_callback(data, arguments);
@@ -3501,6 +3507,14 @@ int RunShell(int argc, const char **argv) {
 		command_line_calls.emplace_back(option, std::move(arguments));
 	}
 
+	if (data.started_as_client && !data.zDbFilename.empty()) {
+		// checked before OpenDB, so that a database that does not exist yet is not created either
+		data.PrintDatabaseError(
+		    StringUtil::Format("Invalid Input Error: cannot open a database (%s) together with -connect\n"
+		                       "-connect uses the database of the server it connects to",
+		                       data.zDbFilename));
+		return 1;
+	}
 	if (data.zDbFilename.empty()) {
 		data.zDbFilename = ":memory:";
 	}
