@@ -308,6 +308,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"duckdb_aws_session_id", "aws", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"duckdb_encodings", "encodings", CatalogType::TABLE_FUNCTION_ENTRY},
     {"duckdb_format_sql", "autocomplete", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"duckdb_proj_compiled_version", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"duckdb_proj_version", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
