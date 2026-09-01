@@ -3181,6 +3181,414 @@ public:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Table Function
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A user-defined table function, built up with the setters and made live with `Register`.
+/// Create one against the `Connection` or `Extension` it will be registered in, describe it (name, signature,
+/// callbacks), then call `Register`. The function object may be destroyed after registration; the registered function
+/// lives on in the catalog.
+///
+/// A table function produces a table rather than a value: the bind callback declares the columns it returns, and the
+/// exec callback is then invoked repeatedly to fill batches of rows until it produces an empty one. Between them, the
+/// optional init callbacks set up the state the scan runs on: one global state shared by every thread, and one local
+/// state per thread.
+///
+/// The callbacks receive their state through the input objects: `SetUserData` plants data readable from every
+/// callback, and the bind callback may plant bind data readable from every later callback. A callback reports failure
+/// by throwing; the exception surfaces as the query's error.
+class TableFunction final : public detail::Handle<TableFunction> {
+	friend detail::Factory;
+
+public:
+	class BindInput;
+	class InitGlobalInput;
+	class InitLocalInput;
+	class ExecInput;
+	class CardinalityInput;
+	class ProgressInput;
+
+	/// Called once per query while the function call is bound; declares the columns the function returns. Required.
+	using BindCallback = void (*)(BindInput &input);
+	/// Called once per scan, before the first `ExecCallback`. Optional.
+	using InitGlobalCallback = void (*)(InitGlobalInput &input);
+	/// Called once per scanning thread, before the first `ExecCallback` on it. Optional.
+	using InitLocalCallback = void (*)(InitLocalInput &input);
+	/// Called repeatedly to produce the next batch of rows; an empty batch ends the scan. Required.
+	using ExecCallback = void (*)(ExecInput &input);
+	/// Called during optimization to estimate the scan's row count. Optional.
+	using CardinalityCallback = void (*)(CardinalityInput &input);
+	/// Called on demand during execution to report how far the scan has advanced. Optional.
+	using ProgressCallback = void (*)(ProgressInput &input);
+
+	TableFunction(TableFunction &&) noexcept = default;
+	TableFunction &operator=(TableFunction &&) noexcept = default;
+
+	~TableFunction() override;
+
+	/// Creates a function that `Register` adds to the connection's database.
+	static auto Create(const Connection &conn) -> TableFunction;
+	/// Creates a function that `Register` adds through the loading extension.
+	static auto Create(const Extension &extension) -> TableFunction;
+
+	/// Sets the function's name, as SQL will call it.
+	auto SetName(const std::string &name) & -> TableFunction &;
+
+	/// The function's signature, borrowed for in-place mutation. A parameter without a default value becomes a
+	/// required positional argument, one with a default becomes a named argument the caller may omit. Registration
+	/// rejects a return type: a table function declares the columns it returns from its bind callback.
+	auto GetSignature() -> FunctionSignature;
+
+	/// Calls `configure` with the function's signature, borrowed for in-place mutation. See `GetSignature`.
+	template <class F>
+	auto WithSignature(F &&configure) & -> TableFunction & {
+		auto sig = GetSignature();
+		configure(sig);
+		return *this;
+	}
+
+	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
+	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> TableFunction & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	auto SetBindCallback(BindCallback callback) & -> TableFunction &;
+	auto SetInitGlobalCallback(InitGlobalCallback callback) & -> TableFunction &;
+	auto SetInitLocalCallback(InitLocalCallback callback) & -> TableFunction &;
+	auto SetExecCallback(ExecCallback callback) & -> TableFunction &;
+	auto SetCardinalityCallback(CardinalityCallback callback) & -> TableFunction &;
+	auto SetProgressCallback(ProgressCallback callback) & -> TableFunction &;
+
+	/// Registers the function in the catalog it was created against. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
+	/// @throws InvalidInputException When the name, bind callback or exec callback is missing, or the signature
+	/// declares a return type.
+	auto Register() -> void;
+
+private:
+	explicit TableFunction(void *impl);
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	BindCallback bind_callback = nullptr;
+	InitGlobalCallback init_global_callback = nullptr;
+	InitLocalCallback init_local_callback = nullptr;
+	ExecCallback exec_callback = nullptr;
+	CardinalityCallback cardinality_callback = nullptr;
+	ProgressCallback progress_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the bind callback works with. Borrowed, valid only for the callback duration.
+	class BindInput {
+		friend detail::Factory;
+
+	public:
+		/// Declares one of the columns the function returns. Call it once per column, in order: the exec callback's
+		/// output chunk carries one vector per declared column, in the same order. At least one column is required.
+		/// @param name The column's name.
+		/// @param type The column's type. Must be a fully defined concrete type; ANY is rejected.
+		auto AddResultColumn(const std::string &name, const LogicalType &type) -> void;
+
+		/// Constructs bind data of type `T`, owned by the bound function call and readable from every later callback
+		/// via `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T`
+		/// has one, by identity otherwise.
+		template <class T, class... ARGS>
+		void SetBindData(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many arguments this call passes. The arguments are the signature's parameters in order -- a parameter
+		/// the call site omitted still appears, carrying its declared default -- followed by any variadic tail
+		/// arguments. Valid indices for `GetArgType` and `GetArgument` are [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// One argument's type.
+		/// @param index Argument index in [0, GetArgCount()).
+		/// @throws InvalidInputException When the index is out of range.
+		auto GetArgType(idx_t index) const -> LogicalType;
+
+		/// One argument's value. A table function's arguments are always constants, so this only fails on a bad index.
+		/// @param index Argument index in [0, GetArgCount()).
+		/// @throws InvalidInputException When the index is out of range.
+		auto GetArgument(idx_t index) const -> Value;
+
+		/// Hints how many rows the scan will produce, for the optimizer. Use `TableFunction::SetCardinalityCallback`
+		/// instead when the estimate is not yet known at bind time. Producing a different number of rows is not an
+		/// error.
+		/// @param cardinality The estimated row count.
+		/// @param is_exact Whether the estimate is exact, which also makes it an upper bound.
+		auto SetCardinality(idx_t cardinality, bool is_exact) -> void;
+
+		/// The binding context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		BindInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the global init callback works with. Borrowed, valid only for the callback duration.
+	class InitGlobalInput {
+		friend detail::Factory;
+
+	public:
+		/// Constructs global state of type `T`, shared by every thread scanning the function and readable from the
+		/// local init, exec and progress callbacks. Since every thread sees the same object, the function must
+		/// synchronize its own access to it.
+		template <class T, class... ARGS>
+		void SetGlobalState(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetGlobalStateInternal(ptr, detail::TypedDelete<T>);
+		}
+
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Caps how many threads may scan the function in parallel. Defaults to 1, a single-threaded scan. The engine
+		/// creates at most this many local states, and may use fewer.
+		/// @param max_threads The maximum thread count. Must be at least 1.
+		auto SetMaxThreads(idx_t max_threads) -> void;
+
+		/// The scan's context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		InitGlobalInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void SetGlobalStateInternal(void *data, void (*destructor)(void *));
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the local init callback works with. Borrowed, valid only for the callback duration.
+	class InitLocalInput {
+		friend detail::Factory;
+
+	public:
+		/// Constructs local state of type `T`, owned by this scanning thread and readable from the exec callback via
+		/// `ExecInput::GetLocalState<T>`. No other thread observes it, so it needs no synchronization.
+		template <class T, class... ARGS>
+		void SetLocalState(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetLocalStateInternal(ptr, detail::TypedDelete<T>);
+		}
+
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The global state set via `InitGlobalInput::SetGlobalState`, typically to claim this thread's share of the
+		/// work from it. Shared with every other scanning thread; access must be synchronized.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetGlobalState() const -> T & {
+			return *static_cast<T *>(GetGlobalStateInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The scan's context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		InitLocalInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void SetLocalStateInternal(void *data, void (*destructor)(void *));
+		void *GetBindDataInternal() const;
+		void *GetGlobalStateInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the exec callback works with. Borrowed, valid only for the callback duration.
+	class ExecInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The global state set via `InitGlobalInput::SetGlobalState`. Shared with every other scanning thread;
+		/// access must be synchronized.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetGlobalState() const -> T & {
+			return *static_cast<T *>(GetGlobalStateInternal());
+		}
+
+		/// The local state set via `InitLocalInput::SetLocalState`, private to this thread.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetLocalState() const -> T & {
+			return *static_cast<T *>(GetLocalStateInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The chunk to write the next batch of rows into, with one vector per column declared in bind. It starts out
+		/// empty on every invocation: write the rows, then give the batch its row count with `Vector::SetSize` on the
+		/// chunk's first vector, which the engine propagates to the others. Leaving it empty ends the scan.
+		/// @return A borrowed chunk, valid only for the callback duration.
+		auto GetOutputChunk() const -> DataChunk;
+
+		/// The execution context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		ExecInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetGlobalStateInternal() const;
+		void *GetLocalStateInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the cardinality callback works with. Borrowed, valid only for the callback duration.
+	class CardinalityInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Reports how many rows the scan is expected to produce. A hint for the optimizer, not a limit: producing a
+		/// different number of rows is not an error. A callback that returns without calling this reports no estimate.
+		/// @param cardinality The estimated row count.
+		/// @param is_exact Whether the estimate is exact, which also makes it an upper bound.
+		auto SetCardinality(idx_t cardinality, bool is_exact) -> void;
+
+		/// The planning context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		CardinalityInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the progress callback works with. Borrowed, valid only for the callback duration.
+	class ProgressInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The global state set via `InitGlobalInput::SetGlobalState`. This callback runs while the scan is running,
+		/// so the state must be read in a thread-safe way.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetGlobalState() const -> T & {
+			return *static_cast<T *>(GetGlobalStateInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Reports how far the scan has advanced, as a fraction between 0.0 and 1.0; values outside that range are
+		/// clamped. A callback that returns without calling this reports no progress.
+		/// @param progress The fraction of the scan that is complete.
+		auto SetProgress(double progress) -> void;
+
+		/// The execution context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		ProgressInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetGlobalStateInternal() const;
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // Scalar Executor
 //----------------------------------------------------------------------------------------------------------------------
 

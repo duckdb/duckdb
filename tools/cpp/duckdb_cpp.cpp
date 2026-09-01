@@ -120,6 +120,10 @@ template <>
 struct HandleTraits<AggregateFunction> {
 	using handle = duckdb_v2_aggregate_function_handle;
 };
+template <>
+struct HandleTraits<TableFunction> {
+	using handle = duckdb_v2_table_function_handle;
+};
 
 } // namespace detail
 
@@ -3177,6 +3181,487 @@ auto AggregateFunction::DestroyInput::GetStates() const -> void ** {
 	CheckedAPICall(duckdb_v2_aggregate_function_destroy_get_states,
 	               static_cast<duckdb_v2_aggregate_function_destroy_info_handle>(args), &states);
 	return states;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Table Function
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered table function: rides the C user_data
+// slot so the trampolines can find it; the user's own slot (SetUserData) rides
+// inside it. Owned by the registered function, freed at engine teardown.
+struct TableFunctionInfo {
+	TableFunction::BindCallback bind_callback = nullptr;
+	TableFunction::InitGlobalCallback init_global_callback = nullptr;
+	TableFunction::InitLocalCallback init_local_callback = nullptr;
+	TableFunction::ExecCallback exec_callback = nullptr;
+	TableFunction::CardinalityCallback cardinality_callback = nullptr;
+	TableFunction::ProgressCallback progress_callback = nullptr;
+	detail::UserData user_data;
+
+	TableFunctionInfo(TableFunction::BindCallback bind_callback, TableFunction::InitGlobalCallback init_global_callback,
+	                  TableFunction::InitLocalCallback init_local_callback, TableFunction::ExecCallback exec_callback,
+	                  TableFunction::CardinalityCallback cardinality_callback,
+	                  TableFunction::ProgressCallback progress_callback, detail::UserData user_data)
+	    : bind_callback(bind_callback), init_global_callback(init_global_callback),
+	      init_local_callback(init_local_callback), exec_callback(exec_callback),
+	      cardinality_callback(cardinality_callback), progress_callback(progress_callback),
+	      user_data(std::move(user_data)) {
+	}
+
+	bool operator==(const TableFunctionInfo &other) const {
+		return bind_callback == other.bind_callback && init_global_callback == other.init_global_callback &&
+		       init_local_callback == other.init_local_callback && exec_callback == other.exec_callback &&
+		       cardinality_callback == other.cardinality_callback && progress_callback == other.progress_callback &&
+		       user_data.get() == other.user_data.get();
+	}
+};
+
+// Guard for the inputs' GetUserData: a clear error instead of a null deref.
+void *RequireTableUserData(const detail::UserData &user_data) {
+	auto ptr = user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call TableFunction::SetUserData before Register");
+	}
+	return ptr;
+}
+
+// Guard for the inputs' GetBindData: a clear error instead of a null deref.
+void *RequireTableBindData(void *ptr) {
+	if (!ptr) {
+		throw InvalidInputException("no bind data was set; call BindInput::SetBindData in the bind callback");
+	}
+	return ptr;
+}
+
+// Guard for the inputs' GetGlobalState: a clear error instead of a null deref.
+void *RequireGlobalState(void *ptr) {
+	if (!ptr) {
+		throw InvalidInputException(
+		    "no global state was set; call InitGlobalInput::SetGlobalState in the global init callback");
+	}
+	return ptr;
+}
+
+// Guard for ExecInput::GetLocalState: a clear error instead of a null deref.
+void *RequireLocalState(void *ptr) {
+	if (!ptr) {
+		throw InvalidInputException(
+		    "no local state was set; call InitLocalInput::SetLocalState in the local init callback");
+	}
+	return ptr;
+}
+
+} // namespace
+
+TableFunction::TableFunction(void *impl) : detail::Handle<TableFunction>(impl) {
+}
+
+TableFunction::~TableFunction() {
+	auto _h = handle();
+	duckdb_v2_table_function_destroy(&_h);
+}
+
+auto TableFunction::Create(const Connection &conn) -> TableFunction {
+	duckdb_v2_table_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_create_with_connection, conn.handle(), &_h);
+	return detail::Factory::Make<TableFunction>(_h);
+}
+
+auto TableFunction::Create(const Extension &extension) -> TableFunction {
+	duckdb_v2_table_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_create_with_extension, extension.handle(), &_h);
+	return detail::Factory::Make<TableFunction>(_h);
+}
+
+auto TableFunction::SetName(const std::string &name) & -> TableFunction & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_table_function_set_name, handle(), &view);
+	return *this;
+}
+
+auto TableFunction::GetSignature() -> FunctionSignature {
+	duckdb_v2_function_signature_handle sig = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_get_signature, handle(), &sig);
+	return detail::Factory::Make<FunctionSignature>(sig);
+}
+
+auto TableFunction::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+auto TableFunction::SetBindCallback(BindCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_bind_callback, handle(), nullptr);
+		bind_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_table_function_bind_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_bind_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<BindInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.bind_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_bind_callback, handle(), trampoline);
+	bind_callback = callback;
+	return *this;
+}
+
+auto TableFunction::SetInitGlobalCallback(InitGlobalCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_init_global_callback, handle(), nullptr);
+		init_global_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_init_global_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input =
+			    detail::Factory::Make<InitGlobalInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.init_global_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_init_global_callback, handle(), trampoline);
+	init_global_callback = callback;
+	return *this;
+}
+
+auto TableFunction::SetInitLocalCallback(InitLocalCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_init_local_callback, handle(), nullptr);
+		init_local_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_init_local_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_init_local_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<InitLocalInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.init_local_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_init_local_callback, handle(), trampoline);
+	init_local_callback = callback;
+	return *this;
+}
+
+auto TableFunction::SetExecCallback(ExecCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_exec_callback, handle(), nullptr);
+		exec_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_exec_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<ExecInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.exec_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_exec_callback, handle(), trampoline);
+	exec_callback = callback;
+	return *this;
+}
+
+auto TableFunction::SetCardinalityCallback(CardinalityCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_cardinality_callback, handle(), nullptr);
+		cardinality_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_cardinality_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_cardinality_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input =
+			    detail::Factory::Make<CardinalityInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.cardinality_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_cardinality_callback, handle(), trampoline);
+	cardinality_callback = callback;
+	return *this;
+}
+
+auto TableFunction::SetProgressCallback(ProgressCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_progress_callback, handle(), nullptr);
+		progress_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_progress_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_progress_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<ProgressInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.progress_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_progress_callback, handle(), trampoline);
+	progress_callback = callback;
+	return *this;
+}
+
+auto TableFunction::Register() -> void {
+	// The callback table rides the C user_data slot so the trampolines can find
+	// it; the user's own data (SetUserData, moved out here) rides inside it.
+	auto info = std::unique_ptr<TableFunctionInfo>(
+	    new TableFunctionInfo(bind_callback, init_global_callback, init_local_callback, exec_callback,
+	                          cardinality_callback, progress_callback, std::move(user_data)));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<TableFunctionInfo>,
+	                         detail::TypedEquals<TableFunctionInfo>};
+	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
+	// The function owns the table now.
+	info.release();
+
+	CheckedAPICall(duckdb_v2_table_function_register, handle());
+}
+
+auto TableFunction::BindInput::AddResultColumn(const std::string &name, const LogicalType &type) -> void {
+	CheckedAPICall(duckdb_v2_table_function_bind_add_result_column,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(args),
+	               duckdb_v2_identifier_t {name.data(), name.size()}, type.handle());
+}
+
+void TableFunction::BindInput::SetBindDataInternal(void *data, bool (*equals)(void *a, void *b),
+                                                   void (*destructor)(void *)) {
+	duckdb_v2_opaque opaque {data, destructor, equals};
+	CheckedAPICall(duckdb_v2_table_function_bind_set_bind_data,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), &opaque);
+}
+
+void *TableFunction::BindInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_bind_get_user_data,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::BindInput::GetArgCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_table_function_bind_get_arg_count,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), &count);
+	return count;
+}
+
+auto TableFunction::BindInput::GetArgType(idx_t index) const -> LogicalType {
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_bind_get_arg_type,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), index, &type);
+	return detail::Factory::Make<LogicalType>(type);
+}
+
+auto TableFunction::BindInput::GetArgument(idx_t index) const -> Value {
+	duckdb_v2_value_handle value = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_bind_get_arg_value,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), index, &value);
+	return detail::Factory::Make<Value>(value);
+}
+
+auto TableFunction::BindInput::SetCardinality(idx_t cardinality, bool is_exact) -> void {
+	CheckedAPICall(duckdb_v2_table_function_bind_set_cardinality,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), cardinality, is_exact);
+}
+
+auto TableFunction::BindInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void TableFunction::InitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {
+	duckdb_v2_opaque opaque {data, destructor, nullptr};
+	CheckedAPICall(duckdb_v2_table_function_init_global_set_global_state,
+	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &opaque);
+}
+
+void *TableFunction::InitGlobalInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_init_global_get_bind_data,
+	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::InitGlobalInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_init_global_get_user_data,
+	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::InitGlobalInput::SetMaxThreads(idx_t max_threads) -> void {
+	CheckedAPICall(duckdb_v2_table_function_init_global_set_max_threads,
+	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), max_threads);
+}
+
+auto TableFunction::InitGlobalInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void TableFunction::InitLocalInput::SetLocalStateInternal(void *data, void (*destructor)(void *)) {
+	duckdb_v2_opaque opaque {data, destructor, nullptr};
+	CheckedAPICall(duckdb_v2_table_function_init_local_set_local_state,
+	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &opaque);
+}
+
+void *TableFunction::InitLocalInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_init_local_get_bind_data,
+	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::InitLocalInput::GetGlobalStateInternal() const {
+	void *global_state = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_init_local_get_global_state,
+	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &global_state);
+	return RequireGlobalState(global_state);
+}
+
+void *TableFunction::InitLocalInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_init_local_get_user_data,
+	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::InitLocalInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void *TableFunction::ExecInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_exec_get_bind_data,
+	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::ExecInput::GetGlobalStateInternal() const {
+	void *global_state = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_exec_get_global_state,
+	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &global_state);
+	return RequireGlobalState(global_state);
+}
+
+void *TableFunction::ExecInput::GetLocalStateInternal() const {
+	void *local_state = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_exec_get_local_state,
+	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &local_state);
+	return RequireLocalState(local_state);
+}
+
+void *TableFunction::ExecInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_exec_get_user_data,
+	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::ExecInput::GetOutputChunk() const -> DataChunk {
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_exec_get_output_chunk,
+	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &chunk);
+	// Borrowed: the engine owns the chunk and reuses it across invocations.
+	return detail::Factory::Make<DataChunk>(chunk, false);
+}
+
+auto TableFunction::ExecInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void *TableFunction::CardinalityInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_cardinality_get_bind_data,
+	               static_cast<duckdb_v2_table_function_cardinality_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::CardinalityInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_cardinality_get_user_data,
+	               static_cast<duckdb_v2_table_function_cardinality_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::CardinalityInput::SetCardinality(idx_t cardinality, bool is_exact) -> void {
+	CheckedAPICall(duckdb_v2_table_function_cardinality_set_cardinality,
+	               static_cast<duckdb_v2_table_function_cardinality_info_handle>(args), cardinality, is_exact);
+}
+
+auto TableFunction::CardinalityInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void *TableFunction::ProgressInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_progress_get_bind_data,
+	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::ProgressInput::GetGlobalStateInternal() const {
+	void *global_state = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_progress_get_global_state,
+	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), &global_state);
+	return RequireGlobalState(global_state);
+}
+
+void *TableFunction::ProgressInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_progress_get_user_data,
+	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::ProgressInput::SetProgress(double progress) -> void {
+	CheckedAPICall(duckdb_v2_table_function_progress_set_progress,
+	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), progress);
+}
+
+auto TableFunction::ProgressInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
 }
 
 } // namespace cxx
