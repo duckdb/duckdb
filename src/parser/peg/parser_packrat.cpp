@@ -31,7 +31,7 @@ void ParserPackratCache::Store(const Matcher &matcher, idx_t token_index, Parser
 	D_ASSERT(packrat_id.IsValid());
 	auto matcher_id = packrat_id.GetIndex();
 	ParserPackratKey key {matcher_id, token_index};
-	entries.insert(make_pair(key, std::move(entry)));
+	entries.insert(make_pair(key, entry));
 }
 
 } // namespace duckdb

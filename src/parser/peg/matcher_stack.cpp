@@ -131,7 +131,7 @@ MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
 		cache_entry.token_index_after = state.token_iterator.Position();
 		cache_entry.max_token_index_seen = MaxValue(frame.max_token_index_before, state.GetMaxTokenIndex());
 		cache_entry.result = result.GetParseResult();
-		state.packrat_cache->Store(matcher, frame.token_index_before, std::move(cache_entry));
+		state.packrat_cache->Store(matcher, frame.token_index_before, cache_entry);
 	}
 	return result;
 }

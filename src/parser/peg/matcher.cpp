@@ -44,7 +44,7 @@ MatcherResult Matcher::MatchParseResult(MatchState &state) const {
 			cache_entry.token_index_after = state.token_iterator.Position();
 			cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
 			cache_entry.result = result.GetParseResult();
-			state.packrat_cache->Store(*this, token_index, std::move(cache_entry));
+			state.packrat_cache->Store(*this, token_index, cache_entry);
 		}
 	}
 	return result;
