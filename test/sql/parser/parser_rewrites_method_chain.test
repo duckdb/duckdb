@@ -1,0 +1,228 @@
+# name: test/sql/parser/parser_rewrites_method_chain.test
+# description: parser-level function rewrites also apply to method-chained calls (issue #11907)
+# group: [parser]
+
+# A handful of names are rewritten by the parser into syntax nodes rather than resolved as
+# catalog functions. The method-chain path (a.f(b)) used to skip that rewrite entirely, so every
+# one of these names failed with "Catalog Error: Scalar Function with name <x> does not exist!".
+# In each block the chained form must agree with the equivalent plain call.
+
+# ---------------------------------------------------------------- ifnull -> two-arg COALESCE
+
+query I
+SELECT (3).ifnull(5);
+----
+3
+
+query I
+SELECT (NULL::INTEGER).ifnull(5);
+----
+5
+
+query I
+SELECT ifnull(NULL::INTEGER, 5);
+----
+5
+
+# the exact repro from the issue (list arguments)
+query I
+SELECT ['abc'].ifnull(['def']);
+----
+[abc]
+
+query I
+SELECT ['abc'].ifnull(NULL);
+----
+[abc]
+
+# nested chains resolve inner-first
+query I
+SELECT (NULL::VARCHAR).ifnull('x').ifnull('y');
+----
+x
+
+# nullif is an ordinary catalog function and is unaffected
+query I
+SELECT (3).nullif(3);
+----
+NULL
+
+# ---------------------------------------------------------------- if -> CASE
+
+query I
+SELECT (true).if('a', 'b');
+----
+a
+
+query I
+SELECT (false).if('a', 'b');
+----
+b
+
+# COALESCE and CASE are syntax nodes, so the chained form short-circuits exactly like the plain
+# one: the else-branch is never evaluated and cannot raise.
+query I
+SELECT (true).if(1, 'abc'::INTEGER);
+----
+1
+
+# ---------------------------------------------------------------- try -> OPERATOR_TRY
+
+query I
+SELECT ('abc'::INTEGER).try();
+----
+NULL
+
+query I
+SELECT try('abc'::INTEGER);
+----
+NULL
+
+# ---------------------------------------------------------------- construct_array
+
+query I
+SELECT (1).construct_array(2, 3);
+----
+[1, 2, 3]
+
+query I
+SELECT construct_array(1, 2, 3);
+----
+[1, 2, 3]
+
+# ---------------------------------------------------------------- date -> CAST
+
+query I
+SELECT ('2020-01-01').date();
+----
+2020-01-01
+
+query I
+SELECT date('2020-01-01');
+----
+2020-01-01
+
+# ---------------------------------------------------------------- unpack -> OPERATOR_UNPACK
+# unpack needs a STAR/COLUMNS context, so what is pinned here is that the chained form reaches the
+# BINDER with the same complaint as the plain call, rather than dying earlier in the catalog.
+
+statement error
+SELECT ([1,2]).unpack();
+----
+UNPACK can only be used in combination with a STAR
+
+statement error
+SELECT unpack([1,2]);
+----
+UNPACK can only be used in combination with a STAR
+
+# ---------------------------------------------------------------- coalesce -> OPERATOR_COALESCE
+
+query I
+SELECT (NULL::INTEGER).coalesce(5);
+----
+5
+
+query I
+SELECT (NULL::INTEGER).coalesce(NULL, 7);
+----
+7
+
+query I
+SELECT coalesce(NULL::INTEGER, 5);
+----
+5
+
+# coalesce is variadic, so the chained form must not acquire an arity limit
+query I
+SELECT (NULL::INTEGER).coalesce(NULL, NULL, 9);
+----
+9
+
+# the skipped arguments are never evaluated, chained as well as plain
+query I
+SELECT (1).coalesce(error('must not be evaluated'));
+----
+1
+
+# ---------------------------------------------------------------- unpack in a context where it works
+# The error case above only proves the chain reaches the binder. This proves the rewritten child is
+# correct in the one context UNPACK is for.
+
+statement ok
+CREATE TABLE integers(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, 2), (3, 4);
+
+query I
+SELECT [(COLUMNS(*).unpack())] FROM integers ORDER BY ALL;
+----
+[1, 2]
+[3, 4]
+
+# ---------------------------------------------------------------- a rewrite outranks a same-named macro
+# This is a behaviour change: before, the chained form reached the macro while the plain form did
+# not. The two paths now agree, which is the point of the shared rewrite.
+
+statement ok
+CREATE MACRO "try"(x) AS 999;
+
+query I
+SELECT try(1);
+----
+1
+
+query I
+SELECT (1)."try"();
+----
+1
+
+# a name with no rewrite still reaches the macro from either form
+statement ok
+CREATE MACRO chain_probe(x) AS 999;
+
+query I
+SELECT (1).chain_probe();
+----
+999
+
+# ---------------------------------------------------------------- validation survives the chain
+# These are the assertions a "just call the variadic COALESCE transformer" implementation would
+# fail: the arity and named-argument checks belong to the rewrite, not to the call path.
+
+statement error
+SELECT (1).ifnull(2, 3);
+----
+Wrong number of arguments to IFNULL.
+
+statement error
+SELECT ifnull(1, 2, 3);
+----
+Wrong number of arguments to IFNULL.
+
+statement error
+SELECT (1).ifnull(a := 2);
+----
+Named arguments are not supported in IFNULL expressions
+
+statement error
+SELECT ifnull(1, a := 2);
+----
+Named arguments are not supported in IFNULL expressions
+
+statement error
+SELECT (true).if('a');
+----
+Wrong number of arguments to IF.
+
+statement error
+SELECT ('2020-01-01').date('extra');
+----
+Wrong number of arguments provided to DATE function
+
+# an unknown name is still an ordinary catalog lookup, chained or not
+statement error
+SELECT (1).no_such_function_xyz();
+----
+Scalar Function with name no_such_function_xyz does not exist
