@@ -48,7 +48,7 @@ SELECT a FROM test LIMIT SUM(42)
 statement error
 SELECT a FROM test LIMIT row_number() OVER ()
 ----
-<REGEX>:Not implemented Error:.*expression class.*
+<REGEX>:Binder Error:.*Window functions are not supported here.*
 
 # LIMIT Bug #321 Crazy Result
 statement ok
