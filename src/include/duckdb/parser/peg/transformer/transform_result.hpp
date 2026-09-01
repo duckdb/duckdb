@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 #include <cstring>
 
@@ -43,7 +44,7 @@ struct DUCKDB_API TypedTransformResult : public TransformResultValue {
 
 //! Returns a pointer to the contained value if the result holds exactly T, and nullptr otherwise
 template <class T>
-T *TryGetTransformResult(TransformResultValue &result) {
+optional_ptr<T> TryGetTransformResult(TransformResultValue &result) {
 	return reinterpret_cast<T *>(result.GetValuePointer(TransformResultTypeName<T>()));
 }
 
