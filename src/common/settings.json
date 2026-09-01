@@ -256,17 +256,6 @@
         ]
     },
     {
-        "name": "configure_profiling",
-        "description": "Accepts a JSON enabling custom metrics",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true,
-        "aliases": [
-            "custom_profiling_settings",
-            "configure_metrics"
-        ]
-    },
-    {
         "name": "current_dialect",
         "description": "The SQL dialect used by the parser",
         "type": "VARCHAR",
@@ -493,13 +482,6 @@
         "on_callbacks": [
             "set"
         ]
-    },
-    {
-        "name": "default_io_mode",
-        "description": "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)",
-        "type": "ENUM<FileIOMode>",
-        "default_value": "BUFFERED_IO",
-        "default_scope": "global"
     },
     {
         "name": "default_null_order",
@@ -1134,13 +1116,6 @@
         "on_callbacks": [
             "set"
         ]
-    },
-    {
-        "name": "parallelize_sequential_sources",
-        "description": "Whether to automatically parallelize sequential sources",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "true"
     },
     {
         "name": "partitioned_write_flush_threshold",

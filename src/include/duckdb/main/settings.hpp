@@ -463,16 +463,6 @@ struct CheckpointThresholdSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct ConfigureProfilingSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "configure_profiling";
-	static constexpr const char *Description = "Accepts a JSON enabling custom metrics";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct CurrentDialectSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "current_dialect";
@@ -789,18 +779,6 @@ struct DefaultCollationSetting {
 	static constexpr const char *Description = "The collation setting used when none is specified";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
-struct DefaultIoModeSetting {
-	using RETURN_TYPE = FileIOMode;
-	static constexpr const char *Name = "default_io_mode";
-	static constexpr const char *Description =
-	    "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "BUFFERED_IO";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -1669,16 +1647,6 @@ struct OrderedAggregateThresholdSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
-struct ParallelizeSequentialSourcesSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "parallelize_sequential_sources";
-	static constexpr const char *Description = "Whether to automatically parallelize sequential sources";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "true";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct PartitionedWriteFlushThresholdSetting {

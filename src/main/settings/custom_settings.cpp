@@ -379,25 +379,6 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Configure Profiling
-//===----------------------------------------------------------------------===//
-void ConfigureProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
-	throw InvalidInputException(
-	    "configure_profiling (and its aliases configure_metrics, custom_profiling_settings) is deprecated. "
-	    "Use SET tracked_metrics = '...' instead. "
-	    "For example: SET tracked_metrics = '*' to track all metrics, "
-	    "or SET tracked_metrics = ['query.total_time', 'operator.*'] to track specific metrics.");
-}
-
-void ConfigureProfilingSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).tracked_metrics = ClientConfig().tracked_metrics;
-}
-
-Value ConfigureProfilingSetting::GetSetting(const ClientContext &context) {
-	return TrackedMetricsSetting::GetSetting(context);
-}
-
-//===----------------------------------------------------------------------===//
 // Custom User Agent
 //===----------------------------------------------------------------------===//
 void CustomUserAgentSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
