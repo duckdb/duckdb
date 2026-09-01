@@ -435,6 +435,15 @@ public:
 		return job;
 	}
 
+	// Try to return control to the executor instead of looping back within the scan.
+	static bool TryYieldControl(TableFunctionInput &data_p) {
+		if (data_p.results_execution_mode != AsyncResultsExecutionMode::TASK_EXECUTOR) {
+			return false;
+		}
+		data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+		return true;
+	}
+
 	//! Decodes read-ahead jobs, returns true when the caller must yield, false once every assignment is consumed
 	bool ScanWithReadAhead(ClientContext &context, TableFunctionInput &data_p, TableScanLocalState &l_state,
 	                       DataChunk &output) {
@@ -464,6 +473,10 @@ public:
 			case PersistentScanResult::YIELD:
 				return true;
 			case PersistentScanResult::NEXT_VECTOR:
+				// the prepared vector was filtered out, we got to return control before scanning the next one
+				if (TryYieldControl(data_p)) {
+					return true;
+				}
 				continue;
 			case PersistentScanResult::EXHAUSTED:
 				break;
@@ -477,6 +490,9 @@ public:
 			job_scan.local_state.rows_scanned = 0;
 			state_pool.Push(std::move(l_state.job->scan_state));
 			l_state.job.reset();
+			if (TryYieldControl(data_p)) {
+				return true;
+			}
 			context.InterruptCheck();
 		}
 	}
