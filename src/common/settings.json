@@ -229,7 +229,7 @@
     },
     {
         "name": "catalog_error_max_schemas",
-        "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
+        "description": "The maximum number of schemas the system will scan for \"did you mean...\" style errors in the catalog",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "100"
@@ -610,7 +610,7 @@
     },
     {
         "name": "enable_external_access",
-        "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
+        "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "true",
@@ -938,14 +938,14 @@
     },
     {
         "name": "index_scan_max_count",
-        "description": "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
+        "description": "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": 2048
     },
     {
         "name": "index_scan_percentage",
-        "description": "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
+        "description": "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
         "type": "DOUBLE",
         "default_scope": "global",
         "default_value": "0.001",
@@ -1054,7 +1054,7 @@
     },
     {
         "name": "max_expression_depth",
-        "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep \"\n\t    \"expressions might lead to stack overflow errors.",
+        "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep expressions might lead to stack overflow errors.",
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "1000"
@@ -1209,7 +1209,7 @@
     },
     {
         "name": "preserve_insertion_order",
-        "description": "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results \"\n\t    \"that do not contain ORDER BY clauses.",
+        "description": "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results that do not contain ORDER BY clauses.",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "true"
@@ -1281,7 +1281,7 @@
     },
     {
         "name": "scalar_subquery_error_on_multiple_rows",
-        "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
+        "description": "Throw an error when a scalar subquery returns more than one row. When disabled, an arbitrary row is returned instead.",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"

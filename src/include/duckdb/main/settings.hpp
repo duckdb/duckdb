@@ -1858,8 +1858,8 @@ struct RegexMatchOperatorSemanticsSetting {
 struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";
-	static constexpr const char *Description =
-	    "When a scalar subquery returns multiple rows - return a random row instead of returning an error.";
+	static constexpr const char *Description = "Throw an error when a scalar subquery returns more than one row. When "
+	                                           "disabled, an arbitrary row is returned instead.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
