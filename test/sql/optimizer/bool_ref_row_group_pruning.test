@@ -1,0 +1,130 @@
+# name: test/sql/optimizer/bool_ref_row_group_pruning.test
+# description: Bare boolean column filters (WHERE b, WHERE NOT b) should prune row groups
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/bool_ref_pruning.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# 6144 rows -> 3 row groups of 2048.
+# Row group 0: b = TRUE  for every row
+# Row group 1: b = FALSE for every row
+# Row group 2: b alternates TRUE / FALSE
+statement ok
+CREATE TABLE tb AS SELECT
+  CASE WHEN range // 2048 = 0 THEN TRUE
+       WHEN range // 2048 = 1 THEN FALSE
+       ELSE (range % 2 = 0) END AS b,
+  range::INTEGER AS x
+FROM range(6144);
+
+statement ok
+CHECKPOINT;
+
+query III
+SELECT count(*) FILTER (WHERE b),
+       count(*) FILTER (WHERE NOT b),
+       count(*)
+FROM tb;
+----
+3072	3072	6144
+
+# baseline
+query II
+EXPLAIN ANALYZE SELECT sum(x) FROM tb WHERE b = TRUE;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT sum(x) FROM tb WHERE b = TRUE;
+----
+7337984
+
+query II
+EXPLAIN ANALYZE SELECT sum(x) FROM tb WHERE b = FALSE;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT sum(x) FROM tb WHERE b = FALSE;
+----
+11533312
+
+query II
+EXPLAIN ANALYZE SELECT sum(x) FROM tb WHERE b IS TRUE;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT sum(x) FROM tb WHERE b IS TRUE;
+----
+7337984
+
+query II
+EXPLAIN ANALYZE SELECT sum(x) FROM tb WHERE b IS FALSE;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT sum(x) FROM tb WHERE b IS FALSE;
+----
+11533312
+
+# bare bool refs should prune the same way
+query II
+EXPLAIN ANALYZE SELECT sum(x) FROM tb WHERE b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT sum(x) FROM tb WHERE b;
+----
+7337984
+
+query II
+EXPLAIN ANALYZE SELECT sum(x) FROM tb WHERE NOT b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT sum(x) FROM tb WHERE NOT b;
+----
+11533312
+
+# Nullable row groups:
+# Row group 0: b is TRUE or NULL
+# Row group 1: b is FALSE or NULL
+# Row group 2: b alternates TRUE/FALSE
+# Row group 3: b is NULL
+statement ok
+CREATE TABLE nullable_tb AS SELECT
+  CASE WHEN range // 2048 = 0 THEN CASE WHEN range % 2 = 0 THEN TRUE ELSE NULL END
+       WHEN range // 2048 = 1 THEN CASE WHEN range % 2 = 0 THEN FALSE ELSE NULL END
+       WHEN range // 2048 = 2 THEN (range % 2 = 0)
+       ELSE NULL END AS b
+FROM range(8192);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM nullable_tb WHERE b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
+
+query I
+SELECT count(*) FROM nullable_tb WHERE b;
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM nullable_tb WHERE NOT b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
+
+query I
+SELECT count(*) FROM nullable_tb WHERE NOT b;
+----
+2048
