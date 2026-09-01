@@ -41,6 +41,9 @@ static FilterPropagateResult PropagateValueComparison(const Value &lmin, const V
 	    has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	switch (comparison) {
 	case ExpressionType::COMPARE_EQUAL:
+		if (RangesAreEqualConstants(lmin, lmax, rmin, rmax)) {
+			return always_true;
+		}
 		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
 			return always_false;
 		}
