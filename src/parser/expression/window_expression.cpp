@@ -211,7 +211,8 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deseria
 		deserializer.ReadPropertyWithDefault<vector<FunctionArgument>>(218, "arguments", result->arguments);
 	}
 
-	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(219, "qualified_name", QualifiedName());
+	auto qualified_name =
+	    deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(219, "qualified_name", QualifiedName());
 	if (!qualified_name.Path().empty()) {
 		result->SetQualifiedName(std::move(qualified_name));
 	}
