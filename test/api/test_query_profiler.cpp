@@ -117,7 +117,6 @@ TEST_CASE("Extracting statements does not start the query profiler", "[api]") {
 	auto output = con.GetProfilingInformation(ProfilerPrintFormat::JSON());
 	REQUIRE(output.find("\"parser\"") != std::string::npos);
 	REQUIRE(output.find("SELECT 44;") != std::string::npos);
->>>>>>> upstream/main
 }
 
 TEST_CASE("Test latency when interrupting query", "[api]") {
