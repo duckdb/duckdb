@@ -118,9 +118,6 @@ unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<refer
 	auto &func = bindings[1].get().Cast<BoundFunctionExpression>();
 	const auto &constant = bindings[4].get().Cast<BoundConstantExpression>();
 	auto &children = func.GetChildrenMutable();
-	if (auto result = RewriteZeroLength(func)) {
-		return result;
-	}
 
 	if (constant.GetValue().IsNull()) {
 		return make_uniq<BoundConstantExpression>(Value(comparison.GetReturnType()));
