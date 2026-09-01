@@ -1,35 +1,13 @@
-diff --git a/src/state.cpp b/src/state.cpp
-index 425b59d..1e32aa1 100644
---- a/src/state.cpp
-+++ b/src/state.cpp
-@@ -16,7 +16,7 @@ TUStorageExtensionInfo &TUStorageExtensionInfo::GetState(const DatabaseInstance
- 	}
- 	return *static_cast<TUStorageExtensionInfo *>(it->second->storage_info.get());
- #else
--	auto ext = StorageExtension::Find(config, STORAGE_EXTENSION_KEY);
-+	auto ext = StorageExtension::Find(config, Identifier(STORAGE_EXTENSION_KEY));
- 	if (!ext) {
- 		throw std::runtime_error("Fatal error: couldn't find the extension state.");
- 	}
-diff --git a/src/test_utils_extension.cpp b/src/test_utils_extension.cpp
-index 59e8be8..294f9bc 100644
---- a/src/test_utils_extension.cpp
-+++ b/src/test_utils_extension.cpp
-@@ -18,7 +18,7 @@ bool HasStorageExtension(const DBConfig &config) {
- #if DUCKDB_VERSION_AT_MOST(1, 4, 4)
- 	return config.storage_extensions.find(STORAGE_EXTENSION_KEY) != config.storage_extensions.end();
- #else
--	return !!StorageExtension::Find(config, STORAGE_EXTENSION_KEY);
-+	return !!StorageExtension::Find(config, Identifier(STORAGE_EXTENSION_KEY));
- #endif
- }
+diff --git a/src/include/state.hpp b/src/include/state.hpp
+index d110cfe..f35b4e0 100644
+--- a/src/include/state.hpp
++++ b/src/include/state.hpp
+@@ -8,7 +8,7 @@
+ #include "utils/serialization_helpers.hpp"
  
-@@ -42,7 +42,7 @@ static void LoadInternal(ExtensionLoader &loader) {
- #else
- 	auto ext = duckdb::make_shared_ptr<duckdb::StorageExtension>();
- 	ext->storage_info = duckdb::make_uniq<TUStorageExtensionInfo>();
--	StorageExtension::Register(instance.config, STORAGE_EXTENSION_KEY, ext);
-+	StorageExtension::Register(instance.config, Identifier(STORAGE_EXTENSION_KEY), ext);
- #endif
+ namespace duckdb {
+-const static std::string STORAGE_EXTENSION_KEY = "test_utils_storage";
++constexpr const char *STORAGE_EXTENSION_KEY = "test_utils_storage";
  
- 	// Register the functions
+ class TUStorageExtensionInfo : public StorageExtensionInfo {
+ public:
