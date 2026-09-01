@@ -59,7 +59,7 @@ bool StatementIterator::HasMore() {
 }
 
 unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<ClientContextLock> lock,
-	                                                              bool profile_statement) {
+                                                                 bool profile_statement) {
 	// Drain the current peel's expansion first.
 	if (buffer_cursor < buffer.size()) {
 		auto statement = std::move(buffer[buffer_cursor++]);
