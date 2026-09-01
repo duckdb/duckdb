@@ -274,6 +274,13 @@ select b.* from b left join (select ida, unnest([1,2,3]) as e from (select disti
 NULL	4
 NULL	NULL
 
+# a group by establishes the same distinct group, and loses it to the unnest the same way
+
+query II
+explain select b.* from b left join (select ida, unnest([1,2,3]) as e from (select ida from a group by ida) s) t on t.ida = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
 # a distinct above the unnest restores uniqueness, so that join is still eliminated
 query II
 explain select b.* from b left join (select ida from (select distinct ida from (select ida, unnest([1,2,3]) e from a))) t on t.ida = b.idb;
