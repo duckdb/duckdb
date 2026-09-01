@@ -87,6 +87,15 @@ WHERE r IN (101, 103);
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
 
+# NULL candidates should not prevent Bloom filter pruning
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_in.parquet')
+WHERE r IN (101, NULL);
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
 # Optional OR filters should also use the bloom filter
 query II
 EXPLAIN ANALYZE
