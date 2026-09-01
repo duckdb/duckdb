@@ -93,9 +93,11 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	for (auto &target : pushdown_targets) {
 		auto &pushed_column = target.columns[0];
 		if (pushed_column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION ||
+		    RuntimeFilterCastUtil::RuntimeFilterUsesTryCast(pushed_column) ||
 		    RuntimeFilterCastUtil::GetRuntimeFilterInputType(pushed_column, type) != type) {
 			// the pushed expression cannot be reconstructed on top of the raw scan value in the sort
-			// key's type (e.g. a non-integral cast or a VARIANT in between) - bail out
+			// key's type (e.g. a non-integral cast or a VARIANT in between), or the cast chain is not
+			// order-preserving (an explicit TRY_CAST, or a cast that can throw) - bail out
 			return;
 		}
 	}
@@ -124,20 +126,21 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		auto &pushed_column = target.columns[0];
 		auto col_binding = pushed_column.probe_column_index;
 
-		// reconstruct the sort key on top of the raw scan column (a cast chain, possibly empty), and
-		// evaluate the dynamic filter on the reconstructed value so the boundary constant - which is
-		// built in the sort key's type - is compared against values in that same type
+		// reconstruct the sort key on top of the raw scan column (an order-preserving cast chain,
+		// possibly empty), and evaluate the dynamic filter on the reconstructed value so the boundary
+		// constant - which is built in the sort key's type - is compared against values in that same
+		// type
 		bool preserves_cast_errors = false;
 		auto filter_input =
 		    RuntimeFilterCastUtil::CreateRuntimeFilterInputExpression(context, pushed_column, preserves_cast_errors);
 		D_ASSERT(filter_input->GetReturnType() == type);
+		D_ASSERT(!preserves_cast_errors);
 
 		// create the actual dynamic filter
 		auto pushed_expr = CreateDynamicFilterExpression(filter_data, type, filter_input->Copy());
-		if (nulls_first || preserves_cast_errors) {
+		if (nulls_first) {
 			// rows whose sort key evaluates to NULL must not be dropped by the filter: with
-			// NULLS FIRST they can be part of the top-N, and a cast error raised by the original
-			// sort key expression must not be suppressed
+			// NULLS FIRST they can be part of the top-N
 			auto or_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 			auto is_null =
 			    ExpressionFilter::CreateNullCheckExpression(std::move(filter_input), ExpressionType::OPERATOR_IS_NULL);

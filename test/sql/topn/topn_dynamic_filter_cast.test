@@ -4,9 +4,11 @@
 
 # The Top-N dynamic filter pushdown reconstructs the sort key on top of the raw scan column before
 # evaluating the filter (mirroring join filter pushdown). When the sort key reaches the scan through
-# a type-changing integral cast (aggregate GROUP BY CAST / projected cast column / set-op child
-# projection), the boundary constant - built in the sort key's type - is compared against values
-# cast to that same type, so the filter is pushed instead of bailing out.
+# an order-preserving widening integral cast (aggregate GROUP BY CAST / projected cast column /
+# set-op child projection), the boundary constant - built in the sort key's type - is compared
+# against values cast to that same type, so the filter is pushed instead of bailing out. Casts that
+# do not preserve the raw column's ordering (an explicit TRY_CAST, or a cast that can throw) are
+# never pushed - also not by the row-group pruner.
 
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
@@ -82,12 +84,12 @@ SELECT k FROM (SELECT CAST(k AS BIGINT) AS k FROM ta UNION ALL SELECT CAST(k AS 
 1
 2
 
-# positive: a failing TRY_CAST yields a NULL sort key; with the default NULLS LAST order those rows
-# sort last and are not part of the top-N, so the filter may drop them
+# negative: a TRY_CAST does not preserve the raw column's ordering (values that fail the cast
+# become NULL) - the dynamic filter is not pushed
 query II
-EXPLAIN ANALYZE SELECT TRY_CAST(k AS TINYINT) AS x FROM tint ORDER BY x LIMIT 5;
+EXPLAIN SELECT TRY_CAST(k AS TINYINT) AS x FROM tint ORDER BY x LIMIT 5;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic Filter.*
+physical_plan	<!REGEX>:(?s).*Dynamic Filter.*
 
 query I
 SELECT TRY_CAST(k AS TINYINT) AS x FROM tint ORDER BY x LIMIT 3;
@@ -95,6 +97,26 @@ SELECT TRY_CAST(k AS TINYINT) AS x FROM tint ORDER BY x LIMIT 3;
 0
 1
 2
+
+# regression: TRY_CAST(NULLS FIRST) combined with row-group pruning - the row-group pruner must
+# also bail on the non-order-preserving cast, otherwise the row groups are ordered/pruned by the
+# raw column statistics and rows whose sort key is NULL are dropped. TRY_CAST(1000 AS TINYINT)
+# overflows to NULL, so the correct answer is three NULLs, not three zeroes
+statement ok
+CREATE TABLE ttry(k INTEGER);
+
+statement ok
+INSERT INTO ttry SELECT 0 FROM range(122880);
+
+statement ok
+INSERT INTO ttry SELECT 1000 FROM range(122880);
+
+query I
+SELECT TRY_CAST(k AS TINYINT) AS x FROM ttry ORDER BY x NULLS FIRST LIMIT 3;
+----
+NULL
+NULL
+NULL
 
 # positive: with NULLS FIRST, rows whose sort key is NULL (or whose cast fails) must survive the
 # pushed filter
@@ -146,14 +168,12 @@ SELECT CAST(k AS VARCHAR) AS x FROM tint ORDER BY x LIMIT 3;
 1
 10
 
-# a default (non-try) cast that can fail (INT32 -> INT8) is still pushed, but the filter wraps the
-# reconstructed expression in OR(is-null) (nulls_first || preserves_cast_errors) so every row
-# survives the pushed filter and the cast error raised by the sort key is not suppressed - even with
-# NULLS LAST, where rows dropped by the filter would otherwise never reach the sort key evaluation
+# negative: a default (non-try) cast that can fail (INT32 -> INT8) is also not order-preserving -
+# the dynamic filter is not pushed, and the cast error raised by the sort key is reported as usual
 query II
 EXPLAIN SELECT CAST(k AS TINYINT) AS x FROM tint ORDER BY x NULLS LAST LIMIT 5;
 ----
-physical_plan	<REGEX>:(?s).*Dynamic Filter.*
+physical_plan	<!REGEX>:(?s).*Dynamic Filter.*
 
 statement error
 SELECT CAST(k AS TINYINT) AS x FROM tint ORDER BY x NULLS LAST LIMIT 5;
