@@ -887,7 +887,7 @@ private:
 	shared_ptr<const AggregateFunction> function_identity_snapshot;
 	bool statistics_preserves_function_identity = false;
 	bool deserialization_preserves_function_identity = false;
-	friend class FunctionIdentityPreservation;
+	friend class BuiltinFunctions;
 };
 
 class BoundAggregateFunction : public BaseAggregateFunction, public BoundSimpleFunction {

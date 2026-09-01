@@ -12,24 +12,9 @@
 #pragma once
 
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar/operator_functions.hpp"
 
 namespace duckdb {
-
-struct AbsOperatorFun {
-	static constexpr const char *Name = "@";
-	static constexpr const char *Parameters = "x";
-	static constexpr const char *Description = "Absolute value";
-	static constexpr const char *Example = "abs(-17.4)";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
-struct AbsFun {
-	using ALIAS = AbsOperatorFun;
-
-	static constexpr const char *Name = "abs";
-};
 
 struct PowOperatorFun {
 	static constexpr const char *Name = "**";

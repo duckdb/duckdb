@@ -10,6 +10,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -985,6 +986,21 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_flipping_aggregate, context),
 	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
+	auto public_abs = AbsOperatorFun::GetFunctions();
+	for (auto &function : public_abs.functions) {
+		REQUIRE_FALSE(function->StatisticsPreservesFunctionIdentity());
+	}
+	auto public_sum = SumFun::GetFunctions();
+	for (auto &function : public_sum.functions) {
+		REQUIRE_FALSE(function->StatisticsPreservesFunctionIdentity());
+		REQUIRE_FALSE(function->DeserializationPreservesFunctionIdentity());
+	}
+	auto public_sum_no_overflow = SumNoOverflowFun::GetFunctions();
+	for (auto &function : public_sum_no_overflow.functions) {
+		REQUIRE_FALSE(function->StatisticsPreservesFunctionIdentity());
+		REQUIRE_FALSE(function->DeserializationPreservesFunctionIdentity());
+	}
+
 	ScalarFunction forged_abs(Identifier("abs"), {LogicalType::INTEGER}, LogicalType::INTEGER,
 	                          ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
 	CreateScalarFunctionInfo forged_abs_info(std::move(forged_abs));
@@ -1009,6 +1025,22 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE(abs_expression);
 	REQUIRE(abs_expression->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
 	RequireRoundTrip(connection, *abs_expression, context, string(), "abs(CAST(7 AS INTEGER))");
+	auto &abs_definition = abs_expression->Cast<BoundFunctionExpression>().Function().GetDefinition();
+	REQUIRE(abs_definition->StatisticsPreservesFunctionIdentity());
+
+	auto &abs_operator_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
+	    *connection.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier("@")));
+	vector<unique_ptr<Expression>> abs_operator_children;
+	abs_operator_children.push_back(Constant(Value::INTEGER(7)));
+	ErrorData abs_operator_error;
+	auto abs_operator_expression =
+	    function_binder.BindScalarFunction(abs_operator_entry, std::move(abs_operator_children), abs_operator_error);
+	REQUIRE(abs_operator_expression);
+	auto &abs_operator_function = abs_operator_expression->Cast<BoundFunctionExpression>().Function();
+	REQUIRE(abs_operator_function.HasRebindableDefinition());
+	REQUIRE(abs_operator_function.GetDefinition()->StatisticsPreservesFunctionIdentity());
+	REQUIRE(abs_operator_function.GetDefinition()->GetName() == "@");
+	REQUIRE(abs_operator_function.GetDefinition() != abs_definition);
 
 	ScalarFunction scalar_impostor(Identifier("synthetic_identity"), {LogicalType::INTEGER}, LogicalType::INTEGER,
 	                               ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);

@@ -2,7 +2,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/function/scalar/comparison_functions.hpp"
-#include "function_identity.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -10,12 +9,6 @@
 #include "duckdb/planner/expression/legacy_bound_between_expression.hpp"
 
 namespace duckdb {
-
-struct BetweenFunctionIdentity {
-	static void Preserve(ScalarFunction &function) {
-		FunctionIdentityPreservation::PreserveDeserialization(function);
-	}
-};
 
 struct BetweenFunctionData : public FunctionData {
 	BetweenFunctionData(bool lower_inclusive, bool upper_inclusive)
@@ -231,7 +224,8 @@ ScalarFunction BetweenFun::GetFunction() {
 	between_fun.SetSelectCallback(BetweenSelect);
 #endif
 	between_fun.SetFunctionExpressionIdentity(ExpressionType::COMPARE_BETWEEN);
-	BetweenFunctionIdentity::Preserve(between_fun);
+	between_fun.RefreshFunctionIdentitySnapshot();
+	between_fun.deserialization_preserves_function_identity = true;
 	return between_fun;
 }
 

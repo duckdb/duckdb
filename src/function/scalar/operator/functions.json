@@ -1,5 +1,15 @@
 [
     {
+        "name": "@",
+        "parameters": "x",
+        "description": "Absolute value",
+        "example": "abs(-17.4)",
+        "type": "scalar_function_set",
+        "struct": "AbsOperatorFun",
+        "aliases": ["abs"],
+        "register": false
+    },
+    {
         "name": "+",
         "parameters": "",
         "description": "",

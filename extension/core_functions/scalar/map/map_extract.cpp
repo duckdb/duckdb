@@ -3,18 +3,11 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "function_identity.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
-
-struct MapExtractFunctionIdentity {
-	static void PreserveStatistics(ScalarFunction &function) {
-		FunctionIdentityPreservation::PreserveStatistics(function);
-	}
-};
 
 static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto count = args.size();
@@ -119,7 +112,6 @@ ScalarFunction MapExtractValueFun::GetFunction() {
 	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, val_type, MapExtractValueFunc);
 	fun.SetStatisticsCallback(MapExtractValueStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	MapExtractFunctionIdentity::PreserveStatistics(fun);
 	return fun;
 }
 

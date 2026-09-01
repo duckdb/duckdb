@@ -24,7 +24,7 @@ def get_header():
 #pragma once
 
 #include "duckdb/function/function_set.hpp"
-
+{INCLUDES}
 namespace duckdb {
 
 '''
@@ -125,8 +125,14 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
     json_path = normalize_path_separators(f'{root}/{path}/functions.json')
     with open(json_path, 'r') as f:
         parsed_json = json.load(f)
-    new_text = get_header().replace('{HEADER}', path)
+    includes = '\n'.join(f'#include "{entry["include"]}"' for entry in parsed_json if 'include' in entry)
+    if includes:
+        includes += '\n'
+    new_text = get_header().replace('{HEADER}', path).replace('{INCLUDES}', includes)
     for entry in parsed_json:
+        if 'include' in entry:
+            continue
+        register = entry.get('register', True)
         function_text = ''
         if 'struct' in entry:
             struct_name = entry['struct']
@@ -140,22 +146,28 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
         function_type_set[struct_name] = entry['type']
         if entry['type'] == 'scalar_function':
             function_text = 'static ScalarFunction GetFunction();'
-            all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION({struct_name})"])
+            if register:
+                all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION({struct_name})"])
         elif entry['type'] == 'scalar_function_set':
             function_text = 'static ScalarFunctionSet GetFunctions();'
-            all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION_SET({struct_name})"])
+            if register:
+                all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION_SET({struct_name})"])
         elif entry['type'] == 'aggregate_function':
             function_text = 'static AggregateFunction GetFunction();'
-            all_function_list.append([entry['name'], f"DUCKDB_AGGREGATE_FUNCTION({struct_name})"])
+            if register:
+                all_function_list.append([entry['name'], f"DUCKDB_AGGREGATE_FUNCTION({struct_name})"])
         elif entry['type'] == 'aggregate_function_set':
             function_text = 'static AggregateFunctionSet GetFunctions();'
-            all_function_list.append([entry['name'], f"DUCKDB_AGGREGATE_FUNCTION_SET({struct_name})"])
+            if register:
+                all_function_list.append([entry['name'], f"DUCKDB_AGGREGATE_FUNCTION_SET({struct_name})"])
         elif entry['type'] == 'window_function':
             function_text = 'static WindowFunction GetFunction();'
-            all_function_list.append([entry['name'], f"DUCKDB_WINDOW_FUNCTION({struct_name})"])
+            if register:
+                all_function_list.append([entry['name'], f"DUCKDB_WINDOW_FUNCTION({struct_name})"])
         elif entry['type'] == 'window_function_set':
             function_text = 'static WindowFunctionSet GetFunctions();'
-            all_function_list.append([entry['name'], f"DUCKDB_WINDOW_FUNCTION_SET({struct_name})"])
+            if register:
+                all_function_list.append([entry['name'], f"DUCKDB_WINDOW_FUNCTION_SET({struct_name})"])
         else:
             print("Unknown entry type " + entry['type'] + ' for entry ' + struct_name)
             exit(1)
@@ -204,7 +216,9 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
                     alias_count += 1
 
                 aliased_type = entry['type']
-                if aliased_type == 'scalar_function':
+                if not register:
+                    pass
+                elif aliased_type == 'scalar_function':
                     all_function_list.append([alias, f"DUCKDB_SCALAR_FUNCTION_ALIAS({alias_struct_name})"])
                 elif aliased_type == 'scalar_function_set':
                     all_function_list.append([alias, f"DUCKDB_SCALAR_FUNCTION_SET_ALIAS({alias_struct_name})"])

@@ -1,5 +1,4 @@
 #include "duckdb/function/scalar/geometry_functions.hpp"
-#include "function_identity.hpp"
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
@@ -11,12 +10,6 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
-
-struct GeometryFunctionIdentity {
-	static void PreserveStatistics(ScalarFunction &function) {
-		FunctionIdentityPreservation::PreserveStatistics(function);
-	}
-};
 
 static void FromWKBFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	Geometry::FromBinary(input.data[0], result, input.size(), true);
@@ -100,7 +93,6 @@ ScalarFunction StGeomfromwkbFun::GetFunction() {
 	function.SetStatisticsCallback(FromWKBStats);
 	// throws when the input is not valid WKB
 	function.SetFallible();
-	GeometryFunctionIdentity::PreserveStatistics(function);
 	return function;
 }
 

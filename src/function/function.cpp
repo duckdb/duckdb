@@ -1,13 +1,34 @@
 #include "duckdb/function/function.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/function/register_function_list_helper.hpp"
+#include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
 namespace duckdb {
+
+struct BuiltinFunctionDescription {
+	string name;
+	string parameters;
+	string description;
+	string example;
+	string categories;
+};
+
+template <class FUNCTION, class INFO>
+static void FillBuiltinFunctionDescription(const Identifier &name, INFO &info) {
+	BuiltinFunctionDescription description {name.GetIdentifierName(), FUNCTION::Parameters, FUNCTION::Description,
+	                                        FUNCTION::Example, FUNCTION::Categories};
+	FillFunctionDescriptions(description, info);
+}
 
 bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
 	return stability == rhs.stability && null_handling == rhs.null_handling && errors == rhs.errors &&
@@ -118,6 +139,9 @@ bool SimpleNamedParameterFunction::HasNamedParameters() const {
 
 // add your initializer for new functions here
 void BuiltinFunctions::Initialize() {
+	RegisterAbsoluteValueFunctions();
+	RegisterSumFunctions();
+
 	RegisterTableScanFunctions();
 	RegisterSQLiteFunctions();
 	RegisterReadFunctions();
@@ -134,6 +158,62 @@ void BuiltinFunctions::Initialize() {
 	AddCollation("nfc", NFCNormalizeFun::GetFunction());
 
 	RegisterExtensionOverloads();
+}
+
+void BuiltinFunctions::RegisterAbsoluteValueFunctions() {
+	auto register_function = [&](const Identifier &name, const Identifier &alias_of) {
+		auto functions = AbsOperatorFun::GetFunctions();
+		functions.SetName(name);
+		CreateScalarFunctionInfo info(std::move(functions));
+		info.alias_of = alias_of;
+		FillBuiltinFunctionDescription<AbsOperatorFun>(name, info);
+		info.functions.ApplyToFunctions([](ScalarFunction &function) {
+			if (!function.HasStatisticsCallback()) {
+				return;
+			}
+			function.RefreshFunctionIdentitySnapshot();
+			function.statistics_preserves_function_identity = true;
+		});
+		catalog.CreateFunction(transaction, info);
+	};
+
+	register_function(Identifier("@"), Identifier("@"));
+	register_function(Identifier("abs"), Identifier("@"));
+}
+
+void BuiltinFunctions::RegisterSumFunctions() {
+	auto sum = SumFun::GetFunctions();
+	sum.SetName(Identifier("sum"));
+	CreateAggregateFunctionInfo sum_info(std::move(sum));
+	sum_info.alias_of = Identifier("sum");
+	FillBuiltinFunctionDescription<SumFun>(Identifier("sum"), sum_info);
+	sum_info.functions.ApplyToFunctions([](AggregateFunction &function) {
+		auto &signature = function.GetSignature();
+		if (!function.GetCallbacks().HasStatisticsCallback() || signature.GetParameterCount() == 0) {
+			return;
+		}
+		auto argument_type = signature.GetParameter(0).GetType().id();
+		if (argument_type != LogicalTypeId::INTEGER && argument_type != LogicalTypeId::BIGINT) {
+			return;
+		}
+		function.RefreshFunctionIdentitySnapshot();
+		function.statistics_preserves_function_identity = true;
+	});
+	catalog.CreateFunction(transaction, sum_info);
+
+	auto sum_no_overflow = SumNoOverflowFun::GetFunctions();
+	sum_no_overflow.SetName(Identifier("sum_no_overflow"));
+	CreateAggregateFunctionInfo sum_no_overflow_info(std::move(sum_no_overflow));
+	sum_no_overflow_info.alias_of = Identifier("sum_no_overflow");
+	FillBuiltinFunctionDescription<SumNoOverflowFun>(Identifier("sum_no_overflow"), sum_no_overflow_info);
+	sum_no_overflow_info.functions.ApplyToFunctions([](AggregateFunction &function) {
+		if (!function.HasSerializationCallbacks()) {
+			return;
+		}
+		function.RefreshFunctionIdentitySnapshot();
+		function.deserialization_preserves_function_identity = true;
+	});
+	catalog.CreateFunction(transaction, sum_no_overflow_info);
 }
 
 hash_t FunctionSignature::Hash() const {

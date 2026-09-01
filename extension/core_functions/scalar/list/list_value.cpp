@@ -7,7 +7,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
-#include "function_identity.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -16,12 +15,6 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 
 namespace duckdb {
-
-struct ListValueFunctionIdentity {
-	static void PreserveStatistics(ScalarFunction &function) {
-		FunctionIdentityPreservation::PreserveStatistics(function);
-	}
-};
 
 namespace {
 
@@ -317,7 +310,6 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 
 	// Overload for 0 arguments, which returns an empty list.
 	ScalarFunction empty_fun({}, LogicalType::LIST(LogicalType::SQLNULL), ListValueFunction, nullptr, ListValueStats);
-	ListValueFunctionIdentity::PreserveStatistics(empty_fun);
 	set.AddFunction(empty_fun);
 
 	// Overload for 1 + N arguments, which returns a list of the arguments.

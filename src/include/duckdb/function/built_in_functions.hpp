@@ -54,6 +54,8 @@ private:
 	void RegisterArrowFunctions();
 	void RegisterSnifferFunction();
 	void RegisterCopyFunctions();
+	void RegisterAbsoluteValueFunctions();
+	void RegisterSumFunctions();
 
 	void RegisterExtensionOverloads();
 
