@@ -4,7 +4,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 
@@ -73,18 +72,9 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 static unique_ptr<BaseStatistics> ConstantOrNullStatistics(ClientContext &, FunctionStatisticsInput &input) {
-	if (input.expr.GetReturnType().id() != LogicalTypeId::VARCHAR) {
-		return BaseStatistics::CreateUnknown(input.expr.GetReturnType()).ToUnique();
-	}
-	auto result = StringStats::CreateEmpty(input.expr.GetReturnType());
-	StringStats::SetMin(result, string_t(""), StringStatsType::EXACT_STATS);
-	StringStats::SetMax(result, string_t(""), StringStatsType::EXACT_STATS);
 	auto &bind_data = input.bind_data->Cast<ConstantOrNullBindData>();
-	if (bind_data.value.IsNull()) {
-		result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
-		return result.ToUnique();
-	}
-	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
+	// constant_or_null returns the underlying constant, or NULL if any argument is NULL
+	auto result = BaseStatistics::FromConstant(bind_data.value);
 	for (idx_t i = 1; i < input.child_stats.size(); i++) {
 		if (input.child_stats[i].CanHaveNull()) {
 			result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
