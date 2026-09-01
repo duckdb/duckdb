@@ -635,7 +635,6 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 			return;
 		}
 
-		bound_column_ref.binding.table_index = 0;
 		bound_column_ref.binding.column_index = referenced_scan_position.GetIndex();
 	});
 	if (!rewrite_possible) {
