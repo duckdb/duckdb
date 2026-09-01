@@ -96,10 +96,17 @@ protected:
 private:
 	//! Generates a new commit timestamp
 	transaction_t GetCommitTimestamp();
+	//! Allocates the cleanup info, and reserves the space RemoveTransaction needs to re-home a transaction.
+	//! RemoveTransaction is noexcept, so it cannot do this itself: it must not allocate at all. Call this with
+	//! transaction_lock held, immediately before RemoveTransaction, so that a failure to allocate is reported
+	//! while the transaction lists are still untouched.
+	unique_ptr<DuckCleanupInfo> CreateCleanupInfo();
 	//! Remove the given transaction from the list of active transactions
-	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction) noexcept;
+	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction,
+	                                              unique_ptr<DuckCleanupInfo> cleanup_info) noexcept;
 	//! Remove the given transaction from the list of active transactions
-	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
+	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction, bool store_transaction,
+	                                              unique_ptr<DuckCleanupInfo> cleanup_info) noexcept;
 
 	//! Whether or not we can checkpoint
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,

@@ -1,4 +1,5 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 
 #include "duckdb/main/settings.hpp"
 
@@ -25,8 +26,9 @@ BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<B
     : function(function_p), info(std::move(info_p)) {
 }
 
-CastFunctionSet::CastFunctionSet() : combine_rules(DefaultCombineTypesRules()), map_info(nullptr) {
-	bind_functions.emplace_back(DefaultCasts::GetDefaultCastFunction);
+CastFunctionSet::CastFunctionSet()
+    : default_bind_function(DefaultCasts::GetDefaultCastFunction), combine_rules(DefaultCombineTypesRules()),
+      map_info(nullptr) {
 }
 
 CastFunctionSet::CastFunctionSet(DBConfig &config_p) : CastFunctionSet() {
@@ -52,19 +54,32 @@ CollationBinding &CollationBinding::Get(DatabaseInstance &db) {
 BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const LogicalType &target,
                                                GetCastFunctionInput &get_input) {
 	if (source == target) {
-		return DefaultCasts::NopCast;
+		BoundCastInfo result(DefaultCasts::NopCast);
+		result.SetStatisticsCallback(CastStatistics::Propagate);
+		return result;
 	}
-	// the first function is the default
-	// we iterate the set of bind functions backwards
-	for (idx_t i = bind_functions.size(); i > 0; i--) {
-		auto &bind_function = bind_functions[i - 1];
+	auto bind_cast = [&](BindCastFunction &bind_function) {
 		BindCastInput input(*this, bind_function.info.get(), get_input.context);
 		input.query_location = get_input.query_location;
-		auto result = bind_function.function(input, source, target);
+		return bind_function.function(input, source, target);
+	};
+
+	// Registered casts can have different semantics, so only their own statistics callbacks are valid.
+	for (auto bind_function = registered_bind_functions.rbegin(); bind_function != registered_bind_functions.rend();
+	     bind_function++) {
+		auto result = bind_cast(*bind_function);
 		if (result.HasFunction()) {
-			// found a cast function! return it
 			return result;
 		}
+	}
+
+	// Built-in casts inherit generic propagation unless they provide a more specific callback.
+	auto result = bind_cast(default_bind_function);
+	if (result.HasFunction()) {
+		if (!result.HasStatisticsCallback()) {
+			result.SetStatisticsCallback(CastStatistics::Propagate);
+		}
+		return result;
 	}
 	// no cast found: return the default null cast
 	return DefaultCasts::TryVectorNullCast;
@@ -233,7 +248,7 @@ void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const Logi
 		// create the cast map and the cast map function
 		auto info = make_uniq<MapCastInfo>();
 		map_info = info.get();
-		bind_functions.emplace_back(MapCastFunction, std::move(info));
+		registered_bind_functions.emplace_back(MapCastFunction, std::move(info));
 	}
 	map_info->AddEntry(source, target, std::move(node));
 }

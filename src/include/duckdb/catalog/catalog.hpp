@@ -17,6 +17,7 @@
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/query_error_context.hpp"
@@ -416,8 +417,10 @@ public:
 		return CatalogLookupBehavior::STANDARD;
 	}
 
-	//! Returns the default schema of the catalog
-	virtual Identifier GetDefaultSchema() const;
+	//! Returns the default schema of the catalog, or nullopt if the catalog has no default schema.
+	//! Catalogs without a default schema are never probed with an implicit schema for unqualified lookups.
+	//! A returned value is always non-empty - an empty Identifier means "unspecified" elsewhere in the catalog.
+	virtual optional<Identifier> GetDefaultSchema() const;
 
 	//! The default table is used for `SELECT * FROM <catalog_name>;`
 	//! FIXME: these should be virtual methods

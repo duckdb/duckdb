@@ -334,6 +334,16 @@
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
                     {"name": "regex", "type": "VARCHAR"},
+                    {"name": "options", "type": "VARCHAR"}
+                ],
+                "description": "If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.",
+                "example": "regexp_extract('aaaBBBCC', '[A-Z][A-Z]', 'i')",
+                "categories": ["regex"]
+            },
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "group", "type": "INTEGER"},
                     {"name": "options", "type": "VARCHAR"}
                 ],

@@ -93,10 +93,11 @@ static Value NegatePercentileValue(const Value &v, const bool desc) {
 	}
 }
 
-static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
+static void NegatePercentileFractions(ClientContext &context, BoundExpressionMap &bound_expressions,
+                                      unique_ptr<ParsedExpression> &fractions, bool desc) {
 	D_ASSERT(fractions.get());
-	D_ASSERT(fractions->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound = BoundExpression::GetExpression(*fractions);
+	D_ASSERT(bound_expressions.IsBound(*fractions));
+	auto &bound = bound_expressions.GetMutable(*fractions);
 
 	if (!bound->IsFoldable()) {
 		return;
@@ -166,7 +167,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		BindChild(child.GetExpressionMutable(), 0, error);
 		// We have to negate the fractions for PERCENTILE_XXXX DESC
 		if (!error.HasError() && ordered_set_agg && i == aggr.GetArguments().size() - 1) {
-			NegatePercentileFractions(context, child.GetExpressionMutable(), negate_fractions);
+			NegatePercentileFractions(context, GetBoundExpressions(), child.GetExpressionMutable(), negate_fractions);
 		}
 	}
 
@@ -205,8 +206,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				if (result.HasError()) {
 					result.error.Throw();
 				}
-				auto &bound_expr = BoundExpression::GetExpression(*child.GetExpressionMutable());
-				ExtractCorrelatedExpressions(binder, *bound_expr);
+				ExtractCorrelatedExpressions(binder, GetBoundExpressions().Get(*child.GetExpressionMutable()));
 			}
 
 			if (aggr.Filter()) {
@@ -215,8 +215,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				if (result.HasError()) {
 					result.error.Throw();
 				}
-				auto &bound_expr = BoundExpression::GetExpression(*aggr.Filter());
-				ExtractCorrelatedExpressions(binder, *bound_expr);
+				ExtractCorrelatedExpressions(binder, GetBoundExpressions().Get(*aggr.Filter()));
 			}
 			if (aggr.OrderBy() && !aggr.OrderBy()->orders.empty()) {
 				for (auto &order : aggr.OrderByMutable()->orders) {
@@ -224,8 +223,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 					if (result.HasError()) {
 						result.error.Throw();
 					}
-					auto &bound_expr = BoundExpression::GetExpression(*order.expression);
-					ExtractCorrelatedExpressions(binder, *bound_expr);
+					ExtractCorrelatedExpressions(binder, GetBoundExpressions().Get(*order.expression));
 				}
 			}
 		} else {
@@ -237,7 +235,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	}
 
 	if (aggr.Filter()) {
-		auto &child = BoundExpression::GetExpression(*aggr.Filter());
+		auto child = GetBoundExpressions().Consume(*aggr.Filter());
 		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child), LogicalType::BOOLEAN);
 	}
 
@@ -250,11 +248,10 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		// Inject missing ordering arguments as positional arguments
 		if (aggr.GetArguments().size() < ordered_set_agg) {
 			for (auto &order : aggr.OrderByMutable()->orders) {
-				auto &child = BoundExpression::GetExpression(*order.expression);
 				if (order_sensitive) {
-					arguments.emplace_back(string(), child->Copy());
+					arguments.emplace_back(string(), GetBoundExpressions().Get(*order.expression).Copy());
 				} else {
-					arguments.emplace_back(string(), std::move(child));
+					arguments.emplace_back(string(), GetBoundExpressions().Consume(*order.expression));
 				}
 			}
 		}
@@ -264,7 +261,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	}
 
 	for (auto &arg : aggr.GetArgumentsMutable()) {
-		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
+		auto bound_arg = GetBoundExpressions().Consume(*arg.GetExpressionMutable());
 		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
 		// and pass them all positionally, aliasing them by their name (see BindFunction for the rationale)
 		if (!arg.GetName().empty()) {
@@ -283,7 +280,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		order_bys = make_uniq<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.OrderByMutable()->orders) {
-			auto &order_expr = BoundExpression::GetExpression(*order.expression);
+			auto order_expr = GetBoundExpressions().Consume(*order.expression);
 			PushCollation(context, order_expr, order_expr->GetReturnType());
 			const auto sense = config.ResolveOrder(context, order.type);
 			const auto null_order = config.ResolveNullOrder(context, sense, order.null_order);

@@ -213,8 +213,8 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 		// no suggestions found during tokenizing
 		// run the root matcher
 		TokenIterator token_iterator(tokens);
-		MatchState state(token_iterator, suggestions, parse_allocator, max_token_index);
-		compiled_grammar->ProgramMatcher().Match(state);
+		MatchState state(token_iterator, suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY);
+		compiled_grammar->ProgramMatcher().MatchParseResult(state);
 	}
 	if (suggestions.empty()) {
 		return {};

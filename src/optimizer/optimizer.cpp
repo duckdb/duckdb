@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
 #include "duckdb/common/enums/optimizer_type.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -16,6 +15,7 @@
 #include "duckdb/optimizer/multi_stage_aggregate_rewriter.hpp"
 #include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
+#include "duckdb/optimizer/filter_statistics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/grouping_sets_optimizer.hpp"
@@ -30,6 +30,7 @@
 #include "duckdb/optimizer/row_group_pruner.hpp"
 #include "duckdb/optimizer/rule/distinct_aggregate_optimizer.hpp"
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
+#include "duckdb/optimizer/rule/empty_needle_removal.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
@@ -55,6 +56,7 @@
 #include "duckdb/optimizer/rule/monotone_preimage.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"
 #include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
@@ -66,6 +68,7 @@ namespace duckdb {
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
 	rewriter.rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<StructExtractStructPackFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<LeastGreatestSimplificationRule>(rewriter));
@@ -91,6 +94,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<RegexpReplaceExtractRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<NoopReplaceRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<JoinDependentFilterRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<TimeStampComparison>(rewriter));
@@ -145,7 +149,18 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 }
 
 void Optimizer::Verify(LogicalOperator &op) {
-	ColumnBindingResolver::Verify(context, op);
+	LogicalPlanVerifier::Verify(context, op);
+}
+
+// RemoveUnusedColumns renumbers bindings, so RemapProjectionMap can match a stale binding to a
+// different column rather than dropping it
+static void ClearProjectionMaps(LogicalOperator &op) {
+	for (idx_t child_index = 0; child_index < op.children.size(); child_index++) {
+		if (auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index)) {
+			projection_map->clear();
+		}
+		ClearProjectionMaps(*op.children[child_index]);
+	}
 }
 
 static bool ContainsDML(const LogicalOperator &op) {
@@ -255,6 +270,11 @@ void Optimizer::RunBuiltInOptimizers() {
 		filter_pushdown.CheckMarkToSemi(*plan, top_bindings);
 		plan = filter_pushdown.Rewrite(std::move(plan));
 	});
+
+	if (!CTEContainsDML(*plan)) {
+		FilterStatisticsOptimizer filter_statistics(*this);
+		filter_statistics.Optimize(plan);
+	}
 
 	// derive and push filters into materialized CTEs
 	RunOptimizer(OptimizerType::CTE_FILTER_PUSHER, [&]() {
@@ -426,12 +446,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	// DML CTEs can invalidate the table statistics captured during planning.
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	bool propagated_statistics = false;
+	bool removed_aggregate_children = false;
 	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
 			propagated_statistics = true;
+			removed_aggregate_children = propagator.HasRemovedAggregateChildren();
 		});
 	}
 	if (propagated_statistics) {
@@ -441,6 +463,7 @@ void Optimizer::RunBuiltInOptimizers() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
+			removed_aggregate_children |= propagator.HasRemovedAggregateChildren();
 		}
 	}
 
@@ -455,6 +478,15 @@ void Optimizer::RunBuiltInOptimizers() {
 		CommonAggregateOptimizer common_aggregate;
 		common_aggregate.VisitOperator(*plan);
 	});
+
+	// COUNT(x) becomes COUNT(*) during statistics propagation, leaving unreferenced columns in the scan
+	if (removed_aggregate_children) {
+		RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
+			ClearProjectionMaps(*plan);
+			RemoveUnusedColumns unused(*this);
+			unused.VisitOperator(plan);
+		});
+	}
 
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {

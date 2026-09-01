@@ -467,9 +467,9 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
 	TokenIterator token_iterator(tokens);
-	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index);
+	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY);
 
-	compiled_grammar->ProgramMatcher().Match(state);
+	compiled_grammar->ProgramMatcher().MatchParseResult(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(std::move(tokens));
 }
@@ -556,12 +556,12 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
 	TokenIterator token_iterator(root_tokens);
-	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index);
+	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY);
 
-	auto match_result = compiled_grammar->ProgramMatcher().Match(state);
-	// `+ 1` accounts for the EOI sentinel — the autocomplete walk may report SUCCESS without
+	auto match_result = compiled_grammar->ProgramMatcher().MatchParseResult(state);
+	// `+ 1` accounts for the EOI sentinel — the matcher walk may report success without
 	// consuming it.
-	if (match_result != MatchResultType::SUCCESS || state.token_iterator.Position() + 1 < root_tokens.size()) {
+	if (!match_result.IsSuccess() || state.token_iterator.Position() + 1 < root_tokens.size()) {
 		auto error_token = string("<eof>");
 		auto current = state.token_iterator.Current();
 		if (current && current->type != TokenType::END_OF_INPUT &&

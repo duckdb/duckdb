@@ -98,32 +98,6 @@ string WindowExpression::ToString() const {
 	                                                                 qualified_name.Name().GetIdentifierName());
 }
 
-bool WindowExpression::HasBoundedParts() const {
-	for (auto &child : arguments) {
-		if (child.GetExpression().GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
-			return true;
-		}
-	}
-	for (auto &partition : partitions) {
-		if ((*partition).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
-			return true;
-		}
-	}
-
-	for (auto &o : orders) {
-		if ((*o.expression).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
-			return true;
-		}
-	}
-
-	for (auto &o : arg_orders) {
-		if ((*o.expression).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
-			return true;
-		}
-	}
-	return false;
-}
-
 void WindowExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "function_name", qualified_name.Name());

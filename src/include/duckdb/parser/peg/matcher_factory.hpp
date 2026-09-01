@@ -1,54 +1,39 @@
 #pragma once
 
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/parser/peg/matcher/list.hpp"
 
 namespace duckdb {
-struct PEGParser;
+struct CompiledGrammar;
+struct PEGExpression;
 
 class MatcherFactory;
 
 //! Class for building matchers
 class MatcherFactory {
 private:
-	struct MatcherList {
-	public:
-		struct Entry {
-			explicit Entry(Matcher &matcher) : matcher(matcher), function_name(0U) {
-			}
-			Entry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {
-			}
-
-			Matcher &matcher;
-			string_t function_name;
-		};
-
-	public:
-		explicit MatcherList(PEGParser &parser, MatcherFactory &factory);
-		void AddMatcher(Matcher &matcher);
-		void AddRootMatcher(Matcher &matcher);
-		idx_t GetRootMatcherCount() const;
-		void BeginFunction(string_t function_name);
-		void CloseBracket();
-		MatcherList::Entry &GetLastRootMatcher();
+	struct MatcherConstructionState {
+		void Register(string_t rule_name);
+		void Schedule(string_t rule_name);
+		bool Begin(string_t rule_name);
+		bool HasScheduled() const;
+		string_t TakeNext();
 
 	private:
-		PEGParser &parser;
-		MatcherFactory &factory;
-		vector<MatcherList::Entry> matchers;
+		string_set_t unconstructed;
+		string_set_t scheduled;
+		queue<string_t> pending;
 	};
 
 public:
-	MatcherFactory(MatcherAllocator &allocator, const PEGKeywordHelper &keyword_helper)
-	    : allocator(allocator), keyword_helper(keyword_helper) {
-	}
+	MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, CompiledGrammar &compiled_p);
 	virtual ~MatcherFactory() = default;
 
 public:
-	//! Create a matcher from a PEG grammar
-	Matcher &CreateMatcher(const char *grammar, const char *root_rule);
-	//! Look up a matcher for a rule that was already built (as a sub-rule of a previous
-	//! CreateMatcher call). Throws if the rule has not been built.
+	Matcher &CreateRootMatcher(const string &root_rule);
+	//! Look up a matcher for a rule that was built by CreateRootMatcher. Throws if the rule has not been built.
 	Matcher &GetMatcher(const string &rule_name);
 
 private:
@@ -70,13 +55,17 @@ private:
 	void AddRuleOverride(const char *name, Matcher &matcher);
 	void AddPackratMemoizedRule(const char *name);
 	void SuppressSuggestions(const char *name);
-	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
-	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters);
+	Matcher &CreateMatcher(string_t rule_name);
+	Matcher &CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters);
+	Matcher &CreateMatcher(const PEGExpression &expression, const string_map_t<idx_t> &parameter_map,
+	                       vector<reference<Matcher>> &parameters);
 
 private:
 	MatcherAllocator &allocator;
-	const PEGKeywordHelper &keyword_helper;
+	const ParsedGrammar &grammar;
+	CompiledGrammar &compiled;
 	string_map_t<reference<Matcher>> matchers;
+	MatcherConstructionState construction_state;
 	mutable case_insensitive_map_t<reference<KeywordMatcher>> keywords;
 	case_insensitive_map_t<KeywordInfo> keyword_overrides;
 	string_set_t no_suggestion_rules;

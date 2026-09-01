@@ -11,13 +11,17 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "debug_fs_extension.hpp"
 
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
 namespace duckdb {
+
+static constexpr const char *BENCHMARK_EXTENSION_DIRECTORY_ENV = "DUCKDB_BENCHMARK_EXTENSION_DIRECTORY";
 
 static string ParseGroupFromPath(string file) {
 	string extension = "";
@@ -66,6 +70,10 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 			result->options.storage_compatibility = StorageCompatibility::FromString(version);
 		}
 		result->options.load_extensions = false;
+		auto extension_directory = std::getenv(BENCHMARK_EXTENSION_DIRECTORY_ENV);
+		if (extension_directory && extension_directory[0]) {
+			result->SetOptionByName("allow_unsigned_extensions", true);
+		}
 		return result;
 	}
 };
@@ -499,6 +507,21 @@ void InterpretedBenchmark::LoadExtensions(InterpretedBenchmarkState &state, bool
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 			throw InvalidInputException("Unknown extension " + extension);
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {
+			auto extension_directory = std::getenv(BENCHMARK_EXTENSION_DIRECTORY_ENV);
+			if (extension_directory && extension_directory[0]) {
+				auto fs = FileSystem::CreateLocal();
+				auto extension_path = fs->JoinPath(extension_directory, extension + ".duckdb_extension");
+				if (!fs->FileExists(extension_path)) {
+					throw InvalidInputException("Extension %s is not linked and was not found at %s", extension,
+					                            extension_path);
+				}
+				auto load_result = state.con.Query("LOAD " + SQLString(extension_path));
+				if (load_result->HasError()) {
+					throw InvalidInputException("Failed to load benchmark extension %s from %s: %s", extension,
+					                            extension_path, load_result->GetError());
+				}
+				continue;
+			}
 			throw InvalidInputException("Extension " + extension +
 			                            " is not available/was not compiled. Cannot run this benchmark.");
 		}

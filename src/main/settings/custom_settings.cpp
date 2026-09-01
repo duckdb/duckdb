@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -65,6 +66,30 @@ static DatabaseInstance &GetDB(DatabaseInstance *db) {
 		throw InvalidInputException("Cannot change/set %s before the database is started", T::Name);
 	}
 	return *db;
+}
+
+//! Parse a memory limit that may also be given as a percentage. The base is only computed when a
+//! percentage is actually given, since obtaining it can be expensive or unavailable.
+template <class BASE>
+static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) {
+	if (input.empty() || input.back() != '%') {
+		return DBConfig::ParseMemoryLimit(input);
+	}
+	double percentage;
+	if (!TryDoubleCast(input.c_str(), input.size() - 1, percentage, false) || percentage < 0 || percentage > 100) {
+		throw InvalidInputException("Unable to parse valid percentage (input: %s)", input);
+	}
+	return LossyNumericCast<idx_t>(percentage) * get_base() / 100;
+}
+
+//! The available system memory. The config's filesystem is not set until the database starts, but
+//! options can be configured before that, so fall back to a temporary local filesystem.
+static idx_t GetAvailableSystemMemory(DBConfig &config) {
+	if (config.file_system) {
+		return DBConfig::GetSystemAvailableMemory(*config.file_system);
+	}
+	auto local_fs = FileSystem::CreateLocal();
+	return DBConfig::GetSystemAvailableMemory(*local_fs);
 }
 
 } // namespace
@@ -142,6 +167,55 @@ void AllocatorFlushThresholdSetting::OnSet(SettingCallbackInfo &info, Value &inp
 void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (info.db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_community_extensions setting while database is running");
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Allow Extension Repositories
+//===----------------------------------------------------------------------===//
+// Ordering of the access levels, independent of the enum's numeric values: while the database is running the setting
+// can only move to a lower level ('undecided' -> 'allowed' -> 'forbidden')
+static int ExtensionRepositoryAccessLevel(ExtensionRepositoryAccess access) {
+	switch (access) {
+	case ExtensionRepositoryAccess::UNDECIDED:
+		return 2;
+	case ExtensionRepositoryAccess::ALLOWED:
+		return 1;
+	default: // FORBIDDEN
+		return 0;
+	}
+}
+
+void AllowExtensionRepositoriesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	// validate the value
+	auto new_access = ExtensionRepositoryManager::ParseAccess(StringValue::Get(input));
+	if (!info.db) {
+		// the value is set before the database is running (startup) - any value is allowed
+		return;
+	}
+	// while the database is running the setting can only move down: the 'undecided' default can be decided either way,
+	// 'allowed' can still be forbidden, but a decision cannot be reverted. This makes 'forbidden' a one-way ratchet
+	// within a session
+	auto current_access = ExtensionRepositoryManager::GetAccess(*info.db);
+	if (ExtensionRepositoryAccessLevel(new_access) > ExtensionRepositoryAccessLevel(current_access)) {
+		throw InvalidInputException("allow_extension_repositories can only be changed from 'undecided' to 'allowed' or "
+		                            "'forbidden', or from 'allowed' to 'forbidden', while the database is running");
+	}
+}
+
+void ExtensionRepositoryDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.db) {
+		// set before the database is running (startup) - always allowed
+		return;
+	}
+	// The repository directory is the trust anchor for user-provided repositories: it determines which signing keys
+	// are trusted. While signature checking is enabled it must be fixed at startup, so that a runtime connection
+	// cannot point it at a directory of attacker-controlled keys and thereby bypass the opt-in. When unsigned
+	// extensions are already allowed the signature-trust model is off, so there is nothing to protect
+	if (!Settings::Get<AllowUnsignedExtensionsSetting>(*info.db)) {
+		throw InvalidInputException(
+		    "extension_repository_directory can only be set at startup while signature checking "
+		    "is enabled (allow_unsigned_extensions=false)");
 	}
 }
 
@@ -284,18 +358,7 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 // Block Allocator Memory
 //===----------------------------------------------------------------------===//
 void BlockAllocatorMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	const auto input_string = input.ToString();
-	idx_t size;
-	if (!input_string.empty() && input_string.back() == '%') {
-		double percentage;
-		if (!TryDoubleCast(input_string.c_str(), input_string.size() - 1, percentage, false) || percentage < 0 ||
-		    percentage > 100) {
-			throw InvalidInputException("Unable to parse valid percentage (input: %s)", input_string);
-		}
-		size = LossyNumericCast<idx_t>(percentage) * config.options.maximum_memory / 100;
-	} else {
-		size = DBConfig::ParseMemoryLimit(input_string);
-	}
+	const auto size = ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return config.options.maximum_memory; });
 	if (db) {
 		BlockAllocator::Get(*db).Resize(size);
 	}
@@ -905,6 +968,12 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 // Enable Progress Bar Print
 //===----------------------------------------------------------------------===//
 void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("enable_progress_bar_print setting cannot be NULL");
+	}
+	if (input.type().id() != LogicalTypeId::BOOLEAN) {
+		throw InvalidInputException("enable_progress_bar_print setting must be a boolean value");
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
 	config.print_progress_bar = input.GetValue<bool>();
@@ -924,6 +993,12 @@ Value EnableProgressBarPrintSetting::GetSetting(const ClientContext &context) {
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 bool EnableProgressBarSetting::OnLocalSet(ClientContext &context, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("enable_progress_bar setting cannot be NULL");
+	}
+	if (input.type().id() != LogicalTypeId::BOOLEAN) {
+		throw InvalidInputException("enable_progress_bar setting must be a boolean value");
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
 	return true;
@@ -939,6 +1014,9 @@ bool EnableProgressBarSetting::OnLocalReset(ClientContext &context) {
 // External Threads
 //===----------------------------------------------------------------------===//
 void ExternalThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("external_threads must be a positive integer");
+	}
 	auto new_external_threads = input.GetValue<uint64_t>();
 	if (info.db) {
 		TaskScheduler::GetScheduler(*info.db).SetThreads(info.config.options.maximum_threads, new_external_threads);
@@ -1086,7 +1164,9 @@ void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 // Max Memory
 //===----------------------------------------------------------------------===//
 void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
+	// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
+	config.options.maximum_memory =
+	    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(config); });
 	if (db) {
 		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
 	}
@@ -1182,6 +1262,9 @@ Value OperatorMemoryLimitSetting::GetSetting(const ClientContext &context) {
 // Ordered Aggregate Threshold
 //===----------------------------------------------------------------------===//
 void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("ordered_aggregate_threshold must be a positive integer");
+	}
 	const auto param = input.GetValue<uint64_t>();
 	if (param <= 0) {
 		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
@@ -1192,9 +1275,38 @@ void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &i
 // Perfect Ht Threshold
 //===----------------------------------------------------------------------===//
 void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("perfect_ht_threshold must be an integer");
+	}
 	auto bits = input.GetValue<int64_t>();
 	if (bits < 0 || bits > 32) {
 		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Preserve Identifier Case
+//===----------------------------------------------------------------------===//
+void PreserveIdentifierCaseSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("preserve_identifier_case setting cannot be NULL");
+	}
+	// backwards compatibility with the 1.x boolean setting: accept anything that casts to BOOLEAN,
+	// mapping true to preserve_case and false to lowercase
+	auto boolean_value = input.DefaultTryCastAs(LogicalType::BOOLEAN);
+	if (boolean_value) {
+		input = Value(BooleanValue::Get(*boolean_value) ? "preserve_case" : "lowercase");
+		return;
+	}
+	auto parameter = StringValue::Get(input);
+	try {
+		EnumUtil::FromString<IdentifierCaseMode>(parameter);
+	} catch (NotImplementedException &) {
+		// the generated setter reports this as a NotImplementedException naming the C++ enum
+		throw InvalidInputException(
+		    "Unrecognized parameter for option preserve_identifier_case \"%s\", expected one of: "
+		    "preserve_case, lowercase, uppercase",
+		    parameter);
 	}
 }
 
@@ -1552,6 +1664,9 @@ Value TrackedMetricsSetting::GetSetting(const ClientContext &context) {
 // Threads
 //===----------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("threads must be a positive integer");
+	}
 	auto new_val = input.GetValue<int64_t>();
 	if (new_val < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
@@ -1580,6 +1695,9 @@ Value ThreadsSetting::GetSetting(const ClientContext &context) {
 // Async Threads
 //===----------------------------------------------------------------------===//
 void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("async_threads must be a positive integer");
+	}
 	auto new_val = input.GetValue<int64_t>();
 	if (new_val < 0) {
 		throw SyntaxException("Cannot have negative async_threads!");

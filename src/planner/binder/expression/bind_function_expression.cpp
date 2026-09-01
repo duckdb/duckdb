@@ -338,7 +338,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 	arguments.reserve(function.GetArguments().size());
 	for (auto &arg : function.GetArgumentsMutable()) {
-		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
+		auto bound_arg = GetBoundExpressions().Consume(*arg.GetExpressionMutable());
 
 		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
 		// and pass them all positionally. We do alias them by their name though, so that alias-capturing functions
@@ -373,7 +373,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
                                                 idx_t depth) {
 	// get the callback function for the lambda parameter types
-	auto &scalar_function = func.functions.functions.front();
+	auto &scalar_function = *func.functions.functions.front();
 	auto bind_lambda_function = scalar_function.GetBindLambdaCallback();
 	if (!bind_lambda_function) {
 		return BindResult("This scalar function does not support lambdas!");
@@ -408,17 +408,17 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			return BindResult(std::move(error));
 		}
 
-		const auto &child = BoundExpression::GetExpression(*args[i].GetExpressionMutable());
-		function_child_types.push_back(child->GetReturnType());
+		const auto &child = GetBoundExpressions().Get(*args[i].GetExpressionMutable());
+		function_child_types.push_back(child.GetReturnType());
 	}
 
 	if (lambda_expr_idx == 1) {
 		// get the logical type of the children of the list
-		auto &list_child = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
-		if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
-		    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
-		    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
-		    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
+		auto &list_child = GetBoundExpressions().Get(*args[0].GetExpressionMutable());
+		if (list_child.GetReturnType().id() != LogicalTypeId::LIST &&
+		    list_child.GetReturnType().id() != LogicalTypeId::ARRAY &&
+		    list_child.GetReturnType().id() != LogicalTypeId::SQLNULL &&
+		    list_child.GetReturnType().id() != LogicalTypeId::UNKNOWN) {
 			return BindResult("Invalid LIST argument during lambda function binding!");
 		}
 	}
@@ -468,11 +468,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		}
 	}
 
-	// successfully bound: replace the node with a BoundExpression
+	// successfully bound: store the bound lambda in the map
 	auto alias = args[lambda_expr_idx].GetExpression().GetAlias();
 	bind_lambda_result.expression->SetAlias(alias);
 
-	args[lambda_expr_idx].GetExpressionMutable() = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
+	GetBoundExpressions().Insert(args[lambda_expr_idx].GetExpression(), std::move(bind_lambda_result.expression));
 
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -482,8 +482,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// extract the children and types
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < args.size(); i++) {
-		auto &child = BoundExpression::GetExpression(*args[i].GetExpressionMutable());
-		children.push_back(std::move(child));
+		children.push_back(GetBoundExpressions().Consume(*args[i].GetExpressionMutable()));
 	}
 
 	// capture the (lambda) columns
@@ -501,10 +500,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	auto &bound_function_expr = result->Cast<BoundFunctionExpression>();
 
-	// remove the lambda expression from the children
-	auto lambda = std::move(bound_function_expr.GetChildrenMutable()[lambda_expr_idx]);
-	bound_function_expr.GetChildrenMutable().erase_at(lambda_expr_idx);
-	auto &bound_lambda = lambda->Cast<BoundLambdaExpression>();
+	// the lambda expression stays in the children, so that the argument positions do not shift.
+	// it has no runtime value - the expression executor fills its slot with a constant placeholder
+	auto &bound_lambda = bound_function_expr.GetChildrenMutable()[lambda_expr_idx]->Cast<BoundLambdaExpression>();
 
 	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda
 	// expression (rhs). This happens after we bound the lambda expression of this depth. So it is relevant for
@@ -531,6 +529,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	for (auto &capture : bound_lambda.CapturesMutable()) {
 		bound_function_expr.GetChildrenMutable().push_back(std::move(capture));
 	}
+	// the lambda stays in the children, so it must not hold on to the moved-from capture slots
+	bound_lambda.CapturesMutable().clear();
 
 	return BindResult(std::move(result));
 }

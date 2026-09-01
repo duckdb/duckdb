@@ -1,0 +1,54 @@
+# name: test/sql/catalog/test_temporary_schema.test
+# description: Temporary schemas are not supported and must not end up in the persistent catalog
+# group: [catalog]
+
+load {TEST_DIR}/temporary_schema.db
+
+statement error
+CREATE TEMPORARY SCHEMA zzz
+----
+<REGEX>:.*Temporary schemas are not supported.*
+
+statement error
+CREATE TEMP SCHEMA zzz
+----
+<REGEX>:.*Temporary schemas are not supported.*
+
+statement error
+CREATE TEMPORARY SCHEMA IF NOT EXISTS zzz
+----
+<REGEX>:.*Temporary schemas are not supported.*
+
+statement error
+CREATE OR REPLACE TEMPORARY SCHEMA zzz
+----
+<REGEX>:.*Temporary schemas are not supported.*
+
+statement error
+CREATE TEMPORARY SCHEMA temp.zzz
+----
+<REGEX>:.*Temporary schemas are not supported.*
+
+# nothing was created - in this session, and after a restart
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE schema_name='zzz'
+----
+0
+
+restart
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE schema_name='zzz'
+----
+0
+
+# non-temporary schemas are unaffected
+statement ok
+CREATE SCHEMA zzz
+
+restart
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE schema_name='zzz'
+----
+1

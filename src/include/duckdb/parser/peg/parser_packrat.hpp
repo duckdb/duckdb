@@ -13,6 +13,7 @@
 
 namespace duckdb {
 class Matcher;
+class MatcherResult;
 struct MatchState;
 class ParseResult;
 
@@ -41,7 +42,7 @@ public:
 	ParserPackratCache();
 	~ParserPackratCache();
 
-	optional_ptr<ParseResult> Match(const Matcher &matcher, MatchState &state);
+	MatcherResult Match(const Matcher &matcher, MatchState &state);
 
 private:
 	unordered_map<ParserPackratKey, ParserPackratEntry, ParserPackratKeyHash> entries;

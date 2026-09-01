@@ -1,11 +1,16 @@
 #include "catch.hpp"
+#include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/opener_file_system.hpp"
+#include "duckdb/common/string.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "test_helpers.hpp"
 #if (!defined(_WIN32) && !defined(WIN32))
@@ -15,9 +20,51 @@
 #include "duckdb/common/windows.hpp"
 #endif
 
+#include <thread>
+
 using namespace duckdb;
 
-static void create_dummy_file(string fname) {
+namespace {
+
+class ExistingDirectoryFileSystem : public FileSystem {
+public:
+	string GetName() const override {
+		return "ExistingDirectoryFileSystem";
+	}
+
+	bool DirectoryExists(const string &, optional_ptr<FileOpener>) override {
+		return true;
+	}
+
+	void CreateDirectory(const string &, optional_ptr<FileOpener>) override {
+		create_called = true;
+	}
+
+public:
+	bool create_called = false;
+};
+
+class TestOpenerFileSystem : public OpenerFileSystem {
+public:
+	TestOpenerFileSystem(FileSystem &file_system_p, FileOpener &opener_p)
+	    : file_system(file_system_p), opener(opener_p) {
+	}
+
+public:
+	FileSystem &GetFileSystem() const override {
+		return file_system;
+	}
+
+	optional_ptr<FileOpener> GetOpener() const override {
+		return opener;
+	}
+
+private:
+	FileSystem &file_system;
+	FileOpener &opener;
+};
+
+void CreateDummyFile(string fname) {
 	string normalized_string;
 	if (StringUtil::StartsWith(fname, "file:///")) {
 #ifdef _WIN32
@@ -40,6 +87,52 @@ static void create_dummy_file(string fname) {
 	outfile << "I_AM_A_DUMMY" << endl;
 	outfile.close();
 }
+
+// Fake compress file handle and filesystem implementation, which doesn't contain any (de)compression functionality but
+// just the interface compatibility.
+class FakeCompressFileHandle : public FileHandle {
+public:
+	FakeCompressFileHandle(FileSystem &internal_file_system, duckdb::unique_ptr<FileHandle> internal_file_handle_p)
+	    : FileHandle(internal_file_system, internal_file_handle_p->GetPath(), internal_file_handle_p->GetFlags()),
+	      internal_file_handle(std::move(internal_file_handle_p)) {
+	}
+
+	void Close() override {
+		internal_file_handle->Close();
+	}
+
+	duckdb::unique_ptr<FileHandle> internal_file_handle;
+};
+class FakeCompressFileSystem : public CompressedFileSystem {
+public:
+	duckdb::unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, duckdb::unique_ptr<FileHandle> handle,
+	                                                  bool write) override {
+		(void)context; // Suppress compilation warning.
+		(void)write;
+		return make_uniq<FakeCompressFileHandle>(*this, std::move(handle));
+	}
+
+	FileCompressionType GetCompressionType() override {
+		return FileCompressionType("fake_compress");
+	}
+	bool CanHandleFile(const string &fpath) override {
+		return StringUtil::EndsWith(fpath, ".compress");
+	}
+	duckdb::unique_ptr<StreamWrapper> CreateStream() override {
+		return nullptr;
+	}
+	idx_t InBufferSize() override {
+		return 0;
+	}
+	idx_t OutBufferSize() override {
+		return 0;
+	}
+	string GetName() const override {
+		return "FakeCompress";
+	}
+};
+
+} // namespace
 
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
@@ -75,7 +168,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	auto fname_in_dir2 = fs->JoinPath(dname_localhost, fname2);
 	auto fname_in_dir3 = fs->JoinPath(dname_no_host, fname2);
 
-	create_dummy_file(fname_in_dir);
+	CreateDummyFile(fname_in_dir);
 	REQUIRE(fs->FileExists(fname_in_dir));
 	REQUIRE(!fs->DirectoryExists(fname_in_dir));
 
@@ -123,7 +216,7 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	auto fname_in_dir = fs->JoinPath(dname, fname);
 	auto fname_in_dir2 = fs->JoinPath(dname, fname2);
 
-	create_dummy_file(fname_in_dir);
+	CreateDummyFile(fname_in_dir);
 	REQUIRE(fs->FileExists(fname_in_dir));
 	REQUIRE(!fs->DirectoryExists(fname_in_dir));
 
@@ -145,6 +238,137 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	REQUIRE(!fs->DirectoryExists(dname));
 	REQUIRE(!fs->FileExists(fname_in_dir));
 	REQUIRE(!fs->FileExists(fname_in_dir2));
+}
+
+#ifndef _WIN32
+TEST_CASE("Character devices use streaming file semantics", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+	REQUIRE(fs->IsPipe("/dev/null"));
+	auto handle = fs->OpenFile("/dev/null", FileFlags::FILE_FLAGS_WRITE);
+	REQUIRE(handle->GetWriteMode() == FileWriteMode::SEQUENTIAL);
+}
+#endif
+
+TEST_CASE("RemoveDirectoryExtended never removes directory contents in single mode", "[file_system]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &fs = FileSystem::GetFileSystem(*con.context);
+	auto directory = TestCreatePath("try_remove_empty_directory");
+	if (fs.DirectoryExists(directory)) {
+		fs.RemoveDirectory(directory);
+	}
+	fs.CreateDirectory(directory);
+
+	auto file = fs.JoinPath(directory, "keep");
+	CreateDummyFile(file);
+	REQUIRE(!fs.RemoveDirectoryExtended(directory, {RemoveDirectoryMode::SINGLE}));
+	REQUIRE(fs.DirectoryExists(directory));
+	REQUIRE(fs.FileExists(file));
+
+	fs.RemoveFile(file);
+	REQUIRE(fs.RemoveDirectoryExtended(directory, {RemoveDirectoryMode::SINGLE}));
+	REQUIRE(!fs.DirectoryExists(directory));
+	REQUIRE(!fs.RemoveDirectoryExtended(directory, {RemoveDirectoryMode::SINGLE}));
+}
+
+TEST_CASE("Extended directory operations report target ownership", "[file_system]") {
+	ExistingDirectoryFileSystem existing_directory_fs;
+	REQUIRE(!existing_directory_fs.CreateDirectoryExtended("virtual_directory", {CreateDirectoryMode::SINGLE}));
+	REQUIRE(!existing_directory_fs.create_called);
+	REQUIRE(!existing_directory_fs.RemoveDirectoryExtended("virtual_directory", {RemoveDirectoryMode::SINGLE}));
+
+	auto fs = FileSystem::CreateLocal();
+	auto directory = TestCreatePath("try_create_directory");
+	if (fs->DirectoryExists(directory)) {
+		fs->RemoveDirectory(directory);
+	}
+
+	atomic<bool> start {false};
+	atomic<idx_t> created {0};
+	atomic<idx_t> errors {0};
+	vector<std::thread> threads;
+	for (idx_t i = 0; i < 8; i++) {
+		threads.emplace_back([&]() {
+			while (!start) {
+				std::this_thread::yield();
+			}
+			try {
+				if (fs->CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE})) {
+					created++;
+				}
+			} catch (...) {
+				errors++;
+			}
+		});
+	}
+	start = true;
+	for (auto &thread : threads) {
+		thread.join();
+	}
+
+	REQUIRE(errors == 0);
+	REQUIRE(created == 1);
+	REQUIRE(!fs->CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}));
+	REQUIRE(fs->RemoveDirectoryExtended(directory, {RemoveDirectoryMode::SINGLE}));
+
+	auto recursive_parent = TestCreatePath("try_create_directory_recursive");
+	if (fs->DirectoryExists(recursive_parent)) {
+		fs->RemoveDirectory(recursive_parent);
+	}
+	auto recursive_leaf = fs->JoinPath(fs->JoinPath(recursive_parent, "nested"), "leaf");
+	REQUIRE(fs->CreateDirectoryExtended(recursive_leaf, {CreateDirectoryMode::RECURSIVE}));
+	REQUIRE(fs->DirectoryExists(recursive_leaf));
+	REQUIRE(!fs->CreateDirectoryExtended(recursive_leaf, {CreateDirectoryMode::RECURSIVE}));
+	REQUIRE(fs->RemoveDirectoryExtended(recursive_parent, {RemoveDirectoryMode::RECURSIVE}));
+	REQUIRE(!fs->DirectoryExists(recursive_parent));
+
+	auto file_path = TestCreatePath("try_create_directory_file");
+	fs->TryRemoveFile(file_path);
+	{ auto handle = fs->OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW); }
+	REQUIRE_THROWS(fs->CreateDirectoryExtended(file_path, {CreateDirectoryMode::SINGLE}));
+	REQUIRE_THROWS(fs->RemoveDirectoryExtended(file_path, {RemoveDirectoryMode::SINGLE}));
+	fs->RemoveFile(file_path);
+}
+
+TEST_CASE("Extended directory operations forward the file opener", "[file_system]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	ClientContextFileOpener opener(*con.context);
+	auto fs = FileSystem::CreateLocal();
+	auto home_directory = TestCreatePath("extended_directory_opener");
+	if (fs->DirectoryExists(home_directory)) {
+		fs->RemoveDirectory(home_directory);
+	}
+	fs->CreateDirectory(home_directory);
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("SET home_directory = '%s'", home_directory)));
+
+	auto directory = "~/parent/child";
+	REQUIRE(fs->CreateDirectoryExtended(directory, {CreateDirectoryMode::RECURSIVE}, &opener));
+	auto absolute_parent = fs->JoinPath(home_directory, "parent");
+	auto file = fs->JoinPath(fs->JoinPath(absolute_parent, "child"), "file");
+	CreateDummyFile(file);
+	REQUIRE(fs->RemoveDirectoryExtended("~/parent", {RemoveDirectoryMode::RECURSIVE}, &opener));
+	REQUIRE(!fs->DirectoryExists(absolute_parent));
+	fs->RemoveDirectory(home_directory);
+}
+
+TEST_CASE("Recursive directory creation checks access for every ancestor", "[file_system]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	ClientContextFileOpener opener(*con.context);
+	auto fs = FileSystem::CreateLocal();
+	TestOpenerFileSystem opener_fs(*fs, opener);
+	auto base = TestCreatePath("extended_directory_permissions");
+	if (fs->DirectoryExists(base)) {
+		fs->RemoveDirectory(base);
+	}
+	auto allowed_root = fs->JoinPath(fs->JoinPath(base, "parent"), "allowed");
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("SET allowed_directories = ['%s']", allowed_root)));
+	REQUIRE_NO_FAIL(con.Query("SET enable_external_access = false"));
+
+	auto target = fs->JoinPath(allowed_root, "child");
+	REQUIRE_THROWS(opener_fs.CreateDirectoryExtended(target, {CreateDirectoryMode::RECURSIVE}));
+	REQUIRE(!fs->DirectoryExists(base));
 }
 
 // note: the integer count is chosen as 512 so that we write 512*8=4096 bytes to the file
@@ -222,9 +446,9 @@ TEST_CASE("Test RemoveFiles", "[file_system]") {
 	auto file2 = fs->JoinPath(dname, "file2.txt");
 	auto file3 = fs->JoinPath(dname, "file3.txt");
 	auto file4 = fs->JoinPath(dname, "file4.txt");
-	create_dummy_file(file1);
-	create_dummy_file(file2);
-	create_dummy_file(file3);
+	CreateDummyFile(file1);
+	CreateDummyFile(file2);
+	CreateDummyFile(file3);
 
 	REQUIRE(fs->FileExists(file1));
 	REQUIRE(fs->FileExists(file2));
@@ -630,11 +854,14 @@ TEST_CASE("Path::FromString/ToString round-trips", "[file_system]") {
 		    make_tuple(OK_, "file:/a",      "file:/a"),
 		    make_tuple(OK_, "file:/a/b",    "file:/a/b"),
 
+		    make_tuple(OK_, "file://localhost",     "file://localhost/"),
 		    make_tuple(OK_, "file://localhost/",    "file://localhost/"),
 		    make_tuple(OK_, "file://localhost/a",   "file://localhost/a"),
 		    make_tuple(OK_, "file://localhost/a/b", "file://localhost/a/b"),
 
 		    make_tuple(ERR, "file://otherhost/a/b", ""),
+		    make_tuple(ERR, "file://otherhost",     ""),
+		    make_tuple(ERR, "file://",              ""),
 
 		    make_tuple(OK_, "file:///",     "file:///"),
 		    make_tuple(OK_, "file:///a",    "file:///a"),
@@ -1114,3 +1341,43 @@ TEST_CASE("Test long paths on Windows", "[file_system]") {
 	fs->RemoveDirectory(work_dir);
 }
 #endif // _WIN32
+
+TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
+	// Create a local file which pretends to be fake-compressed.
+	auto filepath = TestCreatePath("fake_compression_file.compress");
+	auto fs = FileSystem::CreateLocal();
+	{
+		const string payload = "CREATE_COMPRESSED_FILE";
+		auto write_handle = fs->OpenFile(filepath, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		write_handle->Write(QueryContext(), static_cast<void *>(const_cast<char *>(payload.c_str())), payload.size(),
+		                    0);
+		write_handle->Sync();
+	}
+
+	VirtualFileSystem vfs;
+	vfs.RegisterCompressionFilesystem(make_uniq<FakeCompressFileSystem>());
+
+	// Auto-detection matches the fake compression filesystem based on the file name.
+	FileOpenFlags flags = FileOpenFlags::FILE_FLAGS_READ;
+	flags.SetCompression(FileCompressionType::AUTO_DETECT);
+	auto file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+
+	// Downcast to make sure compressed file handle is created.
+	REQUIRE(file_handle != nullptr);
+	auto &compressed_file_handle = file_handle->Cast<FakeCompressFileHandle>();
+	REQUIRE(compressed_file_handle.internal_file_handle != nullptr);
+	file_handle.reset();
+
+	// Explicitly requesting the registered compression type works as well.
+	flags.SetCompression(FileCompressionType("fake_compress"));
+	file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+	REQUIRE(file_handle != nullptr);
+	REQUIRE(file_handle->Cast<FakeCompressFileHandle>().internal_file_handle != nullptr);
+	file_handle.reset();
+
+	// Explicitly requesting a compression type that has not been registered throws.
+	flags.SetCompression(FileCompressionType("nonexistent_compress"));
+	REQUIRE_THROWS(vfs.OpenFile(filepath, flags, /*opener=*/nullptr));
+
+	fs->RemoveFile(filepath);
+}

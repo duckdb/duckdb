@@ -1,0 +1,28 @@
+# name: test/sql/storage/wal/wal_replay_default_database.test
+# description: Resolve the default database while replaying the WAL
+# group: [wal]
+
+load {TEST_DIR}/wal_replay_default_database.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE test (i INTEGER);
+
+statement ok
+INSERT INTO test VALUES (42);
+
+statement ok
+ALTER TABLE test ALTER i TYPE VARCHAR USING concat(i, '');
+
+# Replay the ALTER before the main database is registered as attached
+restart
+
+query T
+SELECT typeof(i) FROM test;
+----
+VARCHAR

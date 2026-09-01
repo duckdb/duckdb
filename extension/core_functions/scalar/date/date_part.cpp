@@ -169,6 +169,39 @@ struct DatePart {
 		return result.ToUnique();
 	}
 
+	//! Some parts (e.g. month) are monotone as long as the input stays within a single parent period (e.g. year)
+	//! If so, evaluating the part at the endpoints gives exact bounds - otherwise fall back to the fixed [MIN, MAX]
+	template <int64_t MIN, int64_t MAX, class T, class OP, class PARENT_OP>
+	static unique_ptr<BaseStatistics> PropagatePartWithinParentStatistics(vector<BaseStatistics> &child_stats) {
+		auto &nstats = child_stats[0];
+		if (!NumericStats::HasMinMax(nstats)) {
+			return nullptr;
+		}
+		auto min = NumericStats::GetMin<T>(nstats);
+		auto max = NumericStats::GetMax<T>(nstats);
+		// an invalid range gives no bounds to propagate
+		if (min > max) {
+			return nullptr;
+		}
+		// Infinities produce a NULL date part even though the input is not NULL,
+		// so we cannot propagate the validity (and thus the stats) in that case
+		if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
+			return nullptr;
+		}
+		int64_t part_min = MIN;
+		int64_t part_max = MAX;
+		// within a single parent period the part cannot wrap around, so the endpoints are exact bounds
+		if (PARENT_OP::template Operation<T, int64_t>(min) == PARENT_OP::template Operation<T, int64_t>(max)) {
+			part_min = OP::template Operation<T, int64_t>(min);
+			part_max = OP::template Operation<T, int64_t>(max);
+		}
+		auto result = NumericStats::CreateEmpty(LogicalType::BIGINT);
+		result.CopyValidity(child_stats[0]);
+		NumericStats::SetMin(result, Value::BIGINT(part_min));
+		NumericStats::SetMax(result, Value::BIGINT(part_max));
+		return result.ToUnique();
+	}
+
 	template <typename OP>
 	struct PartOperator {
 		template <class TA, class TR, class DATA_TYPE>
@@ -211,7 +244,15 @@ struct DatePart {
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			// min/max of month operator is [1, 12]
-			return PropagateSimpleDatePartStatistics<1, 12, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<1, 12, T, MonthOperator, YearOperator>(input.child_stats);
+		}
+	};
+
+	//! Identifies the calendar month containing the input, used as the parent period for day statistics
+	struct YearMonthParentOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return YearOperator::Operation<TA, TR>(input) * 12 + MonthOperator::Operation<TA, TR>(input);
 		}
 	};
 
@@ -224,7 +265,8 @@ struct DatePart {
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			// min/max of day operator is [1, 31]
-			return PropagateSimpleDatePartStatistics<1, 31, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<1, 31, T, DayOperator, YearMonthParentOperator>(
+			    input.child_stats);
 		}
 	};
 
@@ -310,7 +352,7 @@ struct DatePart {
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			// min/max of quarter operator is [1, 4]
-			return PropagateSimpleDatePartStatistics<1, 4, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<1, 4, T, QuarterOperator, YearOperator>(input.child_stats);
 		}
 	};
 
@@ -354,7 +396,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<1, 366, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<1, 366, T, DayOfYearOperator, YearOperator>(input.child_stats);
 		}
 	};
 
@@ -366,7 +408,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<1, 53, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<1, 53, T, WeekOperator, ISOYearOperator>(input.child_stats);
 		}
 	};
 
@@ -455,7 +497,8 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59999999999, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<0, 59999999999, T, NanosecondsOperator,
+			                                           DayHourMinuteParentOperator>(input.child_stats);
 		}
 	};
 
@@ -467,7 +510,8 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59999999, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<0, 59999999, T, MicrosecondsOperator,
+			                                           DayHourMinuteParentOperator>(input.child_stats);
 		}
 	};
 
@@ -479,7 +523,8 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59999, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<0, 59999, T, MillisecondsOperator, DayHourMinuteParentOperator>(
+			    input.child_stats);
 		}
 	};
 
@@ -491,7 +536,8 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<0, 59, T, SecondsOperator, DayHourMinuteParentOperator>(
+			    input.child_stats);
 		}
 	};
 
@@ -503,7 +549,8 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<0, 59, T, MinutesOperator, DayHourParentOperator>(
+			    input.child_stats);
 		}
 	};
 
@@ -515,7 +562,29 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 24, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<0, 24, T, HoursOperator, DayParentOperator>(input.child_stats);
+		}
+	};
+
+	//! Identifies the day containing the input, used as the parent period for hour statistics
+	struct DayParentOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input);
+	};
+
+	//! Identifies the hour containing the input, used as the parent period for minute statistics
+	struct DayHourParentOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return DayParentOperator::Operation<TA, TR>(input) * 24 + HoursOperator::Operation<TA, TR>(input);
+		}
+	};
+
+	//! Identifies the minute containing the input, used as the parent period for second statistics
+	struct DayHourMinuteParentOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return DayHourParentOperator::Operation<TA, TR>(input) * 60 + MinutesOperator::Operation<TA, TR>(input);
 		}
 	};
 
@@ -1346,6 +1415,52 @@ int64_t DatePart::HoursOperator::Operation(dtime_tz_t input) {
 }
 
 template <>
+int64_t DatePart::DayParentOperator::Operation(date_t input) {
+	return input.days;
+}
+
+template <>
+int64_t DatePart::DayParentOperator::Operation(timestamp_t input) {
+	return Timestamp::GetDate(input).days;
+}
+
+// a time-of-day value always lies within a single day
+template <>
+int64_t DatePart::DayParentOperator::Operation(dtime_t input) {
+	return 0;
+}
+
+template <>
+int64_t DatePart::DayParentOperator::Operation(dtime_ns_t input) {
+	return 0;
+}
+
+// TIME_TZ parts are not monotone under its UTC-based ordering, so only identical values share a parent
+template <>
+int64_t DatePart::DayParentOperator::Operation(dtime_tz_t input) {
+	return NumericCast<int64_t>(input.bits);
+}
+
+template <>
+int64_t DatePart::DayHourParentOperator::Operation(dtime_tz_t input) {
+	return NumericCast<int64_t>(input.bits);
+}
+
+template <>
+int64_t DatePart::DayHourMinuteParentOperator::Operation(dtime_tz_t input) {
+	return NumericCast<int64_t>(input.bits);
+}
+
+template <>
+int64_t DatePart::DayHourMinuteParentOperator::Operation(timestamp_ns_t input) {
+	date_t date;
+	dtime_t time;
+	int32_t nanos;
+	Timestamp::Convert(input, date, time, nanos);
+	return int64_t(date.days) * 24 * 60 + time.value / Interval::MICROS_PER_MINUTE;
+}
+
+template <>
 double DatePart::EpochOperator::Operation(timestamp_t input) {
 	D_ASSERT(input.IsFinite());
 	return double(Timestamp::GetEpochMicroSeconds(input)) / double(Interval::MICROS_PER_SEC);
@@ -2050,9 +2165,7 @@ ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar
 	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr,
 	                                        ts_stats, DATE_CACHE));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
-	for (auto &func : operator_set.functions) {
-		func.SetFallible();
-	}
+	operator_set.SetFallible();
 	return operator_set;
 }
 
@@ -2343,9 +2456,7 @@ ScalarFunctionSet QuarterFun::GetFunctions() {
 
 ScalarFunctionSet DayOfWeekFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::DayOfWeekOperator>();
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 
@@ -2382,9 +2493,7 @@ ScalarFunctionSet TimezoneFun::GetFunctions() {
 
 	operator_set.AddFunction(function);
 
-	for (auto &func : operator_set.functions) {
-		func.SetFallible();
-	}
+	operator_set.SetFallible();
 
 	return operator_set;
 }
@@ -2417,9 +2526,7 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ_NS}, LogicalType::BIGINT, tsns_func));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	// these overflow at the representable extremes, so the failure must be reportable
-	for (auto &func : operator_set.functions) {
-		func.SetFallible();
-	}
+	operator_set.SetFallible();
 	return operator_set;
 }
 
@@ -2434,9 +2541,7 @@ ScalarFunctionSet EpochUsFun::GetFunctions() {
 	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, tstz_stats));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	// these overflow at the representable extremes, so the failure must be reportable
-	for (auto &func : operator_set.functions) {
-		func.SetFallible();
-	}
+	operator_set.SetFallible();
 	return operator_set;
 }
 
@@ -2456,9 +2561,7 @@ ScalarFunctionSet EpochMsFun::GetFunctions() {
 
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	// these overflow at the representable extremes, so the failure must be reportable
-	for (auto &func : operator_set.functions) {
-		func.SetFallible();
-	}
+	operator_set.SetFallible();
 	return operator_set;
 }
 
@@ -2468,9 +2571,7 @@ ScalarFunctionSet MakeTimestampMsFun::GetFunctions() {
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	// these overflow at the representable extremes, so the failure must be reportable
-	for (auto &func : operator_set.functions) {
-		func.SetFallible();
-	}
+	operator_set.SetFallible();
 	return operator_set;
 }
 
@@ -2537,6 +2638,7 @@ ScalarFunctionSet LastDayFun::GetFunctions() {
 	                                    DatePart::UnaryFunction<date_t, date_t, LastDayOperator>));
 	last_day.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DATE,
 	                                    DatePart::UnaryFunction<timestamp_t, date_t, LastDayOperator>));
+	last_day.SetFallible();
 	return last_day;
 }
 
@@ -2595,9 +2697,7 @@ ScalarFunctionSet DatePartFun::GetFunctions() {
 	date_part.AddFunction(StructDatePart::GetFunction<interval_t>(LogicalType::INTERVAL));
 	date_part.AddFunction(StructDatePart::GetFunction<dtime_tz_t>(LogicalType::TIME_TZ));
 
-	for (auto &func : date_part.functions) {
-		func.SetFallible();
-	}
+	date_part.SetFallible();
 
 	return date_part;
 }

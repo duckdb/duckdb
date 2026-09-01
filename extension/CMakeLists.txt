@@ -28,7 +28,7 @@ foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
       EXT_KIND
       TARGET ${EXT_NAME}_extension
       PROPERTY DUCKDB_EXTENSION_KIND)
-    if(NOT "${EXT_KIND}" STREQUAL "CAPI")
+    if(NOT "${EXT_KIND}" MATCHES "^CAPI")
       set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
       file(
         APPEND
@@ -74,6 +74,17 @@ foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
     config.linked_extensions.push_back({\"${EXT_NAME}\", [](DuckDB &db) {
         db.LoadStaticCAPIExtension(\"${EXT_NAME}\", ${EXT_NAME}_init_c_api);
     }});
+")
+    elseif("${EXT_KIND}" STREQUAL "CAPI_V2")
+      set(EXT_CAPI_DECLARATIONS
+          "${EXT_CAPI_DECLARATIONS}extern \"C\" void ${EXT_NAME}_init_c_api_v2(struct duckdb_v2_extension_input *);\n"
+      )
+      set(EXT_LOADER_BODY
+          "${EXT_LOADER_BODY}\
+    if (extension==\"${EXT_NAME}\") {
+        db.LoadStaticCAPIExtensionV2(\"${EXT_NAME}\", ${EXT_NAME}_init_c_api_v2);
+        return ExtensionLoadResult::LOADED_EXTENSION;
+    }
 ")
     else()
       set(EXT_REGISTER_BODY

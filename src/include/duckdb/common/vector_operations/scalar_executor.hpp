@@ -264,8 +264,70 @@ private:
 		}
 	}
 
-	template <bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, bool PRESERVE_RESULT_VALIDITY, class RESULT_TYPE,
-	          class ADAPTER, class... ARGS, size_t... Is>
+	template <uint64_t SELECTION_MASK, class RESULT_TYPE, class ADAPTER, class LEFT_TYPE, class RIGHT_TYPE>
+	static void
+	ExecuteGenericBinaryNoNull(const LEFT_TYPE *__restrict left_data, const RIGHT_TYPE *__restrict right_data,
+	                           const std::array<const sel_t *, 2> &selections, RESULT_TYPE *__restrict result_data,
+	                           idx_t count, ValidityMask &result_validity, ADAPTER &adapter) {
+		auto left_selection = selections[0];
+		auto right_selection = selections[1];
+		auto result_ptr = result_data;
+		auto result_end = result_data + count;
+		idx_t result_idx = 0;
+		while (result_ptr != result_end) {
+			idx_t left_index;
+			idx_t right_index;
+			if constexpr (SELECTION_MASK & 1) {
+				left_index = *left_selection++;
+			} else {
+				left_index = result_idx;
+			}
+			if constexpr (SELECTION_MASK & 2) {
+				right_index = *right_selection++;
+			} else {
+				right_index = result_idx;
+			}
+			*result_ptr =
+			    adapter.Operation(result_validity, result_idx, left_data[left_index], right_data[right_index]);
+			result_ptr++;
+			result_idx++;
+		}
+	}
+
+	template <class RESULT_TYPE, class ADAPTER, class LEFT_TYPE, class RIGHT_TYPE>
+	static void ExecuteGenericBinaryNoNullSwitch(const LEFT_TYPE *__restrict left_data,
+	                                             const RIGHT_TYPE *__restrict right_data,
+	                                             const std::array<UnifiedVectorFormat, 2> &formats,
+	                                             RESULT_TYPE *__restrict result_data, idx_t count,
+	                                             ValidityMask &result_validity, ADAPTER &adapter) {
+		std::array<const sel_t *, 2> selections = {{formats[0].sel->data(), formats[1].sel->data()}};
+		uint64_t selection_mask = 0;
+		selection_mask |= selections[0] ? 1 : 0;
+		selection_mask |= selections[1] ? 2 : 0;
+		switch (selection_mask) {
+		case 0:
+			ExecuteGenericBinaryNoNull<0>(left_data, right_data, selections, result_data, count, result_validity,
+			                              adapter);
+			return;
+		case 1:
+			ExecuteGenericBinaryNoNull<1>(left_data, right_data, selections, result_data, count, result_validity,
+			                              adapter);
+			return;
+		case 2:
+			ExecuteGenericBinaryNoNull<2>(left_data, right_data, selections, result_data, count, result_validity,
+			                              adapter);
+			return;
+		case 3:
+			ExecuteGenericBinaryNoNull<3>(left_data, right_data, selections, result_data, count, result_validity,
+			                              adapter);
+			return;
+		default:
+			throw InternalException("Invalid non-null generic scalar executor selection profile");
+		}
+	}
+
+	template <bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, bool SPECIALIZE_NON_NULL_GENERIC_SELECTIONS,
+	          bool PRESERVE_RESULT_VALIDITY, class RESULT_TYPE, class ADAPTER, class... ARGS, size_t... Is>
 	static void ExecuteGeneric(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
 	                           ADAPTER &adapter, std::index_sequence<Is...>) {
 		constexpr idx_t N = sizeof...(ARGS);
@@ -298,6 +360,9 @@ private:
 					}
 				}
 			}
+		} else if constexpr (SPECIALIZE_NON_NULL_GENERIC_SELECTIONS && N == 2) {
+			ExecuteGenericBinaryNoNullSwitch(std::get<0>(input_data), std::get<1>(input_data), formats, result_data,
+			                                 count, result_validity, adapter);
 		} else {
 			for (idx_t row = 0; row < count; row++) {
 				result_data[row] = adapter.Operation(result_validity, row,
@@ -379,8 +444,9 @@ private:
 				}
 			}
 		}
-		ExecuteGeneric<POLICY::SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, POLICY::PRESERVE_RESULT_VALIDITY, RESULT_TYPE,
-		               ADAPTER, ARGS...>(inputs, result, count, adapter, indices);
+		ExecuteGeneric<POLICY::SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, POLICY::SPECIALIZE_NON_NULL_GENERIC_SELECTIONS,
+		               POLICY::PRESERVE_RESULT_VALIDITY, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count, adapter,
+		                                                                                indices);
 	}
 
 	template <bool HAS_TRUE_SELECTION, bool HAS_FALSE_SELECTION>

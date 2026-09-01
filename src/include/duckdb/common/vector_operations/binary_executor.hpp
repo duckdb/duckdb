@@ -134,6 +134,7 @@ private:
 #else
 		static constexpr bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS = false;
 #endif
+		static constexpr bool SPECIALIZE_NON_NULL_GENERIC_SELECTIONS = true;
 		static constexpr bool PRESERVE_RESULT_VALIDITY = false;
 	};
 
@@ -204,6 +205,12 @@ public:
 	static void Execute(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 		bool dummy = false;
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(left, right, result, count, dummy);
+	}
+
+	//! Execute OP through OPWRAPPER, passing "fun" to the wrapper as extra context
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, class OPWRAPPER, class FUNC>
+	static void ExecuteWithWrapper(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, count, fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>

@@ -205,10 +205,6 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
 
-	if (default_database.empty()) {
-		default_database = attached_db->GetName();
-	}
-
 	//! Initialize the database.
 	if (options.is_main_database) {
 		attached_db->SetInitialDatabase();
@@ -325,10 +321,6 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 		attached_db->SetName(new_name);
 		databases[new_name] = attached_db;
 	}
-
-	if (old_name == default_database) {
-		default_database = new_name;
-	}
 }
 
 shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &name) {
@@ -341,9 +333,6 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &n
 		}
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
-		if (name == default_database) {
-			default_database = databases.empty() ? Identifier() : databases.begin()->first;
-		}
 	}
 	if (attached_db && attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		--remote_catalog_count;
@@ -421,30 +410,26 @@ Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	auto &config = ClientData::Get(context);
 	auto &default_entry = config.catalog_search_path->GetDefault();
 	if (IsInvalidCatalog(default_entry.GetCatalog())) {
-		auto &result = DatabaseManager::Get(context).default_database;
-		if (result.empty()) {
-			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
+		auto &manager = DatabaseManager::Get(context);
+		lock_guard<mutex> guard(manager.databases_lock);
+		if (manager.databases.empty()) {
+			auto modified_database = MetaTransaction::Get(context).ModifiedDatabase();
+			if (modified_database) {
+				return modified_database->GetName();
+			}
+			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no database attached");
 		}
-		return result;
+		// OIDs are assigned in attach order, so the oldest attached database is the default.
+		auto default_database = manager.databases.begin();
+		for (auto entry = manager.databases.begin(); entry != manager.databases.end(); entry++) {
+			if (entry->second->oid < default_database->second->oid) {
+				default_database = entry;
+			}
+		}
+		return default_database->first;
 	}
 	return default_entry.GetCatalog();
 }
-
-// LCOV_EXCL_START
-void DatabaseManager::SetDefaultDatabase(ClientContext &context, const Identifier &new_value) {
-	auto db_entry = GetDatabase(context, new_value);
-
-	if (!db_entry) {
-		throw InternalException("Database %s not found", new_value);
-	} else if (db_entry->IsTemporary()) {
-		throw InternalException("Cannot set the default database to a temporary database");
-	} else if (db_entry->IsSystem()) {
-		throw InternalException("Cannot set the default database to a system database");
-	}
-
-	default_database = new_value;
-}
-// LCOV_EXCL_STOP
 
 vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
                                                                    const optional_idx max_db_count) {

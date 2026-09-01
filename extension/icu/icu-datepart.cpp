@@ -599,9 +599,7 @@ struct ICUDatePart : public ICUDateFunc {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetBinaryPartCodeFunction<timestamp_tz_t, double>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
-		for (auto &func : set.functions) {
-			func.SetFallible();
-		}
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 

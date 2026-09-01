@@ -2,6 +2,7 @@
 
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/common/hash_functions.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/random_engine.hpp"
@@ -44,6 +45,20 @@ void HTTPHeaders::Insert(string key, string value) {
 	headers.insert(make_pair(std::move(key), std::move(value)));
 }
 
+void HTTPHeaders::Append(string key, string value) {
+	auto entry = headers.find(key);
+	if (entry == headers.end()) {
+		headers.insert(make_pair(std::move(key), std::move(value)));
+		return;
+	}
+	auto repeated_entry = repeated_headers.find(key);
+	if (repeated_entry == repeated_headers.end()) {
+		repeated_headers.insert(make_pair(std::move(key), header_values_t {entry->second, std::move(value)}));
+	} else {
+		repeated_entry->second.push_back(std::move(value));
+	}
+}
+
 bool HTTPHeaders::HasHeader(const string &key) const {
 	return headers.find(key) != headers.end();
 }
@@ -56,6 +71,14 @@ string HTTPHeaders::GetHeaderValue(const string &key) const {
 	return entry->second;
 }
 
+HTTPHeaders::header_values_t HTTPHeaders::GetHeaderValues(const string &key) const {
+	auto repeated_entry = repeated_headers.find(key);
+	if (repeated_entry != repeated_headers.end()) {
+		return repeated_entry->second;
+	}
+	return {GetHeaderValue(key)};
+}
+
 #ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
 unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 	auto status_code = HTTPUtil::ToStatusCode(res ? res->status : 0);
@@ -65,7 +88,7 @@ unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 		result->body = response.body;
 		result->reason = response.reason;
 		for (auto &entry : response.headers) {
-			result->headers.Insert(entry.first, entry.second);
+			result->headers.Append(entry.first, entry.second);
 		}
 	} else {
 		result->request_error = to_string(res.error());
@@ -116,7 +139,7 @@ string HTTPUtil::GetName() const {
 
 bool HTTPResponse::ShouldRetry() const {
 	if (HasRequestError()) {
-		// always retry on request errors
+		// request errors are eligible for retry
 		return true;
 	}
 	switch (status) {
@@ -242,7 +265,7 @@ private:
 		result->body = response.body;
 		result->reason = response.reason;
 		for (auto &entry : response.headers) {
-			result->headers.Insert(entry.first, entry.second);
+			result->headers.Append(entry.first, entry.second);
 		}
 		return result;
 	}
@@ -348,7 +371,7 @@ struct URISchemeDetectionResult {
 };
 
 bool IsValidSchemeChar(char c) {
-	return std::isalnum(c) || c == '+' || c == '.' || c == '-';
+	return std::isalnum(static_cast<unsigned char>(c)) || c == '+' || c == '.' || c == '-';
 }
 
 //! See https://datatracker.ietf.org/doc/html/rfc3986#section-3.1
@@ -363,7 +386,7 @@ URISchemeDetectionResult DetectURIScheme(const string &uri) {
 		return result;
 	}
 
-	if (!std::isalpha(uri[0])) {
+	if (!std::isalpha(static_cast<unsigned char>(uri[0]))) {
 		//! Scheme names consist of a sequence of characters beginning with a letter
 		result.lower_scheme = "";
 		result.scheme_type = URISchemeType::NONE;
@@ -455,7 +478,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 			}
 		}
 
-		// Note: request errors will always be retried
+		// Request errors and caught exceptions are eligible for retry without a response status
 		bool should_retry = !response || params.http_util.ShouldRetry(request, *response);
 		if (!should_retry) {
 			auto response_code = static_cast<uint16_t>(response->status);
@@ -486,7 +509,8 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 0;
 #endif
 		static constexpr uint64_t THROTTLE_MAX_BACKOFF_MS = 10000;
-		const idx_t max_tries = params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
+		const idx_t max_tries =
+		    !HTTPUtil::IsIdempotent(request.type) ? 0 : params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
 		if (tries <= max_tries) {
 			if (tries > 1 || throttled) {
 #ifndef DUCKDB_NO_THREADS
@@ -616,6 +640,28 @@ void HTTPUtil::BumpToSecureProtocol(string &url) {
 	if (IsHTTPProtocol(url)) {
 		url = "https://" + url.substr(7);
 	}
+}
+
+string HTTPUtil::CreateSignatureV4(EncryptionUtil &encryption_util, const SignatureV4Params &sig_params) {
+	hash_bytes canonical_request_hash;
+	hash_str canonical_request_hash_str;
+	sha256(encryption_util, const_data_ptr_cast(sig_params.canonical_request.data()),
+	       sig_params.canonical_request.length(), canonical_request_hash);
+	hex256(canonical_request_hash, canonical_request_hash_str);
+
+	auto string_to_sign = "AWS4-HMAC-SHA256\n" + sig_params.datetime_now + "\n" + sig_params.credential_scope + "\n" +
+	                      string(const_char_ptr_cast(canonical_request_hash_str), sizeof(hash_str));
+	hash_bytes k_date, k_region, k_service, signing_key, signature;
+	auto sign_key = "AWS4" + sig_params.secret_access_key;
+	hmac256(encryption_util, sig_params.date_now, const_data_ptr_cast(sign_key.data()), sign_key.length(), k_date);
+	hmac256(encryption_util, sig_params.region, k_date, k_region);
+	hmac256(encryption_util, sig_params.service, k_region, k_service);
+	hmac256(encryption_util, "aws4_request", k_service, signing_key);
+	hmac256(encryption_util, string_to_sign, signing_key, signature);
+
+	hash_str signature_str;
+	hex256(signature, signature_str);
+	return string(const_char_ptr_cast(signature_str), sizeof(hash_str));
 }
 
 } // namespace duckdb

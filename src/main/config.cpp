@@ -72,6 +72,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorFlushThresholdSetting),
     DUCKDB_SETTING_CALLBACK(AllowCommunityExtensionsSetting),
+    DUCKDB_SETTING_CALLBACK(AllowExtensionRepositoriesSetting),
     DUCKDB_SETTING(AllowExtensionsMetadataMismatchSetting),
     DUCKDB_SETTING_CALLBACK(AllowParserOverrideExtensionSetting),
     DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
@@ -162,6 +163,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ExplainOutputSetting),
     DUCKDB_GLOBAL(ExtensionDirectoriesSetting),
     DUCKDB_SETTING(ExtensionDirectorySetting),
+    DUCKDB_SETTING_CALLBACK(ExtensionRepositoryDirectorySetting),
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalBlockSizeSetting),
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteBlockSizeSetting),
     DUCKDB_SETTING(ExternalFileCacheSpillSetting),
@@ -201,6 +203,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(MaxVacuumTasksSetting),
     DUCKDB_SETTING(MergeJoinThresholdSetting),
     DUCKDB_SETTING(NestedLoopJoinThresholdSetting),
+    DUCKDB_SETTING(NullOnDivisionByZeroSetting),
     DUCKDB_SETTING(OldImplicitCastingSetting),
     DUCKDB_LOCAL(OperatorMemoryLimitSetting),
     DUCKDB_SETTING(OrderByNonIntegerLiteralSetting),
@@ -214,7 +217,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(PivotFilterThresholdSetting),
     DUCKDB_SETTING(PivotLimitSetting),
     DUCKDB_SETTING(PreferRangeJoinsSetting),
-    DUCKDB_SETTING(PreserveIdentifierCaseSetting),
+    DUCKDB_SETTING_CALLBACK(PreserveIdentifierCaseSetting),
     DUCKDB_SETTING(PreserveInsertionOrderSetting),
     DUCKDB_SETTING(ProduceArrowStringViewSetting),
     DUCKDB_LOCAL(ProfilingCoverageSetting),
@@ -229,6 +232,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
     DUCKDB_GLOBAL(SecretDirectorySetting),
+    DUCKDB_SETTING_CALLBACK(ShowBehaviorSetting),
     DUCKDB_GLOBAL(StandardVectorSizeSetting),
     DUCKDB_SETTING_CALLBACK(StorageBlockPrefetchSetting),
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
@@ -249,14 +253,14 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 30),
-                                                     DUCKDB_SETTING_ALIAS("custom_profiling_settings", 30),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 130),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 62),
-                                                     DUCKDB_SETTING_ALIAS("profile_output", 153),
-                                                     DUCKDB_SETTING_ALIAS("user", 172),
-                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 29),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 170),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 31),
+                                                     DUCKDB_SETTING_ALIAS("custom_profiling_settings", 31),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 132),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 63),
+                                                     DUCKDB_SETTING_ALIAS("profile_output", 156),
+                                                     DUCKDB_SETTING_ALIAS("user", 176),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 30),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 174),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -439,7 +443,7 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 		}
 		idx_t array_size = 0;
 		for (auto length_idx = bracket_open_idx + 1; length_idx < type.size() - 1; length_idx++) {
-			if (!isdigit(type[length_idx])) {
+			if (!isdigit(static_cast<unsigned char>(type[length_idx]))) {
 				throw InternalException("Ill formatted array type: '%s'", type);
 			}
 			array_size = array_size * 10 + static_cast<idx_t>(type[length_idx] - '0');
@@ -732,10 +736,19 @@ optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 		return optional_idx();
 	}
 
+	if (Value::IsNan(limit)) {
+		return optional_idx();
+	}
 	if (limit < 0) {
 		return static_cast<idx_t>(NumericLimits<int64_t>::Maximum());
 	}
-	idx_t actual_limit = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	idx_t actual_limit;
+	// double(idx_max) rounds up to 2^64, so equality already means the product is not representable
+	if (limit >= static_cast<double>(NumericLimits<idx_t>::Maximum()) / static_cast<double>(multiplier)) {
+		actual_limit = NumericLimits<idx_t>::Maximum();
+	} else {
+		actual_limit = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	}
 	if (actual_limit == NumericLimits<idx_t>::Maximum()) {
 		return static_cast<idx_t>(NumericLimits<int64_t>::Maximum());
 	}

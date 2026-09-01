@@ -363,9 +363,8 @@ unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(TokenIterator &token_ite
 		return nullptr;
 	}
 	auto &compiled_grammar = GetGrammar();
-	auto &peg_factory = compiled_grammar.GetTransformerFactory();
-
-	return peg_factory.TransformTopLevelStatement(token_iterator, options, compiled_grammar.TopLevelStatementMatcher());
+	return PEGTransformerFactory::TransformTopLevelStatement(token_iterator, options,
+	                                                         compiled_grammar.TopLevelStatementMatcher());
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {

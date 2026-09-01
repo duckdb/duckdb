@@ -482,7 +482,9 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, cons
 
 static optional_ptr<SchemaCatalogEntry> NavigateNestedSchema(CatalogTransaction transaction, SchemaCatalogEntry &parent,
                                                              const Identifier &name, OnEntryNotFound if_not_found) {
-	auto entry = parent.Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY).GetEntry(transaction, name);
+	// go through the schema's own lookup so that nested schemas work for any catalog, not only DuckCatalog
+	EntryLookupInfo nested_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName(name));
+	auto entry = parent.LookupEntry(transaction, nested_lookup);
 	if (!entry) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw CatalogException("Schema with name %s does not exist!", name);
@@ -599,10 +601,14 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		}
 		if (entries.empty()) {
 			auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
-			if (catalog_entry) {
-				entries.emplace_back(catalog, catalog_entry->GetDefaultSchema());
-			} else {
+			if (!catalog_entry) {
 				entries.emplace_back(catalog, DEFAULT_SCHEMA);
+			} else {
+				auto default_schema = catalog_entry->GetDefaultSchema();
+				// a catalog without a default schema has no implicit schema to fall back on
+				if (default_schema) {
+					entries.emplace_back(catalog, *default_schema);
+				}
 			}
 		}
 	} else {
@@ -1194,10 +1200,13 @@ CatalogEntryLookup Catalog::TryLookupDefaultSchema(CatalogEntryRetriever &retrie
 		if (!catalog_entry) {
 			continue;
 		}
+		auto default_schema = catalog_entry->GetDefaultSchema();
+		if (!default_schema) {
+			continue;
+		}
 		auto transaction = catalog_entry->GetCatalogTransaction(retriever.GetContext());
-		EntryLookupInfo default_schema_lookup(lookup_info,
-		                                      QualifiedName(catalog_entry->GetName(), catalog_entry->GetDefaultSchema(),
-		                                                    lookup_info.GetEntryIdentifier()));
+		EntryLookupInfo default_schema_lookup(
+		    lookup_info, QualifiedName(catalog_entry->GetName(), *default_schema, lookup_info.GetEntryIdentifier()));
 		auto result = catalog_entry->TryLookupEntryInternal(transaction, default_schema_lookup);
 		if (result.Found() || result.error.HasError()) {
 			return result;
@@ -1479,8 +1488,8 @@ ErrorData Catalog::SupportsCreateTable(BoundCreateTableInfo &info) {
 	return ErrorData();
 }
 
-Identifier Catalog::GetDefaultSchema() const {
-	return DEFAULT_SCHEMA;
+optional<Identifier> Catalog::GetDefaultSchema() const {
+	return Identifier(DEFAULT_SCHEMA);
 }
 
 //! Whether this catalog has a default table. Catalogs with a default table can be queries by their catalog name

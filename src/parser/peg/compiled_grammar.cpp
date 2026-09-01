@@ -1,18 +1,15 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
-#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
+#include "duckdb/parser/peg/keyword_helper/parsed_grammar_keyword_helper.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_config.hpp"
-#ifdef PEG_PARSER_SOURCE_FILE
-#include <fstream>
-#else
-#include "duckdb/parser/peg/inlined_grammar.hpp"
-#endif
 
 namespace duckdb {
 
-CompiledGrammar::CompiledGrammar(ParserCache &cache)
-    : keyword_helper(DuckDBKeywordHelper::Instance()), tokenizer(keyword_helper), version(cache.LatestParserVersion()) {
+CompiledGrammar::CompiledGrammar(ParserCache &cache, const ParsedGrammar &grammar)
+    : owned_keyword_helper(make_uniq<ParsedGrammarKeywordHelper>(grammar)), keyword_helper(*owned_keyword_helper),
+      tokenizer(keyword_helper), version(cache.LatestParserVersion()) {
 }
 
 idx_t CompiledGrammar::Version() const {
@@ -34,11 +31,33 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Get(DatabaseInstance &db) {
 	return parser_cache.GetMatcher(nullptr);
 }
 
-const PEGTransformerFactory &CompiledGrammar::GetTransformerFactory() {
-	return transformer_factory;
+ParserCache::ParserCache() : version(0) {
 }
 
-ParserCache::ParserCache() : version(0) {
+static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {
+	if (!grammar.GetRule("Program")) {
+		throw InvalidInputException("Grammar is missing required root rule 'Program'");
+	}
+	if (!grammar.GetRule("TopLevelStatement")) {
+		throw InvalidInputException("Grammar is missing required root rule 'TopLevelStatement'");
+	}
+}
+
+static void CheckReference(const ParsedGrammar &grammar, const ParsedGrammarRule &parsed_rule,
+                           const PEGExpression &expression) {
+	if (expression.type == PEGExpression::Type::REFERENCE || expression.type == PEGExpression::Type::FUNCTION_CALL) {
+		if (expression.type != PEGExpression::Type::REFERENCE ||
+		    !parsed_rule.recipe.parameters.count(expression.text)) {
+			if (!StringUtil::CIEquals(expression.text.GetString(), "EndOfInput") &&
+			    !grammar.GetRule(expression.text.GetString())) {
+				throw InvalidInputException("Grammar rule '%s' references missing rule '%s'", parsed_rule.name,
+				                            expression.text.GetString());
+			}
+		}
+	}
+	for (auto &child : expression.children) {
+		CheckReference(grammar, parsed_rule, child);
+	}
 }
 
 shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> context) {
@@ -48,25 +67,36 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 			return matcher;
 		}
 	}
-	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(*this));
-	MatcherFactory factory(new_matcher->allocator, new_matcher->GetKeywordHelper());
-#ifdef PEG_PARSER_SOURCE_FILE
-	std::ifstream t(PEG_PARSER_SOURCE_FILE);
-	std::stringstream buffer;
-	buffer << t.rdbuf();
-	auto grammar_string = buffer.str();
 
-	new_matcher->program_matcher = factory.CreateMatcher(grammar_string.c_str(), "Program");
-#else
-	new_matcher->program_matcher = factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Program");
-#endif
-	// TopLevelStatement is referenced by Program, so it has already been built and cached.
+	auto grammar = ParsedGrammar::CreateDefault();
+	ValidateParsedGrammarRoots(grammar);
+	for (auto &entry : grammar.rules) {
+		auto &parsed_rule = *entry.second;
+		CheckReference(grammar, parsed_rule, parsed_rule.recipe.expression);
+	}
+
+	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(*this, grammar));
+	for (auto &entry : grammar.rules) {
+		auto &rule = *entry.second;
+		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, std::move(rule.transform)));
+	}
+	MatcherFactory factory(new_matcher->allocator, grammar, *new_matcher);
+	new_matcher->program_matcher = factory.CreateRootMatcher("Program");
 	new_matcher->top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");
+
 	std::unique_lock<std::mutex> lock(mutex);
 	if (!matcher) {
 		matcher = std::move(new_matcher);
 	}
 	return matcher;
+}
+
+optional_ptr<const CompiledGrammarRule> CompiledGrammar::GetRule(const string &rule_name) const {
+	auto entry = rules.find(rule_name);
+	if (entry == rules.end()) {
+		return nullptr;
+	}
+	return *entry->second;
 }
 
 idx_t ParserCache::LatestParserVersion() const {

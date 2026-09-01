@@ -12,7 +12,7 @@
 #include "duckdb/parser/parsed_data/create_window_function_info.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/config.hpp"
-
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -126,8 +126,9 @@ static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput 
 	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), bound_function.GetName()));
 
 	// override the function with the extension function
-	const auto &func = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());
-	return func.Bind(context, std::move(arguments));
+	auto func = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());
+	FunctionBinder function_binder(context);
+	return function_binder.BindScalarFunction(std::move(func), std::move(arguments));
 }
 
 void BuiltinFunctions::AddExtensionFunction(ScalarFunctionSet set) {
