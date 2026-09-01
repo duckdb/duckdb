@@ -53,13 +53,14 @@ private:
 	unique_ptr<LogicalOperator> BuildRightJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
 	                                           const vector<Branch> &branches);
 	unique_ptr<LogicalOperator> BuildFullJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
-	                                          const vector<Branch> &branches);
+	                                          const vector<Branch> &branches, idx_t right_rowid_idx);
 	unique_ptr<LogicalOperator> BuildSemiJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
 	                                          const vector<Branch> &branches);
 	unique_ptr<LogicalOperator> BuildAntiJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
 	                                          const vector<Branch> &branches);
 
 	// Helper builders
+	unique_ptr<LogicalOperator> InjectRowID(unique_ptr<LogicalOperator> child);
 	vector<unique_ptr<LogicalOperator>> CreateMatchedBranches(const CTEInfo &left_cte, const CTEInfo &right_cte,
 	                                                          const vector<Branch> &branches);
 	unique_ptr<LogicalOperator> CreateBranchJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
@@ -68,7 +69,7 @@ private:
 	unique_ptr<LogicalOperator> CreateUnmatchedProbeSide(const CTEInfo &probe_cte, const CTEInfo &build_cte,
 	                                                     const vector<Branch> &branches);
 	unique_ptr<LogicalOperator> CreateUnmatchedBuildSide(const CTEInfo &left_cte, const CTEInfo &right_cte,
-	                                                     const vector<Branch> &branches);
+	                                                     const vector<Branch> &branches, idx_t right_rowid_idx);
 	unique_ptr<LogicalOperator> CreateAntiJoinChain(const CTEInfo &probe_cte, const CTEInfo &build_cte,
 	                                                const vector<Branch> &branches, TableIndex probe_ref_idx);
 
