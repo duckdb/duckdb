@@ -78,7 +78,9 @@ profiler_metrics_t QueryMetrics::GetLiveMetrics() const {
 	return ReadLiveMetrics(*this, LiveMetrics());
 }
 
-QueryMetrics::QueryMetrics() : bytes_read(0), bytes_written(0), bytes_scanned(0), total_memory_allocated(0) {
+QueryMetrics::QueryMetrics()
+    : bytes_read(0), read_operations(0), bytes_written(0), write_operations(0), bytes_scanned(0),
+      total_memory_allocated(0) {
 	Reset();
 }
 

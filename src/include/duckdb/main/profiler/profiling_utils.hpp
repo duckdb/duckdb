@@ -39,7 +39,9 @@ public:
 
 	// Always-tracked byte counters (used by progress bar even when profiling is disabled)
 	atomic<idx_t> bytes_read;
+	atomic<idx_t> read_operations;
 	atomic<idx_t> bytes_written;
+	atomic<idx_t> write_operations;
 	// Always tracked as well, so it can be read while the query runs: the compressed size of the column data scanned.
 	// Not reported - query.total_bytes_scanned is summed over the operator tree, so that secure views hide theirs
 	atomic<idx_t> bytes_scanned;
@@ -61,10 +63,12 @@ public:
 
 	void UpdateBytesRead(idx_t n) {
 		bytes_read += n;
+		read_operations++;
 	}
 
 	void UpdateBytesWritten(idx_t n) {
 		bytes_written += n;
+		write_operations++;
 	}
 	void UpdateBytesScanned(idx_t n) {
 		bytes_scanned += n;
@@ -94,11 +98,19 @@ public:
 		return bytes_read.load();
 	}
 
+	idx_t GetReadOperations() const {
+		return read_operations.load();
+	}
+
 	idx_t GetBytesWritten() const {
 		return bytes_written.load();
 	}
 	idx_t GetBytesScanned() const {
 		return bytes_scanned.load();
+	}
+
+	idx_t GetWriteOperations() const {
+		return write_operations.load();
 	}
 
 	idx_t GetTotalMemoryAllocated() const {
@@ -116,7 +128,9 @@ public:
 	//! Reset the counters that are tracked without profiling; Reset keeps them, so they outlive their query.
 	void ResetLiveMetrics() {
 		bytes_read = 0;
+		read_operations = 0;
 		bytes_written = 0;
+		write_operations = 0;
 		// bytes_scanned is not reset here, so it can be read after a failed query; StartQuery resets it
 		total_memory_allocated = 0;
 	}
@@ -146,7 +160,9 @@ public:
 			string_counters[entry.first] += entry.second;
 		}
 		bytes_read += other.bytes_read.load();
+		read_operations += other.read_operations.load();
 		bytes_written += other.bytes_written.load();
+		write_operations += other.write_operations.load();
 		bytes_scanned += other.bytes_scanned.load();
 		total_memory_allocated += other.total_memory_allocated.load();
 	}
