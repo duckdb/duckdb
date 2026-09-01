@@ -4,6 +4,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
@@ -218,6 +219,22 @@ TEST_CASE("Active grammar extensions are cached on their connection", "[api][gra
 	ActiveGrammarExtensionsSetting::SetLocal(*enabled.context, Value::LIST(LogicalType::VARCHAR, vector<Value> {}));
 	REQUIRE_FAIL(enabled.Query("ANSWER"));
 	REQUIRE(base_grammar == CompiledGrammar::Get(*enabled.context));
+}
+
+TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
+	Connection con(db);
+	ActivateGrammarExtensionTestSyntax(con);
+
+	auto options = con.context->GetParserOptions();
+	REQUIRE(options.compiled_grammar == CompiledGrammar::Get(*con.context));
+	options.parser_cache = nullptr;
+	options.extensions = nullptr;
+
+	Parser parser(std::move(options));
+	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
+	REQUIRE(parser.statements.size() == 1);
 }
 
 class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {

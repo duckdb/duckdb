@@ -1,5 +1,6 @@
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
@@ -286,7 +287,7 @@ unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientCont
                                                                       const Identifier &entry_name) {
 	ParserOptions options;
 	options.parser_cache = &context.db->GetParserCache();
-	options.context = &context;
+	options.compiled_grammar = CompiledGrammar::Get(context);
 	auto info = GetDefaultFunction(schema.name, entry_name, options);
 	if (info) {
 		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
