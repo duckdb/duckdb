@@ -21,24 +21,40 @@ static unique_ptr<BoundConstantExpression> RewriteAsNull(const BoundFunctionExpr
 	return make_uniq<BoundConstantExpression>(Value(comparison.GetReturnType()));
 }
 
+static bool IsNonNullConstant(Expression &child) {
+	return child.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+	       !child.Cast<BoundConstantExpression>().GetValue().IsNull();
+}
+
+static bool TryGetConstantInt(Expression &child, int64_t &result) {
+	if (!IsNonNullConstant(child)) {
+		return false;
+	}
+	result = child.Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>();
+	return true;
+}
+
 static unique_ptr<Expression> RewriteZeroLength(BoundFunctionExpression &func) {
 	auto &children = func.GetChildrenMutable();
 	auto &function_name = func.Function().GetName();
+
+	int64_t length;
 	if (function_name == "left") {
-		if (children.size() != 2 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-		    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull() ||
-		    children[1]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 0) {
+		// left(s, n) -> n is children[1]
+		if (children.size() != 2 || !TryGetConstantInt(*children[1], length)) {
 			return nullptr;
 		}
 	} else if (function_name == "substring" || function_name == "substr") {
-		if (children.size() != 3 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-		    children[2]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-		    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull() ||
-		    children[2]->Cast<BoundConstantExpression>().GetValue().IsNull() ||
-		    children[2]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 0) {
+		// substring(s, start, n) -> n is children[2]; start must be a non-NULL constant so the
+		// NULL-ness of the result matches constant_or_null(s, '')
+		if (children.size() != 3 || !IsNonNullConstant(*children[1]) || !TryGetConstantInt(*children[2], length)) {
 			return nullptr;
 		}
 	} else {
+		return nullptr;
+	}
+
+	if (length != 0) {
 		return nullptr;
 	}
 	return ExpressionRewriter::ConstantOrNull(std::move(children[0]), Value(string()));

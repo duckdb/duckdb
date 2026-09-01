@@ -68,11 +68,11 @@ EXPLAIN ANALYZE SELECT sum(i) FROM db.prefixes WHERE left(s, 0) IN ('');
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
 
-# Impossible comparisons prune every row group
+# Impossible comparisons prune the scan entirely
 query II
 EXPLAIN ANALYZE SELECT sum(i) FROM db.prefixes WHERE left(s, 0) > '';
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+analyzed_plan	<REGEX>:.*EMPTY_RESULT.*
 
 # Preserve NULL semantics
 query I
