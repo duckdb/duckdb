@@ -45,8 +45,13 @@ public:
 	// need to look up correct fs for this
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
+	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener = nullptr) override;
+	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
+	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener = nullptr) override;
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
 

@@ -482,6 +482,12 @@ statement error
 SELECT strptime('', '%Y-%m-%d %H:%M:%S.%f')
 ----
 
+# all-whitespace input, issue #25082
+statement error
+SELECT strptime('            ', '%d')
+----
+<REGEX>:Invalid Input Error:.*Could not parse string.*
+
 # empty string with am/pm
 statement error
 SELECT strptime('', '%p')

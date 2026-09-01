@@ -222,6 +222,10 @@ enum class ExtensionInstallMode : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
 
+enum class ExtensionRepositoryAccess : uint8_t;
+
+enum class ExtensionRepositoryType : uint8_t;
+
 enum class ExtensionUpdateResultTag : uint8_t;
 
 enum class ExternalResourceOperation : uint8_t;
@@ -277,6 +281,8 @@ enum class IndexAppendMode : uint8_t;
 enum class IndexBindState : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
+
+enum class IndexDeltaType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
 
@@ -523,6 +529,8 @@ enum class StateMemoryOwnership : uint8_t;
 enum class StatementReturnType : uint8_t;
 
 enum class StatementType : uint8_t;
+
+enum class StatisticsPropagationMode : uint8_t;
 
 enum class StatisticsType : uint8_t;
 
@@ -913,6 +921,12 @@ template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
 
 template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryAccess>(ExtensionRepositoryAccess value);
+
+template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryType>(ExtensionRepositoryType value);
+
+template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
 
 template<>
@@ -995,6 +1009,9 @@ const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
+
+template<>
+const char* EnumUtil::ToChars<IndexDeltaType>(IndexDeltaType value);
 
 template<>
 const char* EnumUtil::ToChars<InsertColumnOrder>(InsertColumnOrder value);
@@ -1364,6 +1381,9 @@ const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
 
 template<>
 const char* EnumUtil::ToChars<StatementType>(StatementType value);
+
+template<>
+const char* EnumUtil::ToChars<StatisticsPropagationMode>(StatisticsPropagationMode value);
 
 template<>
 const char* EnumUtil::ToChars<StatisticsType>(StatisticsType value);
@@ -1805,6 +1825,12 @@ template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
 
 template<>
+ExtensionRepositoryAccess EnumUtil::FromString<ExtensionRepositoryAccess>(const char *value);
+
+template<>
+ExtensionRepositoryType EnumUtil::FromString<ExtensionRepositoryType>(const char *value);
+
+template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
 
 template<>
@@ -1887,6 +1913,9 @@ IndexBindState EnumUtil::FromString<IndexBindState>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
+
+template<>
+IndexDeltaType EnumUtil::FromString<IndexDeltaType>(const char *value);
 
 template<>
 InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value);
@@ -2256,6 +2285,9 @@ StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value)
 
 template<>
 StatementType EnumUtil::FromString<StatementType>(const char *value);
+
+template<>
+StatisticsPropagationMode EnumUtil::FromString<StatisticsPropagationMode>(const char *value);
 
 template<>
 StatisticsType EnumUtil::FromString<StatisticsType>(const char *value);

@@ -19,9 +19,9 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 		return BindResult(std::move(error));
 	}
 	// the children have been successfully resolved
-	auto &input = BoundExpression::GetExpression(*expr.InputMutable());
-	auto &lower = BoundExpression::GetExpression(*expr.LowerBoundMutable());
-	auto &upper = BoundExpression::GetExpression(*expr.UpperBoundMutable());
+	auto input = GetBoundExpressions().Consume(*expr.InputMutable());
+	auto lower = GetBoundExpressions().Consume(*expr.LowerBoundMutable());
+	auto upper = GetBoundExpressions().Consume(*expr.UpperBoundMutable());
 
 	auto input_sql_type = ExpressionBinder::GetExpressionReturnType(*input);
 	auto lower_sql_type = ExpressionBinder::GetExpressionReturnType(*lower);

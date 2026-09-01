@@ -50,6 +50,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/common/enums/current_transaction_state.hpp"
@@ -809,7 +810,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 		plan = optimizer.Optimize(std::move(plan));
 
 		ColumnBindingResolver resolver;
-		resolver.Verify(*this, *plan);
+		LogicalPlanVerifier::Verify(*this, *plan);
 		resolver.VisitOperator(*plan);
 
 		plan->ResolveOperatorTypes();

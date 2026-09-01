@@ -54,6 +54,7 @@ public:
 	FileMetadata Stats(FileHandle &handle) override;
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 	void FileSync(FileHandle &handle) override;
+	void AbortFileWrite(FileHandle &handle) override;
 	void Seek(FileHandle &handle, idx_t location) override;
 	void Reset(FileHandle &handle) override;
 	idx_t SeekPosition(FileHandle &handle) override;
@@ -64,7 +65,12 @@ public:
 	unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) override;
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
+	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener = nullptr) override;
+	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
+	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener = nullptr) override;
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;

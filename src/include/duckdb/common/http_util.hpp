@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/time_point.hpp"
@@ -66,6 +67,16 @@ public:
 	}
 };
 
+struct SignatureV4Params {
+	string canonical_request;
+	string credential_scope;
+	string region;
+	string service;
+	string secret_access_key;
+	string date_now;
+	string datetime_now;
+};
+
 enum class RequestType : uint8_t {
 	GET_REQUEST,
 	PUT_REQUEST,
@@ -76,6 +87,7 @@ enum class RequestType : uint8_t {
 };
 
 struct HTTPHeaders {
+	using header_values_t = vector<string>;
 	using header_map_t = case_insensitive_map_t<string>;
 
 public:
@@ -85,8 +97,12 @@ public:
 	DUCKDB_API ~HTTPHeaders();
 
 	void Insert(string key, string value);
+	//! Append another field line without combining its value.
+	void Append(string key, string value);
 	bool HasHeader(const string &key) const;
+	//! Return the first field value.
 	string GetHeaderValue(const string &key) const;
+	header_values_t GetHeaderValues(const string &key) const;
 
 	header_map_t::iterator begin() { // NOLINT: match stl API
 		return headers.begin();
@@ -112,6 +128,8 @@ public:
 
 private:
 	header_map_t headers;
+	//! HTTP responses can contain multiple field lines with the same name (i.e., Cache-Control).
+	case_insensitive_map_t<header_values_t> repeated_headers;
 };
 
 struct HTTPResponse {
@@ -333,6 +351,7 @@ public:
 	static string GetStatusMessage(HTTPStatusCode status);
 	static bool IsHTTPProtocol(const string &url);
 	static void BumpToSecureProtocol(string &url);
+	static string CreateSignatureV4(EncryptionUtil &encryption_util, const SignatureV4Params &sig_params);
 
 public:
 	static duckdb::unique_ptr<HTTPResponse>

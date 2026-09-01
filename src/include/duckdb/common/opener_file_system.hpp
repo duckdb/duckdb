@@ -31,8 +31,15 @@ public:
 		}
 	}
 
+	//! Reserved for DuckDB's extension trust domain: the loadable binary and every file that decides whether it may
+	//! be loaded (install provenance, trusted repositories). These can only be written through INSTALL / CREATE
+	//! EXTENSION REPOSITORY, which pass FILE_FLAGS_ENABLE_EXTENSION_INSTALL.
+	//! To add a file to the trust domain, give it a ".duckdb_extension." segment, e.g.
+	//! "<name>.duckdb_extension.info" or "<name>.duckdb_extension.repo.json". Matching is on the file name only, so a
+	//! directory that happens to contain the marker does not reserve the files inside it
 	bool IsDuckDBExtensionName(const string &path) {
-		return StringUtil::EndsWith(path, ".duckdb_extension");
+		auto name = FileSystem::ExtractName(path);
+		return StringUtil::EndsWith(name, ".duckdb_extension") || StringUtil::Contains(name, ".duckdb_extension.");
 	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
@@ -81,15 +88,29 @@ public:
 		return GetFileSystem().DirectoryExists(directory, GetOpener());
 	}
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
+		CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+	}
+	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener) override {
+		if (options.mode == CreateDirectoryMode::RECURSIVE) {
+			return FileSystem::CreateDirectoryExtended(directory, options, opener);
+		}
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().CreateDirectory(directory, GetOpener());
+		return GetFileSystem().CreateDirectoryExtended(directory, options, GetOpener());
+	}
+	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override {
+		CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
 	}
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
+		RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+	}
+	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().RemoveDirectory(directory, GetOpener());
+		return GetFileSystem().RemoveDirectoryExtended(directory, options, GetOpener());
 	}
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
@@ -112,8 +133,14 @@ public:
 	void CreateDirectory(const string &directory) {
 		CreateDirectory(directory, nullptr);
 	}
+	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options) {
+		return CreateDirectoryExtended(directory, options, nullptr);
+	}
 	void RemoveDirectory(const string &directory) {
 		RemoveDirectory(directory, nullptr);
+	}
+	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options) {
+		return RemoveDirectoryExtended(directory, options, nullptr);
 	}
 	void MoveFile(const string &source, const string &target) {
 		MoveFile(source, target, nullptr);
