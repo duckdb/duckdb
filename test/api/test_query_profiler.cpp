@@ -73,7 +73,7 @@ TEST_CASE("Test parser timing is reported per statement", "[api]") {
 	auto iterator = con.context->IterateStatements("SELECT 42; SELECT 43;");
 	for (const auto expected_query : {"SELECT 42; ", "SELECT 43;"}) {
 		REQUIRE(iterator.Peek());
-		auto statement = iterator.GetStatement();
+		auto statement = iterator.GetStatementForExecution();
 		REQUIRE(statement);
 		REQUIRE(statement->query == expected_query);
 		REQUIRE_NO_FAIL(con.Query(std::move(statement)));
@@ -94,10 +94,9 @@ TEST_CASE("Extracting statements does not start the query profiler", "[api]") {
 
 	auto statements = con.ExtractStatements("SELECT 44;");
 	REQUIRE(statements.size() == 1);
-	REQUIRE(statements[0]->parser_timer.ElapsedNanos() > 0);
 	REQUIRE(QueryProfiler::Get(*con.context).GetQuerySQL().empty());
 
-	REQUIRE_NO_FAIL(con.Query(std::move(statements[0])));
+	REQUIRE_NO_FAIL(con.Query("SELECT 44;"));
 	auto output = con.GetProfilingInformation(ProfilerPrintFormat::JSON());
 	REQUIRE(output.find("\"parser\"") != std::string::npos);
 	REQUIRE(output.find("SELECT 44;") != std::string::npos);

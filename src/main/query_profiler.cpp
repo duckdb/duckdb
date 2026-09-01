@@ -160,7 +160,6 @@ void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, b
 	}
 	Start(query);
 }
-
 void QueryProfiler::AddParserTime(const Profiler &parser_timer) {
 	if (!running || !IsEnabled()) {
 		return;

@@ -1039,7 +1039,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	try {
 		auto iterator = con.context->IterateStatements(zSql);
 		while (iterator.Peek()) {
-			auto statement = iterator.GetStatement();
+			auto statement = iterator.GetStatementForExecution();
 			if (!statement) {
 				continue; // a peel that preprocessing swallowed
 			}

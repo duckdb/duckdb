@@ -3,7 +3,6 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
-#include "duckdb/common/profiler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/token_iterator.hpp"
@@ -37,8 +36,6 @@ bool ParseIterator::Peek() {
 	if (exhausted) {
 		return false;
 	}
-	Profiler parser_timer;
-	parser_timer.Start();
 	auto options = client_context.GetParserOptions();
 	// On the very first Peek, give `parser_override` extensions a chance to claim the whole
 	// query. If one does, we yield its statements one at a time and skip the PEG path entirely.
@@ -81,8 +78,6 @@ bool ParseIterator::Peek() {
 			return false;
 		}
 		current_statement = std::move((*overridden_statements)[override_cursor++]);
-		parser_timer.End();
-		current_statement->parser_timer = parser_timer;
 		return true;
 	}
 	if (!parser) {
@@ -129,8 +124,6 @@ bool ParseIterator::Peek() {
 				create.info->sql = stmt->query;
 			}
 			current_statement = std::move(stmt);
-			parser_timer.End();
-			current_statement->parser_timer = parser_timer;
 			return true;
 		}
 		if (token_iterator->AtEnd()) {

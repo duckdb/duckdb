@@ -476,6 +476,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
+	profiler.StartQuery(statement->query, IsExplainAnalyze(statement.get()));
 	Planner logical_planner(*this);
 	if (parameters.parameters) {
 		auto &parameter_values = *parameters.parameters;
@@ -539,10 +540,6 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock,
                                                                          unique_ptr<SQLStatement> statement,
                                                                          PendingQueryParameters parameters) {
-	auto &profiler = QueryProfiler::Get(*this);
-	profiler.StartQuery(statement->query, IsExplainAnalyze(statement.get()));
-	profiler.AddParserTime(statement->parser_timer);
-
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
 	for (auto &state : registered_state->States()) {
@@ -779,7 +776,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		StatementIterator iterator {ParseIterator(*this, query)};
 		vector<unique_ptr<SQLStatement>> result;
 		while (iterator.Peek()) {
-			auto stmt = iterator.GetStatementWithLock(lock);
+			auto stmt = iterator.GetStatementForExecutionWithLock(lock);
 			if (!stmt) {
 				continue; // a peel that preprocessing swallowed
 			}
@@ -1024,7 +1021,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatement(ClientContextLock
 			auto rewritten = WrapAsSelect(std::move(remote_ref));
 			// the rewrite is invisible to the user - keep reporting the SQL they issued
 			rewritten->query = std::move(statement->query);
-			rewritten->parser_timer = statement->parser_timer;
 			statement = std::move(rewritten);
 			AttachedDatabase::InvokeCloseIfLastReference(live, *this);
 			// statement is now SELECT * FROM <remote-ref>; fall through.
@@ -1148,19 +1144,19 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	bool last_had_result = false;
 	while (has_current) {
 		// Get + preprocess the next engine-facing statement, reusing the lock we already hold. PRAGMA
-		// reparse / MULTI_STATEMENT unpacking happen inside GetStatementWithLock, which sees the
+		// reparse / MULTI_STATEMENT unpacking happen inside GetStatementForExecutionWithLock, which sees the
 		// transaction state left by the previously executed statement. A peel can preprocess to
 		// nothing, in which case statement is null and there is nothing to execute.
 		unique_ptr<SQLStatement> statement;
 		try {
-			statement = iterator.GetStatementWithLock(*lock);
+			statement = iterator.GetStatementForExecutionWithLock(*lock);
 		} catch (const std::exception &ex) {
 			return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
 		}
 
 		// Look ahead WITHOUT parsing: HasMore() only walks the token cursor, so it never parses (and
 		// never throws) the next statement here. The next statement is parsed later, in this loop's
-		// next GetStatementWithLock — after the current statement has executed. This lets a statement
+		// next GetStatementForExecutionWithLock — after the current statement has executed. This lets a statement
 		// register grammar (e.g. LOAD an extension) that a following statement then uses.
 		bool has_next = iterator.HasMore();
 
