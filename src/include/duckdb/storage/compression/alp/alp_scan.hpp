@@ -259,11 +259,6 @@ public:
 	void Skip(ColumnSegment &col_segment, idx_t skip_count) {
 		D_ASSERT(total_value_count <= count);
 		D_ASSERT(skip_count <= count - total_value_count);
-		// Reaching the segment end does not require loading the final partial vector.
-		if (skip_count == count - total_value_count) {
-			total_value_count = count;
-			return;
-		}
 		if (total_value_count != 0 && !VectorFinished()) {
 			// Finish skipping the current vector
 			idx_t to_skip = MinValue<idx_t>(skip_count, LeftInVector());
