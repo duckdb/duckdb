@@ -446,11 +446,12 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	auto &prepared = *active_query->prepared;
 	bool create_stream_result =
 	    prepared.properties.output_type == QueryResultOutputType::ALLOW_STREAMING && pending.allow_stream_result;
+	const bool keep_result_open = create_stream_result || executor.HasStreamingResultCollector();
 	unique_ptr<QueryResult> result;
 	D_ASSERT(executor.HasResultCollector());
 	// we have a result collector - fetch the result directly from the result collector
 	result = executor.GetResult();
-	if (!create_stream_result) {
+	if (!keep_result_open) {
 		CleanupInternal(lock, result.get(), false);
 	} else {
 		active_query->SetOpenResult(*result);
