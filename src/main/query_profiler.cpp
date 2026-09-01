@@ -82,7 +82,7 @@ bool QueryProfiler::IsEnabled() const {
 	return is_explain_analyze || ClientConfig::GetConfig(context).enable_profiler;
 }
 
-unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
+unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const Identifier &name) const {
 	return TreeRenderer::CreateRenderer(context, name);
 }
 
@@ -91,10 +91,10 @@ unique_ptr<TreeRenderer> QueryProfiler::GetRenderer(const ProfilerPrintFormat &f
 		// use the configured default profiler format; "no_output" still renders as a query tree when explicitly asked
 		// for output (e.g. EXPLAIN ANALYZE), so fall back to it here
 		auto name = ClientConfig::GetConfig(context).profiler_print_format;
-		return CreateProfiler(name == "no_output" ? "query_tree" : name);
+		return CreateProfiler(name == "no_output" ? Identifier("query_tree") : Identifier(name));
 	}
 	// resolve the explain format name (text/json/html/...) and create the matching renderer
-	return CreateProfiler(format.ToString());
+	return CreateProfiler(Identifier(format.ToString()));
 }
 
 bool QueryProfiler::PrintOptimizerOutput() const {
@@ -301,7 +301,7 @@ string QueryProfiler::ToString(const ProfilerPrintFormat &format) const {
 	return RenderProfilerOutput(renderer.get());
 }
 
-string QueryProfiler::ToString(const string &profiler_format_name) const {
+string QueryProfiler::ToString(const Identifier &profiler_format_name) const {
 	auto renderer = CreateProfiler(profiler_format_name);
 	return RenderProfilerOutput(renderer.get());
 }
@@ -351,7 +351,7 @@ string QueryProfiler::GetQuerySQL() const {
 	return sql.empty() ? query_metrics.query_sql : sql;
 }
 
-string QueryProfiler::RenderProfile(const string &format) const {
+string QueryProfiler::RenderProfile(const Identifier &format) const {
 	auto renderer = CreateProfiler(format);
 	if (!renderer) {
 		return string();

@@ -86,7 +86,7 @@ public:
 	DUCKDB_API bool IsEnabled() const;
 	//! Create the TreeRenderer for the given profiler format name (e.g. "json", "query_tree"). Returns nullptr for the
 	//! "no_output" format, and throws if the format name is not recognized.
-	DUCKDB_API unique_ptr<TreeRenderer> CreateProfiler(const string &name) const;
+	DUCKDB_API unique_ptr<TreeRenderer> CreateProfiler(const Identifier &name) const;
 	//! Returns the renderer to use for the given ProfilerPrintFormat, taking the configured default format into
 	//! account.
 	DUCKDB_API unique_ptr<TreeRenderer>
@@ -147,7 +147,7 @@ public:
 	DUCKDB_API string ToString(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	//! Render the profiler output for the given profiler format name (e.g. "json", "query_tree"), handling the
 	//! profiling-disabled and no-output cases.
-	DUCKDB_API string ToString(const string &profiler_format_name) const;
+	DUCKDB_API string ToString(const Identifier &profiler_format_name) const;
 	//! Render the profiling node tree using the given renderer into the sink (renders nothing when there is no tree).
 	//! Called by TreeRenderer::RenderProfiler for the formats that render the node tree directly.
 	DUCKDB_API void RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const;
@@ -219,7 +219,7 @@ public:
 	//! Render the current profiling tree in the given format (text/json/html/...) to a string. Unlike ToString this
 	//! only requires a tree to exist (HasRoot()), not that profiling is currently enabled - so it can re-render the
 	//! last profile after the query has finished (e.g. the shell's ".web" command).
-	DUCKDB_API string RenderProfile(const string &format) const;
+	DUCKDB_API string RenderProfile(const Identifier &format) const;
 
 private:
 	void FinalizeMetricsInternal();

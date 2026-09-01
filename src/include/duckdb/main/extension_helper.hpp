@@ -270,8 +270,6 @@ public:
 	static bool CanAutoloadExtension(const Identifier &ext_name);
 
 	//! Utility functions for creating meaningful error messages regarding missing extensions
-	static string WrapAutoLoadExtensionErrorMsg(ClientContext &context, const string &base_error,
-	                                            const string &extension_name);
 	static string AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
 	                                                const Identifier &extension_name);
 	static string AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, const string &base_error,

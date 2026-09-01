@@ -932,7 +932,7 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	auto &config = ClientConfig::GetConfig(context);
 
 	// Validate the format name (throws on an unrecognized format).
-	QueryProfiler::Get(context).CreateProfiler(parameter);
+	QueryProfiler::Get(context).CreateProfiler(Identifier(parameter));
 
 	config.enable_profiler = true;
 
@@ -1322,7 +1322,7 @@ void ProfilingOutputSetting::SetLocal(ClientContext &context, const Value &input
 		const auto file_type = file_system.ExtractExtension(parameter);
 		if (file_type != "txt") {
 			try {
-				QueryProfiler::Get(context).CreateProfiler(file_type);
+				QueryProfiler::Get(context).CreateProfiler(Identifier(file_type));
 			} catch (std::exception &e) {
 				throw ParserException("Invalid output file type: %s", file_type);
 			}
