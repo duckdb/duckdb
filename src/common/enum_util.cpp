@@ -201,6 +201,7 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -3607,6 +3608,24 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 	return static_cast<MapInvalidReason>(StringUtil::StringToEnum(GetMapInvalidReasonValues(), 5, "MapInvalidReason", value));
 }
 
+const StringUtil::EnumStringLiteral *GetMatchFrameStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MatchFrameState::INITIALIZE), "INITIALIZE" },
+		{ static_cast<uint32_t>(MatchFrameState::EXECUTE), "EXECUTE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MatchFrameState>(MatchFrameState value) {
+	return StringUtil::EnumToString(GetMatchFrameStateValues(), 2, "MatchFrameState", static_cast<uint32_t>(value));
+}
+
+template<>
+MatchFrameState EnumUtil::FromString<MatchFrameState>(const char *value) {
+	return static_cast<MatchFrameState>(StringUtil::StringToEnum(GetMatchFrameStateValues(), 2, "MatchFrameState", value));
+}
+
 const StringUtil::EnumStringLiteral *GetMatchModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MatchMode::BUILD_PARSE_RESULT), "BUILD_PARSE_RESULT" },
@@ -3623,6 +3642,25 @@ const char* EnumUtil::ToChars<MatchMode>(MatchMode value) {
 template<>
 MatchMode EnumUtil::FromString<MatchMode>(const char *value) {
 	return static_cast<MatchMode>(StringUtil::StringToEnum(GetMatchModeValues(), 2, "MatchMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMatchResultStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MatchResultState::NONE), "NONE" },
+		{ static_cast<uint32_t>(MatchResultState::FAILURE), "FAILURE" },
+		{ static_cast<uint32_t>(MatchResultState::SUCCESS), "SUCCESS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MatchResultState>(MatchResultState value) {
+	return StringUtil::EnumToString(GetMatchResultStateValues(), 3, "MatchResultState", static_cast<uint32_t>(value));
+}
+
+template<>
+MatchResultState EnumUtil::FromString<MatchResultState>(const char *value) {
+	return static_cast<MatchResultState>(StringUtil::StringToEnum(GetMatchResultStateValues(), 3, "MatchResultState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMemoryTagValues() {
