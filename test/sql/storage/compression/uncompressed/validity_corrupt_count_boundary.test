@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/uncompressed/validity_corrupt_count_boundary.test
+# description: A validity segment count one word past true block capacity must error, not read past the block
+# group: [uncompressed]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/validity_corrupt_count_boundary.db.gz {TEST_DIR}/validity_corrupt_count_boundary.db
+
+load {TEST_DIR}/validity_corrupt_count_boundary.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE segment_type='VALIDITY' AND compression='Uncompressed';
+----
+Uncompressed
+
+statement error
+SELECT sum(b) FROM t;
+----
+<REGEX>:.*Data Corruption Error: Corrupted validity segment: (array count|requested range) extends past the end of the segment.*
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(b) FROM t;
+----
+Data Corruption Error: Corrupted validity segment: requested range extends past the end of the segment

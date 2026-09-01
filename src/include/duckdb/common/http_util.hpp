@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/time_point.hpp"
@@ -64,6 +65,16 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+};
+
+struct SignatureV4Params {
+	string canonical_request;
+	string credential_scope;
+	string region;
+	string service;
+	string secret_access_key;
+	string date_now;
+	string datetime_now;
 };
 
 enum class RequestType : uint8_t {
@@ -340,6 +351,7 @@ public:
 	static string GetStatusMessage(HTTPStatusCode status);
 	static bool IsHTTPProtocol(const string &url);
 	static void BumpToSecureProtocol(string &url);
+	static string CreateSignatureV4(EncryptionUtil &encryption_util, const SignatureV4Params &sig_params);
 
 public:
 	static duckdb::unique_ptr<HTTPResponse>

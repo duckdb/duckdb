@@ -13,6 +13,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -447,6 +448,57 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
+void Binder::NormalizeFilterStarExpression(ParsedExpression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (function.Filter()) {
+			BindWhereStarExpression(function.FilterMutable());
+		}
+	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
+		auto &window = expr.Cast<WindowExpression>();
+		if (window.Filter()) {
+			BindWhereStarExpression(window.FilterMutable());
+		}
+	}
+
+	ParsedExpressionIterator::EnumerateChildren(expr,
+	                                            [&](ParsedExpression &child) { NormalizeFilterStarExpression(child); });
+}
+
+void Binder::NormalizeFilterStarExpressions(SelectNode &statement) {
+	for (auto &select_element : statement.select_list) {
+		NormalizeFilterStarExpression(*select_element);
+	}
+
+	for (auto &modifier : statement.modifiers) {
+		switch (modifier->type) {
+		case ResultModifierType::DISTINCT_MODIFIER: {
+			auto &distinct = modifier->Cast<DistinctModifier>();
+			for (auto &target : distinct.distinct_on_targets) {
+				NormalizeFilterStarExpression(*target);
+			}
+			break;
+		}
+		case ResultModifierType::ORDER_MODIFIER: {
+			auto &order = modifier->Cast<OrderModifier>();
+			for (auto &order_node : order.orders) {
+				NormalizeFilterStarExpression(*order_node.expression);
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	if (statement.having) {
+		NormalizeFilterStarExpression(*statement.having);
+	}
+	if (statement.qualify) {
+		NormalizeFilterStarExpression(*statement.qualify);
+	}
+}
+
 Identifier Binder::GetExpressionName(const ParsedExpression &expr) {
 	if (!expr.GetAlias().empty()) {
 		return expr.GetAlias();
@@ -472,6 +524,10 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		result.from_table.plan =
 		    make_uniq<LogicalSample>(std::move(statement.sample), std::move(result.from_table.plan));
 	}
+
+	// do this before column expansion to preserve FILTER semantics,
+	// without normalization the enclosing expression would be duplicated once per column
+	NormalizeFilterStarExpressions(statement);
 
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;
