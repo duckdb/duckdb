@@ -89,11 +89,32 @@ private:
 	shared_ptr<ReadAheadJobCompletion> completion;
 };
 
+//! Async task that opens one file ahead of decoding and releases the pending-open count when destroyed
+class FileOpenTask : public BaseExecutorTask {
+public:
+	FileOpenTask(TaskExecutor &executor, ScanReadAhead &read_ahead_p, std::function<void()> open_fn_p)
+	    : BaseExecutorTask(executor), read_ahead(read_ahead_p), open_fn(std::move(open_fn_p)) {
+	}
+	~FileOpenTask() override {
+		read_ahead.FinishFileOpen();
+	}
+
+	void ExecuteTask() override {
+		open_fn();
+	}
+
+private:
+	ScanReadAhead &read_ahead;
+	std::function<void()> open_fn;
+};
+
 ScanReadAheadJob::~ScanReadAheadJob() = default;
 
 ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
                              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
-    : context(context), read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)) {
+    : context(context), read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)),
+      open_window(MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() * 2,
+                                  memory_governor ? 0 : read_ahead_depth)) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	backlog_budget = memory_governor ? memory_governor->BackpressureBudget() : NumericLimits<idx_t>::Maximum();
 	executor = make_shared_ptr<TaskExecutor>(context, TaskSchedulerType::ASYNC);
@@ -263,6 +284,22 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 
 void ScanReadAhead::PushError(ErrorData error) {
 	executor->PushError(std::move(error));
+}
+
+void ScanReadAhead::ScheduleFileOpen(std::function<void()> open_fn) {
+	++pending_opens;
+	// the task decrements pending_opens in its destructor, so the count stays balanced even if scheduling throws
+	executor->ScheduleTask(make_uniq<FileOpenTask>(*executor, *this, std::move(open_fn)));
+}
+
+void ScanReadAhead::FinishFileOpen() {
+	const auto previous = pending_opens.fetch_sub(1);
+	D_ASSERT(previous > 0);
+	(void)previous;
+}
+
+bool ScanReadAhead::CanScheduleOpen() const {
+	return pending_opens.load() < open_window;
 }
 
 void ScanReadAhead::ThrowIfError() {

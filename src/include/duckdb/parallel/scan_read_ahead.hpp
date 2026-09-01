@@ -150,6 +150,16 @@ public:
 	ScanReadAheadAcquire AcquireJob(ClientContext &context, TableFunctionInput &data_p,
 	                                const ProduceJobCallback &claim_and_schedule, unique_ptr<ScanReadAheadJob> &job);
 
+	//! Push an error onto the async executor
+	void PushError(ErrorData error);
+
+	//! Schedule a file-open closure on the async pool, opening files ahead of decoding
+	void ScheduleFileOpen(std::function<void()> open_fn);
+	//! Mark one scheduled file-open as completed
+	void FinishFileOpen();
+	//! Whether another file-open may be scheduled without exceeding the open-ahead window
+	bool CanScheduleOpen() const;
+
 private:
 	//! Settles the reservation taken by TryReserveSlot
 	struct ProducerReservation {
@@ -185,8 +195,6 @@ private:
 	bool TryReserveSlot();
 	//! Schedule the job's I/O and admit the job to the queue
 	void PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
-	//! Push an error onto the async executor
-	void PushError(ErrorData error);
 	//! Throw if any read-ahead thread or task pushed an error
 	void ThrowIfError();
 	//! Release a read-ahead slot
@@ -198,6 +206,8 @@ private:
 	const idx_t read_ahead_depth;
 	//! Async memory governor
 	unique_ptr<ManagedAsyncMemoryGovernor> memory_governor;
+	//! Maximum file-opens scheduled ahead of decoding on the async pool
+	const idx_t open_window;
 	//! Backlog budget granted by the reservation, refreshed whenever a job is pushed
 	atomic<idx_t> backlog_budget {0};
 
@@ -214,6 +224,8 @@ private:
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
+	//! File-opens scheduled on the async pool that have not completed yet
+	atomic<idx_t> pending_opens {0};
 	//! Async I/O executor (async pool)
 	shared_ptr<TaskExecutor> executor;
 };
