@@ -62,6 +62,9 @@ private:
 	// Helper builders
 	vector<unique_ptr<LogicalOperator>> CreateMatchedBranches(const CTEInfo &left_cte, const CTEInfo &right_cte,
 	                                                          const vector<Branch> &branches);
+	unique_ptr<LogicalOperator> CreateBranchJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
+	                                             const vector<Branch> &branches, idx_t branch_idx,
+	                                             TableIndex &left_ref_idx, TableIndex &right_ref_idx);
 	unique_ptr<LogicalOperator> CreateUnmatchedProbeSide(const CTEInfo &probe_cte, const CTEInfo &build_cte,
 	                                                     const vector<Branch> &branches);
 	unique_ptr<LogicalOperator> CreateUnmatchedBuildSide(const CTEInfo &left_cte, const CTEInfo &right_cte,
