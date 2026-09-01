@@ -29,6 +29,8 @@ namespace duckdb {
 [[noreturn]] void ThrowAlpRDMetadataTableOutOfBounds();
 [[noreturn]] void ThrowAlpRDVectorOffsetOutOfBounds();
 [[noreturn]] void ThrowAlpRDVectorOffsetsInvalid();
+[[noreturn]] void ThrowAlpRDExceptionCountOutOfRange(AlpRDConstants::EXCEPTIONS_COUNT_TYPE exception_count,
+                                                     idx_t vector_size);
 [[noreturn]] void ThrowAlpRDExceptionPositionOutOfRange(AlpRDConstants::EXCEPTION_POSITION_TYPE position,
                                                         idx_t vector_size);
 
@@ -70,11 +72,12 @@ public:
 	//! BitpackingPrimitives::UnPackBuffer reads the right stream through aligned EXACT_TYPE pointers.
 	alignas(EXACT_TYPE) uint8_t right_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
 	EXACT_TYPE decoded_values[AlpRDConstants::ALP_VECTOR_SIZE];
-	//! Exception values read after validating exceptions_count <= AlpRDConstants::ALP_VECTOR_SIZE.
+	//! Exception values read from the segment after validating exceptions_count <= vector_size.
 	AlpRDConstants::EXCEPTION_TYPE exceptions[AlpRDConstants::ALP_VECTOR_SIZE];
 	//! Exception positions read from the segment and validated as exceptions_positions[i] < vector_size.
 	AlpRDConstants::EXCEPTION_POSITION_TYPE exceptions_positions[AlpRDConstants::ALP_VECTOR_SIZE];
 	//! Exception count or UNCOMPRESSED_MODE_SENTINEL read from the segment.
+	//! Compressed-vector counts are validated as exceptions_count <= vector_size.
 	AlpRDConstants::EXCEPTIONS_COUNT_TYPE exceptions_count;
 	//! Right bit width read from the segment.
 	//! Validated as right_bit_width <= MAX_RIGHT_BIT_WIDTH.
@@ -245,6 +248,10 @@ public:
 				vector_reader.Skip(value_buffer_copy_size);
 			}
 			return;
+		}
+
+		if (vector_state.exceptions_count > vector_size) {
+			ThrowAlpRDExceptionCountOutOfRange(vector_state.exceptions_count, vector_size);
 		}
 
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.left_bit_width);
