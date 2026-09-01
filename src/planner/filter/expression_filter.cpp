@@ -635,10 +635,16 @@ static FilterPropagateResult CheckBoolRefStatistics(const Expression &expr, arra
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	auto index = expr.Cast<BoundReferenceExpression>().Index();
-	if (index >= input_stats.size() || !NumericStats::HasMinMax(input_stats[index])) {
+	if (index >= input_stats.size()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	const auto &stats = input_stats[index];
+	if (!stats.CanHaveNoNull()) {
+		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+	}
+	if (!NumericStats::HasMinMax(stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
 	const auto min_v = NumericStats::Min(stats).GetValue<bool>();
 	const auto max_v = NumericStats::Max(stats).GetValue<bool>();
 	if (min_v != max_v) {
