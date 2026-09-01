@@ -63,7 +63,7 @@ TEST_CASE("Disabling profiling resets the active query profiler", "[api]") {
 	con.EnableProfiling();
 	con.context->config.profiler_print_format = "no_output";
 
-	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_profiling"));
+	REQUIRE_NO_FAIL(con.Query("CALL disable_profiling()"));
 	auto &profiler = QueryProfiler::Get(*con.context);
 	CHECK(profiler.GetQuerySQL().empty());
 	CHECK(profiler.GetQueryMetrics().GetStringMetricInSeconds("query.total_time") == 0);
