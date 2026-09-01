@@ -259,6 +259,32 @@ vector<weak_ptr<Pipeline>> Pipeline::GetDependencies() const {
 	return dependencies;
 }
 
+void Pipeline::AddIntraDependency(Pipeline &dependency) {
+	intra_dependencies.emplace_back(dependency.shared_from_this());
+}
+
+void Pipeline::InheritDependencies(const Pipeline &other) {
+	dependencies = other.dependencies;
+	intra_dependencies = other.intra_dependencies;
+}
+
+vector<shared_ptr<Pipeline>> Pipeline::GetAllDependencies() const {
+	vector<shared_ptr<Pipeline>> result;
+	for (auto &weak_dep : intra_dependencies) {
+		auto dep = weak_dep.lock();
+		if (dep) {
+			result.push_back(std::move(dep));
+		}
+	}
+	for (auto &weak_dep : dependencies) {
+		auto dep = weak_dep.lock();
+		if (dep) {
+			result.push_back(std::move(dep));
+		}
+	}
+	return result;
+}
+
 string Pipeline::ToString() const {
 	TextTreeRenderer renderer;
 	return renderer.ToString(*this);
