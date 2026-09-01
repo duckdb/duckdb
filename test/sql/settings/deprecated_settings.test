@@ -1,5 +1,5 @@
 # name: test/sql/settings/deprecated_settings.test
-# description: Setting a deprecated setting emits a deprecation warning
+# description: Setting a deprecated setting, or running a deprecated no-op pragma, emits a deprecation warning
 # group: [settings]
 
 statement ok
@@ -83,6 +83,27 @@ statement error
 SET table_function_identifier_conversion=NULL;
 ----
 <REGEX>:.*table_function_identifier_conversion setting cannot be NULL.*
+
+# the no-op pragmas warn too
+statement error
+PRAGMA enable_verification;
+----
+The 'enable_verification' pragma no longer has any effect; it is deprecated and will be removed in a future release.
+
+statement error
+PRAGMA disable_verification;
+----
+The 'disable_verification' pragma no longer has any effect; it is deprecated and will be removed in a future release.
+
+statement error
+PRAGMA enable_object_cache;
+----
+The 'enable_object_cache' pragma no longer has any effect; it is deprecated and will be removed in a future release.
+
+statement error
+PRAGMA disable_object_cache;
+----
+The 'disable_object_cache' pragma no longer has any effect; it is deprecated and will be removed in a future release.
 
 # settings that are not deprecated do not warn
 statement ok
