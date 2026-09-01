@@ -1,5 +1,5 @@
 diff --git a/src/execution/operator/iceberg_delete.cpp b/src/execution/operator/iceberg_delete.cpp
-index f4430815..77725f15 100644
+index c1bd4fff..990d1b3a 100644
 --- a/src/execution/operator/iceberg_delete.cpp
 +++ b/src/execution/operator/iceberg_delete.cpp
 @@ -1,3 +1,4 @@
@@ -98,10 +98,10 @@ index ac16204e..00000000
 -
 -} // namespace duckdb
 diff --git a/src/execution/operator/merge_into/iceberg_merge_into.cpp b/src/execution/operator/merge_into/iceberg_merge_into.cpp
-index 1b9233d2..5038bdc8 100644
+index e847e4be..5038bdc8 100644
 --- a/src/execution/operator/merge_into/iceberg_merge_into.cpp
 +++ b/src/execution/operator/merge_into/iceberg_merge_into.cpp
-@@ -1,300 +1,25 @@
+@@ -1,302 +1,25 @@
 -
 -#include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 -#include "duckdb/planner/operator/logical_insert.hpp"
@@ -114,7 +114,7 @@ index 1b9233d2..5038bdc8 100644
 -#include "execution/operator/merge_into/iceberg_merge_update.hpp"
 -#include "execution/operator/merge_into/iceberg_merge_into.hpp"
  #include "catalog/rest/iceberg_catalog.hpp"
--#include "catalog/rest/catalog_entry/table/iceberg_table_entry.hpp"
+-#include "catalog/rest/catalog_entry/table/iceberg_table_schema_version.hpp"
 -#include "execution/operator/iceberg_update.hpp"
 -#include "execution/operator/iceberg_delete.hpp"
 -#include "execution/operator/iceberg_insert.hpp"
@@ -253,7 +253,7 @@ index 1b9233d2..5038bdc8 100644
 -	}
 -	auto return_types = op.types;
 -
--	auto &table_entry = op.table.Cast<IcebergTableEntry>();
+-	auto &table_entry = op.table.Cast<IcebergTableSchemaVersion>();
 -	table_entry.PrepareIcebergScanFromEntry(context);
 -
 -	auto &irc_transaction = IcebergTransaction::Get(context, catalog);
@@ -319,7 +319,9 @@ index 1b9233d2..5038bdc8 100644
 -			delete_op.expressions.push_back(std::move(ref));
 -		}
 -		delete_op.bound_constraints = std::move(bound_constraints);
--		result->op = catalog.PlanDelete(context, planner, delete_op, child_plan);
+-		//! MERGE shares this scan with its other actions, so it plans its delete action through the shared
+-		//! PlanDeleteOperation path rather than the standalone PlanDelete entry point.
+-		result->op = catalog.PlanDeleteOperation(context, planner, delete_op, child_plan);
 -		break;
 -	}
 -	case MergeActionType::MERGE_INSERT: {
@@ -376,7 +378,7 @@ index 1b9233d2..5038bdc8 100644
 -	}
 -	map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions;
 -
--	auto &table_entry = op.table.Cast<IcebergTableEntry>();
+-	auto &table_entry = op.table.Cast<IcebergTableSchemaVersion>();
 -	table_entry.PrepareIcebergScanFromEntry(context);
 -
 -	// plan the merge into clauses
@@ -502,7 +504,7 @@ index cc2897bf..00000000
 -} // namespace duckdb
 diff --git a/src/include/execution/operator/merge_into/iceberg_merge_insert.hpp b/src/include/execution/operator/merge_into/iceberg_merge_insert.hpp
 deleted file mode 100644
-index 29de6b33..00000000
+index a1e6ade6..00000000
 --- a/src/include/execution/operator/merge_into/iceberg_merge_insert.hpp
 +++ /dev/null
 @@ -1,77 +0,0 @@
@@ -513,7 +515,7 @@ index 29de6b33..00000000
 -#include "duckdb/execution/physical_operator.hpp"
 -#include "duckdb/common/index_vector.hpp"
 -
--#include "catalog/rest/catalog_entry/table/iceberg_table_entry.hpp"
+-#include "catalog/rest/catalog_entry/table/iceberg_table_schema_version.hpp"
 -#include "catalog/rest/catalog_entry/schema/iceberg_schema_entry.hpp"
 -
 -namespace duckdb {
@@ -614,7 +616,7 @@ index 968c1c8c..00000000
 -} // namespace duckdb
 diff --git a/src/include/execution/operator/merge_into/iceberg_merge_update.hpp b/src/include/execution/operator/merge_into/iceberg_merge_update.hpp
 deleted file mode 100644
-index 529af348..00000000
+index fcb946d4..00000000
 --- a/src/include/execution/operator/merge_into/iceberg_merge_update.hpp
 +++ /dev/null
 @@ -1,86 +0,0 @@
@@ -626,7 +628,7 @@ index 529af348..00000000
 -#include "duckdb/common/index_vector.hpp"
 -
 -#include "execution/operator/iceberg_update.hpp"
--#include "catalog/rest/catalog_entry/table/iceberg_table_entry.hpp"
+-#include "catalog/rest/catalog_entry/table/iceberg_table_schema_version.hpp"
 -#include "catalog/rest/catalog_entry/schema/iceberg_schema_entry.hpp"
 -
 -namespace duckdb {
