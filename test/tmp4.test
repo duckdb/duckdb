@@ -1,6 +1,6 @@
 # name: test/tmp4.test
 # description: An ART physical column ID is used as a logical ColumnList index
-# group: [tmp]
+# group: [test]
 
 statement ok
 CREATE TABLE t(

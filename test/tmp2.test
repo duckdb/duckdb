@@ -1,6 +1,6 @@
 # name: test/tmp2.test
 # description: An index-expression ordinal is mistaken for a physical column ID
-# group: [tmp]
+# group: [test]
 
 statement ok
 CREATE TABLE t(a INTEGER, b INTEGER)

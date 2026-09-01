@@ -1,6 +1,6 @@
 # name: test/tmp1.test
 # description: A logical scan column ID collides with a different ART physical column ID
-# group: [tmp]
+# group: [test]
 
 statement ok
 CREATE TABLE t(

@@ -1,6 +1,6 @@
 # name: test/tmp3.test
 # description: The ordinal-to-scan-position bug also affects expression indexes
-# group: [tmp]
+# group: [test]
 
 statement ok
 CREATE TABLE t(a INTEGER, b VARCHAR)
