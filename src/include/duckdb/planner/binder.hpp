@@ -620,7 +620,7 @@ private:
 	                           vector<unique_ptr<ParsedExpression>> &new_select_list);
 	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
 	//! Rewrites COUNT(tbl.*) into a COUNT over the row of tbl (NULL if all columns of tbl are NULL)
-	void TransformQualifiedCountStar(unique_ptr<ParsedExpression> &expr);
+	void TransformQualifiedCountStar(ParsedExpression &expr);
 	StarExpressionType FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root,
 	                                      bool in_columns);
 	void ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr,
