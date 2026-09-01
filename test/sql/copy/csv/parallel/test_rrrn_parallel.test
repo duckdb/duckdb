@@ -1,0 +1,49 @@
+# name: test/sql/copy/csv/parallel/test_rrrn_parallel.test
+# description: Test parallel CSV reader handles \r\r\n line endings without duplicate rows (issue #25164)
+# group: [parallel]
+
+# force parallelism of the queries
+statement ok
+PRAGMA verify_parallelism
+
+# Test that parallel reading of \r\r\n files produces correct row count
+# and no duplicate rows. Sequential mode serves as the baseline.
+query II
+SELECT 
+    (SELECT COUNT(*) FROM read_csv('{DATA_DIR}/csv/test/rrrn_parallel_test.csv',
+        auto_detect=false, header=true, delim=',',
+        columns={'id':'BIGINT','val':'VARCHAR'},
+        strict_mode=false, ignore_errors=true,
+        max_line_size=2048, buffer_size=4096, parallel=true)) AS parallel_count,
+    (SELECT COUNT(*) FROM read_csv('{DATA_DIR}/csv/test/rrrn_parallel_test.csv',
+        auto_detect=false, header=true, delim=',',
+        columns={'id':'BIGINT','val':'VARCHAR'},
+        strict_mode=false, ignore_errors=true,
+        max_line_size=2048, buffer_size=4096, parallel=false)) AS sequential_count
+----
+10000	10000
+
+# Verify no duplicate rows exist in parallel mode
+query I
+SELECT COUNT(*) FROM (
+    SELECT id, COUNT(*) AS cnt
+    FROM read_csv('{DATA_DIR}/csv/test/rrrn_parallel_test.csv',
+        auto_detect=false, header=true, delim=',',
+        columns={'id':'BIGINT','val':'VARCHAR'},
+        strict_mode=false, ignore_errors=true,
+        max_line_size=2048, buffer_size=4096, parallel=true)
+    GROUP BY id
+    HAVING cnt > 1
+)
+----
+0
+
+# Also test with a larger buffer size
+query I
+SELECT COUNT(*) FROM read_csv('{DATA_DIR}/csv/test/rrrn_parallel_test.csv',
+    auto_detect=false, header=true, delim=',',
+    columns={'id':'BIGINT','val':'VARCHAR'},
+    strict_mode=false, ignore_errors=true,
+    max_line_size=2048, buffer_size=65536, parallel=true)
+----
+10000
