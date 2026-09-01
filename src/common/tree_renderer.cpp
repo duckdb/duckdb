@@ -89,7 +89,7 @@ unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const ProfilerPrintFormat 
 
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ClientContext &context, const string &name) {
 	// registered renderers take precedence over the built-in formats
-	auto extension = ProfilerExtension::Find(context, name);
+	auto extension = ProfilerExtension::Find(context, Identifier(name));
 	if (extension && extension->create_renderer) {
 		return extension->create_renderer(context);
 	}
