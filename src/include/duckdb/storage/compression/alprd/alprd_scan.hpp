@@ -223,6 +223,7 @@ public:
 
 	// Using the metadata, we can avoid loading any of the data if we don't care about the vector at all
 	void SkipVector() {
+		D_ASSERT(total_value_count < count);
 		idx_t vector_size = MinValue((idx_t)AlpRDConstants::ALP_VECTOR_SIZE, count - total_value_count);
 		total_value_count += vector_size;
 	}
@@ -281,6 +282,13 @@ public:
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
 	void Skip(ColumnSegment &col_segment, idx_t skip_count) {
+		D_ASSERT(total_value_count <= count);
+		D_ASSERT(skip_count <= count - total_value_count);
+		// Reaching the segment end does not require loading the final partial vector.
+		if (skip_count == count - total_value_count) {
+			total_value_count = count;
+			return;
+		}
 		if (total_value_count != 0 && !VectorFinished()) {
 			// Finish skipping the current vector
 			idx_t to_skip = MinValue<idx_t>(skip_count, LeftInVector());
@@ -320,6 +328,8 @@ void AlpRDScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
                       idx_t result_offset) {
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	auto &scan_state = (AlpRDScanState<T> &)*state.scan_state;
+	D_ASSERT(scan_state.total_value_count <= scan_state.count);
+	D_ASSERT(scan_count <= scan_state.count - scan_state.total_value_count);
 
 	// Get the pointer to the result values
 	auto current_result_ptr = FlatVector::GetDataMutableUnsafe<EXACT_TYPE>(result);
