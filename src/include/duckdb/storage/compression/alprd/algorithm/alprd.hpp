@@ -213,7 +213,7 @@ template <class T>
 struct AlpRDDecompression {
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	static void Decompress(uint8_t *left_encoded, uint8_t *right_encoded,
+	static void Decompress(const_data_ptr_t left_encoded, const_data_ptr_t right_encoded,
 	                       const AlpRDConstants::DICTIONARY_ELEMENT_TYPE *left_parts_dict, EXACT_TYPE *output,
 	                       idx_t values_count, AlpRDConstants::EXCEPTIONS_COUNT_TYPE exceptions_count,
 	                       const AlpRDConstants::EXCEPTION_TYPE *exceptions,
