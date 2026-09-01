@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 #include <iostream>
 #include <thread>
@@ -54,6 +55,23 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 	REQUIRE(output.size() > 0);
 	query_not_found_in_output = output.find(query) == std::string::npos;
 	REQUIRE(query_not_found_in_output);
+}
+
+TEST_CASE("Disabling profiling resets the active query profiler", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableProfiling();
+	con.context->config.profiler_print_format = "no_output";
+
+	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_profiling"));
+	auto &profiler = QueryProfiler::Get(*con.context);
+	CHECK(profiler.GetQuerySQL().empty());
+	CHECK(profiler.GetQueryMetrics().GetStringMetricInSeconds("query.total_time") == 0);
+
+	REQUIRE_NO_FAIL(con.Query("PRAGMA enable_profiling='no_output'"));
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+	auto output = con.GetProfilingInformation(ProfilerPrintFormat::JSON());
+	REQUIRE(output.find("SELECT 42") != string::npos);
 }
 
 TEST_CASE("Test latency when interrupting query", "[api]") {
