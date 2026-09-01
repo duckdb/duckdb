@@ -25,7 +25,7 @@ struct DuckDBSecretTypeParametersData : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> DuckDBSecretTypeParametersBind(ClientContext &context, TableFunctionBindInput &input,
                                                                vector<LogicalType> &return_types,
-                                                               vector<string> &names) {
+                                                               vector<Identifier> &names) {
 	names.emplace_back("type");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
