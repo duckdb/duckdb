@@ -54,8 +54,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBSecretTypeParametersInit(ClientContex
 		for (const auto &param_pairs : func.named_parameters) {
 			SecretTypeParameterRow row;
 			row.secret_type = func.secret_type;
-			row.provider = func.provider;
-			row.parameter_name = param_pairs.first;
+			row.provider = func.provider.GetIdentifierName();
+			row.parameter_name = param_pairs.first.GetIdentifierName();
 			row.parameter_type = param_pairs.second.ToString();
 			result->rows.push_back(row);
 		}
@@ -74,22 +74,28 @@ void DuckDBSecretTypeParametersFunction(ClientContext &context, TableFunctionInp
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 
+	// type, VARCHAR
+	auto &type = output.data[0];
+	// provider, VARCHAR
+	auto &provider = output.data[1];
+	// name, VARCHAR
+	auto &name = output.data[2];
+	// parameter_type, VARCHAR
+	auto &parameter_type = output.data[3];
+	// description, VARCHAR
+	auto &description = output.data[4];
+
 	while (data.offset < data.rows.size() && count < STANDARD_VECTOR_SIZE) {
-		// Get the current row from our State
 		auto &entry = data.rows[data.offset++];
 
-		// Fill the 5 columns for this row
-		output.SetValue(0, count, Value(entry.secret_type));
-		output.SetValue(1, count, Value(entry.provider));
-		output.SetValue(2, count, Value(entry.parameter_name));
-		output.SetValue(3, count, Value(entry.parameter_type));
-		// Null value
-		output.SetValue(4, count, Value());
+		type.Append(Value(entry.secret_type));
+		provider.Append(Value(entry.provider));
+		name.Append(Value(entry.parameter_name));
+		parameter_type.Append(Value(entry.parameter_type));
+		description.Append(Value());
 
 		count++;
 	}
-
-	output.SetCardinality(count);
 }
 
 void DuckDBSecretTypeParametersFun::RegisterFunction(BuiltinFunctions &set) {
