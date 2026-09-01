@@ -1,7 +1,6 @@
 # name: test/sql/join/left_outer/left_join_issue_24540.test
-# description: left join do not assume right child is null. 
+# description: left join do not assume right child is null.
 # group: [left_outer]
-
 
 query III
 SELECT * FROM (VALUES (1),(2),(NULL)) AS a(x)
