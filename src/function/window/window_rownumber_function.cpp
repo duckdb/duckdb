@@ -288,12 +288,12 @@ void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chu
 			}
 			int64_t n_size = (n_total / n_param);
 			// find the row idx within the group
-			D_ASSERT(row_idx >= begin);
 			idx_t partition_idx = 0;
 			if (grstate.token_tree) {
-				partition_idx = grstate.token_tree->Rank(begin, end, row_idx) - 1;
+				partition_idx = MinValue(grstate.token_tree->Rank(begin, end, row_idx) - 1, idx_t(n_total - 1));
 			} else {
-				partition_idx = row_idx - begin;
+				const auto frame_row_idx = MinValue(MaxValue(begin, row_idx), idx_t(end - 1));
+				partition_idx = frame_row_idx - begin;
 			}
 			auto adjusted_row_idx = NumericCast<int64_t>(partition_idx);
 

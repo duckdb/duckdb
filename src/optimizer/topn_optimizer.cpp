@@ -11,7 +11,6 @@
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 
@@ -91,6 +90,17 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		// no pushdown targets
 		return;
 	}
+	for (auto &target : pushdown_targets) {
+		auto &pushed_column = target.columns[0];
+		if (pushed_column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION ||
+		    RuntimeFilterCastUtil::RuntimeFilterUsesTryCast(pushed_column) ||
+		    RuntimeFilterCastUtil::GetRuntimeFilterInputType(pushed_column, type) != type) {
+			// the pushed expression cannot be reconstructed on top of the raw scan value in the sort
+			// key's type (e.g. a non-integral cast or a VARIANT in between), or the cast chain is not
+			// order-preserving (an explicit TRY_CAST, or a cast that can throw) - bail out
+			return;
+		}
+	}
 	// found pushdown targets! generate dynamic filters
 	ExpressionType comparison_type;
 	if (op.orders[0].type == OrderType::ASCENDING) {
@@ -113,23 +123,36 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	for (auto &target : pushdown_targets) {
 		auto &get = target.get;
 		D_ASSERT(target.columns.size() == 1);
-		auto col_binding = target.columns[0].probe_column_index;
+		auto &pushed_column = target.columns[0];
+		auto col_binding = pushed_column.probe_column_index;
+
+		// reconstruct the sort key on top of the raw scan column (an order-preserving cast chain,
+		// possibly empty), and evaluate the dynamic filter on the reconstructed value so the boundary
+		// constant - which is built in the sort key's type - is compared against values in that same
+		// type
+		bool preserves_cast_errors = false;
+		auto filter_input =
+		    RuntimeFilterCastUtil::CreateRuntimeFilterInputExpression(context, pushed_column, preserves_cast_errors);
+		D_ASSERT(filter_input->GetReturnType() == type);
+		D_ASSERT(!preserves_cast_errors);
 
 		// create the actual dynamic filter
-		auto pushed_expr = CreateDynamicFilterExpression(filter_data, type);
+		auto pushed_expr = CreateDynamicFilterExpression(filter_data, type, filter_input->Copy());
 		if (nulls_first) {
+			// rows whose sort key evaluates to NULL must not be dropped by the filter: with
+			// NULLS FIRST they can be part of the top-N
 			auto or_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
-			auto is_null = ExpressionFilter::CreateNullCheckExpression(
-			    make_uniq<BoundReferenceExpression>(type, idx_t(0)), ExpressionType::OPERATOR_IS_NULL);
+			auto is_null =
+			    ExpressionFilter::CreateNullCheckExpression(std::move(filter_input), ExpressionType::OPERATOR_IS_NULL);
 			or_filter->GetChildrenMutable().push_back(std::move(is_null));
 			or_filter->GetChildrenMutable().push_back(std::move(pushed_expr));
 			pushed_expr = std::move(or_filter);
 		}
 
 		// push the filter into the table scan
-		get.table_filters.PushFilter(
-		    col_binding.column_index,
-		    make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(pushed_expr), type)));
+		get.table_filters.PushFilter(col_binding.column_index,
+		                             make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(
+		                                 std::move(pushed_expr), pushed_column.storage_type)));
 	}
 }
 
