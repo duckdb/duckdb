@@ -344,6 +344,11 @@ static bool TypeSupportsConstantFilter(const LogicalType &type) {
 	return false;
 }
 
+static bool TypeSupportsMultiColumnComparison(const LogicalType &type) {
+	auto physical = type.InternalType();
+	return TypeIsNumeric(physical) || physical == PhysicalType::BOOL;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &table_filters,
                                                                const vector<ColumnIndex> &column_ids, column_t expr_id,
                                                                vector<ExpressionValueInformation> &info_list) {
@@ -445,8 +450,9 @@ static bool IsDirectNumericColumnComparison(const Expression &expr, const vector
 	                                  comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 	                                  comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 	return supported_comparison && left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-	       right.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF && left.GetReturnType().IsNumeric() &&
-	       right.GetReturnType().IsNumeric();
+	       right.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       TypeSupportsMultiColumnComparison(left.GetReturnType()) &&
+	       TypeSupportsMultiColumnComparison(right.GetReturnType());
 }
 
 static bool CanPushdownMultiColumnExpression(const Expression &expr, const vector<ColumnBinding> &bindings) {
