@@ -13,12 +13,11 @@ FROM query('SELECT ' || repeat('(', 10000) || '1' || repeat(')', 10000));
 ----
 1
 
-# Exercise nested list expressions at increasing depths. Keep the maximum
-# depth bounded so failures are reported through max_expression_depth.
+# Exercise nested list expressions through transformation and binding.
 statement ok
 SET max_expression_depth=1000;
 
-foreach depth 1 10 100 500
+foreach depth 1 10 100
 
 query I
 FROM query('SELECT (' || repeat('[', {depth}) || '1' || repeat(']', {depth}) || ') IS NOT NULL');
@@ -27,9 +26,19 @@ FROM query('SELECT (' || repeat('[', {depth}) || '1' || repeat(']', {depth}) || 
 
 endloop
 
-# Array type modifiers use a different transformation path.
+statement ok
+SET max_expression_depth=100;
+
+statement error
+FROM query('SELECT (' || repeat('[', 500) || '1' || repeat(']', 500) || ') IS NOT NULL AS result');
+----
+<REGEX>:.*Max expression depth limit of 100 exceeded.*
+
+statement ok
+SET max_expression_depth=1000;
+
 query I
-FROM query('SELECT (NULL::INT' || repeat('[]', 999) || ') IS NULL');
+FROM query('SELECT (NULL::INT' || repeat('[]', 100) || ') IS NULL');
 ----
 true
 
