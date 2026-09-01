@@ -968,6 +968,12 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 // Enable Progress Bar Print
 //===----------------------------------------------------------------------===//
 void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("enable_progress_bar_print setting cannot be NULL");
+	}
+	if (input.type().id() != LogicalTypeId::BOOLEAN) {
+		throw InvalidInputException("enable_progress_bar_print setting must be a boolean value");
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
 	config.print_progress_bar = input.GetValue<bool>();
@@ -987,6 +993,12 @@ Value EnableProgressBarPrintSetting::GetSetting(const ClientContext &context) {
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 bool EnableProgressBarSetting::OnLocalSet(ClientContext &context, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("enable_progress_bar setting cannot be NULL");
+	}
+	if (input.type().id() != LogicalTypeId::BOOLEAN) {
+		throw InvalidInputException("enable_progress_bar setting must be a boolean value");
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
 	return true;
