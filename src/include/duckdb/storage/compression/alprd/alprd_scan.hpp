@@ -11,7 +11,6 @@
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -21,6 +20,17 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+
+[[noreturn]] void ThrowAlpRDMetadataBeforeHeader();
+[[noreturn]] void ThrowAlpRDRightBitWidthOutOfRange(AlpRDConstants::BIT_WIDTH_TYPE bit_width,
+                                                    AlpRDConstants::BIT_WIDTH_TYPE max_bit_width);
+[[noreturn]] void ThrowAlpRDLeftBitWidthOutOfRange(AlpRDConstants::BIT_WIDTH_TYPE bit_width);
+[[noreturn]] void ThrowAlpRDDictionarySizeExceedsMaximum();
+[[noreturn]] void ThrowAlpRDMetadataTableOutOfBounds();
+[[noreturn]] void ThrowAlpRDVectorOffsetOutOfBounds();
+[[noreturn]] void ThrowAlpRDVectorOffsetsInvalid();
+[[noreturn]] void ThrowAlpRDExceptionPositionOutOfRange(AlpRDConstants::EXCEPTION_POSITION_TYPE position,
+                                                        idx_t vector_size);
 
 template <class T>
 struct AlpRDVectorState {
@@ -53,15 +63,28 @@ public:
 
 public:
 	idx_t index;
-	//! BitpackingPrimitives::UnPackBuffer reads the packed streams through aligned integer pointers.
+	//! Packed left indexes read from the segment through a bounded vector reader.
+	//! BitpackingPrimitives::UnPackBuffer reads the left stream through aligned DICTIONARY_ELEMENT_TYPE pointers.
 	alignas(AlpRDConstants::DICTIONARY_ELEMENT_TYPE) uint8_t left_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
+	//! Packed right parts read from the segment through a bounded vector reader.
+	//! BitpackingPrimitives::UnPackBuffer reads the right stream through aligned EXACT_TYPE pointers.
 	alignas(EXACT_TYPE) uint8_t right_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
 	EXACT_TYPE decoded_values[AlpRDConstants::ALP_VECTOR_SIZE];
+	//! Exception values read after validating exceptions_count <= AlpRDConstants::ALP_VECTOR_SIZE.
 	AlpRDConstants::EXCEPTION_TYPE exceptions[AlpRDConstants::ALP_VECTOR_SIZE];
+	//! Exception positions read from the segment and validated as exceptions_positions[i] < vector_size.
 	AlpRDConstants::EXCEPTION_POSITION_TYPE exceptions_positions[AlpRDConstants::ALP_VECTOR_SIZE];
+	//! Exception count or UNCOMPRESSED_MODE_SENTINEL read from the segment.
 	AlpRDConstants::EXCEPTIONS_COUNT_TYPE exceptions_count;
+	//! Right bit width read from the segment.
+	//! Validated as right_bit_width <= MAX_RIGHT_BIT_WIDTH.
 	AlpRDConstants::BIT_WIDTH_TYPE right_bit_width;
+	//! Left bit width read from the segment.
+	//! Validated as left_bit_width <= AlpRDConstants::MAX_DICTIONARY_BIT_WIDTH.
 	AlpRDConstants::BIT_WIDTH_TYPE left_bit_width;
+	//! Dictionary read from the segment.
+	//! Validated as dictionary_count <= AlpRDConstants::MAX_DICTIONARY_SIZE.
+	//! Unused entries are zero.
 	AlpRDConstants::DICTIONARY_ELEMENT_TYPE left_parts_dict[AlpRDConstants::MAX_DICTIONARY_SIZE];
 };
 
@@ -69,13 +92,17 @@ template <class T>
 struct AlpRDScanState : public SegmentScanState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
+	//! Reconstruction shifts a left part by this width, so it must be smaller than the reconstructed value.
+	static constexpr AlpRDConstants::BIT_WIDTH_TYPE MAX_RIGHT_BIT_WIDTH =
+	    static_cast<AlpRDConstants::BIT_WIDTH_TYPE>(sizeof(EXACT_TYPE) * 8 - 1);
 
 	struct SegmentLayout {
 		//! Vector data between the dictionary and reverse offset table.
 		CompressionSegmentReader data;
-		//! Reverse vector offsets read from disk after the complete table was validated.
+		//! Reverse vector offsets read from the segment after the table extent was validated.
+		//! Each offset is validated when its vector is loaded.
 		unsafe_array_ptr<const AlpRDConstants::METADATA_POINTER_TYPE> vector_offsets;
-		//! Byte offset immediately after the variable-size dictionary.
+		//! Byte offset derived after the dictionary byte span was validated.
 		idx_t data_start;
 	};
 
@@ -84,23 +111,36 @@ public:
 		auto reader = CompressionSegmentReader::FromSegment(handle, segment, "ALPRD segment");
 		auto metadata_end = reader.template Read<AlpRDConstants::METADATA_POINTER_TYPE>();
 		if (metadata_end < AlpRDConstants::HEADER_SIZE) {
-			throw DataCorruptionException("Corrupted ALPRD segment: metadata ends before the segment header");
+			ThrowAlpRDMetadataBeforeHeader();
 		}
 		reader = reader.GetSubReader(0, metadata_end, "ALPRD segment");
 		reader.Skip(AlpRDConstants::METADATA_POINTER_SIZE);
 
 		vector_state.right_bit_width = reader.template Read<AlpRDConstants::BIT_WIDTH_TYPE>();
+		if (vector_state.right_bit_width > MAX_RIGHT_BIT_WIDTH) {
+			ThrowAlpRDRightBitWidthOutOfRange(vector_state.right_bit_width, MAX_RIGHT_BIT_WIDTH);
+		}
+
 		vector_state.left_bit_width = reader.template Read<AlpRDConstants::BIT_WIDTH_TYPE>();
+		if (vector_state.left_bit_width > AlpRDConstants::MAX_DICTIONARY_BIT_WIDTH) {
+			ThrowAlpRDLeftBitWidthOutOfRange(vector_state.left_bit_width);
+		}
+
 		auto dictionary_count = reader.template Read<AlpRDConstants::DICTIONARY_COUNT_TYPE>();
 		if (dictionary_count > AlpRDConstants::MAX_DICTIONARY_SIZE) {
-			throw DataCorruptionException("Corrupt database file: ALPRD dictionary size exceeds maximum");
+			ThrowAlpRDDictionarySizeExceedsMaximum();
 		}
+
 		reader.ReadIntoArray(vector_state.left_parts_dict, dictionary_count);
+		// Exception values use a dictionary index beyond the stored entries, so the remaining entries must be zero.
+		memset(vector_state.left_parts_dict + dictionary_count, 0,
+		       (AlpRDConstants::MAX_DICTIONARY_SIZE - dictionary_count) *
+		           AlpRDConstants::DICTIONARY_ELEMENT_SIZE);
 
 		auto data_start = reader.Position();
 		auto vector_count = count / AlpRDConstants::ALP_VECTOR_SIZE + (count % AlpRDConstants::ALP_VECTOR_SIZE != 0);
 		if (vector_count > (metadata_end - data_start) / AlpRDConstants::METADATA_POINTER_SIZE) {
-			throw DataCorruptionException("Corrupted ALPRD segment: metadata offset table exceeds the segment");
+			ThrowAlpRDMetadataTableOutOfBounds();
 		}
 		auto metadata_size = vector_count * AlpRDConstants::METADATA_POINTER_SIZE;
 		auto metadata_start = metadata_end - metadata_size;
@@ -116,7 +156,7 @@ public:
 	}
 
 	BufferHandle handle;
-	//! Segment row count read from disk, used to derive the vector count and final vector size.
+	//! Row count read from the segment, used to derive the vector count and final vector size.
 	idx_t count;
 	AlpRDVectorState<T> vector_state;
 	SegmentLayout layout;
@@ -132,7 +172,7 @@ public:
 		D_ASSERT(vector_index < layout.vector_offsets.size());
 		auto vector_start = GetVectorOffset(vector_index);
 		if (vector_start < layout.data_start) {
-			throw DataCorruptionException("Corrupted ALPRD segment: vector offset is outside the data region");
+			ThrowAlpRDVectorOffsetOutOfBounds();
 		}
 		auto data_start = vector_start - layout.data_start;
 
@@ -140,12 +180,12 @@ public:
 		if (vector_index + 1 < layout.vector_offsets.size()) {
 			auto vector_end = GetVectorOffset(vector_index + 1);
 			if (vector_end < layout.data_start) {
-				throw DataCorruptionException("Corrupted ALPRD segment: vector offset is outside the data region");
+				ThrowAlpRDVectorOffsetOutOfBounds();
 			}
 			data_end = vector_end - layout.data_start;
 		}
 		if (data_start > data_end || data_end > layout.data.Size()) {
-			throw DataCorruptionException("Corrupted ALPRD segment: vector offsets do not describe a data range");
+			ThrowAlpRDVectorOffsetsInvalid();
 		}
 		return layout.data.GetSubReader(data_start, data_end - data_start, "ALPRD vector");
 	}
@@ -222,8 +262,7 @@ public:
 			//! The exception positions index into the decoded vector, so they must stay within its bounds
 			for (idx_t i = 0; i < vector_state.exceptions_count; i++) {
 				if (vector_state.exceptions_positions[i] >= vector_size) {
-					throw IOException("Corrupted ALPRD segment: exception position (%d) exceeds vector_size (%d)",
-					                  vector_state.exceptions_positions[i], vector_size);
+					ThrowAlpRDExceptionPositionOutOfRange(vector_state.exceptions_positions[i], vector_size);
 				}
 			}
 		}
