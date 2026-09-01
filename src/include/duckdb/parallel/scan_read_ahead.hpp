@@ -94,12 +94,12 @@ template <class STATE>
 class ScanStatePool {
 public:
 	void Push(unique_ptr<STATE> state) {
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		states.push_back(std::move(state));
 	}
 	//! Pop a recycled state, returns null when none is available
 	unique_ptr<STATE> TryPop() {
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		if (states.empty()) {
 			return nullptr;
 		}
@@ -109,13 +109,13 @@ public:
 	}
 	//! Take every pooled state
 	vector<unique_ptr<STATE>> TakeAll() {
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		return std::move(states);
 	}
 
 private:
-	mutex lock;
-	vector<unique_ptr<STATE>> states;
+	annotated_mutex lock;
+	vector<unique_ptr<STATE>> states DUCKDB_GUARDED_BY(lock);
 };
 
 //! Outcome of ScanReadAhead::AcquireJob

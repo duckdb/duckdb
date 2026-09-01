@@ -361,7 +361,7 @@ public:
 
 	//! Claims the next assignment into the thread's own scan state, returns false when none are left
 	bool ClaimAssignment(ClientContext &context, TableScanLocalState &l_state) {
-		if (storage.NextParallelScan(context, state, l_state.scan_state) == 0) {
+		if (!storage.NextParallelScan(context, state, l_state.scan_state).IsValid()) {
 			return false;
 		}
 		l_state.row_groups_scanned++;
@@ -421,10 +421,11 @@ public:
 		{
 			// only the claim and its index need the lock, the per-column setup runs outside it
 			lock_guard<mutex> guard(read_ahead_lock);
-			job->rows = storage.NextParallelScan(context, state, *job->scan_state, false);
-			if (job->rows == 0) {
+			const auto rows = storage.NextParallelScan(context, state, *job->scan_state, false);
+			if (!rows.IsValid()) {
 				return nullptr;
 			}
+			job->rows = rows.GetIndex();
 			job->batch_index = next_job_index++;
 			queued_rows += job->rows;
 		}

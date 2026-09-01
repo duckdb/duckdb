@@ -362,8 +362,8 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.processed_rows = 0;
 }
 
-idx_t RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
-                                           CollectionScanState &scan_state, bool initialize_columns) {
+optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
+                                                  CollectionScanState &scan_state, bool initialize_columns) {
 	AssignSharedPointer(scan_state.row_groups, state.row_groups);
 	while (true) {
 		idx_t vector_index;
@@ -430,7 +430,7 @@ idx_t RowGroupCollection::NextParallelScan(ClientContext &context, ParallelColle
 	}
 	lock_guard<mutex> l(state.lock);
 	scan_state.batch_index = state.batch_index;
-	return 0;
+	return optional_idx();
 }
 
 //===--------------------------------------------------------------------===//

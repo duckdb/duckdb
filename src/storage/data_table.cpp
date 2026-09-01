@@ -305,11 +305,11 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 	local_storage.InitializeParallelScan(*this, state.local_state);
 }
 
-idx_t DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
-                                  bool initialize_columns) {
+optional_idx DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state,
+                                         TableScanState &scan_state, bool initialize_columns) {
 	const auto rows =
 	    row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state, initialize_columns);
-	if (rows > 0) {
+	if (rows.IsValid()) {
 		return rows;
 	}
 	if (state.scan_state.row_number_base.IsValid()) {
