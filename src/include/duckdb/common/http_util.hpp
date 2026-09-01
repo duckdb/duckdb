@@ -12,8 +12,10 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/time_point.hpp"
+#include <exception>
 #include <functional>
 
 namespace duckdb {
@@ -272,6 +274,28 @@ struct PostRequestInfo : public BaseRequest {
 	bool send_post_as_get_request = false;
 };
 
+//! Whether the caller of a request can be handed a result that is not ready yet
+enum class HTTPExecutionMode : uint8_t {
+	//! The caller needs the response before the call returns
+	BLOCKING,
+	//! The caller can take PENDING and be resumed once the completion fires
+	DEFERRABLE
+};
+
+//! Whether a request completed before returning, or will complete later
+enum class HTTPRequestState : uint8_t {
+	//! The completion has already been invoked
+	COMPLETED,
+	//! The completion will be invoked later, only ever returned for DEFERRABLE
+	PENDING
+};
+
+//! Invoked exactly once when a request completes, unless the call that started it threw.
+//! [error] is set when the request failed after it was handed off. Note that for a GET carrying a
+//! content_handler the body has already been streamed through it, so [response] carries the status
+//! and headers rather than the payload.
+using HTTPResponseCallback = std::function<void(unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error)>;
+
 class HTTPClient {
 public:
 	HTTPClient() = default;
@@ -290,6 +314,15 @@ public:
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 
+	//! Perform [request], delivering the result through [on_complete] rather than returning it.
+	//! Returns PENDING only when [mode] is DEFERRABLE and the request was handed off; BLOCKING always
+	//! returns COMPLETED. One entry point covers every verb because Request already dispatches on the
+	//! request type, so a backend that is only asynchronous for some verbs can defer the rest here.
+	//! The default performs the existing synchronous request, so a backend without an asynchronous
+	//! transport needs no change.
+	DUCKDB_API virtual HTTPRequestState Send(BaseRequest &request, HTTPExecutionMode mode,
+	                                         HTTPResponseCallback on_complete);
+
 	const string &GetBaseUrl() const {
 		return base_url;
 	}
@@ -297,6 +330,43 @@ public:
 private:
 	//! The base URL (scheme + host + port) this client was created for
 	const string base_url;
+};
+
+//! What should happen after one attempt of an HTTP request
+enum class HTTPRetryDecision : uint8_t {
+	//! The response is final and should be returned to the caller
+	FINISHED,
+	//! The request should be attempted again, after the delay the policy reported
+	RETRY,
+	//! The retries are exhausted, the caller must produce the failure
+	FAILED
+};
+
+//! The outcome of one attempt of an HTTP request, whether it produced a response or threw
+struct HTTPAttempt {
+	//! The response, null when the attempt threw
+	unique_ptr<HTTPResponse> response;
+	//! The exception the attempt threw, if any
+	std::exception_ptr caught_e = nullptr;
+	string exception_error;
+	//! Status and Retry-After recovered from an HTTPException, used for throttle detection
+	string caught_status;
+	string caught_retry_after;
+};
+
+//! The retry policy of one HTTP request, carried across its attempts.
+//! It does no waiting of its own: a synchronous caller sleeps for the delay it reports, an
+//! asynchronous one schedules the next attempt after it, so both share this one policy.
+class HTTPRetryState {
+public:
+	//! Record one attempt and decide what happens next. [delay_ms] is only set for RETRY.
+	DUCKDB_API HTTPRetryDecision OnAttempt(const BaseRequest &request, HTTPAttempt &attempt, uint64_t &delay_ms);
+	//! Produce the outcome of a FAILED decision: a failed response when the request asked for one, else it throws
+	DUCKDB_API unique_ptr<HTTPResponse> Finalize(const BaseRequest &request, HTTPAttempt &attempt);
+
+private:
+	//! Attempts made so far
+	idx_t tries = 0;
 };
 
 class HTTPUtil {
@@ -337,6 +407,21 @@ public:
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);
 
 	virtual unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client);
+	//! SendRequest, delivering the result through [on_complete] instead of returning it.
+	//! BLOCKING goes through SendRequest above, so an implementation that overrides that one keeps
+	//! its behaviour exactly. DEFERRABLE retries here instead, driving HTTPClient::Send one attempt
+	//! at a time, so a client that defers a request still gets the retry policy rather than losing
+	//! it - a backend implements HTTPClient::Send, and does not need to override this at all.
+	//! [request] and [client] must stay alive until the completion fires.
+	DUCKDB_API virtual HTTPRequestState Send(BaseRequest &request, unique_ptr<HTTPClient> &client,
+	                                         HTTPExecutionMode mode, HTTPResponseCallback on_complete);
+
+	//! Wait [delay_ms] before the next attempt of a request, then run [resume].
+	//! The default sleeps the calling thread and returns COMPLETED, which is what the retry backoff
+	//! has always done. An implementation that must not block - a browser, an event loop - overrides
+	//! this to schedule [resume] and return PENDING, which is the only platform-specific piece of
+	//! retrying without a thread to wait on.
+	DUCKDB_API virtual HTTPRequestState Wait(uint64_t delay_ms, std::function<void()> resume);
 	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
 	//! Whether a failed request should be retried, possibly using HTTPResponse information, and allowing overrides
