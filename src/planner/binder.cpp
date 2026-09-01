@@ -235,6 +235,10 @@ StatementProperties &Binder::GetStatementProperties() {
 	return global_binder_state->prop;
 }
 
+BoundExpressionMap &Binder::GetBoundExpressions() {
+	return global_binder_state->bound_expressions;
+}
+
 optional_ptr<LogicalGet> Binder::GetPassthroughTableFunctionGet(LogicalOperator &op) {
 	// Follow single-child projections down to a lone LOGICAL_GET; anything else is not a passthrough.
 	auto *current = &op;
@@ -480,13 +484,7 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 	auto &indexes = info->GetIndexes();
 
 	// Collect column IDs from unique indexes
-	unordered_set<column_t> indexed_column_ids;
-	for (auto &index : indexes.Indexes()) {
-		if (index.IsUnique()) {
-			auto &col_ids = index.GetColumnIdSet();
-			indexed_column_ids.insert(col_ids.begin(), col_ids.end());
-		}
-	}
+	auto indexed_column_ids = indexes.GetUniqueIndexColumns();
 
 	if (indexed_column_ids.empty()) {
 		return;

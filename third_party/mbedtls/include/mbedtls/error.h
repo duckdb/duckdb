@@ -81,7 +81,7 @@
  * MD        5   5
  * HKDF      5   1 (Started from top)
  * PKCS7     5   12 (Started from 0x5300)
- * SSL       5   2 (Started from 0x5F00)
+ * SSL       5   3 (Started from 0x5F00)
  * CIPHER    6   8 (Started from 0x6080)
  * SSL       6   22 (Started from top, plus 0x6000)
  * SSL       7   20 (Started from 0x7000, gaps at
@@ -139,7 +139,7 @@ extern void (*mbedtls_test_hook_error_add)(int, int, const char *, int);
  * \param file      file where this error code addition occurred.
  * \param line      line where this error code addition occurred.
  */
-inline int mbedtls_error_add(int high, int low,
+static inline int mbedtls_error_add(int high, int low,
                                     const char *file, int line)
 {
 #if defined(MBEDTLS_TEST_HOOKS)

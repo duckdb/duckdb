@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/array_ptr.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/likely.hpp"
 
@@ -71,18 +72,30 @@ public:
 		return Load<T>(data + offset);
 	}
 
-	//! Returns a pointer to the next length bytes and advances the position.
-	const_data_ptr_t ReadBytes(idx_t length) {
+	//! Returns a view over the next length bytes and advances the position.
+	unsafe_array_ptr<const uint8_t> ReadBytes(idx_t length) {
 		CheckForwardRead(length);
-		auto result = data + position;
+		unsafe_array_ptr<const uint8_t> result(data + position, length);
 		position += length;
 		return result;
 	}
 
-	//! Returns a pointer to length bytes at offset without changing the position.
-	const_data_ptr_t GetBytes(idx_t offset, idx_t length) const {
+	//! Returns a view over the next length bytes aligned for T and advances the position.
+	template <class T>
+	unsafe_array_ptr<const uint8_t> ReadBytesAligned(idx_t length) {
+		CheckForwardRead(length);
+		if (DUCKDB_UNLIKELY(reinterpret_cast<uintptr_t>(data + position) % alignof(T) != 0)) { // NOLINT
+			ThrowArrayMisaligned();
+		}
+		unsafe_array_ptr<const uint8_t> result(data + position, length);
+		position += length;
+		return result;
+	}
+
+	//! Returns a view over length bytes at offset without changing the position.
+	unsafe_array_ptr<const uint8_t> GetBytes(idx_t offset, idx_t length) const {
 		CheckRange(offset, length);
-		return data + offset;
+		return unsafe_array_ptr<const uint8_t>(data + offset, length);
 	}
 
 	//! Validates that count aligned elements fit at byte offset.
@@ -99,21 +112,21 @@ public:
 		}
 	}
 
-	//! Returns a pointer to count elements at byte offset.
+	//! Returns a view over count elements at byte offset.
 	template <class T>
-	const T *GetArray(idx_t offset, idx_t count) const {
+	unsafe_array_ptr<const T> GetArray(idx_t offset, idx_t count) const {
 		return GetArraySlice<T>(offset, 0, count);
 	}
 
-	//! Returns a pointer to elements [start, start + count) in the array at byte offset.
+	//! Returns a view over elements [start, start + count) in the array at byte offset.
 	template <class T>
-	const T *GetArraySlice(idx_t offset, idx_t start, idx_t count) const {
+	unsafe_array_ptr<const T> GetArraySlice(idx_t offset, idx_t start, idx_t count) const {
 		CheckArray<T>(offset, start);
 		auto capacity = (size - offset) / sizeof(T);
 		if (DUCKDB_UNLIKELY(count > capacity - start)) {
 			ThrowArrayOutOfBounds();
 		}
-		return reinterpret_cast<const T *>(data + offset) + start; // NOLINT
+		return unsafe_array_ptr<const T>(reinterpret_cast<const T *>(data + offset) + start, count); // NOLINT
 	}
 
 	//! Loads the element at index after validating array_count elements at byte offset.
