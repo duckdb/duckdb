@@ -149,31 +149,6 @@ ON o.o_orderkey = l.l_orderkey
 5	50	NULL	NULL	500	NULL
 NULL	40	NULL	40	NULL	600
 
-query II
-EXPLAIN SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey, o.o_comment, l.l_comment
-FROM orders o JOIN lineitem l
-ON o.o_orderkey + 100 = l.l_orderkey
-   OR o.o_custkey + 1000 = l.l_partkey
-   OR SUBSTRING(o.o_comment, 1, 2) = SUBSTRING(l.l_comment, 1, 2);
-----
-physical_plan	<!REGEX>:.*Blockwise Nl Join.*
-
-query IIIIII rowsort
-SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey, o.o_comment, l.l_comment
-FROM orders o JOIN lineitem l
-ON o.o_orderkey + 100 = l.l_orderkey
-   OR o.o_custkey + 1000 = l.l_partkey
-   OR SUBSTRING(o.o_comment, 1, 2) = SUBSTRING(l.l_comment, 1, 2);
-----
-1	10	1	99	L1	L1
-1	10	1	99	L1	L1
-1	10	101	NULL	L1	L5
-2	20	88	20	L2	L2
-3	30	3	30	L3	L3
-4	NULL	4	77	L4	L4
-5	50	101	NULL	L5	L5
-NULL	40	NULL	40	L6	L6
-
 query IIII rowsort
 SELECT o1.o_orderkey, l1.l_orderkey, o2.o_orderkey, l2.l_orderkey
 FROM orders o1
@@ -310,3 +285,20 @@ SELECT o.o_orderkey, o.o_custkey
 FROM orders o ANTI JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey IS NOT DISTINCT FROM l.l_partkey;
 ----
 5	50
+
+# Volatile and Throwing Expressions
+query II
+EXPLAIN SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey, o.o_comment, l.l_comment
+FROM orders o JOIN lineitem l
+ON o.o_orderkey + 100 = l.l_orderkey
+   OR o.o_custkey + 1000 = l.l_partkey
+   OR SUBSTRING(o.o_comment, 1, 2) = SUBSTRING(l.l_comment, 1, 2);
+----
+physical_plan	<REGEX>:.*Blockwise Nl Join.*
+
+query II
+EXPLAIN SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
+FROM orders o JOIN lineitem l
+ON o.o_orderkey = l.l_orderkey OR random() > 10;
+----
+physical_plan	<REGEX>:.*Blockwise Nl Join.*
