@@ -1,0 +1,125 @@
+diff --git a/vcpkg_ports/aws-c-io/no_op_implementation.patch b/vcpkg_ports/aws-c-io/no_op_implementation.patch
+index ee595831..614377dd 100644
+--- a/vcpkg_ports/aws-c-io/no_op_implementation.patch
++++ b/vcpkg_ports/aws-c-io/no_op_implementation.patch
+@@ -1,8 +1,8 @@
+ diff --git a/CMakeLists.txt b/CMakeLists.txt
+-index c306a19..882f110 100644
++index 0277dbb..2ed6848 100644
+ --- a/CMakeLists.txt
+ +++ b/CMakeLists.txt
+-@@ -166,9 +166,12 @@ aws_add_sanitizers(${PROJECT_NAME})
++@@ -189,9 +189,12 @@ aws_add_sanitizers(${PROJECT_NAME})
+  # We are not ABI stable yet
+  set_target_properties(${PROJECT_NAME} PROPERTIES VERSION 1.0.0)
+  
+@@ -16,14 +16,13 @@ index c306a19..882f110 100644
+      target_compile_definitions(${PROJECT_NAME} PUBLIC "-DAWS_ENABLE_${EVENT_LOOP_DEFINE}")
+  endforeach()
+ diff --git a/source/event_loop.c b/source/event_loop.c
+-index 0ec298d..6dea0f7 100644
++index dfb919d..3c219fa 100644
+ --- a/source/event_loop.c
+ +++ b/source/event_loop.c
+-@@ -17,6 +17,18 @@
+- 
++@@ -23,6 +23,17 @@ static enum aws_event_loop_type s_default_event_loop_type_override = AWS_EVENT_L
+  static enum aws_event_loop_type s_default_event_loop_type_override = AWS_EVENT_LOOP_PLATFORM_DEFAULT;
++ #endif
+  
+-+
+ +#ifdef EMSCRIPTEN
+ +int aws_default_dns_resolve(
+ +    struct aws_allocator *allocator,
+@@ -38,7 +37,7 @@ index 0ec298d..6dea0f7 100644
+  struct aws_event_loop *aws_event_loop_new_default(struct aws_allocator *alloc, aws_io_clock_fn *clock) {
+      struct aws_event_loop_options options = {
+          .thread_options = NULL,
+-@@ -84,6 +96,9 @@ struct aws_event_loop *aws_event_loop_new_with_epoll(
++@@ -90,6 +101,9 @@ struct aws_event_loop *aws_event_loop_new_with_epoll(
+   * If `aws_event_loop_override_default_type` has been called, return the override default type.
+   */
+  enum aws_event_loop_type aws_event_loop_get_default_type(void) {
+@@ -48,7 +47,7 @@ index 0ec298d..6dea0f7 100644
+      if (s_default_event_loop_type_override != AWS_EVENT_LOOP_PLATFORM_DEFAULT) {
+          return s_default_event_loop_type_override;
+      }
+-@@ -103,6 +118,7 @@ enum aws_event_loop_type aws_event_loop_get_default_type(void) {
++@@ -109,6 +123,7 @@ enum aws_event_loop_type aws_event_loop_get_default_type(void) {
+  #    error                                                                                                             \
+          "Default event loop type required. Failed to get default event loop type. The library is not built correctly on the platform. "
+  #endif
+@@ -57,26 +56,25 @@ index 0ec298d..6dea0f7 100644
+  
+  static int aws_event_loop_type_validate_platform(enum aws_event_loop_type type) {
+ diff --git a/source/io.c b/source/io.c
+-index e8a5216..18f5274 100644
++index 27c7263..4250dd8 100644
+ --- a/source/io.c
+ +++ b/source/io.c
+-@@ -396,8 +396,14 @@ static struct aws_log_subject_info_list s_io_log_subject_list = {
+- 
++@@ -400,8 +400,13 @@ static struct aws_log_subject_info_list s_io_log_subject_list = {
+  static bool s_io_library_initialized = false;
+  
+-+
++ void aws_tls_init_vtable(struct aws_allocator *allocator);
+ +#ifdef EMSCRIPTEN
+ +void aws_tls_init_static_state(struct aws_allocator *alloc) {}
+ +void aws_tls_clean_up_static_state(void) {}
+ +#else
+- void aws_tls_init_static_state(struct aws_allocator *alloc);
++ void aws_tls_init_static_state(struct aws_allocator *allocator);
+  void aws_tls_clean_up_static_state(void);
+ +#endif
+  
+  void aws_io_library_init(struct aws_allocator *allocator) {
+      if (!s_io_library_initialized) {
+ diff --git a/source/posix/socket.c b/source/posix/socket.c
+-index 22cd1fc..f19579c 100644
++index 79b214d..a0c3c28 100644
+ --- a/source/posix/socket.c
+ +++ b/source/posix/socket.c
+ @@ -359,6 +359,9 @@ static void s_socket_clean_up(struct aws_socket *socket) {
+@@ -117,12 +115,12 @@ index 22cd1fc..f19579c 100644
+  
+  static void s_handle_socket_timeout(struct aws_task *task, void *args, aws_task_status status) {
+ diff --git a/source/tls_channel_handler.c b/source/tls_channel_handler.c
+-index 353877b..8101337 100644
++index cb79143..a52cd46 100644
+ --- a/source/tls_channel_handler.c
+ +++ b/source/tls_channel_handler.c
+-@@ -21,6 +21,15 @@
+- 
+- #include <aws/common/string.h>
++@@ -22,6 +22,15 @@
++ /* Global TLS v-table, populated at init time with the platform-specific TLS implementation. */
++ static struct aws_tls_vtable s_tls_channel_handler_vtable;
+  
+ +#ifdef EMSCRIPTEN
+ +struct aws_tls_ctx *aws_tls_client_ctx_new(
+diff --git a/vcpkg_ports/aws-c-io/portfile.cmake b/vcpkg_ports/aws-c-io/portfile.cmake
+index a642bef1..49073d9a 100644
+--- a/vcpkg_ports/aws-c-io/portfile.cmake
++++ b/vcpkg_ports/aws-c-io/portfile.cmake
+@@ -2,7 +2,7 @@ vcpkg_from_github(
+     OUT_SOURCE_PATH SOURCE_PATH
+     REPO awslabs/aws-c-io
+     REF "v${VERSION}"
+-    SHA512 ba809c397ca824b9b56d3c73b9e1b18b955bc68f737700695b7d4242707ab570f1d80a1d74267b06b46e2c8b3fc307756883eff40959e6ddd34e2e7683a9ab2f
++    SHA512 2037b119155e5f40c3e4f9772df21a509314b20653b6f3f96a6ea1e6cd499a9e11e886fbb8b9a81af267b9c2f1698044e7194534796b9906769a6f38433ced03
+     HEAD_REF master
+     PATCHES no_op_implementation.patch
+ )
+diff --git a/vcpkg_ports/aws-c-io/vcpkg.json b/vcpkg_ports/aws-c-io/vcpkg.json
+index d79d8035..b8fa6cd6 100644
+--- a/vcpkg_ports/aws-c-io/vcpkg.json
++++ b/vcpkg_ports/aws-c-io/vcpkg.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "aws-c-io",
+-  "version": "0.24.0",
++  "version": "0.27.5",
+   "description": "Handles all IO and TLS work for application protocols.",
+   "homepage": "https://github.com/awslabs/aws-c-io",
+   "license": "Apache-2.0",
