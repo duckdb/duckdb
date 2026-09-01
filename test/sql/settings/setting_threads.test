@@ -18,3 +18,28 @@ SET {thread_type} TO 'blabla'
 <REGEX>:Invalid Input Error.*Failed to cast value.*
 
 endloop
+
+statement error
+SET threads = NULL;
+----
+Invalid Input Error: threads must be a positive integer
+
+statement error
+SET external_threads = NULL;
+----
+Invalid Input Error: external_threads must be a positive integer
+
+statement error
+SET async_threads = NULL;
+----
+Invalid Input Error: async_threads must be a positive integer
+
+statement error
+SET ordered_aggregate_threshold = NULL;
+----
+Invalid Input Error: ordered_aggregate_threshold must be a positive integer
+
+statement error
+SET perfect_ht_threshold = NULL;
+----
+Invalid Input Error: perfect_ht_threshold must be an integer

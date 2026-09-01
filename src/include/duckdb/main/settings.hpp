@@ -171,6 +171,21 @@ struct AllowCommunityExtensionsSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct AllowExtensionRepositoriesSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "allow_extension_repositories";
+	static constexpr const char *Description =
+	    "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing "
+	    "repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones). "
+	    "While the database is running the setting can only move from 'undecided' to 'allowed' or 'forbidden', or from "
+	    "'allowed' to 'forbidden'";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "undecided";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct AllowExtensionsMetadataMismatchSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
@@ -608,6 +623,16 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugHeapBasedParserSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_heap_based_parser";
+	static constexpr const char *Description = "DEBUG SETTING: use the experimental heap-based PEG parser";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugOrderVerificationSetting {
 	using RETURN_TYPE = DebugOrderVerification;
 	static constexpr const char *Name = "debug_order_verification";
@@ -638,16 +663,6 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct DebugTransformerTrampolineStyleSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "debug_transformer_trampoline_style";
-	static constexpr const char *Description = "Use the experimental trampoline-style parser transformer";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -1157,6 +1172,20 @@ struct ExtensionDirectorySetting {
 	static constexpr const char *DefaultValue = "";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct ExtensionRepositoryDirectorySetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "extension_repository_directory";
+	static constexpr const char *Description =
+	    "Set the directory in which trusted extension repositories are stored. This is the trust anchor for "
+	    "user-provided repositories, so while signature checking is enabled (allow_unsigned_extensions=false) it can "
+	    "only be set at startup, not while the database is running";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ExternalFileCacheLocalBlockSizeSetting {

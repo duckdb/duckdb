@@ -338,7 +338,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 	arguments.reserve(function.GetArguments().size());
 	for (auto &arg : function.GetArgumentsMutable()) {
-		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
+		auto bound_arg = GetBoundExpressions().Consume(*arg.GetExpressionMutable());
 
 		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
 		// and pass them all positionally. We do alias them by their name though, so that alias-capturing functions
@@ -408,17 +408,17 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			return BindResult(std::move(error));
 		}
 
-		const auto &child = BoundExpression::GetExpression(*args[i].GetExpressionMutable());
-		function_child_types.push_back(child->GetReturnType());
+		const auto &child = GetBoundExpressions().Get(*args[i].GetExpressionMutable());
+		function_child_types.push_back(child.GetReturnType());
 	}
 
 	if (lambda_expr_idx == 1) {
 		// get the logical type of the children of the list
-		auto &list_child = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
-		if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
-		    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
-		    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
-		    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
+		auto &list_child = GetBoundExpressions().Get(*args[0].GetExpressionMutable());
+		if (list_child.GetReturnType().id() != LogicalTypeId::LIST &&
+		    list_child.GetReturnType().id() != LogicalTypeId::ARRAY &&
+		    list_child.GetReturnType().id() != LogicalTypeId::SQLNULL &&
+		    list_child.GetReturnType().id() != LogicalTypeId::UNKNOWN) {
 			return BindResult("Invalid LIST argument during lambda function binding!");
 		}
 	}
@@ -468,11 +468,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		}
 	}
 
-	// successfully bound: replace the node with a BoundExpression
+	// successfully bound: store the bound lambda in the map
 	auto alias = args[lambda_expr_idx].GetExpression().GetAlias();
 	bind_lambda_result.expression->SetAlias(alias);
 
-	args[lambda_expr_idx].GetExpressionMutable() = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
+	GetBoundExpressions().Insert(args[lambda_expr_idx].GetExpression(), std::move(bind_lambda_result.expression));
 
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -482,8 +482,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// extract the children and types
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < args.size(); i++) {
-		auto &child = BoundExpression::GetExpression(*args[i].GetExpressionMutable());
-		children.push_back(std::move(child));
+		children.push_back(GetBoundExpressions().Consume(*args[i].GetExpressionMutable()));
 	}
 
 	// capture the (lambda) columns

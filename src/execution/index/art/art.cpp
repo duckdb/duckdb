@@ -152,7 +152,7 @@ static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Value &low_v
 	return std::move(result);
 }
 
-unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const Expression &filter_expr) {
+unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const Expression &filter_expr) const {
 	Value low_value, high_value, equal_value;
 	ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
 
@@ -417,12 +417,12 @@ void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_ve
 }
 
 template <>
-void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const {
 	GenerateKeysInternal<false>(allocator, input, keys);
 }
 
 template <>
-void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const {
 	GenerateKeysInternal<true>(allocator, input, keys);
 }
 
@@ -697,18 +697,18 @@ bool ART::HasLegacyGeometryKeys() const {
 //===--------------------------------------------------------------------===//
 // Point and range lookups
 //===--------------------------------------------------------------------===//
-bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) {
+bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
 	Iterator it(*this);
 	it.FindMinimum(tree);
-	ARTKey empty_key = ARTKey();
+	const auto empty_key = ARTKey();
 	RowIdSetOutput output(row_ids, max_count);
 	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
+bool ART::SearchEqual(const ARTKey &key, idx_t max_count, set<row_t> &row_ids) const {
 	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
 	if (!leaf) {
 		return true;
@@ -716,12 +716,12 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
 
 	Iterator it(*this);
 	it.FindMinimum(leaf.Get());
-	ARTKey empty_key = ARTKey();
+	const auto empty_key = ARTKey();
 	RowIdSetOutput output(row_ids, max_count);
 	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) {
+bool ART::SearchGreater(const ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -740,7 +740,7 @@ bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &ro
 	return it.Scan(ARTKey(), output, false) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) {
+bool ART::SearchLess(const ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -759,8 +759,8 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t
 	return it.Scan(upper_bound, output, equal) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
-                           set<row_t> &row_ids) {
+bool ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal, bool right_equal,
+                           idx_t max_count, set<row_t> &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -778,7 +778,7 @@ bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_e
 	return it.Scan(upper_bound, output, right_equal) == ARTScanResult::COMPLETED;
 }
 
-bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) {
+bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	if (scan_state.values[0].IsNull()) {
 		// full scan
@@ -823,7 +823,7 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 // More Constraint Checking
 //===--------------------------------------------------------------------===//
 
-string ART::GenerateErrorKeyName(DataChunk &input, idx_t row_idx) {
+string ART::GenerateErrorKeyName(DataChunk &input, idx_t row_idx) const {
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 	ExecuteExpressions(input, expr_chunk);
@@ -838,7 +838,7 @@ string ART::GenerateErrorKeyName(DataChunk &input, idx_t row_idx) {
 	return key_name;
 }
 
-string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) {
+string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) const {
 	switch (verify_type) {
 	case VerifyExistenceType::APPEND: {
 		// APPEND to PK/UNIQUE table, but node/key already exists in PK/UNIQUE table.
@@ -864,7 +864,7 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 }
 
 void ART::VerifyLeaf(const NodePtr &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info,
-                     ConflictManager &manager, optional_idx &conflict_idx, idx_t i) {
+                     ConflictManager &manager, optional_idx &conflict_idx, idx_t i) const {
 	// Get the set of deleted row ids for this value if we have any delete indexes
 	vector<row_t> deleted_row_ids;
 	if (delete_index_info.delete_indexes) {
@@ -980,7 +980,7 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 	throw ConstraintException(exception_msg);
 }
 
-string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
+string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) const {
 	lock_guard<mutex> l(lock);
 	auto key_name = GenerateErrorKeyName(input, failed_index);
 	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
@@ -1150,11 +1150,11 @@ void ART::SetPrefixCount(const IndexStorageInfo &info) {
 	prefix_count = exceeds_max ? max_aligned : NumericCast<uint8_t>(key_aligned);
 }
 
-idx_t ART::GetInMemorySize(IndexLock &index_lock) {
+idx_t ART::GetInMemorySize(IndexLock &index_lock) const {
 	D_ASSERT(owns_data);
 
 	idx_t in_memory_size = 0;
-	for (auto &allocator : *allocators) {
+	for (const auto &allocator : *allocators) {
 		in_memory_size += allocator->GetInMemorySize();
 	}
 	return in_memory_size;
@@ -1164,15 +1164,8 @@ bool ART::SupportsDeltaIndexes() const {
 	return true;
 }
 
-unique_ptr<BoundIndex> ART::CreateDeltaIndex(DeltaIndexType target_delta_index) const {
-	auto constraint_type = index_constraint_type;
-	if (target_delta_index == DeltaIndexType::DELETED_ROWS_IN_USE) {
-		// deleted_rows_in_use allows duplicates regardless of whether or not the main index is a unique index or not
-		constraint_type = IndexConstraintType::NONE;
-	}
-	auto result = make_uniq<ART>(name, constraint_type, GetColumnIds(), table_io_manager, unbound_expressions, db);
-	result->delta_index_type = target_delta_index;
-	return std::move(result);
+unique_ptr<BoundIndex> ART::CreateEmptyCopy(const IndexConstraintType constraint_type) const {
+	return make_uniq<ART>(name, constraint_type, GetColumnIds(), table_io_manager, unbound_expressions, db);
 }
 
 //===-------------------------------------------------------------------===//
@@ -1432,6 +1425,19 @@ ErrorData ART::InsertMerge(BoundIndex &source_index, IndexAppendMode append_mode
 	IndexLock state;
 	InitializeLock(state);
 	return InsertMerge(state, source_index, append_mode);
+}
+
+ErrorData ART::MergeCheckpointDelta(const IndexDeltaType type, BoundIndex &delta_index) {
+	switch (type) {
+	case IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT:
+		RemovalMerge(delta_index);
+		return ErrorData();
+	case IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT:
+		// Inserts happen before deletes during commit, so duplicates must be accepted while merging the added rows.
+		return InsertMerge(delta_index, IndexAppendMode::INSERT_DUPLICATES);
+	default:
+		throw InternalException("Unsupported ART checkpoint delta type");
+	}
 }
 
 //===--------------------------------------------------------------------===//

@@ -38,6 +38,18 @@ PEGTransformerFactory::TransformCreateStatement(PEGTransformer &transformer, con
 		secret_info.persist_type = temporary ? *temporary : SecretPersistType::DEFAULT;
 	}
 	result->info->temporary = temporary && *temporary == SecretPersistType::TEMPORARY;
+	if (result->info->temporary) {
+		// the grammar allows TEMPORARY in front of every create variation - reject it where the entry does not
+		// carry a user-supplied flag, but derives one from the table it belongs to
+		switch (result->info->type) {
+		case CatalogType::INDEX_ENTRY:
+			throw ParserException("Temporary indexes are not supported");
+		case CatalogType::TRIGGER_ENTRY:
+			throw ParserException("Temporary triggers are not supported");
+		default:
+			break;
+		}
+	}
 	return std::move(result);
 }
 

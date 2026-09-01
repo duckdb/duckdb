@@ -18,6 +18,43 @@ reserved for DuckDB extensions
 statement ok
 COPY (SELECT NULL::BLOB) TO '{TEMP_DIR}/name.duckdb_extensionz' (FORMAT BLOB);
 
+# what is reserved is a '.duckdb_extension' segment: either at the end of the file name, or followed by a '.'. The
+# trust domain is not just the loadable binary - the install metadata and the trusted repository files decide which
+# extensions may be loaded, so they are reserved too and can only be written through INSTALL / CREATE EXTENSION
+# REPOSITORY. Anything that merely starts with the same text keeps being writable
+
+statement error
+COPY (SELECT 42) TO '{TEMP_DIR}/name.duckdb_extension.info' (FORMAT CSV);
+----
+reserved for DuckDB extensions
+
+statement error
+COPY (SELECT 42) TO '{TEMP_DIR}/acme.duckdb_extension.repo.json' (FORMAT CSV);
+----
+reserved for DuckDB extensions
+
+# any future file in the trust domain is covered by the same rule
+statement error
+COPY (SELECT 42) TO '{TEMP_DIR}/name.duckdb_extension.anything' (FORMAT CSV);
+----
+reserved for DuckDB extensions
+
+# the character right after the segment decides: 'z' and '_' do not close the segment, '.' does
+statement ok
+COPY (SELECT 42) TO '{TEMP_DIR}/name.duckdb_extensionz.info' (FORMAT CSV);
+
+statement ok
+COPY (SELECT 42) TO '{TEMP_DIR}/name.duckdb_extension_repo.json' (FORMAT CSV);
+
+# the segment must be preceded by a '.' - a name that merely starts with the marker text is not reserved
+statement ok
+COPY (SELECT 42) TO '{TEMP_DIR}/duckdb_extension.csv' (FORMAT CSV);
+
+statement error
+ATTACH '{TEMP_DIR}/my_name.duckdb_extension.info'
+----
+reserved for DuckDB extensions
+
 statement error
 ATTACH '{TEMP_DIR}/my_name.duckdb_extension'
 ----

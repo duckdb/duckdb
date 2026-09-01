@@ -5,6 +5,11 @@ import os
 import subprocess
 import sys
 
+if __package__:
+    from .regression.local_extensions import extension_loading_args
+else:
+    from regression.local_extensions import extension_loading_args
+
 
 OLD_DB_NAME = "old.duckdb"
 NEW_DB_NAME = "new.duckdb"
@@ -20,28 +25,36 @@ RETRIES = 2
 def run_command(command, **kwargs):
     return subprocess.run(
         command,
-        shell=True,
         check=False,
         **kwargs,
     )
 
 
-def init_db(cli, dbname, benchmark_dir):
+def run_sql_file(cli, dbname, sql_file, extensions=None, **kwargs):
+    command = [cli, *extension_loading_args(cli, extensions or []), dbname]
+    with open(sql_file, 'rb') as sql_input:
+        return run_command(command, stdin=sql_input, **kwargs)
+
+
+def init_db(cli, dbname, benchmark_dir, extensions=None):
     print(f"INITIALIZING {dbname} ...")
     attempts = RETRIES + 1
     if os.path.exists(dbname):
         os.remove(dbname)
 
     for attempt in range(1, attempts + 1):
-        schema_command = f"{cli} {dbname} < {benchmark_dir}/init/schema.sql"
-        completed = run_command(
-            schema_command,
+        completed = run_sql_file(
+            cli,
+            dbname,
+            f"{benchmark_dir}/init/schema.sql",
             stdout=subprocess.DEVNULL,
         )
         if completed.returncode == 0:
-            load_command = f"{cli} {dbname} < {benchmark_dir}/init/load.sql"
-            completed = run_command(
-                load_command,
+            completed = run_sql_file(
+                cli,
+                dbname,
+                f"{benchmark_dir}/init/load.sql",
+                extensions,
                 stdout=subprocess.DEVNULL,
             )
             if completed.returncode == 0:
@@ -168,7 +181,7 @@ def op_inspect(op) -> PlanCost:
 
 def query_plan_cost(cli, dbname, query):
     try:
-        command = f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\""
+        command = [cli, '--readonly', dbname, '-c', f"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}"]
         attempts = RETRIES + 1
         for attempt in range(1, attempts + 1):
             completed = run_command(
@@ -236,6 +249,7 @@ def main():
     parser.add_argument("--old", type=str, help="Path to the old runner.", required=True)
     parser.add_argument("--new", type=str, help="Path to the new runner.", required=True)
     parser.add_argument("--dir", type=str, help="Path to the benchmark directory.", required=True)
+    parser.add_argument("--extension", action="append", default=[], help="Extension required to initialize the data.")
 
     args = parser.parse_args()
 
@@ -243,8 +257,8 @@ def main():
     new = args.new
     benchmark_dir = args.dir
 
-    init_db(old, OLD_DB_NAME, benchmark_dir)
-    init_db(new, NEW_DB_NAME, benchmark_dir)
+    init_db(old, OLD_DB_NAME, benchmark_dir, args.extension)
+    init_db(new, NEW_DB_NAME, benchmark_dir, args.extension)
 
     improvements = []
     regressions = []

@@ -52,31 +52,35 @@ using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR duckdb_v2_vector_get_vector_type(duckdb_v2_vector_handle vector, DUCKDB_V2_VECTOR_TYPE *out_type,
                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
+	DUCKDB_CHECK_ARG(out_type);
+	return WithErrorHandler(err, [&]() { *out_type = MapVectorType(Convert(vector)->GetVectorType()); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_vector_get_logical_type(duckdb_v2_vector_handle vector,
+                                                  duckdb_v2_logical_type_handle *out_type,
+                                                  duckdb_v2_error_info_handle *err) {
 	return WithErrorHandler(err, [&]() {
 		if (!vector || !out_type) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_get_vector_type");
+			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_get_logical_type");
 		}
-		*out_type = MapVectorType(Convert(vector)->GetVectorType());
+		*out_type = nullptr;
+		auto *vec = Convert(vector);
+		auto *lt = new duckdb::LogicalType(vec->GetType());
+		*out_type = reinterpret_cast<_duckdb_v2_logical_type *>(lt);
 	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_vector_flatten(duckdb_v2_vector_handle vector, duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (!vector) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_flatten");
-		}
-		Convert(vector)->Flatten();
-	});
+	DUCKDB_CHECK_ARG(vector);
+	return WithErrorHandler(err, [&]() { Convert(vector)->Flatten(); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_vector_reference(duckdb_v2_vector_handle vector, duckdb_v2_vector_handle source,
                                            duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (!vector || !source) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_reference");
-		}
-		Convert(vector)->Reference(*Convert(source));
-	});
+	DUCKDB_CHECK_ARG(vector);
+	DUCKDB_CHECK_ARG(source);
+	return WithErrorHandler(err, [&]() { Convert(vector)->Reference(*Convert(source)); });
 }
 
 // ---------------------------------------------------------------------------
@@ -85,13 +89,13 @@ DUCKDB_V2_ERROR duckdb_v2_vector_reference(duckdb_v2_vector_handle vector, duckd
 
 DUCKDB_V2_ERROR duckdb_v2_vector_get_view(duckdb_v2_vector_handle vector, duckdb_v2_vector_view *out_view,
                                           duckdb_v2_error_info_handle *err) {
-	if (out_view) {
-		std::memset(out_view, 0, sizeof(*out_view));
-	}
+	DUCKDB_CHECK_ARG(out_view);
+	// Zeroed before any rejection, the null-vector one included, so a failure
+	// leaves no stale pointers in the view.
+	std::memset(out_view, 0, sizeof(*out_view));
+	DUCKDB_CHECK_ARG(vector);
+
 	return WithErrorHandler(err, [&]() {
-		if (!vector || !out_view) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_get_view");
-		}
 		auto *vec = Convert(vector);
 		auto vt = vec->GetVectorType();
 		if (!IsSupportedVectorType(vt)) {
@@ -141,13 +145,9 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_view(duckdb_v2_vector_handle vector, duckdb
 // ---------------------------------------------------------------------------
 DUCKDB_V2_ERROR duckdb_v2_vector_get_data_mutable(duckdb_v2_vector_handle vector, void **out_data,
                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
+	DUCKDB_CHECK_ARG(out_data);
 	return WithErrorHandler(err, [&]() {
-		if (!vector) {
-			throw duckdb::InvalidInputException("Vector pointer cannot be null.");
-		}
-		if (!out_data) {
-			throw duckdb::InvalidInputException("Output data pointer cannot be null.");
-		}
 		auto *vec = Convert(vector);
 
 		const auto vec_type = vec->GetVectorType();
@@ -166,13 +166,9 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_data_mutable(duckdb_v2_vector_handle vector
 
 DUCKDB_V2_ERROR duckdb_v2_vector_make_constant(duckdb_v2_vector_handle vector, duckdb_v2_value_handle value,
                                                idx_t count, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
+	DUCKDB_CHECK_ARG(value);
 	return WithErrorHandler(err, [&]() {
-		if (!vector) {
-			throw duckdb::InvalidInputException("Vector cannot be null.");
-		}
-		if (!value) {
-			throw duckdb::InvalidInputException("Value cannot be null.");
-		}
 		auto *vec = Convert(vector);
 		auto *val = Convert(value);
 		// The engine only debug-asserts this in ConstantVector::Reference; a
@@ -187,12 +183,8 @@ DUCKDB_V2_ERROR duckdb_v2_vector_make_constant(duckdb_v2_vector_handle vector, d
 
 DUCKDB_V2_ERROR duckdb_v2_vector_make_sequence(duckdb_v2_vector_handle vector, int64_t start, int64_t increment,
                                                idx_t count, duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (!vector) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_make_sequence");
-		}
-		Convert(vector)->Sequence(start, increment, count);
-	});
+	DUCKDB_CHECK_ARG(vector);
+	return WithErrorHandler(err, [&]() { Convert(vector)->Sequence(start, increment, count); });
 }
 
 // ---------------------------------------------------------------------------
@@ -200,10 +192,8 @@ DUCKDB_V2_ERROR duckdb_v2_vector_make_sequence(duckdb_v2_vector_handle vector, i
 // ---------------------------------------------------------------------------
 
 DUCKDB_V2_ERROR duckdb_v2_vector_set_null(duckdb_v2_vector_handle vector, idx_t row, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
 	return WithErrorHandler(err, [&]() {
-		if (!vector) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_set_null");
-		}
 		auto *vec = Convert(vector);
 		if (vec->GetVectorType() != duckdb::VectorType::FLAT_VECTOR) {
 			throw duckdb::InvalidInputException("duckdb_v2_vector_set_null: only supported for FLAT vectors");
@@ -217,10 +207,9 @@ DUCKDB_V2_ERROR duckdb_v2_vector_set_null(duckdb_v2_vector_handle vector, idx_t 
 
 DUCKDB_V2_ERROR duckdb_v2_vector_flat_get_validity_mutable(duckdb_v2_vector_handle vector, uint64_t **out_validity,
                                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
+	DUCKDB_CHECK_ARG(out_validity);
 	return WithErrorHandler(err, [&]() {
-		if (!vector || !out_validity) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_flat_get_validity_mutable");
-		}
 		auto *vec = Convert(vector);
 		if (vec->GetVectorType() != duckdb::VectorType::FLAT_VECTOR) {
 			throw duckdb::InvalidInputException(
@@ -234,10 +223,8 @@ DUCKDB_V2_ERROR duckdb_v2_vector_flat_get_validity_mutable(duckdb_v2_vector_hand
 
 DUCKDB_V2_ERROR duckdb_v2_vector_constant_set_valid(duckdb_v2_vector_handle vector, bool validity,
                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
 	return WithErrorHandler(err, [&]() {
-		if (!vector) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_constant_set_valid");
-		}
 		auto *vec = Convert(vector);
 		if (vec->GetVectorType() != duckdb::VectorType::CONSTANT_VECTOR) {
 			throw duckdb::InvalidInputException(
@@ -261,10 +248,9 @@ DUCKDB_V2_ERROR duckdb_v2_vector_constant_set_valid(duckdb_v2_vector_handle vect
 
 DUCKDB_V2_ERROR duckdb_v2_vector_get_child_count(duckdb_v2_vector_handle vector, idx_t *out_count,
                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
+	DUCKDB_CHECK_ARG(out_count);
 	return WithErrorHandler(err, [&]() {
-		if (!vector || !out_count) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_get_child_count");
-		}
 		auto *vec = Convert(vector);
 		switch (vec->GetType().id()) {
 		case duckdb::LogicalTypeId::LIST:
@@ -290,11 +276,10 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_child_count(duckdb_v2_vector_handle vector,
 
 DUCKDB_V2_ERROR duckdb_v2_vector_get_child(duckdb_v2_vector_handle vector, idx_t index,
                                            duckdb_v2_vector_handle *out_child, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
+	DUCKDB_CHECK_ARG(out_child);
+	*out_child = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!vector || !out_child) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_get_child");
-		}
-		*out_child = nullptr;
 		auto *vec = Convert(vector);
 		switch (vec->GetType().id()) {
 		case duckdb::LogicalTypeId::LIST: {
@@ -369,10 +354,9 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_child(duckdb_v2_vector_handle vector, idx_t
 
 DUCKDB_V2_ERROR duckdb_v2_vector_get_size(duckdb_v2_vector_handle vector, idx_t *out_size,
                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
+	DUCKDB_CHECK_ARG(out_size);
 	return WithErrorHandler(err, [&]() {
-		if (!vector || !out_size) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_get_size");
-		}
 		auto *vec = Convert(vector);
 		*out_size = vec->size();
 	});
@@ -380,10 +364,8 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_size(duckdb_v2_vector_handle vector, idx_t 
 
 DUCKDB_V2_ERROR duckdb_v2_vector_set_size(duckdb_v2_vector_handle vector, idx_t size,
                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
 	return WithErrorHandler(err, [&]() {
-		if (!vector) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_set_size");
-		}
 		auto *vec = Convert(vector);
 		// Grow the underlying buffer first so the new logical size fits; constant vectors
 		// carry a single physical element and must not be reserved against.
@@ -400,11 +382,10 @@ DUCKDB_V2_ERROR duckdb_v2_vector_set_size(duckdb_v2_vector_handle vector, idx_t 
 
 DUCKDB_V2_ERROR duckdb_v2_vector_get_value(duckdb_v2_vector_handle vector, idx_t row, duckdb_v2_value_handle *out_value,
                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
+	DUCKDB_CHECK_ARG(out_value);
+	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!vector || !out_value) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_get_value");
-		}
-		*out_value = nullptr;
 		auto *vec = Convert(vector);
 		if (row >= vec->size()) {
 			throw duckdb::InvalidInputException("row out of range in duckdb_v2_vector_get_value");
@@ -417,10 +398,9 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_value(duckdb_v2_vector_handle vector, idx_t
 
 DUCKDB_V2_ERROR duckdb_v2_vector_set_value(duckdb_v2_vector_handle vector, idx_t row, duckdb_v2_value_handle value,
                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
+	DUCKDB_CHECK_ARG(value);
 	return WithErrorHandler(err, [&]() {
-		if (!vector || !value) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_set_value");
-		}
 		auto *vec = Convert(vector);
 		if (vec->GetVectorType() != duckdb::VectorType::FLAT_VECTOR) {
 			throw duckdb::InvalidInputException(
@@ -451,10 +431,9 @@ DUCKDB_V2_ERROR duckdb_v2_vector_set_value(duckdb_v2_vector_handle vector, idx_t
 
 DUCKDB_V2_ERROR duckdb_v2_bignum_decode(const uint8_t *in_data, idx_t in_length, uint8_t *out_data, idx_t out_capacity,
                                         idx_t *out_length, bool *out_is_negative, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_length);
+	DUCKDB_CHECK_ARG(out_is_negative);
 	return WithErrorHandler(err, [&]() {
-		if (!out_length || !out_is_negative) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_bignum_decode");
-		}
 		*out_length = 0;
 		*out_is_negative = false;
 		if (!in_data || in_length <= duckdb::Bignum::BIGNUM_HEADER_SIZE) {
@@ -480,10 +459,8 @@ DUCKDB_V2_ERROR duckdb_v2_bignum_decode(const uint8_t *in_data, idx_t in_length,
 
 DUCKDB_V2_ERROR duckdb_v2_bignum_encode(const uint8_t *in_data, idx_t in_length, bool is_negative, uint8_t *out_data,
                                         idx_t out_capacity, idx_t *out_length, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_length);
 	return WithErrorHandler(err, [&]() {
-		if (!out_length) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_bignum_encode");
-		}
 		*out_length = 0;
 		if (!in_data || in_length == 0) {
 			throw duckdb::InvalidInputException("duckdb_v2_bignum_encode requires in_data != NULL and in_length >= 1");

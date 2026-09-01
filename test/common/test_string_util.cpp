@@ -114,6 +114,25 @@ TEST_CASE("Test common prefix size", "[string_util]") {
 	REQUIRE(StringUtil::GetCommonPrefixSize("🦆ab", "🦆ac") == 5);
 }
 
+TEST_CASE("Test next prefix", "[string_util]") {
+	string prefix = "abc";
+	REQUIRE(StringUtil::FindNextPrefix(prefix));
+	REQUIRE(prefix == "abd");
+
+	prefix = "a";
+	prefix.push_back(static_cast<char>(0xFF));
+	prefix.push_back(static_cast<char>(0xFF));
+	REQUIRE(StringUtil::FindNextPrefix(prefix));
+	REQUIRE(prefix == "b");
+
+	prefix.assign(2, static_cast<char>(0xFF));
+	REQUIRE_FALSE(StringUtil::FindNextPrefix(prefix));
+	REQUIRE(prefix == string(2, static_cast<char>(0xFF)));
+
+	prefix.clear();
+	REQUIRE_FALSE(StringUtil::FindNextPrefix(prefix));
+}
+
 TEST_CASE("Test join vector items", "[string_util]") {
 	SECTION("Three string items") {
 		duckdb::vector<std::string> str_items = {"abc", "def", "ghi"};
