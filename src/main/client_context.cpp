@@ -1024,6 +1024,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatement(ClientContextLock
 			auto rewritten = WrapAsSelect(std::move(remote_ref));
 			// the rewrite is invisible to the user - keep reporting the SQL they issued
 			rewritten->query = std::move(statement->query);
+			rewritten->parser_timer = statement->parser_timer;
 			statement = std::move(rewritten);
 			AttachedDatabase::InvokeCloseIfLastReference(live, *this);
 			// statement is now SELECT * FROM <remote-ref>; fall through.
