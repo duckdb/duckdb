@@ -1,4 +1,4 @@
-# name: test/sql/function/variant/blob_offset_overflow.test
+# name: test/sql/function/variant/blob_offset_overflow.test_slow
 # description: test for uint32_t blob_offset overflow when casting oversized rows to VARIANT
 # group: [variant]
 
