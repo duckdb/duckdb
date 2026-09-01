@@ -625,6 +625,8 @@ private:
 	                                   vector<unique_ptr<ParsedExpression>> &replacements, StarExpression &star,
 	                                   optional_ptr<duckdb_re2::RE2> regex);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
+	void NormalizeFilterStarExpression(ParsedExpression &expr);
+	void NormalizeFilterStarExpressions(SelectNode &statement);
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(Identifier &catalog_name, Identifier &schema_name);

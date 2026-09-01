@@ -2,6 +2,7 @@
 
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/common/hash_functions.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/random_engine.hpp"
@@ -639,6 +640,28 @@ void HTTPUtil::BumpToSecureProtocol(string &url) {
 	if (IsHTTPProtocol(url)) {
 		url = "https://" + url.substr(7);
 	}
+}
+
+string HTTPUtil::CreateSignatureV4(EncryptionUtil &encryption_util, const SignatureV4Params &sig_params) {
+	hash_bytes canonical_request_hash;
+	hash_str canonical_request_hash_str;
+	sha256(encryption_util, const_data_ptr_cast(sig_params.canonical_request.data()),
+	       sig_params.canonical_request.length(), canonical_request_hash);
+	hex256(canonical_request_hash, canonical_request_hash_str);
+
+	auto string_to_sign = "AWS4-HMAC-SHA256\n" + sig_params.datetime_now + "\n" + sig_params.credential_scope + "\n" +
+	                      string(const_char_ptr_cast(canonical_request_hash_str), sizeof(hash_str));
+	hash_bytes k_date, k_region, k_service, signing_key, signature;
+	auto sign_key = "AWS4" + sig_params.secret_access_key;
+	hmac256(encryption_util, sig_params.date_now, const_data_ptr_cast(sign_key.data()), sign_key.length(), k_date);
+	hmac256(encryption_util, sig_params.region, k_date, k_region);
+	hmac256(encryption_util, sig_params.service, k_region, k_service);
+	hmac256(encryption_util, "aws4_request", k_service, signing_key);
+	hmac256(encryption_util, string_to_sign, signing_key, signature);
+
+	hash_str signature_str;
+	hex256(signature, signature_str);
+	return string(const_char_ptr_cast(signature_str), sizeof(hash_str));
 }
 
 } // namespace duckdb

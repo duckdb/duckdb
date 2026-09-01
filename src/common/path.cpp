@@ -221,6 +221,7 @@ void Path::NormalizeSegments(const string &raw, size_t path_offset) {
 	}
 
 	vector<string> raw_segs;
+	D_ASSERT(path_offset <= raw.size());
 	SegmentAndNormalizePath(raw.begin() + static_cast<string::difference_type>(path_offset), raw.end(), raw_segs);
 	segments.clear();
 	for (auto &seg : raw_segs) {
@@ -298,12 +299,12 @@ size_t Path::ParseFileSchemes(const string &input, Path &parsed) {
 		parsed.anchor = "/";
 		path_begin = 8;
 	} else if (/* file:// */ input_len >= 7 && input[6] == '/') {
-		ParseURIScheme(input, parsed);
+		// NOTE: the anchor may be synthesized, so the offset must come from ParseURIScheme, not from the sizes
+		path_begin = ParseURIScheme(input, parsed);
 		if (StringUtil::Lower(parsed.authority) != "localhost") {
 			throw InvalidInputException("Path: file:// scheme only supports localhost authority, got: %s",
 			                            parsed.authority);
 		}
-		path_begin = parsed.scheme.size() + parsed.authority.size() + parsed.anchor.size();
 	} else /* file:/ */ {
 		parsed.scheme = "file:";
 		parsed.anchor = "/";

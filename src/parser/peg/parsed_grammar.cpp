@@ -44,9 +44,6 @@ ParsedGrammar ParsedGrammar::CreateDefault() {
 	const char *grammar = const_char_ptr_cast(INLINED_PEG_GRAMMAR);
 #endif
 	auto result = Parse(grammar);
-	if (!result.GetRule("EndOfInput")) {
-		result.AddParsedRule(ParsedGrammarRule("EndOfInput", PEGRule()));
-	}
 	PEGTransformerFactory::RegisterDefaultTransforms(result);
 	return result;
 }
@@ -76,15 +73,20 @@ ParsedGrammarRule ParsedGrammar::ParseSingleRule(const string &rule_definition) 
 	return ParsedGrammarRule(entry.first, std::move(entry.second));
 }
 
+static void RegisterText(StringHeap &string_heap, PEGExpression &expression) {
+	expression.text = string_heap.AddString(expression.text);
+	for (auto &child : expression.children) {
+		RegisterText(string_heap, child);
+	}
+}
+
 void ParsedGrammar::RegisterStrings(PEGRule &rule) {
 	string_map_t<idx_t> parameters;
 	for (auto &entry : rule.parameters) {
 		parameters.emplace(string_heap.AddString(entry.first), entry.second);
 	}
 	rule.parameters = std::move(parameters);
-	for (auto &token : rule.tokens) {
-		token.text = string_heap.AddString(token.text);
-	}
+	RegisterText(string_heap, rule.expression);
 }
 
 void ParsedGrammar::AddParsedRule(ParsedGrammarRule rule) {
