@@ -227,7 +227,7 @@ public:
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
 		Store<AlpConstants::METADATA_POINTER_TYPE>(NumericCast<AlpConstants::METADATA_POINTER_TYPE>(total_segment_size),
-		                                          dataptr);
+		                                           dataptr);
 
 		FlushCurrentSegment(stats_writer, total_segment_size);
 		data_bytes_used = 0;

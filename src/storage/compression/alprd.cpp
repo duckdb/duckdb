@@ -39,8 +39,8 @@ void ThrowAlpRDVectorOffsetsInvalid() {
 }
 
 void ThrowAlpRDExceptionCountOutOfRange(AlpRDConstants::EXCEPTIONS_COUNT_TYPE exception_count, idx_t vector_size) {
-	throw DataCorruptionException("Corrupted ALPRD segment: exception count %d exceeds vector size %d",
-	                              exception_count, vector_size);
+	throw DataCorruptionException("Corrupted ALPRD segment: exception count %d exceeds vector size %d", exception_count,
+	                              vector_size);
 }
 
 void ThrowAlpRDExceptionPositionOutOfRange(AlpRDConstants::EXCEPTION_POSITION_TYPE position, idx_t vector_size) {

@@ -110,8 +110,8 @@ public:
 		}
 		auto metadata_size = vector_count * AlpConstants::METADATA_POINTER_SIZE;
 		auto metadata_start = metadata_end - metadata_size;
-		auto data = reader.GetSubReader(AlpConstants::HEADER_SIZE, metadata_start - AlpConstants::HEADER_SIZE,
-		                                "ALP data");
+		auto data =
+		    reader.GetSubReader(AlpConstants::HEADER_SIZE, metadata_start - AlpConstants::HEADER_SIZE, "ALP data");
 		auto vector_offsets = reader.template GetArray<METADATA_POINTER_TYPE>(metadata_start, vector_count);
 		return {data, vector_offsets};
 	}

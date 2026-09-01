@@ -137,8 +137,7 @@ public:
 		reader.ReadIntoArray(vector_state.left_parts_dict, dictionary_count);
 		// Exception values use a dictionary index beyond the stored entries, so the remaining entries must be zero.
 		memset(vector_state.left_parts_dict + dictionary_count, 0,
-		       (AlpRDConstants::MAX_DICTIONARY_SIZE - dictionary_count) *
-		           AlpRDConstants::DICTIONARY_ELEMENT_SIZE);
+		       (AlpRDConstants::MAX_DICTIONARY_SIZE - dictionary_count) * AlpRDConstants::DICTIONARY_ELEMENT_SIZE);
 
 		auto data_start = reader.Position();
 		auto vector_count = count / AlpRDConstants::ALP_VECTOR_SIZE + (count % AlpRDConstants::ALP_VECTOR_SIZE != 0);
