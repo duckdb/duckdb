@@ -89,8 +89,10 @@ ProgressData PhysicalMergeActionSource::GetProgress(ClientContext &context, Glob
 	// we do not know how many rows the merge into will push into this action - report the rows we have consumed
 	// out of the rows that have been pushed so far
 	ProgressData result;
+	// read the consumed rows first - the number of pushed rows read afterwards is never smaller
+	auto consumed = gstate.queue->RowsConsumed();
 	auto pushed = gstate.queue->RowsPushed();
-	result.done = double(pushed - gstate.queue->RowsBuffered());
+	result.done = double(consumed);
 	result.total = double(MaxValue<idx_t>(pushed, estimated_cardinality));
 	return result;
 }

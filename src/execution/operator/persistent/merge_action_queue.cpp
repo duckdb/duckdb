@@ -9,7 +9,7 @@ namespace duckdb {
 MergeActionQueue::MergeActionQueue(ClientContext &context, vector<LogicalType> types_p, MergeActionQueueMode mode_p,
                                    idx_t max_buffered_chunks_p)
     : allocator(BufferAllocator::Get(context)), types(std::move(types_p)), mode(mode_p),
-      max_buffered_chunks(max_buffered_chunks_p), rows_pushed(0), rows_buffered(0) {
+      max_buffered_chunks(max_buffered_chunks_p), rows_pushed(0), rows_consumed(0) {
 	if (mode == MergeActionQueueMode::MATERIALIZED) {
 		collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), types);
 		collection->InitializeAppend(append_state);
@@ -42,7 +42,6 @@ SinkResultType MergeActionQueue::PushMaterialized(DataChunk &chunk) {
 	}
 	collection->Append(append_state, chunk);
 	rows_pushed += chunk.size();
-	rows_buffered += chunk.size();
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -84,7 +83,6 @@ SinkResultType MergeActionQueue::PushBounded(DataChunk &chunk, const InterruptSt
 			return SinkResultType::NEED_MORE_INPUT;
 		}
 		rows_pushed += buffer->size();
-		rows_buffered += buffer->size();
 		chunks.push_back(std::move(buffer));
 		consumers = std::move(blocked_consumers);
 		blocked_consumers.clear();
@@ -162,7 +160,7 @@ SourceResultType MergeActionQueue::ScanMaterialized(DataChunk &chunk, MergeActio
 	if (!collection->Scan(scan_state.scan_state, chunk)) {
 		return SourceResultType::FINISHED;
 	}
-	rows_buffered -= chunk.size();
+	rows_consumed += chunk.size();
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
@@ -184,7 +182,7 @@ SourceResultType MergeActionQueue::ScanBounded(DataChunk &chunk, MergeActionQueu
 		} else if (!chunks.empty()) {
 			next_chunk = std::move(chunks.front());
 			chunks.pop_front();
-			rows_buffered -= next_chunk->size();
+			rows_consumed += next_chunk->size();
 			result = SourceResultType::HAVE_MORE_OUTPUT;
 		} else if (finished) {
 			result = SourceResultType::FINISHED;

@@ -63,13 +63,14 @@ public:
 	//! Scan the next chunk. Returns BLOCKED while the queue is empty and the producers are not done yet.
 	SourceResultType Scan(DataChunk &chunk, MergeActionQueueScanState &scan_state,
 	                      const InterruptState &interrupt_state);
-	//! The number of rows that have been pushed into the queue
+	//! The number of rows that have been pushed into the queue - only ever increases
 	idx_t RowsPushed() const {
 		return rows_pushed;
 	}
-	//! The number of rows that are currently buffered in the queue
-	idx_t RowsBuffered() const {
-		return rows_buffered;
+	//! The number of rows that have been handed to a consumer - only ever increases, and is never larger than the
+	//! number of rows that have been pushed. Read this before RowsPushed to obtain a consistent pair.
+	idx_t RowsConsumed() const {
+		return rows_consumed;
 	}
 
 private:
@@ -106,7 +107,7 @@ private:
 	bool cancelled = false;
 	bool consumer_finished = false;
 	atomic<idx_t> rows_pushed;
-	atomic<idx_t> rows_buffered;
+	atomic<idx_t> rows_consumed;
 };
 
 } // namespace duckdb
