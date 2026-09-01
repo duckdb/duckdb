@@ -87,6 +87,17 @@ public:
 		memcpy(destination, source.data(), length);
 	}
 
+	//! Copies the next length bytes into a fixed-size destination and advances the position.
+	template <class T, idx_t N>
+	void ReadBytesIntoArray(T (&destination)[N], idx_t length) {
+		static_assert(std::is_trivially_copyable_v<T>,
+		              "ReadBytesIntoArray element must be a trivially copyable data type");
+		if (DUCKDB_UNLIKELY(length > sizeof(destination))) {
+			ThrowDestinationTooSmall();
+		}
+		ReadBytesInto(data_ptr_cast(destination), length);
+	}
+
 	//! Copies the next count elements into a fixed-size destination and advances the position.
 	template <class T, idx_t N>
 	void ReadIntoArray(T (&destination)[N], idx_t count) {
