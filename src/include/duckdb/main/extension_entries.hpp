@@ -761,6 +761,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"right", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"right_grapheme", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"round", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"round_even", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"roundbankers", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"row_to_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"rpad", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"rtree_index_dump", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},

@@ -1,5 +1,6 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/bit.hpp"
@@ -918,11 +919,11 @@ inline T RoundDivide(T input, T power_of_ten) {
 struct RoundHalfAwayFromZero {
 	static constexpr const char *Name = "ROUND";
 
-	static constexpr double Nearest(double value) {
+	static double Nearest(double value) {
 		return std::round(value);
 	}
 	template <class T>
-	static constexpr bool RoundsAway(T) {
+	static bool RoundsAway(T) {
 		return true;
 	}
 };
@@ -931,8 +932,7 @@ struct RoundHalfToEven {
 	static constexpr const char *Name = "ROUND_EVEN";
 
 	static double Nearest(double value) {
-		// std::nearbyint rounds half to even
-		return std::nearbyint(value);
+		return RoundToNearestEven(value);
 	}
 	template <class T>
 	static bool RoundsAway(T quotient) {
