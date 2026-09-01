@@ -29,9 +29,10 @@ static unique_ptr<FunctionData> DuckDBGrammarExtensionsBind(ClientContext &conte
 static unique_ptr<GlobalTableFunctionState> DuckDBGrammarExtensionsInit(ClientContext &context,
                                                                         TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBGrammarExtensionsData>();
-	for (auto &extension : ExtensionCallbackManager::Get(context).GrammarExtensions()) {
+	auto &callback_manager = ExtensionCallbackManager::Get(context);
+	for (auto &[name, extension] : callback_manager.GrammarExtensions()) {
 		GrammarExtensionData data;
-		data.name = extension->Name();
+		data.name = name;
 		data.description = extension->Description();
 		result->extensions.push_back(data);
 	}

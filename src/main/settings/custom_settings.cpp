@@ -1799,7 +1799,7 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 	}
 
 	auto &config = DatabaseInstance::GetDatabase(context).config;
-	auto grammar_extensions = config.GetCallbackManager().GrammarExtensions();
+	auto &callback_manager = config.GetCallbackManager();
 	case_insensitive_set_t selected_extensions;
 	if (input.type().id() != LogicalTypeId::LIST) {
 		throw InvalidInputException("'active_grammar_extensions' setting value should be of type VARCHAR[], not %s",
@@ -1817,15 +1817,10 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 		}
 	}
 
-	case_insensitive_set_t all_extensions;
-	for (auto &extension : grammar_extensions) {
-		auto &extension_name = extension->Name();
-		all_extensions.insert(extension_name);
-	}
-
 	vector<string> missing;
 	for (auto &ext : selected_extensions) {
-		if (!all_extensions.count(ext)) {
+		auto extension = callback_manager.FindGrammarExtension(ext);
+		if (!extension) {
 			missing.push_back(ext);
 		}
 	}

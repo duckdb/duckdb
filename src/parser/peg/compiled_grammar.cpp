@@ -122,11 +122,12 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	return overrides;
 }
 
-shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<shared_ptr<GrammarExtension>> &grammar_extensions,
-                                                    idx_t parser_version) {
+shared_ptr<CompiledGrammar>
+CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions,
+                        idx_t parser_version) {
 	auto grammar = ParsedGrammar::CreateDefault();
-	for (auto &extension : grammar_extensions) {
-		auto changes = extension->GetChanges();
+	for (auto &[_, extension] : grammar_extensions) {
+		auto changes = extension.get().GetChanges();
 		for (auto &change : changes) {
 			change.Apply(grammar);
 		}
@@ -159,10 +160,12 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context
 shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
                                                     const case_insensitive_set_t &active_extensions,
                                                     idx_t parser_version) {
-	vector<shared_ptr<GrammarExtension>> selected_extensions;
-	for (auto &extension : ExtensionCallbackManager::Get(context).GrammarExtensions()) {
-		if (active_extensions.count(extension->Name())) {
-			selected_extensions.push_back(extension);
+	case_insensitive_map_t<reference<GrammarExtension>> selected_extensions;
+	auto &callback_manager = ExtensionCallbackManager::Get(context);
+	for (auto &name : active_extensions) {
+		auto grammar_extension = callback_manager.FindGrammarExtension(name);
+		if (grammar_extension) {
+			selected_extensions.emplace(name, *grammar_extension);
 		}
 	}
 	return Create(selected_extensions, parser_version);

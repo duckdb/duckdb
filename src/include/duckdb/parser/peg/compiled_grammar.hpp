@@ -15,8 +15,8 @@ struct CompiledGrammar {
 
 private:
 	CompiledGrammar(const ParsedGrammar &grammar, bool has_grammar_changes, idx_t version);
-	static shared_ptr<CompiledGrammar> Create(const vector<shared_ptr<GrammarExtension>> &grammar_extensions,
-	                                          idx_t parser_version);
+	static shared_ptr<CompiledGrammar>
+	Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions, idx_t parser_version);
 	static shared_ptr<CompiledGrammar> Create(const ClientContext &context,
 	                                          const case_insensitive_set_t &active_extensions, idx_t parser_version);
 

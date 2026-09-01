@@ -20,7 +20,7 @@ struct ExtensionCallbackRegistry {
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
 	//! Extensions made to the grammar of the main (PEG) parser
-	vector<shared_ptr<GrammarExtension>> grammar_extensions;
+	case_insensitive_map_t<shared_ptr<GrammarExtension>> grammar_extensions;
 	//! Extensions made to the planner
 	vector<PlannerExtension> planner_extensions;
 	//! Extensions made to the optimizer
@@ -74,7 +74,13 @@ void ExtensionCallbackManager::Register(shared_ptr<GrammarExtension> extension) 
 	}
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
-	new_registry->grammar_extensions.push_back(std::move(extension));
+	auto name = extension->Name();
+	auto res = new_registry->grammar_extensions.emplace(name, std::move(extension));
+	if (!res.second) {
+		//! FIXME: we'll want to namespace the GrammarExtension with the extension that added it
+		throw InvalidInputException(
+		    "Can't add GrammarExtension \"%s\", a GrammarExtension by that name already exists");
+	}
 	callback_registry.atomic_store(new_registry);
 }
 
@@ -151,6 +157,11 @@ ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> ExtensionCallback
 	return ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>(operator_extensions, std::move(registry));
 }
 
+case_insensitive_map_t<shared_ptr<GrammarExtension>> ExtensionCallbackManager::GrammarExtensions() const {
+	auto registry = callback_registry.atomic_load();
+	return registry->grammar_extensions;
+}
+
 ExtensionCallbackIteratorHelper<OptimizerExtension> ExtensionCallbackManager::OptimizerExtensions() const {
 	auto registry = callback_registry.atomic_load();
 	auto &optimizer_extensions = registry->optimizer_extensions;
@@ -161,12 +172,6 @@ ExtensionCallbackIteratorHelper<ParserExtension> ExtensionCallbackManager::Parse
 	auto registry = callback_registry.atomic_load();
 	auto &parser_extensions = registry->parser_extensions;
 	return ExtensionCallbackIteratorHelper<ParserExtension>(parser_extensions, std::move(registry));
-}
-
-ExtensionCallbackIteratorHelper<shared_ptr<GrammarExtension>> ExtensionCallbackManager::GrammarExtensions() const {
-	auto registry = callback_registry.atomic_load();
-	auto &grammar_extensions = registry->grammar_extensions;
-	return ExtensionCallbackIteratorHelper<shared_ptr<GrammarExtension>>(grammar_extensions, std::move(registry));
 }
 
 ExtensionCallbackIteratorHelper<DialectExtension> ExtensionCallbackManager::DialectExtensions() const {
@@ -185,6 +190,15 @@ ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallback
 	auto registry = callback_registry.atomic_load();
 	auto &extension_callbacks = registry->extension_callbacks;
 	return ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>(extension_callbacks, std::move(registry));
+}
+
+optional_ptr<GrammarExtension> ExtensionCallbackManager::FindGrammarExtension(const string &name) const {
+	auto registry = callback_registry.atomic_load();
+	auto entry = registry->grammar_extensions.find(name);
+	if (entry == registry->grammar_extensions.end()) {
+		return nullptr;
+	}
+	return entry->second.get();
 }
 
 optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(const string &name) const {

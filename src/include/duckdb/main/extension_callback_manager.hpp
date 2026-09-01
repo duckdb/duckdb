@@ -56,11 +56,12 @@ public:
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
 	ExtensionCallbackIteratorHelper<ParserExtension> ParserExtensions() const;
-	ExtensionCallbackIteratorHelper<shared_ptr<GrammarExtension>> GrammarExtensions() const;
 	ExtensionCallbackIteratorHelper<DialectExtension> DialectExtensions() const;
 	ExtensionCallbackIteratorHelper<PlannerExtension> PlannerExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbacks() const;
 	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
+	optional_ptr<GrammarExtension> FindGrammarExtension(const string &name) const;
+	case_insensitive_map_t<shared_ptr<GrammarExtension>> GrammarExtensions() const;
 	optional_ptr<ProfilerExtension> FindProfilerExtension(const string &name) const;
 	bool HasParserExtensions() const;
 	bool HasDialectExtension(const string &name) const;
