@@ -9,6 +9,8 @@
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 
 namespace duckdb {
 
@@ -254,8 +256,54 @@ optional_ptr<ParsedExpression> Binder::GetResolvedColumnExpression(ParsedExpress
 	return expr;
 }
 
+static bool IsQualifiedStar(const ParsedExpression &expr) {
+	if (!StarExpression::IsStar(expr)) {
+		return false;
+	}
+	auto &star = expr.Cast<StarExpression>();
+	return !star.RelationName().empty() && star.ExcludeList().empty() && star.ReplaceList().empty() &&
+	       star.RenameList().empty();
+}
+
+void Binder::TransformQualifiedCountStar(unique_ptr<ParsedExpression> &expr) {
+	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &function = expr->Cast<FunctionExpression>();
+		if (function.FunctionName() == "count" && !function.Distinct() && function.GetArguments().size() == 1 &&
+		    IsQualifiedStar(function.GetArguments()[0].GetExpression())) {
+			// COUNT(tbl.*) counts the rows of tbl - a row is NULL if all of its columns are NULL
+			auto &star = function.GetArgumentsMutable()[0].GetExpressionMutable()->Cast<StarExpression>();
+			vector<unique_ptr<ParsedExpression>> star_list;
+			bind_context.GenerateAllColumnExpressions(star, star_list);
+
+			unique_ptr<ParsedExpression> row_not_null;
+			for (auto &column : star_list) {
+				vector<unique_ptr<ParsedExpression>> children;
+				children.push_back(std::move(column));
+				auto check = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(children));
+				if (!row_not_null) {
+					row_not_null = std::move(check);
+				} else {
+					row_not_null = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR,
+					                                                std::move(row_not_null), std::move(check));
+				}
+			}
+			auto case_expr = make_uniq<CaseExpression>();
+			CaseCheck case_check;
+			case_check.when_expr = std::move(row_not_null);
+			case_check.then_expr = make_uniq<ConstantExpression>(Value::BIGINT(1));
+			case_expr->CaseChecksMutable().push_back(std::move(case_check));
+			case_expr->ElseMutable() = make_uniq<ConstantExpression>(Value());
+			function.GetArgumentsMutable()[0] = FunctionArgument(std::move(case_expr));
+			return;
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { TransformQualifiedCountStar(child); });
+}
+
 void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
                                   vector<unique_ptr<ParsedExpression>> &new_select_list) {
+	TransformQualifiedCountStar(expr);
 	TryTransformStarLike(expr);
 
 	StarExpression *star = nullptr;
