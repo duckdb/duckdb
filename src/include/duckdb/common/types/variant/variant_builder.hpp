@@ -47,19 +47,10 @@ namespace duckdb {
 //! Sentinel marking an array child (whose 'key_id' is NULL)
 constexpr uint32_t VARIANT_INVALID_KEY = NumericLimits<uint32_t>::Maximum();
 
-inline void VariantBuilderCheckBlobSize(const string &blob) {
-	if (blob.size() > NumericLimits<uint32_t>::Maximum()) {
-		throw InvalidInputException(
-		    "Cannot convert value to VARIANT: encoded row size exceeds the maximum supported %u bytes",
-		    NumericLimits<uint32_t>::Maximum());
-	}
-}
-
 inline void VariantBuilderAppendVarint(string &blob, uint32_t value) {
 	auto size = GetVarintSize(value);
 	auto pos = blob.size();
 	blob.resize(pos + size);
-	VariantBuilderCheckBlobSize(blob);
 	VarintEncode<uint32_t>(value, data_ptr_cast(blob.data()) + pos);
 }
 
@@ -67,13 +58,11 @@ template <class T>
 void VariantBuilderAppendFixed(string &blob, T value) {
 	auto pos = blob.size();
 	blob.resize(pos + sizeof(T));
-	VariantBuilderCheckBlobSize(blob);
 	Store<T>(value, data_ptr_cast(blob.data()) + pos);
 }
 
 inline void VariantBuilderAppendBytes(string &blob, const_data_ptr_t data, idx_t size) {
 	blob.append(const_char_ptr_cast(data), size);
-	VariantBuilderCheckBlobSize(blob);
 }
 
 inline uint32_t VariantBuilderGetOrCreateIndex(OrderedOwningStringMap<uint32_t> &dictionary, const string_t &key) {
@@ -137,14 +126,18 @@ struct VariantBuilder {
 	//! Emit a VARIANT_NULL value
 	void EmitNull() {
 		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::VARIANT_NULL));
-		byte_offsets.push_back(NumericCast<uint32_t>(blob.size()));
+		//! 'blob' may already exceed uint32_t mid-row; this offset is only read once the row is known to fit
+		//! (checked in BuildVariant once the row is fully emitted), so a narrowing wrap here is harmless.
+		byte_offsets.push_back(static_cast<uint32_t>(blob.size()));
 	}
 
 	//! Emit an OBJECT value with 'n' children (assumed to be in lexicographic key order). 'key_fn(i)'
 	//! returns the (string_t) key of child i; 'emit_fn(i)' must emit exactly one value for child i.
 	template <class KEY_FN, class EMIT_FN>
 	void EmitObject(idx_t n, KEY_FN &&key_fn, EMIT_FN &&emit_fn) {
-		auto byte_offset = NumericCast<uint32_t>(blob.size());
+		//! 'blob' may already exceed uint32_t mid-row; this offset is only read once the row is known to fit
+		//! (checked in BuildVariant once the row is fully emitted), so a narrowing wrap here is harmless.
+		auto byte_offset = static_cast<uint32_t>(blob.size());
 		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::OBJECT));
 		byte_offsets.push_back(byte_offset);
 		VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(n));
@@ -166,7 +159,9 @@ struct VariantBuilder {
 	//! Emit an ARRAY value with 'n' elements. 'emit_fn(i)' must emit exactly one value for element i.
 	template <class EMIT_FN>
 	void EmitArray(idx_t n, EMIT_FN &&emit_fn) {
-		auto byte_offset = NumericCast<uint32_t>(blob.size());
+		//! 'blob' may already exceed uint32_t mid-row; this offset is only read once the row is known to fit
+		//! (checked in BuildVariant once the row is fully emitted), so a narrowing wrap here is harmless.
+		auto byte_offset = static_cast<uint32_t>(blob.size());
 		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::ARRAY));
 		byte_offsets.push_back(byte_offset);
 		VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(n));
@@ -352,7 +347,9 @@ struct VariantBuilder {
 	//! 'it.GetDecimalProperties()' followed by 'it.GetData<T>()' at the physical type implied by the width.
 	template <class NODE>
 	void EmitPrimitiveNode(const NODE &it, VariantLogicalType type_id) {
-		auto byte_offset = NumericCast<uint32_t>(blob.size());
+		//! 'blob' may already exceed uint32_t mid-row; this offset is only read once the row is known to fit
+		//! (checked in BuildVariant once the row is fully emitted), so a narrowing wrap here is harmless.
+		auto byte_offset = static_cast<uint32_t>(blob.size());
 		type_ids.push_back(static_cast<uint8_t>(type_id));
 		byte_offsets.push_back(byte_offset);
 		switch (type_id) {
@@ -542,6 +539,12 @@ void BuildVariant(SOURCE &source, idx_t count, Vector &result) {
 	for (idx_t row = 0; row < count; row++) {
 		builder.BeginRow();
 		bool is_null = source.Emit(row, builder);
+		size_t temp = builder.blob.size();
+		if (temp > NumericLimits<uint32_t>::Maximum()) {
+			throw InvalidInputException(
+			    "Cannot convert value to VARIANT: encoded row size exceeds the maximum supported %u bytes",
+			    NumericLimits<uint32_t>::Maximum());
+		}
 		blob_writer.WriteValue(string_t(builder.blob.data(), NumericCast<uint32_t>(builder.blob.size())));
 		if (is_null) {
 			//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null

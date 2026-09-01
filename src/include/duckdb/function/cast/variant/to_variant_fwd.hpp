@@ -11,6 +11,7 @@
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/checked_integer.hpp"
 
 namespace duckdb {
 namespace variant {
@@ -33,12 +34,7 @@ public:
 	}
 	//! Adds len to offset, throwing if the running total would exceed what a uint32_t blob offset can represent.
 	static void AddBlobOffset(uint32_t &offset, uint32_t len) {
-		if (offset > NumericLimits<uint32_t>::Maximum() - len) {
-			throw InvalidInputException(
-			    "Cannot convert value to VARIANT: encoded row size exceeds the maximum supported %u bytes",
-			    NumericLimits<uint32_t>::Maximum());
-		}
-		offset += len;
+		offset = uinteger_t(offset) += len;
 	}
 };
 
