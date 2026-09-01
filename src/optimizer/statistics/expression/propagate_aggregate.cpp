@@ -19,14 +19,19 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 		return nullptr;
 	}
 	auto definition = aggr.Function().GetDefinition();
-	auto restore_rebindability =
-	    aggr.Function().HasRebindableDefinition() && aggr.Function().StatisticsPreservesFunctionIdentity();
+	auto trusted_identity_transfer = aggr.Function().StatisticsPreservesFunctionIdentity();
+	auto restore_rebindability = aggr.Function().HasRebindableDefinition();
 	AggregateStatisticsInput input(aggr.BindInfo(), stats, node_stats.get());
 	const idx_t child_count = aggr.GetChildren().size();
 	(void)aggr.FunctionMutable();
+	auto function_identity_token = aggr.Function().GetFunctionIdentityToken();
+	auto function_name = aggr.Function().GetName();
 	auto result = aggr.Function().GetCallbacks().GetStatisticsCallback()(context, aggr, input);
 	removed_aggregate_children |= aggr.GetChildren().size() < child_count;
-	if (restore_rebindability && aggr.Function().GetDefinition() == definition) {
+	auto implementation_unchanged = function_identity_token == aggr.Function().GetFunctionIdentityToken() &&
+	                                function_name == aggr.Function().GetName();
+	if (restore_rebindability && aggr.Function().GetDefinition() == definition &&
+	    (implementation_unchanged || trusted_identity_transfer)) {
 		aggr.FunctionMutable().RestoreRebindableDefinition();
 	}
 	return result;

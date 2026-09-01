@@ -358,6 +358,10 @@ static unique_ptr<BaseStatistics> MutateScalarDuringStatistics(ClientContext &, 
 	return nullptr;
 }
 
+static unique_ptr<BaseStatistics> PreserveScalarDuringStatistics(ClientContext &, FunctionStatisticsInput &) {
+	return nullptr;
+}
+
 static AggregateFunction SyntheticSum(const Identifier &name, int64_t offset) {
 	auto result = offset == 0 ? AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<0>>(
 	                                LogicalType::INTEGER, LogicalType::BIGINT)
@@ -370,6 +374,11 @@ static AggregateFunction SyntheticSum(const Identifier &name, int64_t offset) {
 static unique_ptr<BaseStatistics> MutateAggregateDuringStatistics(ClientContext &, BoundAggregateExpression &expression,
                                                                   AggregateStatisticsInput &) {
 	expression.FunctionMutable().ReplaceImplementation(SyntheticSum(Identifier("statistics_sum_plus_one"), 1));
+	return nullptr;
+}
+
+static unique_ptr<BaseStatistics> PreserveAggregateDuringStatistics(ClientContext &, BoundAggregateExpression &,
+                                                                    AggregateStatisticsInput &) {
 	return nullptr;
 }
 
@@ -1104,27 +1113,22 @@ TEST_CASE("Bound expression SQL export preserves deserializer provenance invalid
 	ScalarFunction stable_scalar(Identifier("deserialize_identity"), {LogicalType::INTEGER}, LogicalType::INTEGER,
 	                             ScalarFunction::NopFunction);
 	stable_scalar.SetSerializeCallback(SerializeSyntheticScalar);
-	stable_scalar.SetDeserializeCallback(DeserializeSyntheticScalar, FunctionIdentityPropagation::PRESERVE);
-	loader.RegisterFunction(std::move(stable_scalar));
-
-	ScalarFunction mutated_scalar(Identifier("deserialize_mutation"), {LogicalType::INTEGER}, LogicalType::INTEGER,
-	                              ScalarFunction::NopFunction);
-	mutated_scalar.SetSerializeCallback(SerializeSyntheticScalar);
+	stable_scalar.SetDeserializeCallback(DeserializeSyntheticScalar);
+	auto mutated_scalar = stable_scalar;
+	mutated_scalar.SetName(Identifier("deserialize_mutation"));
 	mutated_scalar.SetDeserializeCallback(DeserializeMutatingScalar);
+	loader.RegisterFunction(std::move(stable_scalar));
 	loader.RegisterFunction(std::move(mutated_scalar));
 
 	auto stable_sum = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<0>>(
 	    LogicalType::INTEGER, LogicalType::BIGINT);
 	stable_sum.SetName(Identifier("deserialize_sum"));
 	stable_sum.SetSerializeCallback(SerializeSyntheticAggregate);
-	stable_sum.SetDeserializeCallback(DeserializeSyntheticAggregate, FunctionIdentityPropagation::PRESERVE);
-	loader.RegisterFunction(std::move(stable_sum));
-
-	auto mutated_sum = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<0>>(
-	    LogicalType::INTEGER, LogicalType::BIGINT);
+	stable_sum.SetDeserializeCallback(DeserializeSyntheticAggregate);
+	auto mutated_sum = stable_sum;
 	mutated_sum.SetName(Identifier("deserialize_mutation_sum"));
-	mutated_sum.SetSerializeCallback(SerializeSyntheticAggregate);
 	mutated_sum.SetDeserializeCallback(DeserializeMutatingAggregate);
+	loader.RegisterFunction(std::move(stable_sum));
 	loader.RegisterFunction(std::move(mutated_sum));
 
 	auto plus_one_sum = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<1>>(
@@ -1202,13 +1206,21 @@ TEST_CASE("Bound expression SQL export consumes provenance around arbitrary stat
 	ExtensionLoader loader(*db.instance, "synthetic_statistics_provenance_extension");
 	loader.UseDedicatedSchemaForExtension(Identifier("synthetic_statistics_provenance_schema"));
 
-	ScalarFunction scalar(Identifier("statistics_mutation"), {}, LogicalType::INTEGER, ReturnSeven);
+	ScalarFunction stable_scalar(Identifier("statistics_stable"), {}, LogicalType::INTEGER, ReturnSeven);
+	stable_scalar.SetStatisticsCallback(PreserveScalarDuringStatistics);
+	stable_scalar.SetVolatile();
+	auto scalar = stable_scalar;
+	scalar.SetName(Identifier("statistics_mutation"));
 	scalar.SetStatisticsCallback(MutateScalarDuringStatistics);
-	scalar.SetVolatile();
+	loader.RegisterFunction(std::move(stable_scalar));
 	loader.RegisterFunction(std::move(scalar));
 
-	auto aggregate = SyntheticSum(Identifier("statistics_sum"), 0);
+	auto stable_aggregate = SyntheticSum(Identifier("statistics_sum_stable"), 0);
+	stable_aggregate.SetStatisticsCallback(PreserveAggregateDuringStatistics);
+	auto aggregate = stable_aggregate;
+	aggregate.SetName(Identifier("statistics_sum"));
 	aggregate.SetStatisticsCallback(MutateAggregateDuringStatistics);
+	loader.RegisterFunction(std::move(stable_aggregate));
 	loader.RegisterFunction(std::move(aggregate));
 	loader.RefreshSearchPath(*connection.context);
 	connection.BeginTransaction();
@@ -1234,6 +1246,15 @@ TEST_CASE("Bound expression SQL export consumes provenance around arbitrary stat
 	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 	RequireIssue(BoundExpressionSQLExporter::Export(*optimized_scalar, context),
 	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+	auto stable_scalar_plan =
+	    OptimizeExportQuery(connection, "SELECT synthetic_statistics_provenance_schema.statistics_stable()");
+	auto stable_scalar_expression = FindExpression(*stable_scalar_plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION;
+	});
+	REQUIRE(stable_scalar_expression);
+	REQUIRE(stable_scalar_expression->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
+	RequireRoundTrip(connection, *stable_scalar_expression, context, string(),
+	                 "synthetic_statistics_provenance_schema.statistics_stable()");
 
 	const string aggregate_query = "SELECT synthetic_statistics_provenance_schema.statistics_sum(CAST(7 AS INTEGER))";
 	auto optimized_aggregate_plan = OptimizeExportQuery(connection, aggregate_query);
@@ -1255,6 +1276,15 @@ TEST_CASE("Bound expression SQL export consumes provenance around arbitrary stat
 	REQUIRE_FALSE(baseline_result->HasError());
 	REQUIRE(baseline_result->GetValue(0, 0) == Value::BIGINT(7));
 	REQUIRE_NO_FAIL(connection.Query("RESET disabled_optimizers"));
+	auto stable_aggregate_plan = OptimizeExportQuery(
+	    connection, "SELECT synthetic_statistics_provenance_schema.statistics_sum_stable(CAST(7 AS INTEGER))");
+	auto stable_aggregate_expression = FindExpression(*stable_aggregate_plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE;
+	});
+	REQUIRE(stable_aggregate_expression);
+	REQUIRE(stable_aggregate_expression->Cast<BoundAggregateExpression>().Function().HasRebindableDefinition());
+	RequireRoundTrip(connection, *stable_aggregate_expression, context, string(),
+	                 "synthetic_statistics_provenance_schema.statistics_sum_stable(CAST(7 AS INTEGER))");
 	connection.Rollback();
 }
 

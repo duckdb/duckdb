@@ -228,11 +228,13 @@ public:
 		// Otherwise, construct the bound function from its parts
 		FUNC bound_function(function);
 		bound_function.GetArguments() = std::move(arguments);
+		auto preserves_function_identity = DeserializationPreservesFunctionIdentity(*function);
 		RestoreFunctionIdentity(bound_function, sql_definition);
 		auto definition = GetFunctionDefinition(bound_function);
-		auto preserves_function_identity = DeserializationPreservesFunctionIdentity(bound_function);
-		auto restore_rebindable_definition = preserves_function_identity && HasRebindableDefinition(bound_function);
+		auto restore_rebindable_definition = HasRebindableDefinition(bound_function);
 		ConsumeFunctionIdentity(bound_function);
+		auto function_identity_token = GetFunctionIdentityToken(bound_function);
+		auto function_name = bound_function.GetName();
 
 		// Invoke deserialization function
 		deserializer.Set<const LogicalType &>(return_type);
@@ -241,11 +243,14 @@ public:
 
 		const FUNC &const_bound_function = bound_function;
 		auto definition_unchanged = GetFunctionDefinition(const_bound_function) == definition;
+		auto implementation_unchanged = function_identity_token == GetFunctionIdentityToken(const_bound_function) &&
+		                                function_name == const_bound_function.GetName();
+		auto can_restore_identity = definition_unchanged && (implementation_unchanged || preserves_function_identity);
 		if (TypeRequiresAssignment(const_bound_function.GetReturnType())) {
 			bound_function.SetReturnType(std::move(return_type));
 		}
-		RestoreFunctionIdentityAfterDeserialization(bound_function, preserves_function_identity && definition_unchanged,
-		                                            restore_rebindable_definition && definition_unchanged);
+		RestoreFunctionIdentityAfterDeserialization(bound_function, can_restore_identity,
+		                                            restore_rebindable_definition && can_restore_identity);
 
 		return make_pair(std::move(bound_function), std::move(bound_data));
 	}
@@ -328,6 +333,22 @@ private:
 	}
 	static bool DeserializationPreservesFunctionIdentity(const BoundAggregateFunction &function) {
 		return function.DeserializationPreservesFunctionIdentity();
+	}
+	static bool DeserializationPreservesFunctionIdentity(const ScalarFunction &function) {
+		return function.DeserializationPreservesFunctionIdentity();
+	}
+	static bool DeserializationPreservesFunctionIdentity(const AggregateFunction &function) {
+		return function.DeserializationPreservesFunctionIdentity();
+	}
+	static shared_ptr<const idx_t> GetFunctionIdentityToken(const BoundScalarFunction &function) {
+		return function.GetFunctionIdentityToken();
+	}
+	static shared_ptr<const idx_t> GetFunctionIdentityToken(const BoundAggregateFunction &function) {
+		return function.GetFunctionIdentityToken();
+	}
+	template <class FUNC>
+	static shared_ptr<const idx_t> GetFunctionIdentityToken(const FUNC &) {
+		return nullptr;
 	}
 	static void ConsumeFunctionIdentity(BoundScalarFunction &function) {
 		function.InvalidateFunctionExpressionIdentity();

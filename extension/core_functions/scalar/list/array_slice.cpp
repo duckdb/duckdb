@@ -416,7 +416,7 @@ ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ArraySliceFunction,
 	                   ArraySliceBind);
-	fun.SetStatisticsCallback(ArraySlicePropagateStats, FunctionIdentityPropagation::PRESERVE);
+	fun.SetStatisticsCallback(ArraySlicePropagateStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetFallible();
 	ScalarFunctionSet set;

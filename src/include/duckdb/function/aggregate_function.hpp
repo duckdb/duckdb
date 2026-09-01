@@ -246,32 +246,17 @@ public:
 
 	bool HasStatisticsCallback() const { return statistics != nullptr; }
 	aggregate_statistics_t GetStatisticsCallback() const { return statistics; }
-	bool StatisticsPreservesFunctionIdentity() const {
-		return statistics_identity == FunctionIdentityPropagation::PRESERVE;
-	}
-	void SetStatisticsCallback(
-	    aggregate_statistics_t callback,
-	    FunctionIdentityPropagation identity = FunctionIdentityPropagation::INVALIDATE) {
+	void SetStatisticsCallback(aggregate_statistics_t callback) {
 		statistics = callback;
-		statistics_identity = identity;
-	}
-	void SetStatisticsIdentityPropagation(FunctionIdentityPropagation identity) {
-		statistics_identity = identity;
 	}
 
 	bool HasSerializationCallbacks() const { return serialize != nullptr && deserialize != nullptr; }
 	void SetSerializeCallback(aggregate_serialize_t callback) { serialize = callback; }
-	void SetDeserializeCallback(
-	    aggregate_deserialize_t callback,
-	    FunctionIdentityPropagation identity = FunctionIdentityPropagation::INVALIDATE) {
+	void SetDeserializeCallback(aggregate_deserialize_t callback) {
 		deserialize = callback;
-		deserialize_identity = identity;
 	}
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
-	bool DeserializationPreservesFunctionIdentity() const {
-		return deserialize_identity == FunctionIdentityPropagation::PRESERVE;
-	}
 
 	bool HasDirectRewriteCallback() const { return direct_rewrite != nullptr; }
 	aggregate_direct_rewrite_t GetDirectRewriteCallback() const { return direct_rewrite; }
@@ -324,12 +309,10 @@ public:
 
 	//! The statistics propagation function (may be null)
 	aggregate_statistics_t statistics = nullptr;
-	FunctionIdentityPropagation statistics_identity = FunctionIdentityPropagation::INVALIDATE;
 
 	aggregate_serialize_t serialize = nullptr;
 
 	aggregate_deserialize_t deserialize = nullptr;
-	FunctionIdentityPropagation deserialize_identity = FunctionIdentityPropagation::INVALIDATE;
 
 	//! Optional expression rewrite that remains inside the original aggregate operator.
 	aggregate_direct_rewrite_t direct_rewrite = nullptr;
@@ -464,16 +447,13 @@ public: // Callbacks
 
 	auto HasStatisticsCallback() const -> bool { return callbacks.statistics != nullptr; }
 	auto GetStatisticsCallback() const -> aggregate_statistics_t { return callbacks.statistics; }
-	auto SetStatisticsCallback(aggregate_statistics_t callback, FunctionIdentityPropagation identity = FunctionIdentityPropagation::INVALIDATE) -> void { InvalidateDefinitionRebindability(); callbacks.SetStatisticsCallback(callback, identity); }
-	auto StatisticsPreservesFunctionIdentity() const -> bool { return callbacks.StatisticsPreservesFunctionIdentity(); }
-	auto SetStatisticsIdentityPropagation(FunctionIdentityPropagation identity) -> void { InvalidateDefinitionRebindability(); callbacks.SetStatisticsIdentityPropagation(identity); }
+	auto SetStatisticsCallback(aggregate_statistics_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.SetStatisticsCallback(callback); }
 
 	auto HasSerializationCallbacks() const -> bool { return callbacks.serialize != nullptr && callbacks.deserialize != nullptr; }
 	auto SetSerializeCallback(aggregate_serialize_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.serialize = callback; }
-	auto SetDeserializeCallback(aggregate_deserialize_t callback, FunctionIdentityPropagation identity = FunctionIdentityPropagation::INVALIDATE) -> void { InvalidateDefinitionRebindability(); callbacks.SetDeserializeCallback(callback, identity); }
+	auto SetDeserializeCallback(aggregate_deserialize_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.SetDeserializeCallback(callback); }
 	auto GetSerializeCallback() const -> aggregate_serialize_t { return callbacks.serialize; }
 	auto GetDeserializeCallback() const -> aggregate_deserialize_t { return callbacks.deserialize; }
-	auto DeserializationPreservesFunctionIdentity() const -> bool { return callbacks.DeserializationPreservesFunctionIdentity(); }
 
 	auto HasDirectRewriteCallback() const -> bool { return callbacks.direct_rewrite != nullptr; }
 	auto GetDirectRewriteCallback() const -> aggregate_direct_rewrite_t { return callbacks.direct_rewrite; }
@@ -527,6 +507,10 @@ public: // Extra function info
 protected:
 	void InvalidateDefinitionRebindability() {
 		rebindable_definition.reset();
+		function_identity_token = make_shared_ptr<idx_t>(0);
+	}
+	const shared_ptr<const idx_t> &GetFunctionIdentityToken() const {
+		return function_identity_token;
 	}
 	void RestoreDefinitionRebindability(shared_ptr<const AggregateFunction> definition) {
 		rebindable_definition = std::move(definition);
@@ -537,6 +521,7 @@ protected:
 
 	//! Immutable catalog definition authenticated and transferred only by its owning boundaries
 	shared_ptr<const AggregateFunction> rebindable_definition;
+	shared_ptr<const idx_t> function_identity_token = make_shared_ptr<idx_t>(0);
 	AggregateFunctionProperties properties;
 	AggregateFunctionCallbacks callbacks;
 	shared_ptr<AggregateFunctionInfo> function_info;
@@ -549,6 +534,13 @@ public:
 	}
 	static constexpr bind_aggregate_function_t NoBind() {
 		return nullptr;
+	}
+
+	bool StatisticsPreservesFunctionIdentity() const {
+		return statistics_preserves_function_identity && HasPreservedFunctionImplementation();
+	}
+	bool DeserializationPreservesFunctionIdentity() const {
+		return deserialization_preserves_function_identity && HasPreservedFunctionImplementation();
 	}
 
 	AggregateFunction(const Identifier &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -875,6 +867,27 @@ public:
 	static void StateDestroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
 		AggregateExecutor::Destroy<STATE, OP>(states, aggr_input_data, count);
 	}
+
+private:
+	void RefreshFunctionIdentitySnapshot() {
+		auto snapshot = make_shared_ptr<AggregateFunction>(*this);
+		snapshot->function_identity_snapshot.reset();
+		snapshot->statistics_preserves_function_identity = false;
+		snapshot->deserialization_preserves_function_identity = false;
+		function_identity_snapshot = std::move(snapshot);
+	}
+	bool HasPreservedFunctionImplementation() const {
+		return function_identity_snapshot && signature == function_identity_snapshot->signature &&
+		       function_identity_token == function_identity_snapshot->function_identity_token &&
+		       GetCallbacks() == function_identity_snapshot->GetCallbacks() &&
+		       GetProperties() == function_identity_snapshot->GetProperties() && !GetFunctionInfo() &&
+		       !function_identity_snapshot->GetFunctionInfo() && extra_info == function_identity_snapshot->extra_info;
+	}
+
+	shared_ptr<const AggregateFunction> function_identity_snapshot;
+	bool statistics_preserves_function_identity = false;
+	bool deserialization_preserves_function_identity = false;
+	friend class FunctionIdentityPreservation;
 };
 
 class BoundAggregateFunction : public BaseAggregateFunction, public BoundSimpleFunction {
@@ -904,6 +917,12 @@ public:
 	}
 	bool HasRebindableDefinition() const {
 		return HasRebindableDefinitionInternal(definition);
+	}
+	bool StatisticsPreservesFunctionIdentity() const {
+		return definition && definition->StatisticsPreservesFunctionIdentity();
+	}
+	bool DeserializationPreservesFunctionIdentity() const {
+		return definition && definition->DeserializationPreservesFunctionIdentity();
 	}
 
 	const vector<LogicalType> &GetArguments() const {

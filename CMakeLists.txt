@@ -961,6 +961,7 @@ message(STATUS
         "Build workers: compile=$ENV{CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
 
 include_directories(src/include)
+include_directories(src/function)
 if (NOT EXTENSION_CONFIG_BUILD)
   include_directories(third_party/fsst)
   include_directories(third_party/fmt/include)

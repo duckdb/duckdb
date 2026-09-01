@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/variant_functions.hpp"
+#include "function_identity.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/interval.hpp"
@@ -13,6 +14,12 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+
+struct VariantComparatorFunctionIdentity {
+	static void PreserveStatistics(ScalarFunction &function) {
+		FunctionIdentityPreservation::PreserveStatistics(function);
+	}
+};
 
 namespace {
 
@@ -353,7 +360,8 @@ unique_ptr<BaseStatistics> VariantComparatorStats(ClientContext &context, Functi
 ScalarFunction VariantComparatorFun::GetFunction() {
 	auto variant_type = LogicalType::VARIANT();
 	ScalarFunction function("variant_comparator", {variant_type}, LogicalType::BLOB, VariantComparatorFunction);
-	function.SetStatisticsCallback(VariantComparatorStats, FunctionIdentityPropagation::PRESERVE);
+	function.SetStatisticsCallback(VariantComparatorStats);
+	VariantComparatorFunctionIdentity::PreserveStatistics(function);
 	return function;
 }
 

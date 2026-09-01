@@ -3,6 +3,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "function_identity.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -30,6 +31,23 @@
 #include <limits>
 
 namespace duckdb {
+
+struct ArithmeticFunctionIdentity {
+	static void PreserveStatistics(ScalarFunction &function) {
+		FunctionIdentityPreservation::PreserveStatistics(function);
+	}
+	static void PreserveDeserialization(ScalarFunction &function) {
+		FunctionIdentityPreservation::PreserveDeserialization(function);
+	}
+	static void PreserveMultiplyCallbacks(ScalarFunctionSet &functions) {
+		functions.ApplyToFunctions([](ScalarFunction &function) {
+			PreserveStatistics(function);
+			if (function.HasSerializationCallbacks()) {
+				PreserveDeserialization(function);
+			}
+		});
+	}
+};
 
 template <class OP>
 static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
@@ -392,11 +410,9 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(BindScalarFunctionInput &input) 
 	}
 	if (IS_SUBTRACT) {
 		bound_function.SetStatisticsCallback(
-		    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>,
-		    FunctionIdentityPropagation::PRESERVE);
+		    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>);
 	} else {
-		bound_function.SetStatisticsCallback(PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>,
-		                                     FunctionIdentityPropagation::PRESERVE);
+		bound_function.SetStatisticsCallback(PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>);
 	}
 	return std::move(bind_data);
 }
@@ -490,26 +506,27 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			                               BindDecimalAddSubtract<AddOperator, DecimalAddOverflowCheck>);
 			function.SetFallible();
 			function.SetSerializeCallback(SerializeDecimalArithmetic);
-			function.SetDeserializeCallback(DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>,
-			                                FunctionIdentityPropagation::PRESERVE);
+			function.SetDeserializeCallback(DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>);
 			function.SetArgProperties({inc, inc});
+			ArithmeticFunctionIdentity::PreserveStatistics(function);
+			ArithmeticFunctionIdentity::PreserveDeserialization(function);
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
 			                        GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()),
 			                        nullptr,
 			                        PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
-			function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
 			function.SetFallible();
 			function.SetArgProperties({inc, inc});
+			ArithmeticFunctionIdentity::PreserveStatistics(function);
 			return function;
 		} else if (left_type.IsFloating()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
 			                        GetScalarBinaryFunction<AddOperator>(left_type.InternalType()));
 			function.SetFallible();
 			function.SetArgProperties({inc, inc});
-			function.SetStatisticsCallback(PropagateFloatingStats<AddPropagateStatistics, AddOperator>,
-			                               FunctionIdentityPropagation::PRESERVE);
+			function.SetStatisticsCallback(PropagateFloatingStats<AddPropagateStatistics, AddOperator>);
+			ArithmeticFunctionIdentity::PreserveStatistics(function);
 			return function;
 		} else {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
@@ -815,18 +832,19 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetFallible();
 			function.SetSerializeCallback(SerializeDecimalArithmetic);
 			function.SetDeserializeCallback(
-			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>,
-			    FunctionIdentityPropagation::PRESERVE);
+			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>);
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
+			ArithmeticFunctionIdentity::PreserveStatistics(function);
+			ArithmeticFunctionIdentity::PreserveDeserialization(function);
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function(
 			    "-", {left_type, right_type}, left_type,
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
-			function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
 			function.SetFallible();
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
+			ArithmeticFunctionIdentity::PreserveStatistics(function);
 			return function;
 
 		} else if (left_type.IsFloating()) {
@@ -834,8 +852,8 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			                        GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
 			function.SetFallible();
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
-			function.SetStatisticsCallback(PropagateFloatingStats<SubtractPropagateStatistics, SubtractOperator>,
-			                               FunctionIdentityPropagation::PRESERVE);
+			function.SetStatisticsCallback(PropagateFloatingStats<SubtractPropagateStatistics, SubtractOperator>);
+			ArithmeticFunctionIdentity::PreserveStatistics(function);
 			return function;
 		} else {
 			ScalarFunction function("-", {left_type, right_type}, left_type,
@@ -1069,8 +1087,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType()));
 	}
 	bound_function.SetStatisticsCallback(
-	    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>,
-	    FunctionIdentityPropagation::PRESERVE);
+	    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
 	return std::move(bind_data);
 }
 
@@ -1083,19 +1100,16 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 			ScalarFunction function({type, type}, type, nullptr, BindDecimalMultiply);
 			function.SetSerializeCallback(SerializeDecimalArithmetic);
 			function.SetDeserializeCallback(
-			    DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>,
-			    FunctionIdentityPropagation::PRESERVE);
+			    DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>);
 			multiply.AddFunction(function);
 		} else if (TypeIsIntegral(type.InternalType())) {
 			ScalarFunction function(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
 			    nullptr, PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>);
-			function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
 			multiply.AddFunction(function);
 		} else if (type.IsFloating()) {
 			ScalarFunction function({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType()),
 			                        nullptr, PropagateFloatingStats<MultiplyPropagateStatistics, MultiplyOperator>);
-			function.SetStatisticsIdentityPropagation(FunctionIdentityPropagation::PRESERVE);
 			multiply.AddFunction(function);
 		} else {
 			multiply.AddFunction(
@@ -1115,6 +1129,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	multiply.SetFallible();
+	ArithmeticFunctionIdentity::PreserveMultiplyCallbacks(multiply);
 
 	return multiply;
 }
