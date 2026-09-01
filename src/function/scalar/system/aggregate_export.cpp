@@ -240,26 +240,26 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 
 	ErrorData error;
 	FunctionBinder function_binder(context);
-	auto best_function = function_binder.BindFunction(aggr_entry.name, aggr_entry.functions, argument_types, error);
-	if (!best_function.IsValid()) {
-		throw InternalException("Could not re-bind exported aggregate %s: %s", function_name, error.Message());
-	}
-	const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
 
 	// FIXME: this is really hacky
 	// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
-	vector<unique_ptr<Expression>> args;
+	vector<pair<Identifier, unique_ptr<Expression>>> args;
 	args.reserve(argument_types.size());
 	for (idx_t arg_idx = 0; arg_idx < argument_types.size(); arg_idx++) {
 		auto constant_entry = constant_parameters.find(arg_idx);
 		if (constant_entry != constant_parameters.end()) {
-			args.push_back(make_uniq<BoundConstantExpression>(constant_entry->second));
+			args.emplace_back(Identifier(), make_uniq<BoundConstantExpression>(constant_entry->second));
 		} else {
-			args.push_back(make_uniq<BoundConstantExpression>(Value(argument_types[arg_idx])));
+			args.emplace_back(Identifier(), make_uniq<BoundConstantExpression>(Value(argument_types[arg_idx])));
 		}
 	}
 
-	auto [bound_aggr, bind_info] = function_binder.ResolveFunction(aggr, args);
+	auto bound_expression = function_binder.BindAggregateFunction(aggr_entry, std::move(args), error);
+	if (!bound_expression) {
+		throw InternalException("Could not re-bind exported aggregate %s: %s", function_name, error.Message());
+	}
+	auto bound_aggr = bound_expression->Function();
+	auto bind_info = std::move(bound_expression->BindInfoMutable());
 
 	const auto &bound_args = bound_aggr.GetArguments();
 	bool signature_matches = bound_args.size() == argument_types.size();

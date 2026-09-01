@@ -221,20 +221,17 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		aggr_children.push_back(std::move(col_ref));
 		auto comp_expr = make_uniq<BoundReferenceExpression>(comp_types.back(), comp_types.size() - 1);
 		aggr_children.push_back(std::move(comp_expr));
-		vector<LogicalType> child_types;
-		for (const auto &child : aggr_children) {
-			child_types.emplace_back(child->GetReturnType());
-		}
 
-		auto &func = arg_min_max_entry;
+		vector<pair<Identifier, unique_ptr<Expression>>> arguments;
+		for (auto &child : aggr_children) {
+			arguments.emplace_back(Identifier(), std::move(child));
+		}
 		ErrorData error;
-		auto best_function = function_binder.BindFunction(func.name, func.functions, child_types, error);
-		if (!best_function.IsValid()) {
+		auto aggr_expr = function_binder.BindAggregateFunction(arg_min_max_entry, std::move(arguments), error, nullptr,
+		                                                       AggregateType::NON_DISTINCT);
+		if (!aggr_expr) {
 			return nullptr;
 		}
-		const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
-		auto aggr_expr = function_binder.BindAggregateFunction(bound_function, std::move(aggr_children), nullptr,
-		                                                       AggregateType::NON_DISTINCT);
 		D_ASSERT(col_type == aggr_expr->GetReturnType());
 		aggregates.emplace_back(std::move(aggr_expr));
 	}

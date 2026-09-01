@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -24,25 +25,11 @@ FunctionBinder::FunctionBinder(ClientContext &context_p) : binder(nullptr), cont
 FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(binder_p.context) {
 }
 
-template <class FUNCTION, class CATALOG_ENTRY>
-static shared_ptr<const FUNCTION> GetLiveCatalogDefinition(ClientContext &context,
-                                                           const shared_ptr<const FUNCTION> &function) {
-	if (!function || function->GetCatalogName().empty() || function->GetSchemaName().empty() ||
-	    function->GetName().empty()) {
-		return nullptr;
-	}
-	auto entry = Catalog::GetEntry<CATALOG_ENTRY>(
-	    context, QualifiedName(function->GetCatalogName(), function->GetSchemaName(), function->GetName()),
-	    OnEntryNotFound::RETURN_NULL);
-	if (!entry) {
-		return nullptr;
-	}
-	for (auto &candidate : entry->functions.functions) {
-		if (candidate == function) {
-			return candidate;
-		}
-	}
-	return nullptr;
+template <class CATALOG_ENTRY>
+static bool IsTransactionVisibleCatalogEntry(ClientContext &context, const CATALOG_ENTRY &entry) {
+	auto transaction = entry.schema.GetCatalogTransaction(context);
+	auto visible_entry = entry.schema.GetEntry(transaction, entry.type, entry.name);
+	return visible_entry && RefersToSameObject(*visible_entry, entry);
 }
 
 // Split the full (maybe-named) argument list into positional types + named (name, type) pairs.
@@ -591,6 +578,13 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
                                                           vector<pair<Identifier, unique_ptr<Expression>>> arguments,
                                                           ErrorData &error, bool is_operator,
                                                           optional_ptr<Binder> binder) {
+	return BindCatalogScalarFunctionInternal(func, std::move(arguments), error, is_operator, binder);
+}
+
+unique_ptr<Expression>
+FunctionBinder::BindCatalogScalarFunctionInternal(const ScalarFunctionCatalogEntry &func,
+                                                  vector<pair<Identifier, unique_ptr<Expression>>> arguments,
+                                                  ErrorData &error, bool is_operator, optional_ptr<Binder> binder) {
 	// select the best matching overload (this may name positional arguments by their alias for functions that opt
 	// into implicit argument naming, e.g. struct_pack/row)
 	auto best_function = BindFunctionFromArguments(func.name, func.functions, arguments, error);
@@ -644,8 +638,33 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 			}
 		}
 	}
-	return BindScalarFunctionInternal(std::move(selected_function), std::move(regular_args), std::move(keyword_args),
-	                                  is_operator, binder);
+	auto [bound_function_result, bind_info] = ResolveScalarFunction(selected_function, regular_args, keyword_args);
+	bool selected_function_is_live = false;
+	if (IsTransactionVisibleCatalogEntry(context, func)) {
+		for (auto &candidate : func.functions.functions) {
+			if (candidate == selected_function) {
+				selected_function_is_live = true;
+				break;
+			}
+		}
+	}
+	if (selected_function_is_live && bound_function_result.GetDefinition() == selected_function) {
+		bound_function_result.RestoreFunctionExpressionIdentity();
+		bound_function_result.RestoreRebindableDefinition();
+	}
+
+	unique_ptr<Expression> result;
+	auto result_func = make_uniq<BoundFunctionExpression>(std::move(bound_function_result), std::move(regular_args),
+	                                                      std::move(bind_info), is_operator);
+	if (result_func->Function().HasBindExpressionCallback()) {
+		FunctionBindExpressionInput input(context, result_func->FunctionMutable(), result_func->BindInfoMutable(),
+		                                  result_func->GetChildrenMutable());
+		result = result_func->Function().GetBindExpressionCallback()(input);
+	}
+	if (!result) {
+		result = std::move(result_func);
+	}
+	return result;
 }
 
 static bool RequiresCollationPropagation(const LogicalType &type) {
@@ -1083,7 +1102,6 @@ pair<BoundScalarFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveScalarFunction(shared_ptr<const ScalarFunction> function_p,
                                       vector<unique_ptr<Expression>> &arguments,
                                       vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
-	auto catalog_definition = GetLiveCatalogDefinition<ScalarFunction, ScalarFunctionCatalogEntry>(context, function_p);
 	auto &function = *function_p;
 	// Reorder named args
 	auto argument_names = ResolveArguments(function, arguments, named_arguments);
@@ -1122,13 +1140,6 @@ FunctionBinder::ResolveScalarFunction(shared_ptr<const ScalarFunction> function_
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, arguments);
-	if (catalog_definition && bound_function.GetDefinition() == catalog_definition) {
-		bound_function.RestoreFunctionExpressionIdentity();
-		if (!function.HasBindCallback() && !function.HasBindExpressionCallback() && !function.HasBindLambdaCallback()) {
-			bound_function.RestoreRebindableDefinition();
-		}
-	}
-
 	return {std::move(bound_function), std::move(bind_info)};
 }
 
@@ -1178,7 +1189,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunctionInternal(
 
 	if (result_func->Function().HasBindExpressionCallback()) {
 		// if a bind_expression callback is registered - call it and emit the resulting expression
-		FunctionBindExpressionInput input(context, result_func->FunctionMutable(), result_func->BindInfoMutable().get(),
+		FunctionBindExpressionInput input(context, result_func->FunctionMutable(), result_func->BindInfoMutable(),
 		                                  result_func->GetChildrenMutable());
 		result = result_func->Function().GetBindExpressionCallback()(input);
 	}
@@ -1194,8 +1205,6 @@ pair<BoundAggregateFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveAggregateFunction(shared_ptr<const AggregateFunction> function_p,
                                          vector<unique_ptr<Expression>> &children,
                                          vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
-	auto catalog_definition =
-	    GetLiveCatalogDefinition<AggregateFunction, AggregateFunctionCatalogEntry>(context, function_p);
 	auto &function = *function_p;
 	// Reorder named args
 	auto argument_names = ResolveArguments(function, children, named_arguments);
@@ -1227,11 +1236,6 @@ FunctionBinder::ResolveAggregateFunction(shared_ptr<const AggregateFunction> fun
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
-	if (catalog_definition && bound_function.GetDefinition() == catalog_definition &&
-	    !function.GetCallbacks().HasBindCallback()) {
-		bound_function.RestoreRebindableDefinition();
-	}
-
 	return {std::move(bound_function), std::move(bind_info)};
 }
 
@@ -1288,6 +1292,12 @@ unique_ptr<BoundAggregateExpression>
 FunctionBinder::BindAggregateFunction(const AggregateFunctionCatalogEntry &func,
                                       vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error,
                                       unique_ptr<Expression> filter, AggregateType aggr_type) {
+	return BindCatalogAggregateFunctionInternal(func, std::move(arguments), error, std::move(filter), aggr_type);
+}
+
+unique_ptr<BoundAggregateExpression> FunctionBinder::BindCatalogAggregateFunctionInternal(
+    const AggregateFunctionCatalogEntry &func, vector<pair<Identifier, unique_ptr<Expression>>> arguments,
+    ErrorData &error, unique_ptr<Expression> filter, AggregateType aggr_type) {
 	// select the best matching overload (this may name positional arguments by their alias for functions that opt
 	// into implicit argument naming, e.g. struct_pack/row)
 	auto best_function = BindFunctionFromArguments(func.name, func.functions, arguments, error);
@@ -1301,8 +1311,22 @@ FunctionBinder::BindAggregateFunction(const AggregateFunctionCatalogEntry &func,
 	// now that the overload is fixed, split the arguments into their final positional/named children
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
 
-	return BindAggregateFunctionInternal(std::move(bound_function), std::move(regular_args), std::move(keyword_args),
-	                                     std::move(filter), aggr_type);
+	auto [bound_function_result, bind_info] = ResolveAggregateFunction(bound_function, regular_args, keyword_args);
+	bool bound_function_is_live = false;
+	if (IsTransactionVisibleCatalogEntry(context, func)) {
+		for (auto &candidate : func.functions.functions) {
+			if (candidate == bound_function) {
+				bound_function_is_live = true;
+				break;
+			}
+		}
+	}
+	if (bound_function_is_live && bound_function_result.GetDefinition() == bound_function) {
+		bound_function_result.RestoreRebindableDefinition();
+	}
+
+	return make_uniq<BoundAggregateExpression>(std::move(bound_function_result), std::move(regular_args),
+	                                           std::move(filter), std::move(bind_info), aggr_type);
 }
 
 pair<BoundWindowFunction, unique_ptr<FunctionData>>
