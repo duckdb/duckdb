@@ -129,7 +129,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
-#include "duckdb/execution/operator/persistent/merge_action_queue.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -3658,24 +3657,6 @@ const char* EnumUtil::ToChars<MergeActionCondition>(MergeActionCondition value) 
 template<>
 MergeActionCondition EnumUtil::FromString<MergeActionCondition>(const char *value) {
 	return static_cast<MergeActionCondition>(StringUtil::StringToEnum(GetMergeActionConditionValues(), 3, "MergeActionCondition", value));
-}
-
-const StringUtil::EnumStringLiteral *GetMergeActionQueueModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MergeActionQueueMode::BOUNDED), "BOUNDED" },
-		{ static_cast<uint32_t>(MergeActionQueueMode::MATERIALIZED), "MATERIALIZED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<MergeActionQueueMode>(MergeActionQueueMode value) {
-	return StringUtil::EnumToString(GetMergeActionQueueModeValues(), 2, "MergeActionQueueMode", static_cast<uint32_t>(value));
-}
-
-template<>
-MergeActionQueueMode EnumUtil::FromString<MergeActionQueueMode>(const char *value) {
-	return static_cast<MergeActionQueueMode>(StringUtil::StringToEnum(GetMergeActionQueueModeValues(), 2, "MergeActionQueueMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMergeActionTypeValues() {

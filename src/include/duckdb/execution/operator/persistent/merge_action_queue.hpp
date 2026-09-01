@@ -23,7 +23,7 @@ class ClientContext;
 //! BOUNDED queues hand the rows to the consumer as they are pushed, and block the producer while the consumer cannot
 //! keep up. MATERIALIZED queues buffer all rows (spilling to disk if required) and only hand them out once the
 //! producer is done - required for actions whose pipeline can only run after another action has completed.
-enum class MergeActionQueueMode : uint8_t { BOUNDED, MATERIALIZED };
+enum class MergeActionQueueMode { BOUNDED, MATERIALIZED };
 
 //! Scan state of a single consumer
 class MergeActionQueueScanState {
