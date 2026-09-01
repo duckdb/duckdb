@@ -264,9 +264,16 @@ void MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
 	case MatcherType::REPEAT:
 		frames.push_back(make_uniq<RepeatMatchStackFrame>(frame_index, matcher.Cast<RepeatMatcher>(), state));
 		break;
-	default:
+	case MatcherType::KEYWORD:
+	case MatcherType::VARIABLE:
+	case MatcherType::STRING_LITERAL:
+	case MatcherType::NUMBER_LITERAL:
+	case MatcherType::OPERATOR:
+	case MatcherType::END_OF_INPUT:
 		frames.push_back(make_uniq<MatchStackFrame>(frame_index, matcher, state));
 		break;
+	default:
+		throw InternalException("Unsupported matcher type in heap-based parser");
 	}
 }
 
