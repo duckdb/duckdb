@@ -103,14 +103,20 @@ void MergeActionQueue::Finish() {
 }
 
 void MergeActionQueue::ConsumerFinished() {
+	vector<InterruptState> consumers;
 	vector<InterruptState> producers;
 	{
 		lock_guard<mutex> guard(lock);
 		consumer_finished = true;
+		// the pipeline of the action is no longer reading - release the consumers that are still parked, and the
+		// producers that are waiting for them
+		consumers = std::move(blocked_consumers);
+		blocked_consumers.clear();
 		producers = std::move(blocked_producers);
 		blocked_producers.clear();
 	}
 	// the buffered chunks are not cleared here - another consumer may still be scanning them
+	CallbackAll(consumers);
 	CallbackAll(producers);
 }
 
@@ -143,7 +149,7 @@ SourceResultType MergeActionQueue::ScanMaterialized(DataChunk &chunk, MergeActio
                                                     const InterruptState &interrupt_state) {
 	{
 		lock_guard<mutex> guard(lock);
-		if (cancelled) {
+		if (cancelled || consumer_finished) {
 			return SourceResultType::FINISHED;
 		}
 		if (!finished) {
@@ -177,7 +183,7 @@ SourceResultType MergeActionQueue::ScanBounded(DataChunk &chunk, MergeActionQueu
 			producers = std::move(blocked_producers);
 			blocked_producers.clear();
 		}
-		if (cancelled) {
+		if (cancelled || consumer_finished) {
 			result = SourceResultType::FINISHED;
 		} else if (!chunks.empty()) {
 			next_chunk = std::move(chunks.front());

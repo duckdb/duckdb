@@ -56,7 +56,9 @@ public:
 	SinkResultType Push(DataChunk &chunk, const InterruptState &interrupt_state);
 	//! Signal that no more data will be pushed into the queue
 	void Finish();
-	//! Signal that the pipeline of the action no longer consumes any data - rows that are pushed are discarded
+	//! Signal that the pipeline of the action no longer consumes any data - rows that are pushed are discarded, and
+	//! blocked producers and consumers are released. Called through PhysicalOperator::SourceFinished, which the
+	//! executor invokes on every pipeline when a query is aborted.
 	void ConsumerFinished();
 	//! Abandon the queue - unblocks all producers and consumers
 	void Cancel();
