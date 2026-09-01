@@ -23,6 +23,7 @@
 #include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/bound_expression_map.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -205,6 +206,8 @@ struct GlobalBinderState {
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)
 	Identifier trigger_creation_name;
+	//! Bound expressions of parsed nodes, used to prevent re-binding of already bound parts
+	BoundExpressionMap bound_expressions;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -383,6 +386,7 @@ public:
 	bool IsInsideSubquery() const;
 
 	StatementProperties &GetStatementProperties();
+	BoundExpressionMap &GetBoundExpressions();
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
 	static string ReplaceColumnsAlias(const string &alias, const string &column_name,
 	                                  optional_ptr<duckdb_re2::RE2> regex);
@@ -621,6 +625,8 @@ private:
 	                                   vector<unique_ptr<ParsedExpression>> &replacements, StarExpression &star,
 	                                   optional_ptr<duckdb_re2::RE2> regex);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
+	void NormalizeFilterStarExpression(ParsedExpression &expr);
+	void NormalizeFilterStarExpressions(SelectNode &statement);
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(Identifier &catalog_name, Identifier &schema_name);
