@@ -229,12 +229,15 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 
 	auto options = con.context->GetParserOptions();
 	REQUIRE(options.compiled_grammar == CompiledGrammar::Get(*con.context));
-	options.parser_cache = nullptr;
 	options.extensions = nullptr;
 
 	Parser parser(std::move(options));
 	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
 	REQUIRE(parser.statements.size() == 1);
+
+	Parser base_parser;
+	REQUIRE_NOTHROW(base_parser.ParseQuery("SELECT 42"));
+	REQUIRE(base_parser.statements.size() == 1);
 }
 
 class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {

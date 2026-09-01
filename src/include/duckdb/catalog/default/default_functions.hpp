@@ -28,7 +28,7 @@ public:
 	SchemaCatalogEntry &schema;
 
 	DUCKDB_API static unique_ptr<CreateMacroInfo> CreateInternalMacroInfo(const DefaultMacro &default_macro);
-	//! Overload taking ParserOptions, so the caller's ParserCache is reused instead of rebuilt per macro.
+	//! Overload taking ParserOptions, so the caller's compiled grammar is reused instead of rebuilt per macro.
 	DUCKDB_API static unique_ptr<CreateMacroInfo> CreateInternalMacroInfo(const DefaultMacro &default_macro,
 	                                                                      ParserOptions options);
 

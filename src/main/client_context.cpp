@@ -1609,7 +1609,6 @@ ParserOptions ClientContext::GetParserOptions() {
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
-	options.parser_cache = &db->GetParserCache();
 	options.compiled_grammar = CompiledGrammar::Get(*this);
 	return options;
 }

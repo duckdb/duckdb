@@ -39,7 +39,7 @@ public:
 	vector<Identifier> GetDefaultEntries() override;
 
 	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro);
-	//! Overload taking ParserOptions, so the caller's ParserCache is reused instead of rebuilt per macro.
+	//! Overload taking ParserOptions, so the caller's compiled grammar is reused instead of rebuilt per macro.
 	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro,
 	                                                        ParserOptions options);
 

@@ -286,7 +286,6 @@ DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatal
 unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                       const Identifier &entry_name) {
 	ParserOptions options;
-	options.parser_cache = &context.db->GetParserCache();
 	options.compiled_grammar = CompiledGrammar::Get(context);
 	auto info = GetDefaultFunction(schema.name, entry_name, options);
 	if (info) {

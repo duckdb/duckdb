@@ -149,7 +149,6 @@ static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const Identifier &
 unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                            const Identifier &entry_name) {
 	ParserOptions options;
-	options.parser_cache = &context.db->GetParserCache();
 	options.compiled_grammar = CompiledGrammar::Get(context);
 	auto info = GetDefaultTableFunction(schema.name, entry_name, options);
 	if (info) {

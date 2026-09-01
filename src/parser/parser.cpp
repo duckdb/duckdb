@@ -27,9 +27,6 @@ Parser::Parser(ParserOptions options_p) : options(options_p) {
 Parser::~Parser() = default;
 
 ParserCache &Parser::GetCache() {
-	if (options.parser_cache) {
-		return *options.parser_cache;
-	}
 	if (!local_cache) {
 		local_cache = make_uniq<ParserCache>();
 	}
