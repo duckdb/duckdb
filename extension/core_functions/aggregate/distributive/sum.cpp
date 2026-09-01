@@ -4,10 +4,20 @@
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "function_identity.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
+
+struct SumFunctionIdentity {
+	static void PreserveStatistics(AggregateFunction &function) {
+		FunctionIdentityPreservation::PreserveStatistics(function);
+	}
+	static void PreserveDeserialization(AggregateFunction &function) {
+		FunctionIdentityPreservation::PreserveDeserialization(function);
+	}
+};
 
 namespace {
 
@@ -250,7 +260,8 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
 		function.SetSerializeCallback(SumNoOverflowSerialize);
-		function.SetDeserializeCallback(SumNoOverflowDeserialize, FunctionIdentityPropagation::PRESERVE);
+		function.SetDeserializeCallback(SumNoOverflowDeserialize);
+		SumFunctionIdentity::PreserveDeserialization(function);
 		return function;
 	}
 	case PhysicalType::INT64: {
@@ -260,7 +271,8 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
 		function.SetSerializeCallback(SumNoOverflowSerialize);
-		function.SetDeserializeCallback(SumNoOverflowDeserialize, FunctionIdentityPropagation::PRESERVE);
+		function.SetDeserializeCallback(SumNoOverflowDeserialize);
+		SumFunctionIdentity::PreserveDeserialization(function);
 		return function;
 	}
 	default:
@@ -273,7 +285,8 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
 	                       SumNoOverflowBind);
 	aggr.SetSerializeCallback(SumNoOverflowSerialize);
-	aggr.SetDeserializeCallback(SumNoOverflowDeserialize, FunctionIdentityPropagation::PRESERVE);
+	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
+	SumFunctionIdentity::PreserveDeserialization(aggr);
 	return aggr;
 }
 
@@ -362,16 +375,18 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int32_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::INTEGER, LogicalType::HUGEINT);
-		function.SetStatisticsCallback(SumPropagateStats, FunctionIdentityPropagation::PRESERVE);
+		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		SumFunctionIdentity::PreserveStatistics(function);
 		return function;
 	}
 	case PhysicalType::INT64: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int64_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::BIGINT, LogicalType::HUGEINT);
-		function.SetStatisticsCallback(SumPropagateStats, FunctionIdentityPropagation::PRESERVE);
+		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		SumFunctionIdentity::PreserveStatistics(function);
 		return function;
 	}
 	case PhysicalType::INT128: {

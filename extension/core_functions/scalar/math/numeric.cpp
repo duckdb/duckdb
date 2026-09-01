@@ -9,6 +9,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "function_identity.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -18,6 +19,19 @@
 #include <type_traits>
 
 namespace duckdb {
+
+struct NumericFunctionIdentity {
+	static void PreserveStatistics(ScalarFunction &function) {
+		FunctionIdentityPreservation::PreserveStatistics(function);
+	}
+	static void PreserveStatistics(ScalarFunctionSet &functions) {
+		functions.ApplyToFunctions([](ScalarFunction &function) {
+			if (function.HasStatisticsCallback()) {
+				PreserveStatistics(function);
+			}
+		});
+	}
+};
 
 template <class ERROR_OP, class IEEE_OP>
 static unique_ptr<FunctionData> BindIEEEFloatingUnary(BindScalarFunctionInput &input) {
@@ -244,14 +258,14 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT: {
 			ScalarFunction function({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
-			function.SetStatisticsCallback(PropagateAbsStats, FunctionIdentityPropagation::PRESERVE);
+			function.SetStatisticsCallback(PropagateAbsStats);
 			abs.AddFunction(function);
 			break;
 		}
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE: {
 			ScalarFunction function({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type));
-			function.SetStatisticsCallback(PropagateAbsStats, FunctionIdentityPropagation::PRESERVE);
+			function.SetStatisticsCallback(PropagateAbsStats);
 			abs.AddFunction(function);
 			break;
 		}
@@ -267,6 +281,7 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		}
 	}
 	abs.SetFallible();
+	NumericFunctionIdentity::PreserveStatistics(abs);
 	return abs;
 }
 
@@ -460,7 +475,8 @@ ScalarFunctionSet SignFun::GetFunctions() {
 		}
 		ScalarFunction function({type}, LogicalType::TINYINT,
 		                        ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type));
-		function.SetStatisticsCallback(PropagateSignStats, FunctionIdentityPropagation::PRESERVE);
+		function.SetStatisticsCallback(PropagateSignStats);
+		NumericFunctionIdentity::PreserveStatistics(function);
 		sign.AddFunction(function);
 	}
 	return sign;
@@ -1334,8 +1350,9 @@ unique_ptr<BaseStatistics> PropagatePowStats(ClientContext &context, FunctionSta
 ScalarFunction PowOperatorFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingBinary<PowOperator, IEEEPowOperator>);
-	function.SetStatisticsCallback(PropagatePowStats, FunctionIdentityPropagation::PRESERVE);
+	function.SetStatisticsCallback(PropagatePowStats);
 	function.SetFallible();
+	NumericFunctionIdentity::PreserveStatistics(function);
 	return function;
 }
 
@@ -1631,11 +1648,13 @@ ScalarFunctionSet IsNanFun::GetFunctions() {
 	ScalarFunctionSet funcs;
 	ScalarFunction float_function({LogicalType::FLOAT}, LogicalType::BOOLEAN,
 	                              ScalarFunction::UnaryFunction<float, bool, IsNanOperator>);
-	float_function.SetStatisticsCallback(PropagateIsNanStats, FunctionIdentityPropagation::PRESERVE);
+	float_function.SetStatisticsCallback(PropagateIsNanStats);
+	NumericFunctionIdentity::PreserveStatistics(float_function);
 	funcs.AddFunction(float_function);
 	ScalarFunction double_function({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
 	                               ScalarFunction::UnaryFunction<double, bool, IsNanOperator>);
-	double_function.SetStatisticsCallback(PropagateIsNanStats, FunctionIdentityPropagation::PRESERVE);
+	double_function.SetStatisticsCallback(PropagateIsNanStats);
+	NumericFunctionIdentity::PreserveStatistics(double_function);
 	funcs.AddFunction(double_function);
 	return funcs;
 }
