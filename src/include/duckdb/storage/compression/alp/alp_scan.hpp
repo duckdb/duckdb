@@ -62,14 +62,23 @@ public:
 public:
 	idx_t index;
 	T decoded_values[AlpConstants::ALP_VECTOR_SIZE];
+	//! Exception values read from the segment after validating exceptions_count <= vector_size.
 	T exceptions[AlpConstants::ALP_VECTOR_SIZE];
+	//! Exception positions read from the segment and validated as exceptions_positions[i] < vector_size.
 	AlpConstants::EXCEPTION_POSITION_TYPE exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
-	//! BitpackingPrimitives::UnPackBuffer<uint64_t> reads the packed input through aligned integer pointers, so this must be aligned
+	//! Packed values read from the segment through a bounded vector reader.
+	//! BitpackingPrimitives::UnPackBuffer<uint64_t> reads the input through aligned integer pointers.
 	alignas(AlpConstants::FRAME_OF_REFERENCE_TYPE) uint8_t for_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
+	//! Exponent or UNCOMPRESSED_MODE_SENTINEL read from the segment.
+	//! Exponents are validated as v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT.
 	AlpConstants::EXPONENT_TYPE v_exponent;
+	//! Factor read from the segment and validated as v_factor <= v_exponent.
 	AlpConstants::FACTOR_TYPE v_factor;
+	//! Exception count read from the segment and validated as exceptions_count <= vector_size.
 	AlpConstants::EXCEPTIONS_COUNT_TYPE exceptions_count;
+	//! Frame of reference read from the segment, no validation is needed for FRAME_OF_REFERENCE_TYPE values.
 	AlpConstants::FRAME_OF_REFERENCE_TYPE frame_of_reference;
+	//! Bit width read from the segment and validated as bit_width <= AlpConstants::MAX_BIT_WIDTH.
 	AlpConstants::BIT_WIDTH_TYPE bit_width;
 };
 
@@ -82,7 +91,8 @@ public:
 	struct SegmentLayout {
 		//! Vector data between the segment header and reverse offset table.
 		CompressionSegmentReader data;
-		//! Reverse vector offsets read from disk after the complete table was validated.
+		//! Reverse vector offsets read from the segment after the table extent was validated.
+		//! Each offset is validated when its vector is loaded.
 		unsafe_array_ptr<const METADATA_POINTER_TYPE> vector_offsets;
 	};
 
@@ -111,7 +121,7 @@ public:
 	}
 
 	BufferHandle handle;
-	//! Segment row count read from disk, used to derive the vector count and final vector size.
+	//! Row count read from the segment, used to derive the vector count and final vector size.
 	idx_t count;
 	SegmentLayout layout;
 	idx_t total_value_count = 0;
