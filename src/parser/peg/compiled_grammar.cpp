@@ -1,6 +1,7 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/keyword_helper/parsed_grammar_keyword_helper.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"

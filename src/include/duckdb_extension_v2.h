@@ -559,6 +559,8 @@ typedef struct {
 	(duckdb_v2_vector_handle vector, idx_t *out_count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vector_get_data_mutable)
 	(duckdb_v2_vector_handle vector, void **out_data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vector_get_logical_type)
+	(duckdb_v2_vector_handle vector, duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vector_get_size)
 	(duckdb_v2_vector_handle vector, idx_t *out_size, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vector_get_value)
@@ -798,6 +800,7 @@ typedef struct {
 #define duckdb_v2_vector_get_child                       duckdb_ext_api.duckdb_v2_vector_get_child
 #define duckdb_v2_vector_get_child_count                 duckdb_ext_api.duckdb_v2_vector_get_child_count
 #define duckdb_v2_vector_get_data_mutable                duckdb_ext_api.duckdb_v2_vector_get_data_mutable
+#define duckdb_v2_vector_get_logical_type                duckdb_ext_api.duckdb_v2_vector_get_logical_type
 #define duckdb_v2_vector_get_size                        duckdb_ext_api.duckdb_v2_vector_get_size
 #define duckdb_v2_vector_get_value                       duckdb_ext_api.duckdb_v2_vector_get_value
 #define duckdb_v2_vector_get_vector_type                 duckdb_ext_api.duckdb_v2_vector_get_vector_type

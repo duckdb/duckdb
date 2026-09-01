@@ -60,6 +60,20 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_vector_type(duckdb_v2_vector_handle vector,
 	});
 }
 
+DUCKDB_V2_ERROR duckdb_v2_vector_get_logical_type(duckdb_v2_vector_handle vector,
+                                                  duckdb_v2_logical_type_handle *out_type,
+                                                  duckdb_v2_error_info_handle *err) {
+	return WithErrorHandler(err, [&]() {
+		if (!vector || !out_type) {
+			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_get_logical_type");
+		}
+		*out_type = nullptr;
+		auto *vec = Convert(vector);
+		auto *lt = new duckdb::LogicalType(vec->GetType());
+		*out_type = reinterpret_cast<_duckdb_v2_logical_type *>(lt);
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_vector_flatten(duckdb_v2_vector_handle vector, duckdb_v2_error_info_handle *err) {
 	return WithErrorHandler(err, [&]() {
 		if (!vector) {

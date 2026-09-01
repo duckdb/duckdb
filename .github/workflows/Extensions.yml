@@ -6,9 +6,9 @@ name: Extensions (all platforms)
 on:
   workflow_call:
     inputs:
-      override_git_describe:
+      duckdb_version:
         type: string
-      git_ref:
+      duckdb_commit:
         type: string
       extra_exclude_archs:
         type: string
@@ -42,11 +42,13 @@ on:
         required: false
         default: false
 concurrency:
-  group: extensions-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  group: extensions-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.duckdb_version }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+  DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
   BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
 
 jobs:
@@ -74,7 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ inputs.duckdb_commit }}
 
       - id: set-main-extensions
         name: Configure main extensions
@@ -187,7 +189,7 @@ jobs:
       # NOTE: on PRs we exclude some archs to speed things up
       reduced_ci_mode: ${{ needs.load-extension-configs.outputs.reduced_ci_mode }}
       set_caller_as_duckdb: true
-      duckdb_version: ${{ inputs.git_ref }}
+      duckdb_version: ${{ inputs.duckdb_commit }}
       override_ci_tools_repository: duckdb/extension-ci-tools
       ci_tools_version: main
       exclude_archs: ${{ matrix.exclude_archs }}
@@ -195,7 +197,7 @@ jobs:
       allow_failure_archs: ${{ inputs.allow_failure_archs }}
       extra_toolchains: ${{ matrix.extra_toolchains }}
       use_merged_vcpkg_manifest: '1'
-      duckdb_tag: ${{ inputs.override_git_describe }}
+      duckdb_tag: ${{ inputs.duckdb_version }}
       skip_tests: ${{ inputs.skip_tests }}
       save_cache: ${{ (github.event_name == 'workflow_call' && inputs.save_cache) || (github.event_name != 'workflow_call' && (github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name))) }}
       extensions_test_selection: 'complete'
@@ -215,7 +217,7 @@ jobs:
         with:
           runner_provider: ${{ inputs.runner_provider }}
           fetch_depth: 0
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ inputs.duckdb_commit }}
 
       - uses: ./.github/actions/ccache-action
 
@@ -296,7 +298,8 @@ jobs:
           EXTENSION_TESTS_ONLY: 1
           ENABLE_EXTENSION_AUTOLOADING: 1
           ENABLE_EXTENSION_AUTOINSTALL: 1
-          OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+          DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+          DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
         run: python3 scripts/ci/retry.py -- make release
 
       - name: Run Tests
@@ -311,7 +314,8 @@ jobs:
         env:
           GENERATE_EXTENSION_ENTRIES: 1
           LOCAL_EXTENSION_REPO: build/release/repository_other
-          OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+          DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+          DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
         run: |
           python3 scripts/ci/retry.py -- make release
 
@@ -349,7 +353,8 @@ jobs:
         id: check_extension_entries
         env:
           EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
-          OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+          DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+          DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
         run: |
           make check-extension-entries
 

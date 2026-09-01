@@ -97,7 +97,7 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	auto matcher_entry = matchers.find(rule_name);
 	if (!is_function_call) {
 		if (matcher_entry == matchers.end()) {
-			throw InvalidConfigurationException("Recipe reference rule %s, which doesn't exist in the grammar",
+			throw InvalidConfigurationException("Recipe references rule %s, which doesn't exist in the grammar",
 			                                    rule_name.GetString());
 		}
 		if (!construction_state.Begin(rule_name)) {

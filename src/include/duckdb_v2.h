@@ -2073,6 +2073,24 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_vector_type(duckdb_v2_vector_h
                                                               duckdb_v2_error_info_handle *err);
 
 /*!
+ * Returns the vector's logical type.
+ *
+ * The returned logical type is the same type that was passed to vector_reference, or the type that was set on creation.
+ * It is caller-owned; destroy it via logical_type_destroy.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param vector The vector.
+ * @param out_type Receives the caller-owned logical type handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_logical_type(duckdb_v2_vector_handle vector,
+                                                               duckdb_v2_logical_type_handle *out_type,
+                                                               duckdb_v2_error_info_handle *err);
+
+/*!
  * Reads a vector as a unified view of data, validity, selection, and count.
  *
  * Populates out_view with borrowed pointers, valid until the owning chunk is destroyed. view.data addresses the
