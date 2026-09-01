@@ -1034,7 +1034,8 @@ Identifier <- QuotedIdentifier / PlainIdentifier
 
 ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
 ColIdOrString <- ColId / StringLiteralIdentifier
-TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier
+TypeFuncName <- UnreservedKeyword / TypeFuncKeyword / Identifier
+TypeFuncKeyword <- TypeNameKeyword / FuncNameKeyword
 TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
 ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
 ColLabelOrString <- ColLabelIdentifier / StringLiteralIdentifier

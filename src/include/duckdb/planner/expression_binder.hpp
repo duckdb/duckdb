@@ -12,11 +12,11 @@
 #include "duckdb/common/stack_checker.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/lambdaref_expression.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
+#include "duckdb/planner/bound_expression_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
@@ -119,6 +119,8 @@ public:
 	}
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
+	//! Bind the expression at the given depth. Memoized: a node that was already bound (by an earlier attempt at a
+	//! different depth) is skipped, and the bound expression is stored in the binder's BoundExpressionMap.
 	ErrorData Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
 	//! Returns the STRUCT_EXTRACT operator expression
@@ -173,6 +175,9 @@ private:
 
 	void InitializeStackCheck();
 	StackChecker<ExpressionBinder> StackCheck(const ParsedExpression &expr, idx_t extra_stack = 1);
+
+	//! Whether any direct child slot of the window expression has already been bound
+	bool WindowHasBoundedParts(const WindowExpression &window) const;
 
 protected:
 	BindResult BindExpression(BetweenExpression &expr, idx_t depth);
@@ -238,6 +243,9 @@ protected:
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 	//! Look up an entry using the (possibly nested) qualification carried in the lookup itself
 	optional_ptr<CatalogEntry> GetCatalogEntry(const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
+
+	//! The map holding the bound expressions of already bound parsed nodes
+	BoundExpressionMap &GetBoundExpressions() const;
 
 	Binder &binder;
 	ClientContext &context;

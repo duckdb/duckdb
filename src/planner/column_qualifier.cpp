@@ -194,6 +194,10 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 
 void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params,
                                          const bool within_function_expression) {
+	if (binder.GetBoundExpressions().IsBound(*expr)) {
+		// never descend into or replace already bound expressions
+		return;
+	}
 	bool next_within_function_expression = false;
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {

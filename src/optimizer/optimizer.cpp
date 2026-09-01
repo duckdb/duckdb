@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
 #include "duckdb/common/enums/optimizer_type.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -57,6 +56,7 @@
 #include "duckdb/optimizer/rule/monotone_preimage.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"
 #include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
@@ -68,6 +68,7 @@ namespace duckdb {
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
 	rewriter.rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<StructExtractStructPackFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<LeastGreatestSimplificationRule>(rewriter));
@@ -148,7 +149,7 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 }
 
 void Optimizer::Verify(LogicalOperator &op) {
-	ColumnBindingResolver::Verify(context, op);
+	LogicalPlanVerifier::Verify(context, op);
 }
 
 // RemoveUnusedColumns renumbers bindings, so RemapProjectionMap can match a stale binding to a

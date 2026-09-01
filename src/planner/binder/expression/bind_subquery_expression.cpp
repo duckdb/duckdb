@@ -129,7 +129,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		idx_t expected_columns = 1;
 		bool has_unexpanded_struct = false;
 		if (expr.GetChild()) {
-			auto &child = BoundExpression::GetExpression(*expr.GetChildMutable());
+			auto child = GetBoundExpressions().Consume(*expr.GetChildMutable());
 			// Check if child is an unexpanded struct before extraction
 			has_unexpanded_struct = TypeIsTuple(child->GetReturnType());
 			ExtractSubqueryChildren(child, child_expressions, bound_subquery.bound_node.types,

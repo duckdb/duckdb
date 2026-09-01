@@ -158,7 +158,6 @@ ConstChildrenView ParsedExpression::Children() const {
 		}
 		break;
 	}
-	case ExpressionClass::BOUND_EXPRESSION:
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::CONSTANT:
@@ -292,7 +291,6 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 		}
 		break;
 	}
-	case ExpressionClass::BOUND_EXPRESSION:
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::CONSTANT:

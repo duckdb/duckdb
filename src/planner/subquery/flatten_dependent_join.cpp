@@ -4,7 +4,6 @@
 
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
@@ -18,6 +17,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 
@@ -737,7 +737,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCorrelatedN
 		RewriteCountAggregates::Rewrite(*plan, replacement_map);
 	}
 	if (!parent) {
-		ColumnBindingResolver::Verify(binder.context, *plan);
+		LogicalPlanVerifier::Verify(binder.context, *plan);
 	}
 	return state;
 }
@@ -795,7 +795,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownProjection(
 	auto &proj = plan->Cast<LogicalProjection>();
 	auto correlated_offset = plan->expressions.size() - correlated_columns.size();
 	if (!parent) {
-		ColumnBindingResolver::Verify(binder.context, *plan);
+		LogicalPlanVerifier::Verify(binder.context, *plan);
 	}
 	result.bindings = CreateContiguousState(ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)));
 	return result;

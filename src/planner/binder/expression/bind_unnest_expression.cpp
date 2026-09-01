@@ -151,8 +151,8 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 			if (error.HasError()) {
 				return BindResult(std::move(error));
 			}
-			auto &const_child = BoundExpression::GetExpression(*args[i].GetExpressionMutable());
-			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
+			auto &const_child = binder.GetBoundExpressions().Get(*args[i].GetExpressionMutable());
+			auto value = ExpressionExecutor::EvaluateScalar(context, const_child, true);
 			if (alias == "recursive") {
 				auto recursive = value.GetValue<bool>();
 				if (recursive) {
@@ -188,10 +188,10 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 		if (result.HasError()) {
 			return BindResult(result.error);
 		}
-		auto &bound_expr = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
-		ExpressionBinder::ExtractCorrelatedExpressions(binder, *bound_expr);
+		ExpressionBinder::ExtractCorrelatedExpressions(binder,
+		                                               binder.GetBoundExpressions().Get(args[0].GetExpression()));
 	}
-	auto &child = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
+	auto &child = binder.GetBoundExpressions().GetMutable(*args[0].GetExpressionMutable());
 	child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
 	auto &child_type = child->GetReturnType();
 
