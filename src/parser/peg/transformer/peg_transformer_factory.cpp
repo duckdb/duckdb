@@ -20,7 +20,7 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
                                                                    ParseResult &parse_result) {
-	if (transformer.options.debug_transformer_trampoline_style && !transformer.grammar.HasGrammarChanges()) {
+	if (transformer.options.debug_heap_based_parser && !transformer.grammar.HasGrammarChanges()) {
 		return TransformStatementTrampoline(transformer, parse_result);
 	}
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -91,8 +91,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	ParseResultAllocator parse_result_allocator;
 	ParserPackratCache packrat_cache;
 	idx_t max_token_index = token_iterator.Position();
+	const bool use_heap_based_parser = options.debug_heap_based_parser && !grammar.HasGrammarChanges();
 	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index,
-	                 MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
+	                 MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, use_heap_based_parser,
+	                 &packrat_cache);
 	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
 	if (!match_result.IsSuccess()) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
