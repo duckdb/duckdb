@@ -775,7 +775,9 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(AlterStatement &
 		// CREATE resolves an OnCreateConflict, so they never reach the optimizer as a parsed statement
 		return CatalogPushdownResult::Unknown();
 	}
-	auto target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::EXISTING_ENTRY, info.GetCatalogType());
+	// COMMENT ON COLUMN targets either a table or a view, the exact type is only resolved at bind time
+	auto entry_type = info.type == AlterType::SET_COLUMN_COMMENT ? CatalogType::TABLE_ENTRY : info.GetCatalogType();
+	auto target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::EXISTING_ENTRY, entry_type);
 	return VerifyStatementSupport(statement, std::move(target));
 }
 
