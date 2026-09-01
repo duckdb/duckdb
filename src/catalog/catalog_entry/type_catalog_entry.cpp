@@ -13,7 +13,17 @@ constexpr const char *TypeCatalogEntry::Name;
 
 TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info)
     : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.GetTypeName()), user_type(info.type),
-      bind_function(info.bind_function) {
+      constructors(info.constructors) {
+	if (constructors.functions.empty()) {
+		// a type without constructors takes no modifiers and always resolves to its own type
+		constructors.AddFunction(TypeConstructor::Identity(name));
+	}
+	constructors.SetName(name);
+	constructors.ApplyToFunctions([&](TypeConstructor &constructor) {
+		constructor.SetName(name);
+		constructor.SetCatalogName(catalog.GetAttached().GetName());
+		constructor.SetSchemaName(schema.name);
+	});
 	this->temporary = info.temporary;
 	this->internal = info.internal;
 	this->extension_name = info.extension_name;
@@ -37,7 +47,7 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->dependencies = dependencies;
 	result->comment = comment;
 	result->tags = tags;
-	result->bind_function = bind_function;
+	result->constructors = constructors;
 	return std::move(result);
 }
 
