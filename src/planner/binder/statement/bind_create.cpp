@@ -644,6 +644,10 @@ void Binder::BindLogicalType(LogicalType &type) {
 bool BoundBodyContainsTrigger(const LogicalOperator &op);
 
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
+	if (create_trigger_info.temporary) {
+		// unsupported - a trigger is temporary iff its base table is (see below)
+		throw BinderException("Temporary triggers are not supported");
+	}
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres).
 	// Promote a catalog-qualified base table (e.g. attached_db.tbl) so downstream lookups carry the resolved
 	// catalog instead of a bare schema (matches the DROP TRIGGER path).
@@ -666,6 +670,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 
 	// Trigger inherits the catalog and the (possibly nested) schema from the base table
 	create_trigger_info.SetQualifiedName(table.schema.GetQualifiedName(create_trigger_info.GetQualifiedName().Name()));
+	// ... and its temporariness, so that a trigger on a temporary table lands in the temp catalog
+	create_trigger_info.temporary = table.temporary;
 
 	auto &schema = BindCreateSchema(create_trigger_info);
 
@@ -892,6 +898,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::INDEX_ENTRY: {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
+		if (create_index_info.temporary) {
+			// unsupported - an index is temporary iff the table it is created on is (see below)
+			throw BinderException("Temporary indexes are not supported");
+		}
 
 		// Plan the table scan - the table lives in the same (possibly nested) schema as the index.
 		TableDescription table_description(create_index_info.GetQualifiedName().WithName(create_index_info.table));
