@@ -146,6 +146,10 @@ CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>
 	return new_matcher;
 }
 
+shared_ptr<CompiledGrammar> CompiledGrammar::Create() {
+	return Create({});
+}
+
 shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
                                                     const case_insensitive_set_t &active_extensions) {
 	case_insensitive_map_t<reference<GrammarExtension>> selected_extensions;
@@ -166,7 +170,7 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher() {
 			return matcher;
 		}
 	}
-	auto new_matcher = CompiledGrammar::Create({});
+	auto new_matcher = CompiledGrammar::Create();
 
 	std::unique_lock<std::mutex> lock(mutex);
 	if (!matcher) {

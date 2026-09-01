@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-struct ParserCache;
-
 enum class TokenizeState {
 	STANDARD = 0,
 	SINGLE_LINE_COMMENT,

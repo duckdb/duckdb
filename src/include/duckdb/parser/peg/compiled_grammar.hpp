@@ -6,13 +6,10 @@
 
 namespace duckdb {
 
-struct ParserCache;
 class ClientContext;
 class GrammarExtension;
 
 struct CompiledGrammar {
-	friend struct ParserCache;
-
 private:
 	CompiledGrammar(const ParsedGrammar &grammar, bool has_grammar_changes);
 	static shared_ptr<CompiledGrammar>
@@ -38,6 +35,8 @@ public:
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
+	//! Compile the base DuckDB grammar.
+	static shared_ptr<CompiledGrammar> Create();
 	//! Compile a grammar for the selected extensions without changing the client configuration.
 	static shared_ptr<CompiledGrammar> Create(const ClientContext &context,
 	                                          const case_insensitive_set_t &active_extensions);

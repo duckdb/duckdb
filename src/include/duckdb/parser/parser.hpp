@@ -19,7 +19,6 @@
 
 namespace duckdb {
 
-struct ParserCache;
 struct CompiledGrammar;
 struct MatcherToken;
 class TokenIterator;
@@ -106,11 +105,9 @@ public:
 	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:
-	ParserCache &GetCache();
 	CompiledGrammar &GetGrammar();
 
 	ParserOptions options;
-	unique_ptr<ParserCache> local_cache;
 	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 } // namespace duckdb

@@ -26,19 +26,12 @@ Parser::Parser(ParserOptions options_p) : options(options_p) {
 
 Parser::~Parser() = default;
 
-ParserCache &Parser::GetCache() {
-	if (!local_cache) {
-		local_cache = make_uniq<ParserCache>();
-	}
-	return *local_cache;
-}
-
 CompiledGrammar &Parser::GetGrammar() {
 	if (!compiled_grammar) {
 		if (options.compiled_grammar) {
 			compiled_grammar = options.compiled_grammar;
 		} else {
-			compiled_grammar = GetCache().GetMatcher();
+			compiled_grammar = CompiledGrammar::Create();
 		}
 	}
 	return *compiled_grammar;
