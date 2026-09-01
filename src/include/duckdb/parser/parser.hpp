@@ -36,7 +36,7 @@ struct UnicodeSpace {
 //! plan and executed.
 class Parser {
 public:
-	explicit Parser(ParserOptions options = ParserOptions());
+	explicit Parser(const ParserOptions &options = ParserOptions());
 	~Parser();
 
 	//! The parsed SQL statements from an invocation to ParseQuery.

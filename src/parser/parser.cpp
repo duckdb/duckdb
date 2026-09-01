@@ -21,7 +21,7 @@
 
 namespace duckdb {
 
-Parser::Parser(ParserOptions options_p) : options(options_p) {
+Parser::Parser(const ParserOptions &options_p) : options(options_p) {
 }
 
 Parser::~Parser() = default;
