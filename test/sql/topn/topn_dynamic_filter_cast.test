@@ -132,3 +132,30 @@ SELECT CAST(k AS BIGINT) AS x FROM tint ORDER BY x DESC LIMIT 3;
 204799
 204798
 204797
+
+# negative: a cast to VARCHAR is also not reconstructible - bail out
+query II
+EXPLAIN SELECT CAST(k AS VARCHAR) AS x FROM tint ORDER BY x LIMIT 5;
+----
+physical_plan	<!REGEX>:(?s).*Dynamic Filter.*
+
+query I
+SELECT CAST(k AS VARCHAR) AS x FROM tint ORDER BY x LIMIT 3;
+----
+0
+1
+10
+
+# a default (non-try) cast that can fail (INT32 -> INT8) is still pushed, but the filter wraps the
+# reconstructed expression in OR(is-null) (nulls_first || preserves_cast_errors) so every row
+# survives the pushed filter and the cast error raised by the sort key is not suppressed - even with
+# NULLS LAST, where rows dropped by the filter would otherwise never reach the sort key evaluation
+query II
+EXPLAIN SELECT CAST(k AS TINYINT) AS x FROM tint ORDER BY x NULLS LAST LIMIT 5;
+----
+physical_plan	<REGEX>:(?s).*Dynamic Filter.*
+
+statement error
+SELECT CAST(k AS TINYINT) AS x FROM tint ORDER BY x NULLS LAST LIMIT 5;
+----
+<REGEX>:.*Conversion Error.*out of range for the destination type INT8.*
