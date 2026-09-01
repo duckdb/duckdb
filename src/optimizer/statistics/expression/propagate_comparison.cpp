@@ -34,14 +34,15 @@ static bool RangesAreEqualConstants(const Value &lmin, const Value &lmax, const 
 }
 
 static FilterPropagateResult PropagateValueComparison(const Value &lmin, const Value &lmax, const Value &rmin,
-                                                      const Value &rmax, ExpressionType comparison, bool has_null) {
+                                                      const Value &rmax, ExpressionType comparison, bool has_null,
+                                                      bool propagate_equal_constants) {
 	const auto always_true =
 	    has_null ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	const auto always_false =
 	    has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	switch (comparison) {
 	case ExpressionType::COMPARE_EQUAL:
-		if (RangesAreEqualConstants(lmin, lmax, rmin, rmax)) {
+		if (propagate_equal_constants && RangesAreEqualConstants(lmin, lmax, rmin, rmax)) {
 			return always_true;
 		}
 		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
@@ -93,9 +94,8 @@ static FilterPropagateResult PropagateValueComparison(const Value &lmin, const V
 	}
 }
 
-FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatistics &lstats,
-                                                                const BaseStatistics &rstats,
-                                                                ExpressionType comparison) {
+static FilterPropagateResult PropagateComparisonInternal(const BaseStatistics &lstats, const BaseStatistics &rstats,
+                                                         ExpressionType comparison, bool propagate_equal_constants) {
 	if (lstats.GetStatsType() == StatisticsType::STRING_STATS &&
 	    rstats.GetStatsType() == StatisticsType::STRING_STATS) {
 		if (lstats.GetType() != rstats.GetType()) {
@@ -118,7 +118,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 			rmax = GetStringStatsMax(rstats);
 		}
 		bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
-		return PropagateValueComparison(lmin, lmax, rmin, rmax, comparison, has_null);
+		return PropagateValueComparison(lmin, lmax, rmin, rmax, comparison, has_null, propagate_equal_constants);
 	}
 
 	switch (lstats.GetType().InternalType()) {
@@ -146,7 +146,13 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 	}
 	bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
 	return PropagateValueComparison(NumericStats::Min(lstats), NumericStats::Max(lstats), NumericStats::Min(rstats),
-	                                NumericStats::Max(rstats), comparison, has_null);
+	                                NumericStats::Max(rstats), comparison, has_null, propagate_equal_constants);
+}
+
+FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatistics &lstats,
+                                                                const BaseStatistics &rstats,
+                                                                ExpressionType comparison) {
+	return PropagateComparisonInternal(lstats, rstats, comparison, false);
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateComparison(BoundFunctionExpression &expr,
@@ -159,7 +165,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateComparison(BoundFuncti
 		return nullptr;
 	}
 	// propagate the statistics of the comparison operator
-	auto propagate_result = PropagateComparison(*left_stats, *right_stats, expr.GetExpressionType());
+	auto propagate_result = PropagateComparisonInternal(*left_stats, *right_stats, expr.GetExpressionType(), true);
 	switch (propagate_result) {
 	case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
