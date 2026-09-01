@@ -625,7 +625,8 @@ private:
 
 	friend class BaseScalarFunction<ScalarFunction>;
 	friend class BoundScalarFunction;
-	friend class FunctionIdentityPreservation;
+	friend class BuiltinFunctions;
+	friend struct AddFunction;
 	friend struct BetweenFun;
 	friend struct CastFun;
 	friend struct IsDistinctFromFun;
@@ -636,6 +637,8 @@ private:
 	friend struct OperatorLessThanEqualsFun;
 	friend struct OperatorLessThanFun;
 	friend struct OperatorNotEqualFun;
+	friend struct OperatorMultiplyFun;
+	friend struct SubtractFunction;
 };
 
 class BoundScalarFunction : public BaseScalarFunction<BoundScalarFunction>, public BoundSimpleFunction {

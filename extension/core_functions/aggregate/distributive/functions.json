@@ -1,5 +1,8 @@
 [
     {
+        "include": "duckdb/function/aggregate/distributive_functions.hpp"
+    },
+    {
         "name": "approx_count_distinct",
         "parameters": "any",
         "description": "Computes the approximate count of distinct elements using HyperLogLog.",
@@ -150,19 +153,5 @@
         "example": "string_agg(A, '-')",
         "type": "aggregate_function_set",
         "aliases": ["group_concat","listagg"]
-    },
-    {
-        "name": "sum",
-        "parameters": "arg",
-        "description": "Calculates the sum value for all tuples in arg.",
-        "example": "sum(A)",
-        "type": "aggregate_function_set"
-    },
-    {
-        "name": "sum_no_overflow",
-        "parameters": "arg",
-        "description": "Internal only. Calculates the sum value for all tuples in arg without overflow checks.",
-        "example": "sum_no_overflow(A)",
-        "type": "aggregate_function_set"
     }
 ]

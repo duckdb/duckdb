@@ -1,23 +1,13 @@
-#include "core_functions/aggregate/distributive_functions.hpp"
-#include "core_functions/aggregate/sum_helpers.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
-#include "function_identity.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
-
-struct SumFunctionIdentity {
-	static void PreserveStatistics(AggregateFunction &function) {
-		FunctionIdentityPreservation::PreserveStatistics(function);
-	}
-	static void PreserveDeserialization(AggregateFunction &function) {
-		FunctionIdentityPreservation::PreserveDeserialization(function);
-	}
-};
 
 namespace {
 
@@ -33,17 +23,6 @@ struct SumSetOperation {
 		} else {
 			CombineSumStateValue(target.value, source.value);
 		}
-	}
-	template <class STATE>
-	static void AddValues(STATE &state, idx_t count) {
-		state.is_set = true;
-	}
-};
-
-struct KahanSumSetOperation {
-	template <class STATE>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		target.Combine(source);
 	}
 	template <class STATE>
 	static void AddValues(STATE &state, idx_t count) {
@@ -218,17 +197,6 @@ struct NumericSumOperation
 	}
 };
 
-struct KahanSumOperation : public BaseSumOperation<KahanSumSetOperation, KahanAdd> {
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set) {
-			finalize_data.ReturnNull();
-		} else {
-			target = state.value;
-		}
-	}
-};
-
 struct HugeintSumOperation
     : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredAddOp<HugeintAdd>> {
 	template <class STATE, class OP>
@@ -261,7 +229,6 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		function.SetBindCallback(SumNoOverflowBind);
 		function.SetSerializeCallback(SumNoOverflowSerialize);
 		function.SetDeserializeCallback(SumNoOverflowDeserialize);
-		SumFunctionIdentity::PreserveDeserialization(function);
 		return function;
 	}
 	case PhysicalType::INT64: {
@@ -272,7 +239,6 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		function.SetBindCallback(SumNoOverflowBind);
 		function.SetSerializeCallback(SumNoOverflowSerialize);
 		function.SetDeserializeCallback(SumNoOverflowDeserialize);
-		SumFunctionIdentity::PreserveDeserialization(function);
 		return function;
 	}
 	default:
@@ -286,7 +252,6 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	                       SumNoOverflowBind);
 	aggr.SetSerializeCallback(SumNoOverflowSerialize);
 	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
-	SumFunctionIdentity::PreserveDeserialization(aggr);
 	return aggr;
 }
 
@@ -377,7 +342,6 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		        LogicalType::INTEGER, LogicalType::HUGEINT);
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		SumFunctionIdentity::PreserveStatistics(function);
 		return function;
 	}
 	case PhysicalType::INT64: {
@@ -386,7 +350,6 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		        LogicalType::BIGINT, LogicalType::HUGEINT);
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		SumFunctionIdentity::PreserveStatistics(function);
 		return function;
 	}
 	case PhysicalType::INT128: {
@@ -485,7 +448,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	return sum;
 }
 
-AggregateFunction CountIfFun::GetFunction() {
+AggregateFunction GetCountIfAggregateFunction() {
 	return GetSumAggregate(PhysicalType::BOOL);
 }
 
@@ -495,11 +458,6 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT64));
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflowDecimal());
 	return sum_no_overflow;
-}
-
-AggregateFunction KahanSumFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
-	                                                                                           LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

@@ -1,5 +1,4 @@
 #include "duckdb/function/scalar/operator_functions.hpp"
-#include "function_identity.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/legacy_bound_cast_expression.hpp"
@@ -13,13 +12,6 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
-
-struct CastFunctionIdentity {
-	static void Preserve(ScalarFunction &function) {
-		FunctionIdentityPreservation::PreserveStatistics(function);
-		FunctionIdentityPreservation::PreserveDeserialization(function);
-	}
-};
 
 static BoundCastInfo BindCastScalarFunction(ClientContext &context, const LogicalType &source,
                                             const LogicalType &target) {
@@ -174,7 +166,9 @@ ScalarFunction CastFun::GetFunction() {
 	cast_fun.SetInitStateCallback(CastInitLocalState);
 	cast_fun.SetStatisticsCallback(CastPropagateStatistics);
 	cast_fun.SetFunctionExpressionIdentity(ExpressionType::OPERATOR_CAST);
-	CastFunctionIdentity::Preserve(cast_fun);
+	cast_fun.RefreshFunctionIdentitySnapshot();
+	cast_fun.statistics_preserves_function_identity = true;
+	cast_fun.deserialization_preserves_function_identity = true;
 	return cast_fun;
 }
 

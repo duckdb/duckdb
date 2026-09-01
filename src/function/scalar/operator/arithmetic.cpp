@@ -3,7 +3,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "function_identity.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -31,23 +30,6 @@
 #include <limits>
 
 namespace duckdb {
-
-struct ArithmeticFunctionIdentity {
-	static void PreserveStatistics(ScalarFunction &function) {
-		FunctionIdentityPreservation::PreserveStatistics(function);
-	}
-	static void PreserveDeserialization(ScalarFunction &function) {
-		FunctionIdentityPreservation::PreserveDeserialization(function);
-	}
-	static void PreserveMultiplyCallbacks(ScalarFunctionSet &functions) {
-		functions.ApplyToFunctions([](ScalarFunction &function) {
-			PreserveStatistics(function);
-			if (function.HasSerializationCallbacks()) {
-				PreserveDeserialization(function);
-			}
-		});
-	}
-};
 
 template <class OP>
 static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
@@ -508,8 +490,9 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			function.SetSerializeCallback(SerializeDecimalArithmetic);
 			function.SetDeserializeCallback(DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>);
 			function.SetArgProperties({inc, inc});
-			ArithmeticFunctionIdentity::PreserveStatistics(function);
-			ArithmeticFunctionIdentity::PreserveDeserialization(function);
+			function.RefreshFunctionIdentitySnapshot();
+			function.statistics_preserves_function_identity = true;
+			function.deserialization_preserves_function_identity = true;
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
@@ -518,7 +501,8 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			                        PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
 			function.SetFallible();
 			function.SetArgProperties({inc, inc});
-			ArithmeticFunctionIdentity::PreserveStatistics(function);
+			function.RefreshFunctionIdentitySnapshot();
+			function.statistics_preserves_function_identity = true;
 			return function;
 		} else if (left_type.IsFloating()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
@@ -526,7 +510,8 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			function.SetFallible();
 			function.SetArgProperties({inc, inc});
 			function.SetStatisticsCallback(PropagateFloatingStats<AddPropagateStatistics, AddOperator>);
-			ArithmeticFunctionIdentity::PreserveStatistics(function);
+			function.RefreshFunctionIdentitySnapshot();
+			function.statistics_preserves_function_identity = true;
 			return function;
 		} else {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
@@ -834,8 +819,9 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetDeserializeCallback(
 			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>);
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
-			ArithmeticFunctionIdentity::PreserveStatistics(function);
-			ArithmeticFunctionIdentity::PreserveDeserialization(function);
+			function.RefreshFunctionIdentitySnapshot();
+			function.statistics_preserves_function_identity = true;
+			function.deserialization_preserves_function_identity = true;
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function(
@@ -844,7 +830,8 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
 			function.SetFallible();
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
-			ArithmeticFunctionIdentity::PreserveStatistics(function);
+			function.RefreshFunctionIdentitySnapshot();
+			function.statistics_preserves_function_identity = true;
 			return function;
 
 		} else if (left_type.IsFloating()) {
@@ -853,7 +840,8 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetFallible();
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			function.SetStatisticsCallback(PropagateFloatingStats<SubtractPropagateStatistics, SubtractOperator>);
-			ArithmeticFunctionIdentity::PreserveStatistics(function);
+			function.RefreshFunctionIdentitySnapshot();
+			function.statistics_preserves_function_identity = true;
 			return function;
 		} else {
 			ScalarFunction function("-", {left_type, right_type}, left_type,
@@ -1129,7 +1117,11 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	multiply.SetFallible();
-	ArithmeticFunctionIdentity::PreserveMultiplyCallbacks(multiply);
+	multiply.ApplyToFunctions([](ScalarFunction &function) {
+		function.RefreshFunctionIdentitySnapshot();
+		function.statistics_preserves_function_identity = true;
+		function.deserialization_preserves_function_identity = function.HasSerializationCallbacks();
+	});
 
 	return multiply;
 }
