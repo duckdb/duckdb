@@ -193,6 +193,11 @@ void ParsedGrammar::RemoveChoice(const string &rule_name, const grammar_cursor_f
 		throw InvalidInputException("Grammar rule '%s' does not contain a choice", rule.name);
 	}
 	auto &children = rule.recipe.expression.children;
+	if (children.size() <= 1) {
+		throw InternalException(
+		    "Choice rule '%s' has %d children, this shouldn't happen, minimum children for CHOICE is 2", rule.name,
+		    children.size());
+	}
 	auto cursor = FindChoice(rule, find_cursor);
 	children.erase_at(cursor);
 	if (children.size() == 1) {
