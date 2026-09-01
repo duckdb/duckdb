@@ -239,7 +239,6 @@ public:
 		case ExpressionClass::LEGACY_BOUND_BETWEEN:
 			return Failure(UnsupportedExpression(path, expression.GetExpressionClass()));
 		case ExpressionClass::BOUND_EXPANDED:
-		case ExpressionClass::BOUND_EXPRESSION:
 		case ExpressionClass::AGGREGATE:
 		case ExpressionClass::CASE:
 		case ExpressionClass::CAST:

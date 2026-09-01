@@ -1473,7 +1473,7 @@ TEST_CASE("Bound expression SQL export reconstructs optimizer-produced scalar fu
 	DuckDB db;
 	Connection connection(db);
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE scalar_values(i INTEGER, s VARCHAR)"));
-	REQUIRE_NO_FAIL(connection.Query("INSERT INTO scalar_values VALUES (-7, 'AbC')"));
+	REQUIRE_NO_FAIL(connection.Query("INSERT INTO scalar_values VALUES (-7, 'AbC'), (7, 'Def')"));
 	connection.BeginTransaction();
 
 	auto plan = OptimizeExportQuery(connection,
