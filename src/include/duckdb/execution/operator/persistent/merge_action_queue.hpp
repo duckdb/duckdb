@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -16,6 +17,7 @@
 #include "duckdb/parallel/interrupt.hpp"
 
 namespace duckdb {
+class Allocator;
 class ClientContext;
 
 //! BOUNDED queues hand the rows to the consumer as they are pushed, and block the producer while the consumer cannot
@@ -26,8 +28,8 @@ enum class MergeActionQueueMode : uint8_t { BOUNDED, MATERIALIZED };
 //! Scan state of a single consumer
 class MergeActionQueueScanState {
 public:
-	//! BOUNDED - the chunk that is currently being scanned
-	shared_ptr<DataChunk> current_chunk;
+	//! BOUNDED - the chunk that is currently being scanned - returned to the queue when the next chunk is scanned
+	unique_ptr<DataChunk> current_chunk;
 	//! MATERIALIZED - the scan state within the buffered data
 	ColumnDataScanState scan_state;
 	bool scan_initialized = false;
@@ -62,13 +64,15 @@ public:
 	SourceResultType Scan(DataChunk &chunk, MergeActionQueueScanState &scan_state,
 	                      const InterruptState &interrupt_state);
 	//! The number of rows that have been pushed into the queue
-	idx_t RowsPushed() const;
+	idx_t RowsPushed() const {
+		return rows_pushed;
+	}
 	//! The number of rows that are currently buffered in the queue
-	idx_t RowsBuffered() const;
+	idx_t RowsBuffered() const {
+		return rows_buffered;
+	}
 
 private:
-	struct ChunkPool;
-
 	static void CallbackAll(const vector<InterruptState> &states);
 	SinkResultType PushBounded(DataChunk &chunk, const InterruptState &interrupt_state);
 	SinkResultType PushMaterialized(DataChunk &chunk);
@@ -78,19 +82,22 @@ private:
 	                                  const InterruptState &interrupt_state);
 
 private:
+	Allocator &allocator;
 	vector<LogicalType> types;
 	MergeActionQueueMode mode;
+	//! BOUNDED - the maximum number of chunk buffers that exist at any point in time
 	idx_t max_buffered_chunks;
-	shared_ptr<ChunkPool> pool;
 	//! MATERIALIZED - the buffered rows
 	unique_ptr<ColumnDataCollection> collection;
 	ColumnDataAppendState append_state;
 
-	mutable mutex lock;
-	//! Chunks that have been pushed but not yet scanned
-	deque<shared_ptr<DataChunk>> chunks;
-	//! Chunk slots that have been reserved by a producer that is currently copying its data
-	idx_t reserved_slots = 0;
+	mutex lock;
+	//! BOUNDED - chunks that have been pushed but not yet scanned
+	deque<unique_ptr<DataChunk>> chunks;
+	//! BOUNDED - buffers that can be re-used by the next producer
+	vector<unique_ptr<DataChunk>> free_chunks;
+	//! BOUNDED - the number of chunk buffers that have been handed out to producers and consumers
+	idx_t buffer_count = 0;
 	//! Consumers that are waiting for data
 	vector<InterruptState> blocked_consumers;
 	//! Producers that are waiting for space
@@ -98,8 +105,8 @@ private:
 	bool finished = false;
 	bool cancelled = false;
 	bool consumer_finished = false;
-	idx_t rows_pushed = 0;
-	idx_t rows_buffered = 0;
+	atomic<idx_t> rows_pushed;
+	atomic<idx_t> rows_buffered;
 };
 
 } // namespace duckdb

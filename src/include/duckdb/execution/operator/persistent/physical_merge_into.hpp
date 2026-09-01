@@ -31,7 +31,9 @@ public:
 	MergeActionType action_type;
 	//! Whether or not the rows of this action can be consumed by multiple threads
 	bool parallel;
-	//! The queue that the merge into pushes the rows of this action into - set up when building the pipelines
+	//! The queue that the merge into pushes the rows of this action into - set up when building the pipelines.
+	//! This is shared because the merge into keeps the queue alive: the physical plan can destroy this source
+	//! before the merge into, whose sink state cancels the queue when it is torn down.
 	shared_ptr<MergeActionQueue> queue;
 	//! The plan that produces the rows that the merge into pushes into this source. This is not a child - the rows
 	//! are pushed in by the merge into - but the source stands in for it when the operators of the action are

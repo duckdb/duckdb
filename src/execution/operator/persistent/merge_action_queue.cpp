@@ -6,73 +6,13 @@
 
 namespace duckdb {
 
-//===--------------------------------------------------------------------===//
-// Chunk Pool
-//===--------------------------------------------------------------------===//
-//! Chunks are recycled through the pool - a chunk is handed out as a shared_ptr that returns it to the pool once the
-//! consumer that scanned it releases it
-struct MergeActionQueue::ChunkPool : public enable_shared_from_this<MergeActionQueue::ChunkPool> {
-	ChunkPool(Allocator &allocator, vector<LogicalType> types_p, idx_t max_cached_chunks)
-	    : allocator(allocator), types(std::move(types_p)), max_cached_chunks(max_cached_chunks) {
-	}
-
-	//! Acquire a chunk from the pool and copy `source` into it
-	shared_ptr<DataChunk> Copy(DataChunk &source) {
-		unique_ptr<DataChunk> result;
-		{
-			lock_guard<mutex> guard(lock);
-			if (!cached_chunks.empty()) {
-				result = std::move(cached_chunks.back());
-				cached_chunks.pop_back();
-			}
-		}
-		if (!result) {
-			result = make_uniq<DataChunk>();
-			result->Initialize(allocator, types);
-		} else {
-			result->Reset();
-		}
-		source.Copy(*result);
-
-		auto self = shared_from_this();
-		return shared_ptr<DataChunk>(result.release(), [self](DataChunk *chunk) {
-			unique_ptr<DataChunk> owned(chunk);
-			self->Release(std::move(owned));
-		});
-	}
-
-	void Release(unique_ptr<DataChunk> chunk) {
-		lock_guard<mutex> guard(lock);
-		if (cached_chunks.size() >= max_cached_chunks) {
-			return;
-		}
-		cached_chunks.push_back(std::move(chunk));
-	}
-
-	void Clear() {
-		lock_guard<mutex> guard(lock);
-		cached_chunks.clear();
-	}
-
-	Allocator &allocator;
-	vector<LogicalType> types;
-	idx_t max_cached_chunks;
-
-	mutex lock;
-	vector<unique_ptr<DataChunk>> cached_chunks;
-};
-
-//===--------------------------------------------------------------------===//
-// Merge Action Queue
-//===--------------------------------------------------------------------===//
 MergeActionQueue::MergeActionQueue(ClientContext &context, vector<LogicalType> types_p, MergeActionQueueMode mode_p,
                                    idx_t max_buffered_chunks_p)
-    : types(std::move(types_p)), mode(mode_p), max_buffered_chunks(max_buffered_chunks_p) {
+    : allocator(BufferAllocator::Get(context)), types(std::move(types_p)), mode(mode_p),
+      max_buffered_chunks(max_buffered_chunks_p), rows_pushed(0), rows_buffered(0) {
 	if (mode == MergeActionQueueMode::MATERIALIZED) {
 		collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), types);
 		collection->InitializeAppend(append_state);
-	} else {
-		pool = make_shared_ptr<ChunkPool>(BufferAllocator::Get(context), types, max_buffered_chunks + 1);
 	}
 }
 
@@ -107,31 +47,45 @@ SinkResultType MergeActionQueue::PushMaterialized(DataChunk &chunk) {
 }
 
 SinkResultType MergeActionQueue::PushBounded(DataChunk &chunk, const InterruptState &interrupt_state) {
+	// the queue is bounded by the number of chunk buffers that exist - a buffer is either free, being filled by a
+	// producer, waiting to be scanned, or being scanned by a consumer
+	unique_ptr<DataChunk> buffer;
 	{
 		lock_guard<mutex> guard(lock);
 		if (cancelled || consumer_finished) {
 			// nobody is reading from this queue anymore - discard the rows
 			return SinkResultType::NEED_MORE_INPUT;
 		}
-		if (chunks.size() + reserved_slots >= max_buffered_chunks) {
-			// the queue is full - block until a consumer has scanned a chunk
+		if (!free_chunks.empty()) {
+			buffer = std::move(free_chunks.back());
+			free_chunks.pop_back();
+			buffer->Reset();
+		} else if (buffer_count >= max_buffered_chunks) {
+			// all buffers are in use - block until a consumer releases one
 			blocked_producers.push_back(interrupt_state);
 			return SinkResultType::BLOCKED;
+		} else {
+			// claim a new buffer - it is allocated below
+			buffer_count++;
 		}
-		// reserve a slot so that concurrent producers do not overshoot the buffer size
-		reserved_slots++;
 	}
-
+	if (!buffer) {
+		buffer = make_uniq<DataChunk>();
+		buffer->Initialize(allocator, types);
+	}
 	// the merge into re-uses its chunks - copy the data (outside of the lock)
-	auto copied_chunk = pool->Copy(chunk);
+	chunk.Copy(*buffer);
 
 	vector<InterruptState> consumers;
 	{
 		lock_guard<mutex> guard(lock);
-		reserved_slots--;
-		rows_pushed += copied_chunk->size();
-		rows_buffered += copied_chunk->size();
-		chunks.push_back(std::move(copied_chunk));
+		if (cancelled || consumer_finished) {
+			free_chunks.push_back(std::move(buffer));
+			return SinkResultType::NEED_MORE_INPUT;
+		}
+		rows_pushed += buffer->size();
+		rows_buffered += buffer->size();
+		chunks.push_back(std::move(buffer));
 		consumers = std::move(blocked_consumers);
 		blocked_consumers.clear();
 	}
@@ -169,14 +123,11 @@ void MergeActionQueue::Cancel() {
 		lock_guard<mutex> guard(lock);
 		cancelled = true;
 		chunks.clear();
-		rows_buffered = 0;
+		free_chunks.clear();
 		consumers = std::move(blocked_consumers);
 		blocked_consumers.clear();
 		producers = std::move(blocked_producers);
 		blocked_producers.clear();
-	}
-	if (pool) {
-		pool->Clear();
 	}
 	CallbackAll(consumers);
 	CallbackAll(producers);
@@ -211,52 +162,46 @@ SourceResultType MergeActionQueue::ScanMaterialized(DataChunk &chunk, MergeActio
 	if (!collection->Scan(scan_state.scan_state, chunk)) {
 		return SourceResultType::FINISHED;
 	}
-	{
-		lock_guard<mutex> guard(lock);
-		rows_buffered -= MinValue<idx_t>(rows_buffered, chunk.size());
-	}
+	rows_buffered -= chunk.size();
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 SourceResultType MergeActionQueue::ScanBounded(DataChunk &chunk, MergeActionQueueScanState &scan_state,
                                                const InterruptState &interrupt_state) {
-	shared_ptr<DataChunk> next_chunk;
+	unique_ptr<DataChunk> next_chunk;
 	vector<InterruptState> producers;
+	SourceResultType result;
 	{
 		lock_guard<mutex> guard(lock);
-		// the previously scanned chunk has been consumed - hand it back to the pool
-		scan_state.current_chunk.reset();
-		if (chunks.empty()) {
-			if (finished || cancelled) {
-				return SourceResultType::FINISHED;
-			}
+		if (scan_state.current_chunk) {
+			// the previously scanned chunk has been consumed - the buffer can be re-used by a producer
+			free_chunks.push_back(std::move(scan_state.current_chunk));
+			producers = std::move(blocked_producers);
+			blocked_producers.clear();
+		}
+		if (cancelled) {
+			result = SourceResultType::FINISHED;
+		} else if (!chunks.empty()) {
+			next_chunk = std::move(chunks.front());
+			chunks.pop_front();
+			rows_buffered -= next_chunk->size();
+			result = SourceResultType::HAVE_MORE_OUTPUT;
+		} else if (finished) {
+			result = SourceResultType::FINISHED;
+		} else {
 			// no data available (yet) - block until the merge into pushes more data
 			blocked_consumers.push_back(interrupt_state);
-			return SourceResultType::BLOCKED;
+			result = SourceResultType::BLOCKED;
 		}
-		next_chunk = std::move(chunks.front());
-		chunks.pop_front();
-		rows_buffered -= next_chunk->size();
-		// a slot has freed up - wake up any producer waiting for space
-		producers = std::move(blocked_producers);
-		blocked_producers.clear();
 	}
+	// a buffer has freed up - wake up any producer that was waiting for space
 	CallbackAll(producers);
-
-	// the scan state keeps the chunk alive until the consumer scans the next chunk
-	scan_state.current_chunk = std::move(next_chunk);
-	chunk.Reference(*scan_state.current_chunk);
-	return SourceResultType::HAVE_MORE_OUTPUT;
-}
-
-idx_t MergeActionQueue::RowsPushed() const {
-	lock_guard<mutex> guard(lock);
-	return rows_pushed;
-}
-
-idx_t MergeActionQueue::RowsBuffered() const {
-	lock_guard<mutex> guard(lock);
-	return rows_buffered;
+	if (result == SourceResultType::HAVE_MORE_OUTPUT) {
+		// the scan state keeps the chunk alive until the consumer scans the next chunk
+		scan_state.current_chunk = std::move(next_chunk);
+		chunk.Reference(*scan_state.current_chunk);
+	}
+	return result;
 }
 
 } // namespace duckdb
