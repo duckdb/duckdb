@@ -291,6 +291,11 @@ unique_ptr<HTTPClient> HTTPUtil::InitializeClient(HTTPParams &http_params, const
 #endif
 }
 
+unique_ptr<HTTPClient> HTTPUtil::InitializeClientExtended(HTTPParams &http_params, const string &proto_host_port,
+                                                          const HTTPClientInitializationOptions &) {
+	return InitializeClient(http_params, proto_host_port);
+}
+
 void HTTPUtil::CloseClient(unique_ptr<HTTPClient> &&) {
 	// default: no-op, client is destroyed
 }
@@ -304,8 +309,10 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 		}
 	}
 
+	auto cache_policy = HTTPClientCachePolicy::DEFAULT;
 	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
 		unique_ptr<HTTPResponse> response;
+		cache_policy = HTTPClientCachePolicy::DEFAULT;
 
 		// When logging is enabled, we collect request timings
 		if (request.params.logger) {
@@ -317,9 +324,13 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 			request.request_monotonic_start = TimePoint::Tick();
 			response = client->Request(request);
 		} catch (...) {
+			cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
 			request.request_monotonic_end = TimePoint::Tick();
 			LogRequest(request, nullptr);
 			throw;
+		}
+		if (!response || response->HasRequestError()) {
+			cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
 		}
 		request.request_monotonic_end = TimePoint::Tick();
 		LogRequest(request, response ? response.get() : nullptr);
@@ -327,7 +338,11 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 	});
 
 	// Refresh the client on retries
-	std::function<void(void)> on_retry([&]() { client = InitializeClient(request.params, request.proto_host_port); });
+	std::function<void(void)> on_retry([&]() {
+		HTTPClientInitializationOptions options;
+		options.cache_policy = cache_policy;
+		client = InitializeClientExtended(request.params, request.proto_host_port, options);
+	});
 
 	return RunRequestWithRetry(on_request, request, on_retry);
 }
