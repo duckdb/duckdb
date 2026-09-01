@@ -245,41 +245,48 @@ void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
 	auto block_alloc_size = run.handles[0]->GetBlockAllocSize();
 	auto total_block_size = block_count * block_alloc_size;
 	// prefetching is best effort, on memory pressure the run is left for the scan to pin its blocks on demand
-	try {
-		auto batch_memory = RegisterMemory(MemoryTag::BASE_TABLE, total_block_size, 0, true);
-		auto intermediate_buffer = Pin(batch_memory);
+	unique_ptr<FileBuffer> staging_reuse;
+	auto staging_result = buffer_pool.EvictBlocks(context, MemoryTag::BASE_TABLE, GetAllocSize(total_block_size),
+	                                              buffer_pool.maximum_memory, &staging_reuse);
+	if (!staging_result.success) {
+		return;
+	}
+	// the reservation is held for the staging buffer's lifetime, released when this function returns
+	auto intermediate_buffer =
+	    ConstructManagedBuffer(total_block_size, 0, std::move(staging_reuse), FileBufferType::MANAGED_BUFFER);
 
-		// perform a batch read of the blocks into the buffer
-		auto &block_manager = run.handles[0]->GetBlockManager();
-		block_manager.ReadBlocks(context, intermediate_buffer.GetFileBuffer(), run.first_block, block_count);
+	// perform a batch read of the blocks into the buffer
+	auto &block_manager = run.handles[0]->GetBlockManager();
+	block_manager.ReadBlocks(context, *intermediate_buffer, run.first_block, block_count);
 
-		// the blocks are read, now assign them to the individual block handles
-		for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
-			auto &handle = run.handles[block_idx];
-			D_ASSERT(handle->BlockId() == run.first_block + NumericCast<block_id_t>(block_idx));
+	// the blocks are read, now assign them to the individual block handles
+	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
+		auto &handle = run.handles[block_idx];
+		D_ASSERT(handle->BlockId() == run.first_block + NumericCast<block_id_t>(block_idx));
 
-			// reserve memory for the block
-			auto &block_memory = handle->GetMemory();
-			idx_t required_memory = block_memory.GetMemoryUsage();
-			unique_ptr<FileBuffer> reusable_buffer;
-			auto reservation = EvictBlocksOrThrow(context, block_memory.GetMemoryTag(), required_memory,
-			                                      &reusable_buffer, "failed to pin block of size %s%s",
-			                                      StringUtil::BytesToHumanReadableString(required_memory));
-			// load the block, the handle is not kept, the scan pins it again before it can be evicted
-			BufferHandle buf;
-			{
-				auto lock = block_memory.GetLock();
-				if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
-					// the block is loaded already by another thread, free up the reservation and continue
-					reservation.Resize(0);
-					continue;
-				}
-				auto block_ptr = intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * block_alloc_size;
-				buf = handle->LoadFromBuffer(lock, block_ptr, std::move(reusable_buffer), std::move(reservation));
-			}
+		// reserve memory for the block
+		auto &block_memory = handle->GetMemory();
+		idx_t required_memory = block_memory.GetMemoryUsage();
+		unique_ptr<FileBuffer> reusable_buffer;
+		auto block_result = buffer_pool.EvictBlocks(context, block_memory.GetMemoryTag(), required_memory,
+		                                            buffer_pool.maximum_memory, &reusable_buffer);
+		if (!block_result.success) {
+			// the remaining blocks do not fit next to what the pool holds, the scan pins them on demand
+			return;
 		}
-	} catch (OutOfMemoryException &) {
-		// the run does not fit next to what the pool holds, its blocks are pinned on demand during the scan
+		// load the block, the handle is not kept, the scan pins it again before it can be evicted
+		BufferHandle buf;
+		{
+			auto lock = block_memory.GetLock();
+			if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
+				// the block is loaded already by another thread, free up the reservation and continue
+				block_result.reservation.Resize(0);
+				continue;
+			}
+			auto block_ptr = intermediate_buffer->InternalBuffer() + block_idx * block_alloc_size;
+			buf = handle->LoadFromBuffer(lock, block_ptr, std::move(reusable_buffer),
+			                             std::move(block_result.reservation));
+		}
 	}
 }
 

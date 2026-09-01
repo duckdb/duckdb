@@ -493,7 +493,6 @@ public:
 			if (TryYieldControl(data_p)) {
 				return true;
 			}
-			context.InterruptCheck();
 		}
 	}
 
