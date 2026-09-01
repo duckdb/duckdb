@@ -593,8 +593,9 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 		return false;
 	}
 
-	// The index stores physical table column IDs, while the table scan stores logical table column IDs.
-	// Resolve an indexed physical column to its position in the current scan projection.
+	// The index stores physical table column IDs, while input.column_indexes contains logical table column IDs
+	// for every column read by the scan, including filter-only columns. Resolve an indexed physical column to its
+	// position in this scan input column list.
 	auto find_scan_position = [&](column_t physical_column_id) -> optional_idx {
 		auto &indexed_column = column_list.GetColumn(PhysicalIndex(physical_column_id));
 		for (idx_t i = 0; i < input.column_indexes.size(); i++) {
@@ -605,17 +606,17 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 		return optional_idx();
 	};
 
-	// Get the ART column and find it in the current scan projection.
+	// Get the ART column and find it in the current scan input column list.
 	auto &col = column_list.GetColumn(PhysicalIndex(indexed_columns[0]));
 	auto scan_position = find_scan_position(indexed_columns[0]);
 
-	// No filter matches the ART column.
+	// The ART column is not part of the current scan input.
 	if (!scan_position.IsValid()) {
 		return false;
 	}
 
 	// The column index of a bound column reference in an unbound index expression is an ordinal into
-	// indexed_columns. Rebind every reference to its position in the current scan projection.
+	// indexed_columns. Rebind every reference to its position in the current scan input column list.
 	bool rewrite_possible = true;
 	ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
 		if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
