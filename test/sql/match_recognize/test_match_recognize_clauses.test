@@ -368,3 +368,20 @@ SELECT 1 FROM flags MATCH_RECOGNIZE(
 )
 ----
 <REGEX>:Binder Error:.*nosuchcol.*
+
+# DEFINES is accepted wherever DEFINE is, since the clause reads as a list of definitions
+
+query I
+SELECT count(*) FROM flags MATCH_RECOGNIZE(
+    ORDER BY t MEASURES count(*) AS n ONE ROW PER MATCH
+    PATTERN (RISE+) DEFINES RISE AS RISE.vol > 0
+)
+----
+2
+
+query I
+SELECT count(*) FROM flags MATCH_RECOGNIZE(
+    ORDER BY t ALL ROWS PER MATCH PATTERN (rising+) DEFINES AUTO
+)
+----
+2

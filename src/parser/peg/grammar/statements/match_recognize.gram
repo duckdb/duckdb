@@ -8,7 +8,7 @@ MRRows <- RowsPerMatch
 MRSkip <- AfterMatchSkip
 MRPattern <- PatternClause
 MRSubset <- SubsetClause
-MRDefineAuto <- 'DEFINE' 'AUTO'
+MRDefineAuto <- ('DEFINE' / 'DEFINES') 'AUTO'
 MRDefine <- DefineClause
 
 MeasuresClause <- 'MEASURES' List(MeasuresElement)
@@ -53,5 +53,5 @@ QuantifierExact <- NumberLiteral
 SubsetClause <- 'SUBSET' List(SubsetElement)
 SubsetElement <- ColLabelOrString '=' Parens(List(ColLabelOrString))
 
-DefineClause <- 'DEFINE' List(DefineElement)
+DefineClause <- ('DEFINE' / 'DEFINES') List(DefineElement)
 DefineElement <- ColLabelOrString 'AS' Expression

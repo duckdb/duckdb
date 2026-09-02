@@ -453,6 +453,7 @@ UnreservedKeyword <- 'ABORT' /
 'DEFAULTS' /
 'DEFERRED' /
 'DEFINER' /
+'DEFINES' /
 'DELETE' /
 'DELIMITER' /
 'DELIMITERS' /
@@ -614,7 +615,6 @@ UnreservedKeyword <- 'ABORT' /
 'READ' /
 'REASSIGN' /
 'RECHECK' /
-'RECOGNIZE' /
 'RECURSIVE' /
 'REF' /
 'REFERENCING' /
@@ -1640,7 +1640,7 @@ MRRows <- RowsPerMatch
 MRSkip <- AfterMatchSkip
 MRPattern <- PatternClause
 MRSubset <- SubsetClause
-MRDefineAuto <- 'DEFINE' 'AUTO'
+MRDefineAuto <- ('DEFINE' / 'DEFINES') 'AUTO'
 MRDefine <- DefineClause
 
 MeasuresClause <- 'MEASURES' List(MeasuresElement)
@@ -1685,7 +1685,7 @@ QuantifierExact <- NumberLiteral
 SubsetClause <- 'SUBSET' List(SubsetElement)
 SubsetElement <- ColLabelOrString '=' Parens(List(ColLabelOrString))
 
-DefineClause <- 'DEFINE' List(DefineElement)
+DefineClause <- ('DEFINE' / 'DEFINES') List(DefineElement)
 DefineElement <- ColLabelOrString 'AS' Expression
 
 MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?

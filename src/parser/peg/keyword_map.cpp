@@ -158,6 +158,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("defaults");
 	unreserved_keyword_map.insert("deferred");
 	unreserved_keyword_map.insert("definer");
+	unreserved_keyword_map.insert("defines");
 	unreserved_keyword_map.insert("delete");
 	unreserved_keyword_map.insert("delimiter");
 	unreserved_keyword_map.insert("delimiters");
@@ -319,7 +320,6 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("read");
 	unreserved_keyword_map.insert("reassign");
 	unreserved_keyword_map.insert("recheck");
-	unreserved_keyword_map.insert("recognize");
 	unreserved_keyword_map.insert("recursive");
 	unreserved_keyword_map.insert("ref");
 	unreserved_keyword_map.insert("referencing");
