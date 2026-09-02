@@ -21,6 +21,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -33,7 +34,8 @@ static LogicalPlanVerificationPath ChildPath(const LogicalPlanVerificationPath &
 	return child_path;
 }
 
-static bool IsAtOrBelowPath(const LogicalPlanVerificationPath &path, const LogicalPlanVerificationPath &candidate) {
+static bool IsAtOrBelowPath(const Expression &expression, const LogicalPlanVerificationPath &path,
+                            const LogicalPlanVerificationPath &candidate) {
 	if (candidate.root != path.root || candidate.components.size() < path.components.size()) {
 		return false;
 	}
@@ -42,17 +44,38 @@ static bool IsAtOrBelowPath(const LogicalPlanVerificationPath &path, const Logic
 			return false;
 		}
 	}
+	optional_ptr<const Expression> current_expression = expression;
+	for (idx_t component_index = path.components.size(); component_index < candidate.components.size();
+	     component_index++) {
+		auto &component = candidate.components[component_index];
+		if (component.type != LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD) {
+			return false;
+		}
+		optional_ptr<const Expression> selected_child;
+		idx_t child_index = 0;
+		ExpressionIterator::EnumerateChildren(*current_expression, [&](const Expression &child) {
+			if (child_index == component.ordinal) {
+				selected_child = child;
+			}
+			child_index++;
+		});
+		if (!selected_child) {
+			return false;
+		}
+		current_expression = selected_child;
+	}
 	return true;
 }
 
 static bool IsValidFunctionSQLExportResultForPath(const FunctionSQLExportResult &result,
-                                                  const LogicalPlanVerificationPath &path) {
+                                                  const LogicalPlanVerificationPath &path,
+                                                  const Expression &expression) {
 	if (!result.IsValid()) {
 		return false;
 	}
 	for (auto &issue : result.GetIssues()) {
 		if (issue.phase != LogicalPlanVerificationPhase::EXPRESSION_EXPORT || !issue.path ||
-		    !IsAtOrBelowPath(path, *issue.path)) {
+		    !IsAtOrBelowPath(expression, path, *issue.path)) {
 			return false;
 		}
 	}
@@ -661,7 +684,7 @@ private:
 			ScalarFunctionSQLExportInput input(function, expression.BindInfo().get(), std::move(children), path,
 			                                   identity);
 			auto result = recipe->callback(input);
-			if (!IsValidFunctionSQLExportResultForPath(result, path)) {
+			if (!IsValidFunctionSQLExportResultForPath(result, path, expression)) {
 				return Failure(
 				    InternalInvariant(path, "Scalar function SQL export callback returned an invalid result",
 				                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
@@ -787,7 +810,7 @@ private:
 			    function, expression.BindInfo().get(), std::move(arguments), std::move(filter), std::move(order_bys),
 			    expression.GetAggregateType(), expression.StateExportMode(), path, identity);
 			auto result = recipe->callback(input);
-			if (!IsValidFunctionSQLExportResultForPath(result, path)) {
+			if (!IsValidFunctionSQLExportResultForPath(result, path, expression)) {
 				return Failure(
 				    InternalInvariant(path, "Aggregate function SQL export callback returned an invalid result",
 				                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
