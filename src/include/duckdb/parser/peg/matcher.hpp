@@ -205,11 +205,14 @@ struct MatchState {
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
+//! Input to start a Matcher execution
 struct MatchInput {
 	const Matcher &matcher;
 	MatchState &state;
 };
 
+//! Essentially a std::variant<MatchInput, MatcherResult>
+//! Produced by a MatchContinuation::Resume call, controlling the next step in the execution
 class MatchStep {
 public:
 	static MatchStep Child(MatchInput input);
