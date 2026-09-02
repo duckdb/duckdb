@@ -6,13 +6,13 @@
 
 namespace duckdb {
 
-class IdentifierMatcher : public Matcher {
+class IdentifierMatcher : public AtomicMatcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
 
 public:
 	IdentifierMatcher(SuggestionState suggestion_type, const PEGKeywordHelper &keyword_helper_p)
-	    : Matcher(TYPE), suggestion_type(suggestion_type), keyword_helper(keyword_helper_p) {
+	    : AtomicMatcher(TYPE), suggestion_type(suggestion_type), keyword_helper(keyword_helper_p) {
 	}
 
 	bool IsQuoted(const string &text) const {
@@ -45,7 +45,7 @@ public:
 		return Tokenizer::CharacterIsKeyword(text[0]);
 	}
 
-	MatcherResult MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchAtomic(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
 			return MatcherResult::Failure();
@@ -196,7 +196,7 @@ public:
 	    : IdentifierMatcher(suggestion_type, keyword_helper) {
 	}
 
-	MatcherResult MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchAtomic(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
 			return MatcherResult::Failure();

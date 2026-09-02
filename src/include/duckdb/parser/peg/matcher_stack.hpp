@@ -13,13 +13,6 @@
 
 namespace duckdb {
 
-using match_frame_index_t = idx_t;
-
-class MatchStack;
-
-enum class MatchFrameState : uint8_t { INITIALIZE, EXECUTE };
-enum class MatchResultState : uint8_t { NONE, FAILURE, SUCCESS };
-
 struct PackratMatchState {
 	static bool IsEnabled(const Matcher &matcher, const MatchState &state) {
 		return state.packrat_cache && matcher.IsPackratMemoized() && matcher.GetPackratId().IsValid();
@@ -34,36 +27,22 @@ private:
 };
 
 struct MatchStackFrame {
-	MatchStackFrame(match_frame_index_t frame_index, const Matcher &matcher, MatchState &state);
-	virtual ~MatchStackFrame() = default;
+	MatchStackFrame(const Matcher &matcher, MatchState &state);
 
-	virtual void Execute(MatchStack &stack) = 0;
-	void SetResult(const MatcherResult &result);
-	bool HasResult() const;
-	MatcherResult GetResult() const;
-	void SetChildResult(const MatcherResult &result);
-	bool HasChildResult() const;
-	MatcherResult TakeChildResult();
-
-	const match_frame_index_t frame_index;
 	const Matcher &matcher;
 	MatchState &match_state;
-	MatchFrameState state = MatchFrameState::INITIALIZE;
-	MatchResultState result_state = MatchResultState::NONE;
-	optional_ptr<ParseResult> parse_result;
-	MatchResultState child_result_state = MatchResultState::NONE;
-	optional_ptr<ParseResult> child_parse_result;
+	unique_ptr<MatchContinuation> continuation;
+	optional<MatcherResult> child_result;
+	optional<MatcherResult> result;
 	PackratMatchState packrat_state;
+	bool initialized = false;
 };
 
 class MatchStack {
 public:
 	MatcherResult Execute(const Matcher &matcher, MatchState &state);
-	void PushChildFrame(MatchStackFrame &parent, const Matcher &matcher, MatchState &state);
 
 private:
-	static bool IsTerminalMatcher(const Matcher &matcher);
-	MatcherResult ExecuteTerminalMatcher(const Matcher &matcher, MatchState &state);
 	void PushFrame(const Matcher &matcher, MatchState &state);
 	void InitializeFrame(MatchStackFrame &frame);
 	void ExecuteFrame(MatchStackFrame &frame);

@@ -5,16 +5,16 @@
 
 namespace duckdb {
 
-class KeywordMatcher : public Matcher {
+class KeywordMatcher : public AtomicMatcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::KEYWORD;
 
 public:
 	explicit KeywordMatcher(string keyword_p, const KeywordInfo &info)
-	    : Matcher(TYPE), keyword(std::move(keyword_p)), info(info) {
+	    : AtomicMatcher(TYPE), keyword(std::move(keyword_p)), info(info) {
 	}
 
-	MatcherResult MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchAtomic(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
 			return MatcherResult::Failure();

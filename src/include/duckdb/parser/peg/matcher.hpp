@@ -27,6 +27,7 @@ class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
+class MatchContinuation;
 
 enum class SuggestionState : uint8_t {
 	SUGGEST_KEYWORD,
@@ -204,6 +205,46 @@ struct MatchState {
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
+struct MatchChildRequest {
+	MatchChildRequest(const Matcher &matcher_p, MatchState &state_p) : matcher(matcher_p), state(state_p) {
+	}
+
+	const Matcher &matcher;
+	MatchState &state;
+};
+
+class MatchStep {
+public:
+	static MatchStep Child(const Matcher &matcher, MatchState &state);
+	static MatchStep Complete(MatcherResult result);
+
+	bool NeedsChild() const {
+		return bool(child_matcher);
+	}
+
+	MatchChildRequest GetChild();
+	MatcherResult GetResult() const;
+
+private:
+	MatchStep(optional_ptr<const Matcher> child_matcher_p, optional_ptr<MatchState> child_state_p,
+	          optional<MatcherResult> result_p)
+	    : child_matcher(child_matcher_p), child_state(child_state_p), result(std::move(result_p)) {
+	}
+
+private:
+	optional_ptr<const Matcher> child_matcher;
+	optional_ptr<MatchState> child_state;
+	optional<MatcherResult> result;
+};
+
+class MatchContinuation {
+public:
+	virtual ~MatchContinuation() = default;
+
+	//! Resume matching, optionally with the result of the previously requested child.
+	virtual MatchStep Resume(optional<MatcherResult> child_result) = 0;
+};
+
 enum class MatcherType {
 	KEYWORD,
 	LIST,
@@ -214,18 +255,20 @@ enum class MatcherType {
 	STRING_LITERAL,
 	NUMBER_LITERAL,
 	OPERATOR,
-	END_OF_INPUT
+	END_OF_INPUT,
+	CUSTOM
 };
 
 class Matcher {
 public:
-	explicit Matcher(MatcherType type) : type(type) {
+	explicit Matcher(MatcherType type = MatcherType::CUSTOM) : type(type) {
 	}
 	virtual ~Matcher() = default;
 
 	//! Match and construct the parse result
 	MatcherResult MatchParseResult(MatchState &state) const;
-	virtual MatcherResult MatchParseResultInternal(MatchState &state) const = 0;
+	//! Create matcher-local state that can be scheduled recursively or iteratively.
+	virtual unique_ptr<MatchContinuation> StartMatch(MatchState &state) const = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
@@ -282,6 +325,15 @@ protected:
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
 	optional_ptr<const CompiledGrammarRule> rule;
+};
+
+class AtomicMatcher : public Matcher {
+public:
+	explicit AtomicMatcher(MatcherType type) : Matcher(type) {
+	}
+
+	unique_ptr<MatchContinuation> StartMatch(MatchState &state) const final;
+	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
 };
 
 class KeywordInfo {

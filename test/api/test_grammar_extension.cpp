@@ -24,6 +24,53 @@ static unique_ptr<TransformResultValue> TransformGrammarExtensionTestAtom(PEGTra
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement));
 }
 
+class GrammarExtensionTestMatchContinuation final : public MatchContinuation {
+public:
+	GrammarExtensionTestMatchContinuation(const Matcher &child_p, MatchState &state_p)
+	    : child(child_p), state(state_p), child_state(state_p) {
+	}
+
+	MatchStep Resume(optional<MatcherResult> child_result) override {
+		D_ASSERT(awaiting_child == child_result.has_value());
+		if (!child_result) {
+			awaiting_child = true;
+			return MatchStep::Child(child, child_state);
+		}
+		awaiting_child = false;
+		if (child_result->IsSuccess()) {
+			state.token_iterator.SetPosition(child_state.token_iterator);
+		}
+		return MatchStep::Complete(*child_result);
+	}
+
+private:
+	const Matcher &child;
+	MatchState &state;
+	MatchState child_state;
+	bool awaiting_child = false;
+};
+
+class GrammarExtensionTestMatcher final : public Matcher {
+public:
+	GrammarExtensionTestMatcher() : child("ANSWER", KeywordInfo()) {
+	}
+
+	unique_ptr<MatchContinuation> StartMatch(MatchState &state) const override {
+		return make_uniq<GrammarExtensionTestMatchContinuation>(child, state);
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return child.AddSuggestion(state);
+	}
+
+	string ToString() const override {
+		return "GrammarExtensionTestMatcher";
+	}
+
+private:
+	KeywordMatcher child;
+};
+
 class AddGrammarExtensionTestValue final : public GrammarExtension {
 public:
 	AddGrammarExtensionTestValue() : GrammarExtension("extension_test_value", "GrammarExtensionTestValue") {
@@ -38,7 +85,7 @@ public:
 			    if (!keyword_helper.KeywordCategoryType("ANSWER", PEGKeywordCategory::KEYWORD_UNRESERVED)) {
 				    throw InternalException("Parser change keyword is missing from the compiled keyword helper");
 			    }
-			    return make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper);
+			    return make_uniq<GrammarExtensionTestMatcher>();
 		    }));
 		return changes;
 	}
@@ -82,6 +129,8 @@ TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_exten
 	RegisterGrammarExtensionTestSyntax(*db.instance);
 	Connection con(db);
 	ActivateGrammarExtensionTestSyntax(con);
+	CheckGrammarExtensionTestSyntax(con);
+	REQUIRE_NO_FAIL(*con.Query("SET debug_heap_based_parser = true"));
 	CheckGrammarExtensionTestSyntax(con);
 }
 

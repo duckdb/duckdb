@@ -18,36 +18,37 @@
 
 namespace duckdb {
 
+static MatcherResult ExecuteRecursive(const Matcher &matcher, MatchState &state) {
+	state.rule = matcher.GetRule();
+	PackratMatchState packrat_state;
+	if (PackratMatchState::IsEnabled(matcher, state)) {
+		auto cached_result = packrat_state.TryLoadCachedResult(matcher, state);
+		if (cached_result) {
+			return *cached_result;
+		}
+	}
+
+	auto continuation = matcher.StartMatch(state);
+	optional<MatcherResult> child_result;
+	while (true) {
+		auto step = continuation->Resume(std::move(child_result));
+		child_result.reset();
+		if (!step.NeedsChild()) {
+			auto result = step.GetResult();
+			packrat_state.StoreResult(matcher, state, result);
+			return result;
+		}
+		auto child = step.GetChild();
+		child_result = child.matcher.MatchParseResult(child.state);
+	}
+}
+
 MatcherResult Matcher::MatchParseResult(MatchState &state) const {
-	state.rule = rule;
 	if (state.use_heap_based_parser) {
 		MatchStack stack;
 		return stack.Execute(*this, state);
 	}
-	auto result = MatcherResult::Failure();
-	if (!state.packrat_cache || !IsPackratMemoized() || !GetPackratId().IsValid()) {
-		result = MatchParseResultInternal(state);
-	} else {
-		auto token_index = state.token_iterator.Position();
-		auto cached_result = state.packrat_cache->Lookup(*this, token_index);
-		if (cached_result) {
-			state.token_iterator.SetPosition(cached_result->token_index_after);
-			state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
-			if (cached_result->success) {
-				result = MatcherResult::Success(cached_result->result);
-			}
-		} else {
-			auto max_token_index_before = state.GetMaxTokenIndex();
-			result = MatchParseResultInternal(state);
-			ParserPackratEntry cache_entry;
-			cache_entry.success = result.IsSuccess();
-			cache_entry.token_index_after = state.token_iterator.Position();
-			cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
-			cache_entry.result = result.GetParseResult();
-			state.packrat_cache->Store(*this, token_index, cache_entry);
-		}
-	}
-	return result;
+	return ExecuteRecursive(*this, state);
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
