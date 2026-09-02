@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from benchmark import BenchmarkRunner
+from benchmark import BenchmarkRunner, find_benchmark_cache_directory
 from comparison import (
     MAX_CONFIRMATION_RUNS,
     MIN_CONFIRMATION_RUNS,
@@ -137,10 +137,7 @@ def parse_arguments():
 
 
 def clear_benchmark_caches(runner_paths: List[str]):
-    cache_paths = {
-        os.path.abspath(os.path.join(os.path.dirname(runner_path), "..", "..", "..", "duckdb_benchmark_data"))
-        for runner_path in runner_paths
-    }
+    cache_paths = {find_benchmark_cache_directory(runner_path) for runner_path in runner_paths}
     for cache_path in cache_paths:
         shutil.rmtree(cache_path, ignore_errors=True)
 
@@ -168,11 +165,33 @@ def run_paired_samples(
     planned_runs = sum(batch_sizes)
     for batch_size in batch_sizes:
         if batch_index % 2 == 0:
-            old_batch, old_failure = old_runner.run(benchmark, batch_size)
-            new_batch, new_failure = new_runner.run(benchmark, batch_size)
+            first_runner = old_runner
+            second_runner = new_runner
         else:
-            new_batch, new_failure = new_runner.run(benchmark, batch_size)
-            old_batch, old_failure = old_runner.run(benchmark, batch_size)
+            first_runner = new_runner
+            second_runner = old_runner
+
+        first_batch, first_failure = first_runner.run(benchmark, batch_size)
+        second_batch, second_failure = second_runner.run(benchmark, batch_size)
+        if first_runner is old_runner:
+            old_batch, old_failure = first_batch, first_failure
+            new_batch, new_failure = second_batch, second_failure
+        else:
+            new_batch, new_failure = first_batch, first_failure
+            old_batch, old_failure = second_batch, second_failure
+
+        if second_failure:
+            second_failure += f"\nComparison batch {batch_index + 1} ran {first_runner.label} immediately before "
+            second_failure += f"{second_runner.label}."
+            if first_runner.cache_directory == second_runner.cache_directory:
+                second_failure += (
+                    f" Both runners use the same benchmark cache, so files may have been last written by "
+                    f"{first_runner.label}."
+                )
+            if second_runner is old_runner:
+                old_failure = second_failure
+            else:
+                new_failure = second_failure
 
         old_batch = old_batch or []
         new_batch = new_batch or []
@@ -806,8 +825,8 @@ def print_failure_summary(failures: List[BenchmarkResult]):
     for index, result in enumerate(failures, start=1):
         print(f"{index}: {result.benchmark}")
         if result.old_failure != result.new_failure:
-            print("Base:\n", result.old_failure)
-            print("PR:\n", result.new_failure)
+            print("Base:\n", result.old_failure or "No failure")
+            print("PR:\n", result.new_failure or "No failure")
         else:
             print(result.old_failure)
         print("-", 52)
@@ -859,7 +878,7 @@ def main() -> int:
     suite = Path(args.benchmarks).stem
     old_runner = BenchmarkRunner(
         args.old,
-        "base",
+        "Base",
         args.threads,
         args.memory_limit,
         args.verbose,

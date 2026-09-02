@@ -20,7 +20,9 @@ STDOUT_HEADER = '''====================================================
 '''
 
 
-def benchmark_failure_message(benchmark: str, row: List[str], trailing_lines: List[str], stdout: str) -> str:
+def benchmark_failure_message(
+    label: str, benchmark: str, row: List[str], trailing_lines: List[str], stdout: str
+) -> str:
     run = row[1].strip() if len(row) > 1 else ""
     status = row[2].strip() if len(row) > 2 else "malformed output"
     location = f" for {benchmark}"
@@ -30,7 +32,7 @@ def benchmark_failure_message(benchmark: str, row: List[str], trailing_lines: Li
     details = "\n".join(trailing_lines).strip()
     if not details:
         details = stdout.strip()
-    message = f"Benchmark runner reported {status}{location}"
+    message = f"{label} benchmark runner reported {status}{location}"
     if details:
         message += f":\n{details}"
     return message
@@ -48,6 +50,10 @@ def find_extension_directory(runner_path: str) -> Optional[str]:
         directories = ", ".join(str(path) for path in extension_directories)
         raise ValueError(f"Found multiple extension directories for {runner_path}: {directories}")
     return str(extension_directories[0])
+
+
+def find_benchmark_cache_directory(runner_path: str) -> str:
+    return os.path.abspath(os.path.join(os.path.dirname(runner_path), "..", "..", "..", "duckdb_benchmark_data"))
 
 
 class BenchmarkRunner:
@@ -69,6 +75,7 @@ class BenchmarkRunner:
         self.disable_timeout = disable_timeout
         self.benchmark_arguments = benchmark_arguments or []
         self.extension_directory = find_extension_directory(path)
+        self.cache_directory = find_benchmark_cache_directory(path)
 
     def run(self, benchmark: str, timed_runs: int) -> Tuple[Optional[List[float]], Optional[str]]:
         arguments = [self.path, benchmark]
@@ -133,7 +140,9 @@ class BenchmarkRunner:
             try:
                 timings.append(float(row[2]))
             except (IndexError, ValueError):
-                message = benchmark_failure_message(benchmark, row, stderr_lines[line_index + 1 :], process.stdout)
+                message = benchmark_failure_message(
+                    self.label, benchmark, row, stderr_lines[line_index + 1 :], process.stdout
+                )
                 print(f"Failed to run benchmark {benchmark}: {message}", flush=True)
                 return None, message
 
