@@ -485,12 +485,20 @@ auto Connection::ParseType(std::string_view text) -> LogicalType {
 	return detail::Factory::Make<LogicalType>(type);
 }
 
+auto Connection::CreateType(std::string_view name) -> LogicalType {
+	return CreateType(name, {});
+}
+
 auto Connection::CreateType(std::string_view name, const std::vector<TypeParam> &params) -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
 	CheckedAPICall(duckdb_v2_connection_create_type_from_name, handle(), ToStr(name), split.names(), split.values(),
 	               static_cast<idx_t>(params.size()), &type);
 	return detail::Factory::Make<LogicalType>(type);
+}
+
+auto Connection::CreateType(LogicalTypeId id) -> LogicalType {
+	return CreateType(id, {});
 }
 
 auto Connection::CreateType(LogicalTypeId id, const std::vector<TypeParam> &params) -> LogicalType {
@@ -647,12 +655,20 @@ auto Context::Log(LogLevel level, std::string_view message, std::string_view log
 	               ToStr(message));
 }
 
+auto Context::CreateType(std::string_view name) const -> LogicalType {
+	return CreateType(name, {});
+}
+
 auto Context::CreateType(std::string_view name, const std::vector<TypeParam> &params) const -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
 	CheckedAPICall(duckdb_v2_context_create_type_from_name, handle(), ToStr(name), split.names(), split.values(),
 	               static_cast<idx_t>(params.size()), &type);
 	return detail::Factory::Make<LogicalType>(type);
+}
+
+auto Context::CreateType(LogicalTypeId id) const -> LogicalType {
+	return CreateType(id, {});
 }
 
 auto Context::CreateType(LogicalTypeId id, const std::vector<TypeParam> &params) const -> LogicalType {
