@@ -263,6 +263,9 @@ public:
 	MatcherResult MatchParseResult(MatchState &state) const;
 	//! Create matcher-local state that can be scheduled recursively or iteratively.
 	virtual unique_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
+	virtual bool IsAtomic() const {
+		return false;
+	}
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
@@ -326,6 +329,9 @@ public:
 	explicit AtomicMatcher(MatcherType type) : Matcher(type) {
 	}
 
+	bool IsAtomic() const final {
+		return true;
+	}
 	unique_ptr<MatchProcess> StartMatch(MatchState &state) const final;
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
 };

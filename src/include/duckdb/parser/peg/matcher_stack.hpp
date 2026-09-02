@@ -47,6 +47,7 @@ public:
 	MatcherResult Execute(MatchInput input);
 
 private:
+	MatcherResult ExecuteAtomicMatcher(MatchInput input);
 	void PushFrame(MatchInput input);
 	void InitializeFrame(MatchStackFrame &frame);
 	void ExecuteFrame(MatchStackFrame &frame);

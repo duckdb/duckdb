@@ -39,6 +39,25 @@ bool MatchStackFrame::IsInitialized() const {
 	return process || result;
 }
 
+MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
+	auto &matcher = input.matcher;
+	auto &state = input.state;
+	D_ASSERT(matcher.IsAtomic());
+	state.rule = matcher.GetRule();
+
+	PackratMatchState packrat_state;
+	if (PackratMatchState::IsEnabled(matcher, state)) {
+		auto cached_result = packrat_state.TryLoadCachedResult(matcher, state);
+		if (cached_result) {
+			return *cached_result;
+		}
+	}
+
+	auto result = static_cast<const AtomicMatcher &>(matcher).MatchAtomic(state);
+	packrat_state.StoreResult(matcher, state, result);
+	return result;
+}
+
 void MatchStack::PushFrame(MatchInput input) {
 	input.state.rule = input.matcher.GetRule();
 	frames.push_back(make_uniq<MatchStackFrame>(input));
@@ -73,6 +92,10 @@ void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 		frame.result = step.GetResult();
 		return;
 	}
+	if (child->matcher.IsAtomic()) {
+		frame.child_result = ExecuteAtomicMatcher(*child);
+		return;
+	}
 	PushFrame(*child);
 }
 
@@ -87,6 +110,9 @@ MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
 
 MatcherResult MatchStack::Execute(MatchInput input) {
 	D_ASSERT(frames.empty());
+	if (input.matcher.IsAtomic()) {
+		return ExecuteAtomicMatcher(input);
+	}
 	PushFrame(input);
 	while (!frames.empty()) {
 		auto &frame = *frames.back();
