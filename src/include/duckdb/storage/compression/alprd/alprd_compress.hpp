@@ -52,7 +52,7 @@ public:
 	data_ptr_t data_ptr;     // Pointer to next free spot in segment;
 	data_ptr_t metadata_ptr; // Reverse pointer to the next free spot for the metadata; used in decoding to SKIP vectors
 	uint32_t actual_dictionary_size_bytes;
-	uint32_t next_vector_byte_index_start;
+	AlpRDConstants::METADATA_POINTER_TYPE next_vector_byte_index_start;
 
 	EXACT_TYPE input_vector[AlpRDConstants::ALP_VECTOR_SIZE];
 	uint16_t vector_null_positions[AlpRDConstants::ALP_VECTOR_SIZE];
@@ -133,7 +133,7 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushCompressedVector() {
-		Store<uint16_t>(compression_data.exceptions_count, data_ptr);
+		Store<AlpRDConstants::EXCEPTIONS_COUNT_TYPE>(compression_data.exceptions_count, data_ptr);
 		data_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		memcpy((void *)data_ptr, (void *)compression_data.left_parts_encoded, compression_data.left_bit_packed_size);
@@ -158,8 +158,8 @@ public:
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
-		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
-		next_vector_byte_index_start = NumericCast<uint32_t>(UsedSpace());
+		Store<AlpRDConstants::METADATA_POINTER_TYPE>(next_vector_byte_index_start, metadata_ptr);
+		next_vector_byte_index_start = NumericCast<AlpRDConstants::METADATA_POINTER_TYPE>(UsedSpace());
 
 		vectors_flushed++;
 		vector_idx = 0;
@@ -170,8 +170,8 @@ public:
 	//! Uncompressed mode
 	void FlushUncompressedVector() {
 		// Store a sentinel value, signaling the coming data is stored uncompressed.
-		constexpr uint16_t sentinel = AlpRDConstants::UNCOMPRESSED_MODE_SENTINEL;
-		Store<uint16_t>(sentinel, data_ptr);
+		constexpr AlpRDConstants::EXCEPTIONS_COUNT_TYPE sentinel = AlpRDConstants::UNCOMPRESSED_MODE_SENTINEL;
+		Store<AlpRDConstants::EXCEPTIONS_COUNT_TYPE>(sentinel, data_ptr);
 		data_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		// Store uncompressed data
@@ -182,8 +182,8 @@ public:
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
-		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
-		next_vector_byte_index_start = NumericCast<uint32_t>(UsedSpace());
+		Store<AlpRDConstants::METADATA_POINTER_TYPE>(next_vector_byte_index_start, metadata_ptr);
+		next_vector_byte_index_start = NumericCast<AlpRDConstants::METADATA_POINTER_TYPE>(UsedSpace());
 
 		vectors_flushed++;
 		vector_idx = 0;
@@ -210,31 +210,32 @@ public:
 		if (used_space_percentage < AlpConstants::COMPACT_BLOCK_THRESHOLD) {
 #ifdef DEBUG
 			//! Copy the first 4 bytes of the metadata
-			uint32_t verify_bytes;
-			memcpy((void *)&verify_bytes, metadata_ptr, 4);
+			AlpRDConstants::METADATA_POINTER_TYPE verify_bytes;
+			memcpy((void *)&verify_bytes, metadata_ptr, AlpRDConstants::METADATA_POINTER_SIZE);
 #endif
 			memmove(dataptr + metadata_offset, metadata_ptr, bytes_used_by_metadata);
 #ifdef DEBUG
 			//! Now assert that the memmove was correct
-			D_ASSERT(verify_bytes == *(uint32_t *)(dataptr + metadata_offset));
+			D_ASSERT(verify_bytes == *(AlpRDConstants::METADATA_POINTER_TYPE *)(dataptr + metadata_offset));
 #endif
 			total_segment_size = metadata_offset + bytes_used_by_metadata;
 		}
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
-		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
+		Store<AlpRDConstants::METADATA_POINTER_TYPE>(
+		    NumericCast<AlpRDConstants::METADATA_POINTER_TYPE>(total_segment_size), dataptr);
 		dataptr += AlpRDConstants::METADATA_POINTER_SIZE;
 
 		// Store the right bw for the segment
-		Store<uint8_t>(compression_data.right_bit_width, dataptr);
+		Store<AlpRDConstants::BIT_WIDTH_TYPE>(compression_data.right_bit_width, dataptr);
 		dataptr += AlpRDConstants::RIGHT_BIT_WIDTH_SIZE;
 
 		// Store the left bw for the segment
-		Store<uint8_t>(compression_data.left_bit_width, dataptr);
+		Store<AlpRDConstants::BIT_WIDTH_TYPE>(compression_data.left_bit_width, dataptr);
 		dataptr += AlpRDConstants::LEFT_BIT_WIDTH_SIZE;
 
 		// Store the actual number of elements on the dictionary of the segment
-		Store<uint8_t>(compression_data.actual_dictionary_size, dataptr);
+		Store<AlpRDConstants::DICTIONARY_COUNT_TYPE>(compression_data.actual_dictionary_size, dataptr);
 		dataptr += AlpRDConstants::N_DICTIONARY_ELEMENTS_SIZE;
 
 		// Store the Dictionary
