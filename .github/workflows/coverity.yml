@@ -19,7 +19,7 @@ jobs:
   coverity:
     # So it doesn't try to run on forks
     if: github.repository == 'duckdb/duckdb'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     env:
       COVERITY_PROJECT_NAME: DuckDB
     steps:

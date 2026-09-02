@@ -40,7 +40,7 @@ jobs:
     name: Analyze (${{ matrix.language }})
     needs: check-draft
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     permissions:
       actions: read
       contents: read
@@ -111,7 +111,7 @@ jobs:
 
   release-assert:
     name: Release Assertions
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     needs: linux-memory-leaks
     env:
       GEN: ninja
@@ -229,7 +229,7 @@ jobs:
 
   release-assert-clang:
     name: Release Assertions with Clang
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     needs: linux-memory-leaks
     env:
       CC: clang
@@ -318,7 +318,7 @@ jobs:
 
   sqllogic:
      name: Sqllogic tests
-     runs-on: ubuntu-latest # Secondary task of this CI job is to test building duckdb on latest ubuntu
+     runs-on: namespace-profile-test # Secondary task of this CI job is to test building duckdb on latest ubuntu
      needs: linux-memory-leaks
 
      steps:
@@ -711,7 +711,7 @@ jobs:
 
   bwc-build:
     name: Build DuckDB
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     outputs:
       groups: ${{ steps.resolve.outputs.groups }}
     steps:
@@ -746,7 +746,7 @@ jobs:
 
   bwc-test:
     name: BWC Test (DuckDB ${{ matrix.series.group }})
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     needs: bwc-build
     strategy:
       fail-fast: false

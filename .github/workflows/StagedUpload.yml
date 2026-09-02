@@ -15,7 +15,7 @@ on:
 
 jobs:
  staged-upload:
-   runs-on: ubuntu-latest
+   runs-on: namespace-profile-test
    if: ${{ inputs.duckdb_version != '' }}
    env:
      DUCKDB_COMMIT: ${{ inputs.duckdb_commit || github.sha }}

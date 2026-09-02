@@ -10,7 +10,7 @@ jobs:
       contents: write # only for delete-branch option
       issues: write
       pull-requests: write
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     steps:
       - name: Close stale issues
         uses: actions/stale@v9

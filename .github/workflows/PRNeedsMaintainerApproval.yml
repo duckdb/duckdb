@@ -12,7 +12,7 @@ env:
 jobs:
   create_or_label_issue:
     if: github.event.label.name == 'needs maintainer approval'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     steps:
       - name: Get mirror issue number
         run: |

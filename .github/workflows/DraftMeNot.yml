@@ -12,7 +12,7 @@ jobs:
   mark-as-draft:
     name: Placeholder
     if: github.event.pull_request.draft == true
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     steps:
       - name: Print PR number
         env:

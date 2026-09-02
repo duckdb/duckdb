@@ -69,7 +69,7 @@ jobs:
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
-    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
+    runs-on: namespace-profile-test
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
       runner_linux_small: ${{ steps.runners.outputs.runner_linux_small }}

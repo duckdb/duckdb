@@ -12,7 +12,7 @@ env:
 jobs:
   handle_pr_submitted_or_fix_on_nightly_label:
     if: github.event.label.name == 'PR submitted' || github.event.label.name == 'fixed on nightly'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     steps:
       - name: Remove 'needs triage' label
         run: |
@@ -20,7 +20,7 @@ jobs:
 
   add_needs_reproducible_example_comment:
     if: github.event.label.name == 'needs reproducible example'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     steps:
       - name: Add comment
         run: |
@@ -38,7 +38,7 @@ jobs:
 
   create_or_label_mirror_issue:
     if: github.event.label.name == 'reproduced' || github.event.label.name == 'under review'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     steps:
       - name: Remove 'needs triage' / 'under review' if 'reproduced'
         if: github.event.label.name == 'reproduced'

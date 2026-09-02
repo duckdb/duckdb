@@ -45,7 +45,7 @@ env:
 jobs:
   load-extension-configs:
     name: Load Extension Config
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     outputs:
       extension_config: ${{ steps.set-extension.outputs.extension_config }}
       extension_exclude_archs: ${{ steps.set-extension.outputs.exclude_archs }}
@@ -108,7 +108,7 @@ jobs:
   # Merge all extensions into a single, versioned repository
   create-extension-repository:
     name: Create Extension Repository
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     needs:
       - build
 
@@ -155,7 +155,7 @@ jobs:
 
   upload-extensions:
     name: Upload Extensions
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     needs:
       - create-extension-repository
 

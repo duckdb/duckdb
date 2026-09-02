@@ -29,7 +29,7 @@ jobs:
       fail-fast: false
       matrix:
         sanitizer: [address, undefined, memory]
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     steps:
     - name: Build Fuzzers ${{ matrix.sanitizer }}
       id: build

@@ -9,7 +9,7 @@ env:
   ISSUE_BODY: ${{ github.event.issue.body }}
 jobs:
   check_code_formatting:
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     steps:
       - uses: actions/checkout@v6
         with:

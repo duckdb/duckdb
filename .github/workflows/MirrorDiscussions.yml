@@ -12,7 +12,7 @@ env:
 jobs:
   create_mirror_issue:
     if: github.event.label.name == 'under review'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     steps:
       - name: Create mirror issue for discussion
         run: |

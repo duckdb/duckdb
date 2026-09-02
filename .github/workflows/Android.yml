@@ -44,7 +44,7 @@ env:
 jobs:
   android:
     name: Android
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
 
     strategy:

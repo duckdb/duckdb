@@ -18,7 +18,7 @@ env:
 jobs:
   python:
     name: Python
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-test
     env:
       GEN: ninja
 
