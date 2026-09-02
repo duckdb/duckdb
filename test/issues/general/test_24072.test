@@ -1,0 +1,84 @@
+# name: test/issues/general/test_24072.test
+# description: Redundant LIMIT elimination using maximum cardinality
+# group: [general]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+# Both limits exceed the exact cardinality of range(10)
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM range(10) LIMIT 20) q LIMIT 30;
+----
+physical_plan	<!REGEX>:.*LIMIT.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM (SELECT * FROM range(10) LIMIT 20) q LIMIT 30);
+----
+10
+
+# The inner limit remains and propagates its maximum cardinality to the outer limit
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM range(100) LIMIT 20) q LIMIT 30;
+----
+physical_plan	<REGEX>:.*LIMIT.*
+
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM range(100) LIMIT 20) q LIMIT 30;
+----
+physical_plan	<!REGEX>:.*LIMIT.*LIMIT.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM (SELECT * FROM range(100) LIMIT 20) q LIMIT 30);
+----
+20
+
+statement ok
+CREATE TABLE integers AS SELECT i FROM range(10) t(i);
+
+# Regular table scans also provide a maximum cardinality
+query II
+EXPLAIN SELECT * FROM integers LIMIT 20;
+----
+physical_plan	<!REGEX>:.*LIMIT.*
+
+# A limit equal to the maximum cardinality with an explicit zero offset is redundant
+query II
+EXPLAIN SELECT * FROM integers LIMIT 10 OFFSET 0;
+----
+physical_plan	<!REGEX>:.*LIMIT.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM integers LIMIT 10 OFFSET 0);
+----
+10
+
+# Maximum cardinality propagates through filters
+query II
+EXPLAIN SELECT * FROM integers WHERE i % 2 = 0 LIMIT 20;
+----
+physical_plan	<!REGEX>:.*LIMIT.*
+
+# A limit below the maximum cardinality must remain
+query II
+EXPLAIN SELECT * FROM integers LIMIT 5;
+----
+physical_plan	<REGEX>:.*LIMIT.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM integers LIMIT 5);
+----
+5
+
+# A non-zero offset changes the result, so the limit must remain
+query II
+EXPLAIN SELECT * FROM integers LIMIT 20 OFFSET 1;
+----
+physical_plan	<REGEX>:.*LIMIT.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM integers LIMIT 20 OFFSET 1);
+----
+9

@@ -6,7 +6,7 @@ statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
-CREATE TABLE integers(i INTEGER, j INTEGER)
+CREATE TABLE integers AS SELECT i::INTEGER i, i::INTEGER j FROM range(10) t(i)
 
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;

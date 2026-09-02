@@ -16,22 +16,21 @@ INSERT INTO integers VALUES (1,1), (2,2), (3, 3), (4,4)
 
 # project + limit becomes limit + project
 query II
-EXPLAIN SELECT i FROM integers LIMIT 4
+EXPLAIN SELECT i FROM integers LIMIT 3
 ----
 logical_opt	<REGEX>:.*PROJECTION.*LIMIT.*
 
 # verify result for project + limit to limit + project
 query I
-SELECT i FROM integers LIMIT 4
+SELECT i FROM integers LIMIT 3
 ----
 1
 2
 3
-4
 
 # recursive limit pushdown
 query II
-EXPLAIN SELECT i FROM (SELECT i, i+1 FROM integers) LIMIT 4
+EXPLAIN SELECT i FROM (SELECT i, i+1 FROM integers) LIMIT 3
 ----
 logical_opt	<REGEX>:.*PROJECTION.*PROJECTION.*LIMIT.*
 
@@ -62,6 +61,9 @@ SELECT i FROM integers LIMIT 4 OFFSET 2
 4
 
 # limit value > 8192: no pushdown
+statement ok
+INSERT INTO integers SELECT i, i FROM range(4, 10000) t(i)
+
 query II
 EXPLAIN SELECT i FROM integers LIMIT 8192
 ----
