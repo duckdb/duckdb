@@ -105,7 +105,7 @@ SELECT count(*) FROM prefix_truncated WHERE NOT starts_with(s, 'ppppppppppppp');
 ----
 0
 
-# NULL rows produce NULL rather than false, so a nullable column is not pruned.
+# NULL rows do not satisfy the negated predicate, so true-or-NULL can be pruned.
 statement ok
 CREATE TABLE prefix_nullable AS
 SELECT i::INTEGER AS i, CASE WHEN i % 100 = 50 THEN NULL ELSE lpad(i::VARCHAR, 6, '0') END AS s
@@ -114,7 +114,7 @@ FROM range(6144) r(i);
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM prefix_nullable WHERE NOT starts_with(s, '00');
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+analyzed_plan	<REGEX>:.*Empty Result.*
 
 query I
 SELECT count(*) FROM prefix_nullable WHERE NOT starts_with(s, '00');
