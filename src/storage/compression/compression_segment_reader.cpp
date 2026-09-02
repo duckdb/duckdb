@@ -14,12 +14,12 @@ CompressionSegmentReader CompressionSegmentReader::FromSegment(const BufferHandl
 		ThrowOffsetExceedsBlockSize(context);
 	}
 	auto reader_size = block_size - block_offset;
-	auto &byte_size = segment.GetByteSize();
-	if (byte_size) {
-		if (DUCKDB_UNLIKELY(*byte_size > reader_size)) {
+	auto &data_size = segment.GetDataSize();
+	if (data_size) {
+		if (DUCKDB_UNLIKELY(*data_size > reader_size)) {
 			ThrowByteSizeExceedsBlockSize(context);
 		}
-		reader_size = *byte_size;
+		reader_size = *data_size;
 	}
 	return CompressionSegmentReader(handle.Ptr() + block_offset, reader_size, context);
 }

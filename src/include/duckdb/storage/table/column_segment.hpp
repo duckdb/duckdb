@@ -44,7 +44,7 @@ public:
 	              const idx_t count, const CompressionFunction &function_p, BaseStatistics statistics,
 	              const block_id_t block_id_p, const idx_t offset, const idx_t segment_size_p,
 	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr,
-	              optional<uint32_t> byte_size_p = optional<uint32_t>());
+	              optional<uint32_t> data_size_in_bytes = optional<uint32_t>());
 	//! Construct a column segment from another column segment.
 	//! The other column segment becomes invalid (std::move).
 	ColumnSegment(ColumnSegment &other);
@@ -52,11 +52,7 @@ public:
 
 public:
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
-	                                                         block_id_t id, idx_t offset, idx_t count,
-	                                                         CompressionType compression_type,
-	                                                         BaseStatistics statistics,
-	                                                         unique_ptr<ColumnSegmentState> segment_state,
-	                                                         optional<uint32_t> byte_size = optional<uint32_t>());
+	                                                         DataPointer &data_pointer);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const CompressionFunction &function,
 	                                                        const LogicalType &type, const idx_t segment_size,
 	                                                        BlockManager &block_manager);
@@ -128,12 +124,12 @@ public:
 		return offset;
 	}
 
-	const optional<uint32_t> &GetByteSize() const {
-		return byte_size;
+	const optional<uint32_t> &GetDataSize() const {
+		return data_size_in_bytes;
 	}
 
-	void SetByteSize(uint32_t byte_size_p) {
-		byte_size = byte_size_p;
+	void SetByteSize(uint32_t data_size_in_bytes_p) {
+		data_size_in_bytes = data_size_in_bytes_p;
 	}
 
 	optional_ptr<CompressedSegmentState> GetSegmentState() const {
@@ -186,7 +182,7 @@ private:
 	//! The allocated segment size, which is bounded by Storage::BLOCK_SIZE
 	idx_t segment_size;
 	//! Number of bytes occupied by this segment within its block, if recorded
-	optional<uint32_t> byte_size;
+	optional<uint32_t> data_size_in_bytes;
 	//! Storage associated with the compressed segment
 	unique_ptr<CompressedSegmentState> segment_state;
 	//! The statistics for the segment
