@@ -56,4 +56,12 @@ SELECT count(*) FROM read_parquet('{TEST_DIR}/oe_*.parquet')
 endloop
 
 statement ok
+SET threads=1
+
+statement error
+SELECT sum(b) FROM read_parquet(['{TEST_DIR}/oe_0.parquet', '{TEST_DIR}/oe_1x.parquet'])
+----
+<REGEX>:.*Invalid Input Error.*
+
+statement ok
 SET GLOBAL debug_local_file_system_delay_ms=0

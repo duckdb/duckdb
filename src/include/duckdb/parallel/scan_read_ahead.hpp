@@ -155,8 +155,6 @@ public:
 
 	//! Schedule a file-open closure on the async pool, opening files ahead of decoding
 	void ScheduleFileOpen(std::function<void()> open_fn);
-	//! Mark one scheduled file-open as completed
-	void FinishFileOpen();
 	//! Whether another file-open may be scheduled without exceeding the open-ahead window
 	bool CanScheduleOpen() const;
 
@@ -225,7 +223,7 @@ private:
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
 	//! File-opens scheduled on the async pool that have not completed yet
-	atomic<idx_t> pending_opens {0};
+	shared_ptr<atomic<idx_t>> pending_opens;
 	//! Async I/O executor (async pool)
 	shared_ptr<TaskExecutor> executor;
 };
