@@ -446,6 +446,31 @@ enum class ContextRewriteMode : uint8_t {
 	TRANSACTION_CONTROL
 };
 
+static string ContextRewriteModeToString(ContextRewriteMode mode) {
+	switch (mode) {
+	case ContextRewriteMode::SUCCESS:
+		return "SUCCESS";
+	case ContextRewriteMode::TRANSACTION:
+		return "TRANSACTION";
+	case ContextRewriteMode::TABLE:
+		return "TABLE";
+	case ContextRewriteMode::PLAN_EXTENSION:
+		return "PLAN_EXTENSION";
+	case ContextRewriteMode::EMPTY:
+		return "EMPTY";
+	case ContextRewriteMode::MULTI:
+		return "MULTI";
+	case ContextRewriteMode::RECURSE:
+		return "RECURSE";
+	case ContextRewriteMode::PRAGMA:
+		return "PRAGMA";
+	case ContextRewriteMode::TRANSACTION_CONTROL:
+		return "TRANSACTION_CONTROL";
+	default:
+		throw InternalException("Unsupported context rewrite mode");
+	}
+}
+
 struct ContextRewriteData : public ParserExtensionParseData {
 	explicit ContextRewriteData(ContextRewriteMode mode_p) : mode(mode_p) {
 	}
@@ -457,7 +482,7 @@ struct ContextRewriteData : public ParserExtensionParseData {
 	}
 
 	string ToString() const override {
-		return "CONTEXT REWRITE";
+		return "CONTEXT REWRITE " + ContextRewriteModeToString(mode);
 	}
 };
 

@@ -488,7 +488,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		logical_planner.CreatePlan(std::move(statement));
 		D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
 	}
-	if (parameters.parameters && logical_planner.HasExtensionStatementRewrite()) {
+	if (parameters.parameters && logical_planner.RequiresParameterRevalidation()) {
 		PreparedStatement::VerifyParameters(*parameters.parameters, logical_planner.GetNamedParameterMap(), this);
 	}
 	auto result = make_shared_ptr<PreparedStatementData>(logical_planner.GetStatementType());

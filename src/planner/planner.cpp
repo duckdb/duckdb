@@ -231,7 +231,6 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	binder->SetBindingMode(BindingMode::PREPARE);
 	CreatePlan(std::move(statement));
 	copied_statement->named_param_map = named_param_map;
-	copied_statement->has_anonymous_parameters = has_anonymous_parameters;
 	// now create the logical prepare
 	auto prepared_data = make_shared_ptr<PreparedStatementData>(statement_type);
 	prepared_data->unbound_statement = std::move(copied_statement);
@@ -280,7 +279,6 @@ unique_ptr<SQLStatement> Planner::RewriteExtensionStatement(unique_ptr<SQLStatem
 		auto &explain = statement->Cast<ExplainStatement>();
 		explain.stmt = RewriteExtensionStatement(std::move(explain.stmt));
 		statement->named_param_map = explain.stmt->named_param_map;
-		statement->has_anonymous_parameters = explain.stmt->has_anonymous_parameters;
 		return statement;
 	}
 	if (statement->type != StatementType::EXTENSION_STATEMENT) {
@@ -295,7 +293,7 @@ unique_ptr<SQLStatement> Planner::RewriteExtensionStatement(unique_ptr<SQLStatem
 	auto source_location = statement->stmt_location;
 	auto result = extension_statement.extension.rewrite_function(extension_statement.extension.parser_info.get(),
 	                                                             context, std::move(extension_statement.parse_data));
-	has_extension_statement_rewrite = true;
+	requires_parameter_revalidation = true;
 	if (!result.statement) {
 		throw InvalidInputException("Parser extension rewrite functions must generate a statement");
 	}
@@ -314,12 +312,12 @@ unique_ptr<SQLStatement> Planner::RewriteExtensionStatement(unique_ptr<SQLStatem
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement);
+	requires_parameter_revalidation = false;
 	statement = RewriteExtensionStatement(std::move(statement));
 	Optimizer optimizer(*binder, context);
 	optimizer.OptimizeStatement(statement);
 	statement_type = statement->type;
 	named_param_map = statement->named_param_map;
-	has_anonymous_parameters = statement->has_anonymous_parameters;
 
 	switch (statement->type) {
 	case StatementType::SELECT_STATEMENT:
@@ -362,8 +360,8 @@ const identifier_map_t<idx_t> &Planner::GetNamedParameterMap() const {
 	return named_param_map;
 }
 
-bool Planner::HasExtensionStatementRewrite() const {
-	return has_extension_statement_rewrite;
+bool Planner::RequiresParameterRevalidation() const {
+	return requires_parameter_revalidation;
 }
 
 StatementType Planner::GetStatementType() const {

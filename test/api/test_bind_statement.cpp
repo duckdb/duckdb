@@ -88,8 +88,12 @@ TEST_CASE("Planner rewrite parameters are visible to binding APIs", "[api][bind_
 	REQUIRE(signature.parameters[0].identifier == "1");
 	REQUIRE(signature.parameters[0].type == LogicalType::INTEGER);
 
+	vector<Value> missing_values;
+	auto pending = con.PendingQuery(BindRewriteStatement(), missing_values);
+	REQUIRE(pending->HasError());
+
 	vector<Value> values {Value::INTEGER(42)};
-	auto pending = con.PendingQuery(BindRewriteStatement(), values);
+	pending = con.PendingQuery(BindRewriteStatement(), values);
 	REQUIRE(!pending->HasError());
 	auto result = pending->Execute();
 	REQUIRE_NO_FAIL(*result);
@@ -102,6 +106,7 @@ TEST_CASE("Planner rewrite parameters are visible to binding APIs", "[api][bind_
 
 	auto prepared = con.Prepare(BindRewriteStatement());
 	REQUIRE(!prepared->HasError());
+	REQUIRE(prepared->GetStatementType() == StatementType::SELECT_STATEMENT);
 	REQUIRE(prepared->GetParameterCount() == 1);
 	auto count_after_prepare = bind_rewrite_count.load();
 	result = prepared->Execute(values, false);
