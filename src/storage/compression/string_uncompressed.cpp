@@ -17,6 +17,64 @@ namespace duckdb {
 	throw DataCorruptionException("Corrupted uncompressed string segment: offset table overlaps the dictionary");
 }
 
+[[noreturn]] static void ThrowStringOffsetMinimumValue() {
+	throw DataCorruptionException("Corrupted uncompressed string segment: dictionary offset is INT32_MIN");
+}
+
+[[noreturn]] static void ThrowStringOffsetOutsideDictionary(uint32_t offset, uint32_t dictionary_size) {
+	throw DataCorruptionException(
+	    "Corrupted uncompressed string segment: dictionary offset %u exceeds dictionary size %u", offset,
+	    dictionary_size);
+}
+
+[[noreturn]] static void ThrowDecreasingStringOffset(uint32_t offset, uint32_t previous_offset) {
+	throw DataCorruptionException(
+	    "Corrupted uncompressed string segment: dictionary offset %u is smaller than preceding offset %u", offset,
+	    previous_offset);
+}
+
+[[noreturn]] static void ThrowInvalidOverflowStringMarker() {
+	throw DataCorruptionException(
+	    "Corrupted uncompressed string segment: negative dictionary offset does not describe an overflow marker");
+}
+
+static uint32_t GetStringOffsetMagnitude(int32_t offset) {
+	if (offset == NumericLimits<int32_t>::Minimum()) {
+		ThrowStringOffsetMinimumValue();
+	}
+	if (offset < 0) {
+		return NumericCast<uint32_t>(-offset);
+	}
+	return NumericCast<uint32_t>(offset);
+}
+
+uint32_t StringScanState::SegmentLayout::GetStringLength(int32_t current_offset, int32_t previous_offset) const {
+	auto current_magnitude = GetStringOffsetMagnitude(current_offset);
+	auto previous_magnitude = GetStringOffsetMagnitude(previous_offset);
+	if (current_magnitude > dictionary.size) {
+		ThrowStringOffsetOutsideDictionary(current_magnitude, dictionary.size);
+	}
+	if (previous_magnitude > dictionary.size) {
+		ThrowStringOffsetOutsideDictionary(previous_magnitude, dictionary.size);
+	}
+	if (current_magnitude < previous_magnitude) {
+		ThrowDecreasingStringOffset(current_magnitude, previous_magnitude);
+	}
+
+	// The magnitude must advance by a string's size or BIG_STRING_MARKER_SIZE.
+	auto string_length = current_magnitude - previous_magnitude;
+	if (current_offset < 0) {
+		if (string_length == 0) {
+			if (current_offset != previous_offset) {
+				ThrowInvalidOverflowStringMarker();
+			}
+		} else if (string_length != UncompressedStringStorage::BIG_STRING_MARKER_SIZE) {
+			ThrowInvalidOverflowStringMarker();
+		}
+	}
+	return string_length;
+}
+
 StringScanState::SegmentLayout StringScanState::ReadSegmentLayout(const BufferHandle &handle,
                                                                  const ColumnSegment &segment) {
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "uncompressed string segment");
@@ -131,9 +189,8 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	int32_t previous_offset = start > 0 ? base_data[start - 1] : 0;
 
 	for (idx_t i = 0; i < scan_count; i++) {
-		// std::abs used since offsets can be negative to indicate big strings
 		auto current_offset = base_data[start + i];
-		auto string_length = UnsafeNumericCast<uint32_t>(std::abs(current_offset) - std::abs(previous_offset));
+		auto string_length = scan_state.layout.GetStringLength(current_offset, previous_offset);
 		result_data[result_offset + i] =
 		    FetchStringFromDict(state.context, segment, dict_end, result, baseptr, current_offset, string_length);
 		previous_offset = base_data[start + i];
@@ -163,7 +220,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 		idx_t index = start + sel.get_index(i);
 		auto current_offset = base_data[index];
 		auto prev_offset = index > 0 ? base_data[index - 1] : 0;
-		auto string_length = UnsafeNumericCast<uint32_t>(std::abs(current_offset) - std::abs(prev_offset));
+		auto string_length = scan_state.layout.GetStringLength(current_offset, prev_offset);
 		result_data[i] =
 		    FetchStringFromDict(state.context, segment, dict_end, result, baseptr, current_offset, string_length);
 	}
@@ -205,9 +262,9 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	uint32_t string_length;
 	if (DUCKDB_UNLIKELY(row_id == 0LL)) {
 		// edge case where this is the first string in the dict
-		string_length = NumericCast<uint32_t>(std::abs(dict_offset));
+		string_length = layout.GetStringLength(dict_offset, 0);
 	} else {
-		string_length = NumericCast<uint32_t>(std::abs(dict_offset) - std::abs(base_data[row_index - 1]));
+		string_length = layout.GetStringLength(dict_offset, base_data[row_index - 1]);
 	}
 	result_data[result_idx] =
 	    FetchStringFromDict(state.context, segment, dict_end, result, baseptr, dict_offset, string_length);
