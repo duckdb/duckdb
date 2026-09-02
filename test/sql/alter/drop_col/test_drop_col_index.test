@@ -46,3 +46,27 @@ query I
 SELECT count(*) FROM duckdb_columns() WHERE table_name = 'transactional_drop_index';
 ----
 1
+
+# a dropped catalog index must not hide an unrelated constraint index with the same name
+statement ok
+CREATE TABLE constraint_index_collision(i INTEGER, j INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE unrelated_index_table(k INTEGER)
+
+statement ok
+CREATE INDEX PRIMARY_constraint_index_collision_0 ON unrelated_index_table(k)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DROP INDEX PRIMARY_constraint_index_collision_0
+
+statement error
+ALTER TABLE constraint_index_collision DROP COLUMN i
+----
+Catalog Error: Cannot drop this column: an index depends on a column after it
+
+statement ok
+ROLLBACK
