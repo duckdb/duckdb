@@ -504,19 +504,16 @@ static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &st
 
 struct BoundedType {
 	static LogicalType Bind(BindLogicalTypeInput &input) {
-		auto &modifiers = input.modifiers;
+		return Get(input.modifiers[0].GetValue().GetValue<int32_t>());
+	}
 
-		if (modifiers.size() != 1) {
-			throw BinderException("BOUNDED type must have one modifier");
-		}
-		if (modifiers[0].GetValue().type() != LogicalType::INTEGER) {
-			throw BinderException("BOUNDED type modifier must be integer");
-		}
-		if (modifiers[0].GetValue().IsNull()) {
-			throw BinderException("BOUNDED type modifier cannot be NULL");
-		}
-		auto bound_val = modifiers[0].GetValue().GetValue<int32_t>();
-		return Get(bound_val);
+	static TypeConstructorSet Constructors() {
+		auto signature = TypeConstructor::Signature();
+		signature.AddParameter("bound", LogicalType::INTEGER);
+
+		TypeConstructorSet result;
+		result.AddFunction(TypeConstructor(std::move(signature), Bind));
+		return result;
 	}
 
 	static LogicalType Get(int32_t max_val) {
@@ -670,21 +667,8 @@ static bool IntToBoundedCast(Vector &source, Vector &result, idx_t count, CastPa
 
 struct MinMaxType {
 	static LogicalType Bind(BindLogicalTypeInput &input) {
-		auto &modifiers = input.modifiers;
-
-		if (modifiers.size() != 2) {
-			throw BinderException("MINMAX type must have two modifiers");
-		}
-		if (modifiers[0].GetValue().type() != LogicalType::INTEGER ||
-		    modifiers[1].GetValue().type() != LogicalType::INTEGER) {
-			throw BinderException("MINMAX type modifiers must be integers");
-		}
-		if (modifiers[0].GetValue().IsNull() || modifiers[1].GetValue().IsNull()) {
-			throw BinderException("MINMAX type modifiers cannot be NULL");
-		}
-
-		const auto min_val = modifiers[0].GetValue().GetValue<int32_t>();
-		const auto max_val = modifiers[1].GetValue().GetValue<int32_t>();
+		const auto min_val = input.modifiers[0].GetValue().GetValue<int32_t>();
+		const auto max_val = input.modifiers[1].GetValue().GetValue<int32_t>();
 
 		if (min_val >= max_val) {
 			throw BinderException("MINMAX type min value must be less than max value");
@@ -694,6 +678,16 @@ struct MinMaxType {
 		info->modifiers.emplace_back(Value::INTEGER(min_val));
 		info->modifiers.emplace_back(Value::INTEGER(max_val));
 		return LogicalType(LogicalTypeId::INTEGER).WithAlias("MINMAX").WithExtensionInfo(std::move(info));
+	}
+
+	static TypeConstructorSet Constructors() {
+		auto signature = TypeConstructor::Signature();
+		signature.AddParameter("min", LogicalType::INTEGER);
+		signature.AddParameter("max", LogicalType::INTEGER);
+
+		TypeConstructorSet result;
+		result.AddFunction(TypeConstructor(std::move(signature), Bind));
+		return result;
 	}
 
 	static int32_t GetMinValue(const LogicalType &type) {
@@ -1261,7 +1255,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 
 	// Bounded type
 	auto bounded_type = BoundedType::GetDefault();
-	loader.RegisterType("BOUNDED", bounded_type, BoundedType::Bind);
+	loader.RegisterType("BOUNDED", bounded_type, BoundedType::Constructors());
 
 	// Example of function inspecting the type property
 	ScalarFunction bounded_max("bounded_max", {bounded_type}, LogicalType::INTEGER, BoundedMaxFunc, BoundedMaxBind);
@@ -1299,7 +1293,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 
 	// MinMax Type
 	auto minmax_type = MinMaxType::GetDefault();
-	loader.RegisterType("MINMAX", minmax_type, MinMaxType::Bind);
+	loader.RegisterType("MINMAX", minmax_type, MinMaxType::Constructors());
 	loader.RegisterCastFunction(LogicalType::INTEGER, minmax_type, BoundCastInfo(IntToMinMaxCast), 0);
 	loader.RegisterFunction(ScalarFunction("minmax_range", {minmax_type}, LogicalType::INTEGER, MinMaxRangeFunc));
 

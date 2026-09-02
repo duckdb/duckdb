@@ -86,6 +86,12 @@ enum class RequestType : uint8_t {
 	OPTIONS_REQUEST
 };
 
+enum class HTTPClientCachePolicy : uint8_t { DEFAULT, BYPASS_CACHE };
+
+struct HTTPClientInitializationOptions {
+	HTTPClientCachePolicy cache_policy = HTTPClientCachePolicy::DEFAULT;
+};
+
 struct HTTPHeaders {
 	using header_values_t = vector<string>;
 	using header_map_t = case_insensitive_map_t<string>;
@@ -329,6 +335,9 @@ public:
 	                                                    optional_ptr<FileOpenerInfo> info);
 
 	virtual unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port);
+	DUCKDB_API virtual unique_ptr<HTTPClient> InitializeClientExtended(HTTPParams &http_params,
+	                                                                   const string &proto_host_port,
+	                                                                   const HTTPClientInitializationOptions &options);
 
 	//! Close a client — implementations may cache it for reuse
 	virtual void CloseClient(unique_ptr<HTTPClient> &&client);

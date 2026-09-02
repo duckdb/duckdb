@@ -399,6 +399,9 @@ void CopyInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(209, "is_format_auto_detected", is_format_auto_detected);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(210, "file_path_expression", file_path_expression);
 	serializer.WritePropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(211, "parsed_options", parsed_options);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
+		serializer.WriteProperty<QualifiedName>(212, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
@@ -415,7 +418,11 @@ unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(209, "is_format_auto_detected", result->is_format_auto_detected);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(210, "file_path_expression", result->file_path_expression);
 	deserializer.ReadPropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(211, "parsed_options", result->parsed_options);
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(212, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog), std::move(schema), std::move(table));
+	if (!qualified_name.Path().empty()) {
+		result->SetQualifiedName(std::move(qualified_name));
+	}
 	return std::move(result);
 }
 
