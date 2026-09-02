@@ -60,6 +60,8 @@ public:
 	static FilterPropagateResult CheckExpressionStatistics(optional_ptr<ClientContext> context_p,
 	                                                       const Expression &expr,
 	                                                       array_ptr<const BaseStatistics> input_stats);
+	//! Whether statistics can be propagated through this filter expression
+	static bool CanPropagateExpressionStatistics(const Expression &expr);
 	//! Derive statistics for an expression over one or more input columns
 	static unique_ptr<BaseStatistics> TryGetExpressionStatistics(ClientContext &context, const Expression &expr,
 	                                                             array_ptr<const BaseStatistics> input_stats);
