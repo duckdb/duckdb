@@ -754,6 +754,333 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arena_allocate(duckdb_v2_arena_handle are
 /* --- Struct definitions for arena --- */
 
 /* ============================================================================
+ * MODULE: cast
+ * ============================================================================ */
+
+/* --- Enums for cast --- */
+
+/*!
+ * The mode a cast is being executed in. A normal cast must either succeed for every row or report an error, which
+ * aborts the query. A "try" cast (SQL TRY_CAST, and implicit casts the engine probes speculatively) tolerates per-row
+ * failures: the callback writes NULL for the rows it could not convert instead of aborting. Read with
+ * `duckdb_v2_cast_function_exec_get_mode()`.
+ */
+typedef enum DUCKDB_V2_CAST_MODE {
+	//! A regular cast. A conversion failure reported through the error slot aborts the query.
+	DUCKDB_V2_CAST_MODE_NORMAL = 0,
+
+	/*!
+	 * A "try" cast. Conversion failures should be written as NULLs into the output vector; an error reported through
+	 * the slot is swallowed and the affected rows are left NULL.
+	 */
+	DUCKDB_V2_CAST_MODE_TRY = 1,
+	DUCKDB_V2_CAST_MODE_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_CAST_MODE;
+
+/* --- Struct forward declarations for cast --- */
+
+/* --- Types for cast --- */
+
+/*!
+ * An owned opaque handle to a cast function being built. Created with
+ * `duckdb_v2_cast_function_create_with_connection()` or `duckdb_v2_cast_function_create_with_extension()`, configured
+ * with the setter functions (e.g. `duckdb_v2_cast_function_set_source_type()`,
+ * `duckdb_v2_cast_function_set_exec_callback()`, etc.), made available with `duckdb_v2_cast_function_register()`, and
+ * destroyed with `duckdb_v2_cast_function_destroy()`.
+ */
+typedef struct _duckdb_v2_cast_function {
+	void *internal_ptr;
+} * duckdb_v2_cast_function_handle;
+
+/*!
+ * A borrowed opaque handle to the arguments supplied to a cast function during the execution "exec" phase. The "exec"
+ * callback receives this handle and can use it to access the input vector, the output vector to write into, the number
+ * of rows to convert, and the mode the cast is running in.
+ */
+typedef struct _duckdb_v2_cast_function_exec_info {
+	void *internal_ptr;
+} * duckdb_v2_cast_function_exec_info_handle;
+
+/* --- Constants for cast --- */
+
+/* --- Function pointer typedefs for cast --- */
+
+typedef void (*duckdb_v2_cast_function_exec_callback_fn)(duckdb_v2_cast_function_exec_info_handle info,
+                                                         duckdb_v2_context_handle context,
+                                                         duckdb_v2_error_info_handle *err);
+
+/* --- Functions for cast --- */
+
+/*!
+ * Creates a new cast function that will be registered on the connection's database.
+ *
+ * The function starts out empty: configure it with the setter functions (e.g.
+ * `duckdb_v2_cast_function_set_source_type()`, `duckdb_v2_cast_function_set_exec_callback()`, etc.), then make it
+ * available with `duckdb_v2_cast_function_register()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_cast_function_destroy()`, also after registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param connection The connection to create the function in.
+ * @param function On success, receives the newly created cast function. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_create_with_connection(duckdb_v2_connection_handle connection,
+                                                                            duckdb_v2_cast_function_handle *function,
+                                                                            duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a new cast function that will be registered on the loading extension's database.
+ *
+ * Use this from an extension load callback, where an extension handle is available. The function starts out empty:
+ * configure it with the setter functions (e.g. `duckdb_v2_cast_function_set_source_type()`,
+ * `duckdb_v2_cast_function_set_exec_callback()`, etc.), then make it available with
+ * `duckdb_v2_cast_function_register()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_cast_function_destroy()`, also after registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The extension to create the function in.
+ * @param function On success, receives the newly created cast function. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_create_with_extension(duckdb_v2_extension_handle extension,
+                                                                           duckdb_v2_cast_function_handle *function,
+                                                                           duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the type the cast converts from.
+ *
+ * The type is borrowed and copied. Calling this again replaces the previous source type. A source type must be set
+ * before registration, and it must be a fully defined concrete type.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the source type of.
+ * @param source_type The type to cast from. Borrowed for the call only.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_set_source_type(duckdb_v2_cast_function_handle function,
+                                                                     duckdb_v2_logical_type_handle source_type,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the type the cast converts to.
+ *
+ * The type is borrowed and copied. Calling this again replaces the previous target type. A target type must be set
+ * before registration, and it must be a fully defined concrete type.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the target type of.
+ * @param target_type The type to cast to. Borrowed for the call only.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_set_target_type(duckdb_v2_cast_function_handle function,
+                                                                     duckdb_v2_logical_type_handle target_type,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets what it costs to apply this cast implicitly.
+ *
+ * The binder uses the cost to choose between candidate implicit casts: a lower non-negative cost makes the cast more
+ * likely to be picked, a higher one less likely. Built-in widening casts sit in the [0, 20] range, so a cost above 100
+ * effectively puts this cast last. A negative cost -- the default -- means the cast is never applied implicitly and is
+ * reached only through an explicit CAST or TRY_CAST.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the implicit cast cost of.
+ * @param cost The cost. Negative disables implicit casting.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_set_implicit_cast_cost(duckdb_v2_cast_function_handle function,
+                                                                            int64_t cost,
+                                                                            duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets arbitrary user data on the cast function.
+ *
+ * Associates an opaque pointer with the function, retrievable from the exec callback via
+ * `duckdb_v2_cast_function_exec_get_user_data()`. The opaque handle bundles the pointer with an optional destructor,
+ * invoked when the data is no longer needed. The data is read-only during execution: the same pointer is shared by
+ * every thread running the cast.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the user data of.
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_set_user_data(duckdb_v2_cast_function_handle function,
+                                                                   duckdb_v2_opaque *data,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the exec callback of the cast function.
+ *
+ * The exec callback implements the conversion: it is invoked during query execution with a batch of input values and
+ * must fill the output vector. An exec callback must be set before registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the exec callback of.
+ * @param callback The exec callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_set_exec_callback(
+    duckdb_v2_cast_function_handle function, duckdb_v2_cast_function_exec_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the user data set via `duckdb_v2_cast_function_set_user_data()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The exec info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_exec_get_user_data(duckdb_v2_cast_function_exec_info_handle info,
+                                                                        void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns how many rows this execution must convert.
+ *
+ * The number of rows held by the input vector, and the number of entries the callback must write to the output vector.
+ * Note that this may be less than a full vector: a constant input is converted as a single row and the result is
+ * expanded by the engine.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The exec info handle.
+ * @param count Receives the number of rows.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_exec_get_row_count(duckdb_v2_cast_function_exec_info_handle info,
+                                                                        idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the input vector holding the values to convert.
+ *
+ * The vector holds the source type's values for the current batch; use `duckdb_v2_cast_function_exec_get_row_count()`
+ * for the number of rows. Borrowed; valid only for the duration of the callback.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The exec info handle.
+ * @param vector Receives the borrowed input vector.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_exec_get_input(duckdb_v2_cast_function_exec_info_handle info,
+                                                                    duckdb_v2_vector_handle *vector,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the output vector the exec callback must write into.
+ *
+ * The callback must write one entry per input row; use `duckdb_v2_cast_function_exec_get_row_count()` for the number of
+ * rows. Borrowed; valid only for the duration of the callback.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The exec info handle.
+ * @param vector Receives the borrowed output vector to write into.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_exec_get_output(duckdb_v2_cast_function_exec_info_handle info,
+                                                                     duckdb_v2_vector_handle *vector,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the mode the cast is being executed in.
+ *
+ * In `CAST_MODE_TRY` a conversion failure should be written as a NULL into the output vector rather than reported
+ * through the error slot, since the engine discards the error and keeps whatever the callback left in the output.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The exec info handle.
+ * @param mode Receives the cast mode.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_exec_get_mode(duckdb_v2_cast_function_exec_info_handle info,
+                                                                   DUCKDB_V2_CAST_MODE *mode,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the cast function, making it available to CAST and TRY_CAST.
+ *
+ * The function is registered on the target given at creation: the connection's database or the loading extension.
+ * Registration requires a source type, a target type and an exec callback; both types must be fully defined concrete
+ * types. Registering a cast for a pair that already has one replaces it. The caller still owns the handle after
+ * registration and must destroy it with `duckdb_v2_cast_function_destroy()`, which does not affect the registered
+ * function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_register(duckdb_v2_cast_function_handle function,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys the cast function, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_destroy(duckdb_v2_cast_function_handle *function);
+
+/* --- Struct definitions for cast --- */
+
+/* ============================================================================
  * MODULE: column_data_collection
  * ============================================================================ */
 
@@ -1291,6 +1618,147 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_alias(duckdb_v2_option_handle 
                                                         duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for configuration --- */
+
+/* ============================================================================
+ * MODULE: custom type
+ * ============================================================================ */
+
+/* --- Enums for custom type --- */
+
+/* --- Struct forward declarations for custom type --- */
+
+/* --- Types for custom type --- */
+
+/*!
+ * An owned opaque handle to a custom type being built. Created with `duckdb_v2_custom_type_create_with_connection()` or
+ * `duckdb_v2_custom_type_create_with_extension()`, configured with `duckdb_v2_custom_type_set_name()` and
+ * `duckdb_v2_custom_type_set_base_type()`, made available with `duckdb_v2_custom_type_register()`, and destroyed with
+ * `duckdb_v2_custom_type_destroy()`.
+ */
+typedef struct _duckdb_v2_custom_type {
+	void *internal_ptr;
+} * duckdb_v2_custom_type_handle;
+
+/* --- Constants for custom type --- */
+
+/* --- Function pointer typedefs for custom type --- */
+
+/* --- Functions for custom type --- */
+
+/*!
+ * Creates a new custom type that will be registered on the connection's database.
+ *
+ * The type starts out empty: configure it with `duckdb_v2_custom_type_set_name()` and
+ * `duckdb_v2_custom_type_set_base_type()`, then make it available with `duckdb_v2_custom_type_register()`. The caller
+ * owns the returned handle and must destroy it with `duckdb_v2_custom_type_destroy()`, also after registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param connection The connection to create the type in.
+ * @param type On success, receives the newly created custom type. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_create_with_connection(duckdb_v2_connection_handle connection,
+                                                                          duckdb_v2_custom_type_handle *type,
+                                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a new custom type that will be registered on the loading extension's database.
+ *
+ * Use this from an extension load callback, where an extension handle is available. The type starts out empty:
+ * configure it with `duckdb_v2_custom_type_set_name()` and `duckdb_v2_custom_type_set_base_type()`, then make it
+ * available with `duckdb_v2_custom_type_register()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_custom_type_destroy()`, also after registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The extension to create the type in.
+ * @param type On success, receives the newly created custom type. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_create_with_extension(duckdb_v2_extension_handle extension,
+                                                                         duckdb_v2_custom_type_handle *type,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the name of the custom type.
+ *
+ * This is the name the type is referred to by in SQL, and the alias carried by every logical type instance of it. The
+ * name is borrowed and copied. Calling this again replaces the previous name. A name must be set before registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The type to set the name of.
+ * @param name The name to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_set_name(duckdb_v2_custom_type_handle type,
+                                                            duckdb_v2_identifier_t name,
+                                                            duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the base type of the custom type.
+ *
+ * The custom type shares the base type's internal representation but is logically distinct, so it can carry its own
+ * cast functions. The type is borrowed and copied. Calling this again replaces the previous base type. A base type must
+ * be set before registration, and it must be a fully defined concrete type -- ANY is a signature wildcard, not
+ * something a registered type can be built on.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The type to set the base type of.
+ * @param base_type The logical type to base the custom type on. Borrowed for the call only.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_set_base_type(duckdb_v2_custom_type_handle type,
+                                                                 duckdb_v2_logical_type_handle base_type,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the custom type, making it available for use in SQL queries.
+ *
+ * The type is registered on the target given at creation: the connection's database or the loading extension.
+ * Registration requires a name and a complete base type. The caller still owns the handle after registration and must
+ * destroy it with `duckdb_v2_custom_type_destroy()`, which does not affect the registered type.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The type to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_register(duckdb_v2_custom_type_handle type,
+                                                            duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys the custom type, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered type.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The type to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_destroy(duckdb_v2_custom_type_handle *type);
+
+/* --- Struct definitions for custom type --- */
 
 /* ============================================================================
  * MODULE: data_chunk

@@ -74,6 +74,8 @@ enum class LogicalTypeId : uint32_t;
 
 template <class CTX>
 class TypeBuilder;
+class CustomType;
+class CastFunction;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -3584,6 +3586,169 @@ public:
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Custom Type
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A user-defined type, built up with the setters and made live with `Register`.
+/// Create one against the `Connection` or `Extension` it will be registered in, give it a name and a base type, then
+/// call `Register`. The type object may be destroyed after registration; the registered type lives on in the catalog.
+///
+/// A custom type borrows its base type's internal representation, so the execution engine needs no special handling
+/// for it, while staying logically distinct from the base type so it can carry its own casts. Values of it are
+/// produced and read with the base type's vector accessors; to hand one back out under the custom name, alias the
+/// base type with `LogicalType::WithAlias`.
+class CustomType final : public detail::Handle<CustomType> {
+	friend detail::Factory;
+
+public:
+	CustomType(CustomType &&) noexcept = default;
+	CustomType &operator=(CustomType &&) noexcept = default;
+
+	~CustomType() override;
+
+	/// Creates a type that `Register` adds to the connection's database.
+	static auto Create(const Connection &conn) -> CustomType;
+	/// Creates a type that `Register` adds through the loading extension.
+	static auto Create(const Extension &extension) -> CustomType;
+
+	/// Sets the type's name, as SQL will refer to it, and as every logical type instance of it carries as its alias.
+	auto SetName(const std::string &name) & -> CustomType &;
+
+	/// Sets the type whose representation this type borrows. Must be a fully defined concrete type.
+	auto SetBaseType(const LogicalType &type) & -> CustomType &;
+
+	/// Registers the type in the catalog it was created against. The type object remains valid and may be adjusted
+	/// and registered again.
+	/// @throws InvalidInputException When the name or the base type is missing, or the base type is not concrete.
+	auto Register() -> void;
+
+private:
+	explicit CustomType(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Cast Function
+//----------------------------------------------------------------------------------------------------------------------
+
+/// The mode a cast runs in, which decides what a conversion failure means.
+enum class CastMode : uint8_t {
+	/// A regular cast. Throwing from the exec callback aborts the query.
+	NORMAL = 0,
+	/// A "try" cast (SQL TRY_CAST). The rows the callback could not convert should be left NULL in the output; an
+	/// exception thrown anyway is swallowed and those rows stay NULL.
+	TRY = 1,
+};
+
+/// A user-defined cast between two types, built up with the setters and made live with `Register`.
+/// Create one against the `Connection` or `Extension` it will be registered in, describe it (source type, target
+/// type, exec callback), then call `Register`. The function object may be destroyed after registration; the
+/// registered cast lives on.
+///
+/// A cast is keyed by its (source, target) type pair rather than by a name, and is reached from SQL through CAST and
+/// TRY_CAST -- and, when it declares a non-negative implicit cast cost, through the binder converting argument types
+/// on its own. The exec callback converts a whole batch at a time; whether a per-row failure aborts the query or
+/// becomes a NULL follows from `ExecInput::GetMode`.
+class CastFunction final : public detail::Handle<CastFunction> {
+	friend detail::Factory;
+
+public:
+	class ExecInput;
+
+	/// Called for every batch of values; must fill the output vector. Required.
+	using ExecCallback = void (*)(ExecInput &input);
+
+	CastFunction(CastFunction &&) noexcept = default;
+	CastFunction &operator=(CastFunction &&) noexcept = default;
+
+	~CastFunction() override;
+
+	/// Creates a cast that `Register` adds to the connection's database.
+	static auto Create(const Connection &conn) -> CastFunction;
+	/// Creates a cast that `Register` adds through the loading extension.
+	static auto Create(const Extension &extension) -> CastFunction;
+
+	/// Sets the type the cast converts from. Must be a fully defined concrete type.
+	auto SetSourceType(const LogicalType &type) & -> CastFunction &;
+
+	/// Sets the type the cast converts to. Must be a fully defined concrete type.
+	auto SetTargetType(const LogicalType &type) & -> CastFunction &;
+
+	/// Sets what it costs to apply this cast implicitly. The binder uses the cost to choose between candidate
+	/// implicit casts: a lower non-negative cost makes this cast more likely to be picked. Built-in widening casts
+	/// sit in the [0, 20] range. A negative cost -- the default -- keeps the cast out of implicit conversion
+	/// entirely, so it is reached only through an explicit CAST or TRY_CAST.
+	/// @param cost The cost, or a negative value to disable implicit casting.
+	auto SetImplicitCastCost(int64_t cost) & -> CastFunction &;
+
+	/// Constructs user data of type `T`, carried by the registered cast and freed at engine teardown; read it from the
+	/// exec callback via `ExecInput::GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> CastFunction & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	auto SetExecCallback(ExecCallback callback) & -> CastFunction &;
+
+	/// Registers the cast in the database it was created against, replacing whatever cast was registered for the same
+	/// type pair. The function object remains valid and may be adjusted and registered again; user data set via
+	/// `SetUserData` is consumed by the first `Register`.
+	/// @throws InvalidInputException When the source type, target type, or exec callback is missing, or either type is
+	/// not concrete.
+	auto Register() -> void;
+
+private:
+	explicit CastFunction(void *impl);
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	ExecCallback exec_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the exec callback works with. Borrowed, valid only for the callback duration.
+	class ExecInput {
+		friend detail::Factory;
+
+	public:
+		/// The user data set via `CastFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many rows this execution must convert: the callback writes exactly this many entries to the output
+		/// vector. May be less than a full vector; a constant input is converted as a single row and the engine
+		/// expands the result.
+		auto GetRowCount() const -> idx_t;
+
+		/// The input vector holding the values to convert.
+		auto GetInput() const -> Vector;
+
+		/// The output vector to fill.
+		auto GetOutput() const -> Vector;
+
+		/// The mode this cast runs in. In `CastMode::TRY` a failed row should be left NULL rather than reported by
+		/// throwing.
+		auto GetMode() const -> CastMode;
+
+		/// The execution context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		ExecInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
 		void *GetUserDataInternal() const;
 	};
 };

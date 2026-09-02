@@ -6,12 +6,14 @@ add_library_unity(
   capi_v2_arena.cpp
   capi_v2_column_data_collection.cpp
   capi_v2_connection.cpp
+  capi_v2_custom_type.cpp
   capi_v2_data_chunk.cpp
   capi_v2_database.cpp
   capi_v2_environment.cpp
   capi_v2_error.cpp
   capi_v2_extension.cpp
   capi_v2_func_aggregate.cpp
+  capi_v2_func_cast.cpp
   capi_v2_func_properties.cpp
   capi_v2_func_scalar.cpp
   capi_v2_func_signature.cpp
