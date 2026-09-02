@@ -38,6 +38,11 @@ namespace duckdb {
 	    "Corrupted uncompressed string segment: negative dictionary offset does not describe an overflow marker");
 }
 
+[[noreturn]] static void ThrowStringDictionaryEntryOutOfBounds() {
+	throw DataCorruptionException(
+	    "Corrupted uncompressed string segment: dictionary entry extends past the dictionary");
+}
+
 static uint32_t GetStringOffsetMagnitude(int32_t offset) {
 	if (offset == NumericLimits<int32_t>::Minimum()) {
 		ThrowStringOffsetMinimumValue();
@@ -75,6 +80,18 @@ uint32_t StringScanState::SegmentLayout::GetStringLength(int32_t current_offset,
 	return string_length;
 }
 
+unsafe_array_ptr<const uint8_t> StringScanState::SegmentLayout::GetDictionaryEntry(int32_t dict_offset,
+                                                                                   uint32_t entry_size) const {
+	auto magnitude = GetStringOffsetMagnitude(dict_offset);
+	if (magnitude > dictionary.size) {
+		ThrowStringOffsetOutsideDictionary(magnitude, dictionary.size);
+	}
+	if (entry_size > magnitude) {
+		ThrowStringDictionaryEntryOutOfBounds();
+	}
+	return dictionary_data.SubArray(dictionary.size - magnitude, entry_size);
+}
+
 StringScanState::SegmentLayout StringScanState::ReadSegmentLayout(const BufferHandle &handle,
                                                                  const ColumnSegment &segment) {
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "uncompressed string segment");
@@ -88,8 +105,9 @@ StringScanState::SegmentLayout StringScanState::ReadSegmentLayout(const BufferHa
 	    offset_count > (dictionary_start - UncompressedStringStorage::DICTIONARY_HEADER_SIZE) / sizeof(int32_t)) {
 		ThrowStringOffsetTableOutOfBounds();
 	}
+	auto dictionary_data = reader.GetBytes(dictionary_start, dictionary.size);
 	auto offsets = reader.GetArray<int32_t>(UncompressedStringStorage::DICTIONARY_HEADER_SIZE, offset_count);
-	return {dictionary, offsets};
+	return {dictionary, dictionary_data, offsets};
 }
 
 StringScanState::StringScanState(BufferHandle handle_p, const ColumnSegment &segment)
@@ -181,8 +199,6 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto start = state.GetPositionInSegment();
 
-	auto baseptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-	auto dict_end = scan_state.layout.dictionary.end;
 	auto base_data = scan_state.layout.offsets;
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
@@ -192,7 +208,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 		auto current_offset = base_data[start + i];
 		auto string_length = scan_state.layout.GetStringLength(current_offset, previous_offset);
 		result_data[result_offset + i] =
-		    FetchStringFromDict(state.context, segment, dict_end, result, baseptr, current_offset, string_length);
+		    FetchStringFromDict(state.context, segment, scan_state.layout, result, current_offset, string_length);
 		previous_offset = base_data[start + i];
 	}
 }
@@ -211,8 +227,6 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto start = state.GetPositionInSegment();
 
-	auto baseptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-	auto dict_end = scan_state.layout.dictionary.end;
 	auto base_data = scan_state.layout.offsets;
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
@@ -222,7 +236,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 		auto prev_offset = index > 0 ? base_data[index - 1] : 0;
 		auto string_length = scan_state.layout.GetStringLength(current_offset, prev_offset);
 		result_data[i] =
-		    FetchStringFromDict(state.context, segment, dict_end, result, baseptr, current_offset, string_length);
+		    FetchStringFromDict(state.context, segment, scan_state.layout, result, current_offset, string_length);
 	}
 }
 
@@ -252,8 +266,6 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	auto &handle = state.GetOrInsertHandle(segment);
 	auto layout = StringScanState::ReadSegmentLayout(handle, segment);
 
-	auto baseptr = handle.GetDataMutable() + segment.GetBlockOffset();
-	auto dict_end = layout.dictionary.end;
 	auto base_data = layout.offsets;
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
@@ -267,7 +279,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 		string_length = layout.GetStringLength(dict_offset, base_data[row_index - 1]);
 	}
 	result_data[result_idx] =
-	    FetchStringFromDict(state.context, segment, dict_end, result, baseptr, dict_offset, string_length);
+	    FetchStringFromDict(state.context, segment, layout, result, dict_offset, string_length);
 }
 
 //===--------------------------------------------------------------------===//
@@ -390,11 +402,6 @@ StringDictionaryContainer UncompressedStringStorage::GetDictionary(ColumnSegment
 	container.size = Load<uint32_t>(startptr);
 	container.end = Load<uint32_t>(startptr + sizeof(uint32_t));
 	return container;
-}
-
-uint32_t UncompressedStringStorage::GetDictionaryEnd(ColumnSegment &segment, BufferHandle &handle) {
-	auto startptr = handle.GetDataMutable() + segment.GetBlockOffset();
-	return Load<uint32_t>(startptr + sizeof(uint32_t));
 }
 
 idx_t UncompressedStringStorage::RemainingSpace(ColumnSegment &segment, BufferHandle &handle) {
@@ -541,12 +548,6 @@ void UncompressedStringStorage::WriteStringMarker(data_ptr_t target, block_id_t 
 	memcpy(target, &block_id, sizeof(block_id_t));
 	target += sizeof(block_id_t);
 	memcpy(target, &offset, sizeof(int32_t));
-}
-
-void UncompressedStringStorage::ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset) {
-	memcpy(&block_id, target, sizeof(block_id_t));
-	target += sizeof(block_id_t);
-	memcpy(&offset, target, sizeof(int32_t));
 }
 
 } // namespace duckdb
