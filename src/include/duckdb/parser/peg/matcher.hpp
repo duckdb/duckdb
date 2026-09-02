@@ -205,29 +205,26 @@ struct MatchState {
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
-struct MatchChildRequest {
-	MatchChildRequest(const Matcher &matcher_p, MatchState &state_p) : matcher(matcher_p), state(state_p) {
-	}
-
+struct MatchInput {
 	const Matcher &matcher;
 	MatchState &state;
 };
 
 class MatchStep {
 public:
-	static MatchStep Child(const Matcher &matcher, MatchState &state);
+	static MatchStep Child(MatchInput input);
 	static MatchStep Complete(MatcherResult result);
 
-	optional<MatchChildRequest> GetChild();
+	optional<MatchInput> GetChild();
 	MatcherResult GetResult() const;
 
 private:
-	MatchStep(optional<MatchChildRequest> child_p, optional<MatcherResult> result_p)
+	MatchStep(optional<MatchInput> child_p, optional<MatcherResult> result_p)
 	    : child(std::move(child_p)), result(std::move(result_p)) {
 	}
 
 private:
-	optional<MatchChildRequest> child;
+	optional<MatchInput> child;
 	optional<MatcherResult> result;
 };
 

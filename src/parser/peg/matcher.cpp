@@ -18,7 +18,9 @@
 
 namespace duckdb {
 
-static MatcherResult ExecuteRecursive(const Matcher &matcher, MatchState &state) {
+static MatcherResult ExecuteRecursive(MatchInput input) {
+	auto &matcher = input.matcher;
+	auto &state = input.state;
 	state.rule = matcher.GetRule();
 	PackratMatchState packrat_state;
 	if (PackratMatchState::IsEnabled(matcher, state)) {
@@ -39,16 +41,17 @@ static MatcherResult ExecuteRecursive(const Matcher &matcher, MatchState &state)
 			packrat_state.StoreResult(matcher, state, result);
 			return result;
 		}
-		child_result = child->matcher.MatchParseResult(child->state);
+		child_result = ExecuteRecursive(*child);
 	}
 }
 
 MatcherResult Matcher::MatchParseResult(MatchState &state) const {
+	MatchInput input {*this, state};
 	if (state.use_heap_based_parser) {
 		MatchStack stack;
-		return stack.Execute(*this, state);
+		return stack.Execute(input);
 	}
-	return ExecuteRecursive(*this, state);
+	return ExecuteRecursive(input);
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {

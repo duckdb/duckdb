@@ -34,7 +34,7 @@ public:
 		D_ASSERT(awaiting_child == child_result.has_value());
 		if (!child_result) {
 			awaiting_child = true;
-			return MatchStep::Child(child, child_state);
+			return MatchStep::Child({child, child_state});
 		}
 		awaiting_child = false;
 		if (child_result->IsSuccess()) {

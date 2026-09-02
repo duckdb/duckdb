@@ -6,15 +6,15 @@
 
 namespace duckdb {
 
-MatchStep MatchStep::Child(const Matcher &matcher, MatchState &state) {
-	return MatchStep(MatchChildRequest(matcher, state), nullopt);
+MatchStep MatchStep::Child(MatchInput input) {
+	return MatchStep(input, nullopt);
 }
 
 MatchStep MatchStep::Complete(MatcherResult result) {
 	return MatchStep(nullopt, std::move(result));
 }
 
-optional<MatchChildRequest> MatchStep::GetChild() {
+optional<MatchInput> MatchStep::GetChild() {
 	return child;
 }
 
@@ -74,7 +74,7 @@ public:
 			bool at_autocomplete_cursor = current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 			if (!at_autocomplete_cursor) {
 				awaiting_child = true;
-				return MatchStep::Child(matcher.matchers[child_index].get(), list_state);
+				return MatchStep::Child({matcher.matchers[child_index].get(), list_state});
 			}
 			if (matcher.suppress_suggestions) {
 				DiscardSuggestions();
@@ -147,7 +147,7 @@ public:
 		}
 		child_state = make_uniq<MatchState>(state);
 		awaiting_child = true;
-		return MatchStep::Child(matcher.matchers[child_index].get(), *child_state);
+		return MatchStep::Child({matcher.matchers[child_index].get(), *child_state});
 	}
 
 private:
@@ -176,7 +176,7 @@ public:
 		D_ASSERT(awaiting_child == child_result.has_value());
 		if (!child_result) {
 			awaiting_child = true;
-			return MatchStep::Child(matcher.GetChildMatcher(), child_state);
+			return MatchStep::Child({matcher.GetChildMatcher(), child_state});
 		}
 		awaiting_child = false;
 		if (!child_result->IsSuccess()) {
@@ -233,7 +233,7 @@ public:
 			}
 		}
 		awaiting_child = true;
-		return MatchStep::Child(matcher.GetChildMatcher(), repeat_state);
+		return MatchStep::Child({matcher.GetChildMatcher(), repeat_state});
 	}
 
 private:

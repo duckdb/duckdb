@@ -32,13 +32,12 @@ void PackratMatchState::StoreResult(const Matcher &matcher, MatchState &state, c
 	state.packrat_cache->Store(matcher, token_index_before.GetIndex(), cache_entry);
 }
 
-MatchStackFrame::MatchStackFrame(const Matcher &matcher_p, MatchState &state_p)
-    : matcher(matcher_p), match_state(state_p) {
+MatchStackFrame::MatchStackFrame(MatchInput input) : matcher(input.matcher), match_state(input.state) {
 }
 
-void MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
-	state.rule = matcher.GetRule();
-	frames.push_back(make_uniq<MatchStackFrame>(matcher, state));
+void MatchStack::PushFrame(MatchInput input) {
+	input.state.rule = input.matcher.GetRule();
+	frames.push_back(make_uniq<MatchStackFrame>(input));
 }
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
@@ -70,7 +69,7 @@ void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 		frame.result = step.GetResult();
 		return;
 	}
-	PushFrame(child->matcher, child->state);
+	PushFrame(*child);
 }
 
 MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
@@ -82,9 +81,9 @@ MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
 	return result;
 }
 
-MatcherResult MatchStack::ExecuteInternal(const Matcher &matcher, MatchState &state) {
+MatcherResult MatchStack::Execute(MatchInput input) {
 	D_ASSERT(frames.empty());
-	PushFrame(matcher, state);
+	PushFrame(input);
 	while (!frames.empty()) {
 		auto &frame = *frames.back();
 		ExecuteFrame(frame);
@@ -101,10 +100,6 @@ MatcherResult MatchStack::ExecuteInternal(const Matcher &matcher, MatchState &st
 		parent.child_result = result;
 	}
 	throw InternalException("Matcher stack completed without a result");
-}
-
-MatcherResult MatchStack::Execute(const Matcher &matcher, MatchState &state) {
-	return ExecuteInternal(matcher, state);
 }
 
 } // namespace duckdb

@@ -27,7 +27,7 @@ private:
 };
 
 struct MatchStackFrame {
-	MatchStackFrame(const Matcher &matcher, MatchState &state);
+	explicit MatchStackFrame(MatchInput input);
 
 	const Matcher &matcher;
 	MatchState &match_state;
@@ -40,14 +40,13 @@ struct MatchStackFrame {
 
 class MatchStack {
 public:
-	MatcherResult Execute(const Matcher &matcher, MatchState &state);
+	MatcherResult Execute(MatchInput input);
 
 private:
-	void PushFrame(const Matcher &matcher, MatchState &state);
+	void PushFrame(MatchInput input);
 	void InitializeFrame(MatchStackFrame &frame);
 	void ExecuteFrame(MatchStackFrame &frame);
 	MatcherResult FinalizeFrame(MatchStackFrame &frame);
-	MatcherResult ExecuteInternal(const Matcher &matcher, MatchState &state);
 
 private:
 	vector<unique_ptr<MatchStackFrame>> frames;
