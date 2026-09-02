@@ -593,55 +593,57 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 		return false;
 	}
 
-	// Resolve bound column references in the index_expr against the current input projection
-	column_t updated_index_column;
-	bool found_index_column_in_input = false;
-
-	// Find the indexed column amongst the input columns
-	for (idx_t i = 0; i < input.column_ids.size(); ++i) {
-		if (input.column_ids[i] == indexed_columns[0]) {
-			updated_index_column = i;
-			found_index_column_in_input = true;
-			break;
-		}
-	}
-
-	// If found, update the bound column ref within index_expr
-	if (found_index_column_in_input) {
-		ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
-			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-				return;
+	// The index stores physical table column IDs, while input.column_indexes contains logical table column IDs
+	// for every column read by the scan, including filter-only columns. Resolve an indexed physical column to its
+	// position in this scan input column list.
+	auto find_scan_position = [&](column_t physical_column_id) -> optional_idx {
+		auto &indexed_column = column_list.GetColumn(PhysicalIndex(physical_column_id));
+		for (idx_t i = 0; i < input.column_indexes.size(); i++) {
+			if (input.column_indexes[i].ToLogical() == indexed_column.Logical()) {
+				return optional_idx(i);
 			}
-
-			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
-
-			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.binding.column_index == indexed_columns[0]) {
-				bound_column_ref_expr.binding.column_index = updated_index_column;
-			}
-		});
-	}
-
-	// Get ART column.
-	auto &col = column_list.GetColumn(LogicalIndex(indexed_columns[0]));
-
-	// The indexes of the filters match input.column_indexes, which are: i -> column_index.
-	// Try to find a filter on the ART column.
-	optional_idx storage_index;
-	for (idx_t i = 0; i < input.column_indexes.size(); i++) {
-		if (input.column_indexes[i].ToLogical() == col.Logical()) {
-			storage_index = i;
-			break;
 		}
+		return optional_idx();
+	};
+
+	// Get the ART column and find it in the current scan input column list.
+	auto &col = column_list.GetColumn(PhysicalIndex(indexed_columns[0]));
+	auto scan_position = find_scan_position(indexed_columns[0]);
+
+	// The ART column is not part of the current scan input.
+	if (!scan_position.IsValid()) {
+		return false;
 	}
 
-	// No filter matches the ART column.
-	if (!storage_index.IsValid()) {
+	// The column index of a bound column reference in an unbound index expression is an ordinal into
+	// indexed_columns. Rebind every reference to its position in the current scan input column list.
+	bool rewrite_possible = true;
+	ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
+		if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return;
+		}
+
+		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
+		auto index_column_ordinal = bound_column_ref.binding.column_index;
+		if (index_column_ordinal >= indexed_columns.size()) {
+			rewrite_possible = false;
+			return;
+		}
+
+		auto referenced_scan_position = find_scan_position(indexed_columns[index_column_ordinal]);
+		if (!referenced_scan_position.IsValid()) {
+			rewrite_possible = false;
+			return;
+		}
+
+		bound_column_ref.binding.column_index = referenced_scan_position.GetIndex();
+	});
+	if (!rewrite_possible) {
 		return false;
 	}
 
 	// Try to find a matching filter for the column.
-	auto filter = filter_set.filters.find(storage_index.GetIndex());
+	auto filter = filter_set.filters.find(scan_position.GetIndex());
 	if (filter == filter_set.filters.end()) {
 		return false;
 	}
@@ -662,7 +664,7 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 		arts_to_scan.push_back(entry.added_data_during_checkpoint->Cast<ART>());
 	}
 
-	auto expressions = ExtractFilterExpressions(col, filter->second, storage_index.GetIndex());
+	auto expressions = ExtractFilterExpressions(col, filter->second, scan_position.GetIndex());
 	for (const auto &filter_expr : expressions) {
 		for (auto &art_ref : arts_to_scan) {
 			auto &art_to_scan = art_ref.get();
