@@ -64,6 +64,7 @@ blacklist = [
     "WatermarkState",
     "WriterWakeMode",
     "FunctionDataKind",
+    "BoundFunctionSQLExportType",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")

@@ -487,6 +487,84 @@ static FunctionSQLExportResult ExportInvalidAggregateFailure(AggregateFunctionSQ
 	return InvalidSQLExportFailure();
 }
 
+template <class INPUT>
+static FunctionSQLExportResult ExportScopedFunctionFailure(INPUT &input, LogicalPlanVerificationPhase phase,
+                                                           LogicalPlanVerificationPath path) {
+	LogicalPlanVerificationIssue issue;
+	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION;
+	issue.phase = phase;
+	issue.path = std::move(path);
+	issue.construct = LogicalPlanVerificationConstructIdentity::Function(input.identity);
+	issue.message = "Synthetic function SQL export hook rejected the expression";
+	vector<LogicalPlanVerificationIssue> issues;
+	issues.push_back(std::move(issue));
+	return FunctionSQLExportResult::Failure(std::move(issues));
+}
+
+template <class INPUT>
+static LogicalPlanVerificationPath OtherRootPath(INPUT &input) {
+	LogicalPlanVerificationPath path;
+	path.root = input.path.root == LogicalPlanVerificationPathRoot::LOGICAL_PLAN
+	                ? LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION
+	                : LogicalPlanVerificationPathRoot::LOGICAL_PLAN;
+	return path;
+}
+
+template <class INPUT>
+static LogicalPlanVerificationPath SiblingPath(INPUT &input) {
+	auto path = input.path;
+	D_ASSERT(!path.components.empty());
+	path.components.back().ordinal++;
+	return path;
+}
+
+template <class INPUT>
+static LogicalPlanVerificationPath DescendantPath(INPUT &input) {
+	auto path = input.path;
+	path.components.push_back({LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, 0});
+	return path;
+}
+
+static FunctionSQLExportResult ExportScalarVerifyFailure(ScalarFunctionSQLExportInput &input) {
+	return ExportScopedFunctionFailure(input, LogicalPlanVerificationPhase::VERIFY, input.path);
+}
+
+static FunctionSQLExportResult ExportAggregateVerifyFailure(AggregateFunctionSQLExportInput &input) {
+	return ExportScopedFunctionFailure(input, LogicalPlanVerificationPhase::VERIFY, input.path);
+}
+
+static FunctionSQLExportResult ExportScalarPlanFailure(ScalarFunctionSQLExportInput &input) {
+	return ExportScopedFunctionFailure(input, LogicalPlanVerificationPhase::PLAN_EXPORT, input.path);
+}
+
+static FunctionSQLExportResult ExportAggregatePlanFailure(AggregateFunctionSQLExportInput &input) {
+	return ExportScopedFunctionFailure(input, LogicalPlanVerificationPhase::PLAN_EXPORT, input.path);
+}
+
+static FunctionSQLExportResult ExportScalarWrongRootFailure(ScalarFunctionSQLExportInput &input) {
+	return ExportScopedFunctionFailure(input, LogicalPlanVerificationPhase::EXPRESSION_EXPORT, OtherRootPath(input));
+}
+
+static FunctionSQLExportResult ExportAggregateWrongRootFailure(AggregateFunctionSQLExportInput &input) {
+	return ExportScopedFunctionFailure(input, LogicalPlanVerificationPhase::EXPRESSION_EXPORT, OtherRootPath(input));
+}
+
+static FunctionSQLExportResult ExportScalarSiblingFailure(ScalarFunctionSQLExportInput &input) {
+	return ExportScopedFunctionFailure(input, LogicalPlanVerificationPhase::EXPRESSION_EXPORT, SiblingPath(input));
+}
+
+static FunctionSQLExportResult ExportAggregateSiblingFailure(AggregateFunctionSQLExportInput &input) {
+	return ExportScopedFunctionFailure(input, LogicalPlanVerificationPhase::EXPRESSION_EXPORT, SiblingPath(input));
+}
+
+static FunctionSQLExportResult ExportScalarDescendantFailure(ScalarFunctionSQLExportInput &input) {
+	return ExportScopedFunctionFailure(input, LogicalPlanVerificationPhase::EXPRESSION_EXPORT, DescendantPath(input));
+}
+
+static FunctionSQLExportResult ExportAggregateDescendantFailure(AggregateFunctionSQLExportInput &input) {
+	return ExportScopedFunctionFailure(input, LogicalPlanVerificationPhase::EXPRESSION_EXPORT, DescendantPath(input));
+}
+
 static FunctionSQLExportResult ExportScalarFailure(ScalarFunctionSQLExportInput &input) {
 	LogicalPlanVerificationIssue issue;
 	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE;
@@ -1501,6 +1579,11 @@ TEST_CASE("Bound expression SQL export uses canonical read-only function hooks",
 	register_scalar(Identifier("bad_alloc_scalar_hook"), ExportBadAllocScalar);
 	register_scalar(Identifier("empty_scalar_failure_hook"), ExportEmptyScalarFailure);
 	register_scalar(Identifier("invalid_scalar_failure_hook"), ExportInvalidScalarFailure);
+	register_scalar(Identifier("verify_scalar_failure_hook"), ExportScalarVerifyFailure);
+	register_scalar(Identifier("plan_scalar_failure_hook"), ExportScalarPlanFailure);
+	register_scalar(Identifier("wrong_root_scalar_failure_hook"), ExportScalarWrongRootFailure);
+	register_scalar(Identifier("sibling_scalar_failure_hook"), ExportScalarSiblingFailure);
+	register_scalar(Identifier("descendant_scalar_failure_hook"), ExportScalarDescendantFailure);
 	register_scalar(Identifier("failing_scalar_hook"), ExportScalarFailure);
 
 	auto register_aggregate = [&](const Identifier &name, aggregate_function_sql_export_t callback) {
@@ -1517,6 +1600,11 @@ TEST_CASE("Bound expression SQL export uses canonical read-only function hooks",
 	register_aggregate(Identifier("throwing_sum_hook"), ExportThrowingAggregate);
 	register_aggregate(Identifier("empty_sum_failure_hook"), ExportEmptyAggregateFailure);
 	register_aggregate(Identifier("invalid_sum_failure_hook"), ExportInvalidAggregateFailure);
+	register_aggregate(Identifier("verify_sum_failure_hook"), ExportAggregateVerifyFailure);
+	register_aggregate(Identifier("plan_sum_failure_hook"), ExportAggregatePlanFailure);
+	register_aggregate(Identifier("wrong_root_sum_failure_hook"), ExportAggregateWrongRootFailure);
+	register_aggregate(Identifier("sibling_sum_failure_hook"), ExportAggregateSiblingFailure);
+	register_aggregate(Identifier("descendant_sum_failure_hook"), ExportAggregateDescendantFailure);
 	register_aggregate(Identifier("failing_sum_hook"), ExportAggregateFailure);
 	loader.RefreshSearchPath(*connection.context);
 	connection.BeginTransaction();
@@ -1586,6 +1674,30 @@ TEST_CASE("Bound expression SQL export uses canonical read-only function hooks",
 	auto invalid_scalar_failure = bind_scalar("invalid_scalar_failure_hook");
 	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*invalid_scalar_failure, context), root_path,
 	                         "Scalar function SQL export callback returned an invalid result");
+	auto verify_scalar_failure = bind_scalar("verify_scalar_failure_hook");
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*verify_scalar_failure, context), root_path,
+	                         "Scalar function SQL export callback returned an invalid result");
+	auto plan_scalar_failure = bind_scalar("plan_scalar_failure_hook");
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*plan_scalar_failure, context), root_path,
+	                         "Scalar function SQL export callback returned an invalid result");
+	auto wrong_root_scalar_failure = bind_scalar("wrong_root_scalar_failure_hook");
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*wrong_root_scalar_failure, context), root_path,
+	                         "Scalar function SQL export callback returned an invalid result");
+	auto sibling_scalar_failure = bind_scalar("sibling_scalar_failure_hook");
+	auto nested_sibling_scalar_failure = BoundComparisonExpression::Create(
+	    ExpressionType::COMPARE_EQUAL, std::move(sibling_scalar_failure), Constant(Value::INTEGER(7)));
+	auto scalar_hook_path = root_path;
+	scalar_hook_path.components.push_back({LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, 0});
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*nested_sibling_scalar_failure, context),
+	                         scalar_hook_path, "Scalar function SQL export callback returned an invalid result");
+	auto descendant_scalar_failure = bind_scalar("descendant_scalar_failure_hook");
+	auto scalar_descendant_path = root_path;
+	scalar_descendant_path.components.push_back({LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, 0});
+	auto scalar_descendant_result = BoundExpressionSQLExporter::Export(*descendant_scalar_failure, context);
+	RequireIssue(scalar_descendant_result, LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION,
+	             scalar_descendant_path);
+	REQUIRE(scalar_descendant_result.GetIssues()[0].message ==
+	        "Synthetic function SQL export hook rejected the expression");
 
 	auto modified_aggregate_plan =
 	    BindExportQuery(connection, "SELECT " + schema_name.GetIdentifierName() +
@@ -1641,6 +1753,30 @@ TEST_CASE("Bound expression SQL export uses canonical read-only function hooks",
 	auto invalid_aggregate_failure = bind_aggregate("invalid_sum_failure_hook");
 	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*invalid_aggregate_failure, context), root_path,
 	                         "Aggregate function SQL export callback returned an invalid result");
+	auto verify_aggregate_failure = bind_aggregate("verify_sum_failure_hook");
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*verify_aggregate_failure, context), root_path,
+	                         "Aggregate function SQL export callback returned an invalid result");
+	auto plan_aggregate_failure = bind_aggregate("plan_sum_failure_hook");
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*plan_aggregate_failure, context), root_path,
+	                         "Aggregate function SQL export callback returned an invalid result");
+	auto wrong_root_aggregate_failure = bind_aggregate("wrong_root_sum_failure_hook");
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*wrong_root_aggregate_failure, context), root_path,
+	                         "Aggregate function SQL export callback returned an invalid result");
+	auto sibling_aggregate_failure = bind_aggregate("sibling_sum_failure_hook");
+	auto nested_sibling_aggregate_failure = BoundComparisonExpression::Create(
+	    ExpressionType::COMPARE_EQUAL, std::move(sibling_aggregate_failure), Constant(Value::BIGINT(7)));
+	auto aggregate_hook_path = root_path;
+	aggregate_hook_path.components.push_back({LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, 0});
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*nested_sibling_aggregate_failure, context),
+	                         aggregate_hook_path, "Aggregate function SQL export callback returned an invalid result");
+	auto descendant_aggregate_failure = bind_aggregate("descendant_sum_failure_hook");
+	auto aggregate_descendant_path = root_path;
+	aggregate_descendant_path.components.push_back({LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, 0});
+	auto aggregate_descendant_result = BoundExpressionSQLExporter::Export(*descendant_aggregate_failure, context);
+	RequireIssue(aggregate_descendant_result, LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION,
+	             aggregate_descendant_path);
+	REQUIRE(aggregate_descendant_result.GetIssues()[0].message ==
+	        "Synthetic function SQL export hook rejected the expression");
 	auto failing_aggregate = bind_aggregate("failing_sum_hook");
 	auto aggregate_failure = BoundExpressionSQLExporter::Export(*failing_aggregate, context);
 	RequireIssue(aggregate_failure, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, root_path);
