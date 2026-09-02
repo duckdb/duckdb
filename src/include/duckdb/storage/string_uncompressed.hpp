@@ -37,10 +37,13 @@ public:
 	struct SegmentLayout {
 		//! Dictionary size and end read from the first eight segment bytes and validated within the segment.
 		StringDictionaryContainer dictionary;
-		//! One persisted dictionary offset per row, after verifying every entry fits before the dictionary bytes.
+		//! Dictionary bytes [dictionary.end - dictionary.size, dictionary.end)
+		unsafe_array_ptr<const uint8_t> dictionary_data;
+		//! Dictionary offsets read from the segment after validating the array's byte range.
 		unsafe_array_ptr<const int32_t> offsets;
 
 		uint32_t GetStringLength(int32_t current_offset, int32_t previous_offset) const;
+		unsafe_array_ptr<const uint8_t> GetDictionaryEntry(int32_t dict_offset, uint32_t entry_size) const;
 	};
 
 	static SegmentLayout ReadSegmentLayout(const BufferHandle &handle, const ColumnSegment &segment);
@@ -240,7 +243,6 @@ public:
 public:
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
-	static uint32_t GetDictionaryEnd(ColumnSegment &segment, BufferHandle &handle);
 	static idx_t RemainingSpace(ColumnSegment &segment, BufferHandle &handle);
 	static void WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
 	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
@@ -277,6 +279,32 @@ public:
 			block_id_t block_id;
 			int32_t offset;
 			ReadStringMarker(base_ptr + dict_end_offset - AbsValue<int32_t>(dict_offset), block_id, offset);
+
+			return ReadOverflowString(context, segment, result, block_id, offset);
+		}
+	}
+
+	inline static string_t FetchStringFromDict(const QueryContext &context, ColumnSegment &segment,
+	                                           const StringScanState::SegmentLayout &layout, Vector &result,
+	                                           int32_t dict_offset, uint32_t string_length) {
+		auto entry = layout.GetDictionaryEntry(dict_offset, string_length);
+		if (DUCKDB_LIKELY(dict_offset >= 0)) {
+			// regular string - fetch from dictionary
+			auto str_ptr = const_char_ptr_cast(entry.data());
+			return string_t(str_ptr, string_length);
+		} else if (string_length == 0) {
+			// NULL values are stored as a copy of the previous entry's dictionary offset (see
+			// StringAppendBase). When the previous entry is a big (overflow) string, its offset is
+			// negative, so the NULL inherits that negative offset even though it references no
+			// overflow data (its computed length is 0). Return an empty string here instead of
+			// following the marker into ReadOverflowString - otherwise every NULL that trails a big
+			// string re-reads and re-allocates the entire overflow string (O(num_nulls * big_size)
+			// memory, tagged OVERFLOW_STRINGS). The value is masked NULL by the caller regardless.
+			return string_t(const_char_ptr_cast(entry.data()), 0);
+		} else {
+			// read overflow string
+			auto block_id = Load<block_id_t>(entry.data());
+			auto offset = Load<int32_t>(entry.data() + sizeof(block_id_t));
 
 			return ReadOverflowString(context, segment, result, block_id, offset);
 		}
