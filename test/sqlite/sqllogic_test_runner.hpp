@@ -110,6 +110,9 @@ public:
 	bool test_skipped_requirement = false;
 	string test_skip_reason;
 	TestSkipKind test_skip_kind = TestSkipKind::REQUIREMENT;
+	//! Error text of the statement that failed, when it failed with one. The driver otherwise only
+	//! sees a file:line locator, and the text is what says why.
+	string last_error_message;
 	//! Locator for the failing command (file:line), stashed at the throw site for --emit-test-events.
 	//! A Catch FAIL carries no message; consumers get this anchor to correlate with captured output.
 	//! Written single-threaded: serial fails throw directly; concurrent fails are re-raised post-join.
