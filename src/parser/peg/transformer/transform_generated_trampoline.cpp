@@ -20293,8 +20293,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeRowPatternFactor
 	if (frame.child_results[1]) {
 		row_pattern_quantifier = frame.TakeResult<MatchRecognizeQuantifier>(1);
 	}
-	auto result =
-	    TransformRowPatternFactor(transformer, std::move(row_pattern_primary), std::move(row_pattern_quantifier));
+	auto result = TransformRowPatternFactor(transformer, std::move(row_pattern_primary), row_pattern_quantifier);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
@@ -20382,7 +20381,7 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeRowPatternQuantifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                               TransformStackFrame &frame) {
 	auto result = frame.TakeResult<MatchRecognizeQuantifier>(0);
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierStarTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -20394,7 +20393,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeQuantifierStarTr
                                                                                          TransformStack &stack,
                                                                                          TransformStackFrame &frame) {
 	auto result = TransformQuantifierStar(transformer);
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierPlusTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -20406,7 +20405,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeQuantifierPlusTr
                                                                                          TransformStack &stack,
                                                                                          TransformStackFrame &frame) {
 	auto result = TransformQuantifierPlus(transformer);
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierRangeTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -20420,7 +20419,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeQuantifierRangeT
                                                                                           TransformStack &stack,
                                                                                           TransformStackFrame &frame) {
 	auto result = frame.TakeResult<MatchRecognizeQuantifier>(0);
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierBoundsTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -20441,7 +20440,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeQuantifierBounds
                                                                                            TransformStack &stack,
                                                                                            TransformStackFrame &frame) {
 	auto result = frame.TakeResult<MatchRecognizeQuantifier>(0);
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierMinMaxTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -20456,7 +20455,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeQuantifierMinMax
 	auto number_literal = TransformNumberLiteral(transformer, list_pr.GetChild(0));
 	auto number_literal_1 = TransformNumberLiteral(transformer, list_pr.GetChild(2));
 	auto result = TransformQuantifierMinMax(transformer, std::move(number_literal), std::move(number_literal_1));
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierMinTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -20470,7 +20469,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeQuantifierMinTra
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto number_literal = TransformNumberLiteral(transformer, list_pr.GetChild(0));
 	auto result = TransformQuantifierMin(transformer, std::move(number_literal));
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierMaxTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -20484,7 +20483,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeQuantifierMaxTra
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto number_literal = TransformNumberLiteral(transformer, list_pr.GetChild(1));
 	auto result = TransformQuantifierMax(transformer, std::move(number_literal));
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierExactTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -20498,7 +20497,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeQuantifierExactT
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto number_literal = TransformNumberLiteral(transformer, list_pr.GetChild(0));
 	auto result = TransformQuantifierExact(transformer, std::move(number_literal));
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeSubsetClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,

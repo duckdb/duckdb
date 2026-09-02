@@ -293,7 +293,7 @@ PEGTransformerFactory::TransformRowPatternTerm(PEGTransformer &transformer,
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformRowPatternFactor(PEGTransformer &transformer,
                                                  unique_ptr<ParsedExpression> row_pattern_primary,
-                                                 optional<MatchRecognizeQuantifier> row_pattern_quantifier) {
+                                                 const optional<MatchRecognizeQuantifier> &row_pattern_quantifier) {
 	MatchRecognizeQuantifier quantifier;
 	if (row_pattern_quantifier) {
 		quantifier = *row_pattern_quantifier;

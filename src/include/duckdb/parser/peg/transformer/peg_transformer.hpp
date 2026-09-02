@@ -7913,7 +7913,7 @@ public:
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>
 	TransformRowPatternFactor(PEGTransformer &transformer, unique_ptr<ParsedExpression> row_pattern_primary,
-	                          optional<MatchRecognizeQuantifier> row_pattern_quantifier);
+	                          const optional<MatchRecognizeQuantifier> &row_pattern_quantifier);
 	static unique_ptr<TransformResultValue> TransformRowPatternPrimaryInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformRowPatternGroupInternal(PEGTransformer &transformer,

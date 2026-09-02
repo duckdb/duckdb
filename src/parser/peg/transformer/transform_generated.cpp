@@ -8228,10 +8228,9 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowPatternFacto
 	if (row_pattern_quantifier_opt.HasResult()) {
 		auto row_pattern_quantifier_value =
 		    transformer.Transform<MatchRecognizeQuantifier>(row_pattern_quantifier_opt.GetResult());
-		row_pattern_quantifier = std::move(row_pattern_quantifier_value);
+		row_pattern_quantifier = row_pattern_quantifier_value;
 	}
-	auto result =
-	    TransformRowPatternFactor(transformer, std::move(row_pattern_primary), std::move(row_pattern_quantifier));
+	auto result = TransformRowPatternFactor(transformer, std::move(row_pattern_primary), row_pattern_quantifier);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
@@ -8273,27 +8272,27 @@ PEGTransformerFactory::TransformRowPatternQuantifierInternal(PEGTransformer &tra
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = transformer.Transform<MatchRecognizeQuantifier>(choice_pr.GetResult());
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierStarInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto result = TransformQuantifierStar(transformer);
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierPlusInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto result = TransformQuantifierPlus(transformer);
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierRangeInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto quantifier_bounds = transformer.Transform<MatchRecognizeQuantifier>(list_pr.GetChild(1));
-	auto result = std::move(quantifier_bounds);
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	auto result = quantifier_bounds;
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierBoundsInternal(PEGTransformer &transformer,
@@ -8301,7 +8300,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierBound
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = transformer.Transform<MatchRecognizeQuantifier>(choice_pr.GetResult());
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierMinMaxInternal(PEGTransformer &transformer,
@@ -8310,7 +8309,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierMinMa
 	auto number_literal = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
 	auto number_literal_1 = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
 	auto result = TransformQuantifierMinMax(transformer, std::move(number_literal), std::move(number_literal_1));
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierMinInternal(PEGTransformer &transformer,
@@ -8318,7 +8317,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierMinIn
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto number_literal = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
 	auto result = TransformQuantifierMin(transformer, std::move(number_literal));
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierMaxInternal(PEGTransformer &transformer,
@@ -8326,7 +8325,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierMaxIn
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto number_literal = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
 	auto result = TransformQuantifierMax(transformer, std::move(number_literal));
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierExactInternal(PEGTransformer &transformer,
@@ -8334,7 +8333,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierExact
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto number_literal = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
 	auto result = TransformQuantifierExact(transformer, std::move(number_literal));
-	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(std::move(result));
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSubsetClauseInternal(PEGTransformer &transformer,
