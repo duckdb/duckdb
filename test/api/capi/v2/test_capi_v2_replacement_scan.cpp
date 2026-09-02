@@ -27,11 +27,8 @@ duckdb_v2_identifier_t ReplIdent(const char *s) {
 
 // What the callback saw, for the test to assert on afterwards.
 struct ReplObserved {
-	std::string catalog;
-	std::string schema;
-	std::string table;
-	bool catalog_is_null_view = false;
-	bool schema_is_null_view = false;
+	std::vector<std::string> parts;
+	std::string rendered;
 	int calls = 0;
 	// Return codes latched from calls the callback expects to fail.
 	DUCKDB_V2_ERROR mixed_form_rc = DUCKDB_V2_ERROR_NONE;
@@ -43,29 +40,54 @@ void ReplReset() {
 	repl_observed = ReplObserved();
 }
 
-// Reads the unresolved name into the observation record.
+// Reads the unresolved name into the observation record. The name is owned, so it is destroyed here.
 void ReplRecordName(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_error_info_handle *err) {
-	duckdb_v2_identifier_t catalog = {nullptr, 0};
-	duckdb_v2_identifier_t schema = {nullptr, 0};
-	duckdb_v2_identifier_t table = {nullptr, 0};
-	if (duckdb_v2_replacement_scan_get_catalog_name(info, &catalog, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_replacement_scan_get_schema_name(info, &schema, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_replacement_scan_get_table_name(info, &table, err) != DUCKDB_V2_ERROR_NONE) {
+	duckdb_v2_qname_handle name = nullptr;
+	if (duckdb_v2_replacement_scan_get_name(info, &name, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	repl_observed.calls++;
-	repl_observed.catalog = Convert(catalog);
-	repl_observed.schema = Convert(schema);
-	repl_observed.table = Convert(table);
-	repl_observed.catalog_is_null_view = catalog.ptr == nullptr;
-	repl_observed.schema_is_null_view = schema.ptr == nullptr;
+	repl_observed.parts.clear();
+
+	idx_t count = 0;
+	if (duckdb_v2_qname_get_part_count(name, &count, err) == DUCKDB_V2_ERROR_NONE) {
+		for (idx_t i = 0; i < count; i++) {
+			duckdb_v2_identifier_t part = {nullptr, 0};
+			if (duckdb_v2_qname_get_part(name, i, &part, err) != DUCKDB_V2_ERROR_NONE) {
+				break;
+			}
+			repl_observed.parts.push_back(Convert(part));
+		}
+	}
+	idx_t length = 0;
+	if (duckdb_v2_qname_render(name, nullptr, 0, &length, err) == DUCKDB_V2_ERROR_NONE) {
+		std::vector<char> buffer(length + 1, '\0');
+		if (duckdb_v2_qname_render(name, buffer.data(), buffer.size(), &length, err) == DUCKDB_V2_ERROR_NONE) {
+			repl_observed.rendered = std::string(buffer.data(), length);
+		}
+	}
+	duckdb_v2_qname_destroy(&name);
+}
+
+// Claims by an unqualified function name, which now means building a one-part qualified name.
+DUCKDB_V2_ERROR ReplClaimFunction(duckdb_v2_replacement_scan_info_handle info, const char *function_name,
+                                  duckdb_v2_error_info_handle *err) {
+	duckdb_v2_identifier_t parts[1] = {Convert(function_name)};
+	duckdb_v2_qname_handle name = nullptr;
+	auto rc = duckdb_v2_qname_create(parts, 1, &name, err);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return rc;
+	}
+	rc = duckdb_v2_replacement_scan_set_function_name(info, name, err);
+	duckdb_v2_qname_destroy(&name);
+	return rc;
 }
 
 // Claims every name with range(2).
 void ReplClaimRange(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle context,
                     duckdb_v2_error_info_handle *err) {
 	ReplRecordName(info, err);
-	if (duckdb_v2_replacement_scan_set_function_name(info, ReplIdent("range"), err) != DUCKDB_V2_ERROR_NONE) {
+	if (ReplClaimFunction(info, "range", err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_value_handle value = nullptr;
@@ -90,11 +112,14 @@ void ReplDecline(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_
 // Claims only names ending in ".csv", so it can be shown to outrank the built-in CSV scan.
 void ReplClaimCsv(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle context,
                   duckdb_v2_error_info_handle *err) {
-	duckdb_v2_identifier_t table = {nullptr, 0};
-	if (duckdb_v2_replacement_scan_get_table_name(info, &table, err) != DUCKDB_V2_ERROR_NONE) {
+	duckdb_v2_qname_handle qname = nullptr;
+	if (duckdb_v2_replacement_scan_get_name(info, &qname, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	const auto name = Convert(table);
+	duckdb_v2_identifier_t part = {nullptr, 0};
+	auto rc = duckdb_v2_qname_get_part(qname, 0, &part, err);
+	const auto name = rc == DUCKDB_V2_ERROR_NONE ? Convert(part) : std::string();
+	duckdb_v2_qname_destroy(&qname);
 	if (name.size() < 4 || name.compare(name.size() - 4, 4, ".csv") != 0) {
 		return;
 	}
@@ -110,7 +135,7 @@ void ReplFail(duckdb_v2_replacement_scan_info_handle, duckdb_v2_context_handle, 
 // Claims a function that does not exist.
 void ReplClaimUnknown(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle,
                       duckdb_v2_error_info_handle *err) {
-	duckdb_v2_replacement_scan_set_function_name(info, ReplIdent("no_such_table_function"), err);
+	ReplClaimFunction(info, "no_such_table_function", err);
 }
 
 // Exercises the claim-form rules, then claims by function.
@@ -126,8 +151,8 @@ void ReplClaimRules(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_conte
 	duckdb_v2_value_destroy(&value);
 
 	// A first claim, then the same form again (allowed, last wins), then a different form (refused).
-	if (duckdb_v2_replacement_scan_set_function_name(info, ReplIdent("not_this_one"), err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_replacement_scan_set_function_name(info, ReplIdent("range"), err) != DUCKDB_V2_ERROR_NONE) {
+	if (ReplClaimFunction(info, "not_this_one", err) != DUCKDB_V2_ERROR_NONE ||
+	    ReplClaimFunction(info, "range", err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	repl_observed.mixed_form_rc = duckdb_v2_replacement_scan_set_subquery(info, Convert("SELECT 1"), nullptr);
@@ -295,13 +320,20 @@ struct ReplRegistry {
 void ReplClaimCollection(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle,
                          duckdb_v2_error_info_handle *err) {
 	void *user_data = nullptr;
-	duckdb_v2_identifier_t table = {nullptr, 0};
+	duckdb_v2_qname_handle qname = nullptr;
 	if (duckdb_v2_replacement_scan_get_user_data(info, &user_data, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_replacement_scan_get_table_name(info, &table, err) != DUCKDB_V2_ERROR_NONE) {
+	    duckdb_v2_replacement_scan_get_name(info, &qname, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
+	duckdb_v2_identifier_t part = {nullptr, 0};
+	idx_t part_count = 0;
+	duckdb_v2_qname_get_part_count(qname, &part_count, err);
+	auto part_rc = duckdb_v2_qname_get_part(qname, 0, &part, err);
+	const auto table_name = part_rc == DUCKDB_V2_ERROR_NONE ? Convert(part) : std::string();
+	duckdb_v2_qname_destroy(&qname);
+
 	auto &registry = *static_cast<ReplRegistry *>(user_data);
-	if (Convert(table) != registry.name) {
+	if (part_count != 1 || table_name != registry.name) {
 		return; // not ours: decline
 	}
 
@@ -346,7 +378,7 @@ TEST_CASE("V2 replacement scan: claims a table function", "[capi_v2][replacement
 
 	REQUIRE(ReplQueryI64(fx.conn, "SELECT * FROM not_a_table") == std::vector<int64_t> {0, 1});
 	REQUIRE(repl_observed.calls == 1);
-	REQUIRE(repl_observed.table == "not_a_table");
+	REQUIRE(repl_observed.parts == std::vector<std::string> {"not_a_table"});
 	// The scan's alias names the binding, so a qualified reference resolves.
 	REQUIRE(ReplQueryI64(fx.conn, "SELECT claimed.range FROM not_a_table") == std::vector<int64_t> {0, 1});
 	// A query-written alias wins over the scan's.
@@ -361,21 +393,15 @@ TEST_CASE("V2 replacement scan: reports the unresolved name and can decline", "[
 	// Declining leaves the reference unresolved, so the normal catalog error surfaces.
 	REQUIRE(ReplQueryError(fx.conn, "SELECT * FROM missing_table") != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(repl_observed.calls == 1);
-	REQUIRE(repl_observed.table == "missing_table");
-	// An unqualified reference reports the canonical empty view for the qualifiers, not a pointer to "".
-	REQUIRE(repl_observed.catalog.empty());
-	REQUIRE(repl_observed.schema.empty());
-	REQUIRE(repl_observed.catalog_is_null_view);
-	REQUIRE(repl_observed.schema_is_null_view);
+	// An unqualified reference is a single part: absence is a shorter path, never an empty placeholder.
+	REQUIRE(repl_observed.parts == std::vector<std::string> {"missing_table"});
+	REQUIRE(repl_observed.rendered == "missing_table");
 
 	ReplReset();
 	REQUIRE(ReplQueryError(fx.conn, "SELECT * FROM memory.main.missing_table") != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(repl_observed.calls == 1);
-	REQUIRE(repl_observed.catalog == "memory");
-	REQUIRE(repl_observed.schema == "main");
-	REQUIRE(repl_observed.table == "missing_table");
-	REQUIRE_FALSE(repl_observed.catalog_is_null_view);
-	REQUIRE_FALSE(repl_observed.schema_is_null_view);
+	REQUIRE(repl_observed.parts == std::vector<std::string> {"memory", "main", "missing_table"});
+	REQUIRE(repl_observed.rendered == "memory.main.missing_table");
 }
 
 TEST_CASE("V2 replacement scan: not consulted for names the catalog resolves", "[capi_v2][replacement_scan]") {
@@ -550,20 +576,14 @@ TEST_CASE("V2 replacement scan: null arguments and destroy null-safety", "[capi_
 
 	// The info accessors reject a null handle and a null out-parameter alike.
 	void *data = nullptr;
-	duckdb_v2_identifier_t name = {nullptr, 0};
+	duckdb_v2_qname_handle name = nullptr;
 	REQUIRE(duckdb_v2_replacement_scan_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_get_catalog_name(nullptr, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_get_schema_name(nullptr, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_get_table_name(nullptr, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_set_function_name(nullptr, ReplIdent("x"), nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_get_name(nullptr, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_set_function_name(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_replacement_scan_add_argument(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_replacement_scan_set_subquery(nullptr, Convert("SELECT 1"), nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_replacement_scan_set_alias(nullptr, ReplIdent("x"), nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	// A view with a null pointer but a non-zero length is malformed.
-	REQUIRE(duckdb_v2_replacement_scan_set_function_name(nullptr, duckdb_v2_identifier_t {nullptr, 4}, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	REQUIRE(duckdb_v2_replacement_scan_destroy(&scan) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(scan == nullptr);

@@ -38,9 +38,8 @@ struct ScanRegistry {
 // What the callback saw, latched for the test to assert on afterwards. A callback must not use REQUIRE: it would
 // throw through the callback boundary into the engine.
 struct ScanObserved {
-	std::string catalog;
-	std::string schema;
-	std::string table;
+	std::vector<std::string> parts;
+	std::string rendered;
 	int calls = 0;
 };
 ScanObserved scan_observed;
@@ -48,9 +47,12 @@ ScanObserved scan_observed;
 // Claims every name with range(2), recording what it saw.
 void ClaimRange(ReplacementScan::Input &input) {
 	scan_observed.calls++;
-	scan_observed.table = input.GetTableName();
-	scan_observed.catalog = input.GetCatalogName();
-	scan_observed.schema = input.GetSchemaName();
+	auto name = input.GetName();
+	scan_observed.parts.clear();
+	for (idx_t i = 0; i < name.GetPartCount(); i++) {
+		scan_observed.parts.emplace_back(name.GetPart(i));
+	}
+	scan_observed.rendered = name.Render();
 
 	auto ctx = input.GetContext();
 	input.SetFunctionName("range");
@@ -61,7 +63,8 @@ void ClaimRange(ReplacementScan::Input &input) {
 // Claims only the registry's name, with its collection.
 void ClaimCollection(ReplacementScan::Input &input) {
 	auto &registry = input.GetUserData<ScanRegistry>();
-	if (input.GetTableName() != registry.name) {
+	auto name = input.GetName();
+	if (name.GetPartCount() != 1 || name.GetName() != registry.name) {
 		return; // decline
 	}
 	registry.calls++;
@@ -112,7 +115,7 @@ TEST_CASE("Stable C++API: replacement scan claims a table function", "[cpp_api]"
 
 	REQUIRE(CollectScanBigints(conn.Execute("SELECT * FROM not_a_table")) == std::vector<int64_t> {0, 1});
 	REQUIRE(scan_observed.calls == 1);
-	REQUIRE(scan_observed.table == "not_a_table");
+	REQUIRE(scan_observed.parts == std::vector<std::string> {"not_a_table"});
 	// The scan's alias names the binding, so a qualified reference resolves.
 	REQUIRE(CollectScanBigints(conn.Execute("SELECT claimed.range FROM not_a_table")) == std::vector<int64_t> {0, 1});
 	// A query-written alias wins over the scan's.
@@ -128,21 +131,50 @@ TEST_CASE("Stable C++API: replacement scan reports the unresolved name", "[cpp_a
 	scan.SetCallback(ClaimRange);
 	scan.Register();
 
-	// An unqualified reference reports empty qualifiers.
+	// An unqualified reference is a single part -- absence is a shorter path, not an empty placeholder.
 	scan_observed = ScanObserved();
 	conn.Execute("SELECT * FROM plain_name").Drain();
 	REQUIRE(scan_observed.calls == 1);
-	REQUIRE(scan_observed.table == "plain_name");
-	REQUIRE(scan_observed.catalog.empty());
-	REQUIRE(scan_observed.schema.empty());
+	REQUIRE(scan_observed.parts == std::vector<std::string> {"plain_name"});
+	REQUIRE(scan_observed.rendered == "plain_name");
 
-	// A fully qualified one reports all three parts.
+	// A fully qualified one carries all three, outermost first.
 	scan_observed = ScanObserved();
 	conn.Execute("SELECT * FROM memory.main.qualified_name").Drain();
 	REQUIRE(scan_observed.calls == 1);
-	REQUIRE(scan_observed.catalog == "memory");
-	REQUIRE(scan_observed.schema == "main");
-	REQUIRE(scan_observed.table == "qualified_name");
+	REQUIRE(scan_observed.parts == std::vector<std::string> {"memory", "main", "qualified_name"});
+	REQUIRE(scan_observed.rendered == "memory.main.qualified_name");
+}
+
+TEST_CASE("Stable C++API: qualified name", "[cpp_api]") {
+	auto one = QualifiedName::Create({"tbl"});
+	REQUIRE(one.GetPartCount() == 1);
+	REQUIRE(one.GetPart(0) == "tbl");
+	REQUIRE(one.GetName() == "tbl");
+	REQUIRE(one.Render() == "tbl");
+
+	auto three = QualifiedName::Create({"cat", "sch", "tbl"});
+	REQUIRE(three.GetPartCount() == 3);
+	REQUIRE(three.GetName() == "tbl");
+	REQUIRE(three.Render() == "cat.sch.tbl");
+
+	// Rendering round-trips through Parse, quoting only where the identifier needs it.
+	auto quoted = QualifiedName::Create({"we.ird", "tbl"});
+	REQUIRE(quoted.Render() == "\"we.ird\".tbl");
+	REQUIRE(QualifiedName::Parse(quoted.Render()) == quoted);
+
+	// Equality is case-insensitive, and hashes agree with it.
+	REQUIRE(QualifiedName::Parse("Cat.Sch.Tbl") == three);
+	REQUIRE(QualifiedName::Parse("Cat.Sch.Tbl").Hash() == three.Hash());
+	REQUIRE(one != three);
+
+	// Partial qualification is fewer parts, never an empty placeholder.
+	REQUIRE(QualifiedName::Parse("sch.tbl").GetPartCount() == 2);
+	REQUIRE_THROWS_MATCHES(QualifiedName::Create({}), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(QualifiedName::Create({"a", "b", "c", "d"}), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(QualifiedName::Create({"a", ""}), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(one.GetPart(1), Exception);
 }
 
 TEST_CASE("Stable C++API: replacement scan reports the name and can decline", "[cpp_api]") {

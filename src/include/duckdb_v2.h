@@ -2500,414 +2500,116 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_log(duckdb_v2_context_handle ctx,
 /* --- Struct definitions for logging --- */
 
 /* ============================================================================
- * MODULE: logical_type
+ * MODULE: qname
  * ============================================================================ */
 
-/* --- Enums for logical_type --- */
+/* --- Enums for qname --- */
+
+/* --- Struct forward declarations for qname --- */
+
+/* --- Types for qname --- */
 
 /*!
- * Logical type identifier. The values are the same integers DuckDB uses internally, so round-tripping is lossless. The
- * bind- and UDF-only ids (UNKNOWN, ANY, TEMPLATE) appear here for completeness; they do not show up in result column
- * types in practice.
+ * An owned qualified name: an ordered path of one to three non-empty identifier parts whose last element is the object
+ * name. Construct with `duckdb_v2_qname_parse()` or `duckdb_v2_qname_create()`, read with
+ * `duckdb_v2_qname_get_part_count()` and `duckdb_v2_qname_get_part()`, render back to SQL with
+ * `duckdb_v2_qname_render()`, compare with `duckdb_v2_qname_equals()`, and destroy with `duckdb_v2_qname_destroy()`.
+ * Two handles are compared with `duckdb_v2_qname_equals()`, never by pointer.
  */
-typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
-	//! Invalid / unset.
-	DUCKDB_V2_LOGICAL_TYPE_ID_INVALID = 0,
+typedef struct _duckdb_v2_qname {
+	void *internal_ptr;
+} * duckdb_v2_qname_handle;
 
-	//! NULL constant type.
-	DUCKDB_V2_LOGICAL_TYPE_ID_SQLNULL = 1,
+/* --- Constants for qname --- */
 
-	//! Unknown — used for unresolved parameter expressions.
-	DUCKDB_V2_LOGICAL_TYPE_ID_UNKNOWN = 2,
+/* --- Function pointer typedefs for qname --- */
 
-	//! ANY — used for functions that accept any type.
-	DUCKDB_V2_LOGICAL_TYPE_ID_ANY = 3,
-
-	/*!
-	 * A type carried as a value (type parameters). Values of this type are built via value_create_type_with_context /
-	 * _with_connection.
-	 */
-	DUCKDB_V2_LOGICAL_TYPE_ID_TYPE = 6,
-	DUCKDB_V2_LOGICAL_TYPE_ID_BOOLEAN = 10,
-	DUCKDB_V2_LOGICAL_TYPE_ID_TINYINT = 11,
-	DUCKDB_V2_LOGICAL_TYPE_ID_SMALLINT = 12,
-	DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER = 13,
-	DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT = 14,
-
-	//! 32-bit days since epoch.
-	DUCKDB_V2_LOGICAL_TYPE_ID_DATE = 15,
-
-	//! 64-bit microseconds since midnight.
-	DUCKDB_V2_LOGICAL_TYPE_ID_TIME = 16,
-
-	//! 64-bit seconds since epoch.
-	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP_SEC = 17,
-
-	//! 64-bit milliseconds since epoch.
-	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP_MS = 18,
-
-	//! 64-bit microseconds since epoch.
-	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP = 19,
-
-	//! 64-bit nanoseconds since epoch.
-	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP_NS = 20,
-
-	//! Decimal with width and scale parameters.
-	DUCKDB_V2_LOGICAL_TYPE_ID_DECIMAL = 21,
-	DUCKDB_V2_LOGICAL_TYPE_ID_FLOAT = 22,
-	DUCKDB_V2_LOGICAL_TYPE_ID_DOUBLE = 23,
-	DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR = 25,
-	DUCKDB_V2_LOGICAL_TYPE_ID_BLOB = 26,
-	DUCKDB_V2_LOGICAL_TYPE_ID_INTERVAL = 27,
-	DUCKDB_V2_LOGICAL_TYPE_ID_UTINYINT = 28,
-	DUCKDB_V2_LOGICAL_TYPE_ID_USMALLINT = 29,
-	DUCKDB_V2_LOGICAL_TYPE_ID_UINTEGER = 30,
-	DUCKDB_V2_LOGICAL_TYPE_ID_UBIGINT = 31,
-
-	//! 64-bit microseconds since epoch, timezone-aware.
-	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP_TZ = 32,
-
-	//! 64-bit nanoseconds since epoch, timezone-aware.
-	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP_TZ_NS = 33,
-
-	//! 64-bit microseconds since midnight + 32-bit offset.
-	DUCKDB_V2_LOGICAL_TYPE_ID_TIME_TZ = 34,
-
-	//! 64-bit nanoseconds since midnight.
-	DUCKDB_V2_LOGICAL_TYPE_ID_TIME_NS = 35,
-	DUCKDB_V2_LOGICAL_TYPE_ID_BIT = 36,
-
-	//! Arbitrary-precision integer (VARINT-encoded).
-	DUCKDB_V2_LOGICAL_TYPE_ID_BIGNUM = 39,
-	DUCKDB_V2_LOGICAL_TYPE_ID_UHUGEINT = 49,
-	DUCKDB_V2_LOGICAL_TYPE_ID_HUGEINT = 50,
-	DUCKDB_V2_LOGICAL_TYPE_ID_UUID = 54,
-
-	//! Geometry (spatial extension).
-	DUCKDB_V2_LOGICAL_TYPE_ID_GEOMETRY = 60,
-	DUCKDB_V2_LOGICAL_TYPE_ID_STRUCT = 100,
-	DUCKDB_V2_LOGICAL_TYPE_ID_LIST = 101,
-	DUCKDB_V2_LOGICAL_TYPE_ID_MAP = 102,
-	DUCKDB_V2_LOGICAL_TYPE_ID_ENUM = 104,
-	DUCKDB_V2_LOGICAL_TYPE_ID_UNION = 107,
-	DUCKDB_V2_LOGICAL_TYPE_ID_ARRAY = 108,
-	DUCKDB_V2_LOGICAL_TYPE_ID_VARIANT = 109,
-
-	//! Unnamed struct; shares the physical representation of STRUCT.
-	DUCKDB_V2_LOGICAL_TYPE_ID_TUPLE = 110,
-	DUCKDB_V2_LOGICAL_TYPE_ID_MAX_ENUM = 0x7FFFFFFF,
-} DUCKDB_V2_LOGICAL_TYPE_ID;
-
-/* --- Struct forward declarations for logical_type --- */
-
-/* --- Types for logical_type --- */
-
-/* --- Constants for logical_type --- */
-
-/* --- Function pointer typedefs for logical_type --- */
-
-/* --- Functions for logical_type --- */
+/* --- Functions for qname --- */
 
 /*!
- * Creates a logical type from a type id plus value parameters.
+ * Parses SQL text into a qualified name.
  *
- * The id-keyed twin of context_create_type_from_name: the type id names the kind, and the parameters bind it. With
- * param_count 0 it instantiates a primitive directly, without touching the catalog: BOOLEAN, TINYINT..BIGINT,
- * UTINYINT..UBIGINT, HUGEINT, UHUGEINT, FLOAT, DOUBLE, DATE, every TIME and TIMESTAMP variant, INTERVAL, VARCHAR, BLOB,
- * BIT, BIGNUM, and UUID. ANY is accepted as well.
- *
- * ANY is a function-signature wildcard, constructible here so it can be passed to the function parameter and varargs
- * setters, as a fixed-arity ANY parameter or an ANY varargs type. Data-creating surfaces reject it: value and data
- * chunk creation, scalar and aggregate return types, table function result columns, cast source and target types, and
- * custom type registration.
- *
- * With parameters, the id resolves to its canonical type name and binds through the same path as
- * context_create_type_from_name, so the parameterized kinds construct here too: decimal(width, scale); list(T);
- * array(T, size); map(K, V); struct(fields); union(members); enum(entries); and varchar with a named "collation"
- * parameter. Parameters are (name, value) pairs in two parallel arrays, exactly as for context_create_type_from_name.
- *
- * Returns ERROR_INPUT_INVALID when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP,
- * ARRAY, UNION, ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
- * context_create_type_from_text — and for INVALID.
+ * Applies the engine's qualified-name rules: dots separate parts, and a double-quoted part may contain dots and doubled
+ * interior quotes. More than three parts and an unterminated quote are rejected with the parser's own error; text
+ * without at least one non-empty part is rejected with `ERROR_INPUT_INVALID`. When the parts are already separate,
+ * build the name with `duckdb_v2_qname_create()` rather than joining them and parsing the result.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context supplying the catalog and active transaction.
- * @param type_id The type id to instantiate.
- * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
- * all-positional parameters.
- * @param param_values An array of param_count parameter values. Borrowed (copied in). Pass NULL when param_count is 0.
- * @param param_count The number of parameters. 0 instantiates a parameterless primitive.
- * @param out_type Receives the new logical type handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param text The name text to parse. Borrowed for the call only.
+ * @param name On success, receives the qualified name. Owned by the caller; destroy via `duckdb_v2_qname_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_id(
-    duckdb_v2_context_handle ctx, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const duckdb_v2_identifier_t *param_names,
-    const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
-    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_parse(duckdb_v2_str text, duckdb_v2_qname_handle *name,
+                                                   duckdb_v2_error_info_handle *err);
 
 /*!
- * Creates a logical type from a type name plus value parameters.
+ * Creates a qualified name from its parts.
  *
- * The generic constructor: resolves the name in the context's catalog — search path first, then the system catalog —
- * and binds it with the given parameters, exactly as SQL binds a type expression. Built-in parameterized kinds and
- * registered extension types construct through this same call.
- *
- * Parameters are (name, value) pairs in two parallel arrays. param_names may be NULL to make every parameter
- * positional, and a {NULL, 0} entry makes that one parameter positional. Child types cross as TYPE values, built with
- * value_create_type_with_context / _with_connection. The built-in shapes are: decimal(width, scale); list(T); array(T,
- * size); map(K, V); struct(fields, as named or all-positional TYPE values); union(members, as named TYPE values);
- * enum(entries, as VARCHAR values); and varchar with a named "collation" VARCHAR parameter.
- *
- * A name that resolves to a type with no bind function takes no parameters, and passing any fails. Bind errors —
- * unknown name, wrong parameter count or types — surface from the call.
- *
- * Runs in the caller's context scope, as create_type_from_text does: reach it from a bind-phase callback or another
- * context-holding scope, not from an exec-phase worker callback. External callers holding only a connection use
- * connection_create_type_from_name instead.
- *
- * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
- * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database. This is
- * the inverse of logical_type_get_param_count / logical_type_get_param.
+ * The parts are ordered outermost first, so the last one is the object name. Between one and three parts are accepted
+ * -- the engine qualifies at most catalog.schema.name today -- and every part must be non-empty: partial qualification
+ * is expressed by passing fewer parts, never by empty placeholders. Zero parts, more than three, and an empty part are
+ * all rejected with `ERROR_INPUT_INVALID`. The parts are borrowed and copied.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context supplying the catalog and active transaction.
- * @param name View of the type name to resolve. Unqualified; case-insensitive.
- * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
- * all-positional parameters.
- * @param param_values An array of param_count parameter values. Borrowed (copied in). Pass NULL when param_count is 0.
- * @param param_count The number of parameters.
- * @param out_type Receives the new logical type handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param parts An array of `part_count` non-empty identifier views, outermost first.
+ * @param part_count The number of parts, between one and three.
+ * @param name On success, receives the qualified name. Owned by the caller; destroy via `duckdb_v2_qname_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_name(
-    duckdb_v2_context_handle ctx, duckdb_v2_identifier_t name, const duckdb_v2_identifier_t *param_names,
-    const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
-    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_create(const duckdb_v2_identifier_t *parts, idx_t part_count,
+                                                    duckdb_v2_qname_handle *name, duckdb_v2_error_info_handle *err);
 
 /*!
- * Creates a logical type by parsing SQL text.
+ * Returns how many parts the qualified name has.
  *
- * Parses a SQL type expression in the given context and returns the bound logical type. It accepts primitives
- * ("INTEGER"), parameterized kinds ("DECIMAL(18,3)", "INTEGER[]", "STRUCT(a INTEGER, b VARCHAR)", "MAP(VARCHAR,
- * INTEGER)", "INTEGER[3]", "UNION(i INTEGER, s VARCHAR)", "ENUM('a', 'b')"), and catalog-registered type names, both
- * user-defined and from extensions. A catalog type name binds to its structural type, and the name is not preserved as
- * an alias. Names are case-insensitive. Parse and bind errors surface from the call.
- *
- * Runs in the caller's context scope: a context handle arrives with the context lock held and a transaction active, as
- * in a function bind callback or custom type registration. Catalog-touching context calls belong in bind-phase
- * callbacks and other context-holding scopes, not in exec-phase worker callbacks. External callers holding only a
- * connection use connection_create_type_from_text instead.
- *
- * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
- * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database. This is
- * the inverse of logical_type_to_text for every constructible kind.
+ * Always at least one. Valid indices for `duckdb_v2_qname_get_part()` are [0, count), and the object name is the part
+ * at count - 1.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context supplying the catalog and active transaction.
- * @param text View of the SQL type expression to parse.
- * @param out_type Receives the new logical type handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param name The qualified name.
+ * @param count Receives the number of parts.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle ctx, duckdb_v2_str text,
-                                                                     duckdb_v2_logical_type_handle *out_type,
-                                                                     duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_get_part_count(duckdb_v2_qname_handle name, idx_t *count,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
- * Creates a logical type from a type id plus value parameters.
+ * Borrows one part of the qualified name.
  *
- * The id-keyed twin of connection_create_type_from_name: the type id names the kind, and the parameters bind it. With
- * param_count 0 it instantiates a primitive directly, without touching the catalog: BOOLEAN, TINYINT..BIGINT,
- * UTINYINT..UBIGINT, HUGEINT, UHUGEINT, FLOAT, DOUBLE, DATE, every TIME and TIMESTAMP variant, INTERVAL, VARCHAR, BLOB,
- * BIT, BIGNUM, and UUID. ANY is accepted as well.
- *
- * ANY is a function-signature wildcard, constructible here so it can be passed to the function parameter and varargs
- * setters, as a fixed-arity ANY parameter or an ANY varargs type. Data-creating surfaces reject it: value and data
- * chunk creation, scalar and aggregate return types, table function result columns, cast source and target types, and
- * custom type registration.
- *
- * With parameters, the id resolves to its canonical type name and binds through the same path as
- * connection_create_type_from_name, so the parameterized kinds construct here too: decimal(width, scale); list(T);
- * array(T, size); map(K, V); struct(fields); union(members); enum(entries); and varchar with a named "collation"
- * parameter. Parameters are (name, value) pairs in two parallel arrays, exactly as for
- * connection_create_type_from_name.
- *
- * Returns ERROR_INPUT_INVALID when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP,
- * ARRAY, UNION, ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
- * connection_create_type_from_text — and for INVALID.
+ * Parts are ordered outermost first, so the object name is the part at `duckdb_v2_qname_get_part_count()` - 1. The view
+ * is valid until the qualified name is destroyed. An index outside [0, count) is rejected with
+ * `ERROR_INPUT_OUT_OF_RANGE`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param conn The connection supplying the catalog and active transaction.
- * @param type_id The type id to instantiate.
- * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
- * all-positional parameters.
- * @param param_values An array of param_count parameter values. Borrowed (copied in). Pass NULL when param_count is 0.
- * @param param_count The number of parameters. 0 instantiates a parameterless primitive.
- * @param out_type Receives the new logical type handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param name The qualified name.
+ * @param index Zero-based part index.
+ * @param part Receives a borrowed view of the part, valid until the qualified name is destroyed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_id(
-    duckdb_v2_connection_handle conn, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const duckdb_v2_identifier_t *param_names,
-    const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
-    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_get_part(duckdb_v2_qname_handle name, idx_t index,
+                                                      duckdb_v2_identifier_t *part, duckdb_v2_error_info_handle *err);
 
 /*!
- * Creates a logical type from a type name plus value parameters, using a connection.
+ * Renders the qualified name as SQL text.
  *
- * The same as context_create_type_from_name, except that the catalog and transaction come from a connection: the bind
- * runs in its own transaction on that connection's context. Use it from outside DuckDB, where a connection — but no
- * context — is in hand.
- *
- * Parameters are (name, value) pairs in two parallel arrays, exactly as for context_create_type_from_name.
- *
- * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
- * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection supplying the catalog and active transaction.
- * @param name View of the type name to resolve. Unqualified; case-insensitive.
- * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
- * all-positional parameters.
- * @param param_values An array of param_count parameter values. Borrowed (copied in). Pass NULL when param_count is 0.
- * @param param_count The number of parameters.
- * @param out_type Receives the new logical type handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_name(
-    duckdb_v2_connection_handle conn, duckdb_v2_identifier_t name, const duckdb_v2_identifier_t *param_names,
-    const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
-    duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a logical type by parsing SQL text, using a connection.
- *
- * The same as context_create_type_from_text, except that the catalog and transaction come from a connection: the parse
- * and bind run in their own transaction on that connection's context. Use it from outside DuckDB, where a connection —
- * but no context — is in hand.
- *
- * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
- * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection supplying the catalog and active transaction.
- * @param text View of the SQL type expression to parse.
- * @param out_type Receives the new logical type handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_text(duckdb_v2_connection_handle conn,
-                                                                        duckdb_v2_str text,
-                                                                        duckdb_v2_logical_type_handle *out_type,
-                                                                        duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a copy of a logical type.
- *
- * On success, writes the new caller-owned handle into *out_type; destroy it via logical_type_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param type The logical type to copy.
- * @param out_type Receives the new logical type handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_copy(duckdb_v2_logical_type_handle type,
-                                                         duckdb_v2_logical_type_handle *out_type,
-                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Destroys a logical type handle.
- *
- * Null-safe: passing nullptr or a slot already set to nullptr is a no-op. On success the slot is set to nullptr.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param type The logical type to destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_destroy(duckdb_v2_logical_type_handle *type);
-
-/*!
- * Compares two logical types for deep equality.
- *
- * Two types are equal when they agree in kind and in every parameter, recursively. DECIMAL(10, 2) equals DECIMAL(10,
- * 2), but not DECIMAL(10, 3) and not FLOAT; two STRUCTs are equal when they have the same field names in the same order
- * and equal field types.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param left The first logical type.
- * @param right The second logical type.
- * @param result Receives the result of the comparison.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_is_equal(duckdb_v2_logical_type_handle left,
-                                                             duckdb_v2_logical_type_handle right, bool *result,
-                                                             duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the logical type id.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param type The logical type.
- * @param out_id Receives the type id.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_id(duckdb_v2_logical_type_handle type,
-                                                           DUCKDB_V2_LOGICAL_TYPE_ID *out_id,
-                                                           duckdb_v2_error_info_handle *err);
-
-/*!
- * Borrows the logical type's name.
- *
- * The alias when one is set — an extension or user-defined name such as "POINT_2D" — otherwise the canonical name of
- * the type id, such as "INTEGER", "DECIMAL", or "TIMESTAMP WITH TIME ZONE". Never the empty view. This is exactly the
- * name vocabulary create_type_from_name accepts. The view is valid until the logical type is destroyed; a canonical
- * name points at static storage.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param type The logical type.
- * @param out_name Receives a borrowed view of the name (alias when set, else the id's canonical name).
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_name(duckdb_v2_logical_type_handle type,
-                                                             duckdb_v2_identifier_t *out_name,
-                                                             duckdb_v2_error_info_handle *err);
-
-/*!
- * Renders a logical type as SQL text.
- *
- * An aliased type renders as its alias, and create_type_from_text resolves that spelling only when the name is
- * registered in the connection's catalog. The text round-trips through create_type_from_text for every constructible
- * kind, with one exception: ANY renders as "ANY", but create_type_from_text cannot parse it back, since ANY is a
- * signature wildcard rather than a parseable SQL type.
+ * Joins the parts with dots, quoting and escaping each one only where the identifier requires it, so the result parses
+ * back through `duckdb_v2_qname_parse()` to an equal name.
  *
  * Writes into a caller-supplied buffer, so nothing is allocated on the caller's behalf and nothing has to be freed.
  * Pass out_text = NULL to size the buffer without rendering into it: out_length then receives the length, and
@@ -2920,119 +2622,73 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_name(duckdb_v2_logical_t
  * history:
  * - stable: v2.0.0
  *
- * @param type The logical type.
+ * @param name The qualified name to render.
  * @param out_text Caller-owned buffer receiving the text plus a null terminator, or NULL to only report the required
  * length in out_length.
  * @param out_capacity Bytes available in out_text, terminator included. Ignored when out_text is NULL.
  * @param out_length Receives the text length excluding the null terminator — written on success and on
  * ERROR_INPUT_OBJECT_SIZE.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_to_text(duckdb_v2_logical_type_handle type, char *out_text,
-                                                            idx_t out_capacity, idx_t *out_length,
-                                                            duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_render(duckdb_v2_qname_handle name, char *out_text, idx_t out_capacity,
+                                                    idx_t *out_length, duckdb_v2_error_info_handle *err);
 
 /*!
- * Returns the number of value parameters of a logical type.
+ * Compares two qualified names.
  *
- * The inspection dual of create_type_from_name: these are the parameters that reconstruct the type through it. Per
- * kind: DECIMAL 2 (width, scale); LIST 1 (element type); ARRAY 2 (element type, size); MAP 2 (key type, value type);
- * STRUCT and TUPLE one per field; UNION one per member; ENUM one per dictionary entry; VARCHAR 1 when a collation is
- * set, else 0; GEOMETRY 1 when a coordinate system is set, else 0; everything else 0. A bound type reports only what it
- * actually carries, so a bind-time modifier that is not retained — an ignored VARCHAR length, say — does not reappear.
+ * True when both have the same number of parts and every part matches case-insensitively, which is the engine's own
+ * identifier equality: casing never distinguishes two names. This is the only way to compare names; two handles holding
+ * equal names are still distinct pointers.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param type The logical type.
- * @param out_count Receives the number of parameters.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param left The first qualified name.
+ * @param right The second qualified name.
+ * @param result Receives whether the two names are equal.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_param_count(duckdb_v2_logical_type_handle type,
-                                                                    idx_t *out_count, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_equals(duckdb_v2_qname_handle left, duckdb_v2_qname_handle right,
+                                                    bool *result, duckdb_v2_error_info_handle *err);
 
 /*!
- * Returns one value parameter of a logical type.
+ * Hashes a qualified name.
  *
- * out_name receives a borrowed view of the parameter name — a STRUCT field name, a UNION member name, "collation" — or
- * the empty view {NULL, 0} for a positional parameter. A non-empty view is valid until the logical type is destroyed.
- * out_value receives an owned value, destroyed via value_destroy: child types come back as TYPE values (unwrap them
- * with value_get_type), DECIMAL width and scale as UTINYINT, ARRAY size as BIGINT, and ENUM dictionary entries and
- * collations as VARCHAR. An out-of-range index returns ERROR_INPUT_INVALID. Each call allocates one owned value.
+ * Consistent with `duckdb_v2_qname_equals()`: names that compare equal hash equal, casing differences included. The
+ * value is not stable across processes or library versions, so use it for in-process lookup tables only and never
+ * persist it.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param type The logical type.
- * @param index The parameter index, in [0, param_count).
- * @param out_name Receives a borrowed view of the parameter name, or the empty view {NULL, 0} for a positional
- * parameter.
- * @param out_value Receives the owned parameter value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param name The qualified name to hash.
+ * @param hash Receives the hash value.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_param(duckdb_v2_logical_type_handle type, idx_t index,
-                                                              duckdb_v2_identifier_t *out_name,
-                                                              duckdb_v2_value_handle *out_value,
-                                                              duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_hash(duckdb_v2_qname_handle name, uint64_t *hash,
+                                                  duckdb_v2_error_info_handle *err);
 
 /*!
- * Creates a logical type that is an alias of another logical type.
+ * Destroys the qualified name, releasing its resources.
  *
- * The alias keeps the base type's internal representation, so executing against it needs no special handling, while
- * remaining logically distinct from the base type. Intended for custom type bind callbacks, where both the base type
- * and the name come from the bind info.
- *
- * Scoped like the rest of the create_type family: the alias is resolved against the catalog reachable from the context.
- * An empty alias name returns ERROR_INPUT_INVALID.
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Any part views borrowed from it become dangling.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to resolve the alias against.
- * @param base_type The logical type to alias. Typically the base type supplied in the custom type bind info.
- * @param alias_name The name for the resulting type. Typically the name of the custom type being constructed, also
- * available from the bind info.
- * @param out_type Receives the new type: the base type's internal representation under the given alias name.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param name The qualified name to destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_context_handle ctx,
-                                                                      duckdb_v2_logical_type_handle base_type,
-                                                                      duckdb_v2_identifier_t alias_name,
-                                                                      duckdb_v2_logical_type_handle *out_type,
-                                                                      duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_destroy(duckdb_v2_qname_handle *name);
 
-/*!
- * Creates a logical type that is an alias of another logical type.
- *
- * The alias keeps the base type's internal representation, so executing against it needs no special handling, while
- * remaining logically distinct from the base type. Intended for custom type bind callbacks, where both the base type
- * and the name come from the bind info.
- *
- * Scoped like the rest of the create_type family: the alias is resolved against the catalog reachable from the
- * connection. An empty alias name returns ERROR_INPUT_INVALID.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to resolve the alias against.
- * @param base_type The logical type to alias. Typically the base type supplied in the custom type bind info.
- * @param alias_name The name for the resulting type. Typically the name of the custom type being constructed, also
- * available from the bind info.
- * @param out_type Receives the new type: the base type's internal representation under the given alias name.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_with_alias(duckdb_v2_connection_handle conn,
-                                                                         duckdb_v2_logical_type_handle base_type,
-                                                                         duckdb_v2_identifier_t alias_name,
-                                                                         duckdb_v2_logical_type_handle *out_type,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/* --- Struct definitions for logical_type --- */
+/* --- Struct definitions for qname --- */
 
 /* ============================================================================
  * MODULE: schema
@@ -4835,6 +4491,547 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_destroy(duckdb_v2_query_pr
 /* --- Struct definitions for connection --- */
 
 /* ============================================================================
+ * MODULE: logical_type
+ * ============================================================================ */
+
+/* --- Enums for logical_type --- */
+
+/*!
+ * Logical type identifier. The values are the same integers DuckDB uses internally, so round-tripping is lossless. The
+ * bind- and UDF-only ids (UNKNOWN, ANY, TEMPLATE) appear here for completeness; they do not show up in result column
+ * types in practice.
+ */
+typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
+	//! Invalid / unset.
+	DUCKDB_V2_LOGICAL_TYPE_ID_INVALID = 0,
+
+	//! NULL constant type.
+	DUCKDB_V2_LOGICAL_TYPE_ID_SQLNULL = 1,
+
+	//! Unknown — used for unresolved parameter expressions.
+	DUCKDB_V2_LOGICAL_TYPE_ID_UNKNOWN = 2,
+
+	//! ANY — used for functions that accept any type.
+	DUCKDB_V2_LOGICAL_TYPE_ID_ANY = 3,
+
+	/*!
+	 * A type carried as a value (type parameters). Values of this type are built via value_create_type_with_context /
+	 * _with_connection.
+	 */
+	DUCKDB_V2_LOGICAL_TYPE_ID_TYPE = 6,
+	DUCKDB_V2_LOGICAL_TYPE_ID_BOOLEAN = 10,
+	DUCKDB_V2_LOGICAL_TYPE_ID_TINYINT = 11,
+	DUCKDB_V2_LOGICAL_TYPE_ID_SMALLINT = 12,
+	DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER = 13,
+	DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT = 14,
+
+	//! 32-bit days since epoch.
+	DUCKDB_V2_LOGICAL_TYPE_ID_DATE = 15,
+
+	//! 64-bit microseconds since midnight.
+	DUCKDB_V2_LOGICAL_TYPE_ID_TIME = 16,
+
+	//! 64-bit seconds since epoch.
+	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP_SEC = 17,
+
+	//! 64-bit milliseconds since epoch.
+	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP_MS = 18,
+
+	//! 64-bit microseconds since epoch.
+	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP = 19,
+
+	//! 64-bit nanoseconds since epoch.
+	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP_NS = 20,
+
+	//! Decimal with width and scale parameters.
+	DUCKDB_V2_LOGICAL_TYPE_ID_DECIMAL = 21,
+	DUCKDB_V2_LOGICAL_TYPE_ID_FLOAT = 22,
+	DUCKDB_V2_LOGICAL_TYPE_ID_DOUBLE = 23,
+	DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR = 25,
+	DUCKDB_V2_LOGICAL_TYPE_ID_BLOB = 26,
+	DUCKDB_V2_LOGICAL_TYPE_ID_INTERVAL = 27,
+	DUCKDB_V2_LOGICAL_TYPE_ID_UTINYINT = 28,
+	DUCKDB_V2_LOGICAL_TYPE_ID_USMALLINT = 29,
+	DUCKDB_V2_LOGICAL_TYPE_ID_UINTEGER = 30,
+	DUCKDB_V2_LOGICAL_TYPE_ID_UBIGINT = 31,
+
+	//! 64-bit microseconds since epoch, timezone-aware.
+	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP_TZ = 32,
+
+	//! 64-bit nanoseconds since epoch, timezone-aware.
+	DUCKDB_V2_LOGICAL_TYPE_ID_TIMESTAMP_TZ_NS = 33,
+
+	//! 64-bit microseconds since midnight + 32-bit offset.
+	DUCKDB_V2_LOGICAL_TYPE_ID_TIME_TZ = 34,
+
+	//! 64-bit nanoseconds since midnight.
+	DUCKDB_V2_LOGICAL_TYPE_ID_TIME_NS = 35,
+	DUCKDB_V2_LOGICAL_TYPE_ID_BIT = 36,
+
+	//! Arbitrary-precision integer (VARINT-encoded).
+	DUCKDB_V2_LOGICAL_TYPE_ID_BIGNUM = 39,
+	DUCKDB_V2_LOGICAL_TYPE_ID_UHUGEINT = 49,
+	DUCKDB_V2_LOGICAL_TYPE_ID_HUGEINT = 50,
+	DUCKDB_V2_LOGICAL_TYPE_ID_UUID = 54,
+
+	//! Geometry (spatial extension).
+	DUCKDB_V2_LOGICAL_TYPE_ID_GEOMETRY = 60,
+	DUCKDB_V2_LOGICAL_TYPE_ID_STRUCT = 100,
+	DUCKDB_V2_LOGICAL_TYPE_ID_LIST = 101,
+	DUCKDB_V2_LOGICAL_TYPE_ID_MAP = 102,
+	DUCKDB_V2_LOGICAL_TYPE_ID_ENUM = 104,
+	DUCKDB_V2_LOGICAL_TYPE_ID_UNION = 107,
+	DUCKDB_V2_LOGICAL_TYPE_ID_ARRAY = 108,
+	DUCKDB_V2_LOGICAL_TYPE_ID_VARIANT = 109,
+
+	//! Unnamed struct; shares the physical representation of STRUCT.
+	DUCKDB_V2_LOGICAL_TYPE_ID_TUPLE = 110,
+	DUCKDB_V2_LOGICAL_TYPE_ID_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_LOGICAL_TYPE_ID;
+
+/* --- Struct forward declarations for logical_type --- */
+
+/* --- Types for logical_type --- */
+
+/* --- Constants for logical_type --- */
+
+/* --- Function pointer typedefs for logical_type --- */
+
+/* --- Functions for logical_type --- */
+
+/*!
+ * Creates a logical type from a type id plus value parameters.
+ *
+ * The id-keyed twin of context_create_type_from_name: the type id names the kind, and the parameters bind it. With
+ * param_count 0 it instantiates a primitive directly, without touching the catalog: BOOLEAN, TINYINT..BIGINT,
+ * UTINYINT..UBIGINT, HUGEINT, UHUGEINT, FLOAT, DOUBLE, DATE, every TIME and TIMESTAMP variant, INTERVAL, VARCHAR, BLOB,
+ * BIT, BIGNUM, and UUID. ANY is accepted as well.
+ *
+ * ANY is a function-signature wildcard, constructible here so it can be passed to the function parameter and varargs
+ * setters, as a fixed-arity ANY parameter or an ANY varargs type. Data-creating surfaces reject it: value and data
+ * chunk creation, scalar and aggregate return types, table function result columns, cast source and target types, and
+ * custom type registration.
+ *
+ * With parameters, the id resolves to its canonical type name and binds through the same path as
+ * context_create_type_from_name, so the parameterized kinds construct here too: decimal(width, scale); list(T);
+ * array(T, size); map(K, V); struct(fields); union(members); enum(entries); and varchar with a named "collation"
+ * parameter. Parameters are (name, value) pairs in two parallel arrays, exactly as for context_create_type_from_name.
+ *
+ * Returns ERROR_INPUT_INVALID when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP,
+ * ARRAY, UNION, ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
+ * context_create_type_from_text — and for INVALID.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param ctx The context supplying the catalog and active transaction.
+ * @param type_id The type id to instantiate.
+ * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
+ * all-positional parameters.
+ * @param param_values An array of param_count parameter values. Borrowed (copied in). Pass NULL when param_count is 0.
+ * @param param_count The number of parameters. 0 instantiates a parameterless primitive.
+ * @param out_type Receives the new logical type handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_id(
+    duckdb_v2_context_handle ctx, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const duckdb_v2_identifier_t *param_names,
+    const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a logical type from a type name plus value parameters.
+ *
+ * The generic constructor: resolves the name in the context's catalog and binds it with the given parameters, exactly
+ * as SQL binds a type expression. Built-in parameterized kinds and registered extension types construct through this
+ * same call.
+ *
+ * An unqualified name is resolved along the search path first and then in the system catalog, which is where the
+ * built-in kinds live. A qualified name is resolved exactly as written, with no system-catalog fallback, so it names
+ * the type in that catalog or schema or fails.
+ *
+ * Parameters are (name, value) pairs in two parallel arrays. param_names may be NULL to make every parameter
+ * positional, and a {NULL, 0} entry makes that one parameter positional. Child types cross as TYPE values, built with
+ * value_create_type_with_context / _with_connection. The built-in shapes are: decimal(width, scale); list(T); array(T,
+ * size); map(K, V); struct(fields, as named or all-positional TYPE values); union(members, as named TYPE values);
+ * enum(entries, as VARCHAR values); and varchar with a named "collation" VARCHAR parameter.
+ *
+ * A name that resolves to a type with no bind function takes no parameters, and passing any fails. Bind errors —
+ * unknown name, wrong parameter count or types — surface from the call.
+ *
+ * Runs in the caller's context scope, as create_type_from_text does: reach it from a bind-phase callback or another
+ * context-holding scope, not from an exec-phase worker callback. External callers holding only a connection use
+ * connection_create_type_from_name instead.
+ *
+ * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
+ * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database. This is
+ * the inverse of logical_type_get_param_count / logical_type_get_param.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param ctx The context supplying the catalog and active transaction.
+ * @param name The type name to resolve. Parts are matched case-insensitively; qualify it to name a type in a particular
+ * catalog or schema.
+ * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
+ * all-positional parameters.
+ * @param param_values An array of param_count parameter values. Borrowed (copied in). Pass NULL when param_count is 0.
+ * @param param_count The number of parameters.
+ * @param out_type Receives the new logical type handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_name(
+    duckdb_v2_context_handle ctx, duckdb_v2_qname_handle name, const duckdb_v2_identifier_t *param_names,
+    const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a logical type by parsing SQL text.
+ *
+ * Parses a SQL type expression in the given context and returns the bound logical type. It accepts primitives
+ * ("INTEGER"), parameterized kinds ("DECIMAL(18,3)", "INTEGER[]", "STRUCT(a INTEGER, b VARCHAR)", "MAP(VARCHAR,
+ * INTEGER)", "INTEGER[3]", "UNION(i INTEGER, s VARCHAR)", "ENUM('a', 'b')"), and catalog-registered type names, both
+ * user-defined and from extensions. A catalog type name binds to its structural type, and the name is not preserved as
+ * an alias. Names are case-insensitive. Parse and bind errors surface from the call.
+ *
+ * Runs in the caller's context scope: a context handle arrives with the context lock held and a transaction active, as
+ * in a function bind callback or custom type registration. Catalog-touching context calls belong in bind-phase
+ * callbacks and other context-holding scopes, not in exec-phase worker callbacks. External callers holding only a
+ * connection use connection_create_type_from_text instead.
+ *
+ * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
+ * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database. This is
+ * the inverse of logical_type_to_text for every constructible kind.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param ctx The context supplying the catalog and active transaction.
+ * @param text View of the SQL type expression to parse.
+ * @param out_type Receives the new logical type handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle ctx, duckdb_v2_str text,
+                                                                     duckdb_v2_logical_type_handle *out_type,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a logical type from a type id plus value parameters.
+ *
+ * The id-keyed twin of connection_create_type_from_name: the type id names the kind, and the parameters bind it. With
+ * param_count 0 it instantiates a primitive directly, without touching the catalog: BOOLEAN, TINYINT..BIGINT,
+ * UTINYINT..UBIGINT, HUGEINT, UHUGEINT, FLOAT, DOUBLE, DATE, every TIME and TIMESTAMP variant, INTERVAL, VARCHAR, BLOB,
+ * BIT, BIGNUM, and UUID. ANY is accepted as well.
+ *
+ * ANY is a function-signature wildcard, constructible here so it can be passed to the function parameter and varargs
+ * setters, as a fixed-arity ANY parameter or an ANY varargs type. Data-creating surfaces reject it: value and data
+ * chunk creation, scalar and aggregate return types, table function result columns, cast source and target types, and
+ * custom type registration.
+ *
+ * With parameters, the id resolves to its canonical type name and binds through the same path as
+ * connection_create_type_from_name, so the parameterized kinds construct here too: decimal(width, scale); list(T);
+ * array(T, size); map(K, V); struct(fields); union(members); enum(entries); and varchar with a named "collation"
+ * parameter. Parameters are (name, value) pairs in two parallel arrays, exactly as for
+ * connection_create_type_from_name.
+ *
+ * Returns ERROR_INPUT_INVALID when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP,
+ * ARRAY, UNION, ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
+ * connection_create_type_from_text — and for INVALID.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection supplying the catalog and active transaction.
+ * @param type_id The type id to instantiate.
+ * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
+ * all-positional parameters.
+ * @param param_values An array of param_count parameter values. Borrowed (copied in). Pass NULL when param_count is 0.
+ * @param param_count The number of parameters. 0 instantiates a parameterless primitive.
+ * @param out_type Receives the new logical type handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_id(
+    duckdb_v2_connection_handle conn, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const duckdb_v2_identifier_t *param_names,
+    const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a logical type from a type name plus value parameters, using a connection.
+ *
+ * The same as context_create_type_from_name, except that the catalog and transaction come from a connection: the bind
+ * runs in its own transaction on that connection's context. Use it from outside DuckDB, where a connection — but no
+ * context — is in hand.
+ *
+ * Parameters are (name, value) pairs in two parallel arrays, exactly as for context_create_type_from_name.
+ *
+ * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
+ * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection supplying the catalog and active transaction.
+ * @param name The type name to resolve. Parts are matched case-insensitively; qualify it to name a type in a particular
+ * catalog or schema.
+ * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
+ * all-positional parameters.
+ * @param param_values An array of param_count parameter values. Borrowed (copied in). Pass NULL when param_count is 0.
+ * @param param_count The number of parameters.
+ * @param out_type Receives the new logical type handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_name(
+    duckdb_v2_connection_handle conn, duckdb_v2_qname_handle name, const duckdb_v2_identifier_t *param_names,
+    const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a logical type by parsing SQL text, using a connection.
+ *
+ * The same as context_create_type_from_text, except that the catalog and transaction come from a connection: the parse
+ * and bind run in their own transaction on that connection's context. Use it from outside DuckDB, where a connection —
+ * but no context — is in hand.
+ *
+ * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
+ * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection supplying the catalog and active transaction.
+ * @param text View of the SQL type expression to parse.
+ * @param out_type Receives the new logical type handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_text(duckdb_v2_connection_handle conn,
+                                                                        duckdb_v2_str text,
+                                                                        duckdb_v2_logical_type_handle *out_type,
+                                                                        duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a copy of a logical type.
+ *
+ * On success, writes the new caller-owned handle into *out_type; destroy it via logical_type_destroy.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The logical type to copy.
+ * @param out_type Receives the new logical type handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_copy(duckdb_v2_logical_type_handle type,
+                                                         duckdb_v2_logical_type_handle *out_type,
+                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys a logical type handle.
+ *
+ * Null-safe: passing nullptr or a slot already set to nullptr is a no-op. On success the slot is set to nullptr.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The logical type to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_destroy(duckdb_v2_logical_type_handle *type);
+
+/*!
+ * Compares two logical types for deep equality.
+ *
+ * Two types are equal when they agree in kind and in every parameter, recursively. DECIMAL(10, 2) equals DECIMAL(10,
+ * 2), but not DECIMAL(10, 3) and not FLOAT; two STRUCTs are equal when they have the same field names in the same order
+ * and equal field types.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param left The first logical type.
+ * @param right The second logical type.
+ * @param result Receives the result of the comparison.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_is_equal(duckdb_v2_logical_type_handle left,
+                                                             duckdb_v2_logical_type_handle right, bool *result,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the logical type id.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The logical type.
+ * @param out_id Receives the type id.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_id(duckdb_v2_logical_type_handle type,
+                                                           DUCKDB_V2_LOGICAL_TYPE_ID *out_id,
+                                                           duckdb_v2_error_info_handle *err);
+
+/*!
+ * Borrows the logical type's name.
+ *
+ * The alias when one is set — an extension or user-defined name such as "POINT_2D" — otherwise the canonical name of
+ * the type id, such as "INTEGER", "DECIMAL", or "TIMESTAMP WITH TIME ZONE". Never the empty view. This is exactly the
+ * name vocabulary create_type_from_name accepts. The view is valid until the logical type is destroyed; a canonical
+ * name points at static storage.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The logical type.
+ * @param out_name Receives a borrowed view of the name (alias when set, else the id's canonical name).
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_name(duckdb_v2_logical_type_handle type,
+                                                             duckdb_v2_identifier_t *out_name,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Renders a logical type as SQL text.
+ *
+ * An aliased type renders as its alias, and create_type_from_text resolves that spelling only when the name is
+ * registered in the connection's catalog. The text round-trips through create_type_from_text for every constructible
+ * kind, with one exception: ANY renders as "ANY", but create_type_from_text cannot parse it back, since ANY is a
+ * signature wildcard rather than a parseable SQL type.
+ *
+ * Writes into a caller-supplied buffer, so nothing is allocated on the caller's behalf and nothing has to be freed.
+ * Pass out_text = NULL to size the buffer without rendering into it: out_length then receives the length, and
+ * out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call returns
+ * ERROR_INPUT_OBJECT_SIZE with out_length set to the required length and out_text left untouched.
+ *
+ * out_length never counts the terminator, but a successful write always appends one, so the buffer is usable as a C
+ * string.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The logical type.
+ * @param out_text Caller-owned buffer receiving the text plus a null terminator, or NULL to only report the required
+ * length in out_length.
+ * @param out_capacity Bytes available in out_text, terminator included. Ignored when out_text is NULL.
+ * @param out_length Receives the text length excluding the null terminator — written on success and on
+ * ERROR_INPUT_OBJECT_SIZE.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_to_text(duckdb_v2_logical_type_handle type, char *out_text,
+                                                            idx_t out_capacity, idx_t *out_length,
+                                                            duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the number of value parameters of a logical type.
+ *
+ * The inspection dual of create_type_from_name: these are the parameters that reconstruct the type through it. Per
+ * kind: DECIMAL 2 (width, scale); LIST 1 (element type); ARRAY 2 (element type, size); MAP 2 (key type, value type);
+ * STRUCT and TUPLE one per field; UNION one per member; ENUM one per dictionary entry; VARCHAR 1 when a collation is
+ * set, else 0; GEOMETRY 1 when a coordinate system is set, else 0; everything else 0. A bound type reports only what it
+ * actually carries, so a bind-time modifier that is not retained — an ignored VARCHAR length, say — does not reappear.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The logical type.
+ * @param out_count Receives the number of parameters.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_param_count(duckdb_v2_logical_type_handle type,
+                                                                    idx_t *out_count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns one value parameter of a logical type.
+ *
+ * out_name receives a borrowed view of the parameter name — a STRUCT field name, a UNION member name, "collation" — or
+ * the empty view {NULL, 0} for a positional parameter. A non-empty view is valid until the logical type is destroyed.
+ * out_value receives an owned value, destroyed via value_destroy: child types come back as TYPE values (unwrap them
+ * with value_get_type), DECIMAL width and scale as UTINYINT, ARRAY size as BIGINT, and ENUM dictionary entries and
+ * collations as VARCHAR. An out-of-range index returns ERROR_INPUT_INVALID. Each call allocates one owned value.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The logical type.
+ * @param index The parameter index, in [0, param_count).
+ * @param out_name Receives a borrowed view of the parameter name, or the empty view {NULL, 0} for a positional
+ * parameter.
+ * @param out_value Receives the owned parameter value.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_param(duckdb_v2_logical_type_handle type, idx_t index,
+                                                              duckdb_v2_identifier_t *out_name,
+                                                              duckdb_v2_value_handle *out_value,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a logical type that is an alias of another logical type.
+ *
+ * The alias keeps the base type's internal representation, so executing against it needs no special handling, while
+ * remaining logically distinct from the base type. Intended for custom type bind callbacks, where both the base type
+ * and the name come from the bind info.
+ *
+ * Scoped like the rest of the create_type family: the alias is resolved against the catalog reachable from the context.
+ * An empty alias name returns ERROR_INPUT_INVALID.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param ctx The context to resolve the alias against.
+ * @param base_type The logical type to alias. Typically the base type supplied in the custom type bind info.
+ * @param alias_name The name for the resulting type. Typically the name of the custom type being constructed, also
+ * available from the bind info.
+ * @param out_type Receives the new type: the base type's internal representation under the given alias name.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_context_handle ctx,
+                                                                      duckdb_v2_logical_type_handle base_type,
+                                                                      duckdb_v2_identifier_t alias_name,
+                                                                      duckdb_v2_logical_type_handle *out_type,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a logical type that is an alias of another logical type.
+ *
+ * The alias keeps the base type's internal representation, so executing against it needs no special handling, while
+ * remaining logically distinct from the base type. Intended for custom type bind callbacks, where both the base type
+ * and the name come from the bind info.
+ *
+ * Scoped like the rest of the create_type family: the alias is resolved against the catalog reachable from the
+ * connection. An empty alias name returns ERROR_INPUT_INVALID.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection to resolve the alias against.
+ * @param base_type The logical type to alias. Typically the base type supplied in the custom type bind info.
+ * @param alias_name The name for the resulting type. Typically the name of the custom type being constructed, also
+ * available from the bind info.
+ * @param out_type Receives the new type: the base type's internal representation under the given alias name.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_with_alias(duckdb_v2_connection_handle conn,
+                                                                         duckdb_v2_logical_type_handle base_type,
+                                                                         duckdb_v2_identifier_t alias_name,
+                                                                         duckdb_v2_logical_type_handle *out_type,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/* --- Struct definitions for logical_type --- */
+
+/* ============================================================================
  * MODULE: replacement scan
  * ============================================================================ */
 
@@ -4858,7 +5055,7 @@ typedef struct _duckdb_v2_replacement_scan {
 /*!
  * A borrowed opaque handle to the arguments supplied to a replacement scan when the binder consults it. The callback
  * receives this handle and can use it to inspect the unresolved name and to claim it by naming what to read instead.
- * Valid only for the duration of the callback, as are the name views obtained through it.
+ * Valid only for the duration of the callback; the name it hands out is owned separately and outlives it.
  */
 typedef struct _duckdb_v2_replacement_scan_info {
 	void *internal_ptr;
@@ -4945,7 +5142,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_extension(du
  * Sets the callback of the replacement scan.
  *
  * The callback is invoked during query planning for each table reference the catalog could not resolve. It can inspect
- * the unresolved name via `duckdb_v2_replacement_scan_get_table_name()` and its qualifiers, and claim the reference via
+ * the unresolved name via `duckdb_v2_replacement_scan_get_name()`, and claim the reference via
  * `duckdb_v2_replacement_scan_set_function_name()`, `duckdb_v2_replacement_scan_set_collection()` or
  * `duckdb_v2_replacement_scan_set_subquery()`; returning without claiming declines it. The context passed to the
  * callback may be used to read settings, but not to run queries. A callback must be set before registration.
@@ -5000,70 +5197,34 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_user_data(duckdb_v2_
                                                                       void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * Retrieves the catalog name of the unresolved reference.
+ * Retrieves the name the catalog could not resolve.
  *
- * Returns the empty view `{NULL, 0}` when the reference carries no catalog qualifier. The name is borrowed and valid
- * only for the duration of the callback.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The info handle.
- * @param name Receives the borrowed catalog name, or the empty view when the reference carries no catalog qualifier.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_catalog_name(duckdb_v2_replacement_scan_info_handle info,
-                                                                         duckdb_v2_identifier_t *name,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Retrieves the schema name of the unresolved reference.
- *
- * Returns the empty view `{NULL, 0}` when the reference carries no schema qualifier. The name is borrowed and valid
- * only for the duration of the callback.
+ * The name as written in the query, as a path: an unqualified reference has a single part, and a qualified one carries
+ * its catalog and schema before it -- see `duckdb_v2_qname_get_part()`. For a file-backed reference the single part is
+ * the path with the quotes stripped. The returned name is owned by the caller and must be destroyed via
+ * `duckdb_v2_qname_destroy()`; being owned, it may outlive the callback.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param info The info handle.
- * @param name Receives the borrowed schema name, or the empty view when the reference carries no schema qualifier.
+ * @param name Receives the unresolved name. Owned by the caller; destroy via `duckdb_v2_qname_destroy()`.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_schema_name(duckdb_v2_replacement_scan_info_handle info,
-                                                                        duckdb_v2_identifier_t *name,
-                                                                        duckdb_v2_error_info_handle *err);
-
-/*!
- * Retrieves the table name of the unresolved reference.
- *
- * This is the name as written in the query, which for a file-backed reference is the path with the quotes stripped.
- * Never the empty view. The name is borrowed and valid only for the duration of the callback.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The info handle.
- * @param name Receives the borrowed table name.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_table_name(duckdb_v2_replacement_scan_info_handle info,
-                                                                       duckdb_v2_identifier_t *name,
-                                                                       duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_name(duckdb_v2_replacement_scan_info_handle info,
+                                                                 duckdb_v2_qname_handle *name,
+                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
  * Claims the reference by naming a table function to read instead.
  *
  * Arguments to the function are added with `duckdb_v2_replacement_scan_add_argument()` and
- * `duckdb_v2_replacement_scan_add_named_argument()`. The name is borrowed and copied. It is matched case-insensitively
- * and is never split on ".", so it always names an unqualified function; an empty name results in an error. The name is
- * not resolved here: an unknown function fails later, when the replacement is bound. Calling this again replaces the
- * previous name and keeps the arguments added so far.
+ * `duckdb_v2_replacement_scan_add_named_argument()`. The name is borrowed and copied, and its parts are matched
+ * case-insensitively. A qualified name targets a function in a particular schema or catalog, exactly as writing it out
+ * in SQL would. The name is not resolved here: an unknown function fails later, when the replacement is bound. Calling
+ * this again replaces the previous name and keeps the arguments added so far.
  *
  * The three claim forms, `duckdb_v2_replacement_scan_set_function_name()`,
  * `duckdb_v2_replacement_scan_set_collection()` and `duckdb_v2_replacement_scan_set_subquery()`, are mutually
@@ -5073,13 +5234,13 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_table_name(duckdb_v2
  * - stable: v2.0.0
  *
  * @param info The info handle.
- * @param name The name of the table function to read instead. Borrowed and copied.
+ * @param name The table function to read instead. Borrowed and copied.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_function_name(duckdb_v2_replacement_scan_info_handle info,
-                                                                          duckdb_v2_identifier_t name,
+                                                                          duckdb_v2_qname_handle name,
                                                                           duckdb_v2_error_info_handle *err);
 
 /*!

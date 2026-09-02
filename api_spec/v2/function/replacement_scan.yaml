@@ -35,7 +35,8 @@ handles:
     description: |
       A borrowed opaque handle to the arguments supplied to a replacement scan when the binder consults it. The
       callback receives this handle and can use it to inspect the unresolved name and to claim it by naming what to
-      read instead. Valid only for the duration of the callback, as are the name views obtained through it.
+      read instead. Valid only for the duration of the callback; the name it hands out is owned separately and
+      outlives it.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Callbacks
@@ -149,7 +150,7 @@ functions:
       Sets the callback of the replacement scan.
 
       The callback is invoked during query planning for each table reference the catalog could not resolve. It can
-      inspect the unresolved name via `[[replacement_scan_get_table_name]]` and its qualifiers, and claim the
+      inspect the unresolved name via `[[replacement_scan_get_name]]`, and claim the
       reference via `[[replacement_scan_set_function_name]]`, `[[replacement_scan_set_collection]]` or
       `[[replacement_scan_set_subquery]]`; returning without claiming declines it. The context passed to the callback
       may be used to read settings, but not to run queries. A callback must be set before registration.
@@ -212,69 +213,25 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  replacement_scan_get_catalog_name:
+  replacement_scan_get_name:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-02" ]
     description: |
-      Retrieves the catalog name of the unresolved reference.
+      Retrieves the name the catalog could not resolve.
 
-      Returns the empty view `{NULL, 0}` when the reference carries no catalog qualifier. The name is borrowed and
-      valid only for the duration of the callback.
+      The name as written in the query, as a path: an unqualified reference has a single part, and a qualified one
+      carries its catalog and schema before it -- see `[[qname_get_part]]`. For a file-backed reference the single
+      part is the path with the quotes stripped. The returned name is owned by the caller and must be destroyed via
+      `[[qname_destroy]]`; being owned, it may outlive the callback.
     parameters:
       info:
         type: replacement_scan_info
         description: The info handle.
       name:
-        type: identifier
+        type: qname
         indirection: 1
-        kind: OUT_BORROW
-        description: Receives the borrowed catalog name, or the empty view when the reference carries no catalog qualifier.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  replacement_scan_get_schema_name:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-02" ]
-    description: |
-      Retrieves the schema name of the unresolved reference.
-
-      Returns the empty view `{NULL, 0}` when the reference carries no schema qualifier. The name is borrowed and
-      valid only for the duration of the callback.
-    parameters:
-      info:
-        type: replacement_scan_info
-        description: The info handle.
-      name:
-        type: identifier
-        indirection: 1
-        kind: OUT_BORROW
-        description: Receives the borrowed schema name, or the empty view when the reference carries no schema qualifier.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  replacement_scan_get_table_name:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-02" ]
-    description: |
-      Retrieves the table name of the unresolved reference.
-
-      This is the name as written in the query, which for a file-backed reference is the path with the quotes
-      stripped. Never the empty view. The name is borrowed and valid only for the duration of the callback.
-    parameters:
-      info:
-        type: replacement_scan_info
-        description: The info handle.
-      name:
-        type: identifier
-        indirection: 1
-        kind: OUT_BORROW
-        description: Receives the borrowed table name.
+        kind: OUT
+        description: Receives the unresolved name. Owned by the caller; destroy via `[[qname_destroy]]`.
       err:
         type: error_info
         indirection: 1
@@ -291,10 +248,10 @@ functions:
       Claims the reference by naming a table function to read instead.
 
       Arguments to the function are added with `[[replacement_scan_add_argument]]` and
-      `[[replacement_scan_add_named_argument]]`. The name is borrowed and copied. It is matched case-insensitively
-      and is never split on ".", so it always names an unqualified function; an empty name results in an error. The
-      name is not resolved here: an unknown function fails later, when the replacement is bound. Calling this again
-      replaces the previous name and keeps the arguments added so far.
+      `[[replacement_scan_add_named_argument]]`. The name is borrowed and copied, and its parts are matched
+      case-insensitively. A qualified name targets a function in a particular schema or catalog, exactly as writing
+      it out in SQL would. The name is not resolved here: an unknown function fails later, when the replacement is
+      bound. Calling this again replaces the previous name and keeps the arguments added so far.
 
       The three claim forms, `[[replacement_scan_set_function_name]]`, `[[replacement_scan_set_collection]]` and
       `[[replacement_scan_set_subquery]]`, are mutually exclusive: claiming the reference through a second, different
@@ -304,8 +261,8 @@ functions:
         type: replacement_scan_info
         description: The info handle.
       name:
-        type: identifier
-        description: The name of the table function to read instead. Borrowed and copied.
+        type: qname
+        description: The table function to read instead. Borrowed and copied.
       err:
         type: error_info
         indirection: 1

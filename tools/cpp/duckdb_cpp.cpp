@@ -138,6 +138,10 @@ template <>
 struct HandleTraits<ReplacementScan> {
 	using handle = duckdb_v2_replacement_scan_handle;
 };
+template <>
+struct HandleTraits<QualifiedName> {
+	using handle = duckdb_v2_qname_handle;
+};
 
 } // namespace detail
 
@@ -508,9 +512,13 @@ auto Connection::CreateType(std::string_view name) -> LogicalType {
 }
 
 auto Connection::CreateType(std::string_view name, const std::vector<TypeParam> &params) -> LogicalType {
+	return CreateType(QualifiedName::Create({std::string(name)}), params);
+}
+
+auto Connection::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_connection_create_type_from_name, handle(), ToStr(name), split.names(), split.values(),
+	CheckedAPICall(duckdb_v2_connection_create_type_from_name, handle(), name.handle(), split.names(), split.values(),
 	               static_cast<idx_t>(params.size()), &type);
 	return detail::Factory::Make<LogicalType>(type);
 }
@@ -678,9 +686,13 @@ auto Context::CreateType(std::string_view name) const -> LogicalType {
 }
 
 auto Context::CreateType(std::string_view name, const std::vector<TypeParam> &params) const -> LogicalType {
+	return CreateType(QualifiedName::Create({std::string(name)}), params);
+}
+
+auto Context::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) const -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_context_create_type_from_name, handle(), ToStr(name), split.names(), split.values(),
+	CheckedAPICall(duckdb_v2_context_create_type_from_name, handle(), name.handle(), split.names(), split.values(),
 	               static_cast<idx_t>(params.size()), &type);
 	return detail::Factory::Make<LogicalType>(type);
 }
@@ -3871,6 +3883,71 @@ auto CastFunction::ExecInput::GetContext() const -> Context {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Qualified Name
+//----------------------------------------------------------------------------------------------------------------------
+
+QualifiedName::QualifiedName(void *impl) : detail::Handle<QualifiedName>(impl) {
+}
+
+QualifiedName::~QualifiedName() {
+	auto _h = handle();
+	duckdb_v2_qname_destroy(&_h);
+}
+
+auto QualifiedName::Parse(std::string_view text) -> QualifiedName {
+	duckdb_v2_qname_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_qname_parse, ToStr(text), &_h);
+	return detail::Factory::Make<QualifiedName>(_h);
+}
+
+auto QualifiedName::Create(const std::vector<std::string> &parts) -> QualifiedName {
+	std::vector<duckdb_v2_identifier_t> views;
+	views.reserve(parts.size());
+	for (auto &part : parts) {
+		views.push_back(ToStr(part));
+	}
+	duckdb_v2_qname_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_qname_create, views.empty() ? nullptr : views.data(), views.size(), &_h);
+	return detail::Factory::Make<QualifiedName>(_h);
+}
+
+auto QualifiedName::GetPartCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_qname_get_part_count, handle(), &count);
+	return count;
+}
+
+auto QualifiedName::GetPart(idx_t index) const -> std::string_view {
+	duckdb_v2_identifier_t part = {nullptr, 0};
+	CheckedAPICall(duckdb_v2_qname_get_part, handle(), index, &part);
+	return FromStr(part);
+}
+
+auto QualifiedName::GetName() const -> std::string_view {
+	return GetPart(GetPartCount() - 1);
+}
+
+auto QualifiedName::Render() const -> std::string {
+	idx_t length = 0;
+	CheckedAPICall(duckdb_v2_qname_render, handle(), nullptr, 0, &length);
+	std::string out(length, '\0');
+	CheckedAPICall(duckdb_v2_qname_render, handle(), &out[0], length + 1, &length);
+	return out;
+}
+
+auto QualifiedName::Equals(const QualifiedName &other) const -> bool {
+	bool result = false;
+	CheckedAPICall(duckdb_v2_qname_equals, handle(), other.handle(), &result);
+	return result;
+}
+
+auto QualifiedName::Hash() const -> uint64_t {
+	uint64_t hash = 0;
+	CheckedAPICall(duckdb_v2_qname_hash, handle(), &hash);
+	return hash;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // Replacement Scan
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -3980,30 +4057,20 @@ void *ReplacementScan::Input::GetUserDataInternal() const {
 	return RequireReplacementUserData(scan.user_data);
 }
 
-auto ReplacementScan::Input::GetCatalogName() const -> std::string_view {
-	duckdb_v2_identifier_t name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_replacement_scan_get_catalog_name,
-	               static_cast<duckdb_v2_replacement_scan_info_handle>(args), &name);
-	return FromStr(name);
-}
-
-auto ReplacementScan::Input::GetSchemaName() const -> std::string_view {
-	duckdb_v2_identifier_t name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_replacement_scan_get_schema_name,
-	               static_cast<duckdb_v2_replacement_scan_info_handle>(args), &name);
-	return FromStr(name);
-}
-
-auto ReplacementScan::Input::GetTableName() const -> std::string_view {
-	duckdb_v2_identifier_t name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_replacement_scan_get_table_name, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
+auto ReplacementScan::Input::GetName() const -> QualifiedName {
+	duckdb_v2_qname_handle name = nullptr;
+	CheckedAPICall(duckdb_v2_replacement_scan_get_name, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
 	               &name);
-	return FromStr(name);
+	return detail::Factory::Make<QualifiedName>(name);
+}
+
+auto ReplacementScan::Input::SetFunctionName(const QualifiedName &name) -> void {
+	CheckedAPICall(duckdb_v2_replacement_scan_set_function_name,
+	               static_cast<duckdb_v2_replacement_scan_info_handle>(args), name.handle());
 }
 
 auto ReplacementScan::Input::SetFunctionName(std::string_view name) -> void {
-	CheckedAPICall(duckdb_v2_replacement_scan_set_function_name,
-	               static_cast<duckdb_v2_replacement_scan_info_handle>(args), ToStr(name));
+	SetFunctionName(QualifiedName::Create({std::string(name)}));
 }
 
 auto ReplacementScan::Input::AddArgument(const Value &value) -> void {
@@ -4115,8 +4182,13 @@ void Appender::Initialize(Connection &conn, const std::string &query, std::vecto
 	auto scan = ReplacementScan::Create(conn);
 	scan.SetCallback([](ReplacementScan::Input &input) {
 		auto &shared = input.GetUserData<std::shared_ptr<Buffer>>();
-		if (!shared->collection || !EqualsIgnoreCase(input.GetTableName(), shared->name)) {
-			return; // not ours, or the appender is gone: decline
+		if (!shared->collection) {
+			return; // the appender is gone: decline
+		}
+		// Only an unqualified reference can be the buffer; anything catalog- or schema-qualified is a real object.
+		auto name = input.GetName();
+		if (name.GetPartCount() != 1 || !EqualsIgnoreCase(name.GetName(), shared->name)) {
+			return; // not ours: decline
 		}
 		input.SetCollection(*shared->collection, shared->column_names);
 	});

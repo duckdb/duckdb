@@ -23,6 +23,7 @@
 #include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
@@ -221,6 +222,15 @@ inline auto Convert(duckdb_v2_logical_type_handle opt) -> CV2LogicalType * {
 }
 inline auto Convert(CV2LogicalType *opt) -> duckdb_v2_logical_type_handle {
 	return reinterpret_cast<duckdb_v2_logical_type_handle>(opt);
+}
+
+using CV2QualifiedName = duckdb::QualifiedName;
+
+inline auto Convert(duckdb_v2_qname_handle name) -> CV2QualifiedName * {
+	return reinterpret_cast<CV2QualifiedName *>(name);
+}
+inline auto Convert(CV2QualifiedName *name) -> duckdb_v2_qname_handle {
+	return reinterpret_cast<duckdb_v2_qname_handle>(name);
 }
 
 using CV2Value = duckdb::Value;

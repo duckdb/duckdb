@@ -33,7 +33,7 @@ public:
 	Identifier out_alias;
 
 	// FUNCTION
-	Identifier out_function_name;
+	QualifiedName out_function_name;
 	vector<Value> out_arguments;
 	vector<std::pair<Identifier, Value>> out_named_arguments;
 
@@ -78,6 +78,7 @@ public:
 				children.push_back(std::move(child));
 			}
 			auto function = make_uniq<TableFunctionRef>();
+			// The QualifiedName overload keeps any catalog/schema qualification; the Identifier one would drop it.
 			function->function = make_uniq<FunctionExpression>(out_function_name, std::move(children));
 			result = std::move(function);
 			break;
@@ -180,14 +181,6 @@ static auto Convert(CV2ReplacementScan *scan) -> duckdb_v2_replacement_scan_hand
 	return reinterpret_cast<duckdb_v2_replacement_scan_handle>(scan);
 }
 
-// The engine reports an absent catalog/schema as an empty string; the borrowed-view convention is the null view.
-static auto BorrowNamePart(const string &part) -> duckdb_v2_identifier_t {
-	if (part.empty()) {
-		return duckdb_v2_identifier_t {nullptr, 0};
-	}
-	return Convert(part);
-}
-
 } // namespace duckdb::capiv2
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -260,43 +253,27 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_user_data(duckdb_v2_replacement_s
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_catalog_name(duckdb_v2_replacement_scan_info_handle info,
-                                                            duckdb_v2_identifier_t *name,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_name(duckdb_v2_replacement_scan_info_handle info,
+                                                    duckdb_v2_qname_handle *out_name,
+                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(name);
-	return WithErrorHandler(err, [&]() { *name = BorrowNamePart(Convert(info)->in_input->catalog_name); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_schema_name(duckdb_v2_replacement_scan_info_handle info,
-                                                           duckdb_v2_identifier_t *name,
-                                                           duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(name);
-	return WithErrorHandler(err, [&]() { *name = BorrowNamePart(Convert(info)->in_input->schema_name); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_table_name(duckdb_v2_replacement_scan_info_handle info,
-                                                          duckdb_v2_identifier_t *name,
-                                                          duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(name);
-	return WithErrorHandler(err, [&]() { *name = BorrowNamePart(Convert(info)->in_input->table_name); });
+	DUCKDB_CHECK_ARG(out_name);
+	*out_name = nullptr;
+	return WithErrorHandler(err, [&]() {
+		// Owned, so the callback can keep it: the binder's own name dies with the call.
+		*out_name = Convert(new duckdb::QualifiedName(Convert(info)->in_input->name));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_function_name(duckdb_v2_replacement_scan_info_handle info,
-                                                             duckdb_v2_identifier_t name,
+                                                             duckdb_v2_qname_handle name,
                                                              duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
 	return WithErrorHandler(err, [&]() {
 		auto &args = *Convert(info);
-		auto function_name = duckdb::Identifier(Convert(name));
-		if (function_name.empty()) {
-			throw duckdb::InvalidInputException("Function name cannot be empty.");
-		}
 		args.SetClaim(CV2ReplacementScanClaim::FUNCTION);
-		args.out_function_name = std::move(function_name);
+		args.out_function_name = *Convert(name);
 	});
 }
 

@@ -77,6 +77,7 @@ class TypeBuilder;
 class CustomType;
 class CastFunction;
 class ReplacementScan;
+class QualifiedName;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -412,6 +413,10 @@ public:
 	/// Parameterless overload of the above.
 	auto CreateType(std::string_view name) const -> LogicalType;
 
+	/// `CreateType` for a name that may be catalog- or schema-qualified. An unqualified name is resolved along the
+	/// search path and then in the system catalog; a qualified one is resolved exactly as written.
+	auto CreateType(const QualifiedName &name, const std::vector<TypeParam> &params = {}) const -> LogicalType;
+
 	/// The id-keyed twin of `CreateType`: the id resolves to its canonical name and binds like it.
 	/// @param id The type's id. Without parameters, only ids that name a complete type on their own are accepted;
 	/// parameterized kinds such as LIST or DECIMAL require parameters.
@@ -597,6 +602,10 @@ public:
 	auto CreateType(std::string_view name, const std::vector<TypeParam> &params) -> LogicalType;
 	/// Parameterless overload of the above.
 	auto CreateType(std::string_view name) -> LogicalType;
+
+	/// `CreateType` for a name that may be catalog- or schema-qualified. An unqualified name is resolved along the
+	/// search path and then in the system catalog; a qualified one is resolved exactly as written.
+	auto CreateType(const QualifiedName &name, const std::vector<TypeParam> &params = {}) -> LogicalType;
 
 	/// The id-keyed twin of `CreateType`: the id resolves to its canonical name and binds like it.
 	/// @param id The type's id. Without parameters, only ids that name a complete type on their own are accepted;
@@ -3859,6 +3868,68 @@ public:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Qualified Name
+//----------------------------------------------------------------------------------------------------------------------
+
+/// The ordered path of identifiers that names a database object.
+/// The path is the whole representation: partial qualification is expressed by having fewer parts (`{"t"}`,
+/// `{"s", "t"}`, `{"c", "s", "t"}`), never by empty placeholders, and the last part is always the object itself.
+/// Whether a two-part name means catalog.object or schema.object is decided by resolution, not by the name.
+///
+/// Owned, so a name obtained from somewhere transient -- a replacement scan callback, say -- can be kept for as long
+/// as you like.
+class QualifiedName final : public detail::Handle<QualifiedName> {
+	friend detail::Factory;
+
+public:
+	QualifiedName(QualifiedName &&) noexcept = default;
+	QualifiedName &operator=(QualifiedName &&) noexcept = default;
+
+	~QualifiedName() override;
+
+	/// Parses SQL text into a qualified name: dots separate parts, and a double-quoted part may contain dots and
+	/// doubled interior quotes.
+	/// @throws Exception When the text does not parse, or yields no parts or more than three.
+	static auto Parse(std::string_view text) -> QualifiedName;
+
+	/// Builds a name from its parts, outermost first, so the last one is the object name.
+	/// @param parts Between one and three non-empty parts.
+	/// @throws InvalidInputException When there are no parts, more than three, or any is empty.
+	static auto Create(const std::vector<std::string> &parts) -> QualifiedName;
+
+	/// How many parts the name has; always at least one.
+	auto GetPartCount() const -> idx_t;
+
+	/// One part, outermost first. The view is valid until this name is destroyed.
+	/// @param index Part index in [0, GetPartCount()).
+	/// @throws Exception When the index is out of range.
+	auto GetPart(idx_t index) const -> std::string_view;
+
+	/// The object name: the last part. The view is valid until this name is destroyed.
+	auto GetName() const -> std::string_view;
+
+	/// The name as SQL text, quoting each part only where the identifier requires it, so it parses back to an equal
+	/// name.
+	auto Render() const -> std::string;
+
+	/// Whether two names have the same parts, compared case-insensitively the way the engine compares identifiers.
+	auto Equals(const QualifiedName &other) const -> bool;
+
+	/// A hash consistent with `Equals`. Not stable across processes or versions: for in-process lookup only.
+	auto Hash() const -> uint64_t;
+
+private:
+	explicit QualifiedName(void *impl);
+};
+
+inline bool operator==(const QualifiedName &lhs, const QualifiedName &rhs) {
+	return lhs.Equals(rhs);
+}
+inline bool operator!=(const QualifiedName &lhs, const QualifiedName &rhs) {
+	return !lhs.Equals(rhs);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // Replacement Scan
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -3938,20 +4009,19 @@ public:
 			return *static_cast<T *>(GetUserDataInternal());
 		}
 
-		/// The catalog qualifier of the unresolved reference, empty when it carries none.
-		auto GetCatalogName() const -> std::string_view;
-
-		/// The schema qualifier of the unresolved reference, empty when it carries none.
-		auto GetSchemaName() const -> std::string_view;
-
-		/// The table name of the unresolved reference, as written in the query; for a file-backed reference, the path.
-		auto GetTableName() const -> std::string_view;
+		/// The name the catalog could not resolve, as written in the query. An unqualified reference has a single
+		/// part; for a file-backed one that part is the path. Owned, so it can outlive the callback.
+		auto GetName() const -> QualifiedName;
 
 		/// Claims the reference by naming a table function to call instead; its arguments are then supplied with
-		/// `AddArgument` and `AddNamedArgument`. The name is unqualified and matched case-insensitively, and is not
-		/// resolved here: an unknown function fails later, when the replacement is bound. The three claim forms,
-		/// `SetFunctionName`, `SetCollection` and `SetSubquery`, are mutually exclusive.
-		/// @throws InvalidInputException When the name is empty, or a different claim form was already used.
+		/// `AddArgument` and `AddNamedArgument`. Parts are matched case-insensitively, and a qualified name targets a
+		/// function in a particular schema or catalog. The name is not resolved here: an unknown function fails
+		/// later, when the replacement is bound. The three claim forms, `SetFunctionName`, `SetCollection` and
+		/// `SetSubquery`, are mutually exclusive.
+		/// @throws InvalidInputException When a different claim form was already used.
+		auto SetFunctionName(const QualifiedName &name) -> void;
+
+		/// `SetFunctionName` for the common case of an unqualified function.
 		auto SetFunctionName(std::string_view name) -> void;
 
 		/// Appends a positional argument to the claimed table function. Positional arguments are passed in the order
