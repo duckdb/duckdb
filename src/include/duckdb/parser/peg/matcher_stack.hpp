@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 
 namespace duckdb {
@@ -17,6 +19,19 @@ class MatchStack;
 
 enum class MatchFrameState : uint8_t { INITIALIZE, EXECUTE };
 enum class MatchResultState : uint8_t { NONE, FAILURE, SUCCESS };
+
+struct PackratMatchState {
+	static bool IsEnabled(const Matcher &matcher, const MatchState &state) {
+		return state.packrat_cache && matcher.IsPackratMemoized() && matcher.GetPackratId().IsValid();
+	}
+
+	optional<MatcherResult> TryLoadCachedResult(const Matcher &matcher, MatchState &state);
+	void StoreResult(const Matcher &matcher, MatchState &state, const MatcherResult &result) const;
+
+private:
+	optional_idx token_index_before;
+	idx_t max_token_index_before = 0;
+};
 
 struct MatchStackFrame {
 	MatchStackFrame(match_frame_index_t frame_index, const Matcher &matcher, MatchState &state);
@@ -38,9 +53,7 @@ struct MatchStackFrame {
 	optional_ptr<ParseResult> parse_result;
 	MatchResultState child_result_state = MatchResultState::NONE;
 	optional_ptr<ParseResult> child_parse_result;
-	bool store_packrat_result = false;
-	idx_t token_index_before = 0;
-	idx_t max_token_index_before = 0;
+	PackratMatchState packrat_state;
 };
 
 class MatchStack {

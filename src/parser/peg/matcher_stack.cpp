@@ -6,6 +6,36 @@
 
 namespace duckdb {
 
+optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
+	D_ASSERT(IsEnabled(matcher, state));
+	auto token_index = state.token_iterator.Position();
+	auto cached_result = state.packrat_cache->Lookup(matcher, token_index);
+	if (!cached_result) {
+		token_index_before = token_index;
+		max_token_index_before = state.GetMaxTokenIndex();
+		return nullopt;
+	}
+
+	state.token_iterator.SetPosition(cached_result->token_index_after);
+	state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
+	if (cached_result->success) {
+		return MatcherResult::Success(cached_result->result);
+	}
+	return MatcherResult::Failure();
+}
+
+void PackratMatchState::StoreResult(const Matcher &matcher, MatchState &state, const MatcherResult &result) const {
+	if (!token_index_before.IsValid()) {
+		return;
+	}
+	ParserPackratEntry cache_entry;
+	cache_entry.success = result.IsSuccess();
+	cache_entry.token_index_after = state.token_iterator.Position();
+	cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
+	cache_entry.result = result.GetParseResult();
+	state.packrat_cache->Store(matcher, token_index_before.GetIndex(), cache_entry);
+}
+
 MatchStackFrame::MatchStackFrame(match_frame_index_t frame_index_p, const Matcher &matcher_p, MatchState &state_p)
     : frame_index(frame_index_p), matcher(matcher_p), match_state(state_p) {
 }
@@ -72,29 +102,18 @@ bool MatchStack::IsTerminalMatcher(const Matcher &matcher) {
 MatcherResult MatchStack::ExecuteTerminalMatcher(const Matcher &matcher, MatchState &state) {
 	D_ASSERT(IsTerminalMatcher(matcher));
 	state.rule = matcher.GetRule();
-	if (!state.packrat_cache || !matcher.IsPackratMemoized() || !matcher.GetPackratId().IsValid()) {
+	if (!PackratMatchState::IsEnabled(matcher, state)) {
 		return matcher.MatchParseResultInternal(state);
 	}
 
-	auto token_index_before = state.token_iterator.Position();
-	auto cached_result = state.packrat_cache->Lookup(matcher, token_index_before);
+	PackratMatchState packrat_state;
+	auto cached_result = packrat_state.TryLoadCachedResult(matcher, state);
 	if (cached_result) {
-		state.token_iterator.SetPosition(cached_result->token_index_after);
-		state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
-		if (cached_result->success) {
-			return MatcherResult::Success(cached_result->result);
-		}
-		return MatcherResult::Failure();
+		return *cached_result;
 	}
 
-	auto max_token_index_before = state.GetMaxTokenIndex();
 	auto result = matcher.MatchParseResultInternal(state);
-	ParserPackratEntry cache_entry;
-	cache_entry.success = result.IsSuccess();
-	cache_entry.token_index_after = state.token_iterator.Position();
-	cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
-	cache_entry.result = result.GetParseResult();
-	state.packrat_cache->Store(matcher, token_index_before, cache_entry);
+	packrat_state.StoreResult(matcher, state, result);
 	return result;
 }
 
@@ -140,21 +159,12 @@ void MatchStack::PushChildFrame(MatchStackFrame &parent, const Matcher &matcher,
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 	auto &matcher = frame.matcher;
 	auto &state = frame.match_state;
-	if (state.packrat_cache && matcher.IsPackratMemoized() && matcher.GetPackratId().IsValid()) {
-		frame.token_index_before = state.token_iterator.Position();
-		auto cached_result = state.packrat_cache->Lookup(matcher, frame.token_index_before);
-		if (cached_result) {
-			state.token_iterator.SetPosition(cached_result->token_index_after);
-			state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
-			if (cached_result->success) {
-				frame.SetResult(MatcherResult::Success(cached_result->result));
-			} else {
-				frame.SetResult(MatcherResult::Failure());
-			}
-			return;
-		}
-		frame.store_packrat_result = true;
-		frame.max_token_index_before = state.GetMaxTokenIndex();
+	if (!PackratMatchState::IsEnabled(matcher, state)) {
+		return;
+	}
+	auto cached_result = frame.packrat_state.TryLoadCachedResult(matcher, state);
+	if (cached_result) {
+		frame.SetResult(*cached_result);
 	}
 }
 
@@ -172,14 +182,7 @@ MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
 	auto result = frame.GetResult();
 	auto &matcher = frame.matcher;
 	auto &state = frame.match_state;
-	if (frame.store_packrat_result) {
-		ParserPackratEntry cache_entry;
-		cache_entry.success = result.IsSuccess();
-		cache_entry.token_index_after = state.token_iterator.Position();
-		cache_entry.max_token_index_seen = MaxValue(frame.max_token_index_before, state.GetMaxTokenIndex());
-		cache_entry.result = result.GetParseResult();
-		state.packrat_cache->Store(matcher, frame.token_index_before, cache_entry);
-	}
+	frame.packrat_state.StoreResult(matcher, state, result);
 	return result;
 }
 
