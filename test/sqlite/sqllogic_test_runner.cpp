@@ -103,8 +103,9 @@ void SQLLogicTestRunner::AddSkipReason(const string &reason) {
 	skip_reason_counts[reason]++;
 }
 
-void SQLLogicTestRunner::SkipTest(const string &reason) {
+void SQLLogicTestRunner::SkipTest(const string &reason, TestSkipKind kind) {
 	AddSkipReason(reason);
+	test_skip_kind = kind;
 	// A whole-test skip is a terminal disposition, not a mid-stream event: record it and let the
 	// Catch wrapper emit the single end {status:"skip-requirement"} terminal.
 	test_skipped_requirement = true;
@@ -125,9 +126,6 @@ string SQLLogicTestRunner::GetSkipReasonSummary() {
 }
 
 void SQLLogicTestRunner::CountStatement(bool passed) {
-	if (!EmitTestEventsEnabled()) {
-		return; // feature off: no counting on the normal path
-	}
 	if (passed) {
 		test_stat_passes++;
 	} else {
@@ -136,9 +134,6 @@ void SQLLogicTestRunner::CountStatement(bool passed) {
 }
 
 void SQLLogicTestRunner::CountSkipMode() {
-	if (!EmitTestEventsEnabled()) {
-		return;
-	}
 	test_stat_skip_mode++;
 }
 
@@ -784,7 +779,7 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 	file_name = script;
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
-		SkipTest("config skip_tests");
+		SkipTest("config skip_tests", TestSkipKind::EXCLUDED);
 		return;
 	}
 
@@ -862,7 +857,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 		// Check tags first time we hit test statements, since all explicit & implicit tags now present
 		if (parser.IsTestCommand(token.type) && !test_expr_executed) {
 			if (test_config.GetPolicyForTagSet(file_tags) == TestConfiguration::SelectPolicy::SKIP) {
-				SkipTest("select tag-set");
+				SkipTest("select tag-set", TestSkipKind::EXCLUDED);
 				return;
 			}
 			test_expr_executed = true;
@@ -1248,7 +1243,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			auto &test_config = TestConfiguration::Get();
 			if (test_config.OnLoadCommand() == "skip") {
-				SkipTest("config on_load skip");
+				SkipTest("config on_load skip", TestSkipKind::EXCLUDED);
 				return;
 			}
 			bool is_read_only = false;
