@@ -33,3 +33,9 @@ query I
 SELECT count(*) FROM data
 ----
 100
+
+# alias is gone after COMMIT (and is unbound in the txn; a failed query would abort it)
+statement error
+SELECT * FROM src.prepared_data
+----
+does not exist

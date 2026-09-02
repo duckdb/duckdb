@@ -112,3 +112,21 @@ Cannot re-attach database "attach_transaction"
 
 statement ok
 ROLLBACK
+
+# DETACH unbinds the alias: queries in the same txn fail (this aborts the txn)
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '{TEST_DIR}/attach_transaction.db'
+
+statement ok
+DETACH attach_transaction
+
+statement error
+SELECT * FROM attach_transaction.integers
+----
+does not exist
+
+statement ok
+ROLLBACK
