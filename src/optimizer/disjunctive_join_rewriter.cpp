@@ -292,7 +292,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildSemiJoin(const CTEInfo
 	filter->expressions.push_back(std::move(filter_cond));
 	filter->AddChild(std::move(current));
 
-	return filter;
+	return std::move(filter);
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildAntiJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
@@ -335,7 +335,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::CreateBranchJoin(const CTEI
 	join->AddChild(std::move(left_scan));
 	join->AddChild(std::move(right_scan));
 
-	return join;
+	return std::move(join);
 }
 
 vector<unique_ptr<LogicalOperator>> DisjunctiveJoinRewriter::CreateMatchedBranches(const CTEInfo &left_cte,
@@ -494,7 +494,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormalizeOutput(unique_ptr<
 		replacer.replacement_bindings.emplace_back(orig_bindings[i], ColumnBinding(norm_tbl, ProjectionIndex(i)),
 		                                           orig_types[i]);
 	}
-	return proj;
+	return std::move(proj);
 }
 
 void DisjunctiveJoinRewriter::RemapExpressions(const CTEInfo &left_cte, const CTEInfo &right_cte, TableIndex left_ref,
@@ -580,7 +580,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::CreateProjection(unique_ptr
 	TableIndex proj_tbl = NewTableIndex();
 	auto proj = make_uniq<LogicalProjection>(proj_tbl, std::move(expressions));
 	proj->AddChild(std::move(child));
-	return proj;
+	return std::move(proj);
 }
 
 unique_ptr<Expression> DisjunctiveJoinRewriter::CreateColRef(ColumnBinding binding, const LogicalType &type,

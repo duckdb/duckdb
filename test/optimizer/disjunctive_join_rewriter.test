@@ -306,21 +306,9 @@ physical_plan	<REGEX>:.*Blockwise Nl Join.*
 
 # Stable Row Identity tests
 
-statement ok
-CREATE TABLE l(k BOOLEAN, z BOOLEAN);
-
-statement ok
-INSERT INTO l VALUES (true, false);
-
-statement ok
-CREATE TABLE r(p DOUBLE, q BOOLEAN);
-
-statement ok
-INSERT INTO r VALUES
-    (0.0, true),
-    (-1.0::DOUBLE / 'Infinity'::DOUBLE, true);
-
 query TTTT rowsort
+WITH l(k, z) AS (VALUES (true, false)),
+     r(p, q) AS (VALUES (0.0::DOUBLE, true), (-1.0::DOUBLE / 'Infinity'::DOUBLE, true))
 SELECT l.k, l.z, signbit(r.p), r.q
 FROM l FULL JOIN r
   ON l.k = signbit(r.p) OR l.z = r.q;
