@@ -266,18 +266,33 @@ struct RLEScanState : public SegmentScanState {
 	};
 
 	struct SegmentLayout {
-		//! Values read from the file and bounded to the value region.
-		unsafe_array_ptr<const T> values;
-		//! Run counts read from the file and bounded to the count region.
-		unsafe_array_ptr<const rle_count_t> run_counts;
-		//! Number of entries with both a value and run count.
-		idx_t entry_capacity;
-		//! Number of run counts already validated against the segment row count.
-		idx_t validated_entry_count;
-		//! Segment rows not yet covered by validated run counts.
-		idx_t unvalidated_row_count;
+		SegmentLayout(unsafe_array_ptr<const T> values_p, unsafe_array_ptr<const rle_count_t> run_counts_p,
+		              idx_t entry_capacity_p, idx_t segment_count)
+		    : values(values_p), run_counts(run_counts_p), entry_capacity(entry_capacity_p), validated_entry_count(0),
+		      unvalidated_row_count(segment_count) {
+		}
 
-		//! Track validation separately from consumption so each run is accounted for exactly once.
+		rle_count_t GetRunCount(idx_t entry_index) {
+			ValidateThrough(entry_index);
+			return run_counts[entry_index];
+		}
+
+		ValidatedRun GetRun(idx_t entry_index) {
+			ValidateThrough(entry_index);
+			return {values[entry_index], run_counts[entry_index]};
+		}
+
+		unsafe_array_ptr<const T> GetRunValues() {
+			auto run_count = ValidateAllRuns();
+			return values.SubArray(0, run_count);
+		}
+
+		idx_t GetEntryCapacity() const {
+			return entry_capacity;
+		}
+
+	private:
+		//! Validate through entry_index without advancing the scan.
 		void ValidateThrough(idx_t entry_index) {
 			while (validated_entry_count <= entry_index) {
 				if (validated_entry_count >= entry_capacity) {
@@ -287,7 +302,6 @@ struct RLEScanState : public SegmentScanState {
 				if (run_count > unvalidated_row_count) {
 					ThrowRLERunCountExceedsRemaining(run_count, unvalidated_row_count);
 				}
-				// Account for the complete run once, position within the run is tracked separately.
 				unvalidated_row_count -= run_count;
 				validated_entry_count++;
 			}
@@ -300,15 +314,16 @@ struct RLEScanState : public SegmentScanState {
 			return validated_entry_count;
 		}
 
-		rle_count_t GetRunCount(idx_t entry_index) {
-			ValidateThrough(entry_index);
-			return run_counts[entry_index];
-		}
-
-		ValidatedRun GetRun(idx_t entry_index) {
-			ValidateThrough(entry_index);
-			return {values[entry_index], run_counts[entry_index]};
-		}
+		//! Values read from the segment between RLE_HEADER_SIZE and rle_count_offset.
+		unsafe_array_ptr<const T> values;
+		//! Run counts read from the segment between rle_count_offset and the segment end.
+		unsafe_array_ptr<const rle_count_t> run_counts;
+		//! Number of value/run-count pairs that fit in both segment regions.
+		idx_t entry_capacity;
+		//! Number of run counts already validated against the segment row count.
+		idx_t validated_entry_count;
+		//! Segment rows not yet covered by validated run counts.
+		idx_t unvalidated_row_count;
 	};
 
 	static SegmentLayout ReadSegmentLayout(const BufferHandle &handle, ColumnSegment &segment, idx_t segment_count) {
@@ -323,7 +338,7 @@ struct RLEScanState : public SegmentScanState {
 		auto entry_capacity = MinValue<idx_t>(value_capacity, count_capacity);
 		auto values = reader.template GetArray<T>(RLEConstants::RLE_HEADER_SIZE, value_capacity);
 		auto run_counts = reader.template GetArray<rle_count_t>(rle_count_offset, count_capacity);
-		return {values, run_counts, entry_capacity, 0, segment_count};
+		return SegmentLayout(values, run_counts, entry_capacity, segment_count);
 	}
 
 	explicit RLEScanState(BufferHandle handle_p, ColumnSegment &segment)
@@ -361,7 +376,7 @@ struct RLEScanState : public SegmentScanState {
 		// handled all entries in this RLE value
 		// move to the next entry
 		entry_pos++;
-		if (entry_pos > layout.entry_capacity) {
+		if (entry_pos > layout.GetEntryCapacity()) {
 			ThrowRLERunCountArrayExhausted();
 		}
 		position_in_entry = 0;
@@ -372,7 +387,7 @@ struct RLEScanState : public SegmentScanState {
 	}
 
 	BufferHandle handle;
-	//! Segment row count read from the file and used to validate run counts as they are reached.
+	//! Segment row count loaded from the file and used to validate runs as they are reached.
 	const idx_t segment_count;
 	SegmentLayout layout;
 	idx_t entry_pos;
@@ -523,8 +538,9 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 	if (!scan_state.matching_runs) {
 		// we haven't applied the filter yet
 		// apply the filter to all RLE values at once
-		auto total_run_count = scan_state.layout.ValidateAllRuns();
-		auto data_pointer = const_cast<T *>(scan_state.layout.values.data());
+		auto run_values = scan_state.layout.GetRunValues();
+		auto total_run_count = run_values.size();
+		auto data_pointer = const_cast<T *>(run_values.data());
 
 		// initialize the filter set to all false (all runs are filtered out)
 		scan_state.matching_runs = make_unsafe_uniq_array<bool>(total_run_count);
