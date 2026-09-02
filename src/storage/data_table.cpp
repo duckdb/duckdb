@@ -689,10 +689,11 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	// Global constraint verification.
 	auto &data_table = table_entry.GetStorage();
 	auto &local_storage = LocalStorage::Get(context, db);
-	auto sibling_storage = local_storage.GetStorage(data_table);
-	auto sibling_delete_indexes = sibling_storage ? &sibling_storage->delete_indexes : nullptr;
-
-	data_table.info->indexes.VerifyForeignKey(sibling_delete_indexes, dst_keys_ptr, dst_chunk, global_conflict_manager);
+	// For APPEND_FK: consult the PK table's local delete_indexes so that a PK row deleted
+	// in this transaction is treated as absent by ART::VerifyLeaf. NULL FK values still go
+	// through AddNull and are treated as satisfied (SQL semantics allow NULL FK).
+	auto pk_indexes_storage = is_append ? local_storage.GetStorage(data_table) : storage;
+	data_table.info->indexes.VerifyForeignKey(pk_indexes_storage, dst_keys_ptr, dst_chunk, global_conflict_manager);
 
 	// Check if we can insert the chunk into the local storage.
 	bool local_error = false;
