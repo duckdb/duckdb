@@ -30,10 +30,10 @@ static MatcherResult ExecuteRecursive(MatchInput input) {
 		}
 	}
 
-	auto continuation = matcher.StartMatch(state);
+	auto process = matcher.StartMatch(state);
 	optional<MatcherResult> child_result;
 	while (true) {
-		auto step = continuation->Resume(std::move(child_result));
+		auto step = process->Resume(std::move(child_result));
 		child_result.reset();
 		auto child = step.GetChild();
 		if (!child) {

@@ -50,7 +50,7 @@ void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 			return;
 		}
 	}
-	frame.continuation = matcher.StartMatch(state);
+	frame.process = matcher.StartMatch(state);
 }
 
 void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
@@ -61,8 +61,8 @@ void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 	if (frame.result) {
 		return;
 	}
-	D_ASSERT(frame.continuation);
-	auto step = frame.continuation->Resume(std::move(frame.child_result));
+	D_ASSERT(frame.process);
+	auto step = frame.process->Resume(std::move(frame.child_result));
 	frame.child_result.reset();
 	auto child = step.GetChild();
 	if (!child) {

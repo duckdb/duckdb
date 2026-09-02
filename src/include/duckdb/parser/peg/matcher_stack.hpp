@@ -31,7 +31,7 @@ struct MatchStackFrame {
 
 	const Matcher &matcher;
 	MatchState &match_state;
-	unique_ptr<MatchContinuation> continuation;
+	unique_ptr<MatchProcess> process;
 	optional<MatcherResult> child_result;
 	optional<MatcherResult> result;
 	PackratMatchState packrat_state;

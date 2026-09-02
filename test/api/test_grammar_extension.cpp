@@ -24,9 +24,9 @@ static unique_ptr<TransformResultValue> TransformGrammarExtensionTestAtom(PEGTra
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement));
 }
 
-class GrammarExtensionTestMatchContinuation final : public MatchContinuation {
+class GrammarExtensionTestMatchProcess final : public MatchProcess {
 public:
-	GrammarExtensionTestMatchContinuation(const Matcher &child_p, MatchState &state_p)
+	GrammarExtensionTestMatchProcess(const Matcher &child_p, MatchState &state_p)
 	    : child(child_p), state(state_p), child_state(state_p) {
 	}
 
@@ -55,8 +55,8 @@ public:
 	GrammarExtensionTestMatcher() : child("ANSWER", KeywordInfo()) {
 	}
 
-	unique_ptr<MatchContinuation> StartMatch(MatchState &state) const override {
-		return make_uniq<GrammarExtensionTestMatchContinuation>(child, state);
+	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		return make_uniq<GrammarExtensionTestMatchProcess>(child, state);
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {

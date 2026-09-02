@@ -27,7 +27,7 @@ class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
-class MatchContinuation;
+class MatchProcess;
 
 enum class SuggestionState : uint8_t {
 	SUGGEST_KEYWORD,
@@ -212,7 +212,7 @@ struct MatchInput {
 };
 
 //! Essentially a std::variant<MatchInput, MatcherResult>
-//! Produced by a MatchContinuation::Resume call, controlling the next step in the execution
+//! Produced by a MatchProcess::Resume call, controlling the next step in the execution
 class MatchStep {
 public:
 	static MatchStep Child(MatchInput input);
@@ -231,9 +231,9 @@ private:
 	optional<MatcherResult> result;
 };
 
-class MatchContinuation {
+class MatchProcess {
 public:
-	virtual ~MatchContinuation() = default;
+	virtual ~MatchProcess() = default;
 
 	//! Resume matching, optionally with the result of the previously requested child.
 	virtual MatchStep Resume(optional<MatcherResult> child_result) = 0;
@@ -262,7 +262,7 @@ public:
 	//! Match and construct the parse result
 	MatcherResult MatchParseResult(MatchState &state) const;
 	//! Create matcher-local state that can be scheduled recursively or iteratively.
-	virtual unique_ptr<MatchContinuation> StartMatch(MatchState &state) const = 0;
+	virtual unique_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
@@ -326,7 +326,7 @@ public:
 	explicit AtomicMatcher(MatcherType type) : Matcher(type) {
 	}
 
-	unique_ptr<MatchContinuation> StartMatch(MatchState &state) const final;
+	unique_ptr<MatchProcess> StartMatch(MatchState &state) const final;
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
 };
 

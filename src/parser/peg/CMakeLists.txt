@@ -8,7 +8,7 @@ add_library_unity(
   autocomplete_core.cpp
   keyword_map.cpp
   matcher.cpp
-  matcher_continuation.cpp
+  matcher_process.cpp
   matcher_stack.cpp
   compiled_grammar.cpp
   grammar_change.cpp

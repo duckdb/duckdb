@@ -24,9 +24,9 @@ MatcherResult MatchStep::GetResult() const {
 	return *result;
 }
 
-class AtomicMatchContinuation : public MatchContinuation {
+class AtomicMatchProcess : public MatchProcess {
 public:
-	AtomicMatchContinuation(const AtomicMatcher &matcher_p, MatchState &state_p) : matcher(matcher_p), state(state_p) {
+	AtomicMatchProcess(const AtomicMatcher &matcher_p, MatchState &state_p) : matcher(matcher_p), state(state_p) {
 	}
 
 	MatchStep Resume(optional<MatcherResult> child_result) override {
@@ -42,13 +42,13 @@ private:
 	bool completed = false;
 };
 
-unique_ptr<MatchContinuation> AtomicMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<AtomicMatchContinuation>(*this, state);
+unique_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
+	return make_uniq<AtomicMatchProcess>(*this, state);
 }
 
-class ListMatchContinuation : public MatchContinuation {
+class ListMatchProcess : public MatchProcess {
 public:
-	ListMatchContinuation(const ListMatcher &matcher_p, MatchState &state_p)
+	ListMatchProcess(const ListMatcher &matcher_p, MatchState &state_p)
 	    : matcher(matcher_p), state(state_p), list_state(state_p) {
 		saved_suggestion_size = matcher.suppress_suggestions ? list_state.suggestions.size() : 0;
 		if (auto current = list_state.token_iterator.Current()) {
@@ -114,13 +114,13 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchContinuation> ListMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<ListMatchContinuation>(*this, state);
+unique_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state) const {
+	return make_uniq<ListMatchProcess>(*this, state);
 }
 
-class ChoiceMatchContinuation : public MatchContinuation {
+class ChoiceMatchProcess : public MatchProcess {
 public:
-	ChoiceMatchContinuation(const ChoiceMatcher &matcher_p, MatchState &state_p) : matcher(matcher_p), state(state_p) {
+	ChoiceMatchProcess(const ChoiceMatcher &matcher_p, MatchState &state_p) : matcher(matcher_p), state(state_p) {
 		if (auto current = state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
@@ -159,13 +159,13 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchContinuation> ChoiceMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<ChoiceMatchContinuation>(*this, state);
+unique_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state) const {
+	return make_uniq<ChoiceMatchProcess>(*this, state);
 }
 
-class OptionalMatchContinuation : public MatchContinuation {
+class OptionalMatchProcess : public MatchProcess {
 public:
-	OptionalMatchContinuation(const OptionalMatcher &matcher_p, MatchState &state_p)
+	OptionalMatchProcess(const OptionalMatcher &matcher_p, MatchState &state_p)
 	    : matcher(matcher_p), state(state_p), child_state(state_p) {
 		if (auto current = child_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
@@ -198,13 +198,13 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchContinuation> OptionalMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<OptionalMatchContinuation>(*this, state);
+unique_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state) const {
+	return make_uniq<OptionalMatchProcess>(*this, state);
 }
 
-class RepeatMatchContinuation : public MatchContinuation {
+class RepeatMatchProcess : public MatchProcess {
 public:
-	RepeatMatchContinuation(const RepeatMatcher &matcher_p, MatchState &state_p)
+	RepeatMatchProcess(const RepeatMatcher &matcher_p, MatchState &state_p)
 	    : matcher(matcher_p), state(state_p), repeat_state(state_p) {
 		if (auto current = repeat_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
@@ -251,8 +251,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchContinuation> RepeatMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<RepeatMatchContinuation>(*this, state);
+unique_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state) const {
+	return make_uniq<RepeatMatchProcess>(*this, state);
 }
 
 } // namespace duckdb

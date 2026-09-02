@@ -14,7 +14,7 @@ public:
 	explicit ListMatcher(vector<reference<Matcher>> matchers_p) : Matcher(TYPE), matchers(std::move(matchers_p)) {
 	}
 
-	unique_ptr<MatchContinuation> StartMatch(MatchState &state) const override;
+	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override;
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		if (suppress_suggestions) {

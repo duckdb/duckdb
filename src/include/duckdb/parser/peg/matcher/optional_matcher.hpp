@@ -13,7 +13,7 @@ public:
 	explicit OptionalMatcher(Matcher &matcher_p) : Matcher(TYPE), matcher(matcher_p) {
 	}
 
-	unique_ptr<MatchContinuation> StartMatch(MatchState &state) const override;
+	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override;
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		matcher.AddSuggestion(state);
