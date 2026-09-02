@@ -1,0 +1,57 @@
+TableMatchRecognizeClause <- 'MATCH_RECOGNIZE' Parens(MatchRecognizeBody) TableAlias?
+MatchRecognizeBody <- MatchRecognizeClause+
+MatchRecognizeClause <- MRPartition / MROrderBy / MRMeasures / MRRows / MRSkip / MRPattern / MRSubset / MRDefineAuto / MRDefine
+MRPartition <- WindowPartition
+MROrderBy <- OrderByClause
+MRMeasures <- MeasuresClause
+MRRows <- RowsPerMatch
+MRSkip <- AfterMatchSkip
+MRPattern <- PatternClause
+MRSubset <- SubsetClause
+MRDefineAuto <- 'DEFINE' 'AUTO'
+MRDefine <- DefineClause
+
+MeasuresClause <- 'MEASURES' List(MeasuresElement)
+MeasuresElement <- MeasureSemantics? Expression 'AS' ColLabelOrString
+MeasureSemantics <- RunningSemantics / FinalSemantics
+RunningSemantics <- 'RUNNING'
+FinalSemantics <- 'FINAL'
+
+RowsPerMatch <- OneRowPerMatch / AllRowsPerMatch
+OneRowPerMatch <- 'ONE' 'ROW' 'PER' 'MATCH'
+AllRowsPerMatch <- 'ALL' 'ROWS' 'PER' 'MATCH'
+
+AfterMatchSkip <- 'AFTER' 'MATCH' 'SKIP' AfterMatchSkipTarget
+AfterMatchSkipTarget <- SkipToNextRow / SkipPastLastRow / SkipToFirstVar / SkipToLastVar
+SkipToNextRow <- 'TO' 'NEXT' 'ROW'
+SkipPastLastRow <- 'PAST' 'LAST' 'ROW'
+SkipToFirstVar <- 'TO' 'FIRST' ColLabelOrString
+SkipToLastVar <- 'TO' 'LAST' ColLabelOrString
+
+PatternClause <- 'PATTERN' Parens(RowPattern)
+
+# alternation binds loosest, then concatenation, then quantifiers
+RowPattern <- RowPatternTerm RowPatternAlternative*
+RowPatternAlternative <- '|' RowPatternTerm
+RowPatternTerm <- RowPatternFactor+
+RowPatternFactor <- RowPatternPrimary RowPatternQuantifier?
+RowPatternPrimary <- RowPatternExclusion / RowPatternGroup / RowPatternLabel
+RowPatternGroup <- Parens(RowPattern)
+RowPatternExclusion <- '{' '-' RowPattern '-' '}'
+RowPatternLabel <- ColLabelOrString
+
+RowPatternQuantifier <- QuantifierStar / QuantifierPlus / QuantifierRange
+QuantifierStar <- '*'
+QuantifierPlus <- '+'
+QuantifierRange <- '{' QuantifierBounds '}'
+QuantifierBounds <- QuantifierMinMax / QuantifierMin / QuantifierMax / QuantifierExact
+QuantifierMinMax <- NumberLiteral ',' NumberLiteral
+QuantifierMin <- NumberLiteral ','
+QuantifierMax <- ',' NumberLiteral
+QuantifierExact <- NumberLiteral
+
+SubsetClause <- 'SUBSET' List(SubsetElement)
+SubsetElement <- ColLabelOrString '=' Parens(List(ColLabelOrString))
+
+DefineClause <- 'DEFINE' List(DefineElement)
+DefineElement <- ColLabelOrString 'AS' Expression

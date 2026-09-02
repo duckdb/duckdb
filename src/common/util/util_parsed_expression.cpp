@@ -158,6 +158,28 @@ ConstChildrenView ParsedExpression::Children() const {
 		}
 		break;
 	}
+	case ExpressionClass::PATTERN: {
+		switch (GetExpressionType()) {
+		case ExpressionType::ALTERNATION: {
+			auto &cast_expr = Cast<AlternationExpression>();
+			result.Append(*cast_expr.child_left);
+			result.Append(*cast_expr.child_right);
+			break;
+		}
+		case ExpressionType::CONCATENATION:
+			for (auto &child : Cast<ConcatenationExpression>().children) {
+				result.Append(*child);
+			}
+			break;
+		case ExpressionType::QUANTIFIER:
+			result.Append(*Cast<QuantifiedExpression>().child);
+			break;
+		default:
+			throw NotImplementedException("Unimplemented pattern expression type %s",
+			                              ExpressionTypeToString(GetExpressionType()));
+		}
+		break;
+	}
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::CONSTANT:
@@ -291,6 +313,28 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 		}
 		break;
 	}
+	case ExpressionClass::PATTERN: {
+		switch (GetExpressionType()) {
+		case ExpressionType::ALTERNATION: {
+			auto &cast_expr = Cast<AlternationExpression>();
+			result.Append(cast_expr.child_left);
+			result.Append(cast_expr.child_right);
+			break;
+		}
+		case ExpressionType::CONCATENATION:
+			for (auto &child : Cast<ConcatenationExpression>().children) {
+				result.Append(child);
+			}
+			break;
+		case ExpressionType::QUANTIFIER:
+			result.Append(Cast<QuantifiedExpression>().child);
+			break;
+		default:
+			throw NotImplementedException("Unimplemented pattern expression type %s",
+			                              ExpressionTypeToString(GetExpressionType()));
+		}
+		break;
+	}
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::CONSTANT:
@@ -330,7 +374,6 @@ bool BetweenExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
-
 unique_ptr<ParsedExpression> BetweenExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<BetweenExpression>(new BetweenExpression());
 	copy->input = input ? input->Copy() : nullptr;
@@ -361,7 +404,6 @@ bool CaseExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
-
 
 unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<CaseExpression>(new CaseExpression());
@@ -507,7 +549,6 @@ bool ComparisonExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
-
 unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<ComparisonExpression>(new ComparisonExpression());
 	copy->left = left ? left->Copy() : nullptr;
@@ -526,7 +567,6 @@ bool ConjunctionExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
-
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<ConjunctionExpression>(new ConjunctionExpression());
@@ -567,7 +607,6 @@ bool DefaultExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
-
 
 unique_ptr<ParsedExpression> DefaultExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<DefaultExpression>(new DefaultExpression());
@@ -644,7 +683,6 @@ bool LambdaExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
-
 unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<LambdaExpression>(new LambdaExpression());
 	copy->lhs = lhs ? lhs->Copy() : nullptr;
@@ -664,7 +702,6 @@ bool OperatorExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
-
 
 unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<OperatorExpression>(new OperatorExpression());

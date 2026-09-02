@@ -1,0 +1,353 @@
+# name: test/sql/match_recognize/test_match_recognize_pattern.test
+# description: MATCH_RECOGNIZE PATTERN semantics - quantifiers, alternation, grouping
+# group: [match_recognize]
+
+statement ok
+pragma threads=1;
+
+statement ok
+create table seq(i integer, v integer);
+
+# A holds on offsets 0,1,3,4,5 and B holds on offset 2
+statement ok
+insert into seq values (1,1),(2,1),(3,0),(4,1),(5,1),(6,1);
+
+# a single symbol matches one row at a time, so every A row starts its own match
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+2
+4
+5
+6
+
+# + is greedy: 0-1 stops at the B row, 3-5 runs to the end
+query III
+SELECT i, __pattern_window.match_start, __pattern_window.match_end FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A+) DEFINE A as v=1, B as v=0
+) ORDER BY i
+----
+1	0	1
+2	0	1
+4	3	5
+5	3	5
+6	3	5
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A*) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+4
+
+# repeating a symbol is the same as an exact quantifier; the overlapping 4-5 match is dropped
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A A) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+4
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A{2}) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+4
+
+# only 3,4,5 are three consecutive A rows
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A{3}) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+4
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A{2,3}) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+4
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A{1,}) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+4
+
+# capping the match at two rows leaves offset 5 free to start its own match
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A{,2}) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+4
+6
+
+# concatenation
+query III
+SELECT i, __pattern_window.match_start, __pattern_window.match_end FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B) DEFINE A as v=1, B as v=0
+) ORDER BY i
+----
+2	1	2
+3	1	2
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (B A) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+3
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A B A) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+2
+
+# a greedy prefix still lets the following symbol match
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A* B) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A+ B A+) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+
+# alternation covers every row, and is order independent
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A | B) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+2
+3
+4
+5
+6
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (B | A) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+2
+3
+4
+5
+6
+
+# an unquantified group matches exactly once, so grouping does not change the meaning
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN ((A) (B)) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+2
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN ((A B)) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+2
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN ((A)(B)(A)) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+2
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (((A))) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+2
+4
+5
+6
+
+# a symbol used in the pattern but not defined is implicitly true
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (B Z) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+3
+
+# quantified groups and nested alternation parse and plan
+statement ok
+SELECT count(*) FROM seq MATCH_RECOGNIZE(
+    MEASURES i AS x PATTERN ((A (B A)*){1,2}) DEFINE A as v=1, B as v=0
+)
+
+statement ok
+SELECT count(*) FROM seq MATCH_RECOGNIZE(
+    MEASURES i AS x PATTERN (((A | B) | A)+ | (B A)) DEFINE A as v=1, B as v=0
+)
+
+statement ok
+SELECT count(*) FROM seq MATCH_RECOGNIZE(
+    MEASURES i AS x PATTERN (A+ B* A{1,2} B{3,} A{,4}) DEFINE A as v=1, B as v=0
+)
+
+# A greedy quantifier has to give back as many rows as the rest of the pattern needs, not just one.
+# All but the first of these need it to give back two or more. Grouping the tail must not change the
+# answer either: parentheses do not change the language a pattern matches.
+
+statement ok
+create table five as select i::integer as i, 'a' as v from range(0,5) g(i);
+
+query II
+SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+ B)
+    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+)
+----
+1	5
+
+query II
+SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+ B B)
+    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+)
+----
+1	5
+
+query II
+SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+ B B B)
+    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+)
+----
+1	5
+
+query II
+SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+ B C)
+    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+)
+----
+1	5
+
+query II
+SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+ B+ C)
+    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+)
+----
+1	5
+
+query II
+SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A* B B)
+    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+)
+----
+1	5
+
+query II
+SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A{2,4} B B)
+    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+)
+----
+1	5
+
+query II
+SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+ (B C))
+    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+)
+----
+1	5
+
+query II
+SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ((A|B)+ C)
+    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+)
+----
+1	5
+
+query II
+SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A B+ C C)
+    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+)
+----
+1	5
+
+# the same thing where the variables overlap on real data rather than matching everything: RISE
+# takes the whole climb and then has to give two rows back, one for PEAK and one for DROP
+statement ok
+create table climbs(day integer, level integer);
+
+statement ok
+insert into climbs values (1,40),(2,55),(3,61),(4,67),(5,79),(6,40),(7,49),(8,64),(9,76),(10,79);
+
+query III
+SELECT count(*), max(first_day), max(len) FROM climbs MATCH_RECOGNIZE(
+    ORDER BY day MEASURES FIRST(day) AS first_day, count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (RISE+ PEAK DROP)
+    DEFINE RISE AS RISE.level > PREV(RISE.level), PEAK AS true,
+           DROP AS DROP.level < PREV(DROP.level)
+)
+----
+1	2	5
+
+query III
+SELECT count(*), max(first_day), max(len) FROM climbs MATCH_RECOGNIZE(
+    ORDER BY day MEASURES FIRST(day) AS first_day, count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (RISE+ (PEAK DROP))
+    DEFINE RISE AS RISE.level > PREV(RISE.level), PEAK AS true,
+           DROP AS DROP.level < PREV(DROP.level)
+)
+----
+1	2	5

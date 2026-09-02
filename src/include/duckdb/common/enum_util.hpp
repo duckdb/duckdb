@@ -336,6 +336,12 @@ enum class MatchFrameState : uint8_t;
 
 enum class MatchMode : uint8_t;
 
+enum class MatchRecognizeAfterMatch : uint8_t;
+
+enum class MatchRecognizeClauseKind : uint8_t;
+
+enum class MatchRecognizeRows : uint8_t;
+
 enum class MatchResultState : uint8_t;
 
 enum class MemoryTag : uint8_t;
@@ -1096,6 +1102,15 @@ const char* EnumUtil::ToChars<MatchFrameState>(MatchFrameState value);
 
 template<>
 const char* EnumUtil::ToChars<MatchMode>(MatchMode value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeAfterMatch>(MatchRecognizeAfterMatch value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeClauseKind>(MatchRecognizeClauseKind value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeRows>(MatchRecognizeRows value);
 
 template<>
 const char* EnumUtil::ToChars<MatchResultState>(MatchResultState value);
@@ -2009,6 +2024,15 @@ MatchFrameState EnumUtil::FromString<MatchFrameState>(const char *value);
 
 template<>
 MatchMode EnumUtil::FromString<MatchMode>(const char *value);
+
+template<>
+MatchRecognizeAfterMatch EnumUtil::FromString<MatchRecognizeAfterMatch>(const char *value);
+
+template<>
+MatchRecognizeClauseKind EnumUtil::FromString<MatchRecognizeClauseKind>(const char *value);
+
+template<>
+MatchRecognizeRows EnumUtil::FromString<MatchRecognizeRows>(const char *value);
 
 template<>
 MatchResultState EnumUtil::FromString<MatchResultState>(const char *value);

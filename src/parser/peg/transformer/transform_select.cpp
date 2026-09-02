@@ -11,6 +11,7 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -471,6 +472,10 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &tr
 			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
 			pivot_ref.source = std::move(inner_table_ref);
 			inner_table_ref = std::move(transform_join_or_pivot);
+		} else if (transform_join_or_pivot->type == TableReferenceType::MATCH_RECOGNIZE) {
+			auto &match_recognize_ref = transform_join_or_pivot->Cast<MatchRecognizeRef>();
+			match_recognize_ref.input = std::move(inner_table_ref);
+			inner_table_ref = std::move(transform_join_or_pivot);
 		} else {
 			throw NotImplementedException("Unsupported TableRef type encountered: %s",
 			                              EnumUtil::ToString(transform_join_or_pivot->type));
@@ -521,6 +526,10 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampoli
 		} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
 			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
 			pivot_ref.source = std::move(inner_table_ref);
+			inner_table_ref = std::move(transform_join_or_pivot);
+		} else if (transform_join_or_pivot->type == TableReferenceType::MATCH_RECOGNIZE) {
+			auto &match_recognize_ref = transform_join_or_pivot->Cast<MatchRecognizeRef>();
+			match_recognize_ref.input = std::move(inner_table_ref);
 			inner_table_ref = std::move(transform_join_or_pivot);
 		} else {
 			throw NotImplementedException("Unsupported TableRef type encountered: %s",

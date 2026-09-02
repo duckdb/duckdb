@@ -18,6 +18,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/delimgetref.hpp"
@@ -555,6 +556,7 @@ private:
 	BoundStatement Bind(BaseTableRef &ref);
 	BoundStatement Bind(BoundRefWrapper &ref);
 	BoundStatement Bind(JoinRef &ref);
+	BoundStatement Bind(MatchRecognizeRef &ref);
 	//! Rewrites a NEAREST BY join into a lateral join over a top-k subquery and binds the result
 	BoundStatement BindNearestJoin(JoinRef &ref);
 	BoundStatement Bind(SubqueryRef &ref);

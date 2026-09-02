@@ -1,0 +1,418 @@
+# name: test/sql/match_recognize/test_match_recognize_measures.test
+# description: MATCH_RECOGNIZE MEASURES - variable scoped references, aggregates, RUNNING vs FINAL
+# group: [match_recognize]
+
+statement ok
+pragma threads=1;
+
+statement ok
+create table ev(i integer, v integer);
+
+# PATTERN (A B+) matches rows 1-3 and 4-5; row 6 starts no match
+statement ok
+insert into ev values (1,1),(2,0),(3,0),(4,1),(5,0),(6,1);
+
+# ONE ROW PER MATCH sees the finished match, so a variable reference is the last row it matched
+query IIII
+SELECT a_val, b_val, mn, cl FROM ev MATCH_RECOGNIZE(
+    ORDER BY i
+    MEASURES A.i AS a_val, B.i AS b_val, MATCH_NUMBER() AS mn, CLASSIFIER() AS cl
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY a_val
+----
+1	3	1	A
+4	5	2	A
+
+# ALL ROWS PER MATCH reports progress, so a variable reference only sees the match so far
+query IIIII
+SELECT i, a_val, b_val, mn, cl FROM ev MATCH_RECOGNIZE(
+    ORDER BY i
+    MEASURES A.i AS a_val, B.i AS b_val, MATCH_NUMBER() AS mn, CLASSIFIER() AS cl
+    ALL ROWS PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY i
+----
+1	1	NULL	1	A
+2	1	2	1	B
+3	1	3	1	B
+4	4	NULL	2	A
+5	4	5	2	B
+
+# aggregates span the match
+query II
+SELECT c, s FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS c, sum(i) AS s
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY s
+----
+3	6
+2	9
+
+# and accumulate row by row under ALL ROWS PER MATCH
+query III
+SELECT i, c, s FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS c, sum(i) AS s
+    ALL ROWS PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY i
+----
+1	1	1
+2	2	3
+3	3	6
+4	1	4
+5	2	9
+
+# inside an aggregate a variable restricts the aggregate to the rows it matched
+query III
+SELECT bc, bs, asum FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(B.i) AS bc, sum(B.i) AS bs, sum(A.i) AS asum
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY asum
+----
+2	5	1
+1	5	4
+
+# measures may be arbitrary expressions over variable references
+query II
+SELECT s, d FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES A.i + B.i AS s, B.i - A.i AS d
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY s
+----
+4	2
+9	1
+
+# a measure need not reference any pattern variable at all
+query I
+SELECT x FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i*10 AS x
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+10
+40
+
+# a table qualifier is not a pattern variable
+query I
+SELECT x FROM ev AS t MATCH_RECOGNIZE(
+    ORDER BY i MEASURES t.i AS x
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+4
+
+statement ok
+create table im(i integer);
+
+statement ok
+insert into im values (1),(2);
+
+# a symbol used in the pattern but never defined can still be measured
+query I
+SELECT z_val FROM im MATCH_RECOGNIZE(
+    ORDER BY i MEASURES Z.i AS z_val
+    ONE ROW PER MATCH PATTERN (A Z) DEFINE A as true
+) ORDER BY z_val
+----
+2
+
+statement ok
+create table pv(p integer, i integer);
+
+statement ok
+insert into pv values (1,1),(1,2),(1,3),(1,4),(2,1),(2,2);
+
+# measures are scoped to a match, not to the whole partition
+query III
+SELECT p, s, mn FROM pv MATCH_RECOGNIZE(
+    PARTITION BY p ORDER BY i MEASURES sum(i) AS s, MATCH_NUMBER() AS mn
+    ONE ROW PER MATCH PATTERN (A B) DEFINE A as true, B as true
+) ORDER BY p, mn
+----
+1	3	1
+1	7	2
+2	3	1
+
+# the DEFINE columns are an implementation detail and do not reach the output
+query I
+SELECT count(*) FROM (
+    SELECT * FROM ev MATCH_RECOGNIZE(
+        ORDER BY i MEASURES A.i AS a_val ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+    )
+) WHERE false
+----
+0
+
+statement error
+SELECT __mr_define_A FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES A.i AS a_val ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+)
+----
+<REGEX>:Binder Error.*__mr_define_A.*
+
+# CLASSIFIER() inside DEFINE
+# The row a DEFINE is deciding on is tentatively assigned to the symbol being defined, so
+# CLASSIFIER() is that symbol.
+
+query I
+SELECT x FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as CLASSIFIER()='A'
+) ORDER BY x
+----
+1
+2
+3
+4
+5
+6
+
+# ... and it is never any other symbol
+query I
+SELECT count(*) FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as CLASSIFIER()='B'
+)
+----
+0
+
+query I
+SELECT count(*) FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A B) DEFINE A as v=1, B as CLASSIFIER()='A'
+)
+----
+0
+
+# each DEFINE sees its own symbol, so this matches the same rows as the plain conditions
+query I
+SELECT x FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A B+)
+    DEFINE A as v=1 AND CLASSIFIER()='A', B as v=0 AND CLASSIFIER()='B'
+) ORDER BY x
+----
+1
+4
+
+query II
+SELECT i, cl FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES CLASSIFIER() AS cl ALL ROWS PER MATCH PATTERN (A B)
+    DEFINE A as v=1 AND CLASSIFIER()='A', B as v=0
+) ORDER BY i
+----
+1	A
+2	B
+4	A
+5	B
+
+# MATCH_NUMBER() inside DEFINE
+# The conditions are evaluated by the matcher, so they can see the match being assembled. A condition
+# that stops holding once enough matches were found bounds how many are reported.
+
+statement ok
+create table q(i integer);
+
+statement ok
+insert into q values (1),(2),(3),(4),(5),(6);
+
+query I
+SELECT x FROM q MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as MATCH_NUMBER()=1
+) ORDER BY x
+----
+1
+
+query I
+SELECT x FROM q MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as MATCH_NUMBER()<=2
+) ORDER BY x
+----
+1
+2
+
+# it composes with conditions over the input
+query I
+SELECT x FROM q MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as i%2=1 AND MATCH_NUMBER()<=2
+) ORDER BY x
+----
+1
+3
+
+# a multi row pattern is bounded the same way
+query I
+SELECT x FROM q MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A A) DEFINE A as MATCH_NUMBER()<=2
+) ORDER BY x
+----
+1
+3
+
+# DEFINE and MEASURES agree on the number
+query I
+SELECT mn FROM q MATCH_RECOGNIZE(
+    ORDER BY i MEASURES MATCH_NUMBER() AS mn PATTERN (A) DEFINE A as MATCH_NUMBER()<=2
+) ORDER BY mn
+----
+1
+2
+
+statement ok
+create table mp(p integer, i integer);
+
+statement ok
+insert into mp values (1,1),(1,2),(1,3),(2,1),(2,2),(2,3);
+
+# numbering restarts per partition, so each partition reports its own first two matches
+query II
+SELECT p, x FROM mp MATCH_RECOGNIZE(
+    PARTITION BY p ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as MATCH_NUMBER()<=2
+) ORDER BY p, x
+----
+1	1
+1	2
+2	1
+2	2
+
+# Row pattern navigation in DEFINE
+# PREV/NEXT are physical: they navigate the ordered partition and may leave the match.
+# FIRST/LAST are logical: they navigate the rows of the match being assembled.
+
+statement ok
+create table nav(i integer, v integer);
+
+statement ok
+insert into nav values (1,5),(2,7),(3,6),(4,9),(5,2);
+
+# PREV is relative to the partition, so it sees the row before the match starts
+query I
+SELECT x FROM nav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as v > PREV(v)
+) ORDER BY x
+----
+2
+4
+
+query I
+SELECT x FROM nav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as v < NEXT(v)
+) ORDER BY x
+----
+1
+3
+
+# LAST navigates the rows of this match, so it reads the A of the same match
+query I
+SELECT x FROM nav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B)
+    DEFINE A as true, B as v > LAST(A.v)
+) ORDER BY x
+----
+1
+2
+3
+4
+
+statement ok
+create table run(i integer, v integer);
+
+statement ok
+insert into run values (1,1),(2,3),(3,5),(4,2),(5,8);
+
+# FIRST is anchored at the row the match started on
+query I
+SELECT x FROM run MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B B)
+    DEFINE A as true, B as v > FIRST(A.v)
+) ORDER BY x
+----
+1
+2
+3
+
+# unqualified navigation refers to the match rather than to one variable
+query I
+SELECT x FROM run MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B)
+    DEFINE A as true, B as v > FIRST(v)
+) ORDER BY x
+----
+1
+2
+4
+5
+
+# the row under test counts as the variable it is being tested for, so LAST(B.v) is its own value
+query I
+SELECT count(*) FROM run MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A B+) DEFINE A as true, B as v > LAST(B.v)
+)
+----
+0
+
+# navigation composes with the other DEFINE features
+query I
+SELECT x FROM nav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B)
+    DEFINE A as true, B as v > LAST(A.v) AND CLASSIFIER()='B' AND MATCH_NUMBER()=1
+) ORDER BY x
+----
+1
+2
+
+statement error
+SELECT 1 FROM nav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A B) DEFINE A as true, B as v > LAST(FIRST(v))
+)
+----
+<REGEX>:Binder Error.*Nested row pattern navigation is not supported.*
+
+statement error
+SELECT 1 FROM nav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A B) DEFINE A as true, B as v > LAST(v, i)
+)
+----
+<REGEX>:Binder Error.*offset of LAST\(\) must be a constant.*
+
+# RUNNING and FINAL
+# A measure is RUNNING under ALL ROWS PER MATCH and FINAL under ONE ROW PER MATCH by default. The
+# keywords make that explicit, and can pick the other one.
+
+query IIII
+SELECT i, dflt, run, fin FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS dflt, RUNNING count(*) AS run, FINAL count(*) AS fin
+    ALL ROWS PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY i
+----
+1	1	1	3
+2	2	2	3
+3	3	3	3
+4	1	1	2
+5	2	2	2
+
+# FINAL navigation reads the whole match, RUNNING only what precedes the current row
+query III
+SELECT i, fin_b, run_b FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES FINAL LAST(B.i) AS fin_b, RUNNING LAST(B.i) AS run_b
+    ALL ROWS PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY i
+----
+1	3	NULL
+2	3	2
+3	3	3
+4	5	NULL
+5	5	5
+
+# ONE ROW PER MATCH reports a finished match, so its current row is the last one and the two
+# keywords mean the same thing
+query II
+SELECT run, fin FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES RUNNING count(*) AS run, FINAL count(*) AS fin
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY fin
+----
+2	2
+3	3
+
+# neither keyword is reserved
+statement ok
+CREATE TABLE running(final INTEGER)
+
+statement ok
+SELECT final FROM running

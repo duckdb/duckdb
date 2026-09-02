@@ -133,6 +133,10 @@ enum class ExpressionType : uint8_t {
 	// Parser
 	// -----------------------------
 	STAR = 200,
+	// MATCH_RECOGNIZE
+	QUANTIFIER = 210,
+	CONCATENATION = 211,
+	ALTERNATION = 212,
 	TABLE_STAR = 201,
 	PLACEHOLDER = 202,
 	COLUMN_REF = 203,
@@ -183,6 +187,7 @@ enum class ExpressionClass : uint8_t {
 	BETWEEN = 19,
 	LAMBDA_REF = 20,
 	TYPE = 21,
+	PATTERN = 22,
 	//===--------------------------------------------------------------------===//
 	// Bound Expressions
 	//===--------------------------------------------------------------------===//

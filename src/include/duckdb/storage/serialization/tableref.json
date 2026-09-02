@@ -198,6 +198,13 @@
     ]
   },
   {
+    "class": "MatchRecognizeRef",
+    "base": "TableRef",
+    "enum": "MATCH_RECOGNIZE",
+    "members": [
+    ]
+  },
+  {
     "class": "TableFunctionRef",
     "base": "TableRef",
     "enum": "TABLE_FUNCTION",
