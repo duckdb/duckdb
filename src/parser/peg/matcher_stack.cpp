@@ -65,12 +65,12 @@ void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 	D_ASSERT(frame.continuation);
 	auto step = frame.continuation->Resume(std::move(frame.child_result));
 	frame.child_result.reset();
-	if (!step.NeedsChild()) {
+	auto child = step.GetChild();
+	if (!child) {
 		frame.result = step.GetResult();
 		return;
 	}
-	auto child = step.GetChild();
-	PushFrame(child.matcher, child.state);
+	PushFrame(child->matcher, child->state);
 }
 
 MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {

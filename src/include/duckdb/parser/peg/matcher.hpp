@@ -218,22 +218,16 @@ public:
 	static MatchStep Child(const Matcher &matcher, MatchState &state);
 	static MatchStep Complete(MatcherResult result);
 
-	bool NeedsChild() const {
-		return bool(child_matcher);
-	}
-
-	MatchChildRequest GetChild();
+	optional<MatchChildRequest> GetChild();
 	MatcherResult GetResult() const;
 
 private:
-	MatchStep(optional_ptr<const Matcher> child_matcher_p, optional_ptr<MatchState> child_state_p,
-	          optional<MatcherResult> result_p)
-	    : child_matcher(child_matcher_p), child_state(child_state_p), result(std::move(result_p)) {
+	MatchStep(optional<MatchChildRequest> child_p, optional<MatcherResult> result_p)
+	    : child(std::move(child_p)), result(std::move(result_p)) {
 	}
 
 private:
-	optional_ptr<const Matcher> child_matcher;
-	optional_ptr<MatchState> child_state;
+	optional<MatchChildRequest> child;
 	optional<MatcherResult> result;
 };
 

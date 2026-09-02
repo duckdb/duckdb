@@ -33,13 +33,13 @@ static MatcherResult ExecuteRecursive(const Matcher &matcher, MatchState &state)
 	while (true) {
 		auto step = continuation->Resume(std::move(child_result));
 		child_result.reset();
-		if (!step.NeedsChild()) {
+		auto child = step.GetChild();
+		if (!child) {
 			auto result = step.GetResult();
 			packrat_state.StoreResult(matcher, state, result);
 			return result;
 		}
-		auto child = step.GetChild();
-		child_result = child.matcher.MatchParseResult(child.state);
+		child_result = child->matcher.MatchParseResult(child->state);
 	}
 }
 
