@@ -1,0 +1,24 @@
+# name: test/sql/storage/types/list/list_corrupt_offset_range.test
+# description: List offset past the child column count must error
+# group: [list]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/list_corrupt_offset_range.db.gz {TEST_DIR}/list_corrupt_offset_range.db
+
+load {TEST_DIR}/list_corrupt_offset_range.db readonly
+
+statement error
+SELECT count(*) FROM (SELECT unnest(a) FROM t);
+----
+Data Corruption Error: Corrupted LIST column: offset exceeds the child column count
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT count(*) FROM (SELECT unnest(a) FROM t);
+----
+Data Corruption Error: Corrupted LIST column: offset exceeds the child column count
