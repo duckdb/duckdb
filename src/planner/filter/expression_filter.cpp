@@ -443,6 +443,10 @@ static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContex
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_LESSTHAN:
 			return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		default:
 			break;
 		}

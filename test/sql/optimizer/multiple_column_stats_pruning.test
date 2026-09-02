@@ -61,6 +61,23 @@ SELECT count(*) FROM xy WHERE i <> i;
 ----
 0
 
+# x IS DISTINCT FROM x is always false regardless of nullability
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM xy WHERE i IS DISTINCT FROM i;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM xy WHERE i IS DISTINCT FROM i;
+----
+0
+
+# x IS NOT DISTINCT FROM x is always true regardless of nullability - the filter is dropped
+query I
+SELECT count(*) FROM xy WHERE i IS NOT DISTINCT FROM i;
+----
+400000
+
 # Multi-column filters survive common-subplan canonicalization alongside regular filters
 statement ok
 PRAGMA explain_output='optimized_only';
