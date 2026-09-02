@@ -54,6 +54,64 @@ class TestBenchmarkRunner(unittest.TestCase):
             self.assertIsNone(error)
             self.assertEqual(run.call_args.kwargs["env"][EXTENSION_DIRECTORY_ENV], str(extension_directory.resolve()))
 
+    def test_surfaces_incorrect_result_diagnostic(self):
+        completed_process = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr=(
+                "name\trun\ttiming\n"
+                "query.benchmark\t1\tINCORRECT\n"
+                "INCORRECT RESULT: Invalid Input Error: attempted to read past the end of the segment\n"
+            ),
+        )
+
+        with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process):
+            timings, error = BenchmarkRunner("benchmark_runner", "current").run("query.benchmark", 1)
+
+        self.assertIsNone(timings)
+        self.assertEqual(
+            error,
+            "Benchmark runner reported INCORRECT for query.benchmark on run 1:\n"
+            "INCORRECT RESULT: Invalid Input Error: attempted to read past the end of the segment",
+        )
+
+    def test_surfaces_error_diagnostic(self):
+        completed_process = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="name\trun\ttiming\nquery.benchmark\t2\tERROR\nData Corruption Error: invalid segment size\n",
+        )
+
+        with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process):
+            timings, error = BenchmarkRunner("benchmark_runner", "current").run("query.benchmark", 2)
+
+        self.assertIsNone(timings)
+        self.assertEqual(
+            error,
+            "Benchmark runner reported ERROR for query.benchmark on run 2:\n"
+            "Data Corruption Error: invalid segment size",
+        )
+
+    def test_uses_stdout_failure_summary_when_stderr_has_no_diagnostic(self):
+        completed_process = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="failure summary with the underlying exception\n",
+            stderr="name\trun\ttiming\nquery.benchmark\t1\tINCORRECT\n",
+        )
+
+        with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process):
+            timings, error = BenchmarkRunner("benchmark_runner", "current").run("query.benchmark", 1)
+
+        self.assertIsNone(timings)
+        self.assertEqual(
+            error,
+            "Benchmark runner reported INCORRECT for query.benchmark on run 1:\n"
+            "failure summary with the underlying exception",
+        )
+
 
 class TestBenchmarkComparison(unittest.TestCase):
     def test_measurement_uses_medians_and_observed_ranges(self):
@@ -234,6 +292,14 @@ import sys
 
 print("name\\trun\\ttiming", file=sys.stderr)
 print("not-a-valid-timing-row", file=sys.stderr)
+"""
+
+    incorrect_runner_source = """#!/usr/bin/env python3
+import sys
+
+print("name\\trun\\ttiming", file=sys.stderr)
+print(f"{sys.argv[1]}\\t1\\tINCORRECT", file=sys.stderr)
+print("INCORRECT RESULT: Data Corruption Error: attempted to read past the end of the segment", file=sys.stderr)
 """
 
     def run_regression_test(
@@ -534,6 +600,15 @@ print("not-a-valid-timing-row", file=sys.stderr)
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
         self.assertLess(plain_output.index("FAILURES SUMMARY"), plain_output.index("geomean:"))
         self.assertTrue(plain_output.rstrip().endswith("result: failed; benchmark failure; no query regressions"))
+
+    def test_incorrect_result_diagnostic_reaches_failure_summary(self):
+        process, _, _ = self.run_regression_test(self.incorrect_runner_source)
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertIn(
+            "INCORRECT RESULT: Data Corruption Error: attempted to read past the end of the segment",
+            process.stdout,
+        )
+        self.assertNotIn("could not convert string to float", process.stdout)
 
 
 if __name__ == "__main__":

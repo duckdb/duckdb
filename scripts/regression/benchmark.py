@@ -1,7 +1,6 @@
 import csv
 import os
 import subprocess
-from io import StringIO
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -19,6 +18,22 @@ STDOUT_HEADER = '''====================================================
 ==============         STDOUT          =============
 ====================================================
 '''
+
+
+def benchmark_failure_message(benchmark: str, row: List[str], trailing_lines: List[str], stdout: str) -> str:
+    run = row[1].strip() if len(row) > 1 else ""
+    status = row[2].strip() if len(row) > 2 else "malformed output"
+    location = f" for {benchmark}"
+    if run:
+        location += f" on run {run}"
+
+    details = "\n".join(trailing_lines).strip()
+    if not details:
+        details = stdout.strip()
+    message = f"Benchmark runner reported {status}{location}"
+    if details:
+        message += f":\n{details}"
+    return message
 
 
 def find_extension_directory(runner_path: str) -> Optional[str]:
@@ -103,16 +118,24 @@ class BenchmarkRunner:
                 print(process.stderr, flush=True)
 
         timings = []
+        stderr_lines = process.stderr.splitlines()
         try:
-            rows = csv.reader(StringIO(process.stderr), delimiter='\t')
+            rows = csv.reader(stderr_lines, delimiter='\t')
             next(rows)
-            for row in rows:
-                if row:
-                    timings.append(float(row[2]))
-        except (IndexError, StopIteration, ValueError) as exception:
+        except StopIteration as exception:
             message = f"Could not parse benchmark timings: {exception}"
             print(f"Failed to run benchmark {benchmark}: {message}", flush=True)
             return None, message
+
+        for line_index, row in enumerate(rows, start=1):
+            if not row:
+                continue
+            try:
+                timings.append(float(row[2]))
+            except (IndexError, ValueError):
+                message = benchmark_failure_message(benchmark, row, stderr_lines[line_index + 1 :], process.stdout)
+                print(f"Failed to run benchmark {benchmark}: {message}", flush=True)
+                return None, message
 
         if len(timings) != timed_runs:
             message = f"Expected {timed_runs} benchmark timings, received {len(timings)}"
