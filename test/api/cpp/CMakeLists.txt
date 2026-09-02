@@ -14,6 +14,7 @@ add_library(
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_cast_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_column_data_collection.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_core.cpp
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_file_system.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_query.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_replacement_scan.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_scalar_function.cpp

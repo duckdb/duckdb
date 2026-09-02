@@ -142,6 +142,18 @@ template <>
 struct HandleTraits<QualifiedName> {
 	using handle = duckdb_v2_qname_handle;
 };
+template <>
+struct HandleTraits<FileSystem> {
+	using handle = duckdb_v2_file_system_handle;
+};
+template <>
+struct HandleTraits<FileHandle> {
+	using handle = duckdb_v2_file_handle;
+};
+template <>
+struct HandleTraits<FileOpenOptions> {
+	using handle = duckdb_v2_file_open_options_handle;
+};
 
 } // namespace detail
 
@@ -515,6 +527,12 @@ auto Connection::CreateType(std::string_view name, const std::vector<TypeParam> 
 	return CreateType(QualifiedName::Create({std::string(name)}), params);
 }
 
+auto Connection::GetFileSystem() const -> FileSystem {
+	duckdb_v2_file_system_handle fs = nullptr;
+	CheckedAPICall(duckdb_v2_file_system_get_from_connection, handle(), &fs);
+	return detail::Factory::Make<FileSystem>(fs);
+}
+
 auto Connection::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
@@ -687,6 +705,12 @@ auto Context::CreateType(std::string_view name) const -> LogicalType {
 
 auto Context::CreateType(std::string_view name, const std::vector<TypeParam> &params) const -> LogicalType {
 	return CreateType(QualifiedName::Create({std::string(name)}), params);
+}
+
+auto Context::GetFileSystem() const -> FileSystem {
+	duckdb_v2_file_system_handle fs = nullptr;
+	CheckedAPICall(duckdb_v2_file_system_get_from_context, handle(), &fs);
+	return detail::Factory::Make<FileSystem>(fs);
 }
 
 auto Context::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) const -> LogicalType {
@@ -3880,6 +3904,111 @@ auto CastFunction::ExecInput::GetMode() const -> CastMode {
 
 auto CastFunction::ExecInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// File System
+//----------------------------------------------------------------------------------------------------------------------
+
+FileSystem::FileSystem(void *impl) : detail::Handle<FileSystem>(impl) {
+}
+
+FileSystem::~FileSystem() {
+	// Borrowed: the context or connection owns the file system, so there is nothing to release here.
+}
+
+auto FileSystem::CreateOpenOptions() const -> FileOpenOptions {
+	return FileOpenOptions::Create(*this);
+}
+
+auto FileSystem::OpenFile(const std::string &path, std::initializer_list<FileFlags> flags) const -> FileHandle {
+	auto options = CreateOpenOptions();
+	for (auto flag : flags) {
+		options.SetFlag(flag);
+	}
+	return OpenFile(path, options);
+}
+
+auto FileSystem::OpenFile(const std::string &path, const FileOpenOptions &options) const -> FileHandle {
+	duckdb_v2_file_handle result = nullptr;
+	CheckedAPICall(duckdb_v2_file_system_open, handle(), ToStr(path), options.handle(), &result);
+	return detail::Factory::Make<FileHandle>(result);
+}
+
+FileOpenOptions::FileOpenOptions(void *impl) : detail::Handle<FileOpenOptions>(impl) {
+}
+
+FileOpenOptions::~FileOpenOptions() {
+	auto _h = handle();
+	duckdb_v2_file_open_options_destroy(&_h);
+}
+
+auto FileOpenOptions::Create(const FileSystem &fs) -> FileOpenOptions {
+	duckdb_v2_file_open_options_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_file_open_options_create, fs.handle(), &_h);
+	return detail::Factory::Make<FileOpenOptions>(_h);
+}
+
+auto FileOpenOptions::SetFlag(FileFlags flag) & -> FileOpenOptions & {
+	CheckedAPICall(duckdb_v2_file_open_options_set_flag, handle(), static_cast<DUCKDB_V2_FILE_FLAG>(flag));
+	return *this;
+}
+
+auto FileOpenOptions::SetValue(std::string_view name, const Value &value) & -> FileOpenOptions & {
+	CheckedAPICall(duckdb_v2_file_open_options_set_value, handle(), ToStr(name), value.handle());
+	return *this;
+}
+
+FileHandle::FileHandle(void *impl) : detail::Handle<FileHandle>(impl) {
+}
+
+FileHandle::~FileHandle() {
+	auto _h = handle();
+	duckdb_v2_file_destroy(&_h);
+}
+
+void FileHandle::Sync() {
+	CheckedAPICall(duckdb_v2_file_sync, handle());
+}
+
+void FileHandle::Close() {
+	CheckedAPICall(duckdb_v2_file_close, handle());
+}
+
+void FileHandle::Seek(idx_t position) {
+	CheckedAPICall(duckdb_v2_file_seek, handle(), position);
+}
+
+auto FileHandle::Tell() const -> idx_t {
+	idx_t position = 0;
+	CheckedAPICall(duckdb_v2_file_tell, handle(), &position);
+	return position;
+}
+
+auto FileHandle::Size() const -> idx_t {
+	idx_t size = 0;
+	CheckedAPICall(duckdb_v2_file_size, handle(), &size);
+	return size;
+}
+
+auto FileHandle::Read(void *buffer, idx_t size) -> idx_t {
+	idx_t bytes_read = 0;
+	CheckedAPICall(duckdb_v2_file_read, handle(), buffer, size, &bytes_read);
+	return bytes_read;
+}
+
+auto FileHandle::Write(const void *buffer, idx_t size) -> idx_t {
+	idx_t bytes_written = 0;
+	CheckedAPICall(duckdb_v2_file_write, handle(), buffer, size, &bytes_written);
+	return bytes_written;
+}
+
+void FileHandle::ReadAt(void *buffer, idx_t size, idx_t location) {
+	CheckedAPICall(duckdb_v2_file_read_at, handle(), buffer, size, location);
+}
+
+void FileHandle::WriteAt(const void *buffer, idx_t size, idx_t location) {
+	CheckedAPICall(duckdb_v2_file_write_at, handle(), buffer, size, location);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

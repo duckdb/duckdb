@@ -78,6 +78,9 @@ class CustomType;
 class CastFunction;
 class ReplacementScan;
 class QualifiedName;
+class FileSystem;
+class FileHandle;
+class FileOpenOptions;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -417,6 +420,9 @@ public:
 	/// search path and then in the system catalog; a qualified one is resolved exactly as written.
 	auto CreateType(const QualifiedName &name, const std::vector<TypeParam> &params = {}) const -> LogicalType;
 
+	/// The file system this context reads and writes through. Borrowed, and valid only while the context is.
+	auto GetFileSystem() const -> FileSystem;
+
 	/// The id-keyed twin of `CreateType`: the id resolves to its canonical name and binds like it.
 	/// @param id The type's id. Without parameters, only ids that name a complete type on their own are accepted;
 	/// parameterized kinds such as LIST or DECIMAL require parameters.
@@ -606,6 +612,9 @@ public:
 	/// `CreateType` for a name that may be catalog- or schema-qualified. An unqualified name is resolved along the
 	/// search path and then in the system catalog; a qualified one is resolved exactly as written.
 	auto CreateType(const QualifiedName &name, const std::vector<TypeParam> &params = {}) -> LogicalType;
+
+	/// The file system this connection reads and writes through. Borrowed, and valid only while the connection is.
+	auto GetFileSystem() const -> FileSystem;
 
 	/// The id-keyed twin of `CreateType`: the id resolves to its canonical name and binds like it.
 	/// @param id The type's id. Without parameters, only ids that name a complete type on their own are accepted;
@@ -3865,6 +3874,144 @@ public:
 
 		void *GetUserDataInternal() const;
 	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// File System
+//----------------------------------------------------------------------------------------------------------------------
+
+/// How `FileSystem::OpenFile` opens a file. Not a bitmask -- apply these one at a time with
+/// `FileOpenOptions::SetFlag`, or pass several as a braced list to `FileSystem::OpenFile`.
+enum class FileFlags : uint8_t {
+	/// Not a flag. The zero value, so an uninitialized variable does not name a behaviour; applying it is an error.
+	INVALID = 0,
+	/// Open the file with "read" capabilities.
+	READ = 1,
+	/// Open the file with "write" capabilities.
+	WRITE = 2,
+	/// Create the file if it does not exist, and open it as it is if it does.
+	/// The FILE_ prefix matches the engine's flag names and keeps CREATE clear of the `<windows.h>` macro.
+	FILE_CREATE = 3,
+	/// Create the file if it does not exist, and truncate it to empty if it does. To fail instead of truncating,
+	/// combine `FILE_CREATE` with `EXCLUSIVE_CREATE`.
+	FILE_CREATE_NEW = 4,
+	/// Open the file in "append" mode.
+	APPEND = 5,
+	/// Fail if the file already exists. A modifier on `FILE_CREATE`, and meaningless without it.
+	EXCLUSIVE_CREATE = 6,
+	/// The file will be read and written at explicit offsets from several threads at once. Pass it whenever `ReadAt`
+	/// or `WriteAt` are used concurrently, so that a file system which would otherwise assume sequential access does
+	/// not.
+	PARALLEL_ACCESS = 7,
+};
+
+/// An open file, obtained from `FileSystem::OpenFile`. Closes on destruction.
+/// Only usable while the `FileSystem` it came from is still valid.
+class FileHandle final : public detail::Handle<FileHandle> {
+	friend detail::Factory;
+
+public:
+	FileHandle(FileHandle &&) noexcept = default;
+	FileHandle &operator=(FileHandle &&) noexcept = default;
+
+	~FileHandle() override;
+
+	/// Flushes buffered writes to persistent storage, which is what makes them durable across a crash. Closing or
+	/// destroying the handle flushes as well.
+	void Sync();
+
+	/// Closes the file, releasing its operating-system resources. The handle stays valid but can no longer be used
+	/// to read, write or seek.
+	void Close();
+
+	/// Moves the read/write position to an absolute byte offset from the start of the file. Seeking past the end is
+	/// allowed; reading from there yields nothing.
+	void Seek(idx_t position);
+
+	/// The current read/write position, as a byte offset from the start of the file.
+	auto Tell() const -> idx_t;
+
+	/// The total size of the file in bytes.
+	auto Size() const -> idx_t;
+
+	/// Reads up to `size` bytes from the current position, advancing it by however many were read.
+	/// @return How many bytes were read. Fewer than asked for is normal at the end of the file, and zero means
+	/// there is nothing left; neither is an error.
+	auto Read(void *buffer, idx_t size) -> idx_t;
+
+	/// Writes up to `size` bytes at the current position, advancing it by however many were written.
+	/// @return How many bytes were written.
+	auto Write(const void *buffer, idx_t size) -> idx_t;
+
+	/// Reads exactly `size` bytes from `location`, leaving the file's position alone. Unlike `Read`, a short read is
+	/// an error rather than a result, so there is no count to return. Safe to call from several threads at once when
+	/// the file was opened with `FileFlags::PARALLEL_ACCESS`.
+	/// @throws Exception When the file ends before `size` bytes have been read.
+	void ReadAt(void *buffer, idx_t size, idx_t location);
+
+	/// Writes exactly `size` bytes at `location`, leaving the file's position alone and extending the file when the
+	/// offset is past its end. Safe to call from several threads at once when the file was opened with
+	/// `FileFlags::PARALLEL_ACCESS` and the threads write disjoint ranges.
+	void WriteAt(const void *buffer, idx_t size, idx_t location);
+
+private:
+	explicit FileHandle(void *impl);
+};
+
+/// How a file is opened: the flags, plus any values the file system handling the path cares about.
+/// Created from the `FileSystem` it will be used with, and reusable across any number of opens.
+class FileOpenOptions final : public detail::Handle<FileOpenOptions> {
+	friend detail::Factory;
+
+public:
+	FileOpenOptions(FileOpenOptions &&) noexcept = default;
+	FileOpenOptions &operator=(FileOpenOptions &&) noexcept = default;
+
+	~FileOpenOptions() override;
+
+	/// Creates an empty set of options for `fs`. Flags must be set before they can open anything.
+	static auto Create(const FileSystem &fs) -> FileOpenOptions;
+
+	/// Applies one flag. Additive, and applying the same flag twice is harmless; at least one flag is required
+	/// before the options can open anything. There is no way to take a flag back -- build a fresh set instead.
+	/// @throws InvalidInputException When the value is `FileFlags::INVALID` or not a flag at all.
+	auto SetFlag(FileFlags flag) & -> FileOpenOptions &;
+
+	/// Attaches a named value, a hint for whichever file system ends up handling the path. What a name means is that
+	/// file system's business, and one it does not recognize is ignored. Setting the same name again replaces it.
+	auto SetValue(std::string_view name, const Value &value) & -> FileOpenOptions &;
+
+private:
+	explicit FileOpenOptions(void *impl);
+};
+
+/// The file system DuckDB itself reads and writes through, so files open the way the engine would open them --
+/// including through virtual and remote file systems registered by other extensions.
+/// Borrowed from a `Context` or `Connection`, and valid only for as long as that is.
+class FileSystem final : public detail::Handle<FileSystem> {
+	friend detail::Factory;
+
+public:
+	FileSystem(FileSystem &&) noexcept = default;
+	FileSystem &operator=(FileSystem &&) noexcept = default;
+
+	~FileSystem() override;
+
+	/// Opens a file with nothing but flags, which is what most opens need.
+	/// @param path The path to open, routed the way the engine would route it.
+	/// @param flags How to open it, e.g. `{FileFlags::WRITE, FileFlags::FILE_CREATE}`; at least one is required.
+	/// @throws Exception When the file cannot be opened.
+	auto OpenFile(const std::string &path, std::initializer_list<FileFlags> flags) const -> FileHandle;
+
+	/// Opens a file with a prepared set of options, for when the file system needs values as well as flags.
+	/// @throws Exception When the file cannot be opened, or the options carry no flags.
+	auto OpenFile(const std::string &path, const FileOpenOptions &options) const -> FileHandle;
+
+	/// Creates an empty set of options for this file system, the same as `FileOpenOptions::Create(*this)`.
+	auto CreateOpenOptions() const -> FileOpenOptions;
+
+private:
+	explicit FileSystem(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
