@@ -159,9 +159,9 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		}
 	}
 
-	// Name was detached in this transaction but the AttachedDatabase is still alive
-	// (used_databases). Re-ATTACH of that alias is the error Mytherin wanted, not DETACH.
-	if (MetaTransaction::Get(context).GetReferencedDatabase(info.name)) {
+	// Detached in this transaction: name is unbound, but the AttachedDatabase object
+	// is still held. Re-ATTACH of that alias would mix two files under one txn name.
+	if (MetaTransaction::Get(context).GetReferencedDatabaseOwning(info.name)) {
 		throw TransactionException("Cannot re-attach database %s in the same transaction that already used it",
 		                           info.name);
 	}
@@ -280,6 +280,11 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &n
 		}
 		return;
 	}
+
+	// Unbind the alias so GetDatabase no longer resolves it. Keep referenced_databases
+	// so in-flight transactions can still commit. Re-ATTACH of this alias is rejected
+	// via GetReferencedDatabaseOwning below.
+	MetaTransaction::Get(context).DetachDatabase(*attached_db);
 
 	attached_db->OnDetach(context);
 
