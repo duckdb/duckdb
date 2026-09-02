@@ -55,8 +55,9 @@ public:
 			return;
 		}
 		value_buffer[0] = (T)0;
-		alp::AlpDecompression<T>::Decompress(for_encoded, value_buffer, count, v_factor, v_exponent, exceptions_count,
-		                                     exceptions, exceptions_positions, frame_of_reference, bit_width);
+		alp::AlpDecompression<T>::Decompress(const_data_ptr_cast(for_encoded), value_buffer, count, v_factor,
+		                                     v_exponent, exceptions_count, exceptions, exceptions_positions,
+		                                     frame_of_reference, bit_width);
 	}
 
 public:
@@ -67,8 +68,7 @@ public:
 	//! Exception positions read from the segment and validated as exceptions_positions[i] < vector_size.
 	AlpConstants::EXCEPTION_POSITION_TYPE exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
 	//! Packed values read from the segment through a bounded vector reader.
-	//! BitpackingPrimitives::UnPackBuffer<uint64_t> reads the input through aligned integer pointers.
-	alignas(AlpConstants::FRAME_OF_REFERENCE_TYPE) uint8_t for_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
+	AlpConstants::ENCODED_VALUE_TYPE for_encoded[AlpConstants::ALP_VECTOR_SIZE];
 	//! Exponent or UNCOMPRESSED_MODE_SENTINEL read from the segment.
 	//! Exponents are validated as v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT.
 	AlpConstants::EXPONENT_TYPE v_exponent;
@@ -232,7 +232,7 @@ public:
 
 		if (vector_state.bit_width > 0) {
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
-			vector_reader.ReadIntoArray(vector_state.for_encoded, bp_size);
+			vector_reader.ReadBytesIntoArray(vector_state.for_encoded, bp_size);
 		}
 
 		if (vector_state.exceptions_count > 0) {

@@ -20,7 +20,8 @@ public:
 	using FACTOR_TYPE = uint8_t;
 	using EXCEPTIONS_COUNT_TYPE = uint16_t;
 	using EXCEPTION_POSITION_TYPE = uint16_t;
-	using FRAME_OF_REFERENCE_TYPE = uint64_t;
+	using ENCODED_VALUE_TYPE = uint64_t;
+	using FRAME_OF_REFERENCE_TYPE = ENCODED_VALUE_TYPE;
 	using BIT_WIDTH_TYPE = uint8_t;
 	using METADATA_POINTER_TYPE = uint32_t;
 
@@ -39,7 +40,7 @@ public:
 	static constexpr uint8_t EXCEPTION_POSITION_SIZE = sizeof(EXCEPTION_POSITION_TYPE);
 	static constexpr uint8_t FOR_SIZE = sizeof(FRAME_OF_REFERENCE_TYPE);
 	static constexpr uint8_t BIT_WIDTH_SIZE = sizeof(BIT_WIDTH_TYPE);
-	static constexpr BIT_WIDTH_TYPE MAX_BIT_WIDTH = FOR_SIZE * 8;
+	static constexpr BIT_WIDTH_TYPE MAX_BIT_WIDTH = sizeof(ENCODED_VALUE_TYPE) * 8;
 	static constexpr uint8_t METADATA_POINTER_SIZE = sizeof(METADATA_POINTER_TYPE);
 
 	static constexpr uint8_t SAMPLING_EARLY_EXIT_THRESHOLD = 2;

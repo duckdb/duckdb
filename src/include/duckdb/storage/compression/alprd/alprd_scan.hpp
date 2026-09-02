@@ -58,19 +58,17 @@ public:
 			return;
 		}
 		values_buffer[0] = (EXACT_TYPE)0;
-		alp::AlpRDDecompression<T>::Decompress(left_encoded, right_encoded, left_parts_dict, values_buffer, count,
-		                                       exceptions_count, exceptions, exceptions_positions, left_bit_width,
-		                                       right_bit_width);
+		alp::AlpRDDecompression<T>::Decompress(const_data_ptr_cast(left_encoded), const_data_ptr_cast(right_encoded),
+		                                       left_parts_dict, values_buffer, count, exceptions_count, exceptions,
+		                                       exceptions_positions, left_bit_width, right_bit_width);
 	}
 
 public:
 	idx_t index;
-	//! Packed left indexes read from the segment through a bounded vector reader.
-	//! BitpackingPrimitives::UnPackBuffer reads the left stream through aligned DICTIONARY_ELEMENT_TYPE pointers.
-	alignas(AlpRDConstants::DICTIONARY_ELEMENT_TYPE) uint8_t left_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
-	//! Packed right parts read from the segment through a bounded vector reader.
-	//! BitpackingPrimitives::UnPackBuffer reads the right stream through aligned EXACT_TYPE pointers.
-	alignas(EXACT_TYPE) uint8_t right_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
+	//! The element types below provide maximum packed capacity and alignment for bit unpacking.
+	AlpRDConstants::DICTIONARY_ELEMENT_TYPE left_encoded[AlpRDConstants::ALP_VECTOR_SIZE];
+	EXACT_TYPE right_encoded[AlpRDConstants::ALP_VECTOR_SIZE];
+
 	EXACT_TYPE decoded_values[AlpRDConstants::ALP_VECTOR_SIZE];
 	//! Exception values read from the segment after validating exceptions_count <= vector_size.
 	AlpRDConstants::EXCEPTION_TYPE exceptions[AlpRDConstants::ALP_VECTOR_SIZE];
@@ -79,15 +77,11 @@ public:
 	//! Exception count or UNCOMPRESSED_MODE_SENTINEL read from the segment.
 	//! Compressed-vector counts are validated as exceptions_count <= vector_size.
 	AlpRDConstants::EXCEPTIONS_COUNT_TYPE exceptions_count;
-	//! Right bit width read from the segment.
-	//! Validated as right_bit_width <= MAX_RIGHT_BIT_WIDTH.
+	//! Right bit width read from the segment, validated as right_bit_width <= MAX_RIGHT_BIT_WIDTH.
 	AlpRDConstants::BIT_WIDTH_TYPE right_bit_width;
-	//! Left bit width read from the segment.
-	//! Validated as left_bit_width <= AlpRDConstants::MAX_DICTIONARY_BIT_WIDTH.
+	//! Left bit width read from the segment, validated as left_bit_width <= AlpRDConstants::MAX_DICTIONARY_BIT_WIDTH.
 	AlpRDConstants::BIT_WIDTH_TYPE left_bit_width;
-	//! Dictionary read from the segment.
-	//! Validated as dictionary_count <= AlpRDConstants::MAX_DICTIONARY_SIZE.
-	//! Unused entries are zero.
+	//! Dictionary read from the segment, entries beyond dictionary_count are zeroed.
 	AlpRDConstants::DICTIONARY_ELEMENT_TYPE left_parts_dict[AlpRDConstants::MAX_DICTIONARY_SIZE];
 };
 
@@ -256,8 +250,8 @@ public:
 
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.left_bit_width);
 		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.right_bit_width);
-		vector_reader.ReadIntoArray(vector_state.left_encoded, left_bp_size);
-		vector_reader.ReadIntoArray(vector_state.right_encoded, right_bp_size);
+		vector_reader.ReadBytesIntoArray(vector_state.left_encoded, left_bp_size);
+		vector_reader.ReadBytesIntoArray(vector_state.right_encoded, right_bp_size);
 
 		if (vector_state.exceptions_count > 0) {
 			//! Load the exceptions
