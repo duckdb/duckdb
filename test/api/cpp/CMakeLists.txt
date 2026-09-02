@@ -10,10 +10,12 @@ include_directories(${CMAKE_SOURCE_DIR}/tools/cpp
 add_library(
   test_cpp_api OBJECT
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_aggregate_function.cpp
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_appender.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_cast_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_column_data_collection.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_core.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_query.cpp
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_replacement_scan.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_scalar_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_table_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_types_values.cpp

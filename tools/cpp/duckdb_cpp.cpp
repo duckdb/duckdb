@@ -1,6 +1,8 @@
 // Include the C++ API header (which includes the C API header)
 #include "duckdb_cpp.hpp"
 
+#include <atomic>
+#include <cctype>
 #include <cstring>
 #include <memory>
 
@@ -131,6 +133,10 @@ struct HandleTraits<CustomType> {
 template <>
 struct HandleTraits<CastFunction> {
 	using handle = duckdb_v2_cast_function_handle;
+};
+template <>
+struct HandleTraits<ReplacementScan> {
+	using handle = duckdb_v2_replacement_scan_handle;
 };
 
 } // namespace detail
@@ -2003,6 +2009,10 @@ auto ColumnDataCollection::Reset() -> void {
 	CheckedAPICall(duckdb_v2_column_data_collection_reset, handle());
 }
 
+auto ColumnDataCollection::Clear() -> void {
+	CheckedAPICall(duckdb_v2_column_data_collection_clear, handle());
+}
+
 auto ColumnDataCollection::Combine(ColumnDataCollection &&source) -> void {
 	auto source_handle = source.handle();
 	CheckedAPICall(duckdb_v2_column_data_collection_combine, handle(), &source_handle);
@@ -3858,6 +3868,374 @@ auto CastFunction::ExecInput::GetMode() const -> CastMode {
 
 auto CastFunction::ExecInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Replacement Scan
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered scan: rides the C user_data slot so
+// the trampoline can find it; the user's own slot (SetUserData) rides inside
+// it. Owned by the registered scan, freed when its scope ends.
+struct ReplacementScanInfo {
+	ReplacementScan::Callback callback = nullptr;
+	detail::UserData user_data;
+
+	ReplacementScanInfo(ReplacementScan::Callback callback, detail::UserData user_data)
+	    : callback(callback), user_data(std::move(user_data)) {
+	}
+
+	bool operator==(const ReplacementScanInfo &other) const {
+		return callback == other.callback && user_data.get() == other.user_data.get();
+	}
+};
+
+// Guard for Input::GetUserData: a clear error instead of a null deref.
+void *RequireReplacementUserData(const detail::UserData &user_data) {
+	auto ptr = user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call ReplacementScan::SetUserData before Register");
+	}
+	return ptr;
+}
+
+} // namespace
+
+ReplacementScan::ReplacementScan(void *impl) : detail::Handle<ReplacementScan>(impl) {
+}
+
+ReplacementScan::~ReplacementScan() {
+	auto _h = handle();
+	duckdb_v2_replacement_scan_destroy(&_h);
+}
+
+auto ReplacementScan::Create(const Connection &conn) -> ReplacementScan {
+	duckdb_v2_replacement_scan_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_replacement_scan_create_with_connection, conn.handle(), &_h);
+	return detail::Factory::Make<ReplacementScan>(_h);
+}
+
+auto ReplacementScan::Create(const Database &db) -> ReplacementScan {
+	duckdb_v2_replacement_scan_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_replacement_scan_create_with_database, db.handle(), &_h);
+	return detail::Factory::Make<ReplacementScan>(_h);
+}
+
+auto ReplacementScan::Create(const Extension &extension) -> ReplacementScan {
+	duckdb_v2_replacement_scan_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_replacement_scan_create_with_extension, extension.handle(), &_h);
+	return detail::Factory::Make<ReplacementScan>(_h);
+}
+
+auto ReplacementScan::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+auto ReplacementScan::SetCallback(Callback callback_p) & -> ReplacementScan & {
+	if (!callback_p) {
+		CheckedAPICall(duckdb_v2_replacement_scan_set_callback, handle(), nullptr);
+		callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_replacement_scan_get_user_data, info, &user_data);
+			const auto &scan = *static_cast<ReplacementScanInfo *>(user_data);
+
+			auto input = detail::Factory::Make<Input>(static_cast<void *>(info), static_cast<void *>(context));
+			scan.callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_replacement_scan_set_callback, handle(), trampoline);
+	callback = callback_p;
+	return *this;
+}
+
+auto ReplacementScan::Register() -> void {
+	// The callback table rides the C user_data slot so the trampoline can find
+	// it; the user's own data (SetUserData, moved out here) rides inside it.
+	auto info = std::unique_ptr<ReplacementScanInfo>(new ReplacementScanInfo(callback, std::move(user_data)));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<ReplacementScanInfo>,
+	                         detail::TypedEquals<ReplacementScanInfo>};
+	CheckedAPICall(duckdb_v2_replacement_scan_set_user_data, handle(), &opaque);
+	// The scan owns the table now.
+	info.release();
+
+	CheckedAPICall(duckdb_v2_replacement_scan_register, handle());
+}
+
+void *ReplacementScan::Input::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_replacement_scan_get_user_data, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
+	               &user_data);
+	const auto &scan = *static_cast<const ReplacementScanInfo *>(user_data);
+	return RequireReplacementUserData(scan.user_data);
+}
+
+auto ReplacementScan::Input::GetCatalogName() const -> std::string_view {
+	duckdb_v2_identifier_t name = {nullptr, 0};
+	CheckedAPICall(duckdb_v2_replacement_scan_get_catalog_name,
+	               static_cast<duckdb_v2_replacement_scan_info_handle>(args), &name);
+	return FromStr(name);
+}
+
+auto ReplacementScan::Input::GetSchemaName() const -> std::string_view {
+	duckdb_v2_identifier_t name = {nullptr, 0};
+	CheckedAPICall(duckdb_v2_replacement_scan_get_schema_name,
+	               static_cast<duckdb_v2_replacement_scan_info_handle>(args), &name);
+	return FromStr(name);
+}
+
+auto ReplacementScan::Input::GetTableName() const -> std::string_view {
+	duckdb_v2_identifier_t name = {nullptr, 0};
+	CheckedAPICall(duckdb_v2_replacement_scan_get_table_name, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
+	               &name);
+	return FromStr(name);
+}
+
+auto ReplacementScan::Input::SetFunctionName(std::string_view name) -> void {
+	CheckedAPICall(duckdb_v2_replacement_scan_set_function_name,
+	               static_cast<duckdb_v2_replacement_scan_info_handle>(args), ToStr(name));
+}
+
+auto ReplacementScan::Input::AddArgument(const Value &value) -> void {
+	CheckedAPICall(duckdb_v2_replacement_scan_add_argument, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
+	               value.handle());
+}
+
+auto ReplacementScan::Input::AddNamedArgument(std::string_view name, const Value &value) -> void {
+	CheckedAPICall(duckdb_v2_replacement_scan_add_named_argument,
+	               static_cast<duckdb_v2_replacement_scan_info_handle>(args), ToStr(name), value.handle());
+}
+
+auto ReplacementScan::Input::SetCollection(const ColumnDataCollection &collection,
+                                           const std::vector<std::string> &column_names) -> void {
+	std::vector<duckdb_v2_identifier_t> names;
+	names.reserve(column_names.size());
+	for (auto &name : column_names) {
+		names.push_back(ToStr(name));
+	}
+	CheckedAPICall(duckdb_v2_replacement_scan_set_collection, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
+	               collection.handle(), names.empty() ? nullptr : names.data(), names.size());
+}
+
+auto ReplacementScan::Input::SetSubquery(std::string_view sql) -> void {
+	CheckedAPICall(duckdb_v2_replacement_scan_set_subquery, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
+	               ToStr(sql));
+}
+
+auto ReplacementScan::Input::SetAlias(std::string_view alias) -> void {
+	CheckedAPICall(duckdb_v2_replacement_scan_set_alias, static_cast<duckdb_v2_replacement_scan_info_handle>(args),
+	               ToStr(alias));
+}
+
+auto ReplacementScan::Input::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Appender
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// Renders an identifier as SQL, doubling any embedded quotes.
+std::string QuoteIdentifier(std::string_view name) {
+	std::string out = "\"";
+	for (auto c : name) {
+		if (c == '"') {
+			out += '"';
+		}
+		out += c;
+	}
+	out += '"';
+	return out;
+}
+
+bool EqualsIgnoreCase(std::string_view a, std::string_view b) {
+	if (a.size() != b.size()) {
+		return false;
+	}
+	for (size_t i = 0; i < a.size(); i++) {
+		auto lhs = static_cast<unsigned char>(a[i]);
+		auto rhs = static_cast<unsigned char>(b[i]);
+		if (std::tolower(lhs) != std::tolower(rhs)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// Parses exactly one statement out of `sql`.
+auto ParseSingleStatement(Connection &conn, const std::string &sql) -> SqlStatement {
+	auto statements = conn.ParseSQL(sql);
+	auto first = statements.Next();
+	if (!first) {
+		throw InvalidInputException("the appender's query contains no statement");
+	}
+	if (statements.Next()) {
+		throw InvalidInputException("the appender's query must contain exactly one statement");
+	}
+	return first;
+}
+
+// Names the buffers the table constructor generates, so two appenders on one connection never collide.
+std::atomic<uint64_t> appender_buffer_counter {0};
+
+} // namespace
+
+Appender::Appender(Connection &conn, std::string_view query, std::vector<LogicalType> column_types,
+                   std::string_view buffer_name, const std::vector<std::string> &column_names) {
+	Initialize(conn, std::string(query), std::move(column_types), std::string(buffer_name), column_names);
+}
+
+void Appender::Initialize(Connection &conn, const std::string &query, std::vector<LogicalType> column_types,
+                          const std::string &buffer_name, const std::vector<std::string> &column_names) {
+	connection = &conn;
+	types = std::move(column_types);
+	if (types.empty()) {
+		throw InvalidInputException("an appender needs at least one column type");
+	}
+
+	buffer = std::make_shared<Buffer>();
+	buffer->name = buffer_name;
+	buffer->column_names = column_names;
+	buffer->collection = std::make_unique<ColumnDataCollection>(conn, types);
+
+	// The scan makes the buffer visible to the statement under its name. It is connection-scoped, so it is invisible
+	// to every other connection, and it holds the buffer by shared_ptr because it outlives this object.
+	auto scan = ReplacementScan::Create(conn);
+	scan.SetCallback([](ReplacementScan::Input &input) {
+		auto &shared = input.GetUserData<std::shared_ptr<Buffer>>();
+		if (!shared->collection || !EqualsIgnoreCase(input.GetTableName(), shared->name)) {
+			return; // not ours, or the appender is gone: decline
+		}
+		input.SetCollection(*shared->collection, shared->column_names);
+	});
+	scan.SetUserData<std::shared_ptr<Buffer>>(buffer);
+	scan.Register();
+
+	// Parsed once and re-executed per flush.
+	statement = std::make_unique<SqlStatement>(ParseSingleStatement(conn, query));
+	append_state = std::make_unique<ColumnDataCollection::AppendState>(buffer->collection->CreateAppendState());
+}
+
+namespace {
+
+// The table constructor's two derived pieces: the buffer's columns, and the INSERT that drains it.
+struct AppenderTablePlan {
+	std::vector<LogicalType> types;
+	std::vector<std::string> column_names;
+	std::string query;
+	std::string buffer_name;
+};
+
+AppenderTablePlan PlanTableAppender(Connection &conn, std::string_view table) {
+	AppenderTablePlan plan;
+	plan.buffer_name = "__appender_buffer_" + std::to_string(appender_buffer_counter++);
+
+	// Bind rather than execute: it resolves the table and reports its columns without reading a row.
+	auto probe = ParseSingleStatement(conn, "SELECT * FROM " + std::string(table));
+	auto signature = conn.Bind(probe);
+	auto &schema = signature.output;
+	if (schema.GetFieldCount() == 0) {
+		throw InvalidInputException("table " + std::string(table) + " has no columns to append to");
+	}
+
+	std::string columns;
+	for (idx_t i = 0; i < schema.GetFieldCount(); i++) {
+		if (i > 0) {
+			columns += ", ";
+		}
+		columns += QuoteIdentifier(schema.GetFieldName(i));
+		plan.column_names.emplace_back(schema.GetFieldName(i));
+		plan.types.push_back(schema.GetFieldType(i));
+	}
+	plan.query = "INSERT INTO " + std::string(table) + " (" + columns + ") SELECT * FROM " + plan.buffer_name;
+	return plan;
+}
+
+} // namespace
+
+Appender::Appender(Connection &conn, std::string_view table) {
+	auto plan = PlanTableAppender(conn, table);
+	Initialize(conn, plan.query, std::move(plan.types), plan.buffer_name, plan.column_names);
+}
+
+Appender::~Appender() {
+	// Frees the buffer without flushing. The replacement scan outlives this object and stays registered on the
+	// connection, so the shared block survives; nulling the collection makes the scan decline from here on.
+	if (buffer) {
+		append_state.reset();
+		buffer->collection.reset();
+	}
+}
+
+void Appender::ResetBuffer() {
+	// Drop the append state first: it references the segments the clear releases.
+	append_state.reset();
+	buffer->collection->Clear();
+	try {
+		append_state = std::make_unique<ColumnDataCollection::AppendState>(buffer->collection->CreateAppendState());
+	} catch (...) {
+		broken = true;
+		throw;
+	}
+}
+
+void Appender::AppendChunk(DataChunk &chunk) {
+	if (broken) {
+		throw InvalidInputException("the appender is broken after a failed buffer operation; Clear or destroy it");
+	}
+	try {
+		// The append validates the chunk's columns against the buffer and refuses a mismatch before copying.
+		buffer->collection->Append(*append_state, chunk);
+	} catch (const Exception &ex) {
+		// A validation refusal leaves the buffer untouched; anything else may have copied part of the chunk.
+		if (ex.GetCode() != DUCKDB_V2_ERROR_INPUT_INVALID) {
+			broken = true;
+		}
+		throw;
+	} catch (...) {
+		broken = true;
+		throw;
+	}
+}
+
+void Appender::Flush() {
+	if (broken) {
+		throw InvalidInputException("the appender is broken after a failed buffer operation; Clear or destroy it");
+	}
+	if (buffer->collection->GetRowCount() == 0) {
+		return;
+	}
+	try {
+		connection->Execute(*statement).Drain();
+	} catch (const Exception &ex) {
+		// A busy connection or an interrupted run keeps the rows so the flush can be retried; any other failure drops
+		// them, so a retry does not re-run the same failing statement over the same rows.
+		if (ex.GetCode() != DUCKDB_V2_ERROR_RESOURCE_IN_USE && ex.GetCode() != DUCKDB_V2_ERROR_RUNTIME_INTERRUPT) {
+			ResetBuffer();
+		}
+		throw;
+	} catch (...) {
+		ResetBuffer();
+		throw;
+	}
+	ResetBuffer();
+}
+
+void Appender::Clear() {
+	ResetBuffer();
+	broken = false;
 }
 
 } // namespace cxx

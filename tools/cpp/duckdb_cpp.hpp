@@ -76,6 +76,7 @@ template <class CTX>
 class TypeBuilder;
 class CustomType;
 class CastFunction;
+class ReplacementScan;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -2224,8 +2225,15 @@ public:
 	auto GetRowCount() const -> idx_t;
 
 	/// Drops all rows and releases their memory, keeping the column types; the collection is immediately appendable
-	/// again. Outstanding append and scan states are invalidated: create new ones.
+	/// again. Outstanding append and scan states are invalidated: create new ones. Prefer `Clear` when the collection
+	/// is about to be refilled.
 	auto Reset() -> void;
+
+	/// Drops all rows but keeps their memory, so the next appends write into buffers that are already allocated;
+	/// prefer it over `Reset` when the collection is refilled repeatedly. The column types are unchanged and the
+	/// collection is immediately appendable again. Outstanding append and scan states are invalidated: create new
+	/// ones.
+	auto Clear() -> void;
 
 	/// Moves another collection's rows to the end of this one, consuming it. The source must have the same column
 	/// types, and both collections must come from the same database -- the rows keep their original buffers rather
@@ -2271,6 +2279,103 @@ public:
 
 private:
 	explicit ColumnDataCollection(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Appender
+//----------------------------------------------------------------------------------------------------------------------
+
+/// Buffers rows on the client side and writes them to the database in bulk.
+/// An appender pairs a `ColumnDataCollection` with a statement that reads it: `AppendChunk` fills the buffer without
+/// touching the database, and `Flush` runs the statement over everything buffered so far and empties the buffer.
+/// Many small inserts thereby become one bulk insert.
+///
+/// The appender is built on the public API alone: a connection-scoped `ReplacementScan` exposes the buffer to the
+/// statement under a name. The same can be done by hand when a different shape is needed.
+///
+/// An appender is bound to the connection it was created on and can only be flushed there. It is not thread-safe:
+/// append from one thread at a time, or give each thread its own appender. It must not outlive its `Connection`.
+///
+/// Destroying an appender does not flush: rows buffered but not flushed are dropped. Since replacement scans cannot
+/// be unregistered, every appender leaves an inert scan registered on its connection; create appenders once and
+/// reuse them rather than creating one per batch.
+class Appender {
+public:
+	/// Creates an appender that inserts into `table`.
+	/// The buffer takes the table's columns, in order, with their types, resolved once at construction: the appender
+	/// keeps targeting that table even if the search path changes later.
+	/// @param conn The connection to buffer against and flush on.
+	/// @param table The table to append to, optionally qualified.
+	/// @throws Exception When the table cannot be resolved.
+	/// @note A table with generated columns needs the query constructor instead: this one lists every column, and
+	/// the engine refuses an INSERT that names a generated one.
+	Appender(Connection &conn, std::string_view table);
+
+	/// Creates an appender that flushes by running `query`, which reads the buffer as a table named `buffer_name`.
+	/// Use this when a plain INSERT of every column is not what is needed: a subset of columns, an UPDATE or MERGE
+	/// driven by the buffer, or an INSERT with an ON CONFLICT clause.
+	/// @param conn The connection to buffer against and flush on.
+	/// @param query Exactly one statement, referring to the buffer by `buffer_name`.
+	/// @param column_types One type per buffer column, at least one.
+	/// @param buffer_name The name `query` reads the buffer under. Must be unique among the appenders on this
+	/// connection: the first one registered claims the name.
+	/// @param column_names Names for the buffer's columns; empty names them col1..colN.
+	/// @throws InvalidInputException When `column_types` is empty, or `query` is not exactly one statement.
+	Appender(Connection &conn, std::string_view query, std::vector<LogicalType> column_types,
+	         std::string_view buffer_name, const std::vector<std::string> &column_names = {});
+
+	Appender(const Appender &) = delete;
+	Appender &operator=(const Appender &) = delete;
+	Appender(Appender &&) noexcept = default;
+	Appender &operator=(Appender &&) noexcept = default;
+
+	/// Drops whatever is still buffered. Does not flush.
+	~Appender();
+
+	/// The buffer's column types, in order. Build a chunk over these to fill and append, e.g.
+	/// `DataChunk chunk(appender.ColumnTypes())`. Valid for the appender's lifetime.
+	auto ColumnTypes() const -> const std::vector<LogicalType> & {
+		return types;
+	}
+
+	/// Buffers a whole chunk. Its column types must equal `ColumnTypes()` exactly; a mismatch is refused before
+	/// anything is copied.
+	/// @throws InvalidInputException When the chunk's columns do not match, or a previous buffer operation failed.
+	void AppendChunk(DataChunk &chunk);
+
+	/// Runs the statement over everything buffered and empties the buffer, keeping its memory for the next batch.
+	/// Does nothing when the buffer is empty.
+	/// @throws Exception When the statement fails. The rows are kept when the connection was busy or the run was
+	/// interrupted, so the flush can be retried; any other failure drops them.
+	void Flush();
+
+	/// Empties the buffer without running the statement, and recovers from a failed buffer operation.
+	void Clear();
+
+private:
+	// Shared with the replacement scan that exposes the buffer. The scan outlives the appender, since scans cannot be
+	// unregistered, so it holds this by shared_ptr; the appender's destructor nulls the collection to make it decline.
+	struct Buffer {
+		std::string name;
+		std::vector<std::string> column_names;
+		std::unique_ptr<ColumnDataCollection> collection;
+	};
+
+	// The shared body of both constructors.
+	void Initialize(Connection &conn, const std::string &query, std::vector<LogicalType> column_types,
+	                const std::string &buffer_name, const std::vector<std::string> &column_names);
+	void ResetBuffer();
+
+	// The connection the buffer's replacement scan is registered on, and the only one a flush can run on.
+	Connection *connection = nullptr;
+	std::vector<LogicalType> types;
+	std::shared_ptr<Buffer> buffer;
+	// The statement, parsed once and re-executed per flush, and the append state, recreated after every reset.
+	std::unique_ptr<SqlStatement> statement;
+	std::unique_ptr<ColumnDataCollection::AppendState> append_state;
+	// Set when a buffer operation failed mid-flight, leaving the buffered rows indeterminate: appends and flushes
+	// refuse until Clear recovers.
+	bool broken = false;
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -3744,6 +3849,146 @@ public:
 
 	private:
 		ExecInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Replacement Scan
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A user-defined replacement scan, built up with the setters and made live with `Register`.
+/// Create one against the `Connection`, `Database` or `Extension` it will be registered on, set its callback and
+/// user data, then call `Register`. The scan object may be destroyed after registration; the registered scan lives
+/// on until its scope ends.
+///
+/// The binder consults replacement scans when a table name cannot be resolved in the catalog; this is what makes
+/// `SELECT * FROM 'file.parquet'` work. The callback inspects the unresolved name and either claims it, by naming a
+/// table function to call, a `ColumnDataCollection` to read or a query to run instead, or declines it by claiming
+/// nothing, which lets the next registered scan try. When no scan claims the name, the usual "table does not exist"
+/// error is raised. A callback reports failure by throwing; the exception surfaces as the query's error.
+///
+/// Scope follows the constructor. A scan created against a `Connection` is visible only to that connection, is
+/// released when it closes, and is consulted before every database-wide scan, including the built-in file scans. A
+/// scan created against a `Database` or `Extension` is visible to every connection to that database and lives until
+/// it closes; registering one is not thread-safe against queries binding on other connections, so do it during
+/// extension load or before issuing queries. A registered scan cannot be unregistered.
+class ReplacementScan final : public detail::Handle<ReplacementScan> {
+	friend detail::Factory;
+
+public:
+	class Input;
+
+	/// Called once per table reference the catalog could not resolve; claims it or declines it. Required.
+	using Callback = void (*)(Input &input);
+
+	ReplacementScan(ReplacementScan &&) noexcept = default;
+	ReplacementScan &operator=(ReplacementScan &&) noexcept = default;
+
+	~ReplacementScan() override;
+
+	/// Creates a scan that `Register` adds to the connection, visible only there.
+	static auto Create(const Connection &conn) -> ReplacementScan;
+	/// Creates a scan that `Register` adds to the database, visible to every connection.
+	static auto Create(const Database &db) -> ReplacementScan;
+	/// Creates a scan that `Register` adds through the loading extension, visible to every connection.
+	static auto Create(const Extension &extension) -> ReplacementScan;
+
+	auto SetCallback(Callback callback) & -> ReplacementScan &;
+
+	/// Constructs user data of type `T`, carried by the registered scan and freed when its scope ends; read it from
+	/// the callback via `Input::GetUserData<T>`. Consumed by `Register`.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> ReplacementScan & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	/// Registers the scan on the target it was created against. Scans are consulted in registration order within
+	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
+	/// be registered only once.
+	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
+	auto Register() -> void;
+
+private:
+	explicit ReplacementScan(void *impl);
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	Callback callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the callback works with. Borrowed, valid only for the callback duration, as are the name views it hands
+	/// out.
+	class Input {
+		friend detail::Factory;
+
+	public:
+		/// The user data set via `ReplacementScan::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The catalog qualifier of the unresolved reference, empty when it carries none.
+		auto GetCatalogName() const -> std::string_view;
+
+		/// The schema qualifier of the unresolved reference, empty when it carries none.
+		auto GetSchemaName() const -> std::string_view;
+
+		/// The table name of the unresolved reference, as written in the query; for a file-backed reference, the path.
+		auto GetTableName() const -> std::string_view;
+
+		/// Claims the reference by naming a table function to call instead; its arguments are then supplied with
+		/// `AddArgument` and `AddNamedArgument`. The name is unqualified and matched case-insensitively, and is not
+		/// resolved here: an unknown function fails later, when the replacement is bound. The three claim forms,
+		/// `SetFunctionName`, `SetCollection` and `SetSubquery`, are mutually exclusive.
+		/// @throws InvalidInputException When the name is empty, or a different claim form was already used.
+		auto SetFunctionName(std::string_view name) -> void;
+
+		/// Appends a positional argument to the claimed table function. Positional arguments are passed in the order
+		/// they are added, before any named ones.
+		/// @throws InvalidInputException Unless `SetFunctionName` was called first.
+		auto AddArgument(const Value &value) -> void;
+
+		/// Appends a named argument to the claimed table function, the equivalent of `name := value`.
+		/// @throws InvalidInputException Unless `SetFunctionName` was called first.
+		auto AddNamedArgument(std::string_view name, const Value &value) -> void;
+
+		/// Claims the reference by naming a collection to read instead. The collection is borrowed: it must stay
+		/// alive, and must not be cleared, reset or destroyed, for as long as any result reading it is live. The three
+		/// claim forms, `SetFunctionName`, `SetCollection` and `SetSubquery`, are mutually exclusive.
+		/// @param collection The collection to read.
+		/// @param column_names Names for its columns, in order; empty names them col1..colN.
+		/// @throws InvalidInputException When the names do not match the collection's columns, or a different claim
+		/// form was already used.
+		auto SetCollection(const ColumnDataCollection &collection, const std::vector<std::string> &column_names = {})
+		    -> void;
+
+		/// Claims the reference by naming a query to run instead. The text is parsed here and must contain exactly
+		/// one SELECT statement. The three claim forms, `SetFunctionName`, `SetCollection` and `SetSubquery`, are
+		/// mutually exclusive.
+		/// @throws Exception When the text does not parse, or is not a single SELECT.
+		/// @throws InvalidInputException When a different claim form was already used.
+		auto SetSubquery(std::string_view sql) -> void;
+
+		/// Sets the alias the claimed replacement is bound under. Optional: an alias written in the query takes
+		/// precedence, and without either the reference's own table name is used.
+		auto SetAlias(std::string_view alias) -> void;
+
+		/// The binding context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		Input(void *args, void *context) : args(args), context(context) {
 		}
 
 		void *args;

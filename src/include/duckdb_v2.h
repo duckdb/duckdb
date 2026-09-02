@@ -1188,8 +1188,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create_with_contex
  * Drops all buffered rows, keeping the column types.
  *
  * Drops all buffered rows and releases their memory. The column types are unchanged and the collection is immediately
- * appendable again. Outstanding append and scan states are invalidated; create new ones. Must not be called while a
- * live result executes over the collection, because that result's scan borrows the collection's buffers.
+ * appendable again. Existing append and scan states are invalidated. Use `duckdb_v2_column_data_collection_clear()`
+ * instead to keep the memory for the next appends.
  *
  * history:
  * - stable: v2.0.0
@@ -1199,6 +1199,24 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create_with_contex
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_reset(duckdb_v2_column_data_collection_handle collection,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Drops all buffered rows, keeping the column types and the memory.
+ *
+ * Like `duckdb_v2_column_data_collection_reset()`, but the buffers are retained rather than released, so the next
+ * appends write into memory that is already allocated. Use this when the collection is refilled repeatedly. The column
+ * types are unchanged and the collection is immediately appendable again. Existing append and scan states are
+ * invalidated.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param collection The collection to clear.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_clear(duckdb_v2_column_data_collection_handle collection,
                                                                     duckdb_v2_error_info_handle *err);
 
 /*!
@@ -4815,6 +4833,412 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_get_total_rows_to_process(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_destroy(duckdb_v2_query_progress_handle *progress);
 
 /* --- Struct definitions for connection --- */
+
+/* ============================================================================
+ * MODULE: replacement scan
+ * ============================================================================ */
+
+/* --- Enums for replacement scan --- */
+
+/* --- Struct forward declarations for replacement scan --- */
+
+/* --- Types for replacement scan --- */
+
+/*!
+ * An owned opaque handle to a replacement scan being built. Created with
+ * `duckdb_v2_replacement_scan_create_with_connection()`, `duckdb_v2_replacement_scan_create_with_database()` or
+ * `duckdb_v2_replacement_scan_create_with_extension()`, configured with `duckdb_v2_replacement_scan_set_callback()` and
+ * `duckdb_v2_replacement_scan_set_user_data()`, made available with `duckdb_v2_replacement_scan_register()`, and
+ * destroyed with `duckdb_v2_replacement_scan_destroy()`.
+ */
+typedef struct _duckdb_v2_replacement_scan {
+	void *internal_ptr;
+} * duckdb_v2_replacement_scan_handle;
+
+/*!
+ * A borrowed opaque handle to the arguments supplied to a replacement scan when the binder consults it. The callback
+ * receives this handle and can use it to inspect the unresolved name and to claim it by naming what to read instead.
+ * Valid only for the duration of the callback, as are the name views obtained through it.
+ */
+typedef struct _duckdb_v2_replacement_scan_info {
+	void *internal_ptr;
+} * duckdb_v2_replacement_scan_info_handle;
+
+/* --- Constants for replacement scan --- */
+
+/* --- Function pointer typedefs for replacement scan --- */
+
+typedef void (*duckdb_v2_replacement_scan_callback_fn)(duckdb_v2_replacement_scan_info_handle info,
+                                                       duckdb_v2_context_handle context,
+                                                       duckdb_v2_error_info_handle *err);
+
+/* --- Functions for replacement scan --- */
+
+/*!
+ * Creates a new replacement scan that will be registered on the connection.
+ *
+ * The scan is visible only to queries on this connection and is released when the connection closes. It is consulted
+ * before every database-wide scan, so it can claim a name that a built-in scan would otherwise take. The scan starts
+ * out empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
+ * `duckdb_v2_replacement_scan_set_user_data()`, then make it available with `duckdb_v2_replacement_scan_register()`.
+ * The caller owns the returned handle and must destroy it with `duckdb_v2_replacement_scan_destroy()`, also after
+ * registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param connection The connection to create the scan on.
+ * @param scan On success, receives the newly created replacement scan. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_connection(duckdb_v2_connection_handle connection,
+                                                                               duckdb_v2_replacement_scan_handle *scan,
+                                                                               duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a new replacement scan that will be registered on the database.
+ *
+ * The scan is visible to every connection to the database and lives until the database closes. The scan starts out
+ * empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
+ * `duckdb_v2_replacement_scan_set_user_data()`, then make it available with `duckdb_v2_replacement_scan_register()`.
+ * The caller owns the returned handle and must destroy it with `duckdb_v2_replacement_scan_destroy()`, also after
+ * registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param database The database to create the scan on.
+ * @param scan On success, receives the newly created replacement scan. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_database(duckdb_v2_database_handle database,
+                                                                             duckdb_v2_replacement_scan_handle *scan,
+                                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a new replacement scan that will be registered on the loading extension's database.
+ *
+ * Use this from an extension load callback, where an extension handle is available. The scan is visible to every
+ * connection to that database and lives until the database closes. The scan starts out empty: configure it with
+ * `duckdb_v2_replacement_scan_set_callback()` and optionally `duckdb_v2_replacement_scan_set_user_data()`, then make it
+ * available with `duckdb_v2_replacement_scan_register()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_replacement_scan_destroy()`, also after registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The extension to create the scan on.
+ * @param scan On success, receives the newly created replacement scan. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_extension(duckdb_v2_extension_handle extension,
+                                                                              duckdb_v2_replacement_scan_handle *scan,
+                                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the callback of the replacement scan.
+ *
+ * The callback is invoked during query planning for each table reference the catalog could not resolve. It can inspect
+ * the unresolved name via `duckdb_v2_replacement_scan_get_table_name()` and its qualifiers, and claim the reference via
+ * `duckdb_v2_replacement_scan_set_function_name()`, `duckdb_v2_replacement_scan_set_collection()` or
+ * `duckdb_v2_replacement_scan_set_subquery()`; returning without claiming declines it. The context passed to the
+ * callback may be used to read settings, but not to run queries. A callback must be set before registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param scan The scan to set the callback of.
+ * @param callback The callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_callback(duckdb_v2_replacement_scan_handle scan,
+                                                                     duckdb_v2_replacement_scan_callback_fn callback,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets arbitrary user data on the replacement scan.
+ *
+ * Associates an opaque pointer with the scan, retrievable from the callback via
+ * `duckdb_v2_replacement_scan_get_user_data()`. The opaque handle bundles the pointer with an optional destructor,
+ * invoked when the data is no longer needed, at the latest when the scan's scope ends. The callback may be invoked from
+ * several connections at once, so the data must be safe to read concurrently.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param scan The scan to set the user data of.
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_user_data(duckdb_v2_replacement_scan_handle scan,
+                                                                      duckdb_v2_opaque *data,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the user data set via `duckdb_v2_replacement_scan_set_user_data()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_user_data(duckdb_v2_replacement_scan_info_handle info,
+                                                                      void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the catalog name of the unresolved reference.
+ *
+ * Returns the empty view `{NULL, 0}` when the reference carries no catalog qualifier. The name is borrowed and valid
+ * only for the duration of the callback.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The info handle.
+ * @param name Receives the borrowed catalog name, or the empty view when the reference carries no catalog qualifier.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_catalog_name(duckdb_v2_replacement_scan_info_handle info,
+                                                                         duckdb_v2_identifier_t *name,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the schema name of the unresolved reference.
+ *
+ * Returns the empty view `{NULL, 0}` when the reference carries no schema qualifier. The name is borrowed and valid
+ * only for the duration of the callback.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The info handle.
+ * @param name Receives the borrowed schema name, or the empty view when the reference carries no schema qualifier.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_schema_name(duckdb_v2_replacement_scan_info_handle info,
+                                                                        duckdb_v2_identifier_t *name,
+                                                                        duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the table name of the unresolved reference.
+ *
+ * This is the name as written in the query, which for a file-backed reference is the path with the quotes stripped.
+ * Never the empty view. The name is borrowed and valid only for the duration of the callback.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The info handle.
+ * @param name Receives the borrowed table name.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_get_table_name(duckdb_v2_replacement_scan_info_handle info,
+                                                                       duckdb_v2_identifier_t *name,
+                                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Claims the reference by naming a table function to read instead.
+ *
+ * Arguments to the function are added with `duckdb_v2_replacement_scan_add_argument()` and
+ * `duckdb_v2_replacement_scan_add_named_argument()`. The name is borrowed and copied. It is matched case-insensitively
+ * and is never split on ".", so it always names an unqualified function; an empty name results in an error. The name is
+ * not resolved here: an unknown function fails later, when the replacement is bound. Calling this again replaces the
+ * previous name and keeps the arguments added so far.
+ *
+ * The three claim forms, `duckdb_v2_replacement_scan_set_function_name()`,
+ * `duckdb_v2_replacement_scan_set_collection()` and `duckdb_v2_replacement_scan_set_subquery()`, are mutually
+ * exclusive: claiming the reference through a second, different form results in an error.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The info handle.
+ * @param name The name of the table function to read instead. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_function_name(duckdb_v2_replacement_scan_info_handle info,
+                                                                          duckdb_v2_identifier_t name,
+                                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Appends a positional argument to the claimed table function.
+ *
+ * Positional arguments are passed in the order they are added, before any named ones. The value is borrowed and copied,
+ * so the caller may destroy it after the call. Requires `duckdb_v2_replacement_scan_set_function_name()` to have been
+ * called first; otherwise the call results in an error.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The info handle.
+ * @param value The argument value. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_argument(duckdb_v2_replacement_scan_info_handle info,
+                                                                     duckdb_v2_value_handle value,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Appends a named argument to the claimed table function.
+ *
+ * Equivalent to writing `name := value` at the call site. The name and the value are borrowed and copied, so the caller
+ * may destroy the value after the call. Requires `duckdb_v2_replacement_scan_set_function_name()` to have been called
+ * first; otherwise the call results in an error.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The info handle.
+ * @param name The name of the parameter to bind the value to. Borrowed and copied.
+ * @param value The argument value. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_named_argument(duckdb_v2_replacement_scan_info_handle info,
+                                                                           duckdb_v2_identifier_t name,
+                                                                           duckdb_v2_value_handle value,
+                                                                           duckdb_v2_error_info_handle *err);
+
+/*!
+ * Claims the reference by naming a column data collection to read instead.
+ *
+ * The collection is borrowed, not copied: the caller keeps ownership and must keep it alive, and must not clear, reset
+ * or destroy it, for as long as any result reading it is live, since the result scans its buffers directly. A prepared
+ * statement holds on to the collection it was bound against, so destroy such statements before releasing the
+ * collection.
+ *
+ * By default the collection's columns are named col1..colN. Pass `column_names` to name them instead. When supplied,
+ * `column_count` must equal the collection's column count and no name may be empty; pass NULL and 0 for the default
+ * names.
+ *
+ * The three claim forms, `duckdb_v2_replacement_scan_set_function_name()`,
+ * `duckdb_v2_replacement_scan_set_collection()` and `duckdb_v2_replacement_scan_set_subquery()`, are mutually
+ * exclusive: claiming the reference through a second, different form results in an error.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The info handle.
+ * @param collection The collection to read instead. Borrowed; the caller keeps ownership and must keep it alive.
+ * @param column_names Optional. An array of `column_count` column names, in order. Pass NULL for the default names
+ * col1..colN.
+ * @param column_count The number of names in `column_names`. Must equal the collection's column count, or 0 for the
+ * default names.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_collection(
+    duckdb_v2_replacement_scan_info_handle info, duckdb_v2_column_data_collection_handle collection,
+    const duckdb_v2_identifier_t *column_names, idx_t column_count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Claims the reference by naming a query to read instead.
+ *
+ * The text is parsed at the call and must contain exactly one SELECT statement: a syntax error, several statements or a
+ * statement of another kind results in an error. The text is borrowed for the call only. Prefer
+ * `duckdb_v2_replacement_scan_set_function_name()` when a single table function call suffices, as it avoids the parse
+ * and keeps the plan flatter.
+ *
+ * The three claim forms, `duckdb_v2_replacement_scan_set_function_name()`,
+ * `duckdb_v2_replacement_scan_set_collection()` and `duckdb_v2_replacement_scan_set_subquery()`, are mutually
+ * exclusive: claiming the reference through a second, different form results in an error.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The info handle.
+ * @param sql The SELECT statement to read instead. Borrowed for the call only.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_scan_info_handle info,
+                                                                     duckdb_v2_str sql,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the alias the claimed replacement is bound under.
+ *
+ * Optional, and independent of the claim form. An alias written in the query takes precedence over this one; without
+ * either, the table name of the reference is used, which for a file-backed reference is the path. The alias is borrowed
+ * and copied.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The info handle.
+ * @param alias The alias to bind the replacement under. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_alias(duckdb_v2_replacement_scan_info_handle info,
+                                                                  duckdb_v2_identifier_t alias,
+                                                                  duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the replacement scan, making it consulted for names the catalog cannot resolve.
+ *
+ * The scan is registered on the target given at creation: the connection, the database or the loading extension's
+ * database. Registration requires a callback. Scans are consulted in registration order within their scope,
+ * connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan cannot be registered
+ * twice, and a registered scan cannot be unregistered: it lives until its scope ends. Registering a database-wide scan
+ * while queries are binding on other connections is not thread-safe; register from an extension load callback or before
+ * issuing queries. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_replacement_scan_destroy()`, which does not affect the registered scan.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param scan The scan to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_register(duckdb_v2_replacement_scan_handle scan,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys the replacement scan, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered scan.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param scan The scan to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_destroy(duckdb_v2_replacement_scan_handle *scan);
+
+/* --- Struct definitions for replacement scan --- */
 
 /* ============================================================================
  * MODULE: scalar

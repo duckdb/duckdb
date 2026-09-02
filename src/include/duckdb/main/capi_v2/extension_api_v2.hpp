@@ -877,6 +877,8 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_set_user_data)
 	(duckdb_v2_cast_function_handle function, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_clear)
+	(duckdb_v2_column_data_collection_handle collection, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_create_with_connection)
 	(duckdb_v2_connection_handle connection, duckdb_v2_custom_type_handle *type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_create_with_extension)
@@ -888,6 +890,42 @@ typedef struct {
 	(duckdb_v2_custom_type_handle type, duckdb_v2_logical_type_handle base_type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_set_name)
 	(duckdb_v2_custom_type_handle type, duckdb_v2_identifier_t name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_add_argument)
+	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_add_named_argument)
+	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_identifier_t name, duckdb_v2_value_handle value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create_with_connection)
+	(duckdb_v2_connection_handle connection, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create_with_database)
+	(duckdb_v2_database_handle database, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create_with_extension)
+	(duckdb_v2_extension_handle extension, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_replacement_scan_destroy)(duckdb_v2_replacement_scan_handle *scan);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_get_catalog_name)
+	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_get_schema_name)
+	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_get_table_name)
+	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_get_user_data)
+	(duckdb_v2_replacement_scan_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_register)
+	(duckdb_v2_replacement_scan_handle scan, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_set_alias)
+	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_identifier_t alias, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_set_callback)
+	(duckdb_v2_replacement_scan_handle scan, duckdb_v2_replacement_scan_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_set_collection)
+	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_column_data_collection_handle collection,
+	 const duckdb_v2_identifier_t *column_names, idx_t column_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_set_function_name)
+	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_identifier_t name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_set_subquery)
+	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_str sql, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_set_user_data)
+	(duckdb_v2_replacement_scan_handle scan, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -1266,12 +1304,30 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_cast_function_set_source_type = duckdb_v2_cast_function_set_source_type;
 	result.duckdb_v2_cast_function_set_target_type = duckdb_v2_cast_function_set_target_type;
 	result.duckdb_v2_cast_function_set_user_data = duckdb_v2_cast_function_set_user_data;
+	result.duckdb_v2_column_data_collection_clear = duckdb_v2_column_data_collection_clear;
 	result.duckdb_v2_custom_type_create_with_connection = duckdb_v2_custom_type_create_with_connection;
 	result.duckdb_v2_custom_type_create_with_extension = duckdb_v2_custom_type_create_with_extension;
 	result.duckdb_v2_custom_type_destroy = duckdb_v2_custom_type_destroy;
 	result.duckdb_v2_custom_type_register = duckdb_v2_custom_type_register;
 	result.duckdb_v2_custom_type_set_base_type = duckdb_v2_custom_type_set_base_type;
 	result.duckdb_v2_custom_type_set_name = duckdb_v2_custom_type_set_name;
+	result.duckdb_v2_replacement_scan_add_argument = duckdb_v2_replacement_scan_add_argument;
+	result.duckdb_v2_replacement_scan_add_named_argument = duckdb_v2_replacement_scan_add_named_argument;
+	result.duckdb_v2_replacement_scan_create_with_connection = duckdb_v2_replacement_scan_create_with_connection;
+	result.duckdb_v2_replacement_scan_create_with_database = duckdb_v2_replacement_scan_create_with_database;
+	result.duckdb_v2_replacement_scan_create_with_extension = duckdb_v2_replacement_scan_create_with_extension;
+	result.duckdb_v2_replacement_scan_destroy = duckdb_v2_replacement_scan_destroy;
+	result.duckdb_v2_replacement_scan_get_catalog_name = duckdb_v2_replacement_scan_get_catalog_name;
+	result.duckdb_v2_replacement_scan_get_schema_name = duckdb_v2_replacement_scan_get_schema_name;
+	result.duckdb_v2_replacement_scan_get_table_name = duckdb_v2_replacement_scan_get_table_name;
+	result.duckdb_v2_replacement_scan_get_user_data = duckdb_v2_replacement_scan_get_user_data;
+	result.duckdb_v2_replacement_scan_register = duckdb_v2_replacement_scan_register;
+	result.duckdb_v2_replacement_scan_set_alias = duckdb_v2_replacement_scan_set_alias;
+	result.duckdb_v2_replacement_scan_set_callback = duckdb_v2_replacement_scan_set_callback;
+	result.duckdb_v2_replacement_scan_set_collection = duckdb_v2_replacement_scan_set_collection;
+	result.duckdb_v2_replacement_scan_set_function_name = duckdb_v2_replacement_scan_set_function_name;
+	result.duckdb_v2_replacement_scan_set_subquery = duckdb_v2_replacement_scan_set_subquery;
+	result.duckdb_v2_replacement_scan_set_user_data = duckdb_v2_replacement_scan_set_user_data;
 	return result;
 }
 
