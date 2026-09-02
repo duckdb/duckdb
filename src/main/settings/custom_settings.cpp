@@ -927,12 +927,12 @@ void DisabledLogTypes::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 // Enable Profiling
 //===----------------------------------------------------------------------===//
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto parameter = StringUtil::Lower(input.ToString());
+	auto parameter = input.GetValue<Identifier>();
 
 	auto &config = ClientConfig::GetConfig(context);
 
 	// Validate the format name (throws on an unrecognized format).
-	QueryProfiler::Get(context).CreateProfiler(Identifier(parameter));
+	QueryProfiler::Get(context).CreateProfiler(parameter);
 
 	config.enable_profiler = true;
 
@@ -942,7 +942,7 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 		if (file_type != parameter && file_type != "txt") {
 			throw ParserException(
 			    "Profiler file type (%s) must either have the same file extension as the profiling output type (%s), "
-			    "or be a '.txt' file. Set 'profiling_output' to a '%s' file or run \"RESET profiling_output\" first.",
+			    "or be a '.txt' file. Set 'profiling_output' to a %s file or run \"RESET profiling_output\" first.",
 			    config.profiler_save_location, parameter, parameter);
 		}
 	}

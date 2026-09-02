@@ -33,7 +33,7 @@ struct ClientConfig {
 	bool enable_profiler = false;
 	//! The format to print query profiling information in (default: query_tree), if enabled.
 	//! This is the profiler format name passed to QueryProfiler::CreateProfiler.
-	string profiler_print_format = "query_tree";
+	Identifier profiler_print_format = "query_tree";
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;

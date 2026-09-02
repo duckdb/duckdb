@@ -90,8 +90,8 @@ unique_ptr<TreeRenderer> QueryProfiler::GetRenderer(const ProfilerPrintFormat &f
 	if (format == ProfilerPrintFormat::Default()) {
 		// use the configured default profiler format; "no_output" still renders as a query tree when explicitly asked
 		// for output (e.g. EXPLAIN ANALYZE), so fall back to it here
-		auto name = ClientConfig::GetConfig(context).profiler_print_format;
-		return CreateProfiler(name == "no_output" ? Identifier("query_tree") : Identifier(name));
+		auto &name = ClientConfig::GetConfig(context).profiler_print_format;
+		return CreateProfiler(name == "no_output" ? "query_tree" : name);
 	}
 	// resolve the explain format name (text/json/html/...) and create the matching renderer
 	return CreateProfiler(format.ToIdentifier());
