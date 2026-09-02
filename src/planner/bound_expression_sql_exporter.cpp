@@ -33,6 +33,32 @@ static LogicalPlanVerificationPath ChildPath(const LogicalPlanVerificationPath &
 	return child_path;
 }
 
+static bool IsAtOrBelowPath(const LogicalPlanVerificationPath &path, const LogicalPlanVerificationPath &candidate) {
+	if (candidate.root != path.root || candidate.components.size() < path.components.size()) {
+		return false;
+	}
+	for (idx_t component_index = 0; component_index < path.components.size(); component_index++) {
+		if (!(candidate.components[component_index] == path.components[component_index])) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool IsValidFunctionSQLExportResultForPath(const FunctionSQLExportResult &result,
+                                                  const LogicalPlanVerificationPath &path) {
+	if (!result.IsValid()) {
+		return false;
+	}
+	for (auto &issue : result.GetIssues()) {
+		if (issue.phase != LogicalPlanVerificationPhase::EXPRESSION_EXPORT || !issue.path ||
+		    !IsAtOrBelowPath(path, *issue.path)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static bool IsExpressionRootPath(const LogicalPlanVerificationPath &path) {
 	if (!path.IsValid()) {
 		return false;
@@ -635,7 +661,7 @@ private:
 			ScalarFunctionSQLExportInput input(function, expression.BindInfo().get(), std::move(children), path,
 			                                   identity);
 			auto result = recipe->callback(input);
-			if (!result.IsValid()) {
+			if (!IsValidFunctionSQLExportResultForPath(result, path)) {
 				return Failure(
 				    InternalInvariant(path, "Scalar function SQL export callback returned an invalid result",
 				                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
@@ -761,7 +787,7 @@ private:
 			    function, expression.BindInfo().get(), std::move(arguments), std::move(filter), std::move(order_bys),
 			    expression.GetAggregateType(), expression.StateExportMode(), path, identity);
 			auto result = recipe->callback(input);
-			if (!result.IsValid()) {
+			if (!IsValidFunctionSQLExportResultForPath(result, path)) {
 				return Failure(
 				    InternalInvariant(path, "Aggregate function SQL export callback returned an invalid result",
 				                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
