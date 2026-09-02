@@ -260,6 +260,11 @@ void RLEFinalizeCompress(CompressionState &state_p) {
 
 template <class T>
 struct RLEScanState : public SegmentScanState {
+	struct ValidatedRun {
+		T value;
+		rle_count_t length;
+	};
+
 	struct SegmentLayout {
 		//! Values read from the file and bounded to the value region.
 		unsafe_array_ptr<const T> values;
@@ -293,9 +298,9 @@ struct RLEScanState : public SegmentScanState {
 			return run_counts[entry_index];
 		}
 
-		T GetValue(idx_t entry_index) {
+		ValidatedRun GetRun(idx_t entry_index) {
 			ValidateThrough(entry_index);
-			return values[entry_index];
+			return {values[entry_index], run_counts[entry_index]};
 		}
 	};
 
@@ -323,8 +328,8 @@ struct RLEScanState : public SegmentScanState {
 		return layout.GetRunCount(entry_pos);
 	}
 
-	T GetCurrentValue() {
-		return layout.GetValue(entry_pos);
+	ValidatedRun GetCurrentRun() {
+		return layout.GetRun(entry_pos);
 	}
 
 	inline void SkipInternal(idx_t skip_count) {
@@ -335,7 +340,7 @@ struct RLEScanState : public SegmentScanState {
 
 			skip_count -= skip_amount;
 			position_in_entry += skip_amount;
-			if (ExhaustedRun()) {
+			if (ExhaustedRun(run_count)) {
 				ForwardToNextRun();
 			}
 		}
@@ -355,8 +360,8 @@ struct RLEScanState : public SegmentScanState {
 		position_in_entry = 0;
 	}
 
-	inline bool ExhaustedRun() {
-		return position_in_entry >= layout.GetRunCount(entry_pos);
+	inline bool ExhaustedRun(rle_count_t run_length) const {
+		return position_in_entry >= run_length;
 	}
 
 	BufferHandle handle;
@@ -404,13 +409,14 @@ static bool CanEmitConstantVector(idx_t position, idx_t run_length, idx_t scan_c
 }
 
 template <class T>
-static void RLEScanConstant(RLEScanState<T> &scan_state, idx_t scan_count, Vector &result) {
+static void RLEScanConstant(RLEScanState<T> &scan_state, const typename RLEScanState<T>::ValidatedRun &run,
+                            idx_t scan_count, Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	FlatVector::SetSize(result, count_t(scan_count));
 	auto result_data = ConstantVector::GetData<T>(result);
-	result_data[0] = scan_state.layout.values[scan_state.entry_pos];
+	result_data[0] = run.value;
 	scan_state.position_in_entry += scan_count;
-	if (scan_state.ExhaustedRun()) {
+	if (scan_state.ExhaustedRun(run.length)) {
 		scan_state.ForwardToNextRun();
 	}
 }
@@ -421,9 +427,10 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	// If we are scanning an entire Vector and it contains only a single run
-	if (CanEmitConstantVector<ENTIRE_VECTOR>(scan_state.position_in_entry,
-	                                         scan_state.layout.run_counts[scan_state.entry_pos], scan_count)) {
-		RLEScanConstant<T>(scan_state, scan_count, result);
+	auto current_run = scan_state.GetCurrentRun();
+	if (scan_state.position_in_entry < current_run.length &&
+	    CanEmitConstantVector<ENTIRE_VECTOR>(scan_state.position_in_entry, current_run.length, scan_count)) {
+		RLEScanConstant<T>(scan_state, current_run, scan_count, result);
 		return;
 	}
 
@@ -431,10 +438,10 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 
 	const idx_t result_end = result_offset + scan_count;
 	while (result_offset < result_end) {
-		rle_count_t run_end = scan_state.layout.run_counts[scan_state.entry_pos];
-		idx_t run_count = run_end - scan_state.position_in_entry;
+		auto run = scan_state.GetCurrentRun();
+		auto run_count = run.length - scan_state.position_in_entry;
 		idx_t remaining_scan_count = result_end - result_offset;
-		T element = scan_state.layout.values[scan_state.entry_pos];
+		T element = run.value;
 		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
 			for (idx_t i = 0; i < remaining_scan_count; i++) {
 				result_data[result_offset + i] = element;
@@ -472,9 +479,10 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	// If we are scanning an entire Vector and it contains only a single run we don't need to select at all
-	if (CanEmitConstantVector<true>(scan_state.position_in_entry, scan_state.layout.run_counts[scan_state.entry_pos],
-	                                vector_count)) {
-		RLEScanConstant<T>(scan_state, vector_count, result);
+	auto current_run = scan_state.GetCurrentRun();
+	if (scan_state.position_in_entry < current_run.length &&
+	    CanEmitConstantVector<true>(scan_state.position_in_entry, current_run.length, vector_count)) {
+		RLEScanConstant<T>(scan_state, current_run, vector_count, result);
 		return;
 	}
 
@@ -489,7 +497,7 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		// skip forward to the next index
 		scan_state.SkipInternal(next_idx - prev_idx);
 		// read the element
-		result_data.WriteValue(scan_state.layout.values[scan_state.entry_pos]);
+		result_data.WriteValue(scan_state.GetCurrentRun().value);
 		// move the next to the prev
 		prev_idx = next_idx;
 	}
@@ -616,7 +624,7 @@ void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 	scan_state.Skip(segment, NumericCast<idx_t>(row_id));
 
 	auto result_data = FlatVector::GetDataMutable<T>(result);
-	result_data[result_idx] = scan_state.GetCurrentValue();
+	result_data[result_idx] = scan_state.GetCurrentRun().value;
 }
 
 //===--------------------------------------------------------------------===//
