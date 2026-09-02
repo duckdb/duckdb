@@ -345,8 +345,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		outer_join_simplification.VisitOperator(*plan);
 	});
 
-
-
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
