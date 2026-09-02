@@ -22,3 +22,27 @@ statement error
 ALTER TABLE test DROP COLUMN i
 ----
 Catalog Error: Cannot drop this column: an index depends on a column
+
+# an index dropped in the current transaction no longer blocks dropping its column
+statement ok
+CREATE TABLE transactional_drop_index(i INTEGER, j INTEGER)
+
+statement ok
+CREATE INDEX transactional_drop_index_idx ON transactional_drop_index(j)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DROP INDEX transactional_drop_index_idx
+
+statement ok
+ALTER TABLE transactional_drop_index DROP COLUMN j
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM duckdb_columns() WHERE table_name = 'transactional_drop_index';
+----
+1
