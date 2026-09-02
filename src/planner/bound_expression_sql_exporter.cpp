@@ -634,23 +634,21 @@ private:
 		if (recipe->callback) {
 			ScalarFunctionSQLExportInput input(function, expression.BindInfo().get(), std::move(children), path,
 			                                   identity);
-			try {
-				auto result = recipe->callback(input);
-				if (result.HasError()) {
-					return result;
-				}
-				if (!result.GetValue()) {
-					return Failure(
-					    InternalInvariant(path, "Scalar function SQL export callback returned an empty expression",
-					                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
-				}
-				return result;
-			} catch (std::exception &ex) {
-				ErrorData error(ex);
-				return Failure(InternalInvariant(
-				    path, StringUtil::Format("Scalar function SQL export callback threw: %s", error.RawMessage()),
-				    LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
+			auto result = recipe->callback(input);
+			if (!result.IsValid()) {
+				return Failure(
+				    InternalInvariant(path, "Scalar function SQL export callback returned an invalid result",
+				                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
 			}
+			if (result.HasError()) {
+				return result;
+			}
+			if (!result.GetValue()) {
+				return Failure(
+				    InternalInvariant(path, "Scalar function SQL export callback returned an empty expression",
+				                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
+			}
+			return result;
 		}
 		return BoundExpressionSQLExportResult::Success(
 		    make_uniq<FunctionExpression>(recipe->name, std::move(children), nullptr, nullptr, false, false, false));
@@ -762,23 +760,21 @@ private:
 			AggregateFunctionSQLExportInput input(
 			    function, expression.BindInfo().get(), std::move(arguments), std::move(filter), std::move(order_bys),
 			    expression.GetAggregateType(), expression.StateExportMode(), path, identity);
-			try {
-				auto result = recipe->callback(input);
-				if (result.HasError()) {
-					return result;
-				}
-				if (!result.GetValue()) {
-					return Failure(
-					    InternalInvariant(path, "Aggregate function SQL export callback returned an empty expression",
-					                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
-				}
-				return result;
-			} catch (std::exception &ex) {
-				ErrorData error(ex);
-				return Failure(InternalInvariant(
-				    path, StringUtil::Format("Aggregate function SQL export callback threw: %s", error.RawMessage()),
-				    LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
+			auto result = recipe->callback(input);
+			if (!result.IsValid()) {
+				return Failure(
+				    InternalInvariant(path, "Aggregate function SQL export callback returned an invalid result",
+				                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
 			}
+			if (result.HasError()) {
+				return result;
+			}
+			if (!result.GetValue()) {
+				return Failure(
+				    InternalInvariant(path, "Aggregate function SQL export callback returned an empty expression",
+				                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
+			}
+			return result;
 		}
 		return BoundExpressionSQLExportResult::Success(make_uniq<FunctionExpression>(
 		    recipe->name, std::move(arguments), std::move(filter), std::move(order_bys), expression.IsDistinct(), false,

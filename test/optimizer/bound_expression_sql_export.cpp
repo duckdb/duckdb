@@ -56,6 +56,8 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/planner.hpp"
 
+#include <new>
+
 using namespace duckdb;
 
 namespace {
@@ -154,11 +156,20 @@ static void RequireIssue(const ExportResult &result, LogicalPlanVerificationIssu
                          const LogicalPlanVerificationPath &path) {
 	REQUIRE(result.IsValid());
 	REQUIRE(result.HasError());
+	REQUIRE_FALSE(result.IsSuccess());
 	REQUIRE(result.GetIssues().size() == 1);
 	INFO(result.GetIssues()[0].message);
 	REQUIRE(result.GetIssues()[0].code == code);
 	REQUIRE(result.GetIssues()[0].phase == LogicalPlanVerificationPhase::EXPRESSION_EXPORT);
 	REQUIRE(result.GetIssues()[0].path == optional<LogicalPlanVerificationPath>(path));
+}
+
+static void RequireInvalidHookResult(const ExportResult &result, const LogicalPlanVerificationPath &path,
+                                     const string &message) {
+	RequireIssue(result, LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
+	REQUIRE(result.GetIssues()[0].construct);
+	REQUIRE(result.GetIssues()[0].construct->type == LogicalPlanVerificationConstructType::FUNCTION);
+	REQUIRE(result.GetIssues()[0].message == message);
 }
 
 static void RequireFunctionIssue(const ExportResult &result, LogicalPlanVerificationIssueCode code,
@@ -444,6 +455,38 @@ static FunctionSQLExportResult ExportThrowingAggregate(AggregateFunctionSQLExpor
 	throw InvalidInputException("synthetic aggregate SQL export failure");
 }
 
+static FunctionSQLExportResult ExportBadAllocScalar(ScalarFunctionSQLExportInput &) {
+	throw std::bad_alloc();
+}
+
+static FunctionSQLExportResult EmptySQLExportFailure() {
+	return FunctionSQLExportResult::Failure({});
+}
+
+static FunctionSQLExportResult InvalidSQLExportFailure() {
+	vector<LogicalPlanVerificationIssue> issues;
+	LogicalPlanVerificationIssue issue;
+	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION;
+	issues.push_back(std::move(issue));
+	return FunctionSQLExportResult::Failure(std::move(issues));
+}
+
+static FunctionSQLExportResult ExportEmptyScalarFailure(ScalarFunctionSQLExportInput &) {
+	return EmptySQLExportFailure();
+}
+
+static FunctionSQLExportResult ExportEmptyAggregateFailure(AggregateFunctionSQLExportInput &) {
+	return EmptySQLExportFailure();
+}
+
+static FunctionSQLExportResult ExportInvalidScalarFailure(ScalarFunctionSQLExportInput &) {
+	return InvalidSQLExportFailure();
+}
+
+static FunctionSQLExportResult ExportInvalidAggregateFailure(AggregateFunctionSQLExportInput &) {
+	return InvalidSQLExportFailure();
+}
+
 static FunctionSQLExportResult ExportScalarFailure(ScalarFunctionSQLExportInput &input) {
 	LogicalPlanVerificationIssue issue;
 	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE;
@@ -451,6 +494,18 @@ static FunctionSQLExportResult ExportScalarFailure(ScalarFunctionSQLExportInput 
 	issue.path = input.path;
 	issue.construct = LogicalPlanVerificationConstructIdentity::ExportFeature("synthetic_scalar_export_failure");
 	issue.message = "Synthetic scalar SQL export hook rejected the expression";
+	vector<LogicalPlanVerificationIssue> issues;
+	issues.push_back(std::move(issue));
+	return FunctionSQLExportResult::Failure(std::move(issues));
+}
+
+static FunctionSQLExportResult ExportAggregateFailure(AggregateFunctionSQLExportInput &input) {
+	LogicalPlanVerificationIssue issue;
+	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE;
+	issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
+	issue.path = input.path;
+	issue.construct = LogicalPlanVerificationConstructIdentity::ExportFeature("synthetic_aggregate_export_failure");
+	issue.message = "Synthetic aggregate SQL export hook rejected the expression";
 	vector<LogicalPlanVerificationIssue> issues;
 	issues.push_back(std::move(issue));
 	return FunctionSQLExportResult::Failure(std::move(issues));
@@ -1443,6 +1498,9 @@ TEST_CASE("Bound expression SQL export uses canonical read-only function hooks",
 	register_scalar(Identifier("missing_scalar_hook"), nullptr);
 	register_scalar(Identifier("malformed_scalar_hook"), ExportMalformedScalar);
 	register_scalar(Identifier("throwing_scalar_hook"), ExportThrowingScalar);
+	register_scalar(Identifier("bad_alloc_scalar_hook"), ExportBadAllocScalar);
+	register_scalar(Identifier("empty_scalar_failure_hook"), ExportEmptyScalarFailure);
+	register_scalar(Identifier("invalid_scalar_failure_hook"), ExportInvalidScalarFailure);
 	register_scalar(Identifier("failing_scalar_hook"), ExportScalarFailure);
 
 	auto register_aggregate = [&](const Identifier &name, aggregate_function_sql_export_t callback) {
@@ -1457,6 +1515,9 @@ TEST_CASE("Bound expression SQL export uses canonical read-only function hooks",
 	register_aggregate(Identifier("missing_sum_hook"), nullptr);
 	register_aggregate(Identifier("malformed_sum_hook"), ExportMalformedAggregate);
 	register_aggregate(Identifier("throwing_sum_hook"), ExportThrowingAggregate);
+	register_aggregate(Identifier("empty_sum_failure_hook"), ExportEmptyAggregateFailure);
+	register_aggregate(Identifier("invalid_sum_failure_hook"), ExportInvalidAggregateFailure);
+	register_aggregate(Identifier("failing_sum_hook"), ExportAggregateFailure);
 	loader.RefreshSearchPath(*connection.context);
 	connection.BeginTransaction();
 
@@ -1516,8 +1577,15 @@ TEST_CASE("Bound expression SQL export uses canonical read-only function hooks",
 	RequireIssue(BoundExpressionSQLExporter::Export(*malformed_scalar, context),
 	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, root_path);
 	auto throwing_scalar = bind_scalar("throwing_scalar_hook");
-	RequireIssue(BoundExpressionSQLExporter::Export(*throwing_scalar, context),
-	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, root_path);
+	REQUIRE_THROWS_AS(BoundExpressionSQLExporter::Export(*throwing_scalar, context), InvalidInputException);
+	auto bad_alloc_scalar = bind_scalar("bad_alloc_scalar_hook");
+	REQUIRE_THROWS_AS(BoundExpressionSQLExporter::Export(*bad_alloc_scalar, context), std::bad_alloc);
+	auto empty_scalar_failure = bind_scalar("empty_scalar_failure_hook");
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*empty_scalar_failure, context), root_path,
+	                         "Scalar function SQL export callback returned an invalid result");
+	auto invalid_scalar_failure = bind_scalar("invalid_scalar_failure_hook");
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*invalid_scalar_failure, context), root_path,
+	                         "Scalar function SQL export callback returned an invalid result");
 
 	auto modified_aggregate_plan =
 	    BindExportQuery(connection, "SELECT " + schema_name.GetIdentifierName() +
@@ -1566,8 +1634,20 @@ TEST_CASE("Bound expression SQL export uses canonical read-only function hooks",
 	RequireIssue(BoundExpressionSQLExporter::Export(*malformed_aggregate, context),
 	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, root_path);
 	auto throwing_aggregate = bind_aggregate("throwing_sum_hook");
-	RequireIssue(BoundExpressionSQLExporter::Export(*throwing_aggregate, context),
-	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, root_path);
+	REQUIRE_THROWS_AS(BoundExpressionSQLExporter::Export(*throwing_aggregate, context), InvalidInputException);
+	auto empty_aggregate_failure = bind_aggregate("empty_sum_failure_hook");
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*empty_aggregate_failure, context), root_path,
+	                         "Aggregate function SQL export callback returned an invalid result");
+	auto invalid_aggregate_failure = bind_aggregate("invalid_sum_failure_hook");
+	RequireInvalidHookResult(BoundExpressionSQLExporter::Export(*invalid_aggregate_failure, context), root_path,
+	                         "Aggregate function SQL export callback returned an invalid result");
+	auto failing_aggregate = bind_aggregate("failing_sum_hook");
+	auto aggregate_failure = BoundExpressionSQLExporter::Export(*failing_aggregate, context);
+	RequireIssue(aggregate_failure, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, root_path);
+	REQUIRE(aggregate_failure.GetIssues()[0].construct ==
+	        optional<LogicalPlanVerificationConstructIdentity>(
+	            LogicalPlanVerificationConstructIdentity::ExportFeature("synthetic_aggregate_export_failure")));
+	REQUIRE(aggregate_failure.GetIssues()[0].message == "Synthetic aggregate SQL export hook rejected the expression");
 
 	auto failing_scalar = bind_scalar("failing_scalar_hook");
 	auto first_comparison = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, std::move(scalar_copy),
@@ -1585,6 +1665,10 @@ TEST_CASE("Bound expression SQL export uses canonical read-only function hooks",
 	        LogicalPlanVerificationPath {LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION,
 	                                     {{LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, 1},
 	                                      {LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, 0}}});
+	REQUIRE(failed.GetIssues()[0].construct ==
+	        optional<LogicalPlanVerificationConstructIdentity>(
+	            LogicalPlanVerificationConstructIdentity::ExportFeature("synthetic_scalar_export_failure")));
+	REQUIRE(failed.GetIssues()[0].message == "Synthetic scalar SQL export hook rejected the expression");
 	connection.Rollback();
 }
 
