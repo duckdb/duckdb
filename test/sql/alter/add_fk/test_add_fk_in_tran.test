@@ -127,13 +127,12 @@ BEGIN TRANSACTION
 statement ok
 INSERT INTO fk4 VALUES (2, 999)
 
-statement ok
-ALTER TABLE fk4 ADD CONSTRAINT fk4_fk FOREIGN KEY (val) REFERENCES pk4(id)
-
 statement error
-commit
+ALTER TABLE fk4 ADD CONSTRAINT fk4_fk FOREIGN KEY (val) REFERENCES pk4(id)
 ----
-ROLLBACK
+
+statement ok
+commit
 
 statement ok
 DROP TABLE fk4
@@ -238,4 +237,41 @@ INSERT INTO self VALUES (6, 999)
 
 statement ok
 DROP TABLE self
+
+# Scenario #8: ALTER FK with uncommitted deleted PK 
+statement ok
+CREATE TABLE pk8 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk8 VALUES (1), (2)
+
+statement ok
+CREATE TABLE fk8 (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO fk8 VALUES (1, 1)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DELETE FROM pk8 where id = 2
+
+statement ok
+INSERT INTO fk8 VALUES (2, 2)
+
+statement error
+ALTER TABLE fk8 ADD CONSTRAINT fk8_fk FOREIGN KEY (val) REFERENCES pk8(id)
+----
+
+statement ok
+commit
+
+statement ok
+DROP TABLE fk8
+
+statement ok
+DROP TABLE pk8
+
+# Scenario #5: Rollback of ALTER FK - constraint should not be active
 

@@ -164,7 +164,7 @@ DROP TABLE pk1b
 #---------------------------------------------------------------------------
 # Scenario 2: DELETE PK row locally, committed FK rows reference it — should fail.
 # The committed FK row id=2 references pk id=2, which is deleted locally.
-# The ALTER must detect this dangling reference.
+# The ALTER must detect this dangling reference via the PK's local delete_indexes.
 #---------------------------------------------------------------------------
 
 statement ok
@@ -186,7 +186,7 @@ BEGIN
 statement ok
 DELETE FROM pk2 WHERE id = 2
 
-# The committed FK row id=2 now has a dangling reference.
+# The committed FK row id=2 now has a dangling reference; ALTER must detect it.
 statement error
 ALTER TABLE fk2 ADD FOREIGN KEY (id) REFERENCES pk2(id)
 ----
