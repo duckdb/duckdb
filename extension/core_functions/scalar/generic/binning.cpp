@@ -193,13 +193,13 @@ struct EquiWidthBinsDouble {
 			// we allow for more bins when doing nice rounding since the bin count is approximate
 			bin_count *= 2;
 		}
-		if (step == 0) {
+
+		const double round_multiplication = 10 / step_power_of_ten;
+		if (max - step >= max || (nice_rounding && !Value::IsFinite(round_multiplication))) {
 			// the span is too small to compute a step size - return only the max boundary
 			result.push_back(max);
 			return result;
 		}
-
-		const double round_multiplication = 10 / step_power_of_ten;
 		for (double bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			// because floating point addition adds inaccuracies, we add rounding at every step
 			double real_boundary = bin_boundary;

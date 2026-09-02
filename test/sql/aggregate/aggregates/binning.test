@@ -352,6 +352,21 @@ SELECT equi_width_bins(0.0, 5e-324, 1000000, true)
 ----
 [5e-324]
 
+query I
+SELECT equi_width_bins(1.0, 1.0000000000000002, 3, false)
+----
+[1.0000000000000002]
+
+query I
+SELECT equi_width_bins(1.0, 1.0000000000000002, 3, true)
+----
+[1.0000000000000002]
+
+query I
+SELECT equi_width_bins(0.0, 5e-324, 1, true)
+----
+[5e-324]
+
 statement error
 SELECT equi_width_bins(-0.0, -1.0, 5, true);
 ----
