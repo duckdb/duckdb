@@ -22,7 +22,7 @@ struct MatchStackFrame {
 	MatchStackFrame(match_frame_index_t frame_index, const Matcher &matcher, MatchState &state);
 	virtual ~MatchStackFrame() = default;
 
-	virtual void Execute(MatchStack &stack);
+	virtual void Execute(MatchStack &stack) = 0;
 	void SetResult(const MatcherResult &result);
 	bool HasResult() const;
 	MatcherResult GetResult() const;
@@ -49,6 +49,8 @@ public:
 	void PushChildFrame(MatchStackFrame &parent, const Matcher &matcher, MatchState &state);
 
 private:
+	static bool IsTerminalMatcher(const Matcher &matcher);
+	MatcherResult ExecuteTerminalMatcher(const Matcher &matcher, MatchState &state);
 	void PushFrame(const Matcher &matcher, MatchState &state);
 	void InitializeFrame(MatchStackFrame &frame);
 	void ExecuteFrame(MatchStackFrame &frame);

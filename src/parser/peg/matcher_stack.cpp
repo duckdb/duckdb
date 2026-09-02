@@ -10,10 +10,6 @@ MatchStackFrame::MatchStackFrame(match_frame_index_t frame_index_p, const Matche
     : frame_index(frame_index_p), matcher(matcher_p), match_state(state_p) {
 }
 
-void MatchStackFrame::Execute(MatchStack &) {
-	SetResult(matcher.MatchParseResultInternal(match_state));
-}
-
 void MatchStackFrame::SetResult(const MatcherResult &result) {
 	D_ASSERT(result_state == MatchResultState::NONE);
 	result_state = result.IsSuccess() ? MatchResultState::SUCCESS : MatchResultState::FAILURE;
@@ -54,6 +50,54 @@ MatcherResult MatchStackFrame::TakeChildResult() {
 	return MatcherResult::Success(parse_result);
 }
 
+bool MatchStack::IsTerminalMatcher(const Matcher &matcher) {
+	switch (matcher.Type()) {
+	case MatcherType::KEYWORD:
+	case MatcherType::VARIABLE:
+	case MatcherType::STRING_LITERAL:
+	case MatcherType::NUMBER_LITERAL:
+	case MatcherType::OPERATOR:
+	case MatcherType::END_OF_INPUT:
+		return true;
+	case MatcherType::OPTIONAL:
+	case MatcherType::CHOICE:
+	case MatcherType::LIST:
+	case MatcherType::REPEAT:
+		return false;
+	default:
+		throw InternalException("Unsupported matcher type in heap-based parser");
+	}
+}
+
+MatcherResult MatchStack::ExecuteTerminalMatcher(const Matcher &matcher, MatchState &state) {
+	D_ASSERT(IsTerminalMatcher(matcher));
+	state.rule = matcher.GetRule();
+	if (!state.packrat_cache || !matcher.IsPackratMemoized() || !matcher.GetPackratId().IsValid()) {
+		return matcher.MatchParseResultInternal(state);
+	}
+
+	auto token_index_before = state.token_iterator.Position();
+	auto cached_result = state.packrat_cache->Lookup(matcher, token_index_before);
+	if (cached_result) {
+		state.token_iterator.SetPosition(cached_result->token_index_after);
+		state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
+		if (cached_result->success) {
+			return MatcherResult::Success(cached_result->result);
+		}
+		return MatcherResult::Failure();
+	}
+
+	auto max_token_index_before = state.GetMaxTokenIndex();
+	auto result = matcher.MatchParseResultInternal(state);
+	ParserPackratEntry cache_entry;
+	cache_entry.success = result.IsSuccess();
+	cache_entry.token_index_after = state.token_iterator.Position();
+	cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
+	cache_entry.result = result.GetParseResult();
+	state.packrat_cache->Store(matcher, token_index_before, cache_entry);
+	return result;
+}
+
 void MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
 	state.rule = matcher.GetRule();
 	auto frame_index = frames.size();
@@ -76,8 +120,7 @@ void MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
 	case MatcherType::NUMBER_LITERAL:
 	case MatcherType::OPERATOR:
 	case MatcherType::END_OF_INPUT:
-		frames.push_back(make_uniq<MatchStackFrame>(frame_index, matcher, state));
-		break;
+		throw InternalException("Terminal matcher cannot create a heap-based parser frame");
 	default:
 		throw InternalException("Unsupported matcher type in heap-based parser");
 	}
@@ -87,6 +130,10 @@ void MatchStack::PushChildFrame(MatchStackFrame &parent, const Matcher &matcher,
 	D_ASSERT(!frames.empty());
 	D_ASSERT(frames.back()->frame_index == parent.frame_index);
 	D_ASSERT(!parent.HasChildResult());
+	if (IsTerminalMatcher(matcher)) {
+		parent.SetChildResult(ExecuteTerminalMatcher(matcher, state));
+		return;
+	}
 	PushFrame(matcher, state);
 }
 
@@ -138,13 +185,16 @@ MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
 
 MatcherResult MatchStack::ExecuteInternal(const Matcher &matcher, MatchState &state) {
 	D_ASSERT(frames.empty());
+	if (IsTerminalMatcher(matcher)) {
+		return ExecuteTerminalMatcher(matcher, state);
+	}
 	PushFrame(matcher, state);
 	while (!frames.empty()) {
 		auto &frame = *frames.back();
 		auto frame_count = frames.size();
 		ExecuteFrame(frame);
 		if (!frame.HasResult()) {
-			D_ASSERT(frames.size() > frame_count);
+			D_ASSERT(frames.size() > frame_count || frame.HasChildResult());
 			continue;
 		}
 		auto result = FinalizeFrame(frame);
