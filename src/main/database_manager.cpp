@@ -153,8 +153,12 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		// Start trying to attach.
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
-			// first check if it exists within this transaction
 			auto &meta_transaction = MetaTransaction::Get(context);
+			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+				// We just detached this alias. Returning the still-held object is the stale-handle
+				// bug. Break and try a new attach; the file lock will error if the txn still has it.
+				break;
+			}
 			if (auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name)) {
 				// it does! return it
 				return existing_db;
