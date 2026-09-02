@@ -2,6 +2,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/compression/compression_segment_reader.hpp"
 #include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -244,12 +245,25 @@ void RLEFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+[[noreturn]] static void ThrowRLECountOffsetInvalid() {
+	throw DataCorruptionException("Corrupted RLE segment: rle_count_offset is corrupted");
+}
+
 template <class T>
 struct RLEScanState : public SegmentScanState {
+	static uint64_t ReadRLECountOffset(const BufferHandle &handle, ColumnSegment &segment) {
+		auto reader = CompressionSegmentReader::FromSegment(handle, segment, "RLE segment");
+		auto rle_count_offset = reader.Read<uint64_t>();
+		if (rle_count_offset < RLEConstants::RLE_HEADER_SIZE || rle_count_offset > reader.Size()) {
+			ThrowRLECountOffsetInvalid();
+		}
+		return rle_count_offset;
+	}
+
 	explicit RLEScanState(BufferHandle handle_p, ColumnSegment &segment)
 	    : handle(std::move(handle_p)), entry_pos(0),
 	      position_in_entry(0),
-	      rle_count_offset(UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()))),
+	      rle_count_offset(ReadRLECountOffset(handle, segment)),
 	      data_pointer(
 	          reinterpret_cast<const T *>(handle.Ptr() + segment.GetBlockOffset() + RLEConstants::RLE_HEADER_SIZE)),
 	      index_pointer(
@@ -257,17 +271,9 @@ struct RLEScanState : public SegmentScanState {
 	      max_entry_pos(static_cast<idx_t>(reinterpret_cast<const_data_ptr_t>(handle.Ptr() + segment.GetBlockSize()) -
 	                                       reinterpret_cast<const_data_ptr_t>(index_pointer)) /
 	                    static_cast<idx_t>(sizeof(rle_count_t))) {
-		if (rle_count_offset < RLEConstants::RLE_HEADER_SIZE) {
-			//! This would make the index_pointer point into a region reserved for the header data
-			throw DataCorruptionException("Corrupted RLE segment: rle_count_offset is corrupted");
-		}
-		if (segment.GetBlockOffset() + rle_count_offset > segment.GetBlockSize()) {
-			//! This would make the index_pointer start outside of the segment
-			throw DataCorruptionException("Corrupted RLE segment: rle_count_offset is corrupted");
-		}
 		if (rle_count_offset > AlignValue(RLEConstants::RLE_HEADER_SIZE + max_entry_pos * sizeof(T))) {
 			//! This would make the indexing of the index_pointer[entry_pos] reach outside of the segment
-			throw DataCorruptionException("Corrupted RLE segment: rle_count_offset is corrupted");
+			ThrowRLECountOffsetInvalid();
 		}
 	}
 
@@ -306,7 +312,7 @@ struct RLEScanState : public SegmentScanState {
 	BufferHandle handle;
 	idx_t entry_pos;
 	idx_t position_in_entry;
-	const uint32_t rle_count_offset;
+	const uint64_t rle_count_offset;
 	//! If we are running a filter over the column - the runs that match the filter
 	unsafe_unique_array<bool> matching_runs;
 	idx_t matching_run_count = 0;
