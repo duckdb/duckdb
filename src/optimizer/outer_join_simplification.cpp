@@ -186,6 +186,12 @@ bool OuterJoinSimplification::HasRequiredColumns(const vector<ColumnBinding> &bi
 	return false;
 }
 
+void OuterJoinSimplification::EraseNullRequiredColumns(LogicalOperator &child) {
+	for (const auto &binding : child.GetColumnBindings()) {
+		null_required_columns.erase(binding);
+	}
+}
+
 void OuterJoinSimplification::MarkEliminatedNullColumns(const vector<ColumnBinding> &bindings) {
 	for (const auto &binding : bindings) {
 		eliminated_null_columns.insert(binding);
@@ -297,6 +303,7 @@ void OuterJoinSimplification::VisitInnerOrSemiJoin(LogicalComparisonJoin &join, 
 void OuterJoinSimplification::VisitOuterJoin(LogicalComparisonJoin &join, LogicalOperator &op) {
 	if (TryConvertLeftToAntiJoin(join)) {
 		AddRequiredColumns(join.conditions);
+		EraseNullRequiredColumns(*join.children[1]);
 		VisitOperatorChildren(op);
 		return;
 	}
@@ -308,6 +315,14 @@ void OuterJoinSimplification::VisitOuterJoin(LogicalComparisonJoin &join, Logica
 	}
 
 	AddRequiredColumns(join.conditions);
+	// NULL values in the NULL-extended side can be introduced by this join itself,
+	// so columns of that side are not guaranteed to be NULL below the join
+	if (join.join_type == JoinType::LEFT || join.join_type == JoinType::OUTER) {
+		EraseNullRequiredColumns(*join.children[1]);
+	}
+	if (join.join_type == JoinType::RIGHT || join.join_type == JoinType::OUTER) {
+		EraseNullRequiredColumns(*join.children[0]);
+	}
 	VisitOperatorChildren(op);
 }
 
