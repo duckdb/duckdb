@@ -364,7 +364,12 @@ jobs:
          run: |
            tmp_zip_dir="$(mktemp -d)"
            archive_path="$(pwd)/static-libs-windows-mingw.zip"
-           cp src/include/duckdb.h "${tmp_zip_dir}/"
+           cp \
+             src/include/duckdb.h \
+             src/include/duckdb_v2.h \
+             src/include/duckdb_extension.h \
+             src/include/duckdb_extension_v2.h \
+             "${tmp_zip_dir}/"
            find build/release/libs -type f -exec cp {} "${tmp_zip_dir}/" \;
            (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${archive_path}" ./*)
            rm -rf "${tmp_zip_dir}"
