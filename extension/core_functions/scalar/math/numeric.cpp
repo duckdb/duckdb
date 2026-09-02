@@ -904,8 +904,15 @@ inline T RoundDivide(T input, T power_of_ten) {
 	// power_of_ten is ten raised to the digits being dropped and is at least ten because the binder replaces round
 	// with ScalarFunction::NopFunction if the round would not drop digits
 	D_ASSERT(power_of_ten >= 10);
-	T quotient = UnsafeNumericCast<T>(input / power_of_ten);
-	T remainder = UnsafeNumericCast<T>(input % power_of_ten);
+	T quotient;
+	T remainder;
+	if constexpr (std::is_same<T, hugeint_t>::value) {
+		// hugeint division and modulo both run a full DivMod and discard half of the result
+		quotient = Hugeint::DivMod(input, power_of_ten, remainder);
+	} else {
+		quotient = UnsafeNumericCast<T>(input / power_of_ten);
+		remainder = UnsafeNumericCast<T>(input % power_of_ten);
+	}
 	if (remainder < 0) {
 		remainder = UnsafeNumericCast<T>(-remainder);
 	}
