@@ -15,6 +15,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 
 namespace duckdb {
 
@@ -156,6 +157,13 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				return existing_db;
 			}
 		}
+	}
+
+	// Name was detached in this transaction but the AttachedDatabase is still alive
+	// (used_databases). Re-ATTACH of that alias is the error Mytherin wanted, not DETACH.
+	if (MetaTransaction::Get(context).GetReferencedDatabase(info.name)) {
+		throw TransactionException("Cannot re-attach database %s in the same transaction that already used it",
+		                           info.name);
 	}
 
 	if (requires_tracking_attaches) {
