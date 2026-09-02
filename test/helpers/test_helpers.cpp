@@ -48,9 +48,17 @@ static string local_temp_dir_root_override; // --local-temp-dir-root ("" -> the 
 // set, not one per root: a remote root is env-var passthrough only -- unittest holds no credentials, so
 // it can never mkdir or reap one, and the local tree is the only thing with a lifecycle.
 static vector<string> run_created_levels;  // $ROOT..$RUN_ID
-static vector<string> test_created_levels; // $TEST_ID
 static vector<string> home_created_levels; // the HOME sandbox sibling
-static string active_test_leaf;            // currently-materialized $TEST_ID dir ("" when none)
+
+//! The $TEST_ID dir a test materialized, and the levels its path created. Keyed by TEST_ID rather
+//! than held in one global: test files can run concurrently, and every thread working on one test
+//! (a concurrentloop spawns several) has to find that test's entry.
+struct ActiveTestTempDir {
+	string leaf;
+	vector<string> created_levels;
+};
+static mutex active_test_lock;
+static unordered_map<string, ActiveTestTempDir> active_tests;
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -522,12 +530,20 @@ void DestroyTempDir(bool success) {
 // Fired at test end with THIS test's pass/fail. Only the $TEST_ID level is in scope -- $RUN_ID/$ROOT
 // were made by PrepareTempDir, so ReclaimLevels stops there.
 void DestroyTestTempDir(bool success) {
-	if (!active_test_leaf.empty() && DestroyFires(temp_dir_destroy, success)) {
-		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-		ReclaimLevels(*fs, active_test_leaf, test_created_levels);
+	ActiveTestTempDir entry;
+	{
+		lock_guard<mutex> guard(active_test_lock);
+		auto it = active_tests.find(ResolveTestId());
+		if (it == active_tests.end()) {
+			return;
+		}
+		entry = std::move(it->second);
+		active_tests.erase(it);
 	}
-	active_test_leaf.clear();
-	test_created_levels.clear();
+	if (!entry.leaf.empty() && DestroyFires(temp_dir_destroy, success)) {
+		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+		ReclaimLevels(*fs, entry.leaf, entry.created_levels);
+	}
 }
 
 // $ROOT/[RUN_ID]/[TEST_ID], materializing the $TEST_ID level on first request -- lazily, because the
@@ -535,14 +551,22 @@ void DestroyTestTempDir(bool success) {
 static string MaterializeLocalTestPath() {
 	string path = TreeTestPath(LocalRoot()).ToString();
 	string root = TreeRunIdRoot(LocalRoot()).ToString();
-	if (path != root && path != active_test_leaf) {
-		active_test_leaf = path;
-		test_created_levels.clear();
-		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-		if (!fs->DirectoryExists(path)) {
-			RecordAndCreateLevels(*fs, path, test_created_levels);
-		}
+	if (path == root) {
+		return path;
 	}
+	lock_guard<mutex> guard(active_test_lock);
+	auto test_id = ResolveTestId();
+	auto entry = active_tests.find(test_id);
+	if (entry != active_tests.end() && entry->second.leaf == path) {
+		return path;
+	}
+	ActiveTestTempDir active;
+	active.leaf = path;
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	if (!fs->DirectoryExists(path)) {
+		RecordAndCreateLevels(*fs, path, active.created_levels);
+	}
+	active_tests[test_id] = std::move(active);
 	return path;
 }
 // -----------------------------------------------------------------------------

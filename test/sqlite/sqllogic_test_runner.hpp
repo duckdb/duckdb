@@ -94,7 +94,6 @@ public:
 
 	//! The map converting the labels to the hash values
 	HashLabelMap hash_label_map;
-	mutex log_lock;
 
 	//! Per-test statement tallies for --emit-test-events. Atomic: concurrent loops run the countable
 	//! commands on multiple threads; the begin/end events are emitted single-threaded at boundaries.

@@ -673,11 +673,18 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 		std::list<std::thread> threads;
 		idx_t finished_thread_idx = 0;
 		auto context_it = contexts.begin();
+		// the reporter is per thread: hand this test's reporter to the workers it spawns
+		auto &reporter = TestReporter::Get();
 		while (context_it != contexts.end()) {
 			// launch threads
 			for (; context_it != contexts.end() && threads.size() - finished_thread_idx < max_threads; ++context_it) {
 				auto &execute_context = *context_it;
-				threads.emplace_back(ParallelExecuteLoop, &execute_context);
+				threads.emplace_back(
+				    [&reporter](ParallelExecuteContext *ctx) {
+					    TestReporter::Set(reporter);
+					    ParallelExecuteLoop(ctx);
+				    },
+				    &execute_context);
 			}
 			// wait for active threads to finish
 			for (auto it = std::next(threads.begin(), static_cast<int64_t>(finished_thread_idx)); it != threads.end();
