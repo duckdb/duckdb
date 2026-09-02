@@ -27,15 +27,19 @@ private:
 };
 
 struct MatchStackFrame {
+public:
 	explicit MatchStackFrame(MatchInput input);
 
+public:
+	bool IsInitialized() const;
+
+public:
 	const Matcher &matcher;
 	MatchState &match_state;
 	unique_ptr<MatchProcess> process;
 	optional<MatcherResult> child_result;
 	optional<MatcherResult> result;
 	PackratMatchState packrat_state;
-	bool initialized = false;
 };
 
 class MatchStack {

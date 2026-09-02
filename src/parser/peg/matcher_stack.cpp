@@ -35,6 +35,10 @@ void PackratMatchState::StoreResult(const Matcher &matcher, MatchState &state, c
 MatchStackFrame::MatchStackFrame(MatchInput input) : matcher(input.matcher), match_state(input.state) {
 }
 
+bool MatchStackFrame::IsInitialized() const {
+	return process || result;
+}
+
 void MatchStack::PushFrame(MatchInput input) {
 	input.state.rule = input.matcher.GetRule();
 	frames.push_back(make_uniq<MatchStackFrame>(input));
@@ -54,9 +58,9 @@ void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 }
 
 void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
-	if (!frame.initialized) {
+	if (!frame.IsInitialized()) {
 		InitializeFrame(frame);
-		frame.initialized = true;
+		D_ASSERT(frame.IsInitialized());
 	}
 	if (frame.result) {
 		return;
