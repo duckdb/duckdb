@@ -1,0 +1,9 @@
+{
+  "description": "example preset used by the preset tests",
+  "settings": [
+    {"threads": 3},
+    {"preserve_insertion_order": false},
+    {"tracked_metrics": ["query.*", "operator.*"]},
+    {"max_expression_depth": null}
+  ]
+}

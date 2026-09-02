@@ -2,6 +2,8 @@
 #include "shell_highlight.hpp"
 #include "terminal.hpp"
 
+#include "duckdb/parser/keyword_helper.hpp"
+
 namespace duckdb_shell {
 
 // FIXME: should be moved out of a define
@@ -268,6 +270,21 @@ MetadataResult SkipInit(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+//! -preset applies a setting preset after the database is opened, the same as running
+//! CALL preset('<name>'). Note that a preset containing a startup-only setting therefore cannot be
+//! applied this way.
+MetadataResult ApplyPreset(ShellState &state, const vector<string> &args) {
+	auto &preset = args[1];
+	// applied without rendering: the flag was asked to configure the session, not to report on it.
+	// CALL preset(...) shows what changed when it is run as a statement.
+	auto command = "CALL preset(" + duckdb::KeywordHelper::WriteQuoted(preset, '\'') + ")";
+	if (state.ExecuteQuery(command) != SuccessState::SUCCESS) {
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	return MetadataResult::SUCCESS;
+}
+
 template <bool EXIT>
 MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 	if (EXIT) {
@@ -378,6 +395,7 @@ static const CommandLineOption command_line_options[] = {
     {"readonly", 0, "", SetReadOnlyMode, nullptr, "open the database read-only"},
     {"s", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"safe", 0, "", ShellState::EnableSafeMode, nullptr, "enable safe-mode"},
+    {"preset", 1, "NAME", nullptr, ApplyPreset, "apply a setting preset by name, or from a preset file"},
     {"separator", 1, "SEP", nullptr, ShellState::SetSeparator, "set output column separator. Default: '|'"},
     {"serve", 0, "[quack[:SECRET]]", SetServeTarget, LaunchServer,
      "serve this database, optionally using a named secret (configurable with .serve_command)", true},

@@ -1,0 +1,69 @@
+# name: test/sql/presets/presets_file.test
+# description: Presets loaded from a JSON file
+# group: [presets]
+
+# settings are applied in the order the file lists them, with their JSON types
+query II
+SELECT setting, status FROM preset('test/sql/presets/example_preset.json')
+----
+threads	applied
+preserve_insertion_order	applied
+tracked_metrics	applied
+max_expression_depth	reset
+
+query I
+SELECT current_setting('threads')
+----
+3
+
+query I
+SELECT current_setting('preserve_insertion_order')
+----
+false
+
+query I
+SELECT current_setting('tracked_metrics')
+----
+[query.*, operator.*]
+
+# null resets rather than assigning null
+statement ok
+SET max_expression_depth=9999
+
+query II
+SELECT setting, new_value FROM preset('test/sql/presets/example_preset.json') WHERE setting = 'max_expression_depth'
+----
+max_expression_depth	1000
+
+# the positional argument accepts a path as well as a name
+query I
+SELECT new_value FROM preset('test/sql/presets/example_preset.json') WHERE setting = 'threads'
+----
+3
+
+# a value containing a dot, slash or backslash is a path, matching how INSTALL tells an
+# extension name from a file. A preset name therefore cannot contain a dot.
+statement error
+CALL preset('compat:duckdb_1.1')
+----
+<REGEX>:.*Preset file.*does not exist.*
+
+# malformed files are rejected
+statement error
+SELECT * FROM preset('test/sql/presets/does_not_exist.json')
+----
+<REGEX>:.*does not exist.*
+
+# an unknown setting is caught before anything is applied
+statement ok
+SET threads=7
+
+statement error
+SELECT * FROM preset('test/sql/presets/bad_preset.json')
+----
+<REGEX>:.*unrecognized configuration parameter.*
+
+query I
+SELECT current_setting('threads')
+----
+7

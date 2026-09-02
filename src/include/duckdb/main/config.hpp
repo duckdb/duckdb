@@ -62,6 +62,7 @@ class TableFunctionRef;
 class OperatorExtension;
 class StorageExtension;
 class ExtensionCallback;
+class PresetManager;
 class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
@@ -183,6 +184,8 @@ public:
 	unique_ptr<FileSystem> file_system;
 	//! Secret manager
 	unique_ptr<SecretManager> secret_manager;
+	//! Presets registered at runtime
+	unique_ptr<PresetManager> preset_manager;
 	//! The allocator used by the system
 	unique_ptr<Allocator> allocator;
 	//! The block allocator used by the system

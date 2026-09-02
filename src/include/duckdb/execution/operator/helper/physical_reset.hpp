@@ -42,8 +42,13 @@ public:
 	const String name;
 	const SetScope scope;
 
+public:
+	//! Reset a setting by name, as the RESET statement does
+	static void ResetVariable(ClientContext &context, const Identifier &name, SetScope scope);
+
 private:
-	void ResetExtensionVariable(ExecutionContext &context, DBConfig &config, ExtensionOption &extension_option) const;
+	static void ResetExtensionVariable(ClientContext &context, DBConfig &config, ExtensionOption &extension_option,
+	                                   SetScope scope);
 };
 
 } // namespace duckdb

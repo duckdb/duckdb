@@ -180,3 +180,19 @@ def test_serve_command_runs_against_quack(shell):
 
 
 # fmt: on
+
+
+def test_preset_builtin(shell):
+    test = (
+        ShellTest(shell)
+        .statement("SELECT current_setting('threads') = current_setting('async_threads') AS matched")
+        .add_argument("-preset", "host:background")
+    )
+    result = test.run()
+    result.check_stdout("true")
+
+
+def test_preset_unknown(shell):
+    test = ShellTest(shell).statement("SELECT 1").add_argument("-preset", "does_not_exist")
+    result = test.run()
+    result.check_stderr("does not exist")

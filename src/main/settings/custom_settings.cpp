@@ -24,6 +24,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/setting_preset.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/common/tree_renderer.hpp"
@@ -1514,6 +1515,22 @@ Value SearchPathSetting::GetSetting(const ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	auto &set_paths = client_data.catalog_search_path->GetSetPaths();
 	return Value(CatalogSearchEntry::ListToString(set_paths));
+}
+
+//===----------------------------------------------------------------------===//
+// Preset Directory
+//===----------------------------------------------------------------------===//
+void PresetDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.preset_manager->SetDirectory(input.ToString());
+}
+
+void PresetDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.preset_manager->ResetDirectory();
+}
+
+Value PresetDirectorySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.preset_manager->GetDirectory());
 }
 
 //===----------------------------------------------------------------------===//

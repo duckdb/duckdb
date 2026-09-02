@@ -1,0 +1,6 @@
+{
+  "settings": [
+    {"threads": 2},
+    {"no_such_setting_exists": 1}
+  ]
+}

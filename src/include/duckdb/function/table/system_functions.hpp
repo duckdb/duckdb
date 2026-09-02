@@ -185,6 +185,18 @@ struct DuckDBTriggersFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBPresetsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct PresetFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RegisterPresetFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBSettingsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

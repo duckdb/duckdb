@@ -28,6 +28,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/result_set_manager.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/main/setting_preset.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/planner/collation_binding.hpp"
@@ -60,6 +61,7 @@ DBConfig::DBConfig() {
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
+	preset_manager = make_uniq<PresetManager>();
 	http_util = make_shared_ptr<HTTPUtil>();
 	callback_manager = make_uniq<ExtensionCallbackManager>();
 }

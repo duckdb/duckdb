@@ -1219,6 +1219,13 @@
         "default_value": "true"
     },
     {
+        "name": "preset_directory",
+        "description": "Set the directory in which persistent presets are stored",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "produce_arrow_string_view",
         "description": "Whether Arrow strings should be produced by DuckDB in Utf8View format instead of Utf8",
         "type": "BOOLEAN",
