@@ -314,6 +314,87 @@ ORDER BY 1;
 0	0
 1	1
 
+# a filter above a LIMIT is applied after the rows have been selected, so it cannot simplify the join below it
+statement ok
+CREATE TABLE l2(a BIGINT, ak VARCHAR);
+
+statement ok
+CREATE TABLE r2(b BIGINT, bk VARCHAR);
+
+statement ok
+INSERT INTO l2 VALUES (1, 'x'), (2, 'y'), (3, 'p');
+
+statement ok
+INSERT INTO r2 VALUES (10, 'p'), (11, 'q');
+
+query II
+EXPLAIN SELECT * FROM (
+    SELECT l2.a AS a, l2.ak AS ak, r2.b AS b
+    FROM l2 LEFT JOIN r2 ON l2.ak = r2.bk
+    ORDER BY b DESC NULLS FIRST, a ASC NULLS LAST
+    LIMIT 2
+) s
+WHERE s.b <= 20;
+----
+logical_opt	<REGEX>:.*LEFT.*
+
+query III
+SELECT * FROM (
+    SELECT l2.a AS a, l2.ak AS ak, r2.b AS b
+    FROM l2 LEFT JOIN r2 ON l2.ak = r2.bk
+    ORDER BY b DESC NULLS FIRST, a ASC NULLS LAST
+    LIMIT 2
+) s
+WHERE s.b <= 20;
+----
+
+# the same for a plain LIMIT, which is not collapsed into a TOP_N
+query II
+EXPLAIN SELECT * FROM (
+    SELECT l2.a AS a, l2.ak AS ak, r2.b AS b
+    FROM l2 LEFT JOIN r2 ON l2.ak = r2.bk
+    LIMIT 2
+) s
+WHERE s.b IS NULL;
+----
+logical_opt	<!REGEX>:.*ANTI.*
+
+# an IS NULL filter above an outer join can be satisfied by the NULL extension of that join,
+# so it cannot be pushed into the NULL-extended side
+query III
+SELECT * FROM (VALUES (1), (2), (NULL)) AS a(x)
+LEFT JOIN (
+    SELECT p.y AS y, q.z AS z
+    FROM (VALUES (2), (3), (NULL)) AS p(y)
+    LEFT JOIN (VALUES (1), (3), (NULL)) AS q(z) ON p.y <> q.z
+) AS s
+ON a.x <> s.y
+WHERE s.z IS NULL;
+----
+NULL	NULL	NULL
+
+query II
+EXPLAIN SELECT * FROM (VALUES (1), (2), (NULL)) AS a(x)
+LEFT JOIN (
+    SELECT p.y AS y, q.z AS z
+    FROM (VALUES (2), (3), (NULL)) AS p(y)
+    LEFT JOIN (VALUES (1), (3), (NULL)) AS q(z) ON p.y <> q.z
+) AS s
+ON a.x <> s.y
+WHERE s.z IS NULL;
+----
+logical_opt	<!REGEX>:.*ANTI.*
+
+# the ANTI rewrite is still applied when the IS NULL filter sits directly above the LEFT join
+query I
+SELECT l.i
+FROM range(3) l(i)
+LEFT JOIN range(2) r(i) ON l.i = r.i
+WHERE r.i IS NULL
+ORDER BY 1;
+----
+2
+
 require tpcds
 
 statement ok

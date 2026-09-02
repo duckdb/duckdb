@@ -22,7 +22,6 @@ class LogicalFilter;
 class LogicalJoin;
 class LogicalOrder;
 class LogicalProjection;
-class LogicalTopN;
 
 //! Simplifies outer joins if NULL-extended rows are filtered in a way that changes the join semantics
 class OuterJoinSimplification : public LogicalOperatorVisitor {
@@ -63,10 +62,10 @@ private:
 	void VisitComparisonJoin(LogicalComparisonJoin &join, LogicalOperator &op);
 	void VisitInnerOrSemiJoin(LogicalComparisonJoin &join, LogicalOperator &op);
 	void VisitOuterJoin(LogicalComparisonJoin &join, LogicalOperator &op);
+	void VisitJoinChildren(LogicalComparisonJoin &join, LogicalOperator &op);
 	void VisitProjection(LogicalProjection &projection, LogicalOperator &op);
 	void VisitFilter(LogicalFilter &filter, LogicalOperator &op);
 	void VisitOrder(LogicalOrder &order, LogicalOperator &op);
-	void VisitTopN(LogicalTopN &top_n, LogicalOperator &op);
 	void VisitAggregate(LogicalAggregate &aggregate, LogicalOperator &op);
 	void VisitUnsupportedOperator(LogicalOperator &op);
 

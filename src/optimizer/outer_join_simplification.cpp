@@ -297,7 +297,7 @@ void OuterJoinSimplification::VisitInnerOrSemiJoin(LogicalComparisonJoin &join, 
 void OuterJoinSimplification::VisitOuterJoin(LogicalComparisonJoin &join, LogicalOperator &op) {
 	if (TryConvertLeftToAntiJoin(join)) {
 		AddRequiredColumns(join.conditions);
-		VisitOperatorChildren(op);
+		VisitJoinChildren(join, op);
 		return;
 	}
 
@@ -308,7 +308,27 @@ void OuterJoinSimplification::VisitOuterJoin(LogicalComparisonJoin &join, Logica
 	}
 
 	AddRequiredColumns(join.conditions);
-	VisitOperatorChildren(op);
+	VisitJoinChildren(join, op);
+}
+
+void OuterJoinSimplification::VisitJoinChildren(LogicalComparisonJoin &join, LogicalOperator &op) {
+	// this join NULL-extends the columns of these children
+	D_ASSERT(op.children.size() == 2);
+	const bool null_extended[2] = {join.join_type == JoinType::RIGHT || join.join_type == JoinType::OUTER,
+	                               join.join_type == JoinType::LEFT || join.join_type == JoinType::OUTER ||
+	                                   join.join_type == JoinType::ANTI};
+	for (idx_t child_idx = 0; child_idx < 2; child_idx++) {
+		if (!null_extended[child_idx]) {
+			VisitOperator(*op.children[child_idx]);
+			continue;
+		}
+		// a NULL requirement from above can be satisfied by the NULL extension this join performs, so it does not
+		// necessarily hold within the child itself
+		auto parent_null_required_columns = std::move(null_required_columns);
+		null_required_columns.clear();
+		VisitOperator(*op.children[child_idx]);
+		null_required_columns = std::move(parent_null_required_columns);
+	}
 }
 
 void OuterJoinSimplification::VisitProjection(LogicalProjection &projection, LogicalOperator &op) {
@@ -372,13 +392,6 @@ void OuterJoinSimplification::VisitOrder(LogicalOrder &order, LogicalOperator &o
 	VisitOperatorChildren(op);
 }
 
-void OuterJoinSimplification::VisitTopN(LogicalTopN &top_n, LogicalOperator &op) {
-	for (const auto &order_node : top_n.orders) {
-		AddRequiredColumns(*order_node.expression);
-	}
-	VisitOperatorChildren(op);
-}
-
 void OuterJoinSimplification::VisitAggregate(LogicalAggregate &aggregate, LogicalOperator &op) {
 	column_binding_set_t child_required_columns;
 	for (const auto &expr : aggregate.groups) {
@@ -426,14 +439,11 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 		VisitOrder(order, op);
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_TOP_N: {
-		auto &top_n = op.Cast<LogicalTopN>();
-		VisitTopN(top_n, op);
-		return;
-	}
+	case LogicalOperatorType::LOGICAL_TOP_N:
 	case LogicalOperatorType::LOGICAL_LIMIT:
-		VisitOperatorChildren(op);
-		return;
+		// these operators emit a subset of their input rows - constraints collected above them are applied after the
+		// rows have been selected, so they do not hold for the children
+		break;
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggregate = op.Cast<LogicalAggregate>();
 		VisitAggregate(aggregate, op);
