@@ -6,6 +6,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -456,13 +457,9 @@ void WindowMatchRecognizeExecutor::Sink(ExecutionContext &context, DataChunk &si
 	lstate.result.Reset();
 	lstate.executor->Execute(slice, lstate.result);
 	for (idx_t i = 0; i < lstate.conditions.size(); i++) {
-		UnifiedVectorFormat condition_data;
-		lstate.result.data[i].ToUnifiedFormat(condition_data);
-		auto values = UnifiedVectorFormat::GetData<bool>(condition_data);
-		for (idx_t row = 0; row < count; row++) {
-			const auto row_idx = condition_data.sel->get_index(row);
-			gstate.condition_values[i][input_idx + row] =
-			    condition_data.validity.RowIsValid(row_idx) && values[row_idx] ? 1 : 0;
+		auto &values = gstate.condition_values[i];
+		for (const auto &entry : lstate.result.data[i].Values<bool>()) {
+			values[input_idx + entry.GetIndex()] = entry.IsValid() && entry.GetValueUnsafe() ? 1 : 0;
 		}
 	}
 }
@@ -799,11 +796,8 @@ public:
 			executors[index] = make_uniq<ExpressionExecutor>(context.client, *conditions[index]);
 		}
 		executors[index]->Execute(row_chunk, row_result);
-		UnifiedVectorFormat result_data;
-		row_result.data[0].ToUnifiedFormat(result_data);
-		const auto result_idx = result_data.sel->get_index(0);
-		return result_data.validity.RowIsValid(result_idx) &&
-		       UnifiedVectorFormat::GetData<bool>(result_data)[result_idx];
+		const auto result = row_result.data[0].Values<bool>()[0];
+		return result.IsValid() && result.GetValueUnsafe();
 	}
 
 private:
