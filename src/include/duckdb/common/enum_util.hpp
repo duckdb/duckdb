@@ -332,7 +332,11 @@ enum class MacroType : uint8_t;
 
 enum class MapInvalidReason : uint8_t;
 
+enum class MatchFrameState : uint8_t;
+
 enum class MatchMode : uint8_t;
+
+enum class MatchResultState : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
@@ -1090,7 +1094,13 @@ template<>
 const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
 
 template<>
+const char* EnumUtil::ToChars<MatchFrameState>(MatchFrameState value);
+
+template<>
 const char* EnumUtil::ToChars<MatchMode>(MatchMode value);
+
+template<>
+const char* EnumUtil::ToChars<MatchResultState>(MatchResultState value);
 
 template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
@@ -2000,7 +2010,13 @@ template<>
 MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
 
 template<>
+MatchFrameState EnumUtil::FromString<MatchFrameState>(const char *value);
+
+template<>
 MatchMode EnumUtil::FromString<MatchMode>(const char *value);
+
+template<>
+MatchResultState EnumUtil::FromString<MatchResultState>(const char *value);
 
 template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);

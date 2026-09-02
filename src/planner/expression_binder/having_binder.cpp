@@ -36,10 +36,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 		// column was not found - check if it is a SQL value function
 		auto value_function = GetSQLValueFunction(col_ref.GetColumnName());
 		if (value_function) {
-			auto result = BindExpression(value_function, depth);
-			// the value function expression is destroyed on return: erase any entries left for its children
-			GetBoundExpressions().EraseSubtree(*value_function);
-			return result;
+			return BindExpression(value_function, depth);
 		}
 	}
 
@@ -54,8 +51,12 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 	}
 
 	if (aggregate_handling != AggregateHandling::FORCE_AGGREGATES) {
-		return BindResult(StringUtil::Format(
-		    "column %s must appear in the GROUP BY clause or be used in an aggregate function", column_name));
+		// the name is not a group of this query, but it may belong to an enclosing one
+		ErrorData local_error(
+		    ExceptionType::BINDER,
+		    StringUtil::Format("column %s must appear in the GROUP BY clause or be used in an aggregate function",
+		                       column_name));
+		return BindInEnclosingScope(expr_ptr->Cast<ColumnRefExpression>(), depth, expr_ptr, std::move(local_error));
 	}
 
 	if (depth > 0) {
@@ -80,10 +81,18 @@ BindResult HavingBinder::BindWindowExpression(WindowExpression &expr, idx_t dept
 	throw BinderException::Unsupported(expr, "HAVING clause cannot contain window functions!");
 }
 
+unique_ptr<ColumnQualifier> HavingBinder::CreateColumnQualifier() {
+	return make_uniq<ColumnQualifier>(binder, lambda_bindings, nullptr, *this);
+}
+
 void ExpressionBinder::QualifyColumnNames(HavingBinder &having_binder, unique_ptr<ParsedExpression> &expr) {
 	ColumnQualifier qualifier(having_binder.binder, having_binder.lambda_bindings, nullptr, having_binder);
 	vector<identifier_set_t> lambda_params;
 	qualifier.QualifyColumnNames(expr, lambda_params);
+}
+
+bool HavingBinder::ClaimsAlias(ColumnRefExpression &colref) {
+	return column_alias_binder.DoesColumnAliasExist(colref);
 }
 
 } // namespace duckdb

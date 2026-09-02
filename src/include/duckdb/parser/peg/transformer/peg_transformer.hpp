@@ -2319,6 +2319,11 @@ public:
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeColumnReferenceTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeNestedSchemaTableColumnNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeNestedSchemaTableColumnNameTrampoline(PEGTransformer &transformer,
+	                                                                                      TransformStack &stack,
+	                                                                                      TransformStackFrame &frame);
 	static void InitializeCatalogReservedSchemaTableColumnNameTrampoline(PEGTransformer &transformer,
 	                                                                     TransformStack &stack,
 	                                                                     TransformStackFrame &frame);
@@ -5342,7 +5347,7 @@ public:
 	                                                                                       ParseResult &parse_result);
 	static QualifiedName TransformCatalogReservedSchemaTypeName(PEGTransformer &transformer,
 	                                                            const Identifier &catalog_qualification,
-	                                                            const Identifier &reserved_schema_qualification,
+	                                                            const vector<Identifier> &reserved_schema_qualification,
 	                                                            const Identifier &reserved_type_name);
 	static unique_ptr<TransformResultValue> TransformSchemaReservedTypeNameInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);
@@ -5908,7 +5913,7 @@ public:
 	TransformCatalogReservedSchemaIdentifierInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName
 	TransformCatalogReservedSchemaIdentifier(PEGTransformer &transformer, const Identifier &catalog_qualification,
-	                                         const Identifier &reserved_schema_qualification,
+	                                         const vector<Identifier> &reserved_schema_qualification,
 	                                         const Identifier &reserved_identifier_or_string_literal);
 	static unique_ptr<TransformResultValue> TransformIdentifierOrStringLiteralInternal(PEGTransformer &transformer,
 	                                                                                   ParseResult &parse_result);
@@ -6436,6 +6441,12 @@ public:
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformColumnReference(PEGTransformer &transformer,
 	                                                             unique_ptr<ColumnRefExpression> child);
+	static unique_ptr<TransformResultValue> TransformNestedSchemaTableColumnNameInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static unique_ptr<ColumnRefExpression> TransformNestedSchemaTableColumnName(
+	    PEGTransformer &transformer, const Identifier &catalog_qualification,
+	    const Identifier &reserved_schema_qualification, const Identifier &reserved_schema_qualification_1,
+	    const vector<Identifier> &reserved_schema_qualification_2, const Identifier &reserved_column_name);
 	static unique_ptr<TransformResultValue>
 	TransformCatalogReservedSchemaTableColumnNameInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ColumnRefExpression>
@@ -6487,7 +6498,7 @@ public:
 	TransformCatalogReservedSchemaFunctionNameInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName
 	TransformCatalogReservedSchemaFunctionName(PEGTransformer &transformer, const Identifier &catalog_qualification,
-	                                           const optional<Identifier> &reserved_schema_qualification,
+	                                           const optional<vector<Identifier>> &reserved_schema_qualification,
 	                                           const Identifier &reserved_function_name);
 	static unique_ptr<TransformResultValue> TransformSchemaReservedFunctionNameInternal(PEGTransformer &transformer,
 	                                                                                    ParseResult &parse_result);
@@ -8007,10 +8018,10 @@ public:
 	                                                             const Identifier &reserved_table_name);
 	static unique_ptr<TransformResultValue> TransformCatalogReservedSchemaTableInternal(PEGTransformer &transformer,
 	                                                                                    ParseResult &parse_result);
-	static unique_ptr<BaseTableRef> TransformCatalogReservedSchemaTable(PEGTransformer &transformer,
-	                                                                    const Identifier &catalog_qualification,
-	                                                                    const Identifier &reserved_schema_qualification,
-	                                                                    const Identifier &reserved_table_name);
+	static unique_ptr<BaseTableRef>
+	TransformCatalogReservedSchemaTable(PEGTransformer &transformer, const Identifier &catalog_qualification,
+	                                    const vector<Identifier> &reserved_schema_qualification,
+	                                    const Identifier &reserved_table_name);
 	static unique_ptr<TransformResultValue> TransformTableFunctionInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformTableFunctionLateralOptInternal(PEGTransformer &transformer,
@@ -8036,7 +8047,7 @@ public:
 	                                                                                ParseResult &parse_result);
 	static QualifiedName TransformQualifiedTableFunction(PEGTransformer &transformer,
 	                                                     const optional<Identifier> &catalog_qualification,
-	                                                     const optional<Identifier> &schema_qualification,
+	                                                     const optional<vector<Identifier>> &schema_qualification,
 	                                                     const Identifier &table_function_name);
 	static unique_ptr<TransformResultValue> TransformTableFunctionArgumentsInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);

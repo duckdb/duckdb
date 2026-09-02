@@ -623,6 +623,16 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugHeapBasedParserSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_heap_based_parser";
+	static constexpr const char *Description = "DEBUG SETTING: use the experimental heap-based PEG parser";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugLocalFileSystemDelayMsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "debug_local_file_system_delay_ms";
@@ -664,16 +674,6 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct DebugTransformerTrampolineStyleSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "debug_transformer_trampoline_style";
-	static constexpr const char *Description = "Use the experimental trampoline-style parser transformer";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
