@@ -102,7 +102,7 @@ DROP TABLE fk2
 statement ok con1
 DROP TABLE pk2
 
-# Scenario #3: con2 inserts valid data before con1 adds FK, both commit successfully
+# Scenario #3: con2 insert data while con1 add fk. con2 should not commit as entry has been alterd.
 
 statement ok con1
 CREATE TABLE pk3 (id INTEGER PRIMARY KEY)
@@ -131,13 +131,14 @@ ALTER TABLE fk3 ADD CONSTRAINT fk3_fk FOREIGN KEY (val) REFERENCES pk3(id)
 statement ok con1
 COMMIT
 
-statement ok con2
+statement error con2
 COMMIT
+----
 
 query I con1
 SELECT COUNT(*) FROM fk3
 ----
-2
+1
 
 statement ok con1
 DROP TABLE fk3
