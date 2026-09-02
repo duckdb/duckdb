@@ -2,6 +2,7 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
@@ -138,7 +139,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	for (const auto &index : indexes) {
 		auto lookup = schema.LookupEntryDetailed(transaction,
 		                                         EntryLookupInfo(CatalogType::INDEX_ENTRY, QualifiedName(index.first)));
-		if (lookup.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
+		if (lookup.reason == CatalogSet::EntryLookup::FailureReason::DELETED && lookup.deleted_entry &&
+		    &lookup.deleted_entry->Cast<DuckIndexEntry>().GetDataTableInfo() == info.get()) {
 			continue;
 		}
 		for (const auto column_id : index.second.column_set) {
