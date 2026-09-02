@@ -39,6 +39,8 @@ public:
 		StringDictionaryContainer dictionary;
 		//! One persisted dictionary offset per row, after verifying every entry fits before the dictionary bytes.
 		unsafe_array_ptr<const int32_t> offsets;
+
+		uint32_t GetStringLength(int32_t current_offset, int32_t previous_offset) const;
 	};
 
 	static SegmentLayout ReadSegmentLayout(const BufferHandle &handle, const ColumnSegment &segment);
