@@ -43,6 +43,14 @@ namespace duckdb {
 	    "Corrupted uncompressed string segment: dictionary entry extends past the dictionary");
 }
 
+[[noreturn]] static void ThrowInvalidOverflowStringBlock() {
+	throw DataCorruptionException("Corrupted uncompressed string segment: invalid overflow string block ID");
+}
+
+[[noreturn]] static void ThrowOverflowStringOffsetOutOfBounds() {
+	throw DataCorruptionException("Corrupted uncompressed string segment: overflow string offset is outside its block");
+}
+
 static uint32_t GetStringOffsetMagnitude(int32_t offset) {
 	if (offset == NumericLimits<int32_t>::Minimum()) {
 		ThrowStringOffsetMinimumValue();
@@ -468,10 +476,17 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 	auto &buffer_manager = segment.GetBlockHandle()->GetMemory().GetBufferManager();
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 
-	D_ASSERT(block != INVALID_BLOCK);
-	D_ASSERT(offset < NumericCast<int32_t>(segment.GetBlockSize()));
+	if (block < 0) {
+		ThrowInvalidOverflowStringBlock();
+	}
+	if (offset < 0) {
+		ThrowOverflowStringOffsetOutOfBounds();
+	}
 
 	if (block < MAXIMUM_BLOCK) {
+		if (NumericCast<idx_t>(offset) >= segment.GetBlockSize()) {
+			ThrowOverflowStringOffsetOutOfBounds();
+		}
 		// read the overflow string from disk
 		// pin the initial handle and read the length
 		auto block_handle = state.GetHandle(segment.GetBlockHandle()->GetBlockManager(), block);
@@ -525,6 +540,9 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 	// read the overflow string from memory
 	// first pin the handle, if it is not pinned yet
 	auto string_block = state.FindOverflowBlock(block);
+	if (NumericCast<idx_t>(offset) >= string_block.get().size) {
+		ThrowOverflowStringOffsetOutOfBounds();
+	}
 	auto handle = buffer_manager.Pin(context, string_block.get().block);
 	auto final_buffer = handle.GetDataMutable();
 	StringVector::AddHandle(result, std::move(handle));
