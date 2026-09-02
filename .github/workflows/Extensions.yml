@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-slim
     outputs:
       # NOTE: on PRs we exclude some archs to speed things up
-      reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
+      reduced_ci_mode: disabled
       main_extensions_core_config: ${{ steps.set-main-extensions.outputs.core_config }}
       main_extensions_cloud_config: ${{ steps.set-main-extensions.outputs.cloud_config }}
       main_extensions_search_config: ${{ steps.set-main-extensions.outputs.search_config }}
