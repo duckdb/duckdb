@@ -21,8 +21,8 @@ struct UndoBufferProperties;
 //! CleanupInfo collects transactions awaiting cleanup.
 //! This ensures we can clean up after releasing the transaction lock.
 struct DuckCleanupInfo {
-	//! All transactions in a cleanup info share the same lowest_snapshot_bound.
-	transaction_t lowest_snapshot_bound;
+	//! All transactions in a cleanup info share the same lowest_visibility_bound.
+	VisibilityBound lowest_visibility_bound;
 	vector<unique_ptr<DuckTransaction>> transactions;
 
 	void Cleanup();
@@ -51,8 +51,8 @@ public:
 	transaction_t LowestActiveId() const {
 		return lowest_active_id;
 	}
-	transaction_t LowestSnapshotBound() const {
-		return lowest_snapshot_bound;
+	VisibilityBound LowestVisibilityBound() const {
+		return lowest_visibility_bound;
 	}
 	transaction_t GetLastCommit() const {
 		return last_commit;
@@ -128,8 +128,9 @@ private:
 	transaction_t current_transaction_id;
 	//! The lowest active transaction id
 	atomic<transaction_t> lowest_active_id;
-	//! The lowest active transaction timestamp
-	atomic<transaction_t> lowest_snapshot_bound;
+	//! The lowest bound any active transaction reads at. A version preceding it is visible to
+	//! every active transaction, so whatever it supersedes can be cleaned up or compacted
+	atomic<VisibilityBound> lowest_visibility_bound;
 	//! The last commit timestamp
 	atomic<transaction_t> last_commit;
 	//! The currently active checkpoint, zero when none is running

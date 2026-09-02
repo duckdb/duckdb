@@ -161,7 +161,7 @@ struct tpch_append_information {
 			return;
 		}
 		FlushChunk();
-		TransactionData transaction_data(0, 0);
+		auto transaction_data = TransactionData::Unversioned();
 		auto &row_collection = *optimistic_collection->collection;
 		row_collection.FinalizeAppend(transaction_data, append_state);
 		finalized = true;

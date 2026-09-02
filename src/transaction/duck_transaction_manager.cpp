@@ -36,7 +36,7 @@ static ErrorData BuildAutocheckpointError(AttachedDatabase &db, const std::excep
 void DuckCleanupInfo::Cleanup() {
 	for (auto &transaction : transactions) {
 		if (transaction->awaiting_cleanup) {
-			transaction->Cleanup(lowest_snapshot_bound);
+			transaction->Cleanup(lowest_visibility_bound);
 		}
 	}
 }
@@ -55,7 +55,7 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 	// uncommitted data could be read by
 	current_transaction_id = TRANSACTION_ID_START;
 	lowest_active_id = TRANSACTION_ID_START;
-	lowest_snapshot_bound = MAX_TRANSACTION_ID;
+	lowest_visibility_bound = VisibilityBound::IncludingUncommitted();
 	active_checkpoint = 0;
 	if (!db.GetCatalog().IsDuckCatalog()) {
 		// Specifically the StorageManager of the DuckCatalog is relied on, with `db.GetStorageManager`
@@ -91,7 +91,7 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	transaction_t start_time = current_start_timestamp++;
 	transaction_t transaction_id = current_transaction_id++;
 	if (active_transactions.empty()) {
-		lowest_snapshot_bound = start_time;
+		lowest_visibility_bound = VisibilityBound::Before(start_time);
 		lowest_active_id = transaction_id;
 	}
 
@@ -246,7 +246,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		}
 	}
 	CheckpointOptions options;
-	if (!VisibleToSnapshot(GetLastCommit(), LowestSnapshotBound())) {
+	if (GetLastCommit() >= LowestVisibilityBound()) {
 		// we cannot do a full checkpoint if any transaction needs to read old data
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
 	}
@@ -410,7 +410,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		last_commit = info.commit_id;
 
 		// check if catalog changes were made
-		if (!IsCommitted(transaction.catalog_version)) {
+		if (transaction.catalog_version >= TRANSACTION_ID_START) {
 			transaction.catalog_version = ++last_committed_version;
 		}
 	}
@@ -522,17 +522,18 @@ DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, bool sto
 	// Find the transaction in the active transactions,
 	// as well as the lowest start time, transaction id, and active query.
 	idx_t t_index = active_transactions.size();
-	auto lowest_snapshot_bound = TRANSACTION_ID_START;
+	auto computed_lowest_visibility_bound = VisibilityBound::AllCommitted();
 	auto lowest_transaction_id = MAX_TRANSACTION_ID;
 	for (idx_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == &transaction) {
 			t_index = i;
 			continue;
 		}
-		lowest_snapshot_bound = MinValue(lowest_snapshot_bound, active_transactions[i]->start_time);
+		computed_lowest_visibility_bound = VisibilityBound::Min(
+		    computed_lowest_visibility_bound, VisibilityBound::Before(active_transactions[i]->start_time));
 		lowest_transaction_id = MinValue(lowest_transaction_id, active_transactions[i]->transaction_id);
 	}
-	this->lowest_snapshot_bound = lowest_snapshot_bound;
+	lowest_visibility_bound = computed_lowest_visibility_bound;
 	lowest_active_id = lowest_transaction_id;
 	D_ASSERT(t_index != active_transactions.size());
 
@@ -553,7 +554,7 @@ DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, bool sto
 		current_transaction->awaiting_cleanup = true;
 		cleanup_info->transactions.push_back(std::move(current_transaction));
 	}
-	cleanup_info->lowest_snapshot_bound = lowest_snapshot_bound;
+	cleanup_info->lowest_visibility_bound = computed_lowest_visibility_bound;
 
 	// Remove the transaction from the list of active transactions.
 	active_transactions.unsafe_erase_at(t_index);
@@ -563,10 +564,10 @@ DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, bool sto
 	idx_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
 		D_ASSERT(recently_committed_transactions[i]);
-		if (!VisibleToSnapshot(recently_committed_transactions[i]->commit_id, lowest_snapshot_bound)) {
+		if (recently_committed_transactions[i]->commit_id >= computed_lowest_visibility_bound) {
 			// recently_committed_transactions is ordered on commit_id.
 			// Thus, if the current commit_id is greater than
-			// lowest_snapshot_bound, any subsequent commit IDs are also greater.
+			// lowest_visibility_bound, any subsequent commit IDs are also greater.
 			break;
 		}
 

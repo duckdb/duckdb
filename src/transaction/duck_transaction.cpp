@@ -29,11 +29,10 @@
 namespace duckdb {
 
 TransactionData::TransactionData(DuckTransaction &transaction_p) // NOLINT
-    : transaction(&transaction_p), transaction_id(transaction_p.transaction_id),
-      snapshot_bound(transaction_p.start_time) {
+    : transaction(&transaction_p), view(transaction_p.GetSnapshotView()) {
 }
-TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t snapshot_bound_p)
-    : transaction(nullptr), transaction_id(transaction_id_p), snapshot_bound(snapshot_bound_p) {
+TransactionData::TransactionData(transaction_t transaction_id_p, VisibilityBound visibility_bound_p)
+    : transaction(nullptr), view(transaction_id_p, visibility_bound_p) {
 }
 
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
@@ -42,6 +41,10 @@ DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext 
       catalog_version(catalog_version_p), awaiting_cleanup(false), undo_buffer(*this, context_p),
       storage(make_uniq<LocalStorage>(context_p, *this)) {
 	D_ASSERT(IsCommitted(start_time) && !IsCommitted(transaction_id));
+}
+
+SnapshotView DuckTransaction::GetSnapshotView() const {
+	return SnapshotView(transaction_id, VisibilityBound::Before(start_time));
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -337,8 +340,8 @@ ErrorData DuckTransaction::Rollback() {
 	}
 }
 
-void DuckTransaction::Cleanup(transaction_t lowest_snapshot_bound) {
-	undo_buffer.Cleanup(lowest_snapshot_bound);
+void DuckTransaction::Cleanup(VisibilityBound lowest_visibility_bound) {
+	undo_buffer.Cleanup(lowest_visibility_bound);
 }
 
 void DuckTransaction::SetModifications(DatabaseModificationType type) {

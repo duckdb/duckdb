@@ -66,7 +66,7 @@ void UpdateInfo::Print() {
 string UpdateInfo::ToString() {
 	auto &type = segment->column_data.type;
 	string result = "Update Info [" + type.ToString() + ", Count: " + to_string(N) +
-	                ", Transaction Id: " + to_string(version_number) + "]\n";
+	                ", Transaction Id: " + to_string(version_number.load()) + "]\n";
 	auto tuples = GetTuples();
 	for (idx_t i = 0; i < N; i++) {
 		result += to_string(tuples[i]) + ": " + GetValue(i).ToString() + "\n";
@@ -161,10 +161,9 @@ static void MergeValidityInfo(UpdateInfo &current, ValidityMask &result_mask) {
 	}
 }
 
-static void UpdateMergeValidity(transaction_t snapshot_bound, transaction_t transaction_id, UpdateInfo &info,
-                                Vector &result) {
+static void UpdateMergeValidity(const SnapshotView &view, UpdateInfo &info, Vector &result) {
 	auto &result_mask = FlatVector::ValidityMutable(result);
-	UpdateInfo::UpdatesForTransaction(info, snapshot_bound, transaction_id,
+	UpdateInfo::UpdatesForTransaction(info, view,
 	                                  [&](UpdateInfo &current) { MergeValidityInfo(current, result_mask); });
 }
 
@@ -185,10 +184,9 @@ static void MergeUpdateInfo(UpdateInfo &current, T *result_data) {
 }
 
 template <class T>
-static void UpdateMergeFetch(transaction_t snapshot_bound, transaction_t transaction_id, UpdateInfo &info,
-                             Vector &result) {
+static void UpdateMergeFetch(const SnapshotView &view, UpdateInfo &info, Vector &result) {
 	auto result_data = FlatVector::GetDataMutable<T>(result);
-	UpdateInfo::UpdatesForTransaction(info, snapshot_bound, transaction_id,
+	UpdateInfo::UpdatesForTransaction(info, view,
 	                                  [&](UpdateInfo &current) { MergeUpdateInfo<T>(current, result_data); });
 }
 
@@ -249,7 +247,7 @@ void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index
 	// FIXME: normalify if this is not the case... need to pass in count?
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pin = node.Pin();
-	fetch_update_function(transaction.snapshot_bound, transaction.transaction_id, UpdateInfo::Get(pin), result);
+	fetch_update_function(transaction.view, UpdateInfo::Get(pin), result);
 }
 
 UpdateNode::UpdateNode(BufferManager &manager) : allocator(manager) {
@@ -459,11 +457,11 @@ static bool FindUpdatedTuple(UpdateInfo &current, idx_t row_idx, idx_t &update_i
 	return false;
 }
 
-static void FetchRowsValidity(transaction_t snapshot_bound, transaction_t transaction_id, UpdateInfo &info,
-                              const idx_t *offsets, const SelectionVector &sel, idx_t fetch_offset, idx_t count,
-                              idx_t vector_offset, Vector &result, idx_t result_offset) {
+static void FetchRowsValidity(const SnapshotView &view, UpdateInfo &info, const idx_t *offsets,
+                              const SelectionVector &sel, idx_t fetch_offset, idx_t count, idx_t vector_offset,
+                              Vector &result, idx_t result_offset) {
 	auto &result_mask = FlatVector::ValidityMutable(result);
-	UpdateInfo::UpdatesForTransaction(info, snapshot_bound, transaction_id, [&](UpdateInfo &current) {
+	UpdateInfo::UpdatesForTransaction(info, view, [&](UpdateInfo &current) {
 		auto info_data = current.GetData<bool>();
 		for (idx_t idx = 0; idx < count; idx++) {
 			const idx_t row_idx = offsets[sel.get_index(fetch_offset + idx)] - vector_offset;
@@ -476,11 +474,11 @@ static void FetchRowsValidity(transaction_t snapshot_bound, transaction_t transa
 }
 
 template <class T>
-static void TemplatedFetchRows(transaction_t snapshot_bound, transaction_t transaction_id, UpdateInfo &info,
-                               const idx_t *offsets, const SelectionVector &sel, idx_t fetch_offset, idx_t count,
-                               idx_t vector_offset, Vector &result, idx_t result_offset) {
+static void TemplatedFetchRows(const SnapshotView &view, UpdateInfo &info, const idx_t *offsets,
+                               const SelectionVector &sel, idx_t fetch_offset, idx_t count, idx_t vector_offset,
+                               Vector &result, idx_t result_offset) {
 	auto result_data = FlatVector::GetDataMutable<T>(result);
-	UpdateInfo::UpdatesForTransaction(info, snapshot_bound, transaction_id, [&](UpdateInfo &current) {
+	UpdateInfo::UpdatesForTransaction(info, view, [&](UpdateInfo &current) {
 		auto info_data = current.GetData<T>();
 		for (idx_t idx = 0; idx < count; idx++) {
 			const idx_t row_idx = offsets[sel.get_index(fetch_offset + idx)] - vector_offset;
@@ -559,8 +557,8 @@ void UpdateSegment::FetchRows(TransactionData transaction, const idx_t *offsets,
 		auto entry = GetUpdateNode(*lock_handle, vector_index);
 		if (entry.IsSet()) {
 			auto pin = entry.Pin();
-			fetch_rows_function(transaction.snapshot_bound, transaction.transaction_id, UpdateInfo::Get(pin), offsets,
-			                    sel, idx, vector_count, vector_offset, result, result_offset);
+			fetch_rows_function(transaction.view, UpdateInfo::Get(pin), offsets, sel, idx, vector_count, vector_offset,
+			                    result, result_offset);
 		}
 		idx += vector_count;
 	}
@@ -671,10 +669,10 @@ static void CheckForConflicts(UndoBufferPointer next_ptr, TransactionData transa
 	while (next_ptr.IsSet()) {
 		auto pin = next_ptr.Pin();
 		auto &info = UpdateInfo::Get(pin);
-		if (info.version_number == transaction.transaction_id) {
+		if (info.version_number == transaction.GetTransactionId()) {
 			// this UpdateInfo belongs to the current transaction, set it in the node
 			node_ref = std::move(pin);
-		} else if (!VisibleToSnapshot(info.version_number, transaction.snapshot_bound)) {
+		} else if (info.version_number.load() >= transaction.view.visibility_bound) {
 			// potential conflict, check that tuple ids do not conflict
 			// as both ids and info->tuples are sorted, this is similar to a merge join
 			idx_t i = 0, j = 0;
@@ -1334,7 +1332,7 @@ UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, DuckTableEntry &t
                                   idx_t count, unsafe_unique_array<char> &data, idx_t row_group_start) {
 	data = make_unsafe_uniq_array_uninitialized<char>(UpdateInfo::GetAllocSize(type_size));
 	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
-	UpdateInfo::Initialize(*update_info, table_entry, transaction.transaction_id, row_group_start);
+	UpdateInfo::Initialize(*update_info, table_entry, transaction.GetTransactionId(), row_group_start);
 	return update_info;
 }
 
@@ -1502,7 +1500,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size, compact_capacity);
 		auto handle = root->allocator.Allocate(alloc_size);
 		auto &update_info = UpdateInfo::Get(handle);
-		UpdateInfo::Initialize(update_info, table_entry, TRANSACTION_ID_START - 1, row_group_start, compact_capacity);
+		UpdateInfo::Initialize(update_info, table_entry, MAX_COMMIT_ID, row_group_start, compact_capacity);
 		update_info.column_index = column_index;
 
 		InitializeUpdateInfo(update_info, ids, sel, count, vector_index, vector_offset);

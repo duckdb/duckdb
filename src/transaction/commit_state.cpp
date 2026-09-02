@@ -295,7 +295,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 				new_entry.set->VerifyExistenceOfDependency(commit_id, new_entry);
 			}
 		} else if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
-			old_entry.set->CommitDrop(commit_id, transaction.start_time, old_entry);
+			old_entry.set->CommitDrop(commit_id, VisibilityBound::Before(transaction.start_time), old_entry);
 		}
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
@@ -318,9 +318,11 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 				// Transaction view at bind time (what the trigger saw when it was created).
 				// Use commit_id as the transaction_id so that earlier catalog changes in this
 				// same transaction (already stamped with commit_id) are visible here.
-				CatalogTransaction bind_txn(duck_catalog.GetDatabase(), commit_id, transaction.start_time);
+				CatalogTransaction bind_txn(duck_catalog.GetDatabase(), commit_id,
+				                            VisibilityBound::Before(transaction.start_time));
 				// Transaction view at commit time (all changes committed before this commit)
-				CatalogTransaction commit_txn(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, commit_id + 1);
+				CatalogTransaction commit_txn(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID,
+				                              VisibilityBound::Through(commit_id));
 
 				auto bound_table = trig.schema.GetEntry(bind_txn, CatalogType::TABLE_ENTRY, trig.base_table->Table());
 				auto current_table =

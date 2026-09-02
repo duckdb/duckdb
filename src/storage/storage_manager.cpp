@@ -264,7 +264,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	} else {
 		auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
 		options.checkpoint_id = transaction_manager.NextCheckpointId();
-		options.snapshot_bound = transaction_manager.GetLastCommit() + 1;
+		options.visibility_bound = VisibilityBound::Through(transaction_manager.GetLastCommit());
 	}
 
 	D_ASSERT(options.checkpoint_id.IsValid());

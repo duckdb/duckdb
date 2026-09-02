@@ -18,7 +18,7 @@ namespace duckdb {
 struct CheckpointOptions {
 	CheckpointOptions()
 	    : wal_action(CheckpointWALAction::DONT_DELETE_WAL), action(CheckpointAction::CHECKPOINT_IF_REQUIRED),
-	      type(CheckpointType::FULL_CHECKPOINT), snapshot_bound(MAX_TRANSACTION_ID) {
+	      type(CheckpointType::FULL_CHECKPOINT), visibility_bound(VisibilityBound::IncludingUncommitted()) {
 	}
 
 	CheckpointWALAction wal_action;
@@ -26,8 +26,8 @@ struct CheckpointOptions {
 	CheckpointType type;
 	//! Identifies this checkpoint. Compared for equality only; empty when no checkpoint is running
 	optional_idx checkpoint_id;
-	//! What this checkpoint sees: stamps below this bound are written
-	transaction_t snapshot_bound;
+	//! What this checkpoint sees: timestamps below this bound are written
+	VisibilityBound visibility_bound;
 	//! The WAL lock - in case we are holding it during the entire checkpoint.
 	//! This is only required if we are doing a checkpoint instead of writing to the WAL
 	optional_ptr<unique_lock<mutex>> wal_lock;
