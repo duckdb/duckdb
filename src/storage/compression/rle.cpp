@@ -246,8 +246,8 @@ void RLEFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 template <class T>
 struct RLEScanState : public SegmentScanState {
-	explicit RLEScanState(ColumnSegment &segment)
-	    : handle(BufferManager::GetBufferManager(segment.GetDatabase()).Pin(segment.GetBlockHandle())), entry_pos(0),
+	explicit RLEScanState(BufferHandle handle_p, ColumnSegment &segment)
+	    : handle(std::move(handle_p)), entry_pos(0),
 	      position_in_entry(0),
 	      rle_count_offset(UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()))),
 	      data_pointer(
@@ -318,7 +318,9 @@ struct RLEScanState : public SegmentScanState {
 
 template <class T>
 unique_ptr<SegmentScanState> RLEInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto result = make_uniq<RLEScanState<T>>(segment);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
+	auto result = make_uniq<RLEScanState<T>>(std::move(handle), segment);
 	return std::move(result);
 }
 
@@ -554,7 +556,9 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	RLEScanState<T> scan_state(segment);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
+	RLEScanState<T> scan_state(std::move(handle), segment);
 	scan_state.Skip(segment, NumericCast<idx_t>(row_id));
 
 	auto data = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
