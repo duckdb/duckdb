@@ -136,8 +136,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 	// first check if there are any indexes that exist that point to the removed column
 	for (const auto &index : indexes) {
-		auto lookup = schema.LookupEntryDetailed(
-		    transaction, EntryLookupInfo(CatalogType::INDEX_ENTRY, QualifiedName(index.first)));
+		auto lookup = schema.LookupEntryDetailed(transaction,
+		                                         EntryLookupInfo(CatalogType::INDEX_ENTRY, QualifiedName(index.first)));
 		if (lookup.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
 			continue;
 		}
