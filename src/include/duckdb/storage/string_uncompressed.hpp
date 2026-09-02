@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/compression/compression_segment_reader.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -32,7 +33,20 @@ struct StringDictionaryContainer {
 };
 
 struct StringScanState : public SegmentScanState {
+public:
+	struct SegmentLayout {
+		//! Dictionary size and end read from the first eight segment bytes and validated within the segment.
+		StringDictionaryContainer dictionary;
+		//! One persisted dictionary offset per row, after verifying every entry fits before the dictionary bytes.
+		unsafe_array_ptr<const int32_t> offsets;
+	};
+
+	static SegmentLayout ReadSegmentLayout(const BufferHandle &handle, const ColumnSegment &segment);
+
+	StringScanState(BufferHandle handle, const ColumnSegment &segment);
+
 	BufferHandle handle;
+	SegmentLayout layout;
 };
 
 //===--------------------------------------------------------------------===//

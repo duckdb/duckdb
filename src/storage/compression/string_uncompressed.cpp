@@ -9,6 +9,35 @@
 
 namespace duckdb {
 
+[[noreturn]] static void ThrowInvalidStringDictionary() {
+	throw DataCorruptionException("Corrupted uncompressed string segment: dictionary is outside the segment");
+}
+
+[[noreturn]] static void ThrowStringOffsetTableOutOfBounds() {
+	throw DataCorruptionException("Corrupted uncompressed string segment: offset table overlaps the dictionary");
+}
+
+StringScanState::SegmentLayout StringScanState::ReadSegmentLayout(const BufferHandle &handle,
+                                                                 const ColumnSegment &segment) {
+	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "uncompressed string segment");
+	StringDictionaryContainer dictionary {reader.Read<uint32_t>(), reader.Read<uint32_t>()};
+	if (dictionary.end > reader.Size() || dictionary.size > dictionary.end) {
+		ThrowInvalidStringDictionary();
+	}
+	auto dictionary_start = NumericCast<idx_t>(dictionary.end - dictionary.size);
+	auto offset_count = segment.count.load();
+	if (dictionary_start < UncompressedStringStorage::DICTIONARY_HEADER_SIZE ||
+	    offset_count > (dictionary_start - UncompressedStringStorage::DICTIONARY_HEADER_SIZE) / sizeof(int32_t)) {
+		ThrowStringOffsetTableOutOfBounds();
+	}
+	auto offsets = reader.GetArray<int32_t>(UncompressedStringStorage::DICTIONARY_HEADER_SIZE, offset_count);
+	return {dictionary, offsets};
+}
+
+StringScanState::StringScanState(BufferHandle handle_p, const ColumnSegment &segment)
+    : handle(std::move(handle_p)), layout(ReadSegmentLayout(handle, segment)) {
+}
+
 //===--------------------------------------------------------------------===//
 // Storage Class
 //===--------------------------------------------------------------------===//
@@ -79,11 +108,10 @@ void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefe
 }
 
 unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(const QueryContext &context,
-                                                                       ColumnSegment &segment) {
-	auto result = make_uniq<StringScanState>();
+	                                                                       ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	result->handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-	return std::move(result);
+	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
+	return make_uniq<StringScanState>(std::move(handle), segment);
 }
 
 //===--------------------------------------------------------------------===//
@@ -96,8 +124,8 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	auto start = state.GetPositionInSegment();
 
 	auto baseptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-	auto dict_end = GetDictionaryEnd(segment, scan_state.handle);
-	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
+	auto dict_end = scan_state.layout.dictionary.end;
+	auto base_data = scan_state.layout.offsets;
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
 	int32_t previous_offset = start > 0 ? base_data[start - 1] : 0;
@@ -127,8 +155,8 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	auto start = state.GetPositionInSegment();
 
 	auto baseptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-	auto dict_end = GetDictionaryEnd(segment, scan_state.handle);
-	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
+	auto dict_end = scan_state.layout.dictionary.end;
+	auto base_data = scan_state.layout.offsets;
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
 	for (idx_t i = 0; i < sel_count; i++) {
@@ -165,19 +193,21 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	// fetch a single row from the string segment
 	// first pin the main buffer if it is not already pinned
 	auto &handle = state.GetOrInsertHandle(segment);
+	auto layout = StringScanState::ReadSegmentLayout(handle, segment);
 
 	auto baseptr = handle.GetDataMutable() + segment.GetBlockOffset();
-	auto dict_end = GetDictionaryEnd(segment, handle);
-	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
+	auto dict_end = layout.dictionary.end;
+	auto base_data = layout.offsets;
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
-	auto dict_offset = base_data[row_id];
+	auto row_index = NumericCast<idx_t>(row_id);
+	auto dict_offset = base_data[row_index];
 	uint32_t string_length;
 	if (DUCKDB_UNLIKELY(row_id == 0LL)) {
 		// edge case where this is the first string in the dict
 		string_length = NumericCast<uint32_t>(std::abs(dict_offset));
 	} else {
-		string_length = NumericCast<uint32_t>(std::abs(dict_offset) - std::abs(base_data[row_id - 1]));
+		string_length = NumericCast<uint32_t>(std::abs(dict_offset) - std::abs(base_data[row_index - 1]));
 	}
 	result_data[result_idx] =
 	    FetchStringFromDict(state.context, segment, dict_end, result, baseptr, dict_offset, string_length);
