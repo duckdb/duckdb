@@ -2,6 +2,8 @@
 # description: Test COUNT over a qualified star (COUNT(tbl.*))
 # group: [aggregates]
 
+require no_force_storage
+
 statement ok
 CREATE TABLE a(id int4);
 
