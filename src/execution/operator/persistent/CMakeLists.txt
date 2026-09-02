@@ -3,7 +3,6 @@ add_library_unity(
   OBJECT
   copy_output_lifecycle.cpp
   csv_rejects_table.cpp
-  merge_action_queue.cpp
   physical_batch_copy_to_file.cpp
   physical_batch_insert.cpp
   physical_copy_database.cpp

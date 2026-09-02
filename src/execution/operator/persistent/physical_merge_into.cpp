@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/operator/persistent/merge_action_queue.hpp"
+#include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/execution/row_id_deduplicator.hpp"
@@ -48,24 +48,45 @@ PhysicalMergeActionSource::~PhysicalMergeActionSource() {
 
 class MergeActionGlobalSourceState : public GlobalSourceState {
 public:
-	MergeActionGlobalSourceState(ClientContext &context, const PhysicalMergeActionSource &op) : queue(op.queue) {
-		if (!queue) {
-			throw InternalException("MERGE INTO action source has no queue - pipelines have not been built");
+	MergeActionGlobalSourceState(ClientContext &context, const PhysicalMergeActionSource &op)
+	    : exchange(op.exchange), consumer_idx(op.consumer_idx) {
+		if (!exchange) {
+			throw InternalException("MERGE INTO action source has no exchange - pipelines have not been built");
 		}
-		max_threads = op.parallel ? NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()) : 1;
+		max_threads = op.parallel ? exchange->MaxThreads() : 1;
+	}
+
+	~MergeActionGlobalSourceState() override {
+		Unregister();
 	}
 
 	idx_t MaxThreads() override {
 		return max_threads;
 	}
 
-	shared_ptr<MergeActionQueue> queue;
+	//! Signal that the pipeline of this action no longer reads from the exchange - the merge into must not block on
+	//! it, and any rows that are pushed afterwards are discarded
+	void Unregister() {
+		if (unregistered.exchange(true)) {
+			return;
+		}
+		exchange->UnregisterConsumer(consumer_idx);
+	}
+
+	shared_ptr<PipelineBroadcastExchange> exchange;
+	idx_t consumer_idx;
 	idx_t max_threads;
+	atomic<bool> unregistered {false};
 };
 
 class MergeActionLocalSourceState : public LocalSourceState {
 public:
-	MergeActionQueueScanState scan_state;
+	explicit MergeActionLocalSourceState(shared_ptr<PipelineBroadcastExchangeScanState> scan_state_p)
+	    : scan_state(std::move(scan_state_p)) {
+	}
+
+	shared_ptr<PipelineBroadcastExchangeScanState> scan_state;
+	optional_idx exchange_batch_index;
 };
 
 unique_ptr<GlobalSourceState> PhysicalMergeActionSource::GetGlobalSourceState(ClientContext &context) const {
@@ -74,32 +95,26 @@ unique_ptr<GlobalSourceState> PhysicalMergeActionSource::GetGlobalSourceState(Cl
 
 unique_ptr<LocalSourceState> PhysicalMergeActionSource::GetLocalSourceState(ExecutionContext &context,
                                                                             GlobalSourceState &gstate) const {
-	return make_uniq<MergeActionLocalSourceState>();
+	return make_uniq<MergeActionLocalSourceState>(exchange->GetScanState());
 }
 
 SourceResultType PhysicalMergeActionSource::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                             OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<MergeActionGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<MergeActionLocalSourceState>();
-	return gstate.queue->Scan(chunk, lstate.scan_state, input.interrupt_state);
+	return gstate.exchange->Scan(gstate.consumer_idx, chunk, *lstate.scan_state, lstate.exchange_batch_index,
+	                             input.batch_index_state, input.interrupt_state);
 }
 
 ProgressData PhysicalMergeActionSource::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<MergeActionGlobalSourceState>();
-	// we do not know how many rows the merge into will push into this action - report the rows we have consumed
-	// out of the rows that have been pushed so far
-	ProgressData result;
-	// read the consumed rows first - the number of pushed rows read afterwards is never smaller
-	auto consumed = gstate.queue->RowsConsumed();
-	auto pushed = gstate.queue->RowsPushed();
-	result.done = double(consumed);
-	result.total = double(MaxValue<idx_t>(pushed, estimated_cardinality));
-	return result;
+	// we do not know how many rows the merge into will push into this action - the exchange reports the rows we have
+	// consumed out of the rows that have been pushed so far
+	return gstate.exchange->ScanProgress(gstate.consumer_idx, estimated_cardinality);
 }
 
 void PhysicalMergeActionSource::SourceFinished(ClientContext &context, GlobalSourceState &gstate_p) const {
-	// the pipeline of this action no longer reads from the queue - the merge into must not block on it
-	gstate_p.Cast<MergeActionGlobalSourceState>().queue->ConsumerFinished();
+	gstate_p.Cast<MergeActionGlobalSourceState>().Unregister();
 }
 
 InsertionOrderPreservingMap<string> PhysicalMergeActionSource::ParamsToString() const {
@@ -258,6 +273,12 @@ public:
 				state.expression_chunk->Initialize(context.client, expression_types);
 			}
 			states.push_back(std::move(state));
+			// the state that this thread pushes the rows of the action into its exchange with
+			auto &source = action->source;
+			exchange_states.push_back(
+			    source && source->exchange
+			        ? source->exchange->GetLocalState(context.client, context.pipeline->GetBaseBatchIndex())
+			        : nullptr);
 		}
 		for (idx_t i = 0; i < 3; i++) {
 			match_results.emplace_back(context.client, op.children[0].get().types);
@@ -267,6 +288,8 @@ public:
 	MergeSinkState sink_state;
 	vector<MatchResult> match_results;
 	vector<MergeActionLocalState> states;
+	//! Per-action exchange state - NULL for actions that have no operator to push data into
+	vector<unique_ptr<PipelineBroadcastExchangeLocalState>> exchange_states;
 	idx_t merged_count = 0;
 
 public:
@@ -331,22 +354,22 @@ public:
 	    : op(op), matched_rows(context, GetRowIdTypes(op)) {
 		merged_count = 0;
 		for (auto &action : op.actions) {
-			shared_ptr<MergeActionQueue> queue;
+			shared_ptr<PipelineBroadcastExchange> exchange;
 			if (action->source) {
-				queue = action->source->queue;
-				if (!queue) {
-					throw InternalException("MERGE INTO action has no queue - pipelines have not been built");
+				exchange = action->source->exchange;
+				if (!exchange) {
+					throw InternalException("MERGE INTO action has no exchange - pipelines have not been built");
 				}
 			}
-			queues.push_back(std::move(queue));
+			exchanges.push_back(std::move(exchange));
 		}
 	}
 
 	~MergeIntoGlobalState() override {
 		// never leave a consumer waiting for data that is no longer coming
-		for (auto &queue : queues) {
-			if (queue) {
-				queue->Cancel();
+		for (auto &exchange : exchanges) {
+			if (exchange) {
+				exchange->Cancel();
 			}
 		}
 	}
@@ -361,8 +384,8 @@ public:
 	}
 
 	const PhysicalMergeInto &op;
-	//! The queue of every action - the queue is NULL for actions that have no operator to push data into
-	vector<shared_ptr<MergeActionQueue>> queues;
+	//! The exchange of every action - NULL for actions that have no operator to push data into
+	vector<shared_ptr<PipelineBroadcastExchange>> exchanges;
 	atomic<idx_t> merged_count;
 	//! Target row-ids already matched by a WHEN MATCHED modifying action, to detect a second action on a row.
 	mutex match_lock;
@@ -423,8 +446,10 @@ public:
 				input_chunk = nullptr;
 				continue;
 			}
-			// push the data into the queue of this action - the pipeline of the action consumes it from there
-			auto result = queues[i]->Push(*input_chunk, input.interrupt_state);
+			// push the data into the exchange of this action - the pipeline of the action consumes it from there
+			auto &exchange_state = *local_state.exchange_states[i];
+			auto result =
+			    exchanges[i]->Push(*input_chunk, exchange_state, local_state.partition_info, input.interrupt_state);
 			if (result == SinkResultType::BLOCKED) {
 				return SinkResultType::BLOCKED;
 			}
@@ -564,10 +589,10 @@ SinkCombineResultType PhysicalMergeInto::Combine(ExecutionContext &context, Oper
 SinkFinalizeType PhysicalMergeInto::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                              OperatorSinkFinalizeInput &input) const {
 	auto &global_state = input.global_state.Cast<MergeIntoGlobalState>();
-	// all data has been pushed into the queues of the actions - their pipelines can finish up
-	for (auto &queue : global_state.queues) {
-		if (queue) {
-			queue->Finish();
+	// all data has been pushed into the exchanges of the actions - their pipelines can finish up
+	for (auto &exchange : global_state.exchanges) {
+		if (exchange) {
+			exchange->Finish();
 		}
 	}
 	return SinkFinalizeType::READY;
@@ -597,21 +622,26 @@ void PhysicalMergeInto::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 	auto &state = meta_pipeline.GetState();
 	auto &context = current.GetClientContext();
 
-	// set up the queues that connect the merge into to the pipelines of the actions
-	// the queues are bounded - the merge into blocks if the pipeline of an action cannot keep up
-	// if the actions must run one after the other only the first action can stream: the rows of the other actions are
-	// buffered so that the merge into can always finish pushing them
-	auto thread_count = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
-	auto max_buffered_chunks = MaxValue<idx_t>(thread_count * 2, 8);
+	// set up the exchanges that connect the merge into to the pipelines of the actions - the rows of an action are
+	// routed to its pipeline by pushing them into the exchange of that action, which its source scans
+	// the merge into blocks if the pipeline of an action cannot keep up. if the actions must run one after the other
+	// only the first action can stream: the rows of the other actions are buffered (spilling to disk if required) so
+	// that the merge into can always finish pushing them
 	bool first_action = true;
 	for (auto &action : actions) {
 		if (!action->source) {
 			continue;
 		}
-		auto mode =
-		    serialize_actions && !first_action ? MergeActionQueueMode::MATERIALIZED : MergeActionQueueMode::BOUNDED;
-		action->source->queue =
-		    make_shared_ptr<MergeActionQueue>(context, action->source->types, mode, max_buffered_chunks);
+		auto buffer_mode = serialize_actions && !first_action ? PipelineBroadcastExchangeBufferMode::BUFFER_ALL
+		                                                      : PipelineBroadcastExchangeBufferMode::THROTTLE_PRODUCER;
+		auto exchange = make_shared_ptr<PipelineBroadcastExchange>(
+		    context, action->source->types, PipelineBroadcastExchangeCompletionMode::RUN_TO_COMPLETION,
+		    OrderPreservationType::NO_ORDER, /*use_batch_index=*/false, buffer_mode);
+		// every action has an exchange of its own - the source of the action is its only consumer
+		action->source->consumer_idx = exchange->RegisterConsumer();
+		exchange->SelectBufferedConsumer(action->source->consumer_idx, PipelineBroadcastExchangeScanMode::CHUNK);
+		exchange->SetLogOperator(*action->source);
+		action->source->exchange = std::move(exchange);
 		first_action = false;
 	}
 

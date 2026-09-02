@@ -12,9 +12,9 @@
 #include "duckdb/common/enums/merge_action_type.hpp"
 
 namespace duckdb {
-class MergeActionQueue;
 class MergeIntoLocalState;
 class PhysicalPlanGenerator;
+class PipelineBroadcastExchange;
 
 //! The source of a MERGE INTO action pipeline - the merge into pushes the rows that belong to this action into the
 //! queue of the action, which this operator scans. The pipeline blocks while no data is available.
@@ -31,10 +31,13 @@ public:
 	MergeActionType action_type;
 	//! Whether or not the rows of this action can be consumed by multiple threads
 	bool parallel;
-	//! The queue that the merge into pushes the rows of this action into - set up when building the pipelines.
-	//! This is shared because the merge into keeps the queue alive: the physical plan can destroy this source
-	//! before the merge into, whose sink state cancels the queue when it is torn down.
-	shared_ptr<MergeActionQueue> queue;
+	//! The exchange that the merge into pushes the rows of this action into - set up when building the pipelines.
+	//! This is shared because the merge into keeps the exchange alive: the physical plan can destroy this source
+	//! before the merge into, whose sink state cancels the exchange when it is torn down.
+	shared_ptr<PipelineBroadcastExchange> exchange;
+	//! The consumer of the exchange that this source scans - every action has an exchange of its own, so the rows
+	//! of an action are routed to it by pushing them into its exchange
+	idx_t consumer_idx = 0;
 	//! The plan that produces the rows that the merge into pushes into this source. This is not a child - the rows
 	//! are pushed in by the merge into - but the source stands in for it when the operators of the action are
 	//! planned, so plan walks that look for the origin of the rows can continue here.
