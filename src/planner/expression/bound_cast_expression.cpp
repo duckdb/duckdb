@@ -92,8 +92,12 @@ unique_ptr<Expression> BoundCastExpression::AddDefaultCastToType(unique_ptr<Expr
 	GetCastFunctionInput get_input;
 	get_input.query_location = expr->GetQueryLocation();
 	bool created_cast = false;
-	return AddCastToTypeInternal(std::move(expr), target_type, default_set, get_input, try_cast,
-	                             CastBindSource::DEFAULT, created_cast);
+	auto result = AddCastToTypeInternal(std::move(expr), target_type, default_set, get_input, try_cast,
+	                                    CastBindSource::DEFAULT, created_cast);
+	if (created_cast) {
+		result->Cast<BoundFunctionExpression>().SetStructuralSQLExportRecipe(BoundFunctionSQLExportType::CAST);
+	}
+	return result;
 }
 
 unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context, unique_ptr<Expression> expr,
@@ -105,8 +109,7 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context
 	auto result = AddCastToTypeInternal(std::move(expr), target_type, cast_functions, get_input, try_cast,
 	                                    CastBindSource::CONTEXT, created_cast);
 	if (created_cast) {
-		result->Cast<BoundFunctionExpression>().FunctionMutable().SetFunctionExpressionIdentity(
-		    ExpressionType::OPERATOR_CAST);
+		result->Cast<BoundFunctionExpression>().SetStructuralSQLExportRecipe(BoundFunctionSQLExportType::CAST);
 	}
 	return result;
 }

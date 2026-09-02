@@ -648,10 +648,8 @@ FunctionBinder::BindCatalogScalarFunctionInternal(const ScalarFunctionCatalogEnt
 			}
 		}
 	}
-	if (selected_function_is_live && bound_function_result.GetDefinition() == selected_function) {
-		bound_function_result.RestoreFunctionExpressionIdentity();
-		bound_function_result.RestoreRebindableDefinition();
-	}
+	auto attach_sql_export_recipe =
+	    selected_function_is_live && bound_function_result.GetDefinition() == selected_function;
 
 	unique_ptr<Expression> result;
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(bound_function_result), std::move(regular_args),
@@ -662,6 +660,18 @@ FunctionBinder::BindCatalogScalarFunctionInternal(const ScalarFunctionCatalogEnt
 		result = result_func->Function().GetBindExpressionCallback()(input);
 	}
 	if (!result) {
+		if (attach_sql_export_recipe) {
+			vector<LogicalType> sql_export_arguments;
+			for (auto &child : result_func->GetChildren()) {
+				sql_export_arguments.push_back(child->GetReturnType());
+			}
+			result_func->SetCatalogSQLExportRecipe(
+			    QualifiedName(selected_function->GetCatalogName(), selected_function->GetSchemaName(),
+			                  selected_function->GetName()),
+			    std::move(sql_export_arguments), result_func->GetReturnType(),
+			    selected_function->GetSQLExportCallback(),
+			    selected_function->HasBindCallback() || selected_function->GetCaptureArgumentAliases());
+		}
 		result = std::move(result_func);
 	}
 	return result;
@@ -1321,12 +1331,19 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindCatalogAggregateFunctio
 			}
 		}
 	}
-	if (bound_function_is_live && bound_function_result.GetDefinition() == bound_function) {
-		bound_function_result.RestoreRebindableDefinition();
+	auto result = make_uniq<BoundAggregateExpression>(std::move(bound_function_result), std::move(regular_args),
+	                                                  std::move(filter), std::move(bind_info), aggr_type);
+	if (bound_function_is_live && result->Function().GetDefinition() == bound_function) {
+		vector<LogicalType> sql_export_arguments;
+		for (auto &child : result->GetChildren()) {
+			sql_export_arguments.push_back(child->GetReturnType());
+		}
+		result->SetCatalogSQLExportRecipe(
+		    QualifiedName(bound_function->GetCatalogName(), bound_function->GetSchemaName(), bound_function->GetName()),
+		    std::move(sql_export_arguments), result->GetReturnType(), bound_function->GetSQLExportCallback(),
+		    bound_function->HasBindCallback());
 	}
-
-	return make_uniq<BoundAggregateExpression>(std::move(bound_function_result), std::move(regular_args),
-	                                           std::move(filter), std::move(bind_info), aggr_type);
+	return result;
 }
 
 pair<BoundWindowFunction, unique_ptr<FunctionData>>

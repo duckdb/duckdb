@@ -177,6 +177,7 @@ unique_ptr<Expression> BoundBetweenExpression::Create(unique_ptr<Expression> inp
 
 	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(BetweenFun::GetFunction()),
 	                                                 std::move(children), std::move(function_data), false);
+	result->SetStructuralSQLExportRecipe(BoundFunctionSQLExportType::BETWEEN);
 	return std::move(result);
 }
 
@@ -223,9 +224,6 @@ ScalarFunction BetweenFun::GetFunction() {
 #if !DUCKDB_SMALLER_BINARY(between_select)
 	between_fun.SetSelectCallback(BetweenSelect);
 #endif
-	between_fun.SetFunctionExpressionIdentity(ExpressionType::COMPARE_BETWEEN);
-	between_fun.RefreshFunctionIdentitySnapshot();
-	between_fun.deserialization_preserves_function_identity = true;
 	return between_fun;
 }
 
@@ -243,7 +241,8 @@ bool BoundBetweenExpression::UpperInclusive(const BoundFunctionExpression &betwe
 }
 
 bool BoundBetweenExpression::HasCanonicalFunction(const BoundFunctionExpression &between_expr) {
-	return between_expr.Function().HasFunctionExpressionIdentity(ExpressionType::COMPARE_BETWEEN);
+	auto recipe = between_expr.GetSQLExportRecipe();
+	return recipe && recipe->type == BoundFunctionSQLExportType::BETWEEN;
 }
 
 bool BoundBetweenExpression::HasValidBindData(const BoundFunctionExpression &between_expr) {

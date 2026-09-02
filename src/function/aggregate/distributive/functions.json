@@ -1,21 +1,5 @@
 [
     {
-        "name": "sum",
-        "parameters": "arg",
-        "description": "Calculates the sum value for all tuples in arg.",
-        "example": "sum(A)",
-        "type": "aggregate_function_set",
-        "register": false
-    },
-    {
-        "name": "sum_no_overflow",
-        "parameters": "arg",
-        "description": "Internal only. Calculates the sum value for all tuples in arg without overflow checks.",
-        "example": "sum_no_overflow(A)",
-        "type": "aggregate_function_set",
-        "register": false
-    },
-    {
         "name": "count_star",
         "parameters": "",
         "description": "",

@@ -13,6 +13,7 @@
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
+#include "duckdb/function/function_sql_export.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
 
@@ -21,13 +22,9 @@ namespace duckdb {
 class BufferManager;
 class InterruptState;
 class BoundAggregateFunction;
-class FunctionBinder;
-class FunctionSerializer;
-class StatisticsPropagator;
 struct AggregateRewriteInput;
 struct AggregateRewritePlan;
 struct AggregateRewriteCostInput;
-struct ExportAggregateFunction;
 
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
@@ -246,15 +243,11 @@ public:
 
 	bool HasStatisticsCallback() const { return statistics != nullptr; }
 	aggregate_statistics_t GetStatisticsCallback() const { return statistics; }
-	void SetStatisticsCallback(aggregate_statistics_t callback) {
-		statistics = callback;
-	}
+	void SetStatisticsCallback(aggregate_statistics_t callback) { statistics = callback; }
 
 	bool HasSerializationCallbacks() const { return serialize != nullptr && deserialize != nullptr; }
 	void SetSerializeCallback(aggregate_serialize_t callback) { serialize = callback; }
-	void SetDeserializeCallback(aggregate_deserialize_t callback) {
-		deserialize = callback;
-	}
+	void SetDeserializeCallback(aggregate_deserialize_t callback) { deserialize = callback; }
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
 
@@ -334,6 +327,24 @@ public:
 	bool operator!=(const AggregateFunctionCallbacks &rhs) const;
 };
 
+//! Callbacks that select only the physical aggregate implementation and its state representation.
+struct AggregateFunctionExecutionCallbacks {
+	aggregate_size_t state_size = nullptr;
+	aggregate_initialize_t initialize = nullptr;
+	aggregate_update_t update = nullptr;
+	aggregate_combine_t combine = nullptr;
+	aggregate_finalize_t finalize = nullptr;
+	aggregate_init_local_state_finalize_t init_local_state_finalize = nullptr;
+	aggregate_cluster_update_t cluster_update = nullptr;
+	aggregate_window_t window = nullptr;
+	aggregate_wininit_t window_init = nullptr;
+	aggregate_window_batch_t window_batch = nullptr;
+	aggregate_destructor_t destructor = nullptr;
+	aggregate_get_state_type_t get_state_type = nullptr;
+	aggregate_finalize_t export_aggregate_state = nullptr;
+	aggregate_import_state_t import_aggregate_state = nullptr;
+};
+
 class AggregateFunctionProperties : public FunctionProperties {
 public:
 	//! Whether the aggregate is order dependent
@@ -353,43 +364,75 @@ class BaseAggregateFunction {
 public:
 	// clang-format off
 	auto GetProperties() const -> const AggregateFunctionProperties & { return properties; }
-	auto GetProperties() -> AggregateFunctionProperties & { InvalidateDefinitionRebindability(); return properties; }
-	auto SetProperties(const AggregateFunctionProperties &value) -> void { InvalidateDefinitionRebindability(); properties = value; }
+	auto GetProperties() -> AggregateFunctionProperties & { return properties; }
+	auto SetProperties(const AggregateFunctionProperties &value) -> void { properties = value; }
 
 	auto GetCallbacks() const -> const AggregateFunctionCallbacks & { return callbacks; }
-	auto GetCallbacks() -> AggregateFunctionCallbacks & { InvalidateDefinitionRebindability(); return callbacks; }
-	auto SetCallbacks(const AggregateFunctionCallbacks &value) -> void { InvalidateDefinitionRebindability(); callbacks = value; }
+	auto GetCallbacks() -> AggregateFunctionCallbacks & { return callbacks; }
+	auto SetCallbacks(const AggregateFunctionCallbacks &value) -> void { callbacks = value; }
+	AggregateFunctionExecutionCallbacks GetExecutionCallbacks() const {
+		return {callbacks.state_size,
+		        callbacks.initialize,
+		        callbacks.update,
+		        callbacks.combine,
+		        callbacks.finalize,
+		        callbacks.init_local_state_finalize,
+		        callbacks.cluster_update,
+		        callbacks.window,
+		        callbacks.window_init,
+		        callbacks.window_batch,
+		        callbacks.destructor,
+		        callbacks.get_state_type,
+		        callbacks.export_aggregate_state,
+		        callbacks.import_aggregate_state};
+	}
+	void SetExecutionCallbacks(const AggregateFunctionExecutionCallbacks &value) {
+		callbacks.state_size = value.state_size;
+		callbacks.initialize = value.initialize;
+		callbacks.update = value.update;
+		callbacks.combine = value.combine;
+		callbacks.finalize = value.finalize;
+		callbacks.init_local_state_finalize = value.init_local_state_finalize;
+		callbacks.cluster_update = value.cluster_update;
+		callbacks.window = value.window;
+		callbacks.window_init = value.window_init;
+		callbacks.window_batch = value.window_batch;
+		callbacks.destructor = value.destructor;
+		callbacks.get_state_type = value.get_state_type;
+		callbacks.export_aggregate_state = value.export_aggregate_state;
+		callbacks.import_aggregate_state = value.import_aggregate_state;
+	}
 
 public: // Properties
 
 	auto GetStability() const -> FunctionStability { return properties.stability; }
-	auto SetStability(FunctionStability value) -> void { InvalidateDefinitionRebindability(); properties.stability = value; }
+	auto SetStability(FunctionStability value) -> void { properties.stability = value; }
 
 	auto GetNullHandling() const -> FunctionNullHandling { return properties.null_handling; }
-	auto SetNullHandling(FunctionNullHandling value) -> void { InvalidateDefinitionRebindability(); properties.null_handling = value; }
+	auto SetNullHandling(FunctionNullHandling value) -> void { properties.null_handling = value; }
 
 	auto GetErrorMode() const -> FunctionErrors { return properties.errors; }
-	auto SetErrorMode(FunctionErrors value) -> void { InvalidateDefinitionRebindability(); properties.errors = value; }
+	auto SetErrorMode(FunctionErrors value) -> void { properties.errors = value; }
 
 	auto GetCollationHandling() const -> FunctionCollationHandling { return properties.collation_handling; }
-	auto SetCollationHandling(FunctionCollationHandling value) -> void { InvalidateDefinitionRebindability(); properties.collation_handling = value; }
+	auto SetCollationHandling(FunctionCollationHandling value) -> void { properties.collation_handling = value; }
 
 	//! Set this functions error-mode as fallible (can throw runtime errors)
-	void SetFallible() { InvalidateDefinitionRebindability(); properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
+	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
 	//! Set this functions stability as volatile (can not be cached per row)
-	void SetVolatile() { InvalidateDefinitionRebindability(); properties.stability = FunctionStability::VOLATILE; }
+	void SetVolatile() { properties.stability = FunctionStability::VOLATILE; }
 
 	//! Whether the aggregate is order dependent
 	auto GetOrderDependent() const -> AggregateOrderDependent { return properties.order_dependent; }
-	auto SetOrderDependent(AggregateOrderDependent value) -> void { InvalidateDefinitionRebindability(); properties.order_dependent = value; }
+	auto SetOrderDependent(AggregateOrderDependent value) -> void { properties.order_dependent = value; }
 
 	//! Whether the aggregate is affect by distinct modifiers
 	auto GetDistinctDependent() const -> AggregateDistinctDependent { return properties.distinct_dependent; }
-	auto SetDistinctDependent(AggregateDistinctDependent value) -> void { InvalidateDefinitionRebindability(); properties.distinct_dependent = value; }
+	auto SetDistinctDependent(AggregateDistinctDependent value) -> void { properties.distinct_dependent = value; }
 
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
-	auto SetSingleValueIdentity(bool value) -> void { InvalidateDefinitionRebindability(); properties.single_value_identity = value; }
+	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
@@ -399,65 +442,65 @@ public: // Callbacks
 
 	auto HasBindCallback() const -> bool { return callbacks.bind != nullptr; }
 	auto GetBindCallback() const -> bind_aggregate_function_t { return callbacks.bind; }
-	auto SetBindCallback(bind_aggregate_function_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.bind = callback; }
+	auto SetBindCallback(bind_aggregate_function_t callback) -> void { callbacks.bind = callback; }
 
 	auto HasStateInitCallback() const -> bool { return callbacks.initialize != nullptr; }
 	auto GetStateInitCallback() const -> aggregate_initialize_t { return callbacks.initialize; }
-	auto SetStateInitCallback(aggregate_initialize_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.initialize = callback; }
+	auto SetStateInitCallback(aggregate_initialize_t callback) -> void { callbacks.initialize = callback; }
 
 	auto HasStateSizeCallback() const -> bool { return callbacks.state_size != nullptr; }
 	auto GetStateSizeCallback() const -> aggregate_size_t { return callbacks.state_size; }
-	auto SetStateSizeCallback(aggregate_size_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.state_size = callback; }
+	auto SetStateSizeCallback(aggregate_size_t callback) -> void { callbacks.state_size = callback; }
 
 	auto HasStateDestructorCallback() const -> bool { return callbacks.destructor != nullptr; }
 	auto GetStateDestructorCallback() const -> aggregate_destructor_t { return callbacks.destructor; }
-	auto SetStateDestructorCallback(aggregate_destructor_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.destructor = callback; }
+	auto SetStateDestructorCallback(aggregate_destructor_t callback) -> void { callbacks.destructor = callback; }
 
 	auto HasStateUpdateCallback() const -> bool { return callbacks.update != nullptr; }
 	auto GetStateUpdateCallback() const -> aggregate_update_t { return callbacks.update; }
-	auto SetStateUpdateCallback(aggregate_update_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.update = callback; }
+	auto SetStateUpdateCallback(aggregate_update_t callback) -> void { callbacks.update = callback; }
 
 	auto HasStateClusterUpdateCallback() const -> bool { return callbacks.cluster_update != nullptr; }
 	auto GetStateClusterUpdateCallback() const -> aggregate_cluster_update_t { return callbacks.cluster_update; }
-	auto SetStateClusterUpdateCallback(aggregate_cluster_update_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.cluster_update = callback; }
+	auto SetStateClusterUpdateCallback(aggregate_cluster_update_t callback) -> void { callbacks.cluster_update = callback; }
 
 	auto HasStateCombineCallback() const -> bool { return callbacks.combine != nullptr; }
 	auto GetStateCombineCallback() const -> aggregate_combine_t { return callbacks.combine; }
-	auto SetStateCombineCallback(aggregate_combine_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.combine = callback; }
+	auto SetStateCombineCallback(aggregate_combine_t callback) -> void { callbacks.combine = callback; }
 
 	auto HasStateFinalizeCallback() const -> bool { return callbacks.finalize != nullptr; }
 	auto GetStateFinalizeCallback() const -> aggregate_finalize_t { return callbacks.finalize; }
-	auto SetStateFinalizeCallback(aggregate_finalize_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.finalize = callback; }
+	auto SetStateFinalizeCallback(aggregate_finalize_t callback) -> void { callbacks.finalize = callback; }
 
 	auto HasInitLocalStateFinalizeCallback() const -> bool { return callbacks.init_local_state_finalize != nullptr; }
 	auto GetInitLocalStateFinalizeCallback() const -> aggregate_init_local_state_finalize_t { return callbacks.init_local_state_finalize; }
-	auto SetInitLocalStateFinalizeCallback(aggregate_init_local_state_finalize_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.init_local_state_finalize = callback; }
+	auto SetInitLocalStateFinalizeCallback(aggregate_init_local_state_finalize_t callback) -> void { callbacks.init_local_state_finalize = callback; }
 
 	auto HasWindowCallback() const -> bool { return callbacks.window != nullptr; }
 	auto GetWindowCallback() const -> aggregate_window_t { return callbacks.window; }
-	auto SetWindowCallback(aggregate_window_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.window = callback; }
+	auto SetWindowCallback(aggregate_window_t callback) -> void { callbacks.window = callback; }
 
-	auto SetWindowInitCallback(aggregate_wininit_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.window_init = callback; }
+	auto SetWindowInitCallback(aggregate_wininit_t callback) -> void { callbacks.window_init = callback; }
 	auto GetWindowInitCallback() const -> aggregate_wininit_t { return callbacks.window_init; }
 	auto HasWindowInitCallback() const -> bool { return callbacks.window_init != nullptr; }
 
 	auto HasWindowBatchCallback() const -> bool { return callbacks.window_batch != nullptr; }
 	auto GetWindowBatchCallback() const -> aggregate_window_batch_t { return callbacks.window_batch; }
-	auto SetWindowBatchCallback(aggregate_window_batch_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.window_batch = callback; }
+	auto SetWindowBatchCallback(aggregate_window_batch_t callback) -> void { callbacks.window_batch = callback; }
 
 	auto HasStatisticsCallback() const -> bool { return callbacks.statistics != nullptr; }
 	auto GetStatisticsCallback() const -> aggregate_statistics_t { return callbacks.statistics; }
-	auto SetStatisticsCallback(aggregate_statistics_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.SetStatisticsCallback(callback); }
+	auto SetStatisticsCallback(aggregate_statistics_t callback) -> void { callbacks.statistics = callback; }
 
 	auto HasSerializationCallbacks() const -> bool { return callbacks.serialize != nullptr && callbacks.deserialize != nullptr; }
-	auto SetSerializeCallback(aggregate_serialize_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.serialize = callback; }
-	auto SetDeserializeCallback(aggregate_deserialize_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.SetDeserializeCallback(callback); }
+	auto SetSerializeCallback(aggregate_serialize_t callback) -> void { callbacks.serialize = callback; }
+	auto SetDeserializeCallback(aggregate_deserialize_t callback) -> void { callbacks.deserialize = callback; }
 	auto GetSerializeCallback() const -> aggregate_serialize_t { return callbacks.serialize; }
 	auto GetDeserializeCallback() const -> aggregate_deserialize_t { return callbacks.deserialize; }
 
 	auto HasDirectRewriteCallback() const -> bool { return callbacks.direct_rewrite != nullptr; }
 	auto GetDirectRewriteCallback() const -> aggregate_direct_rewrite_t { return callbacks.direct_rewrite; }
-	auto SetDirectRewriteCallback(aggregate_direct_rewrite_t callback) -> void { InvalidateDefinitionRebindability(); callbacks.direct_rewrite = callback; }
+	auto SetDirectRewriteCallback(aggregate_direct_rewrite_t callback) -> void { callbacks.direct_rewrite = callback; }
 
 	auto HasRewriteCallback() const -> bool { return callbacks.rewrite != nullptr; }
 	auto GetRewriteCallback() const -> aggregate_rewrite_t { return callbacks.rewrite; }
@@ -467,7 +510,6 @@ public: // Callbacks
 	auto SetRewriteCallback(aggregate_rewrite_t callback, AggregateRewritePolicy policy,
 	                        OptimizerType optimizer_type = OptimizerType::INVALID,
 	                        aggregate_rewrite_cost_t cost = nullptr) -> void {
-		InvalidateDefinitionRebindability();
 		callbacks.SetRewriteCallback(callback, policy, optimizer_type, cost);
 	}
 
@@ -476,11 +518,11 @@ public: // Callbacks
 
 	bool HasExportAggregateStateCallback() const { return callbacks.export_aggregate_state != nullptr; }
 	aggregate_finalize_t GetExportAggregateStateCallback() const { return callbacks.export_aggregate_state; }
-	void SetExportAggregateStateCallback(aggregate_finalize_t callback) { InvalidateDefinitionRebindability(); callbacks.export_aggregate_state = callback; }
+	void SetExportAggregateStateCallback(aggregate_finalize_t callback) { callbacks.export_aggregate_state = callback; }
 
 	bool HasImportAggregateStateCallback() const { return callbacks.import_aggregate_state != nullptr; }
 	aggregate_import_state_t GetImportAggregateStateCallback() const { return callbacks.import_aggregate_state; }
-	void SetImportAggregateStateCallback(aggregate_import_state_t callback) { InvalidateDefinitionRebindability(); callbacks.import_aggregate_state = callback; }
+	void SetImportAggregateStateCallback(aggregate_import_state_t callback) { callbacks.import_aggregate_state = callback; }
 	// clang-format on
 
 public: // Extra function info
@@ -492,12 +534,10 @@ public: // Extra function info
 		return *function_info;
 	}
 	auto SetExtraFunctionInfo(shared_ptr<AggregateFunctionInfo> info) -> void {
-		InvalidateDefinitionRebindability();
 		function_info = std::move(info);
 	}
 	template <class T, class... ARGS>
 	auto SetExtraFunctionInfo(ARGS &&... args) -> void {
-		InvalidateDefinitionRebindability();
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 	auto GetFunctionInfo() const -> shared_ptr<AggregateFunctionInfo> {
@@ -505,23 +545,6 @@ public: // Extra function info
 	}
 
 protected:
-	void InvalidateDefinitionRebindability() {
-		rebindable_definition.reset();
-		function_identity_token = make_shared_ptr<idx_t>(0);
-	}
-	const shared_ptr<const idx_t> &GetFunctionIdentityToken() const {
-		return function_identity_token;
-	}
-	void RestoreDefinitionRebindability(shared_ptr<const AggregateFunction> definition) {
-		rebindable_definition = std::move(definition);
-	}
-	bool HasRebindableDefinitionInternal(const shared_ptr<const AggregateFunction> &definition) const {
-		return definition && rebindable_definition == definition;
-	}
-
-	//! Immutable catalog definition authenticated and transferred only by its owning boundaries
-	shared_ptr<const AggregateFunction> rebindable_definition;
-	shared_ptr<const idx_t> function_identity_token = make_shared_ptr<idx_t>(0);
 	AggregateFunctionProperties properties;
 	AggregateFunctionCallbacks callbacks;
 	shared_ptr<AggregateFunctionInfo> function_info;
@@ -534,13 +557,6 @@ public:
 	}
 	static constexpr bind_aggregate_function_t NoBind() {
 		return nullptr;
-	}
-
-	bool StatisticsPreservesFunctionIdentity() const {
-		return statistics_preserves_function_identity && HasPreservedFunctionImplementation();
-	}
-	bool DeserializationPreservesFunctionIdentity() const {
-		return deserialization_preserves_function_identity && HasPreservedFunctionImplementation();
 	}
 
 	AggregateFunction(const Identifier &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -634,13 +650,23 @@ public:
 
 public:
 	bool operator==(const AggregateFunction &rhs) const {
-		return callbacks == rhs.callbacks;
+		return callbacks == rhs.callbacks && sql_export == rhs.sql_export;
 	}
 	bool operator!=(const AggregateFunction &rhs) const {
 		return !(*this == rhs);
 	}
 
 	unique_ptr<BoundAggregateExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments) const;
+
+	bool HasSQLExportCallback() const {
+		return sql_export != nullptr;
+	}
+	aggregate_function_sql_export_t GetSQLExportCallback() const {
+		return sql_export;
+	}
+	void SetSQLExportCallback(aggregate_function_sql_export_t callback) {
+		sql_export = callback;
+	}
 
 	//! Statistics callback for aggregates whose result always lies within the range of their first
 	//! argument (e.g. min, max, first, median): the output inherits the input column statistics
@@ -869,25 +895,7 @@ public:
 	}
 
 private:
-	void RefreshFunctionIdentitySnapshot() {
-		auto snapshot = make_shared_ptr<AggregateFunction>(*this);
-		snapshot->function_identity_snapshot.reset();
-		snapshot->statistics_preserves_function_identity = false;
-		snapshot->deserialization_preserves_function_identity = false;
-		function_identity_snapshot = std::move(snapshot);
-	}
-	bool HasPreservedFunctionImplementation() const {
-		return function_identity_snapshot && signature == function_identity_snapshot->signature &&
-		       function_identity_token == function_identity_snapshot->function_identity_token &&
-		       GetCallbacks() == function_identity_snapshot->GetCallbacks() &&
-		       GetProperties() == function_identity_snapshot->GetProperties() && !GetFunctionInfo() &&
-		       !function_identity_snapshot->GetFunctionInfo() && extra_info == function_identity_snapshot->extra_info;
-	}
-
-	shared_ptr<const AggregateFunction> function_identity_snapshot;
-	bool statistics_preserves_function_identity = false;
-	bool deserialization_preserves_function_identity = false;
-	friend class BuiltinFunctions;
+	aggregate_function_sql_export_t sql_export = nullptr;
 };
 
 class BoundAggregateFunction : public BaseAggregateFunction, public BoundSimpleFunction {
@@ -912,36 +920,7 @@ public:
 	}
 	//! Restore the definition after the bound function has been replaced wholesale
 	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
-		InvalidateDefinitionRebindability();
 		definition = std::move(definition_p);
-	}
-	bool HasRebindableDefinition() const {
-		return HasRebindableDefinitionInternal(definition);
-	}
-	bool StatisticsPreservesFunctionIdentity() const {
-		return definition && definition->StatisticsPreservesFunctionIdentity();
-	}
-	bool DeserializationPreservesFunctionIdentity() const {
-		return definition && definition->DeserializationPreservesFunctionIdentity();
-	}
-
-	const vector<LogicalType> &GetArguments() const {
-		return BoundSimpleFunction::GetArguments();
-	}
-	vector<LogicalType> &GetArguments() {
-		InvalidateDefinitionRebindability();
-		return BoundSimpleFunction::GetArguments();
-	}
-	const LogicalType &GetReturnType() const {
-		return BoundSimpleFunction::GetReturnType();
-	}
-	LogicalType &GetReturnType() {
-		InvalidateDefinitionRebindability();
-		return BoundSimpleFunction::GetReturnType();
-	}
-	void SetReturnType(LogicalType return_type_p) {
-		InvalidateDefinitionRebindability();
-		BoundSimpleFunction::SetReturnType(std::move(return_type_p));
 	}
 
 	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
@@ -958,23 +937,6 @@ public:
 	}
 
 private:
-	void RestoreRebindableDefinition() {
-		if (definition && !definition->GetCallbacks().HasBindCallback()) {
-			RestoreDefinitionRebindability(definition);
-		} else {
-			InvalidateDefinitionRebindability();
-		}
-	}
-	void InvalidateRebindableDefinition() {
-		InvalidateDefinitionRebindability();
-	}
-
-	friend class FunctionBinder;
-	friend class FunctionSerializer;
-	friend class StatisticsPropagator;
-	friend class BoundAggregateExpression;
-	friend struct ExportAggregateFunction;
-
 	shared_ptr<const AggregateFunction> definition;
 };
 

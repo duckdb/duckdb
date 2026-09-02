@@ -138,14 +138,6 @@ static bool IsSQLRepresentableType(const LogicalType &type) {
 	});
 }
 
-static bool DefinitionArityMatches(const FunctionSignature &signature, idx_t argument_count) {
-	auto required_count = signature.GetRequiredParameterCount();
-	if (argument_count < required_count) {
-		return false;
-	}
-	return signature.HasVarArgs() || argument_count <= signature.GetParameterCount();
-}
-
 static bool ChildrenMatchArguments(const vector<unique_ptr<Expression>> &children,
                                    const vector<LogicalType> &arguments) {
 	if (children.size() != arguments.size()) {
@@ -175,18 +167,13 @@ static bool ChildrenAreConsistentWithArguments(const vector<unique_ptr<Expressio
 }
 
 template <class FUNCTION>
-static LogicalPlanVerificationFunctionIdentity FunctionIdentity(const FUNCTION &function,
-                                                                const vector<unique_ptr<Expression>> &children,
-                                                                const LogicalType &return_type) {
-	auto &definition = function.GetDefinition();
+static LogicalPlanVerificationFunctionIdentity CurrentFunctionIdentity(const FUNCTION &function,
+                                                                       const vector<unique_ptr<Expression>> &children,
+                                                                       const LogicalType &return_type) {
 	LogicalPlanVerificationFunctionIdentity identity;
-	if (definition) {
-		identity.catalog = definition->GetCatalogName().GetIdentifierName();
-		identity.schema = definition->GetSchemaName().GetIdentifierName();
-		identity.name = definition->GetName().GetIdentifierName();
-	} else {
-		identity.name = function.GetName().GetIdentifierName();
-	}
+	identity.catalog = function.GetCatalogName().GetIdentifierName();
+	identity.schema = function.GetSchemaName().GetIdentifierName();
+	identity.name = function.GetName().GetIdentifierName();
 	identity.arguments = function.GetArguments();
 	for (idx_t argument_index = 0; argument_index < identity.arguments.size() && argument_index < children.size();
 	     argument_index++) {
@@ -198,11 +185,16 @@ static LogicalPlanVerificationFunctionIdentity FunctionIdentity(const FUNCTION &
 	return identity;
 }
 
-template <class FUNCTION>
-static bool HasQualifiedDefinition(const FUNCTION &function) {
-	auto &definition = function.GetDefinition();
-	return definition && IsValidIdentifier(definition->GetCatalogName()) &&
-	       IsValidIdentifier(definition->GetSchemaName()) && IsValidIdentifier(definition->GetName());
+template <class RECIPE>
+static LogicalPlanVerificationFunctionIdentity RecipeFunctionIdentity(const RECIPE &recipe,
+                                                                      const LogicalType &return_type) {
+	LogicalPlanVerificationFunctionIdentity identity;
+	identity.catalog = recipe.name.Catalog().GetIdentifierName();
+	identity.schema = recipe.name.Schema().GetIdentifierName();
+	identity.name = recipe.name.Name().GetIdentifierName();
+	identity.arguments = recipe.arguments;
+	identity.return_type = return_type;
+	return identity;
 }
 
 class BoundExpressionSQLExportState {
@@ -358,11 +350,8 @@ private:
 	BoundExpressionSQLExportResult ExportFunction(const BoundFunctionExpression &expression,
 	                                              const LogicalPlanVerificationPath &path) {
 		switch (expression.GetExpressionType()) {
+		case ExpressionType::BOUND_FUNCTION:
 		case ExpressionType::OPERATOR_CAST:
-			if (BoundCastExpression::HasCanonicalFunction(expression)) {
-				return ExportCast(expression, path);
-			}
-			return ExportScalarFunction(expression, path);
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_LESSTHAN:
@@ -371,27 +360,36 @@ private:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			if (BoundComparisonExpression::HasCanonicalFunction(expression)) {
-				return ExportComparison(expression, path);
-			}
-			return ExportScalarFunction(expression, path);
 		case ExpressionType::COMPARE_BETWEEN:
-			if (BoundBetweenExpression::HasCanonicalFunction(expression)) {
-				return ExportBetween(expression, path);
-			}
-			return ExportScalarFunction(expression, path);
-		case ExpressionType::BOUND_FUNCTION:
-			return ExportScalarFunction(expression, path);
+			break;
 		default:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound function has an invalid expression type"));
+		}
+		auto recipe = expression.GetSQLExportRecipe();
+		if (!recipe) {
+			return ExportScalarFunction(expression, path);
+		}
+		switch (recipe->type) {
+		case BoundFunctionSQLExportType::CATALOG:
+			return ExportScalarFunction(expression, path);
+		case BoundFunctionSQLExportType::CAST:
+			return ExportCast(expression, path);
+		case BoundFunctionSQLExportType::COMPARISON:
+			return ExportComparison(expression, path);
+		case BoundFunctionSQLExportType::BETWEEN:
+			return ExportBetween(expression, path);
+		default:
+			return Failure(
+			    InternalExpressionInvariant(path, expression, "Bound function has an invalid SQL export recipe type"));
 		}
 	}
 
 	BoundExpressionSQLExportResult ExportCast(const BoundFunctionExpression &expression,
 	                                          const LogicalPlanVerificationPath &path) {
-		if (expression.GetChildren().size() != 1 || !expression.GetChildren()[0] ||
-		    !BoundCastExpression::HasValidBindData(expression) || !IsSQLRepresentableType(expression.GetReturnType()) ||
+		if (expression.GetExpressionType() != ExpressionType::OPERATOR_CAST || expression.GetChildren().size() != 1 ||
+		    !expression.GetChildren()[0] || !BoundCastExpression::HasValidBindData(expression) ||
+		    !IsSQLRepresentableType(expression.GetReturnType()) ||
 		    !IsSQLRepresentableType(expression.GetChildren()[0]->GetReturnType())) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound cast has malformed type, data, or arity"));
@@ -410,7 +408,8 @@ private:
 
 	BoundExpressionSQLExportResult ExportComparison(const BoundFunctionExpression &expression,
 	                                                const LogicalPlanVerificationPath &path) {
-		if (expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 2 ||
+		if (!BoundComparisonExpression::IsComparison(expression.GetExpressionType()) ||
+		    expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 2 ||
 		    !expression.GetChildren()[0] || !expression.GetChildren()[1] ||
 		    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[1]->GetReturnType()) {
 			return Failure(
@@ -428,7 +427,8 @@ private:
 
 	BoundExpressionSQLExportResult ExportBetween(const BoundFunctionExpression &expression,
 	                                             const LogicalPlanVerificationPath &path) {
-		if (expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 3 ||
+		if (expression.GetExpressionType() != ExpressionType::COMPARE_BETWEEN ||
+		    expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 3 ||
 		    !expression.GetChildren()[0] || !expression.GetChildren()[1] || !expression.GetChildren()[2] ||
 		    !BoundBetweenExpression::HasValidBindData(expression) ||
 		    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[1]->GetReturnType() ||
@@ -591,27 +591,39 @@ private:
 			return Failure(InternalExpressionInvariant(path, expression,
 			                                           "Bound scalar function has an inconsistent current signature"));
 		}
-		auto identity = FunctionIdentity(expression.Function(), expression.GetChildren(), expression.GetReturnType());
+		auto recipe = expression.GetSQLExportRecipe();
+		if (!recipe || recipe->type != BoundFunctionSQLExportType::CATALOG) {
+			auto identity =
+			    CurrentFunctionIdentity(expression.Function(), expression.GetChildren(), expression.GetReturnType());
+			if (!identity.IsValid()) {
+				return Failure(
+				    InternalExpressionInvariant(path, expression, "Bound scalar function identity is incomplete"));
+			}
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The bound scalar function has no authenticated SQL export recipe"));
+		}
+		auto identity = RecipeFunctionIdentity(*recipe, expression.GetReturnType());
 		if (!identity.IsValid()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound scalar function identity is incomplete"));
 		}
-		auto &definition = function.GetDefinition();
-		if (!definition || !function.HasRebindableDefinition() || !HasQualifiedDefinition(function) ||
-		    expression.BindInfo() || definition->GetCaptureArgumentAliases() ||
-		    !DefinitionArityMatches(definition->GetSignature(), expression.GetChildren().size()) ||
-		    !ChildrenMatchArguments(expression.GetChildren(), function.GetArguments()) ||
-		    expression.GetReturnType() != function.GetReturnType() ||
-		    !IsSQLRepresentableType(expression.GetReturnType()) ||
+		if (!IsValidIdentifier(recipe->name.Catalog()) || !IsValidIdentifier(recipe->name.Schema()) ||
+		    !IsValidIdentifier(recipe->name.Name()) ||
+		    !ChildrenMatchArguments(expression.GetChildren(), recipe->arguments) ||
+		    recipe->return_type != expression.GetReturnType() || !IsSQLRepresentableType(expression.GetReturnType()) ||
 		    (expression.IsOperator() && expression.GetChildren().size() != 1 && expression.GetChildren().size() != 2)) {
-			return Failure(UnsupportedFunction(
-			    path, std::move(identity), "The bound scalar function cannot be rebound from positional SQL syntax"));
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The bound scalar function SQL export recipe is not representable"));
 		}
-		for (auto &argument : function.GetArguments()) {
+		for (auto &argument : recipe->arguments) {
 			if (!IsSQLRepresentableType(argument)) {
 				return Failure(UnsupportedFunction(path, std::move(identity),
 				                                   "The bound scalar function uses an internal argument type"));
 			}
+		}
+		if (!recipe->callback && (recipe->requires_callback || expression.BindInfo())) {
+			return Failure(UnsupportedFunction(
+			    path, std::move(identity), "The bound scalar function cannot be rebound from positional SQL syntax"));
 		}
 		vector<unique_ptr<ParsedExpression>> children;
 		vector<LogicalPlanVerificationIssue> issues;
@@ -619,9 +631,29 @@ private:
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
 		}
-		auto name = QualifiedName(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
+		if (recipe->callback) {
+			ScalarFunctionSQLExportInput input(function, expression.BindInfo().get(), std::move(children), path,
+			                                   identity);
+			try {
+				auto result = recipe->callback(input);
+				if (result.HasError()) {
+					return result;
+				}
+				if (!result.GetValue()) {
+					return Failure(
+					    InternalInvariant(path, "Scalar function SQL export callback returned an empty expression",
+					                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
+				}
+				return result;
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				return Failure(InternalInvariant(
+				    path, StringUtil::Format("Scalar function SQL export callback threw: %s", error.RawMessage()),
+				    LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
+			}
+		}
 		return BoundExpressionSQLExportResult::Success(
-		    make_uniq<FunctionExpression>(name, std::move(children), nullptr, nullptr, false, false, false));
+		    make_uniq<FunctionExpression>(recipe->name, std::move(children), nullptr, nullptr, false, false, false));
 	}
 
 	BoundExpressionSQLExportResult ExportAggregate(const BoundAggregateExpression &expression,
@@ -636,20 +668,30 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate has an inconsistent current signature"));
 		}
-		auto identity = FunctionIdentity(expression.Function(), expression.GetChildren(), expression.GetReturnType());
+		auto recipe = expression.GetSQLExportRecipe();
+		if (!recipe || recipe->type != BoundFunctionSQLExportType::CATALOG) {
+			auto identity =
+			    CurrentFunctionIdentity(expression.Function(), expression.GetChildren(), expression.GetReturnType());
+			if (!identity.IsValid()) {
+				return Failure(
+				    InternalExpressionInvariant(path, expression, "Bound aggregate function identity is incomplete"));
+			}
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The bound aggregate has no authenticated SQL export recipe"));
+		}
+		auto identity = RecipeFunctionIdentity(*recipe, expression.GetReturnType());
 		if (!identity.IsValid()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function identity is incomplete"));
 		}
-		auto &definition = function.GetDefinition();
-		if (!definition || !function.HasRebindableDefinition() || !HasQualifiedDefinition(function) ||
-		    expression.BindInfo() ||
-		    !DefinitionArityMatches(definition->GetSignature(), expression.GetChildren().size()) ||
-		    !ChildrenMatchArguments(expression.GetChildren(), function.GetArguments()) ||
-		    expression.GetReturnType() != function.GetReturnType() ||
-		    !IsSQLRepresentableType(expression.GetReturnType())) {
+		if (!IsValidIdentifier(recipe->name.Catalog()) || !IsValidIdentifier(recipe->name.Schema()) ||
+		    !IsValidIdentifier(recipe->name.Name()) ||
+		    !ChildrenMatchArguments(expression.GetChildren(), recipe->arguments) ||
+		    (expression.StateExportMode() == AggregateStateExportMode::NONE &&
+		     recipe->return_type != expression.GetReturnType()) ||
+		    !IsSQLRepresentableType(recipe->return_type) || !IsSQLRepresentableType(expression.GetReturnType())) {
 			return Failure(UnsupportedFunction(path, std::move(identity),
-			                                   "The bound aggregate cannot be rebound from positional SQL syntax"));
+			                                   "The bound aggregate SQL export recipe is not representable"));
 		}
 		if (expression.GetAggregateType() != AggregateType::NON_DISTINCT &&
 		    expression.GetAggregateType() != AggregateType::DISTINCT) {
@@ -661,17 +703,21 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid state export mode"));
 		}
-		for (auto &argument : function.GetArguments()) {
+		for (auto &argument : recipe->arguments) {
 			if (!IsSQLRepresentableType(argument)) {
 				return Failure(UnsupportedFunction(path, std::move(identity),
 				                                   "The bound aggregate uses an internal argument type"));
 			}
 		}
+		if (!recipe->callback && (recipe->requires_callback || expression.BindInfo())) {
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The bound aggregate cannot be rebound from positional SQL syntax"));
+		}
 		vector<optional_ptr<const Expression>> source_children;
 		vector<optional<LogicalType>> expected_types;
 		for (idx_t child_index = 0; child_index < expression.GetChildren().size(); child_index++) {
 			source_children.push_back(expression.GetChildren()[child_index].get());
-			expected_types.push_back(function.GetArguments()[child_index]);
+			expected_types.push_back(recipe->arguments[child_index]);
 		}
 		if (expression.GetFilter()) {
 			source_children.push_back(expression.GetFilter().get());
@@ -712,9 +758,30 @@ private:
 				order_bys->orders.emplace_back(order.type, order.null_order, std::move(children[child_index++]));
 			}
 		}
-		auto name = QualifiedName(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
+		if (recipe->callback) {
+			AggregateFunctionSQLExportInput input(
+			    function, expression.BindInfo().get(), std::move(arguments), std::move(filter), std::move(order_bys),
+			    expression.GetAggregateType(), expression.StateExportMode(), path, identity);
+			try {
+				auto result = recipe->callback(input);
+				if (result.HasError()) {
+					return result;
+				}
+				if (!result.GetValue()) {
+					return Failure(
+					    InternalInvariant(path, "Aggregate function SQL export callback returned an empty expression",
+					                      LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
+				}
+				return result;
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				return Failure(InternalInvariant(
+				    path, StringUtil::Format("Aggregate function SQL export callback threw: %s", error.RawMessage()),
+				    LogicalPlanVerificationConstructIdentity::Function(std::move(identity))));
+			}
+		}
 		return BoundExpressionSQLExportResult::Success(make_uniq<FunctionExpression>(
-		    name, std::move(arguments), std::move(filter), std::move(order_bys), expression.IsDistinct(), false,
+		    recipe->name, std::move(arguments), std::move(filter), std::move(order_bys), expression.IsDistinct(), false,
 		    expression.StateExportMode() == AggregateStateExportMode::STATE_EXPORT));
 	}
 

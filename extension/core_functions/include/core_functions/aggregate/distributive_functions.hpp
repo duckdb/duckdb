@@ -12,7 +12,6 @@
 #pragma once
 
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 
 namespace duckdb {
 
@@ -278,6 +277,26 @@ struct ListaggFun {
 	using ALIAS = StringAggFun;
 
 	static constexpr const char *Name = "listagg";
+};
+
+struct SumFun {
+	static constexpr const char *Name = "sum";
+	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Description = "Calculates the sum value for all tuples in arg.";
+	static constexpr const char *Example = "sum(A)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
+struct SumNoOverflowFun {
+	static constexpr const char *Name = "sum_no_overflow";
+	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Description = "Internal only. Calculates the sum value for all tuples in arg without overflow checks.";
+	static constexpr const char *Example = "sum_no_overflow(A)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
 };
 
 } // namespace duckdb

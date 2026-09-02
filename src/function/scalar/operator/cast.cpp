@@ -165,10 +165,6 @@ ScalarFunction CastFun::GetFunction() {
 	cast_fun.SetDeserializeCallback(CastFunctionDeserialize);
 	cast_fun.SetInitStateCallback(CastInitLocalState);
 	cast_fun.SetStatisticsCallback(CastPropagateStatistics);
-	cast_fun.SetFunctionExpressionIdentity(ExpressionType::OPERATOR_CAST);
-	cast_fun.RefreshFunctionIdentitySnapshot();
-	cast_fun.statistics_preserves_function_identity = true;
-	cast_fun.deserialization_preserves_function_identity = true;
 	return cast_fun;
 }
 
@@ -208,8 +204,6 @@ unique_ptr<Expression> BoundCastExpression::Create(unique_ptr<Expression> child,
 unique_ptr<Expression> BoundCastExpression::CreateDefault(unique_ptr<Expression> child, const LogicalType &target_type,
                                                           BoundCastInfo bound_cast, bool try_cast) {
 	auto result = CreateCastExpression(std::move(child), target_type, std::move(bound_cast), try_cast, true);
-	result->Cast<BoundFunctionExpression>().FunctionMutable().SetFunctionExpressionIdentity(
-	    ExpressionType::OPERATOR_CAST);
 	return result;
 }
 
@@ -239,7 +233,8 @@ bool BoundCastExpression::IsTryCast(const BoundFunctionExpression &cast_expr) {
 }
 
 bool BoundCastExpression::HasCanonicalFunction(const BoundFunctionExpression &cast_expr) {
-	return cast_expr.Function().HasFunctionExpressionIdentity(ExpressionType::OPERATOR_CAST);
+	auto recipe = cast_expr.GetSQLExportRecipe();
+	return recipe && recipe->type == BoundFunctionSQLExportType::CAST;
 }
 
 bool BoundCastExpression::HasValidBindData(const BoundFunctionExpression &cast_expr) {
@@ -261,14 +256,13 @@ const BoundCastInfo &BoundCastExpression::GetBoundCast(const BoundFunctionExpres
 }
 
 BoundCastInfo &BoundCastExpression::GetBoundCastMutable(BoundFunctionExpression &cast_expr) {
-	cast_expr.FunctionMutable().InvalidateFunctionExpressionIdentity();
 	return cast_expr.BindInfoMutable()->Cast<CastFunctionData>().bound_cast;
 }
 
 unique_ptr<BaseStatistics> BoundCastExpression::PropagateStatistics(BoundFunctionExpression &cast_expr,
                                                                     const BaseStatistics &child_stats,
                                                                     optional_ptr<ClientContext> context) {
-	auto &cast_data = cast_expr.BindInfoMutable()->Cast<CastFunctionData>();
+	auto &cast_data = cast_expr.BindInfoForStructuralMutation()->Cast<CastFunctionData>();
 	auto result =
 	    cast_data.bound_cast.PropagateStatistics(cast_data.source_type, cast_data.target_type, child_stats, context);
 	if (cast_data.try_cast && result) {

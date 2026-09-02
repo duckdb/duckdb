@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-static void FillFunctionParameters(FunctionDescription &function_description, const string &function_name,
+static void FillFunctionParameters(FunctionDescription &function_description, const char *function_name,
                                    vector<string> &parameters, vector<string> &descriptions) {
 	for (string &parameter : parameters) {
 		vector<string> parameter_name_type = StringUtil::Split(parameter, "::");
@@ -64,7 +64,6 @@ static vector<string> GetExamplesForFunctionAlias(const Identifier &function_nam
 
 template <class FunctionDefinition, class T>
 static void FillFunctionDescriptions(const FunctionDefinition &function, T &info) {
-	Identifier function_name(function.name);
 	vector<string> variants = StringUtil::Split(function.parameters, '\1');
 	vector<string> descriptions = StringUtil::Split(function.description, '\1');
 	vector<string> examples = StringUtil::Split(function.example, '\1');
@@ -79,7 +78,7 @@ static void FillFunctionDescriptions(const FunctionDefinition &function, T &info
 		FunctionDescription function_description;
 		// parameter_names and parameter_types
 		vector<string> parameters = StringUtil::SplitWithParentheses(variants[variant_index], ',');
-		FillFunctionParameters(function_description, function_name.GetIdentifierName(), parameters, descriptions);
+		FillFunctionParameters(function_description, function.name, parameters, descriptions);
 		// description
 		if (descriptions.size() == variants.size()) {
 			function_description.description = descriptions[variant_index];
@@ -97,7 +96,7 @@ static void FillFunctionDescriptions(const FunctionDefinition &function, T &info
 		} else if (!examples.empty()) {
 			throw InternalException("Incorrect number of function examples for function '%s'", function.name);
 		}
-		function_description.examples = GetExamplesForFunctionAlias(function_name, info.alias_of, variant_examples);
+		function_description.examples = GetExamplesForFunctionAlias(function.name, info.alias_of, variant_examples);
 		// categories
 		if (variant_index < categories.size()) {
 			function_description.categories = StringUtil::Split(categories[variant_index], ',');

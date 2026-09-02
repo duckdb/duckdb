@@ -88,7 +88,8 @@ ScalarFunction::ScalarFunction(std::initializer_list<FunctionParameter> params, 
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
-	return name == rhs.name && signature == rhs.signature && callbacks == rhs.callbacks && properties == rhs.properties;
+	return name == rhs.name && signature == rhs.signature && callbacks == rhs.callbacks &&
+	       properties == rhs.properties && sql_export == rhs.sql_export;
 }
 
 bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
@@ -134,7 +135,6 @@ BoundScalarFunction::BoundScalarFunction(shared_ptr<const ScalarFunction> functi
 	properties = function.GetProperties();
 	function_info = function.GetFunctionInfo();
 	arg_props = function.GetAllArgProperties();
-	function_expression_type = function.function_expression_type;
 
 	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
 	// "bind" callback)

@@ -86,54 +86,36 @@ static ScalarFunction GetComparisonFunctionInternal(const string &name) {
 }
 
 ScalarFunction OperatorEqualFun::GetFunction() {
-	auto function = GetComparisonFunctionInternal<ExpressionType::COMPARE_EQUAL>(OperatorEqualFun::Name);
-	function.SetFunctionExpressionIdentity(ExpressionType::COMPARE_EQUAL);
-	return function;
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_EQUAL>(OperatorEqualFun::Name);
 }
 
 ScalarFunction OperatorNotEqualFun::GetFunction() {
-	auto function = GetComparisonFunctionInternal<ExpressionType::COMPARE_NOTEQUAL>(OperatorNotEqualFun::Name);
-	function.SetFunctionExpressionIdentity(ExpressionType::COMPARE_NOTEQUAL);
-	return function;
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_NOTEQUAL>(OperatorNotEqualFun::Name);
 }
 
 ScalarFunction OperatorLessThanFun::GetFunction() {
-	auto function = GetComparisonFunctionInternal<ExpressionType::COMPARE_LESSTHAN>(OperatorLessThanFun::Name);
-	function.SetFunctionExpressionIdentity(ExpressionType::COMPARE_LESSTHAN);
-	return function;
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_LESSTHAN>(OperatorLessThanFun::Name);
 }
 
 ScalarFunction OperatorLessThanEqualsFun::GetFunction() {
-	auto function =
-	    GetComparisonFunctionInternal<ExpressionType::COMPARE_LESSTHANOREQUALTO>(OperatorLessThanEqualsFun::Name);
-	function.SetFunctionExpressionIdentity(ExpressionType::COMPARE_LESSTHANOREQUALTO);
-	return function;
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_LESSTHANOREQUALTO>(OperatorLessThanEqualsFun::Name);
 }
 
 ScalarFunction OperatorGreaterThanFun::GetFunction() {
-	auto function = GetComparisonFunctionInternal<ExpressionType::COMPARE_GREATERTHAN>(OperatorGreaterThanFun::Name);
-	function.SetFunctionExpressionIdentity(ExpressionType::COMPARE_GREATERTHAN);
-	return function;
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_GREATERTHAN>(OperatorGreaterThanFun::Name);
 }
 
 ScalarFunction OperatorGreaterThanEqualsFun::GetFunction() {
-	auto function =
-	    GetComparisonFunctionInternal<ExpressionType::COMPARE_GREATERTHANOREQUALTO>(OperatorGreaterThanEqualsFun::Name);
-	function.SetFunctionExpressionIdentity(ExpressionType::COMPARE_GREATERTHANOREQUALTO);
-	return function;
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_GREATERTHANOREQUALTO>(
+	    OperatorGreaterThanEqualsFun::Name);
 }
 
 ScalarFunction IsDistinctFromFun::GetFunction() {
-	auto function = GetComparisonFunctionInternal<ExpressionType::COMPARE_DISTINCT_FROM>(IsDistinctFromFun::Name);
-	function.SetFunctionExpressionIdentity(ExpressionType::COMPARE_DISTINCT_FROM);
-	return function;
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_DISTINCT_FROM>(IsDistinctFromFun::Name);
 }
 
 ScalarFunction IsNotDistinctFromFun::GetFunction() {
-	auto function =
-	    GetComparisonFunctionInternal<ExpressionType::COMPARE_NOT_DISTINCT_FROM>(IsNotDistinctFromFun::Name);
-	function.SetFunctionExpressionIdentity(ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-	return function;
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_NOT_DISTINCT_FROM>(IsNotDistinctFromFun::Name);
 }
 
 static ScalarFunction GetComparisonFunction(ExpressionType type) {
@@ -170,6 +152,7 @@ unique_ptr<Expression> BoundComparisonExpression::Create(ExpressionType type, un
 
 	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(GetComparisonFunction(type)),
 	                                                 std::move(children), nullptr, true);
+	result->SetStructuralSQLExportRecipe(BoundFunctionSQLExportType::COMPARISON);
 	return std::move(result);
 }
 
@@ -200,7 +183,8 @@ bool BoundComparisonExpression::HasCanonicalFunction(const BoundFunctionExpressi
 	if (!IsComparison(comparison_expr.GetExpressionType())) {
 		return false;
 	}
-	return comparison_expr.Function().HasFunctionExpressionIdentity(comparison_expr.GetExpressionType());
+	auto recipe = comparison_expr.GetSQLExportRecipe();
+	return recipe && recipe->type == BoundFunctionSQLExportType::COMPARISON;
 }
 
 const Expression &BoundComparisonExpression::Left(const BoundFunctionExpression &comparison_expr) {
@@ -225,9 +209,9 @@ void BoundComparisonExpression::SetType(BoundFunctionExpression &comparison_expr
 	comparison_expr.SetExpressionTypeUnsafe(new_type);
 	comparison_expr.FunctionMutable() = BoundScalarFunction(GetComparisonFunction(new_type));
 	comparison_expr.FunctionMutable().GetArguments() = std::move(arguments);
-	comparison_expr.FunctionMutable().SetFunctionExpressionIdentity(new_type);
 	comparison_expr.BindInfoMutable().reset();
 	comparison_expr.IsOperatorMutable() = true;
+	comparison_expr.SetStructuralSQLExportRecipe(BoundFunctionSQLExportType::COMPARISON);
 }
 
 void BoundComparisonExpression::FlipType(BoundFunctionExpression &comparison_expr) {

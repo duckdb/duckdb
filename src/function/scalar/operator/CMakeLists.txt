@@ -1,7 +1,6 @@
 add_library_unity(
   duckdb_func_ops_main
   OBJECT
-  abs.cpp
   add.cpp
   arithmetic.cpp
   cast.cpp

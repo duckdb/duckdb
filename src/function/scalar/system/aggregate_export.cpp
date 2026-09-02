@@ -768,8 +768,7 @@ void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &
 } // namespace
 
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
-	auto restore_rebindability = aggregate.Function().HasRebindableDefinition();
-	auto &bound_function = aggregate.FunctionMutable();
+	auto &bound_function = aggregate.function;
 	// functions with an explicit export callback use it as the finalize; others use the field-based serialization
 	bound_function.SetStateFinalizeCallback(bound_function.HasExportAggregateStateCallback()
 	                                            ? bound_function.GetExportAggregateStateCallback()
@@ -779,11 +778,8 @@ void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate
 	bound_function.SetReturnType(state_layout);
 	// exported state always produces a valid (non-NULL) struct even for empty inputs
 	bound_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	aggregate.StateExportModeMutable() = AggregateStateExportMode::STATE_EXPORT;
+	aggregate.state_export_mode = AggregateStateExportMode::STATE_EXPORT;
 	aggregate.SetReturnType(std::move(state_layout));
-	if (restore_rebindability) {
-		bound_function.RestoreRebindableDefinition();
-	}
 }
 
 unique_ptr<BoundAggregateExpression>

@@ -35,7 +35,6 @@ public:
 		// the fields are present, they will be used.
 		serializer.WritePropertyWithDefault<Identifier>(505, "catalog_name", function.GetCatalogName(), Identifier());
 		serializer.WritePropertyWithDefault<Identifier>(506, "schema_name", function.GetSchemaName(), Identifier());
-		SerializeSQLDefinition(serializer, function);
 
 		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
@@ -58,7 +57,18 @@ public:
 	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const Identifier &catalog_name,
 	                                const Identifier &schema_name, const Identifier &name,
 	                                const vector<LogicalType> &arguments) {
-		return *LookupFunction<CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name, arguments);
+		EntryLookupInfo lookup_info(catalog_type, QualifiedName(name));
+		auto &func_catalog =
+		    Catalog::GetEntry(context, catalog_type,
+		                      QualifiedName(catalog_name.empty() ? Identifier::SystemCatalog() : catalog_name,
+		                                    schema_name.empty() ? Identifier::DefaultSchema() : schema_name, name));
+
+		if (func_catalog.type != catalog_type) {
+			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
+			                        name.GetIdentifierName());
+		}
+		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
+		return *functions.functions.GetFunctionByArguments(context, arguments);
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
@@ -158,15 +168,6 @@ public:
 		auto original_arguments = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(502, "original_arguments");
 		auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
 		auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
-		auto has_sql_definition = deserializer.ReadPropertyWithDefault<bool>(507, "has_sql_definition");
-		Identifier sql_definition_name;
-		Identifier sql_definition_catalog;
-		Identifier sql_definition_schema;
-		if (has_sql_definition) {
-			sql_definition_name = deserializer.ReadProperty<Identifier>(508, "sql_definition_name");
-			sql_definition_catalog = deserializer.ReadProperty<Identifier>(509, "sql_definition_catalog");
-			sql_definition_schema = deserializer.ReadProperty<Identifier>(510, "sql_definition_schema");
-		}
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 
 		if (catalog_name.empty()) {
@@ -196,12 +197,7 @@ public:
 			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
-		auto function = functions.functions.GetFunctionByArguments(context, arguments);
-		auto sql_definition = decltype(function)();
-		if (has_sql_definition) {
-			sql_definition = LookupFunction<CATALOG_ENTRY>(context, catalog_type, sql_definition_catalog,
-			                                               sql_definition_schema, sql_definition_name, arguments);
-		}
+		const auto &function = functions.functions.GetFunctionByArguments(context, arguments);
 
 		// Does this function support serializing its bound data?
 		if (!has_serialize) {
@@ -210,12 +206,10 @@ public:
 				FunctionBinder binder(context);
 
 				auto [bound_function, bound_data] = binder.ResolveFunction(function, children);
-				const FUNC &const_bound_function = bound_function;
 
-				if (TypeRequiresAssignment(const_bound_function.GetReturnType())) {
+				if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 					bound_function.SetReturnType(std::move(return_type));
 				}
-				RestoreFunctionIdentity(bound_function, std::move(sql_definition));
 
 				return make_pair(std::move(bound_function), std::move(bound_data));
 			} catch (std::exception &ex) {
@@ -228,170 +222,17 @@ public:
 		// Otherwise, construct the bound function from its parts
 		FUNC bound_function(function);
 		bound_function.GetArguments() = std::move(arguments);
-		auto preserves_function_identity = DeserializationPreservesFunctionIdentity(*function);
-		RestoreFunctionIdentity(bound_function, sql_definition);
-		auto definition = GetFunctionDefinition(bound_function);
-		auto restore_rebindable_definition = HasRebindableDefinition(bound_function);
-		ConsumeFunctionIdentity(bound_function);
-		auto function_identity_token = GetFunctionIdentityToken(bound_function);
-		auto function_name = bound_function.GetName();
 
 		// Invoke deserialization function
 		deserializer.Set<const LogicalType &>(return_type);
 		auto bound_data = FunctionDeserialize(deserializer, bound_function);
 		deserializer.Unset<LogicalType>();
 
-		const FUNC &const_bound_function = bound_function;
-		auto definition_unchanged = GetFunctionDefinition(const_bound_function) == definition;
-		auto implementation_unchanged = function_identity_token == GetFunctionIdentityToken(const_bound_function) &&
-		                                function_name == const_bound_function.GetName();
-		auto can_restore_identity = definition_unchanged && (implementation_unchanged || preserves_function_identity);
-		if (TypeRequiresAssignment(const_bound_function.GetReturnType())) {
+		if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 			bound_function.SetReturnType(std::move(return_type));
 		}
-		RestoreFunctionIdentityAfterDeserialization(bound_function, can_restore_identity,
-		                                            restore_rebindable_definition && can_restore_identity);
 
 		return make_pair(std::move(bound_function), std::move(bound_data));
-	}
-
-private:
-	template <class CATALOG_ENTRY>
-	static auto LookupFunction(ClientContext &context, CatalogType catalog_type, const Identifier &catalog_name,
-	                           const Identifier &schema_name, const Identifier &name,
-	                           const vector<LogicalType> &arguments) {
-		EntryLookupInfo lookup_info(catalog_type, QualifiedName(name));
-		auto &func_catalog =
-		    Catalog::GetEntry(context, catalog_type,
-		                      QualifiedName(catalog_name.empty() ? Identifier::SystemCatalog() : catalog_name,
-		                                    schema_name.empty() ? Identifier::DefaultSchema() : schema_name, name));
-
-		if (func_catalog.type != catalog_type) {
-			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
-			                        name.GetIdentifierName());
-		}
-		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
-		return functions.functions.GetFunctionByArguments(context, arguments);
-	}
-
-	static void SerializeSQLDefinition(Serializer &serializer, const BoundScalarFunction &function) {
-		SerializeSQLDefinition(serializer, function.GetDefinition(), function.HasRebindableDefinition());
-	}
-	static void SerializeSQLDefinition(Serializer &serializer, const BoundAggregateFunction &function) {
-		SerializeSQLDefinition(serializer, function.GetDefinition(), function.HasRebindableDefinition());
-	}
-	template <class FUNC>
-	static void SerializeSQLDefinition(Serializer &, const FUNC &) {
-	}
-	template <class FUNC>
-	static void SerializeSQLDefinition(Serializer &serializer, const shared_ptr<const FUNC> &definition,
-	                                   bool rebindable) {
-		serializer.WritePropertyWithDefault<bool>(507, "has_sql_definition", rebindable, false);
-		if (!rebindable) {
-			return;
-		}
-		D_ASSERT(definition);
-		serializer.WriteProperty(508, "sql_definition_name", definition->GetName());
-		serializer.WriteProperty(509, "sql_definition_catalog", definition->GetCatalogName());
-		serializer.WriteProperty(510, "sql_definition_schema", definition->GetSchemaName());
-	}
-
-	static void RestoreFunctionIdentity(BoundScalarFunction &function,
-	                                    shared_ptr<const ScalarFunction> sql_definition) {
-		if (sql_definition) {
-			function.SetDefinition(std::move(sql_definition));
-			function.RestoreFunctionExpressionIdentity();
-			function.RestoreRebindableDefinition();
-			return;
-		}
-		function.InvalidateRebindableDefinition();
-		function.RestoreFunctionExpressionIdentity();
-	}
-	static void RestoreFunctionIdentity(BoundAggregateFunction &function,
-	                                    shared_ptr<const AggregateFunction> sql_definition) {
-		if (sql_definition) {
-			function.SetDefinition(std::move(sql_definition));
-			function.RestoreRebindableDefinition();
-			return;
-		}
-		function.InvalidateRebindableDefinition();
-	}
-	static shared_ptr<const ScalarFunction> GetFunctionDefinition(const BoundScalarFunction &function) {
-		return function.GetDefinition();
-	}
-	static shared_ptr<const AggregateFunction> GetFunctionDefinition(const BoundAggregateFunction &function) {
-		return function.GetDefinition();
-	}
-	static bool HasRebindableDefinition(const BoundScalarFunction &function) {
-		return function.HasRebindableDefinition();
-	}
-	static bool HasRebindableDefinition(const BoundAggregateFunction &function) {
-		return function.HasRebindableDefinition();
-	}
-	static bool DeserializationPreservesFunctionIdentity(const BoundScalarFunction &function) {
-		return function.DeserializationPreservesFunctionIdentity();
-	}
-	static bool DeserializationPreservesFunctionIdentity(const BoundAggregateFunction &function) {
-		return function.DeserializationPreservesFunctionIdentity();
-	}
-	static bool DeserializationPreservesFunctionIdentity(const ScalarFunction &function) {
-		return function.DeserializationPreservesFunctionIdentity();
-	}
-	static bool DeserializationPreservesFunctionIdentity(const AggregateFunction &function) {
-		return function.DeserializationPreservesFunctionIdentity();
-	}
-	static shared_ptr<const idx_t> GetFunctionIdentityToken(const BoundScalarFunction &function) {
-		return function.GetFunctionIdentityToken();
-	}
-	static shared_ptr<const idx_t> GetFunctionIdentityToken(const BoundAggregateFunction &function) {
-		return function.GetFunctionIdentityToken();
-	}
-	template <class FUNC>
-	static shared_ptr<const idx_t> GetFunctionIdentityToken(const FUNC &) {
-		return nullptr;
-	}
-	static void ConsumeFunctionIdentity(BoundScalarFunction &function) {
-		function.InvalidateFunctionExpressionIdentity();
-	}
-	static void ConsumeFunctionIdentity(BoundAggregateFunction &function) {
-		function.InvalidateRebindableDefinition();
-	}
-	static void RestoreFunctionIdentityAfterDeserialization(BoundScalarFunction &function,
-	                                                        bool restore_expression_identity,
-	                                                        bool restore_rebindable_definition) {
-		if (restore_expression_identity) {
-			function.RestoreFunctionExpressionIdentity();
-		}
-		if (restore_rebindable_definition) {
-			function.RestoreRebindableDefinition();
-		}
-	}
-	static void RestoreFunctionIdentityAfterDeserialization(BoundAggregateFunction &function, bool,
-	                                                        bool restore_rebindable_definition) {
-		if (restore_rebindable_definition) {
-			function.RestoreRebindableDefinition();
-		}
-	}
-	template <class FUNC, class DEFINITION>
-	static void RestoreFunctionIdentity(FUNC &, DEFINITION) {
-	}
-	template <class FUNC>
-	static bool HasRebindableDefinition(const FUNC &) {
-		return false;
-	}
-	template <class FUNC>
-	static bool DeserializationPreservesFunctionIdentity(const FUNC &) {
-		return false;
-	}
-	template <class FUNC>
-	static nullptr_t GetFunctionDefinition(const FUNC &) {
-		return nullptr;
-	}
-	template <class FUNC>
-	static void ConsumeFunctionIdentity(FUNC &) {
-	}
-	template <class FUNC>
-	static void RestoreFunctionIdentityAfterDeserialization(FUNC &, bool, bool) {
 	}
 };
 

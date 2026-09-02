@@ -1,10 +1,9 @@
 add_library_unity(
   duckdb_core_functions_distributive
   OBJECT
-  count_if.cpp
-  kahan_sum.cpp
   kurtosis.cpp
   string_agg.cpp
+  sum.cpp
   arg_min_max.cpp
   approx_count.cpp
   skew.cpp
