@@ -761,19 +761,19 @@ bool ExtensionHelper::IsFullPath(const string &extension) {
 	       StringUtil::Contains(extension, "\\");
 }
 
-Identifier ExtensionHelper::GetExtensionName(const string &original_name) {
-	auto extension_name_or_path = StringUtil::Lower(original_name);
-	if (!IsFullPath(extension_name_or_path)) {
-		return ExtensionHelper::ApplyExtensionAlias(Identifier(extension_name_or_path));
+Identifier ExtensionHelper::GetExtensionName(const string &extension_name_or_path) {
+	auto lowered = StringUtil::Lower(extension_name_or_path);
+	if (!IsFullPath(lowered)) {
+		return ExtensionHelper::ApplyExtensionAlias(Identifier(lowered));
 	}
 	// split the name if it's a full path
-	auto splits = StringUtil::Split(StringUtil::Replace(extension_name_or_path, "\\", "/"), '/');
+	auto splits = StringUtil::Split(StringUtil::Replace(lowered, "\\", "/"), '/');
 	if (splits.empty()) {
-		return ExtensionHelper::ApplyExtensionAlias(Identifier(extension_name_or_path));
+		return ExtensionHelper::ApplyExtensionAlias(Identifier(lowered));
 	}
 	splits = StringUtil::Split(splits.back(), '.');
 	if (splits.empty()) {
-		return ExtensionHelper::ApplyExtensionAlias(Identifier(extension_name_or_path));
+		return ExtensionHelper::ApplyExtensionAlias(Identifier(lowered));
 	}
 	return ExtensionHelper::ApplyExtensionAlias(Identifier(splits.front()));
 }

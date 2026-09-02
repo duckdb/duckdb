@@ -70,8 +70,8 @@ void ExtensionCallbackManager::Register(DialectExtension extension) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
 	for (auto &existing : new_registry->dialect_extensions) {
-		if (StringUtil::CIEquals(existing.name, extension.name)) {
-			throw InvalidInputException("Dialect \"%s\" is already registered", extension.name);
+		if (existing.name == extension.name) {
+			throw InvalidInputException("Dialect %s is already registered", extension.name);
 		}
 	}
 	new_registry->dialect_extensions.push_back(std::move(extension));
@@ -189,10 +189,10 @@ bool ExtensionCallbackManager::HasParserExtensions() const {
 	return !registry->parser_extensions.empty();
 }
 
-bool ExtensionCallbackManager::HasDialectExtension(const string &name) const {
+bool ExtensionCallbackManager::HasDialectExtension(const Identifier &name) const {
 	auto registry = callback_registry.atomic_load();
 	for (auto &dialect : registry->dialect_extensions) {
-		if (StringUtil::CIEquals(dialect.name, name)) {
+		if (dialect.name == name) {
 			return true;
 		}
 	}

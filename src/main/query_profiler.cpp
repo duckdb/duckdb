@@ -94,7 +94,7 @@ unique_ptr<TreeRenderer> QueryProfiler::GetRenderer(const ProfilerPrintFormat &f
 		return CreateProfiler(name == "no_output" ? Identifier("query_tree") : Identifier(name));
 	}
 	// resolve the explain format name (text/json/html/...) and create the matching renderer
-	return CreateProfiler(Identifier(format.ToString()));
+	return CreateProfiler(format.ToIdentifier());
 }
 
 bool QueryProfiler::PrintOptimizerOutput() const {

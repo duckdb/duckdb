@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/string.hpp"
 
 namespace duckdb {
@@ -16,7 +17,7 @@ namespace duckdb {
 struct ProfilerPrintFormat {
 	ProfilerPrintFormat() : format("default") {
 	}
-	explicit ProfilerPrintFormat(string format) : format(std::move(format)) {
+	explicit ProfilerPrintFormat(Identifier format) : format(std::move(format)) {
 	}
 
 	//! Named formats.
@@ -49,12 +50,12 @@ struct ProfilerPrintFormat {
 		return !(*this == other);
 	}
 
-	//! The canonical (lowercase) format name.
-	const string &ToString() const {
+	//! The format name as an identifier, for renderer lookup.
+	const Identifier &ToIdentifier() const {
 		return format;
 	}
 
-	string format;
+	Identifier format;
 };
 
 } // namespace duckdb

@@ -10,7 +10,7 @@ ProfilerPrintFormat ParseProfilerPrintFormat(const Value &val) {
 		throw InvalidInputException("Expected a string as argument to FORMAT");
 	}
 	// the format name is validated when the renderer is created (needs a ClientContext); only normalize it here
-	return ProfilerPrintFormat(StringUtil::Lower(val.GetValue<string>()));
+	return ProfilerPrintFormat(val.GetValue<Identifier>());
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(

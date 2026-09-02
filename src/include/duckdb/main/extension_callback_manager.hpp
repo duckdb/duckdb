@@ -60,7 +60,7 @@ public:
 	optional_ptr<StorageExtension> FindStorageExtension(const Identifier &name) const;
 	optional_ptr<ProfilerExtension> FindProfilerExtension(const Identifier &name) const;
 	bool HasParserExtensions() const;
-	bool HasDialectExtension(const string &name) const;
+	bool HasDialectExtension(const Identifier &name) const;
 
 private:
 	mutex registry_lock;

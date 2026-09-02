@@ -83,7 +83,7 @@ unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const Identifier &name) {
 }
 
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const ProfilerPrintFormat &format) {
-	return CreateRenderer(Identifier(format.ToString()));
+	return CreateRenderer(format.ToIdentifier());
 }
 
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ClientContext &context, const Identifier &name) {
@@ -100,7 +100,7 @@ unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ClientContext &context, co
 }
 
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ClientContext &context, const ProfilerPrintFormat &format) {
-	return CreateRenderer(context, Identifier(format.ToString()));
+	return CreateRenderer(context, format.ToIdentifier());
 }
 
 } // namespace duckdb

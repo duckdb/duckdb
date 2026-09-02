@@ -19,8 +19,6 @@ struct ExtensionLoadOptions {
 	ExtensionLoadOptions(string extension_name_or_path) : extension_name_or_path(std::move(extension_name_or_path)) {
 	}
 
-	//! Either a logical extension name or a full path to an extension binary - use ExtensionHelper::IsFullPath to
-	//! tell them apart
 	string extension_name_or_path;
 	Identifier alias;
 	//! The repository named in the FROM clause the extension is loaded from (e.g. LOAD httpfs FROM core). Empty for a

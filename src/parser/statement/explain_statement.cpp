@@ -29,7 +29,7 @@ string ExplainStatement::OptionsToString() const {
 		} else {
 			options += ", ";
 		}
-		options += StringUtil::Format("FORMAT %s", StringUtil::Upper(format.ToString()));
+		options += StringUtil::Format("FORMAT %s", StringUtil::Upper(format.ToIdentifier().GetIdentifierName()));
 	}
 	if (!options.empty()) {
 		options += ")";

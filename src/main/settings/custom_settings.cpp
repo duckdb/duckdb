@@ -1774,9 +1774,9 @@ void CurrentDialectSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (input.IsNull()) {
 		throw InvalidInputException("current_dialect setting cannot be NULL");
 	}
-	auto dialect_name = input.GetValue<string>();
+	auto dialect_name = input.GetValue<Identifier>();
 	if (!info.config.GetCallbackManager().HasDialectExtension(dialect_name)) {
-		throw InvalidInputException("Dialect \"%s\" is not installed", dialect_name);
+		throw InvalidInputException("Dialect %s is not installed", dialect_name);
 	}
 	if (info.db) {
 		info.db->GetParserCache().Invalidate();

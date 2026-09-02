@@ -209,7 +209,7 @@ public:
 	static Identifier ApplyExtensionAlias(const Identifier &extension_name);
 
 	//! Extract the extension name from a logical name or a full path to an extension binary
-	static Identifier GetExtensionName(const string &extension);
+	static Identifier GetExtensionName(const string &extension_name_or_path);
 	static bool IsFullPath(const string &extension);
 
 	//! Lookup a name + type in an ExtensionFunctionEntry list
