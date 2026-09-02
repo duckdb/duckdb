@@ -24,14 +24,10 @@ namespace duckdb {
 //! are required: PIVOT can multiply rows but exposes only its own bindings; WINDOW passes child bindings through
 //! but preserves row count.
 static bool CanDuplicateChildBindings(const LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_UNNEST:
-	// an extension operator can do anything, so assume the worst of it
-	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		return true;
-	default:
-		return false;
-	}
+	// LOGICAL_UNNEST keeps child bindings and can emit multiple rows per input.
+	// Do not speculate about LOGICAL_EXTENSION_OPERATOR: that would skip join
+	// elimination for extensions that do not duplicate rows.
+	return op.type == LogicalOperatorType::LOGICAL_UNNEST;
 }
 
 void JoinElimination::AddDistinctGroup(TableIndex table_index, column_binding_set_t distinct_group) {
