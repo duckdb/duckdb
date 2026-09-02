@@ -65,6 +65,13 @@ string TestCreatePath(string suffix);
 //! ~/.duckdb, so a remote root resolves against the local tree.
 string GetTempDirHome();
 
+//! Extensions the driver has compiled into itself, installed into every database the runner
+//! creates. The unittest binary links debug_fs and registers it here; the sqllogictest extension
+//! links none, so tests needing one skip or fail rather than the runner depending on it.
+void SetStaticExtensionLoader(std::function<void(DuckDB &)> loader);
+
+void LoadStaticExtensions(DuckDB &db);
+
 void SetEmitTestEvents(bool emit);
 bool EmitTestEventsEnabled();
 

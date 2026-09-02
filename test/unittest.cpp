@@ -6,6 +6,7 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "debug_fs_extension.hpp"
 #include "sqlite/catch_test_reporter.hpp"
 #include "sqlite/sqllogic_test_logger.hpp"
 #include "sqlite/sqllogic_test_runner.hpp"
@@ -70,6 +71,8 @@ int main(int argc_in, char *argv[]) {
 	// route the sqllogictest runner's verdicts into the Catch session
 	static CatchTestReporter catch_reporter;
 	TestReporter::Set(catch_reporter);
+	// debug_fs is linked into this binary; hand it to every database the runner creates
+	SetStaticExtensionLoader([](DuckDB &db) { db.LoadStaticExtension<DebugFsExtension>(); });
 
 	auto &test_config = TestConfiguration::Get();
 	try {
