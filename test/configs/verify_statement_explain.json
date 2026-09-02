@@ -25,6 +25,12 @@
       ]
     },
     {
+      "reason": "Statement verification temporarily disables profiling for its internal EXPLAIN",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test"
+      ]
+    },
+    {
       "reason": "Random errors",
       "paths": [
         "test/sql/pragma/test_pragma_sanitized_inputs.test",
