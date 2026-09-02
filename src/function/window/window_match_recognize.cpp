@@ -928,7 +928,8 @@ void WindowMatchRecognizeExecutor::Finalize(ExecutionContext &context, optional_
 void WindowMatchRecognizeExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                            Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gstate = sink.global_state.Cast<WindowMatchRecognizeGlobalState>();
-	lock_guard<mutex> lock(gstate.state_lock);
+	// the spans were materialised in Finalize, which every thread has left by the time any of them
+	// reads here, so this only reads shared state and does not have to be serialised
 	result.Slice(gstate.result_vec, row_idx, row_idx + bounds.size());
 }
 
