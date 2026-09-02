@@ -234,7 +234,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(co
 }
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro,
-                                                                              ParserOptions options) {
+                                                                              const ParserOptions &options) {
 	auto bind_info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 	// Build a full CREATE MACRO statement and let the parser handle parameters, types, and defaults.
 	// macro_definition may contain multiple comma-separated overloads, e.g. "(x) AS x, (x, y) AS x+y".
@@ -268,7 +268,7 @@ static bool DefaultFunctionMatches(const DefaultMacro &macro, const Identifier &
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name,
-                                                         ParserOptions options) {
+                                                         const ParserOptions &options) {
 	auto &schema = input_schema;
 	auto &name = input_name;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {

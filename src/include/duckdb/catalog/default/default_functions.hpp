@@ -30,7 +30,7 @@ public:
 	DUCKDB_API static unique_ptr<CreateMacroInfo> CreateInternalMacroInfo(const DefaultMacro &default_macro);
 	//! Overload taking ParserOptions, so the caller's compiled grammar is reused instead of rebuilt per macro.
 	DUCKDB_API static unique_ptr<CreateMacroInfo> CreateInternalMacroInfo(const DefaultMacro &default_macro,
-	                                                                      ParserOptions options);
+	                                                                      const ParserOptions &options);
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;

@@ -41,7 +41,7 @@ public:
 	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro);
 	//! Overload taking ParserOptions, so the caller's compiled grammar is reused instead of rebuilt per macro.
 	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro,
-	                                                        ParserOptions options);
+	                                                        const ParserOptions &options);
 
 private:
 	static unique_ptr<CreateMacroInfo> CreateInternalTableMacroInfo(const DefaultTableMacro &default_macro,
