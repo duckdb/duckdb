@@ -12,10 +12,10 @@ void DBPathAndType::ExtractExtensionPrefix(string &path, Identifier &db_type) {
 	if (!extension.empty()) {
 		// path is prefixed with an extension - remove the first occurrence of it
 		path = path.substr(extension.length() + 1);
-		// Store the raw user prefix normalized to lowercase. The alias is
+		// Store the raw user prefix. Identifier comparison is case-insensitive; the alias is
 		// applied only at lookup/comparison sites — symmetric with how the
 		// `TYPE 'xxx'` option preserves the user-supplied value.
-		db_type = Identifier(StringUtil::Lower(extension));
+		db_type = Identifier(extension);
 	}
 }
 
