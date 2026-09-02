@@ -410,6 +410,9 @@ unique_ptr<SegmentScanState> RLEInitScan(const QueryContext &context, ColumnSegm
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+	auto end = state.GetPositionInSegment();
+	D_ASSERT(end <= segment.count);
+	D_ASSERT(skip_count <= end);
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 	scan_state.Skip(segment, skip_count);
 }
@@ -446,6 +449,8 @@ static void RLEScanConstant(RLEScanState<T> &scan_state, const typename RLEScanS
 template <class T, bool ENTIRE_VECTOR>
 void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                             idx_t result_offset) {
+	auto start = state.GetPositionInSegment();
+	D_ASSERT(start <= segment.count && scan_count <= segment.count - start);
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	// If we are scanning an entire Vector and it contains only a single run
@@ -516,6 +521,7 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		if (next_idx < prev_idx) {
 			throw InternalException("Error in RLESelect - selection vector indices are not ordered");
 		}
+		D_ASSERT(next_idx < vector_count);
 		// skip forward to the next index
 		scan_state.SkipInternal(next_idx - prev_idx);
 		// read the element
@@ -612,6 +618,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 			if (read_idx < prev_idx) {
 				throw InternalException("Error in RLEFilter - selection vector indices are not ordered");
 			}
+			D_ASSERT(read_idx < vector_count);
 			// skip forward to the next index
 			scan_state.SkipInternal(read_idx - prev_idx);
 			prev_idx = read_idx;
@@ -639,10 +646,13 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+	D_ASSERT(row_id >= 0);
+	auto row_index = NumericCast<idx_t>(row_id);
+	D_ASSERT(row_index < segment.count);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
 	RLEScanState<T> scan_state(std::move(handle), segment);
-	scan_state.Skip(segment, NumericCast<idx_t>(row_id));
+	scan_state.Skip(segment, row_index);
 
 	auto result_data = FlatVector::GetDataMutable<T>(result);
 	result_data[result_idx] = scan_state.GetCurrentRun().value;
