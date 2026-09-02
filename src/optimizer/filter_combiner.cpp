@@ -478,8 +478,11 @@ static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(Logical
 	vector<ProjectionIndex> column_indexes;
 	column_indexes.reserve(distinct_bindings.size());
 	for (const auto &binding : distinct_bindings) {
-		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size() ||
-		    get.GetColumnIds()[binding.column_index].IsVirtualColumn()) {
+		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size()) {
+			return nullptr;
+		}
+		auto &column_id = get.GetColumnIds()[binding.column_index];
+		if (column_id.IsVirtualColumn() && !column_id.IsRowIdColumn()) {
 			return nullptr;
 		}
 		column_indexes.emplace_back(binding.column_index);

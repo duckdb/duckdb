@@ -704,18 +704,24 @@ static idx_t IntersectSelections(const SelectionVector &left, idx_t left_count, 
 	return result_count;
 }
 
+static BaseStatistics CreateRowIdStats(idx_t beg_row, idx_t end_row) {
+	D_ASSERT(end_row > beg_row);
+	auto result = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
+	result.SetHasNoNullFast();
+	NumericStats::SetMin(result, UnsafeNumericCast<row_t>(beg_row));
+	NumericStats::SetMax(result, UnsafeNumericCast<row_t>(end_row - 1));
+	return result;
+}
+
 FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
 	if (end_row <= beg_row) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
-	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
-	dummy_stats.SetHasNoNullFast();
-	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
-	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row - 1));
+	auto rowid_stats = CreateRowIdStats(beg_row, end_row);
 
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::CheckRowIdFilter");
-	return expr_filter.CheckStatistics(dummy_stats);
+	return expr_filter.CheckStatistics(rowid_stats);
 }
 
 bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start) {
@@ -732,7 +738,11 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 					throw InternalException("Multi-column filter column index out of range");
 				}
 				const auto &storage_index = (*column_ids)[column_index.GetIndex()];
-				if (storage_index.IsRowIdColumn() || storage_index.IsRowNumberColumn()) {
+				if (storage_index.IsRowIdColumn()) {
+					input_stats.push_back(CreateRowIdStats(row_start, row_start + count));
+					continue;
+				}
+				if (storage_index.IsRowNumberColumn()) {
 					supported = false;
 					break;
 				}
