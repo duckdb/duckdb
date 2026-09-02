@@ -1,5 +1,5 @@
 diff --git a/vcpkg_ports/aws-c-io/no_op_implementation.patch b/vcpkg_ports/aws-c-io/no_op_implementation.patch
-index ee595831..e1ee88f1 100644
+index ee595831..aa6149aa 100644
 --- a/vcpkg_ports/aws-c-io/no_op_implementation.patch
 +++ b/vcpkg_ports/aws-c-io/no_op_implementation.patch
 @@ -1,8 +1,8 @@
@@ -49,70 +49,100 @@ index ee595831..e1ee88f1 100644
   #    error                                                                                                             \
           "Default event loop type required. Failed to get default event loop type. The library is not built correctly on the platform. "
   #endif
-@@ -57,26 +56,25 @@ index 0ec298d..6dea0f7 100644
+@@ -56,27 +55,8 @@ index 0ec298d..6dea0f7 100644
+  }
   
   static int aws_event_loop_type_validate_platform(enum aws_event_loop_type type) {
- diff --git a/source/io.c b/source/io.c
+-diff --git a/source/io.c b/source/io.c
 -index e8a5216..18f5274 100644
-+index 27c7263..4250dd8 100644
- --- a/source/io.c
- +++ b/source/io.c
+---- a/source/io.c
+-+++ b/source/io.c
 -@@ -396,8 +396,14 @@ static struct aws_log_subject_info_list s_io_log_subject_list = {
 - 
-+@@ -400,8 +400,13 @@ static struct aws_log_subject_info_list s_io_log_subject_list = {
-  static bool s_io_library_initialized = false;
-  
+- static bool s_io_library_initialized = false;
+- 
 -+
-+ void aws_tls_init_vtable(struct aws_allocator *allocator);
- +#ifdef EMSCRIPTEN
- +void aws_tls_init_static_state(struct aws_allocator *alloc) {}
- +void aws_tls_clean_up_static_state(void) {}
- +#else
+-+#ifdef EMSCRIPTEN
+-+void aws_tls_init_static_state(struct aws_allocator *alloc) {}
+-+void aws_tls_clean_up_static_state(void) {}
+-+#else
 - void aws_tls_init_static_state(struct aws_allocator *alloc);
-+ void aws_tls_init_static_state(struct aws_allocator *allocator);
-  void aws_tls_clean_up_static_state(void);
- +#endif
-  
-  void aws_io_library_init(struct aws_allocator *allocator) {
-      if (!s_io_library_initialized) {
+- void aws_tls_clean_up_static_state(void);
+-+#endif
+- 
+- void aws_io_library_init(struct aws_allocator *allocator) {
+-     if (!s_io_library_initialized) {
  diff --git a/source/posix/socket.c b/source/posix/socket.c
 -index 22cd1fc..f19579c 100644
 +index 79b214d..a0c3c28 100644
  --- a/source/posix/socket.c
  +++ b/source/posix/socket.c
  @@ -359,6 +359,9 @@ static void s_socket_clean_up(struct aws_socket *socket) {
-@@ -117,22 +115,19 @@ index 22cd1fc..f19579c 100644
+@@ -117,22 +97,51 @@ index 22cd1fc..f19579c 100644
   
   static void s_handle_socket_timeout(struct aws_task *task, void *args, aws_task_status status) {
  diff --git a/source/tls_channel_handler.c b/source/tls_channel_handler.c
 -index 353877b..8101337 100644
-+index cb79143..6e06e4f 100644
++index cb79143..cc0269b 100644
  --- a/source/tls_channel_handler.c
  +++ b/source/tls_channel_handler.c
 -@@ -21,6 +21,15 @@
 - 
 - #include <aws/common/string.h>
 - 
-+@@ -854,8 +854,12 @@ struct aws_tls_ctx *aws_tls_server_ctx_new(struct aws_allocator *alloc, const st
-+ }
-+
-+ struct aws_tls_ctx *aws_tls_client_ctx_new(struct aws_allocator *alloc, const struct aws_tls_ctx_options *options) {
- +#ifdef EMSCRIPTEN
+-+#ifdef EMSCRIPTEN
 -+struct aws_tls_ctx *aws_tls_client_ctx_new(
 -+    struct aws_allocator *alloc,
 -+    const struct aws_tls_ctx_options *options) {
 -+   printf("aws_tls_client_ctx_new\n");
 -+       return 0;
 -+}
-++    return NULL;
-++#else
-+     AWS_PRECONDITION(s_tls_channel_handler_vtable.client_ctx_new);
-+     return s_tls_channel_handler_vtable.client_ctx_new(alloc, options);
++@@ -805,6 +805,7 @@ void secure_channel_init_tls_vtable(struct aws_tls_vtable *vtable);
++ void aws_tls_init_vtable(struct aws_allocator *allocator) {
++     (void)allocator;
++
+++#ifndef EMSCRIPTEN
++     /* Allow the vtable to be set up only once on library initialization. */
++     static bool s_vtable_initialized = false;
++     if (s_vtable_initialized) {
++@@ -836,16 +837,23 @@ void aws_tls_init_vtable(struct aws_allocator *allocator) {
++ #    else
++     AWS_FATAL_ASSERT(false && "No TLS implementation available.");
++ #    endif
  +#endif
 -+
 - void aws_tls_ctx_options_init_default_client(struct aws_tls_ctx_options *options, struct aws_allocator *allocator) {
 -     AWS_ZERO_STRUCT(*options);
 -     options->allocator = allocator;
++ }
++
++ void aws_tls_init_static_state(struct aws_allocator *allocator) {
+++#ifdef EMSCRIPTEN
+++    (void)allocator;
+++#else
++     AWS_PRECONDITION(s_tls_channel_handler_vtable.init_static_state);
++     s_tls_channel_handler_vtable.init_static_state(allocator);
+++#endif
++ }
++
++ void aws_tls_clean_up_static_state(void) {
+++#ifndef EMSCRIPTEN
++     AWS_PRECONDITION(s_tls_channel_handler_vtable.clean_up_static_state);
++     s_tls_channel_handler_vtable.clean_up_static_state();
+++#endif
++ }
++
++ struct aws_tls_ctx *aws_tls_server_ctx_new(struct aws_allocator *alloc, const struct aws_tls_ctx_options *options) {
++@@ -854,8 +862,12 @@ struct aws_tls_ctx *aws_tls_server_ctx_new(struct aws_allocator *alloc, const st
++ }
++
++ struct aws_tls_ctx *aws_tls_client_ctx_new(struct aws_allocator *alloc, const struct aws_tls_ctx_options *options) {
+++#ifdef EMSCRIPTEN
+++    return NULL;
+++#else
++     AWS_PRECONDITION(s_tls_channel_handler_vtable.client_ctx_new);
++     return s_tls_channel_handler_vtable.client_ctx_new(alloc, options);
+++#endif
 + }
 +
 + struct aws_channel_handler *aws_tls_client_handler_new(
