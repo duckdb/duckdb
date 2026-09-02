@@ -14,6 +14,9 @@
 
 namespace duckdb {
 
+//! The min/max/arg_min/arg_max "n" aggregates require the requested n to be strictly smaller than this value
+static constexpr int64_t MIN_MAX_N_MAX_VALUE = 1000000;
+
 // For basic types
 template <class T>
 struct HeapEntry {
