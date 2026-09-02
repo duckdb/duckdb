@@ -327,7 +327,11 @@ label = os.path.basename(sys.argv[0])
 runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
 with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
     order_log.write(f"{label}:{runs}\\n")
-owner_path = Path(os.environ["BENCHMARK_COUNTER_DIR"]) / "shared-owner"
+if "--root-dir" in sys.argv:
+    state_directory = Path(sys.argv[sys.argv.index("--root-dir") + 1]) / "duckdb_benchmark_data"
+else:
+    state_directory = Path(os.environ["BENCHMARK_COUNTER_DIR"])
+owner_path = state_directory / "shared-owner"
 previous_owner = owner_path.read_text(encoding="utf-8") if owner_path.exists() else None
 owner_path.write_text(label, encoding="utf-8")
 print("name\\trun\\timing", file=sys.stderr)
@@ -657,6 +661,15 @@ else:
             "Both runners use the same benchmark cache, so files may have been last written by PR.", process.stdout
         )
         self.assertIn("PR:\n No failure", process.stdout)
+
+    def test_clear_cache_isolates_runner_writable_state(self):
+        process, order, _ = self.run_regression_test(
+            self.shared_state_runner_source, extra_args=["--benchmark-cache=clear"]
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, self.expected_order(10))
+        self.assertNotIn("opened state written by", process.stdout)
+        self.assertIn("benchmark cache: isolated Base and PR directories", process.stdout)
 
 
 if __name__ == "__main__":

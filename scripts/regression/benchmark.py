@@ -66,6 +66,7 @@ class BenchmarkRunner:
         verbose: bool = False,
         disable_timeout: bool = False,
         benchmark_arguments: Optional[List[Tuple[str, str]]] = None,
+        root_directory: Optional[str] = None,
     ):
         self.path = path
         self.label = label
@@ -74,8 +75,13 @@ class BenchmarkRunner:
         self.verbose = verbose
         self.disable_timeout = disable_timeout
         self.benchmark_arguments = benchmark_arguments or []
+        self.root_directory = root_directory
         self.extension_directory = find_extension_directory(path)
-        self.cache_directory = find_benchmark_cache_directory(path)
+        self.cache_directory = (
+            os.path.join(root_directory, "duckdb_benchmark_data")
+            if root_directory
+            else find_benchmark_cache_directory(path)
+        )
 
     def run(self, benchmark: str, timed_runs: int) -> Tuple[Optional[List[float]], Optional[str]]:
         arguments = [self.path, benchmark]
@@ -85,6 +91,8 @@ class BenchmarkRunner:
             arguments.append(f"--memory_limit={self.memory_limit}")
         if self.disable_timeout:
             arguments.append("--disable-timeout")
+        if self.root_directory:
+            arguments.extend(["--root-dir", self.root_directory])
         for name, value in self.benchmark_arguments:
             arguments.extend([f"--{name}", value])
         arguments.extend(["--timed-runs", str(timed_runs)])
