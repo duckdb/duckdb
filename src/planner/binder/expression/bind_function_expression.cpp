@@ -256,10 +256,9 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 	auto func = qualifier.QualifyFunction(function);
 	if (!func) {
 		// function was not found - check if we this is a table function (to throw a more helpful error message)
-		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
+		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.GetQualifiedName(),
 		                                      error_context);
-		auto table_func = GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
-		                                  table_function_lookup, OnEntryNotFound::RETURN_NULL);
+		auto table_func = GetCatalogEntry(table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
 			                      "Function %s is a table function but it was used as a scalar function. This "
@@ -267,10 +266,8 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 			                      function.FunctionName());
 		}
 		// not a table function - rebind to throw an error
-		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
-		                                error_context);
-		func = GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
-		                       function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.GetQualifiedName(), error_context);
+		func = GetCatalogEntry(function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *func;
 }
@@ -567,6 +564,11 @@ optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const Identifier &c
                                                              const EntryLookupInfo &lookup_info,
                                                              OnEntryNotFound on_entry_not_found) {
 	return binder.GetCatalogEntry(catalog, schema, lookup_info, on_entry_not_found);
+}
+
+optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const EntryLookupInfo &lookup_info,
+                                                             OnEntryNotFound on_entry_not_found) {
+	return binder.GetCatalogEntry(lookup_info, on_entry_not_found);
 }
 
 } // namespace duckdb

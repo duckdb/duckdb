@@ -114,8 +114,14 @@ void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name) {
-	auto catalog = qualified_name.Catalog();
-	auto schema = qualified_name.Schema();
+	auto &path = qualified_name.Path();
+	if (path.size() != 2) {
+		// only a lone qualifier ("x.name") can be either a schema or a catalog - any deeper qualification is
+		// positional and is resolved by ResolveCatalog
+		return;
+	}
+	Identifier catalog;
+	Identifier schema = path[0];
 	BindSchemaOrCatalog(retriever, catalog, schema);
 	qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
 }
@@ -649,9 +655,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw BinderException("Temporary triggers are not supported");
 	}
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres).
-	// Promote a catalog-qualified base table (e.g. attached_db.tbl) so downstream lookups carry the resolved
-	// catalog instead of a bare schema (matches the DROP TRIGGER path).
-	BindSchemaOrCatalog(create_trigger_info.base_table->GetQualifiedNameMutable());
 	TableDescription table_description(create_trigger_info.base_table->GetQualifiedName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
