@@ -50,6 +50,8 @@ public:
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
+	bool has_block_comment = false;
+	idx_t last_block_comment_position = 0;
 	friend class Tokenizer;
 };
 

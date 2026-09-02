@@ -32,14 +32,14 @@ query III
 select start, token_type, word from sql_tokenize($TEST_TOKENIZER$select $$dollar$$;$TEST_TOKENIZER$);
 ----
 0	KEYWORD	select
-7	STRING_LITERAL	'dollar'
+7	STRING_LITERAL	$$dollar$$
 17	TERMINATOR	;
 
 query III
 select start, token_type, word from sql_tokenize($$select $tag$val$ue$tag$;$$);
 ----
 0	KEYWORD	select
-7	STRING_LITERAL	'val$ue'
+7	STRING_LITERAL	$tag$val$ue$tag$
 23	TERMINATOR	;
 
 query III

@@ -485,12 +485,22 @@ string FileSystem::GetVersionTag(FileHandle &handle) {
 	return "";
 }
 
+optional<timestamp_t> FileSystem::GetCacheValidUntil(FileHandle &handle) {
+	return nullopt;
+}
+
 FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 
 FileMetadata FileSystem::Stats(FileHandle &handle) {
-	throw NotImplementedException("%s: Stats is not implemented!", GetName());
+	FileMetadata metadata;
+	metadata.file_size = GetFileSize(handle);
+	metadata.last_modification_time = GetLastModifiedTime(handle);
+	metadata.file_type = GetFileType(handle);
+	metadata.version_tag = GetVersionTag(handle);
+	metadata.cache_valid_until = GetCacheValidUntil(handle);
+	return metadata;
 }
 
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {

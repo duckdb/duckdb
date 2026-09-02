@@ -493,6 +493,11 @@ void LoadInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(203, "version", version);
 	serializer.WritePropertyWithDefault<bool>(204, "repo_is_alias", repo_is_alias);
 	serializer.WritePropertyWithDefault<Identifier>(205, "alias", alias);
+	serializer.WritePropertyWithDefault<string>(206, "repository_url", repository_url);
+	serializer.WritePropertyWithDefault<vector<string>>(207, "public_keys", public_keys);
+	serializer.WritePropertyWithDefault<OnCreateConflict>(208, "on_conflict", on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	serializer.WritePropertyWithDefault<bool>(209, "missing_ok", missing_ok, false);
+	serializer.WritePropertyWithDefault<bool>(210, "load_after_install", load_after_install, false);
 }
 
 unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
@@ -503,6 +508,11 @@ unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(203, "version", result->version);
 	deserializer.ReadPropertyWithDefault<bool>(204, "repo_is_alias", result->repo_is_alias);
 	deserializer.ReadPropertyWithDefault<Identifier>(205, "alias", result->alias);
+	deserializer.ReadPropertyWithDefault<string>(206, "repository_url", result->repository_url);
+	deserializer.ReadPropertyWithDefault<vector<string>>(207, "public_keys", result->public_keys);
+	deserializer.ReadPropertyWithExplicitDefault<OnCreateConflict>(208, "on_conflict", result->on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(209, "missing_ok", result->missing_ok, false);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(210, "load_after_install", result->load_after_install, false);
 	return std::move(result);
 }
 

@@ -13,7 +13,7 @@ struct CompiledGrammar {
 	friend struct ParserCache;
 
 private:
-	explicit CompiledGrammar(ParserCache &cache);
+	CompiledGrammar(ParserCache &cache, const ParsedGrammar &grammar);
 
 public:
 	const Matcher &ProgramMatcher() {
@@ -42,7 +42,7 @@ private:
 	optional_ptr<const Matcher> program_matcher;
 	optional_ptr<const Matcher> top_level_statement_matcher;
 
-	//! TODO: this should be a unique_ptr when we allow keyword overrides
+	unique_ptr<PEGKeywordHelper> owned_keyword_helper;
 	const PEGKeywordHelper &keyword_helper;
 	Tokenizer tokenizer;
 	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;

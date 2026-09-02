@@ -1,13 +1,15 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
-#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
+#include "duckdb/parser/peg/keyword_helper/parsed_grammar_keyword_helper.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
 
-CompiledGrammar::CompiledGrammar(ParserCache &cache)
-    : keyword_helper(DuckDBKeywordHelper::Instance()), tokenizer(keyword_helper), version(cache.LatestParserVersion()) {
+CompiledGrammar::CompiledGrammar(ParserCache &cache, const ParsedGrammar &grammar)
+    : owned_keyword_helper(make_uniq<ParsedGrammarKeywordHelper>(grammar)), keyword_helper(*owned_keyword_helper),
+      tokenizer(keyword_helper), version(cache.LatestParserVersion()) {
 }
 
 idx_t CompiledGrammar::Version() const {
@@ -41,6 +43,23 @@ static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {
 	}
 }
 
+static void CheckReference(const ParsedGrammar &grammar, const ParsedGrammarRule &parsed_rule,
+                           const PEGExpression &expression) {
+	if (expression.type == PEGExpression::Type::REFERENCE || expression.type == PEGExpression::Type::FUNCTION_CALL) {
+		if (expression.type != PEGExpression::Type::REFERENCE ||
+		    !parsed_rule.recipe.parameters.count(expression.text)) {
+			if (!StringUtil::CIEquals(expression.text.GetString(), "EndOfInput") &&
+			    !grammar.GetRule(expression.text.GetString())) {
+				throw InvalidInputException("Grammar rule '%s' references missing rule '%s'", parsed_rule.name,
+				                            expression.text.GetString());
+			}
+		}
+	}
+	for (auto &child : expression.children) {
+		CheckReference(grammar, parsed_rule, child);
+	}
+}
+
 shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> context) {
 	{
 		std::unique_lock<std::mutex> lock(mutex);
@@ -52,22 +71,11 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 	auto grammar = ParsedGrammar::CreateDefault();
 	ValidateParsedGrammarRoots(grammar);
 	for (auto &entry : grammar.rules) {
-		auto &rule = *entry.second;
-		for (auto &token : rule.recipe.tokens) {
-			if (token.type != PEGTokenType::REFERENCE && token.type != PEGTokenType::FUNCTION_CALL) {
-				continue;
-			}
-			if (token.type == PEGTokenType::REFERENCE && rule.recipe.parameters.count(token.text)) {
-				continue;
-			}
-			if (!grammar.GetRule(token.text.GetString())) {
-				throw InvalidInputException("Grammar rule '%s' references missing rule '%s'", rule.name,
-				                            token.text.GetString());
-			}
-		}
+		auto &parsed_rule = *entry.second;
+		CheckReference(grammar, parsed_rule, parsed_rule.recipe.expression);
 	}
 
-	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(*this));
+	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(*this, grammar));
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
 		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, std::move(rule.transform)));

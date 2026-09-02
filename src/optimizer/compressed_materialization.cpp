@@ -623,8 +623,19 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 		const auto &new_type = new_types[col_idx];
 		replacement_bindings.emplace_back(old_binding, new_binding, new_type);
 
-		if (statistics[col_idx]) {
+		// only publish statistics that describe the column type: for variant wrapper group expressions,
+		// binding_info holds the wrapped VARIANT stats while the restored column is the wrapper output
+		if (statistics[col_idx] && statistics[col_idx]->GetType() == new_type) {
 			statistics_map[new_binding] = statistics[col_idx]->ToUnique();
+		} else {
+			// pass-through column: move the statistics of the old binding (if any) to the new binding,
+			// so that references rebound to the decompress projection keep their statistics
+			auto stats_it = statistics_map.find(old_binding);
+			if (stats_it != statistics_map.end() && stats_it->second && stats_it->second->GetType() == new_type) {
+				auto old_stats = std::move(stats_it->second);
+				statistics_map.erase(stats_it);
+				statistics_map[new_binding] = std::move(old_stats);
+			}
 		}
 	}
 

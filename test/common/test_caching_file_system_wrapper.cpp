@@ -96,8 +96,11 @@ public:
 		return true;
 	}
 
-	string GetVersionTag(FileHandle &handle) override {
-		return StringUtil::Format("%lld:%lld", GetFileSize(handle), GetLastModifiedTime(handle).value);
+	FileMetadata Stats(FileHandle &handle) override {
+		auto metadata = LocalFileSystem::Stats(handle);
+		metadata.version_tag =
+		    StringUtil::Format("%lld:%lld", metadata.file_size, metadata.last_modification_time.value);
+		return metadata;
 	}
 };
 
@@ -139,12 +142,11 @@ public:
 		return "NoMetadataFileSystem";
 	}
 
-	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
-		return FileMetadata {}.last_modification_time;
-	}
-
-	string GetVersionTag(FileHandle &handle) override {
-		return "";
+	FileMetadata Stats(FileHandle &handle) override {
+		auto metadata = LocalFileSystem::Stats(handle);
+		metadata.last_modification_time = FileMetadata {}.last_modification_time;
+		metadata.version_tag.clear();
+		return metadata;
 	}
 
 	bool CanHandleFile(const string &path) override {

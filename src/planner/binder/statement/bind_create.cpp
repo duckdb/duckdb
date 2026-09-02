@@ -270,7 +270,19 @@ QualifiedName Binder::BindTableName(const QualifiedName &name) {
 	return BindTableName(retriever, name);
 }
 
+void Binder::RegisterEntryRead(optional_ptr<Binder> binder, ClientContext &context, CatalogEntry &entry) {
+	if (!binder) {
+		// no binder available (e.g. when re-binding a deserialized plan) - nothing is cached in that case
+		return;
+	}
+	binder->GetStatementProperties().RegisterDBRead(entry.ParentCatalog(), context);
+}
+
 void Binder::BindCreateSchema(CreateSchemaInfo &info) {
+	if (info.temporary) {
+		// unsupported - otherwise the schema silently lands in (and is persisted to) the default catalog
+		throw BinderException("Temporary schemas are not supported");
+	}
 	// the qualified name carries the dotted path with the new schema as the last component; resolve its leading
 	// component into a catalog (prepending the default catalog when it is a schema)
 	info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
@@ -545,6 +557,8 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			// create a copy of the expression because we do not want to alter the original
 			auto expression = function->Cast<ScalarMacroFunction>().expression->Copy();
 			ExpressionBinder::QualifyColumnNames(*this, expression);
+			// scope for the map entries of this bind: the bound result is only used for verification
+			BoundExpressionScope verify_scope(GetBoundExpressions());
 			try {
 				error = binder.Bind(expression, 0, false);
 				if (error.HasError()) {
@@ -630,6 +644,10 @@ void Binder::BindLogicalType(LogicalType &type) {
 bool BoundBodyContainsTrigger(const LogicalOperator &op);
 
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
+	if (create_trigger_info.temporary) {
+		// unsupported - a trigger is temporary iff its base table is (see below)
+		throw BinderException("Temporary triggers are not supported");
+	}
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres).
 	// Promote a catalog-qualified base table (e.g. attached_db.tbl) so downstream lookups carry the resolved
 	// catalog instead of a bare schema (matches the DROP TRIGGER path).
@@ -652,6 +670,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 
 	// Trigger inherits the catalog and the (possibly nested) schema from the base table
 	create_trigger_info.SetQualifiedName(table.schema.GetQualifiedName(create_trigger_info.GetQualifiedName().Name()));
+	// ... and its temporariness, so that a trigger on a temporary table lands in the temp catalog
+	create_trigger_info.temporary = table.temporary;
 
 	auto &schema = BindCreateSchema(create_trigger_info);
 
@@ -878,6 +898,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::INDEX_ENTRY: {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
+		if (create_index_info.temporary) {
+			// unsupported - an index is temporary iff the table it is created on is (see below)
+			throw BinderException("Temporary indexes are not supported");
+		}
 
 		// Plan the table scan - the table lives in the same (possibly nested) schema as the index.
 		TableDescription table_description(create_index_info.GetQualifiedName().WithName(create_index_info.table));
