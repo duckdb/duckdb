@@ -293,6 +293,13 @@ struct RLEScanState : public SegmentScanState {
 			}
 		}
 
+		idx_t ValidateAllRuns() {
+			while (unvalidated_row_count > 0) {
+				ValidateThrough(validated_entry_count);
+			}
+			return validated_entry_count;
+		}
+
 		rle_count_t GetRunCount(idx_t entry_index) {
 			ValidateThrough(entry_index);
 			return run_counts[entry_index];
@@ -513,13 +520,11 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
                idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
-	auto data_pointer = const_cast<T *>(scan_state.layout.values.data());
-	auto index_pointer = const_cast<rle_count_t *>(scan_state.layout.run_counts.data());
-
-	auto total_run_count = scan_state.layout.values.size();
 	if (!scan_state.matching_runs) {
 		// we haven't applied the filter yet
 		// apply the filter to all RLE values at once
+		auto total_run_count = scan_state.layout.ValidateAllRuns();
+		auto data_pointer = const_cast<T *>(scan_state.layout.values.data());
 
 		// initialize the filter set to all false (all runs are filtered out)
 		scan_state.matching_runs = make_unsafe_uniq_array<bool>(total_run_count);
@@ -556,11 +561,11 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		idx_t result_offset = 0;
 		idx_t result_end = sel_count;
 		while (result_offset < result_end) {
-			rle_count_t run_end = index_pointer[scan_state.entry_pos];
-			idx_t run_count = run_end - scan_state.position_in_entry;
+			auto run = scan_state.GetCurrentRun();
+			auto run_count = run.length - scan_state.position_in_entry;
 			idx_t remaining_scan_count = result_end - result_offset;
 			// the run is scanned - scan it
-			T element = data_pointer[scan_state.entry_pos];
+			T element = run.value;
 			if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
 				if (scan_state.matching_runs[scan_state.entry_pos]) {
 					for (idx_t i = 0; i < remaining_scan_count; i++) {
@@ -599,7 +604,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 				continue;
 			}
 			// the run is not filtered out - read the element
-			result_data[read_idx] = data_pointer[scan_state.entry_pos];
+			result_data[read_idx] = scan_state.GetCurrentRun().value;
 			matching_sel.set_index(matching_count++, read_idx);
 		}
 		// skip the tail
