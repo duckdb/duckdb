@@ -125,12 +125,28 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	// Bind all indexes.
 	info->BindIndexes(context);
 
+	vector<pair<Identifier, IndexInfo>> indexes;
+	indexes.reserve(info->indexes.Count());
+	for (const auto &entry : info->indexes.IndexEntries()) {
+		indexes.emplace_back(entry->GetName(), entry->GetStorageInfo());
+	}
+	auto &catalog = db.GetCatalog();
+	auto transaction = catalog.GetCatalogTransaction(context);
+	auto &schema = *catalog.GetSchema(transaction, info->GetSchemaPath(), OnEntryNotFound::THROW_EXCEPTION);
+
 	// first check if there are any indexes that exist that point to the removed column
-	for (const auto column_id : info->indexes.GetIndexedColumns()) {
-		if (column_id == removed_column) {
-			throw CatalogException("Cannot drop this column: an index depends on it!");
-		} else if (column_id > removed_column) {
-			throw CatalogException("Cannot drop this column: an index depends on a column after it!");
+	for (const auto &index : indexes) {
+		auto lookup = schema.LookupEntryDetailed(
+		    transaction, EntryLookupInfo(CatalogType::INDEX_ENTRY, QualifiedName(index.first)));
+		if (lookup.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
+			continue;
+		}
+		for (const auto column_id : index.second.column_set) {
+			if (column_id == removed_column) {
+				throw CatalogException("Cannot drop this column: an index depends on it!");
+			} else if (column_id > removed_column) {
+				throw CatalogException("Cannot drop this column: an index depends on a column after it!");
+			}
 		}
 	}
 
