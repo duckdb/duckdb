@@ -1349,6 +1349,8 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_experimental_filter_pushdown", "postgres_scanner"},
     {"pg_idle_in_transaction_timeout_millis", "postgres_scanner"},
     {"pg_null_byte_replacement", "postgres_scanner"},
+    {"pg_numeric_as_varchar", "postgres_scanner"},
+    {"pg_numeric_nan_as_null", "postgres_scanner"},
     {"pg_oauth_token", "postgres_scanner"},
     {"pg_order_pushdown", "postgres_scanner"},
     {"pg_pages_per_task", "postgres_scanner"},
