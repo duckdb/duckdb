@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/rle/rle_corrupt_value_capacity.test
+# description: Too few paired RLE entries to cover segment.count must be rejected
+# group: [rle]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/rle_corrupt_value_capacity.db.gz {TEST_DIR}/rle_corrupt_value_capacity.db
+
+load {TEST_DIR}/rle_corrupt_value_capacity.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='RLE';
+----
+RLE
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted RLE segment: run counts do not cover the segment row count
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted RLE segment: run counts do not cover the segment row count

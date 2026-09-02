@@ -347,11 +347,23 @@ struct RLEScanState : public SegmentScanState {
 	}
 
 	rle_count_t GetCurrentRunCount() {
-		return layout.GetRunCount(entry_pos);
+		auto run_count = layout.GetRunCount(entry_pos);
+		// Empty runs do not represent rows.
+		while (run_count == 0) {
+			ForwardToNextRun();
+			run_count = layout.GetRunCount(entry_pos);
+		}
+		return run_count;
 	}
 
 	ValidatedRun GetCurrentRun() {
-		return layout.GetRun(entry_pos);
+		auto run = layout.GetRun(entry_pos);
+		// Empty runs do not represent rows.
+		while (run.length == 0) {
+			ForwardToNextRun();
+			run = layout.GetRun(entry_pos);
+		}
+		return run;
 	}
 
 	inline void SkipInternal(idx_t skip_count) {
@@ -622,12 +634,13 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 			// skip forward to the next index
 			scan_state.SkipInternal(read_idx - prev_idx);
 			prev_idx = read_idx;
+			auto run = scan_state.GetCurrentRun();
 			if (!scan_state.matching_runs[scan_state.entry_pos]) {
 				// this run is filtered out - we don't need to scan it
 				continue;
 			}
 			// the run is not filtered out - read the element
-			result_data[read_idx] = scan_state.GetCurrentRun().value;
+			result_data[read_idx] = run.value;
 			matching_sel.set_index(matching_count++, read_idx);
 		}
 		// skip the tail
