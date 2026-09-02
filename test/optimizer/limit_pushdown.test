@@ -61,8 +61,8 @@ SELECT i FROM integers LIMIT 4 OFFSET 2
 3
 4
 
-# limit value > 8192: no pushdown
+# limit value >= 8192: no pushdown
 query II
-EXPLAIN SELECT i FROM integers LIMIT 8192
+EXPLAIN SELECT i + 1 FROM range(8193) t(i) LIMIT 8192
 ----
 logical_opt	<REGEX>:.*LIMIT.*PROJECTION.*
