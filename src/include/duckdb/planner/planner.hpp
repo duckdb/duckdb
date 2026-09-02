@@ -39,10 +39,19 @@ public:
 
 public:
 	void CreatePlan(unique_ptr<SQLStatement> statement);
+	StatementType GetStatementType() const;
+	const identifier_map_t<idx_t> &GetNamedParameterMap() const;
+	bool HasExtensionStatementRewrite() const;
 	static void VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
 	                       optional_ptr<bound_parameter_map_t> map = nullptr);
 
 private:
+	StatementType statement_type = StatementType::INVALID_STATEMENT;
+	identifier_map_t<idx_t> named_param_map;
+	bool has_anonymous_parameters = false;
+	bool has_extension_statement_rewrite = false;
+
+	unique_ptr<SQLStatement> RewriteExtensionStatement(unique_ptr<SQLStatement> statement);
 	void CreatePlan(SQLStatement &statement);
 	shared_ptr<PreparedStatementData> PrepareSQLStatement(unique_ptr<SQLStatement> statement);
 };

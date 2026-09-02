@@ -32,6 +32,9 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/extension_statement.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
@@ -428,6 +431,146 @@ public:
 			return ParserOverrideResult();
 		}
 		return ParserOverrideResult(std::move(statements));
+	}
+};
+
+enum class ContextRewriteMode : uint8_t {
+	SUCCESS,
+	TRANSACTION,
+	TABLE,
+	PLAN_EXTENSION,
+	EMPTY,
+	MULTI,
+	RECURSE,
+	PRAGMA,
+	TRANSACTION_CONTROL
+};
+
+struct ContextRewriteData : public ParserExtensionParseData {
+	explicit ContextRewriteData(ContextRewriteMode mode_p) : mode(mode_p) {
+	}
+
+	ContextRewriteMode mode;
+
+	unique_ptr<ParserExtensionParseData> Copy() const override {
+		return make_uniq<ContextRewriteData>(mode);
+	}
+
+	string ToString() const override {
+		return "CONTEXT REWRITE";
+	}
+};
+
+class ContextRewriteExtension : public ParserExtension {
+public:
+	ContextRewriteExtension() {
+		parse_function = ParseFunction;
+		rewrite_function = RewriteFunction;
+	}
+
+	static ParserExtensionParseResult ParseFunction(ParserExtensionInfo *info, const vector<SimpleToken> &tokens) {
+		ContextRewriteMode mode;
+		if (!ParseMode(tokens, mode)) {
+			return ParserExtensionParseResult();
+		}
+		auto result = ParserExtensionParseResult(make_uniq<ContextRewriteData>(mode));
+		result.consumed_tokens = 4;
+		return result;
+	}
+
+	static bool ParseMode(const vector<SimpleToken> &tokens, ContextRewriteMode &mode) {
+		if (tokens.size() < 4 || !StringUtil::CIEquals(tokens[0].text, "context") ||
+		    !StringUtil::CIEquals(tokens[1].text, "rewrite")) {
+			return false;
+		}
+		const auto next_type = tokens[3].type;
+		if (next_type != TokenType::TERMINATOR && next_type != TokenType::END_OF_INPUT &&
+		    next_type != TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			return false;
+		}
+		if (StringUtil::CIEquals(tokens[2].text, "success")) {
+			mode = ContextRewriteMode::SUCCESS;
+		} else if (StringUtil::CIEquals(tokens[2].text, "transaction")) {
+			mode = ContextRewriteMode::TRANSACTION;
+		} else if (StringUtil::CIEquals(tokens[2].text, "table")) {
+			mode = ContextRewriteMode::TABLE;
+		} else if (StringUtil::CIEquals(tokens[2].text, "plan_extension")) {
+			mode = ContextRewriteMode::PLAN_EXTENSION;
+		} else if (StringUtil::CIEquals(tokens[2].text, "empty")) {
+			mode = ContextRewriteMode::EMPTY;
+		} else if (StringUtil::CIEquals(tokens[2].text, "multi")) {
+			mode = ContextRewriteMode::MULTI;
+		} else if (StringUtil::CIEquals(tokens[2].text, "recurse")) {
+			mode = ContextRewriteMode::RECURSE;
+		} else if (StringUtil::CIEquals(tokens[2].text, "pragma")) {
+			mode = ContextRewriteMode::PRAGMA;
+		} else if (StringUtil::CIEquals(tokens[2].text, "transaction_control")) {
+			mode = ContextRewriteMode::TRANSACTION_CONTROL;
+		} else {
+			return false;
+		}
+		return true;
+	}
+
+	static unique_ptr<SQLStatement> ParseStatement(ClientContext &context, const string &query) {
+		Parser parser(context.GetParserOptions());
+		parser.ParseQuery(query);
+		D_ASSERT(parser.statements.size() == 1);
+		return std::move(parser.statements[0]);
+	}
+
+	static unique_ptr<SQLStatement> CreateConstantStatement(Value value) {
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(make_uniq<ConstantExpression>(std::move(value)));
+		select_node->from_table = make_uniq<EmptyTableRef>();
+		auto select_statement = make_uniq<SelectStatement>();
+		select_statement->node = std::move(select_node);
+		return std::move(select_statement);
+	}
+
+	static ParserExtensionRewriteResult RewriteFunction(ParserExtensionInfo *info, ClientContext &context,
+	                                                    unique_ptr<ParserExtensionParseData> parse_data) {
+		auto &rewrite_data = parse_data->Cast<ContextRewriteData>();
+		ParserExtensionRewriteResult result;
+		switch (rewrite_data.mode) {
+		case ContextRewriteMode::SUCCESS:
+			result.statement = CreateConstantStatement(Value::INTEGER(42));
+			break;
+		case ContextRewriteMode::TRANSACTION: {
+			auto transaction_id = context.transaction.ActiveTransaction().global_transaction_id;
+			result.statement =
+			    ParseStatement(context, StringUtil::Format("SELECT current_transaction_id() = %llu", transaction_id));
+			break;
+		}
+		case ContextRewriteMode::TABLE:
+			result.statement = ParseStatement(context, "SELECT count(*) FROM context_rewrite_table");
+			break;
+		case ContextRewriteMode::PLAN_EXTENSION:
+			result.statement = make_uniq<ExtensionStatement>(QuackExtension(), make_uniq<QuackExtensionData>(2));
+			break;
+		case ContextRewriteMode::EMPTY:
+			break;
+		case ContextRewriteMode::MULTI: {
+			auto multi_statement = make_uniq<MultiStatement>();
+			multi_statement->statements.push_back(CreateConstantStatement(Value::INTEGER(1)));
+			multi_statement->statements.push_back(CreateConstantStatement(Value::INTEGER(2)));
+			result.statement = std::move(multi_statement);
+			break;
+		}
+		case ContextRewriteMode::RECURSE:
+			result.statement = make_uniq<ExtensionStatement>(ContextRewriteExtension(),
+			                                                 make_uniq<ContextRewriteData>(rewrite_data.mode));
+			break;
+		case ContextRewriteMode::PRAGMA:
+			result.statement = ParseStatement(context, "PRAGMA version");
+			break;
+		case ContextRewriteMode::TRANSACTION_CONTROL:
+			result.statement = ParseStatement(context, "BEGIN TRANSACTION");
+			break;
+		default:
+			throw InternalException("Unsupported context rewrite mode");
+		}
+		return result;
 	}
 };
 
@@ -1247,6 +1390,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
 	ParserExtension::Register(config, QuackExtension());
+	ParserExtension::Register(config, ContextRewriteExtension());
 	ExtensionCallback::Register(config, make_shared_ptr<QuackLoadExtension>());
 
 	// add a planner extension that adds an extra column to queries

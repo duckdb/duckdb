@@ -473,9 +473,6 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock,
                                                                                  unique_ptr<SQLStatement> statement,
                                                                                  PendingQueryParameters parameters) {
-	StatementType statement_type = statement->type;
-	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
-
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(statement->query, IsExplainAnalyze(statement.get()));
 	Planner logical_planner(*this);
@@ -491,6 +488,10 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		logical_planner.CreatePlan(std::move(statement));
 		D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
 	}
+	if (parameters.parameters && logical_planner.HasExtensionStatementRewrite()) {
+		PreparedStatement::VerifyParameters(*parameters.parameters, logical_planner.GetNamedParameterMap(), this);
+	}
+	auto result = make_shared_ptr<PreparedStatementData>(logical_planner.GetStatementType());
 
 	auto logical_plan = std::move(logical_planner.plan);
 	// extract the result column names from the plan
@@ -884,7 +885,6 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 
 StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> statement) {
 	auto lock = LockContext();
-	auto named_param_map = statement->named_param_map;
 	StatementSignature signature;
 	ErrorData bind_error;
 	RunFunctionInTransactionInternal(
@@ -899,7 +899,7 @@ StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> stateme
 			    // Parameter types from the bound parameter map (as in PreparedStatementData::TryGetType).
 			    // An un-anchored parameter (e.g. SELECT $1) gets no value_map entry, so its
 			    // type stays UNKNOWN; do not assume every parameter is present.
-			    for (auto &entry : named_param_map) {
+			    for (auto &entry : planner.GetNamedParameterMap()) {
 				    LogicalType type(LogicalTypeId::UNKNOWN);
 				    auto it = planner.value_map.find(entry.first);
 				    if (it != planner.value_map.end()) {

@@ -1,7 +1,10 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -16,6 +19,123 @@ static StatementSignature BindOne(Connection &con, const string &sql) {
 	parser.ParseQuery(sql);
 	REQUIRE(parser.statements.size() == 1);
 	return con.context->BindStatement(std::move(parser.statements[0]));
+}
+
+struct BindRewriteData : public ParserExtensionParseData {
+	unique_ptr<ParserExtensionParseData> Copy() const override {
+		return make_uniq<BindRewriteData>();
+	}
+
+	string ToString() const override {
+		return "BIND REWRITE";
+	}
+};
+
+static std::atomic<idx_t> bind_rewrite_count {0};
+
+static ParserExtensionRewriteResult RewriteBindParameter(ParserExtensionInfo *info, ClientContext &context,
+                                                         unique_ptr<ParserExtensionParseData> parse_data) {
+	auto rewrite_count = bind_rewrite_count.fetch_add(1) + 1;
+	Parser parser(context.GetParserOptions());
+	parser.ParseQuery("SELECT $1::INTEGER, " + std::to_string(rewrite_count) + "::BIGINT");
+	ParserExtensionRewriteResult result;
+	result.statement = std::move(parser.statements[0]);
+	result.always_require_rebind = true;
+	return result;
+}
+
+static unique_ptr<SQLStatement> BindRewriteStatement() {
+	ParserExtension extension;
+	extension.rewrite_function = RewriteBindParameter;
+	return make_uniq<ExtensionStatement>(std::move(extension), make_uniq<BindRewriteData>());
+}
+
+struct InvalidRewriteInfo : public ParserExtensionInfo {
+	InvalidRewriteInfo(string sql_p, bool explain_p) : sql(std::move(sql_p)), explain(explain_p) {
+	}
+
+	string sql;
+	bool explain;
+};
+
+static ParserExtensionRewriteResult RewriteInvalidStatement(ParserExtensionInfo *info, ClientContext &context,
+                                                            unique_ptr<ParserExtensionParseData> parse_data) {
+	auto &rewrite_info = info->Cast<InvalidRewriteInfo>();
+	Parser parser(context.GetParserOptions());
+	parser.ParseQuery(rewrite_info.sql);
+	ParserExtensionRewriteResult result;
+	result.statement = std::move(parser.statements[0]);
+	if (rewrite_info.explain) {
+		result.statement = make_uniq<ExplainStatement>(std::move(result.statement));
+	}
+	return result;
+}
+
+static unique_ptr<SQLStatement> InvalidRewriteStatement(string sql, bool explain = false) {
+	ParserExtension extension;
+	extension.rewrite_function = RewriteInvalidStatement;
+	extension.parser_info = make_shared_ptr<InvalidRewriteInfo>(std::move(sql), explain);
+	return make_uniq<ExtensionStatement>(std::move(extension), make_uniq<BindRewriteData>());
+}
+
+TEST_CASE("Planner rewrite parameters are visible to binding APIs", "[api][bind_statement]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	bind_rewrite_count.store(0);
+
+	auto signature = con.context->BindStatement(BindRewriteStatement());
+	REQUIRE(signature.parameters.size() == 1);
+	REQUIRE(signature.parameters[0].identifier == "1");
+	REQUIRE(signature.parameters[0].type == LogicalType::INTEGER);
+
+	vector<Value> values {Value::INTEGER(42)};
+	auto pending = con.PendingQuery(BindRewriteStatement(), values);
+	REQUIRE(!pending->HasError());
+	auto result = pending->Execute();
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Cast<MaterializedQueryResult>().GetValue(0, 0) == Value::INTEGER(42));
+
+	values.push_back(Value::INTEGER(84));
+	pending = con.PendingQuery(BindRewriteStatement(), values);
+	REQUIRE(pending->HasError());
+	values.pop_back();
+
+	auto prepared = con.Prepare(BindRewriteStatement());
+	REQUIRE(!prepared->HasError());
+	REQUIRE(prepared->GetParameterCount() == 1);
+	auto count_after_prepare = bind_rewrite_count.load();
+	result = prepared->Execute(values, false);
+	REQUIRE_NO_FAIL(*result);
+	auto first_execute_count = result->Cast<MaterializedQueryResult>().GetValue(1, 0).GetValue<int64_t>();
+	REQUIRE(first_execute_count > NumericCast<int64_t>(count_after_prepare));
+	result = prepared->Execute(values, false);
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Cast<MaterializedQueryResult>().GetValue(1, 0).GetValue<int64_t>() > first_execute_count);
+
+	auto explain = make_uniq<ExplainStatement>(BindRewriteStatement());
+	prepared = con.Prepare(std::move(explain));
+	REQUIRE(!prepared->HasError());
+	REQUIRE(prepared->GetParameterCount() == 1);
+	result = prepared->Execute(values, false);
+	REQUIRE_NO_FAIL(*result);
+}
+
+TEST_CASE("Planner rewrite rejects prepared statement control", "[api][bind_statement]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto pending = con.PendingQuery(InvalidRewriteStatement("PREPARE rewritten AS SELECT 42"));
+	REQUIRE(pending->HasError());
+	REQUIRE(StringUtil::Contains(pending->GetError(), "cannot generate prepare statements"));
+
+	pending = con.PendingQuery(InvalidRewriteStatement("EXECUTE rewritten"));
+	REQUIRE(pending->HasError());
+	REQUIRE(StringUtil::Contains(pending->GetError(), "cannot generate execute statements"));
+
+	// EXPLAIN is an allowed wrapper, but it must not bypass validation of its nested statement.
+	pending = con.PendingQuery(InvalidRewriteStatement("PREPARE rewritten AS SELECT 42", true));
+	REQUIRE(pending->HasError());
+	REQUIRE(StringUtil::Contains(pending->GetError(), "cannot generate prepare statements"));
 }
 
 TEST_CASE("BindStatement reports the result and parameter schema", "[api][bind_statement]") {
