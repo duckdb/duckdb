@@ -145,29 +145,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		}
 	}
 	if (func.Function().HasStatisticsCallback()) {
-		auto definition = func.Function().GetDefinition();
-		auto trusted_identity_transfer = func.Function().StatisticsPreservesFunctionIdentity();
-		auto restore_rebindability = func.Function().HasRebindableDefinition();
-		auto restore_expression_identity = func.Function().HasFunctionExpressionIdentity(func.GetExpressionType());
-		optional_ptr<Expression> original_expression(expr_ptr);
 		FunctionStatisticsInput input(func, func.BindInfo().get(), stats, &expr_ptr);
-		(void)func.FunctionMutable();
-		auto function_identity_token = func.Function().GetFunctionIdentityToken();
-		auto function_name = func.Function().GetName();
-		auto result = func.Function().GetStatisticsCallback()(context, input);
-		auto implementation_unchanged = function_identity_token == func.Function().GetFunctionIdentityToken() &&
-		                                function_name == func.Function().GetName();
-		if (optional_ptr<Expression>(expr_ptr) == original_expression &&
-		    func.Function().GetDefinition() == definition && (implementation_unchanged || trusted_identity_transfer)) {
-			auto &bound_function = func.FunctionMutable();
-			if (restore_expression_identity) {
-				bound_function.RestoreFunctionExpressionIdentity();
-			}
-			if (restore_rebindability) {
-				bound_function.RestoreRebindableDefinition();
-			}
-		}
-		return result;
+		return func.Function().GetStatisticsCallback()(context, input);
 	}
 	return PropagateMonotoneBounds(context, func, stats);
 }

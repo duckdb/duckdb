@@ -1,5 +1,5 @@
-#include "duckdb/function/aggregate/distributive_functions.hpp"
-#include "duckdb/function/aggregate/sum_helpers.hpp"
+#include "core_functions/aggregate/distributive_functions.hpp"
+#include "core_functions/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -23,6 +23,17 @@ struct SumSetOperation {
 		} else {
 			CombineSumStateValue(target.value, source.value);
 		}
+	}
+	template <class STATE>
+	static void AddValues(STATE &state, idx_t count) {
+		state.is_set = true;
+	}
+};
+
+struct KahanSumSetOperation {
+	template <class STATE>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		target.Combine(source);
 	}
 	template <class STATE>
 	static void AddValues(STATE &state, idx_t count) {
@@ -197,6 +208,17 @@ struct NumericSumOperation
 	}
 };
 
+struct KahanSumOperation : public BaseSumOperation<KahanSumSetOperation, KahanAdd> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value;
+		}
+	}
+};
+
 struct HugeintSumOperation
     : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredAddOp<HugeintAdd>> {
 	template <class STATE, class OP>
@@ -306,7 +328,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 	const bool sum_fits_in_int64 =
 	    wide_negative > NumericLimits<int64_t>::Minimum() && wide_positive < NumericLimits<int64_t>::Maximum();
 	if (has_no_overflow_variant && sum_fits_in_int64) {
-		expr.FunctionMutable().ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
+		expr.SetExecutionCallbacks(GetSumAggregateNoOverflow(internal_type).GetExecutionCallbacks());
 	}
 
 	// Propagate stats.
@@ -448,7 +470,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	return sum;
 }
 
-AggregateFunction GetCountIfAggregateFunction() {
+AggregateFunction CountIfFun::GetFunction() {
 	return GetSumAggregate(PhysicalType::BOOL);
 }
 
@@ -458,6 +480,11 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT64));
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflowDecimal());
 	return sum_no_overflow;
+}
+
+AggregateFunction KahanSumFun::GetFunction() {
+	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
+	                                                                                           LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

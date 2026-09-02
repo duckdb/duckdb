@@ -139,7 +139,6 @@ bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const
 }
 
 void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {
-	InvalidateDefinitionRebindability();
 	this->name = function.name;
 	this->schema_name = function.GetSchemaName();
 	this->catalog_name = function.GetCatalogName();

@@ -271,8 +271,7 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
 			bind_data.check_overflow = false;
 		}
-		expr.FunctionMutable().SetFunctionCallback(
-		    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		expr.SetExecutionFunction(GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);
@@ -490,9 +489,6 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			function.SetSerializeCallback(SerializeDecimalArithmetic);
 			function.SetDeserializeCallback(DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>);
 			function.SetArgProperties({inc, inc});
-			function.RefreshFunctionIdentitySnapshot();
-			function.statistics_preserves_function_identity = true;
-			function.deserialization_preserves_function_identity = true;
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
@@ -501,8 +497,6 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			                        PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
 			function.SetFallible();
 			function.SetArgProperties({inc, inc});
-			function.RefreshFunctionIdentitySnapshot();
-			function.statistics_preserves_function_identity = true;
 			return function;
 		} else if (left_type.IsFloating()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
@@ -510,8 +504,6 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			function.SetFallible();
 			function.SetArgProperties({inc, inc});
 			function.SetStatisticsCallback(PropagateFloatingStats<AddPropagateStatistics, AddOperator>);
-			function.RefreshFunctionIdentitySnapshot();
-			function.statistics_preserves_function_identity = true;
 			return function;
 		} else {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
@@ -819,9 +811,6 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetDeserializeCallback(
 			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>);
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
-			function.RefreshFunctionIdentitySnapshot();
-			function.statistics_preserves_function_identity = true;
-			function.deserialization_preserves_function_identity = true;
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function(
@@ -830,8 +819,6 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
 			function.SetFallible();
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
-			function.RefreshFunctionIdentitySnapshot();
-			function.statistics_preserves_function_identity = true;
 			return function;
 
 		} else if (left_type.IsFloating()) {
@@ -840,8 +827,6 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetFallible();
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			function.SetStatisticsCallback(PropagateFloatingStats<SubtractPropagateStatistics, SubtractOperator>);
-			function.RefreshFunctionIdentitySnapshot();
-			function.statistics_preserves_function_identity = true;
 			return function;
 		} else {
 			ScalarFunction function("-", {left_type, right_type}, left_type,
@@ -1117,12 +1102,6 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	multiply.SetFallible();
-	multiply.ApplyToFunctions([](ScalarFunction &function) {
-		function.RefreshFunctionIdentitySnapshot();
-		function.statistics_preserves_function_identity = true;
-		function.deserialization_preserves_function_identity = function.HasSerializationCallbacks();
-	});
-
 	return multiply;
 }
 

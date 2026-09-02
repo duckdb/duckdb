@@ -15,22 +15,6 @@
 
 namespace duckdb {
 
-struct AbsOperatorFun {
-	static constexpr const char *Name = "@";
-	static constexpr const char *Parameters = "x";
-	static constexpr const char *Description = "Absolute value";
-	static constexpr const char *Example = "abs(-17.4)";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
-struct AbsFun {
-	using ALIAS = AbsOperatorFun;
-
-	static constexpr const char *Name = "abs";
-};
-
 struct OperatorAddFun {
 	static constexpr const char *Name = "+";
 	static constexpr const char *Parameters = "";
