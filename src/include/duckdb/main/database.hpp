@@ -74,9 +74,9 @@ public:
 
 	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
 	//! Runs a V2 C API extension entrypoint, see invoke_capi_v2
-	DUCKDB_API void InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result, const string &extension_name,
-	                                            ext_init_c_api_v2_fun_t init_fun, optional_ptr<ClientContext> context,
-	                                            bool statically_linked);
+	DUCKDB_API void InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result,
+	                                            const string &extension_name_or_path, ext_init_c_api_v2_fun_t init_fun,
+	                                            optional_ptr<ClientContext> context, bool statically_linked);
 
 	idx_t NumberOfThreads();
 

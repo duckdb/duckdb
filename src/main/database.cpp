@@ -656,11 +656,12 @@ const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 	return create_api_v1();
 }
 
-void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result, const string &extension_name,
+void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result,
+                                                   const string &extension_name_or_path,
                                                    ext_init_c_api_v2_fun_t init_fun,
                                                    optional_ptr<ClientContext> context, bool statically_linked) {
 	D_ASSERT(invoke_capi_v2);
-	invoke_capi_v2(*this, init_result, extension_name, init_fun, context, statically_linked);
+	invoke_capi_v2(*this, init_result, extension_name_or_path, init_fun, context, statically_linked);
 }
 
 LogManager &DatabaseInstance::GetLogManager() const {
