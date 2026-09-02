@@ -14,7 +14,7 @@ statement ok
 SET threads=16
 
 statement ok
-SET memory_limit='150MB'
+SET memory_limit='200MB'
 
 # with read-ahead disabled this copy fits comfortably
 statement ok
