@@ -1,0 +1,48 @@
+# name: test/sql/filter/test_tuple_comparison_pushdown.test
+# description: Test that row constructor comparisons (e.g. (a, b) = (42, 3)) are decomposed into per-column comparisons, enabling zone map pruning
+# group: [filter]
+
+# 500k rows -> 5 row groups (122880 rows each). id increases with the row id, so only the first
+# row group can contain id = 42.
+statement ok
+CREATE TABLE t AS SELECT range::BIGINT AS id, mod(range, 10)::INTEGER AS b FROM range(500000);
+
+# the tuple comparison is decomposed into id = 42 AND b = 2, both pushed into the scan
+query II
+EXPLAIN SELECT count(*) FROM t WHERE (id, b) = (42, 2);
+----
+physical_plan	<REGEX>:(?s).*Table: .*\.t.*Filters:.*id = 42.*b = 2.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE (id, b) = (42, 2);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM t WHERE (id, b) = (42, 2);
+----
+1
+
+# non-matching constants still prune down to a single row group
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE (id, b) = (42, 3);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM t WHERE (id, b) = (42, 3);
+----
+0
+
+# mismatched literal types are aligned to the tuple's common type at bind time (1.5 -> 2), and still decompose:
+# id = 42 is pushed down; the aligned value (42, 2) matches the id = 42 row
+query II
+EXPLAIN SELECT count(*) FROM t WHERE (id, b) = (42, 1.5);
+----
+physical_plan	<REGEX>:(?s).*Table: .*\.t.*Filters:.*id = 42.*
+
+query I
+SELECT count(*) FROM t WHERE (id, b) = (42, 1.5);
+----
+1
+

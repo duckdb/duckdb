@@ -34,6 +34,25 @@ SELECT count(*) FROM rows WHERE (a, b) = (c, d);
 ----
 3
 
+# Row-vs-constant comparisons decompose as well: (a, b) = (1, 2) matches rows with a = 1 AND b = 2
+query I
+SELECT count(*) FROM rows WHERE (a, b) = (1, 2);
+----
+3
+
+# Constants containing NULLs decompose with IS NOT DISTINCT FROM: (a, b) = (1, NULL) matches rows
+# with a = 1 AND b IS NULL, which a decomposition into `=` would drop (a = NULL is NULL)
+query I
+SELECT count(*) FROM rows WHERE (a, b) = (1, NULL);
+----
+1
+
+# the constant may be on either side of the comparison
+query I
+SELECT count(*) FROM rows WHERE (1, NULL) = (a, b);
+----
+1
+
 # Empty and expression-valued rows retain the original comparison implementation.
 query II
 SELECT row() = row(), row(a + 1, b) = row(c + 1, d) FROM rows WHERE a = 1 AND b = 2 AND d = 2;
