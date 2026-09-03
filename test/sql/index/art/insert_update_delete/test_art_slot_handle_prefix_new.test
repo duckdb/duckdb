@@ -40,4 +40,3 @@ SELECT payload
 FROM prefix_new
 WHERE key = 'b' || repeat('y', 79) || 'z';
 ----
-

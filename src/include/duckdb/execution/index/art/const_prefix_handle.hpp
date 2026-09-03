@@ -21,6 +21,7 @@ public:
 
 public:
 	explicit ConstPrefixHandle(const ART &art, const NodePtr node) : handle(art, node) {
+		D_ASSERT(node.GetType() == PREFIX);
 	}
 
 	ConstPrefixHandle(const ConstPrefixHandle &) = delete;
@@ -29,20 +30,20 @@ public:
 	ConstPrefixHandle &operator=(ConstPrefixHandle &&) = delete;
 
 public:
-	const_data_ptr_t Data() {
+	const_data_ptr_t Data() const {
 		return handle.GetPtr();
 	}
 
-	uint8_t GetCount(const ART &art) {
+	uint8_t GetCount(const ART &art) const {
 		return Data()[art.PrefixCount()];
 	}
 
-	uint8_t GetByte(const idx_t pos) {
+	uint8_t GetByte(const idx_t pos) const {
 		return Data()[pos];
 	}
 
 	//! Returns the child slot. The reference is valid while this ConstPrefixHandle is alive.
-	const NodePtr &Child(const ART &art) {
+	const NodePtr &Child(const ART &art) const {
 		return ChildRef(art, handle);
 	}
 

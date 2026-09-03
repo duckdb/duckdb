@@ -24,6 +24,7 @@ public:
 
 public:
 	explicit PrefixHandle(NodeHandle &&handle_p) : handle(std::move(handle_p)) {
+		D_ASSERT(handle.GetType() == PREFIX);
 	}
 
 	PrefixHandle(const PrefixHandle &) = delete;
