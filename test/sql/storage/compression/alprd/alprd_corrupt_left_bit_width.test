@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alprd/alprd_corrupt_left_bit_width.test
+# description: An ALPRD left bit width above the dictionary bit width must be rejected
+# group: [alprd]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alprd_corrupt_left_bit_width.db.gz {TEST_DIR}/alprd_corrupt_left_bit_width.db
+
+load {TEST_DIR}/alprd_corrupt_left_bit_width.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALPRD' LIMIT 1;
+----
+ALPRD
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD segment: left bit width 16 exceeds 3
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD segment: left bit width 16 exceeds 3
