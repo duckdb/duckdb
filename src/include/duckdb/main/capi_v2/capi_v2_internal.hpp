@@ -35,6 +35,9 @@
 // V2 C API header -- all types use duckdb_v2_ prefix, no collision with V1.
 #include "duckdb_v2.h"
 
+#include <new>
+#include <type_traits>
+
 // ABI guard: the bridge reinterpret_casts duckdb_v2_bytes <-> duckdb::string_t,
 // so the layouts must match. sizeof/alignof tie them together; the offsetof
 // checks pin duckdb_v2_bytes's field offsets (string_t's union is private, so
@@ -54,16 +57,13 @@ static_assert(offsetof(duckdb_v2_bytes, value.inlined.inlined) == 4,
 
 namespace duckdb {
 
+class AggregateFunctionProperties;
+
 namespace capiv2 {
 
 //----------------------------------------------------------------------------------------------------------------------
 // Conversion Helpers
 //----------------------------------------------------------------------------------------------------------------------
-// The one place a caller-supplied byte range enters the engine, so the range
-// is validated here rather than at each call site: a null pointer is only
-// meaningful when the range is empty, and viewing it with a non-zero length
-// would walk address zero. Every entry point converts inside its
-// WithErrorHandler scope, so this surfaces as ERROR_INPUT_INVALID.
 inline auto Convert(duckdb_v2_str str) -> std::string_view {
 	if (!str.ptr) {
 		if (str.len > 0) {
@@ -171,6 +171,28 @@ inline auto Convert(CV2Context *ctx) -> duckdb_v2_context_handle {
 	return reinterpret_cast<duckdb_v2_context_handle>(ctx);
 }
 
+//! The extension handle's backing struct is the load state in capi_v2_extension.cpp, not an ExtensionLoader, so it
+//! cannot be Convert'ed with a cast: the loader is resolved through the state instead. Valid only while the
+//! extension's entrypoint is running.
+auto GetExtensionLoader(duckdb_v2_extension_handle handle) -> ExtensionLoader &;
+
+//! Translate the generic (key, value) function property channel into engine properties; defined in
+//! capi_v2_func_properties.cpp and shared by the scalar and aggregate set_property entry points.
+void SetScalarFunctionProperty(FunctionProperties &props, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                               DUCKDB_V2_FUNCTION_PROPERTY_VALUE value);
+void SetAggregateFunctionProperty(AggregateFunctionProperties &props, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                                  DUCKDB_V2_FUNCTION_PROPERTY_VALUE value);
+
+using CV2FunctionSignature = duckdb::FunctionSignature;
+
+inline auto Convert(duckdb_v2_function_signature_handle func) -> CV2FunctionSignature * {
+	return reinterpret_cast<CV2FunctionSignature *>(func);
+}
+
+inline auto Convert(CV2FunctionSignature *func) -> duckdb_v2_function_signature_handle {
+	return reinterpret_cast<duckdb_v2_function_signature_handle>(func);
+}
+
 class CV2Option {
 public:
 	Identifier name;
@@ -250,6 +272,37 @@ inline auto Convert(CV2Schema *schema) -> duckdb_v2_schema_handle {
 // Error Handling
 //----------------------------------------------------------------------------------------------------------------------
 
+// Report a null argument through the same slot contract as WithErrorHandler, without the exception round-trip.
+// Defined in capi_v2.cpp.
+auto NullArgumentError(duckdb_v2_error_info_handle *err, const char *function, const char *argument) noexcept
+    -> DUCKDB_V2_ERROR;
+
+// Classify the exception currently being handled into a V2 error code and detail strings. Must be called from inside
+// a catch block. Never throws: if rendering the detail itself fails, it degrades to a bare code with empty detail
+// (RESOURCE_OUT_OF_MEMORY on allocation failure). Defined in capi_v2.cpp.
+auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, string &raw_message) noexcept -> void;
+
+// The null test behind DUCKDB_CHECK_ARG: a pointer/handle is invalid when null; a string/identifier view is invalid
+// when its pointer is null while it carries a non-zero length.
+template <class T>
+bool IsNullArgument(const T &arg) {
+	if constexpr (std::is_pointer_v<T>) {
+		return arg == nullptr;
+	} else {
+		return !arg.ptr && arg.len > 0;
+	}
+}
+
+// Check if an argument is null and return DUCKDB_V2_ERROR_INPUT_INVALID with a message if it is.
+// For use at the top of an API entry point, before WithErrorHandler.
+// `err` must be in scope and `__func__` names the entry point in the message.
+#define DUCKDB_CHECK_ARG(arg)                                                                                          \
+	do {                                                                                                               \
+		if (duckdb::capiv2::IsNullArgument(arg)) {                                                                     \
+			return duckdb::capiv2::NullArgumentError(err, __func__, #arg);                                             \
+		}                                                                                                              \
+	} while (0)
+
 // Error code <-> exception type conversion
 auto GetErrorCodeFromExceptionType(ExceptionType type) -> DUCKDB_V2_ERROR;
 auto TryGetExceptionTypeFromErrorCode(DUCKDB_V2_ERROR code) -> optional<ExceptionType>;
@@ -293,9 +346,11 @@ inline auto Convert(CV2ErrorInfo *info) -> duckdb_v2_error_info_handle {
 	return reinterpret_cast<duckdb_v2_error_info_handle>(info);
 }
 
-//! Invoke a function, and convert any exception into an error code + populate an optional error info handle
+//! Invoke a function, and convert any exception into an error code + populate an optional error info handle.
+//! Nothing may escape across the C ABI, so rendering and reporting the error are themselves guarded: if either
+//! fails (allocation failure), the failure degrades to a bare error code with whatever detail could be produced.
 template <class T>
-DUCKDB_V2_ERROR WithErrorHandler(duckdb_v2_error_info_handle *err, T callback) {
+DUCKDB_V2_ERROR WithErrorHandler(duckdb_v2_error_info_handle *err, T callback) noexcept {
 	auto code = static_cast<DUCKDB_V2_ERROR>(DUCKDB_V2_ERROR_NONE);
 	auto text = string();
 	auto raw_message = string();
@@ -303,17 +358,8 @@ DUCKDB_V2_ERROR WithErrorHandler(duckdb_v2_error_info_handle *err, T callback) {
 	try {
 		// Invoke the callback
 		callback();
-	} catch (const duckdb::Exception &ex) {
-		ErrorData error_data(ex);
-		code = GetErrorCodeFromExceptionType(error_data.Type());
-		text = error_data.Message();
-		raw_message = error_data.RawMessage();
-	} catch (const std::exception &ex) {
-		code = DUCKDB_V2_ERROR_API;
-		text = ex.what() ? ex.what() : "An unknown error occurred.";
 	} catch (...) {
-		code = DUCKDB_V2_ERROR_API;
-		text = "An unknown error occurred.";
+		RenderCaughtError(code, text, raw_message);
 	}
 
 	// Success leaves the slot untouched.
@@ -327,8 +373,14 @@ DUCKDB_V2_ERROR WithErrorHandler(duckdb_v2_error_info_handle *err, T callback) {
 	// Failure: report detail through the slot if the caller provided one.
 	if (err) {
 		if (!*err) {
-			// Allocate a new error info handle if not provided
-			*err = Convert(new CV2ErrorInfo());
+			// Allocate a new error info handle if not provided; if even that fails, the code alone reports it.
+			try {
+				*err = Convert(new CV2ErrorInfo());
+			} catch (const std::bad_alloc &) {
+				return DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY;
+			} catch (...) { // NOLINT(bugprone-empty-catch)
+				return code;
+			}
 		}
 		auto &out = *Convert(*err);
 		out.code = code;
@@ -416,6 +468,69 @@ inline void FillCallerText(char *out_text, idx_t out_capacity, idx_t *out_length
 	}
 	memcpy(out_text, text.c_str(), required);
 }
+
+//----------------------------------------------------------------------------------------------------------------------
+// Opaque User Data
+//----------------------------------------------------------------------------------------------------------------------
+// Owning RAII wrapper for an opaque resource with optional destroy and equals callbacks.
+class CV2UserData {
+public:
+	CV2UserData() = default;
+
+	explicit CV2UserData(void *data, duckdb_v2_opaque_destroy_fn destroy_cb = nullptr,
+	                     duckdb_v2_opaque_equals_fn equals_cb = nullptr)
+	    : data(data), destroy_cb(destroy_cb), equals_cb(equals_cb) {
+	}
+
+	// Moveable
+	CV2UserData(CV2UserData &&other) noexcept
+	    : data(other.data), destroy_cb(other.destroy_cb), equals_cb(other.equals_cb) {
+		other.data = nullptr;
+		other.destroy_cb = nullptr;
+		other.equals_cb = nullptr;
+	}
+
+	CV2UserData &operator=(CV2UserData &&other) noexcept {
+		std::swap(data, other.data);
+		std::swap(destroy_cb, other.destroy_cb);
+		std::swap(equals_cb, other.equals_cb);
+		return *this;
+	}
+
+	// Not copyable
+	CV2UserData(const CV2UserData &) = delete;
+	CV2UserData &operator=(const CV2UserData &) = delete;
+
+	~CV2UserData() {
+		if (data && destroy_cb) {
+			destroy_cb(data);
+		}
+	}
+
+	bool operator==(const CV2UserData &other) const {
+		if (equals_cb) {
+			return equals_cb(data, other.data);
+		}
+		return data == other.data;
+	}
+
+	bool operator!=(const CV2UserData &other) const {
+		return !(*this == other);
+	}
+
+	bool Equals(const CV2UserData &other) const {
+		return *this == other;
+	}
+
+	void *GetData() const {
+		return data;
+	}
+
+private:
+	void *data = nullptr;
+	duckdb_v2_opaque_destroy_fn destroy_cb = nullptr;
+	duckdb_v2_opaque_equals_fn equals_cb = nullptr;
+};
 
 //----------------------------------------------------------------------------------------------------------------------
 // Misc

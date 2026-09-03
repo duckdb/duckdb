@@ -40,6 +40,18 @@ void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpre
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 
+unique_ptr<ColumnQualifier> ExpressionBinder::CreateColumnQualifier() {
+	return make_uniq<ColumnQualifier>(binder, lambda_bindings);
+}
+
+bool ExpressionBinder::MatchesGroup(ParsedExpression &expr) {
+	return false;
+}
+
+bool ExpressionBinder::ClaimsAlias(ColumnRefExpression &colref) {
+	return false;
+}
+
 void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, unique_ptr<ParsedExpression> &expr) {
 	ColumnQualifier qualifier(expression_binder.binder, expression_binder.lambda_bindings);
 	vector<identifier_set_t> lambda_params;
@@ -76,14 +88,11 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 
 			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
 			if (value_function) {
-				auto result = BindExpression(value_function, depth);
-				// the value function expression is destroyed on return: erase any entries left for its children
-				GetBoundExpressions().EraseSubtree(*value_function);
-				return result;
+				return BindExpression(value_function, depth);
 			}
 		}
-		error.AddQueryLocation(col_ref_p);
-		return BindResult(std::move(error));
+		// the name does not resolve in this scope: look for it in the enclosing ones
+		return BindInEnclosingScope(col_ref_p, depth, expr_ptr, std::move(error));
 	}
 
 	expr->SetQueryLocation(col_ref_p.GetQueryLocation());
@@ -94,12 +103,15 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 		auto alias = expr->GetAlias();
 		auto result = BindExpression(expr, depth);
-		if (result.expression) {
+		if (!result.HasError()) {
 			result.expression->SetAlias(std::move(alias));
+			return result;
 		}
-		// the qualified expression is destroyed on return: erase any entries left for its children
-		GetBoundExpressions().EraseSubtree(*expr);
-		return result;
+		// this scope reads the name as something other than a column, e.g a struct extract of one of its own columns,
+		// which does not bind.
+		// An enclosing scope may still read it as a column, as in `z.z` where this scope has a column `z` and `z` is
+		// also a table alias further out.
+		return BindInEnclosingScope(col_ref_p, depth, expr_ptr, std::move(result.error));
 	}
 
 	// the above QualifyColumnName returned an individual column reference

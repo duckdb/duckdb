@@ -1,0 +1,52 @@
+# name: test/extension/autoloading_log_types.test
+# description: Tests for autoloading extensions that register log types
+# group: [extension]
+
+# This test assumes iceberg to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
+require-env LOCAL_EXTENSION_REPO
+
+require iceberg
+
+# Ensure we have a clean extension directory without any preinstalled extensions
+statement ok
+set extension_directory='{TEST_DIR}/autoloading_log_types'
+
+### Without autoloading the log type of an unloaded extension is unknown
+statement ok
+set autoload_known_extensions=false
+
+statement ok
+set autoinstall_known_extensions=false
+
+statement maybe
+CALL enable_logging('Iceberg')
+----
+Unknown log type: 'Iceberg'
+
+### With autoloading, the extension registering the log type is loaded
+statement ok
+set autoload_known_extensions=true
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+set autoinstall_extension_repository='{LOCAL_EXTENSION_REPO}';
+
+statement ok
+CALL enable_logging('Iceberg')
+
+query I
+SELECT loaded FROM duckdb_extensions() WHERE extension_name='iceberg'
+----
+true
+
+statement ok
+CALL disable_logging()
+
+# log types that no extension registers are still rejected
+statement error
+CALL enable_logging('ThisLogTypeDoesNotExist')
+----
+Unknown log type: 'ThisLogTypeDoesNotExist'

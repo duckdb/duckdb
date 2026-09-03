@@ -80,6 +80,34 @@ public:
 		return result;
 	}
 
+	//! Copies the next length bytes into destination and advances the position.
+	//! The caller must ensure destination has capacity for length bytes.
+	void ReadBytesInto(data_ptr_t destination, idx_t length) {
+		auto source = ReadBytes(length);
+		memcpy(destination, source.data(), length);
+	}
+
+	//! Copies the next length bytes into a fixed-size destination and advances the position.
+	template <class T, idx_t N>
+	void ReadBytesIntoArray(T (&destination)[N], idx_t length) {
+		static_assert(std::is_trivially_copyable_v<T>,
+		              "ReadBytesIntoArray element must be a trivially copyable data type");
+		if (DUCKDB_UNLIKELY(length > sizeof(destination))) {
+			ThrowDestinationTooSmall();
+		}
+		ReadBytesInto(data_ptr_cast(destination), length);
+	}
+
+	//! Copies the next count elements into a fixed-size destination and advances the position.
+	template <class T, idx_t N>
+	void ReadIntoArray(T (&destination)[N], idx_t count) {
+		static_assert(std::is_trivially_copyable_v<T>, "ReadIntoArray element must be a trivially copyable data type");
+		if (DUCKDB_UNLIKELY(count > N)) {
+			ThrowDestinationTooSmall();
+		}
+		ReadBytesInto(data_ptr_cast(destination), count * sizeof(T));
+	}
+
 	//! Returns a view over the next length bytes aligned for T and advances the position.
 	template <class T>
 	unsafe_array_ptr<const uint8_t> ReadBytesAligned(idx_t length) {
@@ -205,6 +233,7 @@ private:
 	[[noreturn]] void ThrowRangeOutOfBounds() const;
 	[[noreturn]] void ThrowArrayMisaligned() const;
 	[[noreturn]] void ThrowArrayOutOfBounds() const;
+	[[noreturn]] void ThrowDestinationTooSmall() const;
 
 private:
 	const_data_ptr_t data;

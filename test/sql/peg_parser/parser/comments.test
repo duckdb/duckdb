@@ -15,6 +15,16 @@ SELECT 1 -- /* not a block */ rest
 ----
 3
 
+query III
+SELECT 1+/**/2, 1*/**/2, 1+/* comment */2;
+----
+3	2	3
+
+query I
+SELECT 8//**/2;
+----
+4
+
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT 1 /* outer /* inner */ rest */ + 2;$TEST_PEG_PARSER$);
 
