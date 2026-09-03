@@ -74,6 +74,7 @@ struct InternalApproxTopKState {
 		if (k > MAX_APPROX_K) {
 			throw InvalidInputException("Requested 'k' (%d) is bigger than accepted max (%d)", kval, MAX_APPROX_K);
 		}
+		capacity = kval * MONITORED_VALUES_RATIO;
 		stored_values = make_unsafe_uniq_array_uninitialized<ApproxTopKValue>(capacity);
 		values.reserve(capacity);
 
