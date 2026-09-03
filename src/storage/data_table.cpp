@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/helper.hpp"
@@ -113,7 +114,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	parent.version = DataTableVersion::ALTERED;
 }
 
-DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
+DataTable::DataTable(CatalogTransaction transaction, ClientContext &context, DataTable &parent, idx_t removed_column)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
 	// prevent any new tuples from being added to the parent
 	auto &local_storage = LocalStorage::Get(context, db);
@@ -132,7 +133,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 		indexes.emplace_back(entry->GetName(), entry->GetStorageInfo());
 	}
 	auto &catalog = db.GetCatalog();
-	auto transaction = catalog.GetCatalogTransaction(context);
 	auto &schema = *catalog.GetSchema(transaction, info->GetSchemaPath(), OnEntryNotFound::THROW_EXCEPTION);
 
 	// first check if there are any indexes that exist that point to the removed column
