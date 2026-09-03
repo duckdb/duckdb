@@ -170,9 +170,6 @@ struct InternalApproxTopKState {
 				D_ASSERT(val.count <= values[k - 1].get().count);
 			}
 		}
-		if (lookup_map.size() < values.size()) {
-			throw InvalidInputException("Values of the aggregate state contains duplicates!");
-		}
 		D_ASSERT(lookup_map.size() == values.size());
 #endif
 	}
