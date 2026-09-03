@@ -244,6 +244,22 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	// We have made sure that this is an operator sequence of filter -> N optional projections -> window
 	auto &filter = op->Cast<LogicalFilter>();
 	reference<LogicalOperator> child = *filter.children[0];
+	while (child.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		child = *child.get().children[0];
+	}
+	D_ASSERT(child.get().type == LogicalOperatorType::LOGICAL_WINDOW);
+	auto &window = child.get().Cast<LogicalWindow>();
+
+	// Optimize window children and propagate any changed bindings through the owning plan
+	ColumnBindingReplacer child_replacer;
+	window.children[0] = OptimizeInternal(std::move(window.children[0]), child_replacer);
+	if (!child_replacer.replacement_bindings.empty()) {
+		child_replacer.VisitOperator(*op);
+		replacer.replacement_bindings.insert(replacer.replacement_bindings.end(),
+		                                     child_replacer.replacement_bindings.begin(),
+		                                     child_replacer.replacement_bindings.end());
+	}
+	child = *filter.children[0];
 
 	// Get bindings and types from filter to use in top-most operator later
 	const auto topmost_bindings = filter.GetColumnBindings();
@@ -254,7 +270,6 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	}
 
 	D_ASSERT(child.get().type == LogicalOperatorType::LOGICAL_WINDOW);
-	auto &window = child.get().Cast<LogicalWindow>();
 	const TableIndex window_idx = window.window_index;
 
 	// Map the input column offsets of the group columns to the output offset if there are projections on the group
@@ -271,9 +286,6 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 			params.payload_type = TopNPayloadType::SINGLE_COLUMN;
 		}
 	}
-
-	// Optimize window children
-	window.children[0] = Optimize(std::move(window.children[0]));
 
 	op = CreateAggregateOperator(window, std::move(aggregate_payload), params);
 	op = TryCreateUnnestOperator(std::move(op), params);

@@ -1,0 +1,23 @@
+# name: test/issues/general/test_24710.test
+# description: Issue 24710 - propagate bindings through nested Top-N window rewrites
+# group: [general]
+
+statement ok
+CREATE TABLE t (a BIGINT, b BIGINT);
+
+statement ok
+INSERT INTO t VALUES (1, 5);
+
+statement ok
+CREATE VIEW v AS
+SELECT a, b
+FROM t
+QUALIFY row_number() OVER (PARTITION BY a ORDER BY a) = 1;
+
+query II
+SELECT *
+FROM v
+WHERE b::BOOLEAN
+QUALIFY row_number() OVER (ORDER BY a) <= 1;
+----
+1	5
