@@ -620,7 +620,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	vector<Value> symbol_values;
 	for (auto &symbol : define_symbols) {
-		symbol_values.emplace_back(Value(symbol));
+		symbol_values.emplace_back(symbol);
 	}
 	arguments.emplace_back(make_uniq<ConstantExpression>(Value::LIST(LogicalType::VARCHAR, std::move(symbol_values))));
 

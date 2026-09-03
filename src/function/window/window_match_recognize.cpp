@@ -6,6 +6,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -796,7 +797,9 @@ public:
 			executors[index] = make_uniq<ExpressionExecutor>(context.client, *conditions[index]);
 		}
 		executors[index]->Execute(row_chunk, row_result);
-		const auto result = row_result.data[0].Values<bool>()[0];
+		// the entry borrows from the iterator, so the iterator has to outlive it
+		const auto results = row_result.data[0].Values<bool>();
+		const auto result = results[0];
 		return result.IsValid() && result.GetValueUnsafe();
 	}
 
