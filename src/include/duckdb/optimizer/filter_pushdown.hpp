@@ -114,6 +114,8 @@ private:
 	//! Extract filter bindings to compare them with expressions in an operator and determine if the filter
 	//! can be pushed down
 	void ExtractFilterBindings(const Expression &expr, vector<ColumnBinding> &bindings);
+	//! Whether the filter can distinguish values represented by a collation key
+	bool FilterUsesCollation(const Filter &filter);
 	//! Generate filters from the current set of filters stored in the FilterCombiner
 	void GenerateFilters();
 	//! if there are filters in this FilterPushdown node, push them into the combiner. Returns
