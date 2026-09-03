@@ -740,6 +740,8 @@ TEST_CASE("V2 copy: COPY TO on a connection", "[capi_v2][copy_function]") {
 // The batch size callback decides where batches are cut when the statement sets no BATCH_SIZE.
 // ===========================================================================
 
+// The batch counts below follow from the default chunk size, so the test only holds for the default vector size.
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2 copy: COPY TO batch size callback", "[capi_v2][copy_function]") {
 	EnvFixture fx;
 	// One sink thread, so the batch count follows from the chunk sizes alone.
@@ -770,6 +772,7 @@ TEST_CASE("V2 copy: COPY TO batch size callback", "[capi_v2][copy_function]") {
 	REQUIRE(copy_to_probe.calls[TO_BATCH].load() == 2);
 	REQUIRE(copy_to_probe.rows.load() == 5000);
 }
+#endif
 
 // ===========================================================================
 // Only the batch and flush callbacks are required on the COPY TO side; the others leave their slots empty.

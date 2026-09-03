@@ -250,8 +250,10 @@ void ThrowingExec(TableFunction::ExecInput &) {
 // ---------------------------------------------------------------------------
 
 struct ProjGlobal {
-	bool done = false;
+	idx_t position = 0;
 };
+
+constexpr idx_t PROJ_ROWS = 3;
 
 std::vector<idx_t> proj_columns;
 
@@ -272,8 +274,10 @@ void ProjInitGlobal(TableFunction::InitGlobalInput &input) {
 
 void ProjExec(TableFunction::ExecInput &input) {
 	auto &global = input.GetGlobalState<ProjGlobal>();
-	const idx_t rows = global.done ? 0 : 3;
-	global.done = true;
+	idx_t rows = PROJ_ROWS - global.position;
+	if (rows > static_cast<idx_t>(BATCH_ROWS)) {
+		rows = static_cast<idx_t>(BATCH_ROWS);
+	}
 
 	auto chunk = input.GetOutputChunk();
 	for (idx_t i = 0; i < input.GetColumnCount(); i++) {
@@ -281,12 +285,13 @@ void ProjExec(TableFunction::ExecInput &input) {
 		auto vec = chunk.GetVector(i);
 		auto *out = vec.GetDataMutable<int64_t>();
 		for (idx_t row = 0; row < rows; row++) {
-			out[row] = static_cast<int64_t>(column * 100 + row);
+			out[row] = static_cast<int64_t>(column * 100 + global.position + row);
 		}
 		if (i == 0) {
 			vec.SetSize(rows);
 		}
 	}
+	global.position += rows;
 }
 
 // ---------------------------------------------------------------------------

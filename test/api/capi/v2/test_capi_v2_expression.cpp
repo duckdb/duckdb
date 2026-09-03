@@ -299,7 +299,7 @@ void ProbePushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle info, 
 constexpr int64_t PROBE_ROWS = 4;
 
 struct ProbeGlobal {
-	bool done = false;
+	int64_t position = 0;
 };
 
 void DeleteProbeGlobal(void *ptr) {
@@ -351,11 +351,15 @@ void ProbeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_conte
 			return;
 		}
 	}
-	if (global.done) {
+	// Batches are capped by the vector size so the probe also serves builds with a tiny STANDARD_VECTOR_SIZE.
+	auto produced = PROBE_ROWS - global.position;
+	if (produced > static_cast<int64_t>(STANDARD_VECTOR_SIZE)) {
+		produced = static_cast<int64_t>(STANDARD_VECTOR_SIZE);
+	}
+	if (produced <= 0) {
 		duckdb_v2_vector_set_size(vectors[0], 0, err);
 		return;
 	}
-	global.done = true;
 
 	void *a_raw = nullptr;
 	void *c_raw = nullptr;
@@ -363,16 +367,18 @@ void ProbeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_conte
 	    duckdb_v2_vector_get_data_mutable(vectors[2], &c_raw, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	for (int64_t i = 0; i < PROBE_ROWS; i++) {
-		static_cast<int32_t *>(a_raw)[i] = static_cast<int32_t>(i);
-		static_cast<int64_t *>(c_raw)[i] = i * 10;
-		auto text = std::to_string(i);
+	for (int64_t i = 0; i < produced; i++) {
+		const auto row = global.position + i;
+		static_cast<int32_t *>(a_raw)[i] = static_cast<int32_t>(row);
+		static_cast<int64_t *>(c_raw)[i] = row * 10;
+		auto text = std::to_string(row);
 		if (V2VectorAssignString(vectors[1], static_cast<idx_t>(i), text.data(), text.size(), err) !=
 		    DUCKDB_V2_ERROR_NONE) {
 			return;
 		}
 	}
-	duckdb_v2_vector_set_size(vectors[0], static_cast<idx_t>(PROBE_ROWS), err);
+	global.position += produced;
+	duckdb_v2_vector_set_size(vectors[0], static_cast<idx_t>(produced), err);
 }
 
 void RegisterProbe(duckdb_v2_connection_handle conn) {

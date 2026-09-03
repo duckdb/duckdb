@@ -901,8 +901,10 @@ TEST_CASE("V2 table: null arguments and destroy null-safety", "[capi_v2][table_f
 namespace {
 
 struct ProjGlobal {
-	bool done = false;
+	idx_t position = 0;
 };
+
+constexpr idx_t PROJ_ROWS = 3;
 
 void DeleteProjGlobal(void *ptr) {
 	delete static_cast<ProjGlobal *>(ptr);
@@ -972,8 +974,11 @@ void ProjExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_contex
 		return;
 	}
 	auto &global = *static_cast<ProjGlobal *>(global_ptr);
-	const idx_t rows = global.done ? 0 : 3;
-	global.done = true;
+	// Batches are capped by the vector size so the probe also serves builds with a tiny STANDARD_VECTOR_SIZE.
+	idx_t rows = PROJ_ROWS - global.position;
+	if (rows > STANDARD_VECTOR_SIZE) {
+		rows = STANDARD_VECTOR_SIZE;
+	}
 
 	for (idx_t i = 0; i < count; i++) {
 		idx_t column = 0;
@@ -985,12 +990,13 @@ void ProjExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_contex
 			return;
 		}
 		for (idx_t row = 0; row < rows; row++) {
-			static_cast<int64_t *>(raw)[row] = static_cast<int64_t>(column * 100 + row);
+			static_cast<int64_t *>(raw)[row] = static_cast<int64_t>(column * 100 + global.position + row);
 		}
 		if (i == 0) {
 			duckdb_v2_vector_set_size(vec, rows, err);
 		}
 	}
+	global.position += rows;
 }
 
 void RegisterProj(duckdb_v2_connection_handle conn, const char *name, bool projection_pushdown) {
