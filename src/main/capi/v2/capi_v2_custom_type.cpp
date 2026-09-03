@@ -42,7 +42,9 @@ public:
 
 		context.RunFunctionInTransaction([&]() {
 			auto &catalog = Catalog::GetSystemCatalog(context);
-			CreateTypeInfo type_info(type.GetAlias(), std::move(type));
+			// Read the name before the type is moved out: sibling arguments have no evaluation order.
+			auto name = type.GetAlias();
+			CreateTypeInfo type_info(std::move(name), std::move(type));
 			type_info.temporary = true;
 			type_info.internal = true;
 			type_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
@@ -60,7 +62,8 @@ public:
 	}
 
 	void RegisterToCatalog(LogicalType type) override {
-		loader.RegisterType(type.GetAlias(), std::move(type));
+		auto name = type.GetAlias();
+		loader.RegisterType(std::move(name), std::move(type));
 	}
 
 private:
