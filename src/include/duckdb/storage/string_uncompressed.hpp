@@ -253,6 +253,7 @@ public:
 	static string_t ReadStringWithLength(CompressionSegmentReader &reader, int32_t offset);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 
+	// FIXME: Remove this raw pointer helper once FSST no longer needs it.
 	inline static string_t FetchStringFromDict(const QueryContext &context, ColumnSegment &segment,
 	                                           uint32_t dict_end_offset, Vector &result, data_ptr_t base_ptr,
 	                                           int32_t dict_offset, uint32_t string_length) {
