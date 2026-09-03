@@ -13,7 +13,7 @@ jobs:
   forward:
     # issue_comment fires for PRs too so we skip those.
     if: ${{ github.event_name == 'issues' || github.event.issue.pull_request == null }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Dispatch to community-issue-tracker
         env:
