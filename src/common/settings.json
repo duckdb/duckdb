@@ -716,6 +716,16 @@
         "custom_implementation": true
     },
     {
+        "name": "error_on_division_by_zero",
+        "description": "Throw an error instead of returning NULL when dividing by zero.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "errors_as_json",
         "description": "Output error messages as structured JSON instead of as a raw string",
         "type": "BOOLEAN",
@@ -1096,16 +1106,6 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "5"
-    },
-    {
-        "name": "null_on_division_by_zero",
-        "description": "Return NULL instead of throwing an error when dividing by zero.",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "false",
-        "on_callbacks": [
-            "set"
-        ]
     },
     {
         "name": "old_implicit_casting",
