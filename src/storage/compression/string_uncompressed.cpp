@@ -490,12 +490,13 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 		auto handle = buffer_manager.Pin(context, block_handle);
 
 		// read header
-		auto string_space = segment.GetBlockSize() - sizeof(block_id_t);
-		CompressionSegmentReader reader(handle.GetDataMutable(), string_space, "overflow string block");
+		auto block_size = segment.GetBlockSize();
+		auto string_space = block_size - sizeof(block_id_t);
+		CompressionSegmentReader block_reader(handle.GetDataMutable(), block_size, "overflow string block");
+		auto reader = block_reader.GetSubReader(0, string_space, "overflow string data");
 		reader.SetPosition(NumericCast<idx_t>(offset));
 		uint32_t length = reader.Read<uint32_t>();
 		uint32_t remaining = length;
-		offset = NumericCast<int32_t>(reader.Position());
 
 		BufferHandle target_handle;
 		string_t overflow_string;
@@ -513,18 +514,17 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 
 		// now append the string to the single buffer
 		while (remaining > 0) {
-			idx_t to_write = MinValue<idx_t>(remaining, segment.GetBlockSize() - sizeof(block_id_t) -
-			                                                UnsafeNumericCast<idx_t>(offset));
-			memcpy(target_ptr, handle.GetDataMutable() + offset, to_write);
+			idx_t to_write = MinValue<idx_t>(remaining, reader.Remaining());
+			reader.ReadBytesInto(target_ptr, to_write);
 			remaining -= to_write;
-			offset += UnsafeNumericCast<int32_t>(to_write);
 			target_ptr += to_write;
 			if (remaining > 0) {
 				// read the next block
-				block_id_t next_block = Load<block_id_t>(handle.GetDataMutable() + offset);
+				block_id_t next_block = block_reader.Get<block_id_t>(string_space);
 				block_handle = state.GetHandle(segment.GetBlockHandle()->GetBlockManager(), next_block);
 				handle = buffer_manager.Pin(context, block_handle);
-				offset = 0;
+				block_reader = CompressionSegmentReader(handle.GetDataMutable(), block_size, "overflow string block");
+				reader = block_reader.GetSubReader(0, string_space, "overflow string data");
 			}
 		}
 		if (allocate_block) {
