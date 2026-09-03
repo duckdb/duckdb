@@ -93,10 +93,10 @@ static void DecimalDivExecute(DataChunk &args, ExpressionState &state, Vector &r
 			    q = abs_num / abs_div;
 			    remainder = abs_num % abs_div;
 		    } else {
-			    if (abs_div.upper == 0) {
+			    if (abs_div.upper == 0 && abs_div.lower <= uint64_t(NumericLimits<int64_t>::Maximum())) {
 				    uint64_t r64;
 				    q = Hugeint::DivModPositive(abs_num, abs_div.lower, r64);
-				    remainder = hugeint_t(r64);
+				    remainder = hugeint_t(int64_t(r64));
 			    } else {
 				    q = Hugeint::DivMod(abs_num, abs_div, remainder);
 			    }

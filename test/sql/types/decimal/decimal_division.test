@@ -171,6 +171,15 @@ SELECT decimal_division(10000000000000000000::DECIMAL(38,0),
 ----
 0	2
 
+# Divisor fits in a uint64_t but not an int64_t
+query II
+SELECT decimal_division(9223372036854775808::DECIMAL(20,0),
+                        18446744073709551614::DECIMAL(20,0), 0),
+       decimal_division(27670116110564327421::DECIMAL(20,0),
+                        18446744073709551614::DECIMAL(20,0), 0);
+----
+1	2
+
 # Rounding can carry into an additional integer digit that does not fit the result width
 statement error
 SELECT decimal_division(9.99::DECIMAL(3,2), 0.1::DECIMAL(1,1), 0);
