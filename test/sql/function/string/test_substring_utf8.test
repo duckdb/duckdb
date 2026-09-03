@@ -37,6 +37,16 @@ SELECT {FUN}(s, -1, -4) FROM strings
 r🦆en
 
 query T
+SELECT {FUN}(s, -100, 100) FROM strings
+----
+twoñthree₡four🦆end
+
+query T
+SELECT {FUN}(s, -100, 3) FROM strings
+----
+two
+
+query T
 SELECT {FUN}(s, 0, -4) FROM strings
 ----
 (empty)
