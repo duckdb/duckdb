@@ -528,7 +528,11 @@ void ApproxTopKImportState(AggregateImportInputData &input) {
 			const auto &str_val = value_strings[sel_idx];
 			ApproxTopKString topk_string(str_val, Hash(str_val));
 			InternalApproxTopKState::CopyValue(val, topk_string, allocator);
-			target.lookup_map.insert(make_pair(val.str_val, reference<ApproxTopKValue>(val)));
+			const bool inserted =
+			    target.lookup_map.insert(make_pair(val.str_val, reference<ApproxTopKValue>(val))).second;
+			if (!inserted) {
+				throw InvalidInputException("Invalid approx_top_k state - the state values must be unique");
+			}
 			val.count = count_data[idx];
 		}
 		for (idx_t filter_idx = 0; filter_idx < filter_entries[i].length; filter_idx++) {
