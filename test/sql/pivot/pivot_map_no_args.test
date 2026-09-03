@@ -34,8 +34,13 @@ Conversion Error: Unimplemented type for cast (MAP("NULL", "NULL") -> INTEGER)
 # issue #25279: same pattern in a second location - the legacy pre-v1.5.0 PIVOT
 # backwards-compat constant-folding path used when serializing PIVOT views.
 # Only reachable once the #25276 fix above lets parsing fall back instead of crashing.
+# debug_verify_serializer is forced on explicitly so this reproduces deterministically
+# across every test config, instead of only under verify_serializer.json.
 statement ok
 SET storage_compatibility_version='v1.4.0';
+
+statement ok
+SET debug_verify_serializer=true;
 
 statement ok
 CREATE TABLE t2(year INT, jan INT, feb INT);
@@ -43,13 +48,13 @@ CREATE TABLE t2(year INT, jan INT, feb INT);
 statement ok
 INSERT INTO t2 VALUES (2024, 100, 200);
 
-statement ok
+statement error
 CREATE VIEW v AS PIVOT t2 ON year IN (CAST(map() AS MAP(INT,INT)));
-
-query III
-SELECT * FROM v;
 ----
-100	200	0
+Serialization Error: Cannot serialize non-constant expression 'CAST("map"() AS MAP(INTEGER, INTEGER))' in pivot list when targeting database storage version 'v1.4.0'
 
 statement ok
 RESET storage_compatibility_version;
+
+statement ok
+RESET debug_verify_serializer;
