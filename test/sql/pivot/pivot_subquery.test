@@ -41,6 +41,14 @@ PIVOT (WITH cte AS (SELECT 1 AS col, 10 AS v UNION ALL SELECT 2, 20) SELECT * FR
 ----
 10	20
 
+# the CTE scope is still active while the result modifiers are transformed
+query I
+WITH x AS (SELECT 1 AS col)
+SELECT 42
+ORDER BY (SELECT * FROM (PIVOT x ON col));
+----
+42
+
 statement error
 CREATE VIEW pivot_view AS PIVOT (SELECT YEAR(d) AS year, MONTH(d) AS month, empid, amount FROM sales) ON YEAR, MONTH USING SUM(AMOUNT);
 ----
