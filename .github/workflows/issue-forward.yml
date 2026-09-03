@@ -1,0 +1,66 @@
+name: Forward issue events to community-issue-tracker
+
+# Thin forwarder. Copy this into a tracked repo as
+# .github/workflows/issue-forward.yml. It fires a repository_dispatch at
+# duckdblabs/community-issue-tracker for each event below; all real logic lives
+# in the tracker's ingest.yml, which routes on the `event` field of the payload.
+#
+# EVENT MATRIX (extend here — the payload envelope is the contract):
+#   issues          opened / reopened / closed  -> tracking-issue lifecycle
+#   issue_comment   created                      -> New Activity flip
+# To add an event: add the trigger, surface its fields as env below, include them
+# in the jq payload, and add a branch in community_issue_tracker.ingest.
+#
+# SECURITY — read before editing:
+#   * issues / issue_comment run in the repo's own (trusted) context WITH secrets
+#     — they are not fork-PR events — so they can authenticate the dispatch.
+#   * We do NOT checkout or run any issue/PR-supplied code.
+#   * We send coordinates + a couple of GitHub-supplied comment fields (commenter
+#     login, comment URL) — never issue title/body. The payload is built with jq
+#     from env vars; nothing attacker-influenced is interpolated into a run:
+#     script via ${{ }} (script injection is the likeliest exfil path).
+#
+# SETUP (per tracked repo):
+#   Add a secret COMMUNITY_ISSUE_DISPATCH_TOKEN = a fine-grained PAT scoped to
+#   duckdblabs/community-issue-tracker ONLY, with Contents: write (the minimum
+#   repository_dispatch requires). Nothing else — keep blast radius tiny.
+
+on:
+  issues:
+    types: [opened, reopened, closed]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  forward:
+    # issue_comment fires for PRs too (a PR is an issue) — skip those; we only
+    # track issues. 'issues' events are issue-only, so they always pass.
+    if: ${{ github.event_name == 'issues' || github.event.issue.pull_request == null }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch to community-issue-tracker
+        env:
+          GH_TOKEN: ${{ secrets.COMMUNITY_ISSUE_DISPATCH_TOKEN }}
+          EVENT_KIND: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          # Present only on issue_comment; empty otherwise.
+          COMMENTER: ${{ github.event.comment.user.login }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
+        run: |
+          jq -n \
+            --arg event "$EVENT_KIND" \
+            --arg action "$EVENT_ACTION" \
+            --arg repo "$REPO" \
+            --argjson number "$ISSUE_NUMBER" \
+            --arg commenter "$COMMENTER" \
+            --arg comment_url "$COMMENT_URL" \
+            '{event_type: "issue-event", client_payload: {
+               event: $event, action: $action, repo: $repo, number: $number,
+               commenter: $commenter, comment_url: $comment_url
+             }}' \
+          | gh api -X POST /repos/duckdblabs/community-issue-tracker/dispatches --input -
