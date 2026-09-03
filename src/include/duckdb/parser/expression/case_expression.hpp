@@ -36,12 +36,23 @@ public:
 	const ParsedExpression &Else() const {
 		return *else_expr;
 	}
+	optional_ptr<const ParsedExpression> CaseOperand() const {
+		return case_operand.get();
+	}
 	vector<CaseCheck> &CaseChecksMutable() {
 		return case_checks;
 	}
 	unique_ptr<ParsedExpression> &ElseMutable() {
 		return else_expr;
 	}
+	unique_ptr<ParsedExpression> &CaseOperandMutable() {
+		return case_operand;
+	}
+
+	unique_ptr<CaseExpression> GetLegacyCaseExpression() const;
+	unique_ptr<CaseExpression> GetLegacyCaseExpression(vector<unique_ptr<ParsedExpression>> case_operands) const;
+	bool UseLegacySerialization() const;
+	void LegacySerialize(Serializer &serializer) const;
 
 public:
 	string ToString() const override;
@@ -69,5 +80,6 @@ public:
 private:
 	vector<CaseCheck> case_checks;
 	unique_ptr<ParsedExpression> else_expr;
+	unique_ptr<ParsedExpression> case_operand;
 };
 } // namespace duckdb
