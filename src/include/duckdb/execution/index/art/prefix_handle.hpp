@@ -102,6 +102,8 @@ public:
 private:
 	static PrefixHandle NewInternal(ART &art, NodePtr &node, const_data_ptr_t data, const uint8_t count,
 	                                const idx_t offset);
+	static PrefixHandle AppendByte(ART &art, PrefixHandle prefix, const uint8_t byte);
+	static void Append(ART &art, PrefixHandle prefix, NodePtr other);
 
 	static NodeHandle TransformToDeprecatedAppend(NodeHandle tail_handle, ART &art, FixedSizeAllocator &allocator,
 	                                              const uint8_t byte);

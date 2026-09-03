@@ -101,6 +101,44 @@ PrefixChain PrefixHandle::New(ART &art, const ARTKey &key, const idx_t depth, co
 	return {root, std::move(tail)};
 }
 
+PrefixHandle PrefixHandle::AppendByte(ART &art, PrefixHandle prefix, const uint8_t byte) {
+	const auto count = prefix.GetCount(art);
+	if (count != art.PrefixCount()) {
+		prefix.SetByte(count, byte);
+		prefix.SetCount(art, UnsafeNumericCast<uint8_t>(count + 1));
+		return prefix;
+	}
+
+	auto tail = std::move(prefix).IntoChild(art);
+	return NewInternal(art, tail.Get(), &byte, 1, 0);
+}
+
+void PrefixHandle::Append(ART &art, PrefixHandle prefix, NodePtr other) {
+	D_ASSERT(other.HasMetadata());
+
+	while (other.GetType() == PREFIX) {
+		if (other.GetGateStatus() == GateStatus::GATE_SET) {
+			prefix.Child(art) = other;
+			return;
+		}
+
+		NodePtr next;
+		{
+			PrefixHandle other_prefix(NodeHandle(art, other));
+			const auto count = other_prefix.GetCount(art);
+			for (idx_t i = 0; i < count; i++) {
+				prefix = AppendByte(art, std::move(prefix), other_prefix.GetByte(i));
+			}
+			next = other_prefix.Child(art);
+			prefix.Child(art) = next;
+		}
+
+		NodePtr::FreeNode(art, other);
+		other = next;
+	}
+	prefix.Child(art) = other;
+}
+
 void Prefix::Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte,
                     const GateStatus node4_status, const GateStatus status) {
 	// We have four situations from which we enter here:
