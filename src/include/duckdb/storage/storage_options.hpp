@@ -39,7 +39,7 @@ struct StorageOptions {
 
 	CompressInMemory compress_in_memory = CompressInMemory::AUTOMATIC;
 
-	//! IO_MODE attach option; empty falls back to the default_io_mode setting.
+	//! IO_MODE attach option; empty defaults to BUFFERED_IO.
 	optional<FileIOMode> io_mode;
 	//! MMAP_RESERVE_SIZE attach option; empty uses the StorageManager default.
 	optional_idx mmap_reserve_size;

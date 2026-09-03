@@ -240,7 +240,7 @@
     },
     {
         "name": "catalog_error_max_schemas",
-        "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
+        "description": "The maximum number of schemas the system will scan for \"did you mean...\" style errors in the catalog",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "100"
@@ -264,17 +264,6 @@
         ],
         "aliases": [
             "wal_autocheckpoint"
-        ]
-    },
-    {
-        "name": "configure_profiling",
-        "description": "Accepts a JSON enabling custom metrics",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true,
-        "aliases": [
-            "custom_profiling_settings",
-            "configure_metrics"
         ]
     },
     {
@@ -506,13 +495,6 @@
         ]
     },
     {
-        "name": "default_io_mode",
-        "description": "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)",
-        "type": "ENUM<FileIOMode>",
-        "default_value": "BUFFERED_IO",
-        "default_scope": "global"
-    },
-    {
         "name": "default_null_order",
         "description": "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
         "type": "ENUM<DefaultOrderByNullType>",
@@ -554,7 +536,10 @@
         "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "true"
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "dialect_compatibility_mode",
@@ -636,7 +621,7 @@
     },
     {
         "name": "enable_external_access",
-        "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
+        "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "true",
@@ -690,7 +675,10 @@
         "description": "[PLACEHOLDER] Legacy setting - does nothing",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "enable_optimistic_write",
@@ -758,7 +746,10 @@
         "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "true"
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "explain_output",
@@ -853,7 +844,10 @@
         "description": "Force re-use of row group metadata on a column-level when checkpointing on older storage versions 6 and 7. This breaks storage backward-compatibility with older DuckDB versions.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "force_compression",
@@ -955,14 +949,14 @@
     },
     {
         "name": "index_scan_max_count",
-        "description": "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
+        "description": "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": 2048
     },
     {
         "name": "index_scan_percentage",
-        "description": "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
+        "description": "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
         "type": "DOUBLE",
         "default_scope": "global",
         "default_value": "0.001",
@@ -1006,14 +1000,20 @@
         "description": "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "legacy_metrics_format",
         "description": "When enabled, profiling output uses the legacy flat format instead of the current grouped format",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "lock_configuration",
@@ -1065,7 +1065,7 @@
     },
     {
         "name": "max_expression_depth",
-        "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep \"\n\t    \"expressions might lead to stack overflow errors.",
+        "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep expressions might lead to stack overflow errors.",
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "1000"
@@ -1113,7 +1113,10 @@
         "description": "Return NULL instead of throwing an error when dividing by zero.",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "old_implicit_casting",
@@ -1145,13 +1148,6 @@
         "on_callbacks": [
             "set"
         ]
-    },
-    {
-        "name": "parallelize_sequential_sources",
-        "description": "Whether to automatically parallelize sequential sources",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "true"
     },
     {
         "name": "partitioned_write_flush_threshold",
@@ -1224,7 +1220,7 @@
     },
     {
         "name": "preserve_insertion_order",
-        "description": "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results \"\n\t    \"that do not contain ORDER BY clauses.",
+        "description": "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results that do not contain ORDER BY clauses.",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "true"
@@ -1289,11 +1285,14 @@
         "description": "Configures whether regex match operators use partial or full string matching",
         "type": "ENUM<RegexMatchOperatorSemantics>",
         "default_scope": "local",
-        "default_value": "partial"
+        "default_value": "partial",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "scalar_subquery_error_on_multiple_rows",
-        "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
+        "description": "Throw an error when a scalar subquery returns more than one row. When disabled, an arbitrary row is returned instead.",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
@@ -1373,7 +1372,10 @@
         "description": "Configures the use of deprecated implicit conversion of unbound identifiers to strings in table function arguments.",
         "type": "ENUM<TableFunctionIdentifierConversion>",
         "default_scope": "local",
-        "default_value": "DEFAULT"
+        "default_value": "DEFAULT",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "temp_directory",

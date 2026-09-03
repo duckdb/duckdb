@@ -91,7 +91,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "uncompressed"}},
 	    {"home_directory", {"test"}},
-	    {"default_io_mode", {"MMAP"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
 	    {"extension_repository_directory", {"test"}},
@@ -154,7 +153,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_caching_operators", {false}},
 	    {"enable_optimistic_write", {false}},
 	    {"enable_optimizer", {false}},
-	    {"parallelize_sequential_sources", {false}},
 	    {"initial_column_segment_size", {4096}},
 	    {"delim_join_as_cte", {false}}};
 	// Every option that's not excluded has to be part of this map
@@ -213,9 +211,6 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
-	    "configure_profiling",
-	    "configure_metrics",
-	    "custom_profiling_settings",
 	    "custom_user_agent",
 	    "default_block_size",
 	    "index_scan_percentage",
