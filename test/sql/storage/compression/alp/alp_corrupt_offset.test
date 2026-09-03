@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alp/alp_corrupt_offset.test
+# description: An ALP vector offset outside the data region must be rejected
+# group: [alp]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alp_corrupt_offset.db.gz {TEST_DIR}/alp_corrupt_offset.db
+
+load {TEST_DIR}/alp_corrupt_offset.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='b' AND compression='ALP';
+----
+ALP
+
+statement error
+SELECT sum(b) FROM t;
+----
+Data Corruption Error: Corrupted ALP segment: vector offsets do not describe a data range
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(b) FROM t;
+----
+Data Corruption Error: Corrupted ALP segment: vector offsets do not describe a data range

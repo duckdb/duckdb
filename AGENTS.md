@@ -229,6 +229,7 @@ DuckDB supports two types of extensions:
 - Extensions are located in a separate git repository
 - Full list in `.github/config/out_of_tree_extensions.cmake`
 - When changes have to be made, they have to be made in patch files stored in `.github/patches`
+- Before adapting an out-of-tree extension, changing its pinned revision, or modifying `.github/patches/extensions`, read and follow `.github/patches/extensions/AGENTS.md`.
 
 Building with extensions:
 ```bash

@@ -2335,6 +2335,12 @@ MetadataResult ShellState::DisplayManual(const vector<string> &args) {
 		       ErrorData(ex).RawMessage().c_str());
 		return MetadataResult::FAIL;
 	}
+	if (qname.Path().size() > 3) {
+		// duckdb_functions() only reports the innermost schema, so a nested schema path cannot be matched here
+		PrintF(PrintOutput::STDERR,
+		       "'%s' is not a valid function name - expected NAME, SCHEMA.NAME or DATABASE.SCHEMA.NAME\n", args[1]);
+		return MetadataResult::FAIL;
+	}
 	// missing qualifiers match everything
 	string name_pattern = qname.Name().GetIdentifierName();
 	string schema_pattern = qname.Schema().empty() ? "%" : qname.Schema().GetIdentifierName();

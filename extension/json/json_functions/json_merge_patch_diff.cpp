@@ -5,7 +5,12 @@ namespace duckdb {
 
 //! Internal recursive diff. Returns nullptr to signal "no changes" to the caller,
 //! which is used to skip unchanged keys in the parent object's diff.
-static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjson_val *new_val) {
+static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjson_val *new_val, idx_t depth = 0) {
+	if (depth >= JSONCommon::MAX_RECURSION_DEPTH) {
+		throw InvalidInputException("json_merge_patch_diff: JSON exceeds maximum recursion depth of %d",
+		                            JSONCommon::MAX_RECURSION_DEPTH);
+	}
+
 	// Both objects: compute recursive structural diff
 	if (yyjson_is_obj(old_val) && yyjson_is_obj(new_val)) {
 		auto builder = yyjson_mut_obj(doc);
@@ -35,7 +40,7 @@ static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyj
 					has_diff = true;
 				} else {
 					// Key exists in both: recurse
-					auto sub_diff = ComputeDiff(doc, old_child, new_child);
+					auto sub_diff = ComputeDiff(doc, old_child, new_child, depth + 1);
 					if (sub_diff) {
 						yyjson_mut_obj_add(builder, yyjson_val_mut_copy(doc, key), sub_diff);
 						has_diff = true;
@@ -108,6 +113,7 @@ ScalarFunctionSet JSONFunctions::GetMergePatchDiffFunction() {
 	ScalarFunction fun("json_merge_patch_diff", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
 	                   MergePatchDiffFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 
 	return ScalarFunctionSet(fun);
 }

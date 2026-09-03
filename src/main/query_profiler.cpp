@@ -9,7 +9,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
-#include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -1029,15 +1028,6 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 		if (cte_scan.cte_source) {
 			tree_map.insert(
 			    make_pair(reference<const PhysicalOperator>(*cte_scan.cte_source), reference<ProfilingNode>(*node)));
-		}
-	}
-	if (root_p.type == PhysicalOperatorType::MERGE_INTO) {
-		// merge actions hold their target operators outside of the children - add them to the tree explicitly
-		auto &merge_into = root_p.Cast<PhysicalMergeInto>();
-		for (auto &action : merge_into.actions) {
-			if (action->op) {
-				node->AddChild(CreateTree(*action->op, depth + 1));
-			}
 		}
 	}
 	auto children = root_p.GetChildren();
