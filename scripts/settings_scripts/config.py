@@ -45,6 +45,8 @@ class Setting:
         default_scope: str,
         default_value: str,
         conditional_defaults,
+        is_debug: bool = False,
+        is_deprecated: bool = False,
     ):
         self.name = self._get_valid_name(name)
         self.description = description
@@ -74,6 +76,8 @@ class Setting:
         self.default_scope = self._get_valid_default_scope(default_scope) if default_scope is not None else None
         self.default_value = default_value
         self.conditional_defaults = conditional_defaults
+        self.is_debug = is_debug
+        self.is_deprecated = is_deprecated
         if self.default_scope is not None and self.scope is not None:
             raise ValueError("Only default_scope or scope can be specified")
 
