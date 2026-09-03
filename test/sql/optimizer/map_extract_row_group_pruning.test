@@ -27,3 +27,24 @@ query II
 EXPLAIN ANALYZE SELECT count(*) FROM maps WHERE map_extract_value(m, 'k') BETWEEN 2900 AND 3100;
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# An all-NULL map or key makes extraction NULL for the entire row group.
+statement ok
+CREATE TABLE nullable_map_extract AS
+SELECT CASE WHEN i < 2048 THEN NULL ELSE MAP {'k': i} END AS nullable_m
+FROM range(6144) tbl(i)
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM nullable_map_extract WHERE map_extract_value(nullable_m, 'k') IS NOT NULL;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+statement ok
+CREATE TABLE all_null_map_key AS
+SELECT MAP {'k': i} AS m, NULL::VARCHAR AS key
+FROM range(6144) tbl(i)
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM all_null_map_key WHERE map_extract_value(m, key) IS NOT NULL;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*

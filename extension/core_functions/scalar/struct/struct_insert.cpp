@@ -73,6 +73,7 @@ static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, Func
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto new_stats = StructStats::CreateUnknown(expr.GetReturnType());
+	new_stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 
 	auto existing_count = StructType::GetChildCount(child_stats[0].GetType());
 	auto existing_stats = StructStats::GetChildStats(child_stats[0]);

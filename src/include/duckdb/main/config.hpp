@@ -85,6 +85,8 @@ struct DBConfigOptions {
 	string database_type;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
+	//! ATTACH-style options applied to the main database, e.g. IO_MODE. Same keys ATTACH accepts
+	unordered_map<string, Value> main_database_options;
 	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether extensions should be loaded on start-up

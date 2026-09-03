@@ -308,6 +308,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"duckdb_aws_session_id", "aws", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"duckdb_encodings", "encodings", CatalogType::TABLE_FUNCTION_ENTRY},
     {"duckdb_format_sql", "autocomplete", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"duckdb_proj_compiled_version", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"duckdb_proj_version", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1349,6 +1350,8 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_experimental_filter_pushdown", "postgres_scanner"},
     {"pg_idle_in_transaction_timeout_millis", "postgres_scanner"},
     {"pg_null_byte_replacement", "postgres_scanner"},
+    {"pg_numeric_as_varchar", "postgres_scanner"},
+    {"pg_numeric_nan_as_null", "postgres_scanner"},
     {"pg_oauth_token", "postgres_scanner"},
     {"pg_order_pushdown", "postgres_scanner"},
     {"pg_pages_per_task", "postgres_scanner"},
@@ -1520,6 +1523,13 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"bearer/config", "httpfs"},
     {"mysql/config", "mysql_scanner"},
     {"postgres/config", "postgres_scanner"}}; // EXTENSION_SECRET_PROVIDERS
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
+    {"DuckLakeMetadata", "ducklake"},
+    {"Iceberg", "iceberg"},
+}; // END_OF_EXTENSION_LOG_TYPES
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete", "avro",       "aws",           "azure",   "core_functions",   "delta", "ducklake",

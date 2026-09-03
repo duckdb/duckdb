@@ -2204,12 +2204,38 @@ struct HugeIntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleHexDigit(T &state, uint8_t digit) {
-		return false;
+		static_assert(!NEGATIVE, "HugeInt hex cast does not support negative values");
+		const uint64_t upper = static_cast<uint64_t>(state.result.upper);
+		const uint64_t lower = static_cast<uint64_t>(state.result.lower);
+		if (DUCKDB_UNLIKELY(upper >> 60)) {
+			return false;
+		}
+		state.result.upper = static_cast<decltype(state.result.upper)>((upper << 4) | (lower >> 60));
+		state.result.lower = static_cast<decltype(state.result.lower)>((lower << 4) | digit);
+		if constexpr (std::is_signed<decltype(state.result.upper)>::value) {
+			if (DUCKDB_UNLIKELY(state.result.upper < 0)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	template <class T, bool NEGATIVE>
 	static bool HandleBinaryDigit(T &state, uint8_t digit) {
-		return false;
+		static_assert(!NEGATIVE, "HugeInt binary cast does not support negative values");
+		const uint64_t upper = static_cast<uint64_t>(state.result.upper);
+		const uint64_t lower = static_cast<uint64_t>(state.result.lower);
+		if (DUCKDB_UNLIKELY(upper >> 63)) {
+			return false;
+		}
+		state.result.upper = static_cast<decltype(state.result.upper)>((upper << 1) | (lower >> 63));
+		state.result.lower = static_cast<decltype(state.result.lower)>((lower << 1) | digit);
+		if constexpr (std::is_signed<decltype(state.result.upper)>::value) {
+			if (DUCKDB_UNLIKELY(state.result.upper < 0)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	template <class T, bool NEGATIVE>
