@@ -64,7 +64,7 @@ public:
 	}
 
 	//! Create a slot handle that owns the pin keeping slot_p valid.
-	SlotHandle(NodePtr &slot_p, NodeHandle &&pin_p) : slot(slot_p), pin(std::move(pin_p)) {
+	explicit SlotHandle(NodePtr &slot_p, NodeHandle &&pin_p) : slot(slot_p), pin(std::move(pin_p)) {
 	}
 
 	SlotHandle(const SlotHandle &) = delete;
