@@ -116,21 +116,48 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 		// Verify FK referential integrity for ALTER TABLE ADD FOREIGN KEY.
 	// TODO: Does it verify local data? Add test to check this!
 	if (bound_fk) {
-		// key_chunk has FK columns at indices 0..N-1 (projected), but VerifyForeignKeyConstraint
-		// uses fk_keys physical indices to address the chunk. Build a correctly-indexed chunk.
-		vector<LogicalType> fk_table_types;
-		for (auto &col : table.GetColumns().Physical()) {
-			fk_table_types.emplace_back(col.Type());
+		// CreateIndexScan uses TABLE_SCAN_OMIT_PERMANENTLY_DELETED, which still surfaces
+		// rows that the current transaction has locally deleted. Skip them here so FK
+		// verification only sees rows that will exist post-commit. The deleted rows must
+		// still enter the index build below so commit-time DELETE can remove them.
+		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
+		auto &data_storage = table.GetStorage();
+		auto row_ids = FlatVector::GetData<row_t>(lstate.row_chunk.data[0]);
+		SelectionVector visible_sel(STANDARD_VECTOR_SIZE);
+		idx_t visible_count = 0;
+		for (idx_t i = 0; i < lstate.row_chunk.size(); i++) {
+			if (data_storage.CanFetch(transaction, row_ids[i])) {
+				visible_sel.set_index(visible_count++, i);
+			}
 		}
-		DataChunk full_chunk;
-		full_chunk.InitializeEmpty(fk_table_types);
-		for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
-			full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(lstate.key_chunk.data[i]);
+
+		if (visible_count > 0) {
+			// key_chunk has FK columns at indices 0..N-1 (projected), but VerifyForeignKeyConstraint
+			// uses fk_keys physical indices to address the chunk. Build a correctly-indexed chunk.
+			vector<LogicalType> fk_table_types;
+			for (auto &col : table.GetColumns().Physical()) {
+				fk_table_types.emplace_back(col.Type());
+			}
+			DataChunk full_chunk;
+			full_chunk.InitializeEmpty(fk_table_types);
+			DataChunk verify_keys;
+			verify_keys.InitializeEmpty(indexed_column_types);
+			if (visible_count == lstate.key_chunk.size()) {
+				for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
+					full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(lstate.key_chunk.data[i]);
+				}
+				full_chunk.SetCardinality(visible_count);
+			} else {
+				for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
+					verify_keys.data[i].Slice(lstate.key_chunk.data[i], visible_sel, visible_count);
+					full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(verify_keys.data[i]);
+				}
+				full_chunk.SetCardinality(visible_count);
+			}
+			table.GetStorage().VerifyFKReferentialIntegrity(*bound_fk, context.client, full_chunk);
 		}
-		full_chunk.SetCardinality(lstate.key_chunk.size());
-		table.GetStorage().VerifyFKReferentialIntegrity(*bound_fk, context.client, full_chunk);
 	}
-	
+
 	// Sink into the index
 	IndexBuildSinkInput sink_input {bind_data.get(), *gstate.gstate, *lstate.lstate, table, *info};
 	index_type.build_sink(sink_input, lstate.key_chunk, lstate.row_chunk);
