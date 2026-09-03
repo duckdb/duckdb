@@ -147,16 +147,6 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
-// Default Io Mode
-//===----------------------------------------------------------------------===//
-void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("default_io_mode setting cannot be NULL");
-	}
-	EnumUtil::FromString<FileIOMode>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
 // Default Transaction Invalidation Policy
 //===----------------------------------------------------------------------===//
 void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -164,16 +154,6 @@ void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 		throw InvalidInputException("default_transaction_invalidation_policy setting cannot be NULL");
 	}
 	EnumUtil::FromString<TransactionInvalidationPolicy>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
-// Deprecated Using Key Syntax
-//===----------------------------------------------------------------------===//
-void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("deprecated_using_key_syntax setting cannot be NULL");
-	}
-	EnumUtil::FromString<DeprecatedUsingKeySyntax>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -258,13 +238,13 @@ void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
-// Regex Match Operator Semantics
+// Show Behavior
 //===----------------------------------------------------------------------===//
-void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+void ShowBehaviorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	if (parameter.IsNull()) {
-		throw InvalidInputException("regex_match_operator_semantics setting cannot be NULL");
+		throw InvalidInputException("show_behavior setting cannot be NULL");
 	}
-	EnumUtil::FromString<RegexMatchOperatorSemantics>(StringValue::Get(parameter));
+	EnumUtil::FromString<ShowBehaviorType>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -275,16 +255,6 @@ void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parame
 		throw InvalidInputException("storage_block_prefetch setting cannot be NULL");
 	}
 	EnumUtil::FromString<StorageBlockPrefetch>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
-// Table Function Identifier Conversion
-//===----------------------------------------------------------------------===//
-void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("table_function_identifier_conversion setting cannot be NULL");
-	}
-	EnumUtil::FromString<TableFunctionIdentifierConversion>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

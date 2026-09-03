@@ -8,11 +8,11 @@ on:
         description: 'extension to deploy (using current config)'
         required: true
         type: string
-      override_git_describe:
-        description: 'Override git describe (use for tagged releases)'
+      duckdb_version:
+        description: 'DuckDB build version (empty for a local development version)'
         type: string
-      duckdb_ref:
-        description: 'DuckDB version (empty for current commit)'
+      duckdb_commit:
+        description: 'DuckDB commit (empty for current commit)'
         type: string
         required: false
         default: ''
@@ -39,6 +39,8 @@ on:
 
 env:
   BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
+  DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+  DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
 
 jobs:
   load-extension-configs:
@@ -90,14 +92,14 @@ jobs:
       extension_name: extensions
       reduced_ci_mode: auto
       set_caller_as_duckdb: true
-      duckdb_version: ${{ inputs.duckdb_ref }}
+      duckdb_version: ${{ inputs.duckdb_commit }}
       override_ci_tools_repository: duckdb/extension-ci-tools
       ci_tools_version: main
       exclude_archs: ${{ needs.load-extension-configs.outputs.extension_exclude_archs }}
       opt_in_archs: ''
       extra_toolchains: 'rust'
       use_merged_vcpkg_manifest: '1'
-      duckdb_tag: ${{ inputs.override_git_describe }}
+      duckdb_tag: ${{ inputs.duckdb_version }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
       extensions_test_selection: 'complete'
@@ -118,7 +120,7 @@ jobs:
       - uses: actions/download-artifact@v8
         name: Download extensions
         with:
-          pattern: extensions-${{ inputs.duckdb_ref }}*
+          pattern: extensions-${{ inputs.duckdb_commit }}*
           path: /tmp/repository_generation/extensions
 
       - name: Print all extensions
@@ -147,7 +149,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           if-no-files-found: error
-          name: extension-repository-${{ inputs.duckdb_ref }}
+          name: extension-repository-${{ inputs.duckdb_commit }}
           path: |
             /tmp/merged_repository/**/*.duckdb_extension*
 
@@ -164,13 +166,13 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: extension-repository-${{ inputs.duckdb_ref }}
+          name: extension-repository-${{ inputs.duckdb_commit }}
           path: /tmp
 
       - name: List extensions to deploy
         shell: bash
         run: |
-          tree /tmp/extension-repository-${{ inputs.duckdb_ref }}
+          tree /tmp/extension-repository-${{ inputs.duckdb_commit }}
 
       - name: Deploy extensions
         shell: bash
@@ -182,4 +184,4 @@ jobs:
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
           curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
-          make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/extension-repository-${{ inputs.duckdb_ref }} EXTENSION_BUCKET=duckdb-staging
+          make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/extension-repository-${{ inputs.duckdb_commit }} EXTENSION_BUCKET=duckdb-staging

@@ -20,16 +20,15 @@ static void ApplyOptions(const optional<vector<GenericCopyOption>> &options, Ext
 	}
 }
 
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformCreateExternalResourceStmt(PEGTransformer &transformer, const string &string_literal,
-                                                           const optional<Identifier> &attach_alias,
-                                                           const optional<vector<GenericCopyOption>> &attach_options) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateExternalResourceStmt(
+    PEGTransformer &transformer, const string &string_literal, const optional<Identifier> &attach_alias,
+    const optional<vector<GenericCopyOption>> &external_resource_creation_options) {
 	auto result = make_uniq<ExternalResourceStatement>(ExternalResourceOperation::CREATE);
 	result->type = string_literal;
 	if (attach_alias) {
 		result->name = Identifier(*attach_alias);
 	}
-	ApplyOptions(attach_options, *result);
+	ApplyOptions(external_resource_creation_options, *result);
 	return std::move(result);
 }
 

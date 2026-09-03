@@ -107,6 +107,9 @@ SQLStatement:
     - RegisterExternalResourceStmt
     - DestroyExternalResourceStmt
     - ShowExternalResourcesStmt
+    - ExtensionRepositoryStatement
+    - CreateExtensionRepositoryStmt
+    - DropExtensionRepositoryStmt
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -140,10 +143,12 @@ QueryNode:
   type: "unique_ptr<QueryNode>"
   by_value: true
   rules:
-    - ShowSelect
+    - ShowDeprecatedSelect
+    - DescribeSelect
     - ShowTables
     - ShowAllTables
-    - ShowQualifiedName
+    - ShowByName
+    - DescribeByName
 
 SelectNode:
   type: "unique_ptr<SelectNode>"
@@ -537,6 +542,7 @@ ColumnRefExpression:
   by_value: true
   rules:
     - NestedColumnName
+    - NestedSchemaTableColumnName
     - CatalogReservedSchemaTableColumnName
     - SchemaReservedTableColumnName
     - TableReservedColumnName
@@ -590,6 +596,7 @@ BaseTableRef:
     - UnqualifiedBaseTableName
     - SchemaReservedTable
     - CatalogReservedSchemaTable
+    - QualifiedTableName
     - TargetOptAlias
     - InsertTarget
 
@@ -700,6 +707,7 @@ StringList:
     - DottedIdentifier
     - ColumnAliases
     - TriggerColumnList
+    - RepositoryPublicKey
     - StarSymbolColumnList
     - StarQualifierList
     - PivotGroupByList
@@ -712,7 +720,9 @@ GenericCopyOptionList:
   by_value: false
   rules:
     - AttachOptions
+    - ExternalResourceCreationOptions
     - GenericCopyOptionList
+    - CopyGenericOptionList
     - CopyOptions
     - CopyOptionList
     - SpecializedOptionList
@@ -883,7 +893,11 @@ GenericCopyOption:
   by_value: false
   rules:
     - GenericCopyOption
+    - CopyGenericOption
+    - OrderByCopyOption
+    - PartitionedByCopyOption
     - SpecializedOption
+    - SpecializedOptionTail
     - SingleOption
     - EncodingOption
     - ForceQuoteOption
@@ -899,6 +913,15 @@ GenericCopyOption:
     - OidsOption
     - CsvOption
     - HeaderOption
+
+PartitionByColumnList:
+  type: "vector<string>"
+  by_value: false
+  rules:
+    - PartitionByColumnList
+    - StarPartitionByColumnList
+    - ParenthesizedPartitionByColumnList
+    - SinglePartitionByColumnList
 
 GenericCopyOptionValue:
   type: "GenericCopyOptionValue"
@@ -999,11 +1022,13 @@ String:
     - ColumnNameKeyword
     - FuncNameKeyword
     - TypeNameKeyword
+    - TypeFuncKeyword
     - IndexName
     - Identifier
     - ExportSource
     - ReservedKeyword
     - VersionNumber
+    - RepositoryPrefix
     - LikeVariations
     - LikeToken
     - ILikeToken
@@ -1133,6 +1158,7 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - InstallAndLoad
     - ShowAllModifier
     - FunctionTypeMacro
     - FunctionTypeMacroKeyword
@@ -1142,6 +1168,7 @@ Bool:
     - FunctionKeyword
     - DeallocatePrepare
     - CreateRecursive
+    - CreateSecure
     - WithOrWithoutOids
     - WithOids
     - WithoutOids
@@ -1325,8 +1352,8 @@ ShowType:
   type: "ShowType"
   by_value: false
   rules:
-    - ShowOrDescribeOrSummarize
     - ShowOrDescribe
+    - DescribeOrSummarize
     - Summarize
     - SummarizeRule
     - ShowRule
@@ -1470,6 +1497,9 @@ DescribeTarget:
     - DescribeTarget
     - DescribeBaseTableName
     - DescribeStringLiteral
+    - ShowTarget
+    - ShowDeprecatedQualifiedTableName
+    - ShowSettingName
 
 OnConflictExpressionTarget:
   type: "OnConflictExpressionTarget"
@@ -1781,6 +1811,9 @@ packrat_memoized_rules:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
+  # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
+  - ShowSpecialForm
   - PivotStatement
   - UnpivotStatement
   - Program

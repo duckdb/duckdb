@@ -10,6 +10,7 @@
 
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/main/capi_v2/extension_load_v2.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/valid_checker.hpp"
@@ -72,6 +73,10 @@ public:
 	DUCKDB_API ParserCache &GetParserCache();
 
 	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
+	//! Runs a V2 C API extension entrypoint, see invoke_capi_v2
+	DUCKDB_API void InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result, const string &extension_name,
+	                                            ext_init_c_api_v2_fun_t init_fun, optional_ptr<ClientContext> context,
+	                                            bool statically_linked);
 
 	idx_t NumberOfThreads();
 
@@ -114,6 +119,11 @@ private:
 	unique_ptr<ParserCache> parser_cache;
 
 	duckdb_ext_api_v1 (*create_api_v1)();
+	//! Set in Initialize. Loading a V2 C API extension builds the C API function table and opens a connection, both of
+	//! which reach the entire engine. Naming InvokeCAPIV2Entrypoint from the extension loader - which every extension
+	//! links, and which reaches it through autoloading - would therefore keep all of DuckDB alive in extensions that
+	//! link it statically. Only Initialize names it, and nothing that fails to open a database can reach that.
+	invoke_ext_capi_v2_fun_t invoke_capi_v2;
 };
 
 //! The database object. This object holds the catalog and all the
@@ -160,6 +170,8 @@ public:
 	typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 	// Load a statically compiled C API extension by calling its init function directly (no vtable needed)
 	DUCKDB_API void LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t init_fun);
+	// Same, for an extension built against the V2 C API
+	DUCKDB_API void LoadStaticCAPIExtensionV2(const string &name, ext_init_c_api_v2_fun_t init_fun);
 
 	DUCKDB_API FileSystem &GetFileSystem();
 

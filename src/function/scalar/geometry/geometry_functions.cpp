@@ -185,7 +185,13 @@ static FilterPropagateResult IntersectsExtentFilterPrune(const FunctionStatistic
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	if (const_extent.ContainsXY(col_extent)) {
-		// The constant fully covers the column zonemap, so every non-null row's bbox intersects it.
+		// The constant fully covers the column zonemap, so every row that is represented in the zonemap
+		// matches. Rows that are not represented in it do not: NULL rows (the predicate evaluates to NULL
+		// for them) and empty geometries (which contribute no vertices, but never intersect anything).
+		// Only when neither can be present may we prune the filter away entirely.
+		if (column_stats->CanHaveNull() || GeometryStats::GetFlags(*column_stats).HasEmptyGeometry()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
 		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;

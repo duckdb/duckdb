@@ -37,6 +37,7 @@ add_library_unity(
   plan_set.cpp
   plan_reset.cpp
   plan_sample.cpp
+  plan_secure_view.cpp
   plan_alter.cpp
   plan_attach.cpp
   plan_connect.cpp

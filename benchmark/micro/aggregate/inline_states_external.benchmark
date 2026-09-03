@@ -1,0 +1,24 @@
+# name: benchmark/micro/aggregate/inline_states_external.benchmark
+# description: External aggregation of mostly inline string states with a single arena-backed value
+# group: [aggregate]
+
+name Inline states external
+group aggregate
+
+init
+set threads=1;
+set memory_limit='64MB';
+set temp_directory='${BENCHMARK_DIR}/inline_states_external.duckdb.tmp';
+set preserve_insertion_order=false;
+
+run
+SELECT count(*), sum(length(w))
+FROM (
+    SELECT i,
+           first(CASE WHEN i = 0 THEN repeat('x', 100) ELSE 'x' END) AS w
+    FROM range(5000000) t(i)
+    GROUP BY i
+)
+
+result II
+5000000	5000099

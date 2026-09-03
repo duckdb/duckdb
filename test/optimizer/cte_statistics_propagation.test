@@ -1,0 +1,100 @@
+# name: test/optimizer/cte_statistics_propagation.test
+# description: Statistics of a materialized CTE definition are propagated to references to it
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TABLE nullable(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO nullable VALUES (1, 10), (NULL, 20);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# the CTE definition cannot produce NULL, so the join condition is always true
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM t) SELECT * FROM t l JOIN c ON l.i + c.i IS NOT NULL
+----
+logical_opt	<!REGEX>:.*IS NOT NULL.*
+
+# ... but only if it really cannot produce NULL
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM nullable) SELECT * FROM t l JOIN c ON l.i + c.i IS NOT NULL
+----
+logical_opt	<REGEX>:.*IS NOT NULL.*
+
+# min/max are propagated as well: no row can match, so the comparison folds to false
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM t) SELECT * FROM t l JOIN c ON l.i + c.i > 1000
+----
+logical_opt	<!REGEX>:.*1000.*
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM t) SELECT count(*) FROM t l JOIN c ON l.i + c.i > 1000
+----
+0
+
+# the cardinality of the definition reaches the reference, which is what lets sum() prove it cannot
+# overflow an int64 and switch to sum_no_overflow. The plan assertions for that rewrite live in
+# test/optimizer/test_aggregate_function_rewrite.test; here we only check that the results stay correct
+# on either side of the overflow boundary.
+statement ok
+CREATE TABLE small_vals(v BIGINT);
+
+statement ok
+INSERT INTO small_vals SELECT (i * 1000000000)::BIGINT FROM range(1000) s(i);
+
+query I
+WITH c AS MATERIALIZED (SELECT v FROM small_vals) SELECT sum(v) FROM c
+----
+499500000000000
+
+statement ok
+CREATE TABLE big_vals(v BIGINT);
+
+statement ok
+INSERT INTO big_vals SELECT 4000000000000000000::BIGINT FROM range(5) s(i);
+
+query I
+WITH c AS MATERIALIZED (SELECT v FROM big_vals) SELECT sum(v) FROM c
+----
+20000000000000000000
+
+# the same holds for the duplicate-eliminated CTE that decorrelation generates for a lateral join
+query II
+EXPLAIN SELECT * FROM t l, LATERAL (SELECT * FROM t r WHERE r.i + l.i IS NOT NULL ORDER BY r.i + l.i LIMIT 2)
+----
+logical_opt	<!REGEX>:.*IS NOT NULL.*
+
+query III
+SELECT l.i, r.i, r.j FROM t l, LATERAL (SELECT * FROM t r WHERE r.i + l.i IS NOT NULL ORDER BY r.i + l.i LIMIT 2) r
+ORDER BY l.i, r.i
+----
+1	1	10
+1	2	20
+2	1	10
+2	2	20
+3	1	10
+3	2	20
+
+# the recurring table of a recursive CTE grows during execution, so the anchor statistics do not describe it
+query I
+WITH RECURSIVE r(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM r WHERE i < 10) SELECT i FROM r WHERE i > 5 ORDER BY i
+----
+6
+7
+8
+9
+10
+
+query I
+WITH RECURSIVE r(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM r WHERE i < 10)
+SELECT count(*) FROM r WHERE i IS NOT NULL
+----
+10

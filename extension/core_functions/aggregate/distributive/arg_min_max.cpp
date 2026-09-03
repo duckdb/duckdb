@@ -412,6 +412,7 @@ AggregateFunction GetGenericArgMinMaxFunction(const ArgMinMaxNullHandling null_h
 	    AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
 	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
 	AggregateFunction::WireStructStateType<STATE>(function);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return function;
 }
 
@@ -426,6 +427,7 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 	                                  AggregateFunction::StateCombine<STATE, OP>,
 	                                  AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
 	AggregateFunction::WireStructStateType<STATE>(function);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return function;
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
@@ -484,6 +486,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
 	auto function = AggregateFunction::BinaryAggregate<STATE, ARG_TYPE, BY_TYPE, ARG_TYPE, OP>(type, by_type, type);
 	function.SetBindCallback(GetBindFunction<OP>(null_handling));
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
 	function.GetSignature().GetParameter(0).SetType(type);
@@ -582,6 +585,7 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(BindAggregateFunctionInput &input)
 	auto name = function.GetName();
 	function.ReplaceImplementation(GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type, NULL_HANDLING));
 	function.SetName(std::move(name));
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	function.SetReturnType(decimal_type);
 
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);

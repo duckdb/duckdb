@@ -7,11 +7,11 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression
-	auto error = Bind(expr.ChildMutable(), depth);
-	if (error.HasError()) {
-		return BindResult(std::move(error));
+	auto result = Bind(expr.ChildMutable(), depth);
+	if (result.HasError()) {
+		return result;
 	}
-	auto &child = BoundExpression::GetExpression(*expr.ChildMutable());
+	auto child = std::move(result.expression);
 	if (child->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}

@@ -354,6 +354,13 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::META_DATA>
 
 	names.emplace_back("geo_types");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("encoding_stats");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT({
+	    {"page_type", LogicalType::VARCHAR},
+	    {"encoding", LogicalType::VARCHAR},
+	    {"count", LogicalType::INTEGER},
+	})));
 }
 
 static Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
@@ -388,6 +395,27 @@ static Value ConvertParquetGeoStatsBBOX(const duckdb_parquet::GeospatialStatisti
 	    {"mmin", stats.bbox.__isset.mmin ? Value::DOUBLE(stats.bbox.mmin) : Value(LogicalTypeId::DOUBLE)},
 	    {"mmax", stats.bbox.__isset.mmax ? Value::DOUBLE(stats.bbox.mmax) : Value(LogicalTypeId::DOUBLE)},
 	});
+}
+
+static Value ConvertParquetEncodingStats(const duckdb_parquet::ColumnMetaData &col_meta) {
+	auto stat_type = LogicalType::STRUCT({
+	    {"page_type", LogicalType::VARCHAR},
+	    {"encoding", LogicalType::VARCHAR},
+	    {"count", LogicalType::INTEGER},
+	});
+	if (!col_meta.__isset.encoding_stats) {
+		return Value(LogicalType::LIST(stat_type));
+	}
+	vector<Value> stats;
+	stats.reserve(col_meta.encoding_stats.size());
+	for (auto &entry : col_meta.encoding_stats) {
+		stats.push_back(Value::STRUCT({
+		    {"page_type", Value(ConvertParquetElementToString(entry.page_type))},
+		    {"encoding", Value(ConvertParquetElementToString(entry.encoding))},
+		    {"count", Value::INTEGER(entry.count)},
+		}));
+	}
+	return Value::LIST(stat_type, std::move(stats));
 }
 
 static Value ConvertParquetGeoStatsTypes(const duckdb_parquet::GeospatialStatistics &stats) {
@@ -525,6 +553,9 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 
 	// geo_stats_types, LogicalType::LIST(LogicalType::VARCHAR)
 	output[30].get().Append(ConvertParquetGeoStatsTypes(col_meta.geospatial_statistics));
+
+	// encoding_stats, LogicalType::LIST(LogicalType::STRUCT(...))
+	output[31].get().Append(ConvertParquetEncodingStats(col_meta));
 }
 
 //===--------------------------------------------------------------------===//

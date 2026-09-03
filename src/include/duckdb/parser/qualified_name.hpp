@@ -35,8 +35,8 @@ struct QualifiedName {
 		path.push_back(std::move(name_p));
 	}
 	QualifiedName(Identifier catalog_p, Identifier schema_p, Identifier name_p) {
-		// store the catalog/schema/name as a single path - in preparation for multi-level schema support
-		// for now we only support a single schema level, so the path is at most [catalog, schema, name]
+		// store the catalog/schema/name as a single path - deeper (nested schema) paths are built with the
+		// vector<Identifier> constructor below
 		if (!catalog_p.empty()) {
 			path.push_back(std::move(catalog_p));
 			path.push_back(std::move(schema_p));
@@ -88,9 +88,19 @@ struct QualifiedName {
 			return;
 		}
 		path.erase(path.begin());
+		if (path.size() >= 2 && path[0].empty()) {
+			// the name was catalog-qualified without a schema - drop the empty schema placeholder as well
+			path.erase(path.begin());
+		}
 	}
-	//! Return a copy of this name qualified with the given catalog, replacing the catalog component it already has
+	//! Return a copy of this name qualified with the given catalog, replacing the catalog component it already has.
+	//! An empty catalog strips the catalog qualification.
 	QualifiedName WithCatalog(Identifier catalog) const {
+		if (catalog.empty()) {
+			auto result = *this;
+			result.StripCatalog();
+			return result;
+		}
 		if (path.size() < 2) {
 			return QualifiedName(std::move(catalog), Identifier(), Name());
 		}
@@ -108,6 +118,8 @@ struct QualifiedName {
 	static QualifiedName Parse(const string &input);
 	static vector<Identifier> ParseComponents(const string &input);
 	string ToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
+	//! Render only the qualification (every component before the name), with a trailing "." after each component
+	string QualificationToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
 
 	hash_t Hash() const;
 	bool operator==(const QualifiedName &rhs) const;
@@ -118,7 +130,7 @@ struct QualifiedName {
 
 private:
 	//! The full path (catalog/schema/name). The name is always the last element; the catalog/schema components that
-	//! are actually present precede it. For now at most [catalog, schema, name] (single schema level).
+	//! are actually present precede it, and the schema part can be a nested chain ([catalog, s1, s2, ..., name]).
 	vector<Identifier> path;
 	//! Always-empty identifier, returned by the accessors when a catalog/schema/name component is absent
 	Identifier empty;

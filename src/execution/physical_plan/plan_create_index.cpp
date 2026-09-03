@@ -100,7 +100,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	    schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, op.info->GetIndexName());
 	if (entry) {
 		if (op.info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-			throw CatalogException("Index with name \"%s\" already exists!", op.info->GetIndexName());
+			throw CatalogException("Index with name %s already exists!", op.info->GetIndexName());
 		}
 		return Make<PhysicalDummyScan>(op.types, op.estimated_cardinality);
 	}

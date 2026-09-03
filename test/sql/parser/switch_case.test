@@ -107,3 +107,8 @@ statement error
 SELECT SWITCH (1, i) FROM map_expr;
 ----
 Binder Error: SWITCH expected a constant map for the cases
+
+statement error
+SELECT switch(i, MAP {i : 1}) FROM (SELECT 1 i);
+----
+Binder Error: SWITCH expected a constant map for the cases

@@ -239,6 +239,9 @@ static void TPCDSQueryAnswerFunction(ClientContext &context, TableFunctionInput 
 }
 
 static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters &parameters) {
+	if (parameters.values[0].IsNull()) {
+		throw InvalidInputException("Cannot use NULL as argument for the TPC-DS query number");
+	}
 	auto index = parameters.values[0].GetValue<int32_t>();
 	return tpcds::DSDGenWrapper::GetQuery(index);
 }

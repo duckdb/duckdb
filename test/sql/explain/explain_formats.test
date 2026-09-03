@@ -168,3 +168,8 @@ statement error
 EXPLAIN (FORMAT 1 + 1) SELECT 42
 ----
 Invalid Input Error: FORMAT requires a single format name, e.g. FORMAT json
+
+statement error
+EXPLAIN (ANALYZE, FORMAT x^x) SELECT 42
+----
+Invalid Input Error: FORMAT requires a single format name, e.g. FORMAT json

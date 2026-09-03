@@ -33,45 +33,45 @@ NULL	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': 1, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': 1, 'y': 0}	{'x': 1, 'y': 0}	0	1	1	0	0	1	1	0
 {'x': 1, 'y': 0}	{'x': 1, 'y': 2}	1	1	0	1	0	0	0	1
-{'x': 1, 'y': 0}	{'x': 1, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
-{'x': 1, 'y': 0}	{'x': NULL, 'y': 0}	1	1	NULL	NULL	0	0	0	1
+{'x': 1, 'y': 0}	{'x': 1, 'y': NULL}	1	1	0	1	0	0	0	1
+{'x': 1, 'y': 0}	{'x': NULL, 'y': 0}	1	1	0	1	0	0	0	1
 {'x': 1, 'y': 0}	{'x': NULL, 'y': 2}	1	1	0	1	0	0	0	1
-{'x': 1, 'y': 0}	{'x': NULL, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
+{'x': 1, 'y': 0}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': 1, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': 1, 'y': 2}	{'x': 1, 'y': 0}	0	0	0	1	1	1	0	1
 {'x': 1, 'y': 2}	{'x': 1, 'y': 2}	0	1	1	0	0	1	1	0
-{'x': 1, 'y': 2}	{'x': 1, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
+{'x': 1, 'y': 2}	{'x': 1, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': 1, 'y': 2}	{'x': NULL, 'y': 0}	1	1	0	1	0	0	0	1
-{'x': 1, 'y': 2}	{'x': NULL, 'y': 2}	1	1	NULL	NULL	0	0	0	1
-{'x': 1, 'y': 2}	{'x': NULL, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
+{'x': 1, 'y': 2}	{'x': NULL, 'y': 2}	1	1	0	1	0	0	0	1
+{'x': 1, 'y': 2}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': NULL}	{'x': 1, 'y': 0}	0	0	NULL	NULL	1	1	0	1
-{'x': 1, 'y': NULL}	{'x': 1, 'y': 2}	0	0	NULL	NULL	1	1	0	1
-{'x': 1, 'y': NULL}	{'x': 1, 'y': NULL}	0	1	NULL	NULL	0	1	1	0
-{'x': 1, 'y': NULL}	{'x': NULL, 'y': 0}	1	1	NULL	NULL	0	0	0	1
-{'x': 1, 'y': NULL}	{'x': NULL, 'y': 2}	1	1	NULL	NULL	0	0	0	1
-{'x': 1, 'y': NULL}	{'x': NULL, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
+{'x': 1, 'y': NULL}	{'x': 1, 'y': 0}	0	0	0	1	1	1	0	1
+{'x': 1, 'y': NULL}	{'x': 1, 'y': 2}	0	0	0	1	1	1	0	1
+{'x': 1, 'y': NULL}	{'x': 1, 'y': NULL}	0	1	1	0	0	1	1	0
+{'x': 1, 'y': NULL}	{'x': NULL, 'y': 0}	1	1	0	1	0	0	0	1
+{'x': 1, 'y': NULL}	{'x': NULL, 'y': 2}	1	1	0	1	0	0	0	1
+{'x': 1, 'y': NULL}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 0}	{'x': 1, 'y': 0}	0	0	NULL	NULL	1	1	0	1
+{'x': NULL, 'y': 0}	{'x': 1, 'y': 0}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': 0}	{'x': 1, 'y': 2}	0	0	0	1	1	1	0	1
-{'x': NULL, 'y': 0}	{'x': 1, 'y': NULL}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	0	1	NULL	NULL	0	1	1	0
+{'x': NULL, 'y': 0}	{'x': 1, 'y': NULL}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	0	1	1	0	0	1	1	0
 {'x': NULL, 'y': 0}	{'x': NULL, 'y': 2}	1	1	0	1	0	0	0	1
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': NULL, 'y': 2}	{'x': 1, 'y': 0}	0	0	0	1	1	1	0	1
-{'x': NULL, 'y': 2}	{'x': 1, 'y': 2}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': 2}	{'x': 1, 'y': NULL}	0	0	NULL	NULL	1	1	0	1
+{'x': NULL, 'y': 2}	{'x': 1, 'y': 2}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': 2}	{'x': 1, 'y': NULL}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': 2}	{'x': NULL, 'y': 0}	0	0	0	1	1	1	0	1
-{'x': NULL, 'y': 2}	{'x': NULL, 'y': 2}	0	1	NULL	NULL	0	1	1	0
-{'x': NULL, 'y': 2}	{'x': NULL, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
+{'x': NULL, 'y': 2}	{'x': NULL, 'y': 2}	0	1	1	0	0	1	1	0
+{'x': NULL, 'y': 2}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': NULL}	{'x': 1, 'y': 0}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': NULL}	{'x': 1, 'y': 2}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': NULL}	{'x': 1, 'y': NULL}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 2}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	0	1	NULL	NULL	0	1	1	0
+{'x': NULL, 'y': NULL}	{'x': 1, 'y': 0}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': 1, 'y': 2}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': 1, 'y': NULL}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 2}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	0	1	1	0	0	1	1	0
 
 # String STRUCTs with NULLs in various positions
 statement ok
@@ -102,44 +102,178 @@ NULL	{'x': duck, 'y': ''}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 NULL	{'x': duck, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 NULL	{'x': duck, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	0	1	NULL	NULL	0	1	1	0
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	0	1	1	0	0	1	1	0
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': NULL, 'y': 0}	{'x': NULL, 'y': goose}	1	1	0	1	0	0	0	1
 {'x': NULL, 'y': 0}	{'x': duck, 'y': ''}	0	0	0	1	1	1	0	1
-{'x': NULL, 'y': 0}	{'x': duck, 'y': NULL}	0	0	NULL	NULL	1	1	0	1
+{'x': NULL, 'y': 0}	{'x': duck, 'y': NULL}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': 0}	{'x': duck, 'y': goose}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	0	1	NULL	NULL	0	1	1	0
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': goose}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': NULL}	{'x': duck, 'y': ''}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': NULL}	{'x': duck, 'y': NULL}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': NULL}	{'x': duck, 'y': goose}	0	0	NULL	NULL	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	0	1	1	0	0	1	1	0
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': goose}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': duck, 'y': ''}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': duck, 'y': NULL}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': duck, 'y': goose}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': NULL, 'y': goose}	{'x': NULL, 'y': 0}	0	0	0	1	1	1	0	1
-{'x': NULL, 'y': goose}	{'x': NULL, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
-{'x': NULL, 'y': goose}	{'x': NULL, 'y': goose}	0	1	NULL	NULL	0	1	1	0
+{'x': NULL, 'y': goose}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
+{'x': NULL, 'y': goose}	{'x': NULL, 'y': goose}	0	1	1	0	0	1	1	0
 {'x': NULL, 'y': goose}	{'x': duck, 'y': ''}	0	0	0	1	1	1	0	1
-{'x': NULL, 'y': goose}	{'x': duck, 'y': NULL}	0	0	NULL	NULL	1	1	0	1
-{'x': NULL, 'y': goose}	{'x': duck, 'y': goose}	0	0	NULL	NULL	1	1	0	1
+{'x': NULL, 'y': goose}	{'x': duck, 'y': NULL}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': goose}	{'x': duck, 'y': goose}	0	0	0	1	1	1	0	1
 {'x': duck, 'y': ''}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': duck, 'y': ''}	{'x': NULL, 'y': 0}	1	1	0	1	0	0	0	1
-{'x': duck, 'y': ''}	{'x': NULL, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
+{'x': duck, 'y': ''}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': ''}	{'x': NULL, 'y': goose}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': ''}	{'x': duck, 'y': ''}	0	1	1	0	0	1	1	0
-{'x': duck, 'y': ''}	{'x': duck, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
+{'x': duck, 'y': ''}	{'x': duck, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': ''}	{'x': duck, 'y': goose}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': duck, 'y': NULL}	{'x': NULL, 'y': 0}	1	1	NULL	NULL	0	0	0	1
-{'x': duck, 'y': NULL}	{'x': NULL, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
-{'x': duck, 'y': NULL}	{'x': NULL, 'y': goose}	1	1	NULL	NULL	0	0	0	1
-{'x': duck, 'y': NULL}	{'x': duck, 'y': ''}	0	0	NULL	NULL	1	1	0	1
-{'x': duck, 'y': NULL}	{'x': duck, 'y': NULL}	0	1	NULL	NULL	0	1	1	0
-{'x': duck, 'y': NULL}	{'x': duck, 'y': goose}	0	0	NULL	NULL	1	1	0	1
+{'x': duck, 'y': NULL}	{'x': NULL, 'y': 0}	1	1	0	1	0	0	0	1
+{'x': duck, 'y': NULL}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
+{'x': duck, 'y': NULL}	{'x': NULL, 'y': goose}	1	1	0	1	0	0	0	1
+{'x': duck, 'y': NULL}	{'x': duck, 'y': ''}	0	0	0	1	1	1	0	1
+{'x': duck, 'y': NULL}	{'x': duck, 'y': NULL}	0	1	1	0	0	1	1	0
+{'x': duck, 'y': NULL}	{'x': duck, 'y': goose}	0	0	0	1	1	1	0	1
 {'x': duck, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': duck, 'y': goose}	{'x': NULL, 'y': 0}	1	1	0	1	0	0	0	1
-{'x': duck, 'y': goose}	{'x': NULL, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
-{'x': duck, 'y': goose}	{'x': NULL, 'y': goose}	1	1	NULL	NULL	0	0	0	1
+{'x': duck, 'y': goose}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
+{'x': duck, 'y': goose}	{'x': NULL, 'y': goose}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': goose}	{'x': duck, 'y': ''}	0	0	0	1	1	1	0	1
-{'x': duck, 'y': goose}	{'x': duck, 'y': NULL}	1	1	NULL	NULL	0	0	0	1
+{'x': duck, 'y': goose}	{'x': duck, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': goose}	{'x': duck, 'y': goose}	0	1	1	0	0	1	1	0
+
+statement ok
+CREATE TABLE nested_values(id INTEGER, value STRUCT(child STRUCT(i INTEGER)));
+
+statement ok
+INSERT INTO nested_values VALUES
+	(1, {'child': {'i': 1}}),
+	(2, {'child': {'i': 2}}),
+	(3, {'child': NULL});
+
+
+loop nlj 0 2
+
+# Less or equal
+query IT
+SELECT id, value <= value FROM nested_values ORDER BY id;
+----
+1	true
+2	true
+3	true
+
+query I
+SELECT lhs.id * 10 + rhs.id
+FROM nested_values lhs
+JOIN nested_values rhs ON lhs.value <= rhs.value
+ORDER BY ALL;
+----
+11
+12
+13
+22
+23
+33
+
+# Less
+query IT
+SELECT id, value < value FROM nested_values ORDER BY id;
+----
+1	false
+2	false
+3	false
+
+query I
+SELECT lhs.id * 10 + rhs.id
+FROM nested_values lhs
+JOIN nested_values rhs ON lhs.value < rhs.value
+ORDER BY ALL;
+----
+12
+13
+23
+
+# Greater or equal
+query IT
+SELECT id, value >= value FROM nested_values ORDER BY id;
+----
+1	true
+2	true
+3	true
+
+query I
+SELECT lhs.id * 10 + rhs.id
+FROM nested_values lhs
+JOIN nested_values rhs ON lhs.value >= rhs.value
+ORDER BY ALL;
+----
+11
+21
+22
+31
+32
+33
+
+# Greater 
+query IT
+SELECT id, value > value FROM nested_values ORDER BY id;
+----
+1	false
+2	false
+3	false
+
+query I
+SELECT lhs.id * 10 + rhs.id
+FROM nested_values lhs
+JOIN nested_values rhs ON lhs.value > rhs.value
+ORDER BY ALL;
+----
+21
+31
+32
+
+# Not equals
+query IT
+SELECT id, value <> value FROM nested_values ORDER BY id;
+----
+1	false
+2	false
+3	false
+
+query I
+SELECT lhs.id * 10 + rhs.id
+FROM nested_values lhs
+JOIN nested_values rhs ON lhs.value <> rhs.value
+ORDER BY ALL;
+----
+12
+13
+21
+23
+31
+32
+
+# Equals
+query IT
+SELECT id, value = value FROM nested_values ORDER BY id;
+----
+1	true
+2	true
+3	true
+
+query I
+SELECT lhs.id * 10 + rhs.id
+FROM nested_values lhs
+JOIN nested_values rhs ON lhs.value = rhs.value
+ORDER BY ALL;
+----
+11
+22
+33
+
+statement ok 
+set merge_join_threshold=0;
+
+endloop

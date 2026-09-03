@@ -15,8 +15,9 @@ CopyFileNameIdentifier <- Identifier
 CopyFileNameIdentifierColId <- IdentifierColId
 IdentifierColId <- Identifier '.' ColId
 CopyOptions <- 'WITH'? CopyOptionList
-CopyOptionList <- GenericCopyOptionList / SpecializedOptionList
-SpecializedOptionList <- SpecializedOption*
+CopyOptionList <- CopyGenericOptionList / SpecializedOptionList
+SpecializedOptionList <- SpecializedOption SpecializedOptionTail*
+SpecializedOptionTail <- ','? SpecializedOption
 SpecializedOption <- SingleOption / NullAsOption / DelimiterAsOption / EscapeAsOption /
 	EncodingOption / QuoteAsOption / ForceQuoteOption / PartitionByOption / ForceNullOption
 
@@ -34,11 +35,19 @@ EncodingOption <- 'ENCODING' StringLiteral
 ForceQuoteOption <- ForceQuote? 'QUOTE' StarSymbolColumnList
 StarSymbolColumnList <- StarSymbol / ColumnList
 ForceQuote <- 'FORCE'
-PartitionByOption <- 'PARTITION' 'BY' StarSymbolColumnList
+PartitionByOption <- ('PARTITION' / 'PARTITIONED') 'BY' PartitionByColumnList
+PartitionByColumnList <- StarPartitionByColumnList / ParenthesizedPartitionByColumnList / SinglePartitionByColumnList
+StarPartitionByColumnList <- StarSymbol
+ParenthesizedPartitionByColumnList <- Parens(ColumnList)
+SinglePartitionByColumnList <- ColId
 ForceNullOption <- 'FORCE' ForceNotNull? 'NULL' ColumnList
 ForceNotNull <- 'NOT'
 StarSymbol <- '*'
 
+CopyGenericOptionList <- Parens(List(CopyGenericOption))
+CopyGenericOption <- OrderByCopyOption / PartitionedByCopyOption / GenericCopyOption
+OrderByCopyOption <- 'ORDER' 'BY' GenericCopyOptionValue?
+PartitionedByCopyOption <- ('PARTITION' / 'PARTITIONED') 'BY' GenericCopyOptionValue?
 GenericCopyOptionList <- Parens(List(GenericCopyOption))
 GenericCopyOption <- CopyOptionName GenericCopyOptionValue?
 GenericCopyOptionValue <- GenericCopyOptionOrderList / GenericCopyOptionExpression

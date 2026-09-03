@@ -30,6 +30,19 @@ ORDER BY k;
 1	1	10
 2	NULL	NULL
 
+# State-export aggregates retain their bound state type and empty result.
+query II
+WITH outer_t(k) AS (VALUES (1), (2)),
+     inner_t(k, v) AS (VALUES (1, 10))
+SELECT k,
+       finalize((SELECT count(*) EXPORT_STATE
+                 FROM inner_t WHERE inner_t.k=outer_t.k))
+FROM outer_t
+ORDER BY k;
+----
+1	1
+2	0
+
 # Rewrite multiple aggregate references inside a single scalar-subquery expression.
 query II
 WITH outer_t(k) AS (VALUES (1), (2)),

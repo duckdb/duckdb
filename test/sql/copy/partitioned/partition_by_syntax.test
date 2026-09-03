@@ -1,0 +1,50 @@
+# name: test/sql/copy/partitioned/partition_by_syntax.test
+# description: Test spaced COPY partition and ordering option syntax
+# group: [partitioned]
+
+statement ok
+COPY (SELECT 1 AS a, 2 AS payload) TO '{TEST_DIR}/single_partition' PARTITION BY a, HEADER;
+
+statement ok
+COPY (SELECT 1 AS a, 2 AS b, 3 AS c) TO '{TEST_DIR}/multiple_partitions' PARTITION BY (a, b), HEADER;
+
+statement error
+COPY (SELECT 1 AS a, 2 AS b, 3 AS c) TO '{TEST_DIR}/unparenthesized_partitions' PARTITION BY a, b, HEADER;
+----
+Parser Error: syntax error at or near "b"
+
+statement ok
+COPY (SELECT 1 AS a, 2 AS b) TO '{TEST_DIR}/partitioned_by' PARTITIONED BY a, HEADER;
+
+statement ok
+COPY (SELECT 1 AS a, 'hello' AS payload) TO '{TEST_DIR}/parenthesized_partition_by' (FORMAT CSV, PARTITION BY a, HEADER, OVERWRITE);
+
+query I
+SELECT payload FROM read_csv('{TEST_DIR}/parenthesized_partition_by/a=1/*.csv', HEADER = true)
+----
+hello
+
+statement error
+COPY (SELECT 1 AS a, 2 AS b) TO '{TEST_DIR}/partitioned_by_order_modifier' (FORMAT CSV, PARTITIONED BY (a DESC));
+----
+Parser Error: ORDER BY modifiers are only supported in the ORDER BY option
+
+statement ok
+COPY (SELECT * FROM VALUES (1, 1), (1, 3), (1, 2) t(a, b)) TO '{TEST_DIR}/spaced_options' (FORMAT CSV, PARTITIONED BY (a), ORDER BY (b DESC), HEADER);
+
+query I
+SELECT b FROM read_csv('{TEST_DIR}/spaced_options/a=1/*.csv', HEADER = true)
+----
+3
+2
+1
+
+# PARTITIONED_BY remains supported as an alias for backwards compatibility.
+statement ok
+COPY (SELECT * FROM VALUES (1, 1), (1, 2) t(a, payload)) TO '{TEST_DIR}/partitioned_by_compatibility' (FORMAT CSV, PARTITIONED_BY (a), ORDER_BY (payload DESC), HEADER);
+
+query I
+SELECT payload FROM read_csv('{TEST_DIR}/partitioned_by_compatibility/a=1/*.csv', HEADER = true)
+----
+2
+1

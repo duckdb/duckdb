@@ -416,6 +416,11 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	options.timestamp_is_adjusted_to_utc = parquet_bind.timestamp_is_adjusted_to_utc;
 	options.not_null_columns = parquet_bind.not_null_columns;
 
+	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
+	if (!fs.FileExists(file_path) && !fs.IsPipe(file_path)) {
+		flags |= FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+	}
+	options.open_flags = flags;
 	global_state->writer = make_uniq<ParquetWriter>(context, fs, std::move(options), parquet_bind.kv_metadata);
 	return std::move(global_state);
 }
@@ -598,6 +603,36 @@ ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption
 	}
 	if (StringUtil::Equals(value, "WHOLE_GROUP")) {
 		return ParquetPrefetchStrategyOption::WHOLE_GROUP;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
+const char *
+EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringColumnReader::Utf8ValidationOption value) {
+	switch (value) {
+	case StringColumnReader::Utf8ValidationOption::STRICT_UTF8:
+		return "STRICT";
+	case StringColumnReader::Utf8ValidationOption::REPLACE_UTF8:
+		return "REPLACE";
+	case StringColumnReader::Utf8ValidationOption::IGNORE_UTF8:
+		return "IGNORE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+StringColumnReader::Utf8ValidationOption
+EnumUtil::FromString<StringColumnReader::Utf8ValidationOption>(const char *value) {
+	if (StringUtil::Equals(value, "STRICT")) {
+		return StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
+	}
+	if (StringUtil::Equals(value, "REPLACE")) {
+		return StringColumnReader::Utf8ValidationOption::REPLACE_UTF8;
+	}
+	if (StringUtil::Equals(value, "IGNORE")) {
+		return StringColumnReader::Utf8ValidationOption::IGNORE_UTF8;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -969,7 +1004,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 static void LoadInternal(ExtensionLoader &loader) {
 	auto &db_instance = loader.GetDatabaseInstance();
 	auto &fs = db_instance.GetFileSystem();
-	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
+	fs.RegisterCompressionFilesystem(make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = ParquetScanFunction::GetFunctionSet();
 	scan_fun.SetName("read_parquet");
@@ -1021,7 +1056,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.execution_mode = ParquetWriteExecutionMode;
 	function.initialize_operator = ParquetWriteInitializeOperator;
 	function.copy_from_bind = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindCopy;
-	function.copy_from_function = scan_fun.functions[0];
+	function.copy_from_function = *scan_fun.functions[0];
 
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;

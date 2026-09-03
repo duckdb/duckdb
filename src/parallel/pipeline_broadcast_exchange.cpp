@@ -601,6 +601,9 @@ PipelineBroadcastExchangeLocalState::PipelineBroadcastExchangeLocalState(ClientC
 		auto &pipeline = pipeline_ref.get();
 		pipeline.PrepareExternalInput();
 		direct_executors.push_back(make_uniq<PipelineExecutor>(context, pipeline));
+		auto input_chunk = make_uniq<DataChunk>();
+		input_chunk->InitializeEmpty(exchange.Types());
+		direct_input_chunks.push_back(std::move(input_chunk));
 	}
 }
 
@@ -613,8 +616,9 @@ PipelineBroadcastExchangeLocalState::~PipelineBroadcastExchangeLocalState() = de
 
 PipelineBroadcastExchange::PipelineBroadcastExchange(ClientContext &context, vector<LogicalType> types_p,
                                                      PipelineBroadcastExchangeCompletionMode completion_mode_p,
-                                                     OrderPreservationType source_order_p, bool use_batch_index_p)
-    : context(context), types(std::move(types_p)), completion_mode(completion_mode_p),
+                                                     OrderPreservationType source_order_p, bool use_batch_index_p,
+                                                     PipelineBroadcastExchangeBufferMode buffer_mode_p)
+    : context(context), types(std::move(types_p)), completion_mode(completion_mode_p), buffer_mode(buffer_mode_p),
       order_mode(use_batch_index_p                                   ? PipelineBroadcastExchangeOrderMode::BATCH_INDEX
                  : source_order_p == OrderPreservationType::NO_ORDER ? PipelineBroadcastExchangeOrderMode::UNORDERED
                                                                      : PipelineBroadcastExchangeOrderMode::SEQUENTIAL),
@@ -661,7 +665,7 @@ void PipelineBroadcastExchange::SelectMaterializedConsumer(idx_t consumer_idx) {
 	DeactivateConsumerLocked(consumer, buffer->NextPosition());
 }
 
-bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
+bool PipelineBroadcastExchange::CanRegisterDirectConsumer(Pipeline &pipeline) const {
 	auto source_partition_info =
 	    SupportsBatchIndex() ? OperatorPartitionInfo::BatchIndex() : OperatorPartitionInfo::NoPartitionInfo();
 	if (!pipeline.CanUseExternalInput(source_partition_info)) {
@@ -672,10 +676,15 @@ bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, id
 	if (required_partition_info.RequiresBatchIndex() && producer_pipelines.size() != 1) {
 		return false;
 	}
+	return true;
+}
+
+void PipelineBroadcastExchange::SelectDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	D_ASSERT(consumer_idx < consumers.size());
 	auto &consumer = consumers[consumer_idx];
 	if (consumer.mode == PipelineBroadcastExchangeConsumerMode::DIRECT) {
-		return true;
+		return;
 	}
 	D_ASSERT(consumer.mode == PipelineBroadcastExchangeConsumerMode::UNRESOLVED);
 	consumer.mode = PipelineBroadcastExchangeConsumerMode::DIRECT;
@@ -686,7 +695,20 @@ bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, id
 			producer_pipeline.get().SetExternalStreamingResultProducer();
 		}
 	}
+}
+
+bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
+	if (!CanRegisterDirectConsumer(pipeline)) {
+		return false;
+	}
+	pipeline.SetExternalInput(GetProducerPipelines());
+	SelectDirectConsumer(pipeline, consumer_idx);
 	return true;
+}
+
+vector<reference<Pipeline>> PipelineBroadcastExchange::GetProducerPipelines() const {
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	return producer_pipelines;
 }
 
 void PipelineBroadcastExchange::SelectBufferedConsumer(idx_t consumer_idx,
@@ -877,7 +899,8 @@ SinkCombineResultType PipelineBroadcastExchange::FinishLocal(PipelineBroadcastEx
 
 SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const SourcePartitionInfo &partition_info,
                                                          const InterruptState &interrupt_state) {
-	if (direct_push_state != PipelineBroadcastExchangeDirectPushState::RESUMING) {
+	auto resuming = direct_push_state == PipelineBroadcastExchangeDirectPushState::RESUMING;
+	if (!resuming) {
 		direct_idx = 0;
 	}
 	auto source_partition_data = GetSourcePartitionData(partition_info);
@@ -886,13 +909,20 @@ SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const
 		auto &executor = *direct_executors[direct_idx];
 		executor.SetInterruptState(interrupt_state);
 		if (executor.IsFinishedProcessing()) {
+			resuming = false;
 			continue;
 		}
-		auto result = executor.PushExternal(chunk, source_partition_data, source_min_batch_index);
+		auto &input_chunk = *direct_input_chunks[direct_idx];
+		if (!resuming) {
+			// Operators may slice their input chunk. Keep each direct consumer's wrapper independent.
+			input_chunk.Reference(chunk);
+		}
+		auto result = executor.PushExternal(input_chunk, source_partition_data, source_min_batch_index);
 		if (result == PipelineExecuteResult::INTERRUPTED) {
 			direct_push_state = PipelineBroadcastExchangeDirectPushState::RESUMING;
 			return SinkResultType::BLOCKED;
 		}
+		resuming = false;
 	}
 
 	direct_push_state = PipelineBroadcastExchangeDirectPushState::FINISHED;
@@ -1809,6 +1839,10 @@ bool PipelineBroadcastExchange::ShouldStopProducerLocked() const {
 }
 
 bool PipelineBroadcastExchange::ShouldThrottleProducerLocked() const {
+	if (buffer_mode == PipelineBroadcastExchangeBufferMode::BUFFER_ALL) {
+		// the rows are buffered until the consumer runs - the producer is never blocked
+		return false;
+	}
 	if (buffer->HasSharedSpool()) {
 		return false;
 	}
@@ -1816,8 +1850,12 @@ bool PipelineBroadcastExchange::ShouldThrottleProducerLocked() const {
 }
 
 bool PipelineBroadcastExchange::ShouldCreateSharedSpoolLocked() const {
-	return !buffer->HasSharedSpool() && (!direct_pipelines.empty() || active_consumers > 1) &&
-	       buffer->BufferedCount() >= PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS;
+	if (buffer->HasSharedSpool() || buffer->BufferedCount() < PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS) {
+		return false;
+	}
+	// the spool holds the rows outside of the in-memory buffer, spilling to disk if required
+	return buffer_mode == PipelineBroadcastExchangeBufferMode::BUFFER_ALL || !direct_pipelines.empty() ||
+	       active_consumers > 1;
 }
 
 void PipelineBroadcastExchange::CreateSharedSpoolLocked(vector<ExchangeLogEntry> &log_entries) {

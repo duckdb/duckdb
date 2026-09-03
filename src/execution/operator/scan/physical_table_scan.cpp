@@ -192,7 +192,7 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 				// the function parked
 				return SourceResultType::BLOCKED;
 			}
-			{
+			if (input.interrupt_state.CanCallback()) {
 				annotated_lock_guard<annotated_mutex> guard(g_state.lock);
 				if (g_state.CanBlock()) {
 					data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);

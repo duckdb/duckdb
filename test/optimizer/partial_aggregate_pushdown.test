@@ -513,6 +513,66 @@ GROUP BY g
 ----
 physical_plan	<REGEX>:.*combine_aggr.*
 
+# LIST-backed aggregate states must honor the other side's row count when double-eager aggregation combines them.
+# Keep the collapse ratio well above the cost threshold so this plan is stable across vector sizes. The two keys have
+# different multiplicities, making incorrect state repetition observable in median, LIST count, and LIST sum.
+statement ok
+CREATE TABLE de_list_multiplicity AS
+SELECT CASE WHEN i < 30 THEN 1 ELSE 2 END::INTEGER AS k, 1::INTEGER AS g
+FROM range(50) _(i)
+
+statement ok
+CREATE TABLE de_list_values AS
+SELECT CASE WHEN i < 20 THEN 1 ELSE 2 END::INTEGER AS k,
+       CASE WHEN i < 20 THEN 1 ELSE 42 END::INTEGER AS v
+FROM range(40) _(i)
+
+statement ok
+ANALYZE
+
+query II
+EXPLAIN
+SELECT m.g, median(v.v)
+FROM de_list_multiplicity m
+INNER JOIN de_list_values v USING (k)
+GROUP BY m.g
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+query IRRRII
+SELECT
+    m.g,
+    median(v.v),
+    quantile_cont(v.v, 0.5),
+    mad(v.v),
+    list_count(list(v.v)),
+    list_sum(list(v.v))
+FROM de_list_multiplicity m
+INNER JOIN de_list_values v USING (k)
+GROUP BY m.g
+----
+1	1.0	1.0	0.0	1000	17400
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query IRRRII
+SELECT
+    m.g,
+    median(v.v),
+    quantile_cont(v.v, 0.5),
+    mad(v.v),
+    list_count(list(v.v)),
+    list_sum(list(v.v))
+FROM de_list_multiplicity m
+INNER JOIN de_list_values v USING (k)
+GROUP BY m.g
+----
+1	1.0	1.0	0.0	1000	17400
+
+statement ok
+RESET disabled_optimizers
+
 # Modest per-key collapse does not amortize two aggregate-state tables, their join, and the final combine.
 statement ok
 CREATE TABLE de_modest_dim AS SELECT i AS k, (i % 1000) AS g FROM range(5000) _(i)

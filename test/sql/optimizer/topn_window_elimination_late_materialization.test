@@ -151,3 +151,101 @@ WITH cte AS (SELECT a, b, c::TIMESTAMPTZ AS c FROM casted)
 SELECT * FROM cte QUALIFY row_number() OVER (PARTITION BY a ORDER BY c DESC) = 1
 ----
 x	false	2024-01-01 00:00:00+00
+
+# Issue #24609: a TRY_CAST payload must keep its NULL semantics. The rowid late-materialization
+# path reconstructs the payload with a strict default cast, turning TRY_CAST failures of winning
+# rows into Conversion Errors.
+
+statement ok
+CREATE TABLE try_cast_t (key VARCHAR, ts INTEGER, val VARCHAR, note VARCHAR);
+
+statement ok
+INSERT INTO try_cast_t VALUES ('a', 1, '100', 'n1'), ('a', 2, 'oops', 'n2'), ('b', 1, '7', 'n3'), ('b', 2, '8', 'n4');
+
+# The window is still eliminated ...
+query II
+EXPLAIN SELECT key, v, note FROM (
+  SELECT key, ts, TRY_CAST(val AS INTEGER) AS v, note FROM try_cast_t)
+QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# ... but late materialization must not be used, because a TRY_CAST cannot be
+# reconstructed as a strict cast.
+query II
+EXPLAIN SELECT key, v, note FROM (
+  SELECT key, ts, TRY_CAST(val AS INTEGER) AS v, note FROM try_cast_t)
+QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*
+
+# Un-castable winning rows must yield NULL, not a Conversion Error
+query III
+SELECT key, v, note FROM (
+  SELECT key, ts, TRY_CAST(val AS INTEGER) AS v, note FROM try_cast_t)
+QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
+ORDER BY key
+----
+a	NULL	n2
+b	8	n4
+
+# Issue #24609: a nested cast payload must not be reconstructed as a plain raw-column
+# projection, which would silently drop the intermediate conversion.
+
+statement ok
+CREATE TABLE nested_cast_t (key VARCHAR, ts INTEGER, x DOUBLE, note VARCHAR);
+
+statement ok
+INSERT INTO nested_cast_t VALUES ('a', 1, 1.1, 'n1'), ('a', 2, 3.7, 'n2'), ('b', 1, 2.2, 'n3'), ('b', 2, 8.9, 'n4');
+
+# The window is still eliminated ...
+query II
+EXPLAIN SELECT key, r, note FROM (
+  SELECT key, ts, CAST(CAST(x AS INTEGER) AS DOUBLE) AS r, note FROM nested_cast_t)
+QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# ... but late materialization must not be used, because the cast chain cannot be
+# reconstructed from a single default cast.
+query II
+EXPLAIN SELECT key, r, note FROM (
+  SELECT key, ts, CAST(CAST(x AS INTEGER) AS DOUBLE) AS r, note FROM nested_cast_t)
+QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*
+
+# The intermediate integer truncation must be preserved
+query III
+SELECT key, r, note FROM (
+  SELECT key, ts, CAST(CAST(x AS INTEGER) AS DOUBLE) AS r, note FROM nested_cast_t)
+QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
+ORDER BY key
+----
+a	4	n2
+b	9	n4
+
+# Differential check of both shapes against the same queries with the optimizer disabled
+statement ok
+SET disabled_optimizers = 'top_n_window_elimination'
+
+query III
+SELECT key, v, note FROM (
+  SELECT key, ts, TRY_CAST(val AS INTEGER) AS v, note FROM try_cast_t)
+QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
+ORDER BY key
+----
+a	NULL	n2
+b	8	n4
+
+query III
+SELECT key, r, note FROM (
+  SELECT key, ts, CAST(CAST(x AS INTEGER) AS DOUBLE) AS r, note FROM nested_cast_t)
+QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
+ORDER BY key
+----
+a	4	n2
+b	9	n4
+
+statement ok
+SET disabled_optimizers = ''

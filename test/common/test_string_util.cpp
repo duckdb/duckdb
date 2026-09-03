@@ -114,6 +114,25 @@ TEST_CASE("Test common prefix size", "[string_util]") {
 	REQUIRE(StringUtil::GetCommonPrefixSize("🦆ab", "🦆ac") == 5);
 }
 
+TEST_CASE("Test next prefix", "[string_util]") {
+	string prefix = "abc";
+	REQUIRE(StringUtil::FindNextPrefix(prefix));
+	REQUIRE(prefix == "abd");
+
+	prefix = "a";
+	prefix.push_back(static_cast<char>(0xFF));
+	prefix.push_back(static_cast<char>(0xFF));
+	REQUIRE(StringUtil::FindNextPrefix(prefix));
+	REQUIRE(prefix == "b");
+
+	prefix.assign(2, static_cast<char>(0xFF));
+	REQUIRE_FALSE(StringUtil::FindNextPrefix(prefix));
+	REQUIRE(prefix == string(2, static_cast<char>(0xFF)));
+
+	prefix.clear();
+	REQUIRE_FALSE(StringUtil::FindNextPrefix(prefix));
+}
+
 TEST_CASE("Test join vector items", "[string_util]") {
 	SECTION("Three string items") {
 		duckdb::vector<std::string> str_items = {"abc", "def", "ghi"};
@@ -153,6 +172,21 @@ TEST_CASE("Test join vector items", "[string_util]") {
 		    StringUtil::Join(int_items, int_items.size(), ", ", [](const int &item) { return to_string(item); });
 		REQUIRE(result == "");
 	}
+}
+
+TEST_CASE("Test replace strings", "[string_util]") {
+	REQUIRE(StringUtil::Replace("abcabc", "ab", "x") == "xcxc");
+	REQUIRE(StringUtil::Replace("aaaa", "aa", "b") == "bb");
+	REQUIRE(StringUtil::Replace("xx", "x", "yx") == "yxyx");
+	REQUIRE(StringUtil::Replace("aaa{SNAPSHOT_ID}bbb{SNAPSHOT_ID}", "{SNAPSHOT_ID}", "1") == "aaa1bbb1");
+	REQUIRE(StringUtil::Replace("", "x", "y") == "");
+
+// Replace throws an InternalException if the search string is empty.
+// In CI, when DUCKDB_CRASH_ON_ASSERT is set this fails the test even when
+// surrounded by REQUIRE_THROWS
+#ifndef DUCKDB_CRASH_ON_ASSERT
+	REQUIRE_THROWS(StringUtil::Replace("abc", "", "x"));
+#endif
 }
 
 TEST_CASE("Test SplitWithParentheses", "[string_util]") {
@@ -320,23 +354,23 @@ TEST_CASE("Test split quoted strings", "[string_util]") {
 }
 
 TEST_CASE("Test RTrim preserves trailing UTF-8", "[string_util]") {
-	string value = u8"abcé";
+	string value = "abcé";
 	StringUtil::RTrim(value);
-	REQUIRE(value == u8"abcé");
+	REQUIRE(value == "abcé");
 
-	value = u8"abcé   ";
+	value = "abcé   ";
 	StringUtil::RTrim(value);
-	REQUIRE(value == u8"abcé");
+	REQUIRE(value == "abcé");
 }
 
 TEST_CASE("Test custom RTrim preserves UTF-8 paths", "[string_util]") {
-	string path = u8"/tmp/café";
+	string path = "/tmp/café";
 	StringUtil::RTrim(path, "/");
-	REQUIRE(path == u8"/tmp/café");
+	REQUIRE(path == "/tmp/café");
 
-	path = u8"/tmp/café///";
+	path = "/tmp/café///";
 	StringUtil::RTrim(path, "/");
-	REQUIRE(path == u8"/tmp/café");
+	REQUIRE(path == "/tmp/café");
 }
 
 TEST_CASE("Test path utilities", "[string_util]") {
@@ -526,4 +560,17 @@ TEST_CASE("Test JSON Parsing", "[string_util]") {
 		"bool_f": false
 	}
 	)JSON_LITERAL");
+}
+
+TEST_CASE("Test CIHash is independent of char signedness", "[string_util]") {
+	// bytes >= 0x80 must be zero-extended before hashing so the result is identical
+	// on platforms where char is signed (x86) and where it is unsigned (ARM)
+	const char high_byte[] = {(char)0xC3, 0};
+	REQUIRE(StringUtil::CIHash(high_byte, 1) == 2242087697ULL);
+
+	const char cafe_utf8[] = "Caf\xC3\xA9";
+	REQUIRE(StringUtil::CIHash(cafe_utf8, strlen(cafe_utf8)) == 2425794034ULL);
+
+	// ASCII is unaffected
+	REQUIRE(StringUtil::CIHash("hello") == StringUtil::CIHash("HeLLo"));
 }

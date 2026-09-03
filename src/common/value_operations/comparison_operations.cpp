@@ -77,15 +77,14 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	const auto &left_type = left.type();
 	const auto &right_type = right.type();
 	if (left_type != right_type) {
-		Value left_copy = left;
-		Value right_copy = right;
-
 		auto comparison_type = LogicalType::DefaultForceMaxLogicalType(left_type, right_type);
-		if (!left_copy.DefaultTryCastAs(comparison_type) || !right_copy.DefaultTryCastAs(comparison_type)) {
+		auto left_copy = left.DefaultTryCastAs(comparison_type);
+		auto right_copy = right.DefaultTryCastAs(comparison_type);
+		if (!left_copy || !right_copy) {
 			return false;
 		}
-		D_ASSERT(left_copy.type() == right_copy.type());
-		return TemplatedBooleanOperation<OP>(left_copy, right_copy);
+		D_ASSERT(left_copy->type() == right_copy->type());
+		return TemplatedBooleanOperation<OP>(*left_copy, *right_copy);
 	}
 	switch (left_type.InternalType()) {
 	case PhysicalType::BOOL:

@@ -1,6 +1,4 @@
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/row_operations/row_matcher.hpp"
 
@@ -386,6 +384,8 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 		if (type.id() == LogicalTypeId::UNION) {
 			result.function = GenericNestedMatch<NO_MATCH_SEL, Equals>;
 		} else {
+			//	STRUCT equality always uses DISTINCT semantics for the internal columns
+			child_predicate = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 			result.function = StructMatchEquality<NO_MATCH_SEL, Equals>;
 		}
 		break;

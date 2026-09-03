@@ -15,7 +15,7 @@ string TableRef::BaseToString(string result) const {
 string TableRef::AliasToString(const vector<Identifier> &column_name_alias) const {
 	string result;
 	if (!alias.empty()) {
-		result += StringUtil::Format(" AS %s", alias);
+		result += StringUtil::Format(" AS %s", SQLIdentifier(alias));
 	}
 	if (!column_name_alias.empty()) {
 		D_ASSERT(!alias.empty());

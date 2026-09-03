@@ -10,10 +10,10 @@ namespace duckdb {
 WindowFunctionCatalogEntry::WindowFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
                                                        CreateWindowFunctionInfo &info)
     : FunctionEntry(Type, catalog, schema, info), functions(info.functions) {
-	for (auto &function : functions.functions) {
+	functions.ApplyToFunctions([&](WindowFunction &function) {
 		function.SetCatalogName(catalog.GetAttached().GetName());
 		function.SetSchemaName(schema.name);
-	}
+	});
 }
 
 } // namespace duckdb

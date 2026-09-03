@@ -1,0 +1,22 @@
+# name: test/sql/copy/file_size_bytes_csv_compression.test
+# description: test compressed CSV FILE_SIZE_BYTES accounting
+# group: [copy]
+
+statement ok
+SET threads=1;
+
+# Compressed output rotates based on physical bytes rather than the uncompressed CSV size
+statement ok
+COPY (SELECT repeat('x', 200) AS payload FROM range(100_000))
+TO '{TEST_DIR}/file_size_bytes_csv_gzip'
+(FORMAT CSV, COMPRESSION GZIP, FILE_SIZE_BYTES '1kb');
+
+query I
+SELECT count(*) FROM read_csv_auto('{TEST_DIR}/file_size_bytes_csv_gzip/*.csv.gz');
+----
+100000
+
+query I
+SELECT count(*) < 10 FROM glob('{TEST_DIR}/file_size_bytes_csv_gzip/*.csv.gz');
+----
+true

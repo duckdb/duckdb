@@ -175,10 +175,11 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		Vector::DebugTransformToDictionary(vector);
 	}
 	if (debug_vector_verification == DebugVectorVerification::VARIANT_VECTOR) {
+		// LAMBDA is not a value - its slot only holds a placeholder, so there is nothing to round-trip
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
 			    if (type.IsJSONType() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::UNION ||
 			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::TYPE ||
-			        type.id() == LogicalTypeId::TUPLE) {
+			        type.id() == LogicalTypeId::TUPLE || type.id() == LogicalTypeId::LAMBDA) {
 				    return true;
 			    }
 			    return false;
@@ -241,6 +242,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 		return InitializeState(expr.Cast<BoundConstantExpression>(), state);
 	case ExpressionClass::BOUND_FUNCTION:
 		return InitializeState(expr.Cast<BoundFunctionExpression>(), state);
+	case ExpressionClass::BOUND_LAMBDA:
+		return InitializeState(expr.Cast<BoundLambdaExpression>(), state);
 	case ExpressionClass::BOUND_OPERATOR:
 		return InitializeState(expr.Cast<BoundOperatorExpression>(), state);
 	case ExpressionClass::BOUND_PARAMETER:
@@ -288,6 +291,9 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
 		Execute(expr.Cast<BoundFunctionExpression>(), state, sel, count, result);
+		break;
+	case ExpressionClass::BOUND_LAMBDA:
+		Execute(expr.Cast<BoundLambdaExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
 		Execute(expr.Cast<BoundOperatorExpression>(), state, sel, count, result);

@@ -381,6 +381,28 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	return AddChunk(groups, payload, aggregate_filter);
 }
 
+idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter,
+                                          const before_update_callback_t &before_update) {
+	unsafe_vector<idx_t> aggregate_filter;
+	auto &aggregates = layout_ptr->GetAggregates();
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		if (aggregates[i].aggr_type == filter) {
+			aggregate_filter.push_back(i);
+		}
+	}
+	if (groups.size() == 0) {
+		return 0;
+	}
+
+	sink_count += groups.size();
+	groups.Hash(state.hashes);
+	const auto new_group_count = FindOrCreateGroups(groups, state.hashes, state.addresses, state.new_groups);
+	before_update(state.addresses, state.new_groups, new_group_count);
+	VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()));
+	UpdateAggregates(payload, aggregate_filter, groups.size());
+	return new_group_count;
+}
+
 idx_t GroupedAggregateHashTable::AddChunkAndGetNewGroups(DataChunk &groups, DataChunk &payload, AggregateType filter,
                                                          Vector &new_group_addresses, SelectionVector &new_groups_out) {
 	unsafe_vector<idx_t> aggregate_filter;

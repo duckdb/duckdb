@@ -21,6 +21,11 @@ bool WindowCustomAggregator::CanAggregate(const BoundWindowExpression &wexpr, Wi
 		return false;
 	}
 
+	//	DISTINCT is not currently supported
+	if (wexpr.Distinct()) {
+		return false;
+	}
+
 	return (mode < WindowAggregationMode::COMBINE);
 }
 

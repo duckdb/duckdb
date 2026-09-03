@@ -23,8 +23,6 @@ public:
 		statef.Destroy();
 	}
 
-	//! Partition starts
-	vector<idx_t> partition_offsets;
 	//! Reused result state container for the window functions
 	WindowAggregateStates statef;
 	//! Aggregate results
@@ -36,40 +34,13 @@ WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientC
                                                                          idx_t group_count,
                                                                          const ValidityMask &partition_mask)
     : WindowAggregatorGlobalState(client, aggregator, STANDARD_VECTOR_SIZE), statef(client, aggr) {
-	// Locate the partition boundaries
-	if (partition_mask.CannotHaveNull()) {
-		partition_offsets.emplace_back(0);
-	} else {
-		idx_t entry_idx;
-		idx_t shift;
-		for (idx_t start = 0; start < group_count;) {
-			partition_mask.GetEntryIndex(start, entry_idx, shift);
-
-			//	If start is aligned with the start of a block,
-			//	and the block is blank, then skip forward one block.
-			const auto block = partition_mask.GetValidityEntry(entry_idx);
-			if (partition_mask.NoneValid(block) && !shift) {
-				start += ValidityMask::BITS_PER_VALUE;
-				continue;
-			}
-
-			// Loop over the block
-			for (; shift < ValidityMask::BITS_PER_VALUE && start < group_count; ++shift, ++start) {
-				if (partition_mask.RowIsValid(block, shift)) {
-					partition_offsets.emplace_back(start);
-				}
-			}
-		}
-	}
+	BuildPartitionOffsets(group_count, partition_mask);
 
 	//	Initialise the vector for caching the results
-	results = make_uniq<Vector>(aggregator.result_type, partition_offsets.size());
+	results = make_uniq<Vector>(aggregator.result_type, partition_offsets.size() - 1);
 
 	//	Initialise the final states
-	statef.Initialize(partition_offsets.size());
-
-	// Add final guard
-	partition_offsets.emplace_back(group_count);
+	statef.Initialize(partition_offsets.size() - 1);
 }
 
 //===--------------------------------------------------------------------===//

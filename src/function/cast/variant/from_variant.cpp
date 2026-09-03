@@ -182,13 +182,14 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 		}
 		if (!converted) {
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, sel[i]);
-			if (!value.DefaultTryCastAs(target_type, true)) {
+			auto cast_value = value.DefaultTryCastAs(target_type, nullptr, true);
+			if (!cast_value) {
 				conversion_data.error = StringUtil::Format("Can't convert VARIANT(%s) value '%s'",
 				                                           EnumUtil::ToString(type_id), value.ToString());
-				value = Value(target_type);
+				cast_value = Value(target_type);
 				all_valid = false;
 			}
-			result.SetValue(i + offset, value);
+			result.SetValue(i + offset, *cast_value);
 		}
 	}
 	return all_valid;
@@ -575,11 +576,12 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			uint32_t value_index = sel[i];
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, value_index);
 			try {
-				if (!value.DefaultTryCastAs(target_type, true)) {
-					value = Value(target_type);
+				auto cast_value = value.DefaultTryCastAs(target_type, nullptr, true);
+				if (!cast_value) {
+					cast_value = Value(target_type);
 					all_valid = false;
 				}
-				result.SetValue(i + offset, value);
+				result.SetValue(i + offset, *cast_value);
 			} catch (const BinderException &) {
 				// Bind-time exceptions (e.g., incompatible struct layouts) should be treated as conversion failures
 				// Set the value to NULL and mark as failed

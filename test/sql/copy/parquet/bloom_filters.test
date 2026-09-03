@@ -32,6 +32,12 @@ SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloo
 ----
 true
 
+# Idempotent greatest calls are reduced to the column, enabling Bloom filter row group pruning
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE greatest(r, r) = 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
 # IS NOT DISTINCT FROM a non-NULL constant can use the same Bloom filter probe as equality
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r = 201;
@@ -41,6 +47,12 @@ analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
 # Equal inclusive bounds are reduced to equality, enabling Bloom filter pruning
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r BETWEEN 201 AND 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Idempotent least calls are reduced to the column, enabling Bloom filter row group pruning
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE least(r, r) = 201;
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
 

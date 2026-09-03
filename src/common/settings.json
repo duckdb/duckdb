@@ -53,6 +53,16 @@
         ]
     },
     {
+        "name": "allow_extension_repositories",
+        "description": "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones). While the database is running the setting can only move from 'undecided' to 'allowed' or 'forbidden', or from 'allowed' to 'forbidden'",
+        "type": "VARCHAR",
+        "scope": "global",
+        "default_value": "undecided",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "allow_extensions_metadata_mismatch",
         "description": "Allow to load extensions with not compatible metadata",
         "type": "BOOLEAN",
@@ -219,14 +229,14 @@
     },
     {
         "name": "catalog_error_max_schemas",
-        "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
+        "description": "The maximum number of schemas the system will scan for \"did you mean...\" style errors in the catalog",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "100"
     },
     {
         "name": "checkpoint_on_detach",
-        "description": "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
+        "description": "Override checkpoint behavior when detaching a database. ENABLED requests a checkpoint, but the checkpoint does not occur if another connection still references the database. DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
         "type": "ENUM<CheckpointOnDetach>",
         "default_scope": "local",
         "default_value": "DEFAULT"
@@ -246,15 +256,16 @@
         ]
     },
     {
-        "name": "configure_profiling",
-        "description": "Accepts a JSON enabling custom metrics",
+        "name": "current_dialect",
+        "description": "The SQL dialect used by the parser",
         "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true,
-        "aliases": [
-            "custom_profiling_settings",
-            "configure_metrics"
-        ]
+        "scope": "global",
+        "default_value": "duckdb",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ],
+        "custom_implementation": true
     },
     {
         "name": "current_transaction_invalidation_policy",
@@ -356,6 +367,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_heap_based_parser",
+        "description": "DEBUG SETTING: use the experimental heap-based PEG parser",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "debug_order_verification",
         "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
         "type": "ENUM<DebugOrderVerification>",
@@ -373,13 +391,6 @@
         "description": "DEBUG SETTING: skip checkpointing on commit",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
-    },
-    {
-        "name": "debug_transformer_trampoline_style",
-        "description": "Use the experimental trampoline-style parser transformer",
-        "type": "BOOLEAN",
-        "default_scope": "local",
         "default_value": "false"
     },
     {
@@ -473,13 +484,6 @@
         ]
     },
     {
-        "name": "default_io_mode",
-        "description": "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)",
-        "type": "ENUM<FileIOMode>",
-        "default_value": "BUFFERED_IO",
-        "default_scope": "global"
-    },
-    {
         "name": "default_null_order",
         "description": "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
         "type": "ENUM<DefaultOrderByNullType>",
@@ -521,14 +525,10 @@
         "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "true"
-    },
-    {
-        "name": "deprecated_using_key_syntax",
-        "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
-        "type": "ENUM<DeprecatedUsingKeySyntax>",
-        "default_scope": "local",
-        "default_value": "DEFAULT"
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "dialect_compatibility_mode",
@@ -610,7 +610,7 @@
     },
     {
         "name": "enable_external_access",
-        "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
+        "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "true",
@@ -664,7 +664,10 @@
         "description": "[PLACEHOLDER] Legacy setting - does nothing",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "enable_optimistic_write",
@@ -732,7 +735,10 @@
         "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "true"
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "explain_output",
@@ -754,6 +760,16 @@
         "type": "VARCHAR",
         "scope": "global",
         "default_value": ""
+    },
+    {
+        "name": "extension_repository_directory",
+        "description": "Set the directory in which trusted extension repositories are stored. This is the trust anchor for user-provided repositories, so while signature checking is enabled (allow_unsigned_extensions=false) it can only be set at startup, not while the database is running",
+        "type": "VARCHAR",
+        "scope": "global",
+        "default_value": "",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "external_file_cache_local_block_size",
@@ -780,6 +796,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "external_file_cache_spill",
+        "description": "Whether evicted external file cache blocks of remote files spill to the temporary directory instead of being dropped, so that they are re-read from there rather than re-fetched from the source",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
     },
     {
         "name": "external_threads",
@@ -810,7 +833,10 @@
         "description": "Force re-use of row group metadata on a column-level when checkpointing on older storage versions 6 and 7. This breaks storage backward-compatibility with older DuckDB versions.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "force_compression",
@@ -912,14 +938,14 @@
     },
     {
         "name": "index_scan_max_count",
-        "description": "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
+        "description": "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": 2048
     },
     {
         "name": "index_scan_percentage",
-        "description": "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
+        "description": "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
         "type": "DOUBLE",
         "default_scope": "global",
         "default_value": "0.001",
@@ -963,14 +989,20 @@
         "description": "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "legacy_metrics_format",
         "description": "When enabled, profiling output uses the legacy flat format instead of the current grouped format",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "lock_configuration",
@@ -1022,7 +1054,7 @@
     },
     {
         "name": "max_expression_depth",
-        "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep \"\n\t    \"expressions might lead to stack overflow errors.",
+        "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep expressions might lead to stack overflow errors.",
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "1000"
@@ -1066,6 +1098,16 @@
         "default_value": "5"
     },
     {
+        "name": "null_on_division_by_zero",
+        "description": "Return NULL instead of throwing an error when dividing by zero.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "old_implicit_casting",
         "description": "Allow implicit casting to/from VARCHAR",
         "type": "BOOLEAN",
@@ -1095,13 +1137,6 @@
         "on_callbacks": [
             "set"
         ]
-    },
-    {
-        "name": "parallelize_sequential_sources",
-        "description": "Whether to automatically parallelize sequential sources",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "true"
     },
     {
         "name": "partitioned_write_flush_threshold",
@@ -1164,14 +1199,17 @@
     },
     {
         "name": "preserve_identifier_case",
-        "description": "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers",
-        "type": "BOOLEAN",
+        "description": "How to fold non-quoted identifiers: 'preserve_case' keeps the case as written, 'lowercase' lowercases them, 'uppercase' uppercases them",
+        "type": "ENUM<IdentifierCaseMode>",
         "default_scope": "local",
-        "default_value": "true"
+        "default_value": "preserve_case",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "preserve_insertion_order",
-        "description": "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results \"\n\t    \"that do not contain ORDER BY clauses.",
+        "description": "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results that do not contain ORDER BY clauses.",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "true"
@@ -1236,11 +1274,14 @@
         "description": "Configures whether regex match operators use partial or full string matching",
         "type": "ENUM<RegexMatchOperatorSemantics>",
         "default_scope": "local",
-        "default_value": "partial"
+        "default_value": "partial",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "scalar_subquery_error_on_multiple_rows",
-        "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
+        "description": "Throw an error when a scalar subquery returns more than one row. When disabled, an arbitrary row is returned instead.",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
@@ -1275,6 +1316,13 @@
         "type": "VARCHAR",
         "scope": "global",
         "custom_implementation": true
+    },
+    {
+        "name": "show_behavior",
+        "description": "How SHOW resolves a bare identifier: 'auto' (describe a table if one exists, else a setting; deprecated), 'table' (always a table), or 'setting' (always a setting)",
+        "type": "ENUM<ShowBehaviorType>",
+        "default_scope": "global",
+        "default_value": "AUTO"
     },
     {
         "name": "standard_vector_size",
@@ -1313,7 +1361,10 @@
         "description": "Configures the use of deprecated implicit conversion of unbound identifiers to strings in table function arguments.",
         "type": "ENUM<TableFunctionIdentifierConversion>",
         "default_scope": "local",
-        "default_value": "DEFAULT"
+        "default_value": "DEFAULT",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "temp_directory",

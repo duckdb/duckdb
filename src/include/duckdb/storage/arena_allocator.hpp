@@ -62,6 +62,8 @@ public:
 
 	//! Resets the current head and destroys all previous arena chunks
 	DUCKDB_API void Reset();
+	//! Like Reset, but also destroys the current chunk, so no memory stays allocated
+	DUCKDB_API void FreeAll();
 	DUCKDB_API void Destroy();
 	DUCKDB_API void Move(ArenaAllocator &allocator);
 
