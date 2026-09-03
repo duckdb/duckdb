@@ -12,7 +12,8 @@
 
 namespace duckdb {
 
-// The Case Simplification rule rewrites cases with a constant check (i.e. [CASE WHEN 1=1 THEN x ELSE y END] => x)
+// The Case Simplification rule rewrites cases with a constant check (i.e. [CASE WHEN 1=1 THEN x ELSE y END] => x),
+// and boolean identity cases at filter roots (i.e. WHERE CASE WHEN p THEN true ELSE false END => WHERE p).
 class CaseSimplificationRule : public Rule {
 public:
 	explicit CaseSimplificationRule(ExpressionRewriter &rewriter);

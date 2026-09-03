@@ -2,8 +2,19 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
+
+static bool IsBooleanConstant(const Expression &expr, bool expected_value) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return false;
+	}
+
+	const auto &constant = expr.Cast<BoundConstantExpression>().GetValue();
+	return !constant.IsNull() && constant.type() == LogicalType::BOOLEAN &&
+	       BooleanValue::Get(constant) == expected_value;
+}
 
 CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a CaseExpression that has a ConstantExpression as a check
@@ -42,7 +53,23 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 		// no case checks left: return the ELSE expression
 		return std::move(root.ElseMutable());
 	}
-	return nullptr;
+
+	// This rewrite is only valid at a filter root, where FALSE and NULL both reject the row.
+	if (!is_root || op.type != LogicalOperatorType::LOGICAL_FILTER) {
+		return nullptr;
+	}
+
+	if (root.CaseChecks().size() != 1) {
+		return nullptr;
+	}
+
+	auto &case_check = root.CaseChecksMutable()[0];
+	if (!IsBooleanConstant(*case_check.then_expr, true) || !IsBooleanConstant(root.Else(), false)) {
+		return nullptr;
+	}
+
+	// CASE WHEN predicate THEN true ELSE false END -> predicate
+	return std::move(case_check.when_expr);
 }
 
 } // namespace duckdb
