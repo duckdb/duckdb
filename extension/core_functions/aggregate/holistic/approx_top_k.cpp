@@ -9,6 +9,8 @@ namespace duckdb {
 
 namespace {
 
+static constexpr int64_t MAX_APPROX_K = 1000000;
+
 struct ApproxTopKString {
 	ApproxTopKString() : str(UINT32_C(0)), hash(0) {
 	}
@@ -69,6 +71,9 @@ struct InternalApproxTopKState {
 		D_ASSERT(values.empty());
 		D_ASSERT(lookup_map.empty());
 		k = kval;
+		if (k > MAX_APPROX_K) {
+			throw InvalidInputException("Requested 'k' (%d) is bigger than accepted max (%d)", kval, MAX_APPROX_K);
+		}
 		capacity = kval * MONITORED_VALUES_RATIO;
 		stored_values = make_unsafe_uniq_array_uninitialized<ApproxTopKValue>(capacity);
 		values.reserve(capacity);
@@ -165,7 +170,6 @@ struct InternalApproxTopKState {
 				D_ASSERT(val.count <= values[k - 1].get().count);
 			}
 		}
-		// verify lookup map does not contain extra entries
 		D_ASSERT(lookup_map.size() == values.size());
 #endif
 	}
