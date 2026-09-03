@@ -1,8 +1,10 @@
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/stack_checker.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/cost_model.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
@@ -59,6 +61,15 @@ JoinOrderOptimizer JoinOrderOptimizer::CreateChildOptimizer() {
 
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan,
                                                          optional_ptr<RelationStats> stats) {
+	// Correlated subqueries are represented as delim joins and can cause the
+	// join-order optimizer to recurse deeply without using StackChecker. On Linux,
+	// check the native stack before touching the plan or reading optimizer settings.
+#if defined(__linux__) && !defined(DUCKDB_NO_THREADS) && !defined(DUCKDB_WASM_VERSION)
+	if (NativeStackChecker::IsStackNearLimit()) {
+		throw InvalidInputException("Insufficient stack space to process the query");
+	}
+#endif
+
 	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(query_graph_manager.context);
 	if (depth > max_expression_depth) {
 		// Very deep plans will eventually consume quite some stack space

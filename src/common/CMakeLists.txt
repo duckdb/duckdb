@@ -73,6 +73,7 @@ add_library_unity(
   radix_partitioning.cpp
   re2_regex.cpp
   random_engine.cpp
+  stack_checker.cpp
   stacktrace.cpp
   string_util.cpp
   enum_util.cpp
@@ -87,6 +88,11 @@ add_library_unity(
   clustered_aggregate.cpp
   virtual_file_system.cpp
   windows_util.cpp)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_compile_definitions(duckdb_common PRIVATE _GNU_SOURCE)
+endif()
+
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common>
     PARENT_SCOPE)
