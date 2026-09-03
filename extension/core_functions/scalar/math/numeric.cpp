@@ -196,7 +196,8 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 			break;
 		}
 		}
-		expr.SetExecutionFunction(ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.GetReturnType()));
+		expr.FunctionMutable().SetFunctionCallback(
+		    ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.GetReturnType()));
 	}
 	auto stats = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(stats, new_min);

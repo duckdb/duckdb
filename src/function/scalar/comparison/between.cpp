@@ -177,7 +177,6 @@ unique_ptr<Expression> BoundBetweenExpression::Create(unique_ptr<Expression> inp
 
 	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(BetweenFun::GetFunction()),
 	                                                 std::move(children), std::move(function_data), false);
-	result->SetStructuralSQLExportRecipe(BoundFunctionSQLExportType::BETWEEN);
 	return std::move(result);
 }
 
@@ -238,11 +237,6 @@ bool BoundBetweenExpression::LowerInclusive(const BoundFunctionExpression &betwe
 bool BoundBetweenExpression::UpperInclusive(const BoundFunctionExpression &between_expr) {
 	auto &data = between_expr.BindInfo()->Cast<BetweenFunctionData>();
 	return data.upper_inclusive;
-}
-
-bool BoundBetweenExpression::HasCanonicalFunction(const BoundFunctionExpression &between_expr) {
-	auto recipe = between_expr.GetSQLExportRecipe();
-	return recipe && recipe->type == BoundFunctionSQLExportType::BETWEEN;
 }
 
 bool BoundBetweenExpression::HasValidBindData(const BoundFunctionExpression &between_expr) {

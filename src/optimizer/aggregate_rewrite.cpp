@@ -74,11 +74,11 @@ static unique_ptr<BoundAggregateExpression> BindMinAggregate(ClientContext &cont
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
 	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "min"));
+	const auto &function = entry.functions.GetFunctionByArguments(context, {child->GetReturnType()});
 	FunctionBinder function_binder(context);
-	vector<pair<Identifier, unique_ptr<Expression>>> children;
-	children.emplace_back(Identifier(), std::move(child));
-	ErrorData error;
-	return function_binder.BindAggregateFunction(entry, std::move(children), error);
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(child));
+	return function_binder.BindAggregateFunction(function, std::move(children));
 }
 
 static unique_ptr<Expression> CreateAggregateSortKey(ClientContext &context, const BoundOrderModifier &order_bys) {

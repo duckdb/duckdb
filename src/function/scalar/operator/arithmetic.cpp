@@ -271,7 +271,8 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
 			bind_data.check_overflow = false;
 		}
-		expr.SetExecutionFunction(GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		expr.FunctionMutable().SetFunctionCallback(
+		    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);
@@ -1076,14 +1077,13 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 			    DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>);
 			multiply.AddFunction(function);
 		} else if (TypeIsIntegral(type.InternalType())) {
-			ScalarFunction function(
+			multiply.AddFunction(ScalarFunction(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
-			    nullptr, PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>);
-			multiply.AddFunction(function);
+			    nullptr, PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
 		} else if (type.IsFloating()) {
-			ScalarFunction function({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType()),
-			                        nullptr, PropagateFloatingStats<MultiplyPropagateStatistics, MultiplyOperator>);
-			multiply.AddFunction(function);
+			multiply.AddFunction(ScalarFunction({type, type}, type,
+			                                    GetScalarBinaryFunction<MultiplyOperator>(type.InternalType()), nullptr,
+			                                    PropagateFloatingStats<MultiplyPropagateStatistics, MultiplyOperator>));
 		} else {
 			multiply.AddFunction(
 			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
@@ -1102,6 +1102,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	multiply.SetFallible();
+
 	return multiply;
 }
 

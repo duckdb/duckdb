@@ -100,14 +100,12 @@ public:
 		// Replace AVG(x) with SUM(x)
 		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
 		    optimizer.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "sum"));
-		vector<pair<Identifier, unique_ptr<Expression>>> args;
-		args.emplace_back(Identifier(), std::move(avg_child));
-		auto count_arg = args.back().second->Copy();
-		ErrorData error;
-		expr = function_binder.BindAggregateFunction(sum_entry, std::move(args), error);
-		if (!expr) {
-			error.Throw();
-		}
+		const auto &sum_fun =
+		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
+		vector<unique_ptr<Expression>> args;
+		args.push_back(std::move(avg_child));
+		auto count_arg = args.back()->Copy();
+		expr = function_binder.BindAggregateFunction(sum_fun, std::move(args));
 
 		return count_arg;
 	}

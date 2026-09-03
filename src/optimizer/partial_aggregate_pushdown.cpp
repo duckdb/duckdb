@@ -559,13 +559,18 @@ static unique_ptr<BoundAggregateExpression> DEBindAggregate(ClientContext &conte
                                                             vector<unique_ptr<Expression>> children) {
 	auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
 	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(name)));
-	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
+	vector<LogicalType> types;
 	for (auto &child : children) {
-		arguments.emplace_back(Identifier(), std::move(child));
+		types.push_back(child->GetReturnType());
 	}
 	ErrorData error;
 	FunctionBinder function_binder(context);
-	return function_binder.BindAggregateFunction(entry, std::move(arguments), error);
+	auto best = function_binder.BindFunction(entry.name, entry.functions, types, error);
+	if (!best.IsValid()) {
+		return nullptr;
+	}
+	auto &func = entry.functions.GetFunctionByOffset(best.GetIndex());
+	return function_binder.BindAggregateFunction(func, std::move(children));
 }
 
 static unique_ptr<BoundAggregateExpression> DEBindCombineAggr(ClientContext &context,

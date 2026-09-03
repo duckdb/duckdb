@@ -7,53 +7,17 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/expression/bound_between_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
-
-static const LogicalType &GetFunctionReturnType(const BoundScalarFunction &function) {
-	return function.GetReturnType();
-}
-
-static bool ScalarSQLExportChildrenMatchArguments(const vector<unique_ptr<Expression>> &children,
-                                                  const vector<LogicalType> &arguments) {
-	if (children.size() != arguments.size()) {
-		return false;
-	}
-	for (idx_t child_index = 0; child_index < children.size(); child_index++) {
-		if (!children[child_index] || children[child_index]->GetReturnType() != arguments[child_index]) {
-			return false;
-		}
-	}
-	return true;
-}
 
 BoundFunctionExpression::BoundFunctionExpression(BoundScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
                                                  unique_ptr<FunctionData> bind_info_p, bool is_operator)
     : Expression(GetFunctionExpressionType(bound_function, arguments, bind_info_p.get()),
-                 ExpressionClass::BOUND_FUNCTION, GetFunctionReturnType(bound_function)),
+                 ExpressionClass::BOUND_FUNCTION, bound_function.GetReturnType()),
       function(std::move(bound_function)), children(std::move(arguments)), bind_info(std::move(bind_info_p)),
       is_operator(is_operator) {
 	D_ASSERT(!function.GetName().empty());
-}
-
-void BoundFunctionExpression::SetCatalogSQLExportRecipe(QualifiedName name, vector<LogicalType> arguments,
-                                                        LogicalType return_type, scalar_function_sql_export_t callback,
-                                                        bool requires_callback) {
-	sql_export_recipe = BoundScalarFunctionSQLExportRecipe {BoundFunctionSQLExportType::CATALOG,
-	                                                        std::move(name),
-	                                                        std::move(arguments),
-	                                                        std::move(return_type),
-	                                                        callback,
-	                                                        requires_callback};
-}
-
-void BoundFunctionExpression::SetStructuralSQLExportRecipe(BoundFunctionSQLExportType type) {
-	D_ASSERT(type != BoundFunctionSQLExportType::CATALOG);
-	sql_export_recipe = BoundScalarFunctionSQLExportRecipe {type, QualifiedName(), {}, LogicalType(), nullptr, false};
 }
 
 ExpressionType BoundFunctionExpression::GetFunctionExpressionType(const BoundScalarFunction &bound_function,
@@ -177,7 +141,6 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 	auto copy =
 	    make_uniq<BoundFunctionExpression>(function, std::move(new_children), std::move(new_bind_info), is_operator);
 	copy->CopyProperties(*this);
-	copy->sql_export_recipe = sql_export_recipe;
 	return std::move(copy);
 }
 
@@ -200,15 +163,6 @@ void BoundFunctionExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(201, "children", children);
 	FunctionSerializer::Serialize(serializer, function, bind_info.get());
 	serializer.WriteProperty(202, "is_operator", is_operator);
-	serializer.WriteProperty(203, "has_sql_export_recipe", sql_export_recipe.has_value());
-	if (sql_export_recipe) {
-		serializer.WriteProperty<uint8_t>(204, "sql_export_type", static_cast<uint8_t>(sql_export_recipe->type));
-		if (sql_export_recipe->type == BoundFunctionSQLExportType::CATALOG) {
-			serializer.WriteProperty(205, "sql_export_name", sql_export_recipe->name);
-			serializer.WriteProperty(206, "sql_export_arguments", sql_export_recipe->arguments);
-			serializer.WriteProperty(207, "sql_export_return_type", sql_export_recipe->return_type);
-		}
-	}
 }
 
 namespace {
@@ -247,26 +201,6 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
 
 	auto is_operator = deserializer.ReadProperty<bool>(202, "is_operator");
-	auto has_sql_export_recipe = deserializer.ReadPropertyWithDefault<bool>(203, "has_sql_export_recipe");
-	optional<BoundScalarFunctionSQLExportRecipe> sql_export_recipe;
-	if (has_sql_export_recipe) {
-		auto export_type =
-		    static_cast<BoundFunctionSQLExportType>(deserializer.ReadProperty<uint8_t>(204, "sql_export_type"));
-		if (export_type == BoundFunctionSQLExportType::CATALOG) {
-			auto name = deserializer.ReadProperty<QualifiedName>(205, "sql_export_name");
-			auto arguments = deserializer.ReadProperty<vector<LogicalType>>(206, "sql_export_arguments");
-			auto recipe_return_type = deserializer.ReadProperty<LogicalType>(207, "sql_export_return_type");
-			sql_export_recipe = BoundScalarFunctionSQLExportRecipe {
-			    export_type, std::move(name), std::move(arguments), std::move(recipe_return_type), nullptr, false};
-		} else if (export_type == BoundFunctionSQLExportType::CAST ||
-		           export_type == BoundFunctionSQLExportType::COMPARISON ||
-		           export_type == BoundFunctionSQLExportType::BETWEEN) {
-			sql_export_recipe =
-			    BoundScalarFunctionSQLExportRecipe {export_type, QualifiedName(), {}, LogicalType(), nullptr, false};
-		} else {
-			throw SerializationException("Bound scalar function has an invalid SQL export recipe type");
-		}
-	}
 
 	RestoreErasedLambdaChild(entry.first, entry.second.get(), children);
 
@@ -284,48 +218,6 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	auto result =
 	    make_uniq<BoundFunctionExpression>(std::move(entry.first), std::move(children), std::move(entry.second));
 	result->is_operator = is_operator;
-	if (sql_export_recipe) {
-		switch (sql_export_recipe->type) {
-		case BoundFunctionSQLExportType::CATALOG: {
-			auto &definition = result->function.GetDefinition();
-			if (!definition ||
-			    sql_export_recipe->name !=
-			        QualifiedName(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName()) ||
-			    !ScalarSQLExportChildrenMatchArguments(result->children, sql_export_recipe->arguments) ||
-			    sql_export_recipe->return_type != result->GetReturnType()) {
-				throw SerializationException(
-				    "Bound scalar function SQL export recipe does not match the live catalog definition");
-			}
-			result->SetCatalogSQLExportRecipe(
-			    std::move(sql_export_recipe->name), std::move(sql_export_recipe->arguments),
-			    std::move(sql_export_recipe->return_type), definition->GetSQLExportCallback(),
-			    definition->HasBindCallback() || definition->GetCaptureArgumentAliases());
-			break;
-		}
-		case BoundFunctionSQLExportType::CAST:
-			if (result->GetExpressionType() != ExpressionType::OPERATOR_CAST ||
-			    !BoundCastExpression::HasValidBindData(*result)) {
-				throw SerializationException("Bound cast SQL export recipe does not match the deserialized expression");
-			}
-			result->SetStructuralSQLExportRecipe(BoundFunctionSQLExportType::CAST);
-			break;
-		case BoundFunctionSQLExportType::COMPARISON:
-			if (!BoundComparisonExpression::IsComparison(*result) || result->BindInfo()) {
-				throw SerializationException(
-				    "Bound comparison SQL export recipe does not match the deserialized expression");
-			}
-			result->SetStructuralSQLExportRecipe(BoundFunctionSQLExportType::COMPARISON);
-			break;
-		case BoundFunctionSQLExportType::BETWEEN:
-			if (result->GetExpressionType() != ExpressionType::COMPARE_BETWEEN ||
-			    !BoundBetweenExpression::HasValidBindData(*result)) {
-				throw SerializationException(
-				    "Bound BETWEEN SQL export recipe does not match the deserialized expression");
-			}
-			result->SetStructuralSQLExportRecipe(BoundFunctionSQLExportType::BETWEEN);
-			break;
-		}
-	}
 	if (result->return_type != return_type) {
 		// return type mismatch - push a cast
 		auto &context = deserializer.Get<ClientContext &>();
