@@ -3,6 +3,7 @@
 #include "duckdb_v2.h"
 #include "test_cpp_api.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <string>
 #include <vector>
@@ -243,7 +244,238 @@ void ThrowingExec(TableFunction::ExecInput &) {
 	throw InvalidInputException("exec refused");
 }
 
+// ---------------------------------------------------------------------------
+// cpp_proj(): three BIGINT columns x, y, z, three rows, cell = declared column * 100 + row. The exec callback
+// fills whatever the scan asks for through the column mapping.
+// ---------------------------------------------------------------------------
+
+struct ProjGlobal {
+	bool done = false;
+};
+
+std::vector<idx_t> proj_columns;
+
+void ProjBind(TableFunction::BindInput &input) {
+	auto bigint = input.GetContext().ParseType("BIGINT");
+	input.AddResultColumn("x", bigint);
+	input.AddResultColumn("y", bigint);
+	input.AddResultColumn("z", bigint);
+}
+
+void ProjInitGlobal(TableFunction::InitGlobalInput &input) {
+	proj_columns.clear();
+	for (idx_t i = 0; i < input.GetColumnCount(); i++) {
+		proj_columns.push_back(input.GetColumnIndex(i));
+	}
+	input.SetGlobalState<ProjGlobal>();
+}
+
+void ProjExec(TableFunction::ExecInput &input) {
+	auto &global = input.GetGlobalState<ProjGlobal>();
+	const idx_t rows = global.done ? 0 : 3;
+	global.done = true;
+
+	auto chunk = input.GetOutputChunk();
+	for (idx_t i = 0; i < input.GetColumnCount(); i++) {
+		auto column = input.GetColumnIndex(i);
+		auto vec = chunk.GetVector(i);
+		auto *out = vec.GetDataMutable<int64_t>();
+		for (idx_t row = 0; row < rows; row++) {
+			out[row] = static_cast<int64_t>(column * 100 + row);
+		}
+		if (i == 0) {
+			vec.SetSize(rows);
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// cpp_claim(n): column i BIGINT with 0..n-1. Claims every "i < constant" predicate, then deliberately produces two
+// rows past the bound, which only reach the result if the engine really stopped applying the predicate.
+// ---------------------------------------------------------------------------
+
+struct ClaimBind {
+	int64_t count = 0;
+	int64_t bound = -1;
+};
+
+// Every predicate the pushdown callback saw, rendered.
+std::vector<std::string> claim_seen;
+
+std::string RenderExpression(const TableFunction::FilterPushdownInput &input, const Expression &expr) {
+	switch (expr.GetType()) {
+	case ExpressionType::VALUE_CONSTANT:
+		return expr.GetConstantValue().ToText();
+	case ExpressionType::BOUND_COLUMN_REF:
+		return "col" + std::to_string(input.GetColumnIndex(expr.GetColumnIndex()));
+	default:
+		break;
+	}
+	std::string children;
+	for (idx_t i = 0; i < expr.GetChildCount(); i++) {
+		if (i > 0) {
+			children += ", ";
+		}
+		children += RenderExpression(input, expr.GetChild(i));
+	}
+	switch (expr.GetType()) {
+	case ExpressionType::OPERATOR_CAST:
+		return std::string(expr.GetCastMode() == CastMode::TRY ? "try_cast(" : "cast(") + children +
+		       ")::" + expr.GetReturnType().ToText();
+	case ExpressionType::CONJUNCTION_AND:
+		return "and(" + children + ")";
+	case ExpressionType::CONJUNCTION_OR:
+		return "or(" + children + ")";
+	case ExpressionType::OPERATOR_IS_NULL:
+		return "is_null(" + children + ")";
+	case ExpressionType::INVALID:
+		return "invalid(" + children + ")";
+	case ExpressionType::BOUND_FUNCTION:
+		return expr.GetFunctionQualifiedName().Render() + "(" + children + ")";
+	default:
+		return expr.GetFunctionName() + "(" + children + ")";
+	}
+}
+
+void ClaimBind_(TableFunction::BindInput &input) {
+	const auto count = input.GetArgument(0).Get<int64_t>();
+	input.AddResultColumn("i", input.GetContext().ParseType("BIGINT"));
+	input.SetBindData<ClaimBind>(ClaimBind {count, -1});
+}
+
+void ClaimPushdown(TableFunction::FilterPushdownInput &input) {
+	auto &bind = input.GetBindData<ClaimBind>();
+	for (idx_t i = 0; i < input.GetFilterCount(); i++) {
+		auto filter = input.GetFilter(i);
+		claim_seen.push_back(RenderExpression(input, filter));
+		if (filter.GetType() != ExpressionType::COMPARE_LESSTHAN) {
+			continue;
+		}
+		auto left = filter.GetChild(0);
+		auto right = filter.GetChild(1);
+		if (left.GetType() != ExpressionType::BOUND_COLUMN_REF || right.GetType() != ExpressionType::VALUE_CONSTANT ||
+		    input.GetColumnIndex(left.GetColumnIndex()) != 0) {
+			continue;
+		}
+		bind.bound = right.GetConstantValue().Get<int64_t>();
+		input.Accept(i);
+	}
+}
+
+void ClaimExec(TableFunction::ExecInput &input) {
+	const auto &bind = input.GetBindData<ClaimBind>();
+	auto &global = input.GetGlobalState<RangeGlobal>();
+
+	auto chunk = input.GetOutputChunk();
+	auto vec = chunk.GetVector(0);
+	auto *out = vec.GetDataMutable<int64_t>();
+
+	auto limit = bind.bound < 0 ? bind.count : bind.bound + 2;
+	if (limit > bind.count) {
+		limit = bind.count;
+	}
+	auto produced = limit - global.position;
+	if (produced > BATCH_ROWS) {
+		produced = BATCH_ROWS;
+	}
+	if (produced < 0) {
+		produced = 0;
+	}
+	for (int64_t i = 0; i < produced; i++) {
+		out[i] = global.position + i;
+	}
+	global.position += produced;
+	vec.SetSize(static_cast<idx_t>(produced));
+}
+
+// Whether an accessor refused a node it does not apply to, checked inside the callback where the node lives.
+bool misuse_refused = false;
+
+void MisusePushdown(TableFunction::FilterPushdownInput &input) {
+	auto filter = input.GetFilter(0);
+	misuse_refused = false;
+	try {
+		filter.GetConstantValue();
+	} catch (const InvalidInputException &) {
+		misuse_refused = true;
+	}
+}
+
+void ThrowingPushdown(TableFunction::FilterPushdownInput &) {
+	throw InvalidInputException("pushdown refused");
+}
+
+void RegisterClaim(Connection &conn, const std::string &name, TableFunction::FilterPushdownCallback pushdown) {
+	auto function = TableFunction::Create(conn);
+	function.SetName(name);
+	function.GetSignature().AddParameter("n", conn.ParseType("BIGINT"));
+	function.SetBindCallback(ClaimBind_)
+	    .SetInitGlobalCallback(RangeInitGlobal)
+	    .SetExecCallback(ClaimExec)
+	    .SetFilterPushdownCallback(pushdown);
+	function.Register();
+}
+
 } // namespace
+
+TEST_CASE("Stable C++API: table function projection pushdown", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	auto function = TableFunction::Create(conn);
+	function.SetName("cpp_proj")
+	    .SetBindCallback(ProjBind)
+	    .SetInitGlobalCallback(ProjInitGlobal)
+	    .SetExecCallback(ProjExec)
+	    .SetProjectionPushdown(true);
+	function.Register();
+
+	REQUIRE(CollectBigints(conn.Execute("SELECT z FROM cpp_proj()")) == std::vector<int64_t> {200, 201, 202});
+	REQUIRE(proj_columns == std::vector<idx_t> {2});
+	REQUIRE(CollectBigints(conn.Execute("SELECT x + z FROM cpp_proj()")) == std::vector<int64_t> {200, 202, 204});
+	REQUIRE(proj_columns.size() == 2);
+}
+
+TEST_CASE("Stable C++API: table function filter pushdown", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	RegisterClaim(conn, "cpp_claim", ClaimPushdown);
+
+	claim_seen.clear();
+	REQUIRE(CollectBigints(conn.Execute("SELECT count(*) FROM cpp_claim(100) WHERE i < 10")) ==
+	        std::vector<int64_t> {12});
+	REQUIRE(claim_seen == std::vector<std::string> {"<(col0, 10)"});
+
+	// The optimizer may offer the unclaimed predicates more than once, so only membership is pinned here.
+	claim_seen.clear();
+	REQUIRE(CollectBigints(conn.Execute("SELECT count(*) FROM cpp_claim(100) WHERE i < 10 AND i % 2 = 0")) ==
+	        std::vector<int64_t> {6});
+	REQUIRE(std::count(claim_seen.begin(), claim_seen.end(), "<(col0, 10)") == 1);
+	REQUIRE(std::count(claim_seen.begin(), claim_seen.end(), "=(\"system\".main.\"%\"(col0, 2), 0)") >= 1);
+
+	claim_seen.clear();
+	REQUIRE(CollectBigints(conn.Execute(
+	            "SELECT count(*) FROM cpp_claim(100) WHERE (i = 1 OR i IS NULL) AND TRY_CAST(i AS VARCHAR) = '1'")) ==
+	        std::vector<int64_t> {1});
+	std::sort(claim_seen.begin(), claim_seen.end());
+	claim_seen.erase(std::unique(claim_seen.begin(), claim_seen.end()), claim_seen.end());
+	REQUIRE(claim_seen == std::vector<std::string> {"=(try_cast(col0)::VARCHAR, 1)", "or(=(col0, 1), is_null(col0))"});
+}
+
+TEST_CASE("Stable C++API: expression accessors refuse other node types and errors propagate", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	RegisterClaim(conn, "cpp_misuse", MisusePushdown);
+	RegisterClaim(conn, "cpp_throwing", ThrowingPushdown);
+
+	REQUIRE(CollectBigints(conn.Execute("SELECT count(*) FROM cpp_misuse(5) WHERE i < 3")) == std::vector<int64_t> {3});
+	REQUIRE(misuse_refused);
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT count(*) FROM cpp_throwing(5) WHERE i < 3").Drain(), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+}
 
 TEST_CASE("Stable C++API: table function registers and scans", "[cpp_api]") {
 	Environment env;

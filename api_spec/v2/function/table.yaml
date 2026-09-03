@@ -41,6 +41,13 @@ handles:
       A borrowed opaque handle to the arguments supplied to a table function during the "progress" phase. The
       "progress" callback receives this handle and can use it to report how far the scan has advanced.
 
+
+  table_function_filter_pushdown_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function during the "filter pushdown" phase of
+      query optimization. The "filter pushdown" callback receives this handle and can use it to inspect the filter
+      predicates the query applies to the function's rows, and to accept the ones it will apply itself.
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Callbacks
 #-----------------------------------------------------------------------------------------------------------------------
@@ -114,6 +121,21 @@ callbacks:
         indirection: 1
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
+
+  table_function_filter_pushdown_callback:
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions
 #-----------------------------------------------------------------------------------------------------------------------
@@ -357,6 +379,58 @@ functions:
       callback:
         type: table_function_progress_callback
         description: The progress callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  table_function_set_projection_pushdown:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets whether the table function supports projection pushdown. Defaults to false.
+
+      With projection pushdown, the engine asks the function for only the columns a query actually uses: the exec
+      callback's output chunk holds one vector per requested column rather than one per column declared in bind,
+      and the global init, local init and exec callbacks can look up which declared column each vector stands for
+      via e.g. `[[table_function_exec_get_column_index]]`. Without it the output chunk always holds every declared
+      column, and the engine drops the unused ones itself.
+    parameters:
+      function:
+        type: table_function
+        description: The function to configure.
+      enable:
+        type: bool
+        description: Whether the function supports projection pushdown.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_filter_pushdown_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the optional filter pushdown callback of the table function.
+
+      The filter pushdown callback is invoked while the query is optimized, after the bind callback and before any
+      init callback, with the filter predicates the query applies to the function's rows. Each predicate is a
+      bound expression the callback can inspect with the `expression` functions; the callback accepts the
+      predicates it will apply itself via `[[table_function_filter_pushdown_accept]]`, typically after
+      recording what they select in the bind data. The engine then stops applying the accepted predicates and
+      keeps applying the rest above the scan, so accepting a predicate is a promise to filter the rows exactly as
+      it would have. The optimizer may invoke the callback more than once for the same query, each time with the
+      predicates not yet accepted; it is not invoked when there are none.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the filter pushdown callback of.
+      callback:
+        type: table_function_filter_pushdown_callback
+        description: The filter pushdown callback to set.
       err:
         type: error_info
         indirection: 1
@@ -625,6 +699,59 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+
+  table_function_init_global_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the scan produces.
+
+      With projection pushdown (see `[[table_function_set_projection_pushdown]]`) this is the number of columns the
+      query uses, which is the number of vectors in the exec callback's output chunk; without it, it is the number
+      of columns declared in bind. Valid indices for `[[table_function_init_global_get_column_index]]` are `0` up to
+      (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_init_global_info
+        description: The global init info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns the scan produces.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_init_global_get_column_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns which declared column the scan's column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order: the exec callback fills the output chunk's vector at `index` with that column's data. Without
+      projection pushdown the mapping is the identity. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: table_function_init_global_info
+        description: The global init info handle.
+      index:
+        type: idx
+        description: The index of the column in the scan's output.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   #---------------------------------------------------------------------------------------------------------------------
   # Local Init Callback Functions
   #---------------------------------------------------------------------------------------------------------------------
@@ -706,6 +833,59 @@ functions:
         type: opaque
         indirection: 1
         description: Opaque handle bundling the local state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  table_function_init_local_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the scan produces.
+
+      With projection pushdown (see `[[table_function_set_projection_pushdown]]`) this is the number of columns the
+      query uses, which is the number of vectors in the exec callback's output chunk; without it, it is the number
+      of columns declared in bind. Valid indices for `[[table_function_init_local_get_column_index]]` are `0` up to
+      (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_init_local_info
+        description: The local init info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns the scan produces.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_init_local_get_column_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns which declared column the scan's column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order: the exec callback fills the output chunk's vector at `index` with that column's data. Without
+      projection pushdown the mapping is the identity. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: table_function_init_local_info
+        description: The local init info handle.
+      index:
+        type: idx
+        description: The index of the column in the scan's output.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
       err:
         type: error_info
         indirection: 1
@@ -821,6 +1001,59 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+
+  table_function_exec_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the scan produces.
+
+      With projection pushdown (see `[[table_function_set_projection_pushdown]]`) this is the number of columns the
+      query uses, which is the number of vectors in the exec callback's output chunk; without it, it is the number
+      of columns declared in bind. Valid indices for `[[table_function_exec_get_column_index]]` are `0` up to
+      (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_exec_info
+        description: The exec info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns the scan produces.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_exec_get_column_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns which declared column the scan's column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order: the exec callback fills the output chunk's vector at `index` with that column's data. Without
+      projection pushdown the mapping is the identity. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: table_function_exec_info
+        description: The exec info handle.
+      index:
+        type: idx
+        description: The index of the column in the scan's output.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   #---------------------------------------------------------------------------------------------------------------------
   # Progress Callback Functions
   #---------------------------------------------------------------------------------------------------------------------
@@ -900,6 +1133,178 @@ functions:
       progress:
         type: f64
         description: The fraction of the scan that is complete, in [0.0, 1.0].
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Filter Pushdown Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_filter_pushdown_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the user data set via `[[table_function_set_user_data]]`, or null if none was set.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the bind data set via `[[table_function_bind_set_bind_data]]`, or null if none was set.
+
+      This is the same object the init and exec callbacks later receive, so a predicate the callback accepts can be
+      recorded in it for the scan to apply.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_get_filter_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of filter predicates offered to the function.
+
+      The predicates are combined with `AND`: every row the scan produces must satisfy all of them. Valid indices
+      for `[[table_function_filter_pushdown_get_filter]]` and `[[table_function_filter_pushdown_accept]]` are
+      `0` up to (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of predicates.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_get_filter:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the filter predicate at the given index.
+
+      Fails if the index is out of bounds. The predicate is a bound expression evaluating to `BOOLEAN`; inspect it
+      with `[[expression_get_type]]` and the other `expression` functions, and resolve the column references it
+      contains via `[[table_function_filter_pushdown_get_column_index]]`. Borrowed; valid only for the duration of
+      the callback.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      index:
+        type: idx
+        description: The index of the predicate to retrieve.
+      filter:
+        type: expression
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives the borrowed predicate.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_accept:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Accepts the filter predicate at the given index: the function will apply it itself.
+
+      The engine stops applying an accepted predicate, so the scan must produce only rows that satisfy it, or the
+      query returns rows it should not. Predicates left unaccepted are applied by the engine as usual, so a callback
+      that recognizes nothing can simply return. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      index:
+        type: idx
+        description: The index of the predicate to accept.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the predicates can refer to.
+
+      A column reference inside a predicate (`[[expression_column_ref_get_index]]`) indexes the columns the query
+      reads from the function, not the columns declared in bind. Valid indices for
+      `[[table_function_filter_pushdown_get_column_index]]` are `0` up to (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of referable columns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_get_column_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Resolves a column reference found in a predicate to the declared column it refers to.
+
+      Takes the index a `EXPRESSION_TYPE_BOUND_COLUMN_REF` node reports and returns the index of the column among
+      the ones declared with `[[table_function_bind_add_result_column]]`, in declaration order. Fails if the index
+      is out of bounds.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      index:
+        type: idx
+        description: The column index reported by a column reference node.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
       err:
         type: error_info
         indirection: 1

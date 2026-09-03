@@ -893,4 +893,397 @@ TEST_CASE("V2 table: null arguments and destroy null-safety", "[capi_v2][table_f
 	REQUIRE(live == nullptr);
 }
 
+// ---------------------------------------------------------------------------
+// proj_probe(): three BIGINT columns x, y, z, three rows, cell = declared column * 100 + row. The exec callback
+// fills whatever the scan asks for through the column mapping, so it serves with and without projection pushdown.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct ProjGlobal {
+	bool done = false;
+};
+
+void DeleteProjGlobal(void *ptr) {
+	delete static_cast<ProjGlobal *>(ptr);
+}
+
+// The column mapping each init callback observed for the last scan.
+std::vector<idx_t> proj_global_columns;
+std::vector<idx_t> proj_local_columns;
+
+void ProjBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_context_handle context,
+                duckdb_v2_error_info_handle *err) {
+	auto bigint = MakeTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, err);
+	if (!bigint) {
+		return;
+	}
+	for (auto name : {"x", "y", "z"}) {
+		if (duckdb_v2_table_function_bind_add_result_column(info, TableIdent(name), bigint, err) !=
+		    DUCKDB_V2_ERROR_NONE) {
+			break;
+		}
+	}
+	duckdb_v2_logical_type_destroy(&bigint);
+}
+
+void ProjInitGlobalCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
+                      duckdb_v2_error_info_handle *err) {
+	proj_global_columns.clear();
+	idx_t count = 0;
+	if (duckdb_v2_table_function_init_global_get_column_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		idx_t column = 0;
+		if (duckdb_v2_table_function_init_global_get_column_index(info, i, &column, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+		proj_global_columns.push_back(column);
+	}
+	duckdb_v2_opaque state = {new ProjGlobal {}, DeleteProjGlobal, nullptr};
+	duckdb_v2_table_function_init_global_set_global_state(info, &state, err);
+}
+
+void ProjInitLocalCb(duckdb_v2_table_function_init_local_info_handle info, duckdb_v2_context_handle,
+                     duckdb_v2_error_info_handle *err) {
+	proj_local_columns.clear();
+	idx_t count = 0;
+	if (duckdb_v2_table_function_init_local_get_column_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		idx_t column = 0;
+		if (duckdb_v2_table_function_init_local_get_column_index(info, i, &column, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+		proj_local_columns.push_back(column);
+	}
+}
+
+void ProjExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
+                duckdb_v2_error_info_handle *err) {
+	void *global_ptr = nullptr;
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	idx_t count = 0;
+	if (duckdb_v2_table_function_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_column_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &global = *static_cast<ProjGlobal *>(global_ptr);
+	const idx_t rows = global.done ? 0 : 3;
+	global.done = true;
+
+	for (idx_t i = 0; i < count; i++) {
+		idx_t column = 0;
+		duckdb_v2_vector_handle vec = nullptr;
+		void *raw = nullptr;
+		if (duckdb_v2_table_function_exec_get_column_index(info, i, &column, err) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_data_chunk_get_vector(chunk, i, &vec, err) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_vector_get_data_mutable(vec, &raw, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+		for (idx_t row = 0; row < rows; row++) {
+			static_cast<int64_t *>(raw)[row] = static_cast<int64_t>(column * 100 + row);
+		}
+		if (i == 0) {
+			duckdb_v2_vector_set_size(vec, rows, err);
+		}
+	}
+}
+
+void RegisterProj(duckdb_v2_connection_handle conn, const char *name, bool projection_pushdown) {
+	auto function = MakeTable(conn, name);
+	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ProjBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, ProjInitGlobalCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_init_local_callback(function, ProjInitLocalCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ProjExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_projection_pushdown(function, projection_pushdown, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_table_function_destroy(&function);
+}
+
+// Runs a query and collects its BIGINT columns row-major.
+std::vector<int64_t> QueryCells(duckdb_v2_connection_handle conn, const char *sql) {
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(conn, sql, &result) == DUCKDB_V2_ERROR_NONE);
+	std::vector<int64_t> cells;
+	while (auto chunk = StepChunk(result)) {
+		idx_t columns = 0;
+		idx_t rows = 0;
+		duckdb_v2_data_chunk_get_vector_count(chunk, &columns, nullptr);
+		duckdb_v2_data_chunk_get_size(chunk, &rows, nullptr);
+		for (idx_t row = 0; row < rows; row++) {
+			for (idx_t col = 0; col < columns; col++) {
+				duckdb_v2_vector_handle vec = nullptr;
+				duckdb_v2_data_chunk_get_vector(chunk, col, &vec, nullptr);
+				duckdb_v2_vector_view view {};
+				duckdb_v2_vector_get_view(vec, &view, nullptr);
+				cells.push_back(static_cast<const int64_t *>(view.data)[SelAt(view.sel, row)]);
+			}
+		}
+		duckdb_v2_data_chunk_destroy(&chunk);
+	}
+	duckdb_v2_result_destroy(&result);
+	return cells;
+}
+
+// ---------------------------------------------------------------------------
+// claim_probe(n): column i BIGINT with 0..n-1. Its pushdown callback claims every "i < constant" predicate by
+// recording the bound in the bind data; the scan then deliberately produces two rows past the bound, which only
+// reach the result if the engine really stopped applying the claimed predicate.
+// ---------------------------------------------------------------------------
+
+struct ClaimBind {
+	int64_t count = 0;
+	int64_t bound = -1;
+};
+struct ClaimGlobal {
+	int64_t position = 0;
+};
+
+void DeleteClaimBind(void *ptr) {
+	delete static_cast<ClaimBind *>(ptr);
+}
+void DeleteClaimGlobal(void *ptr) {
+	delete static_cast<ClaimGlobal *>(ptr);
+}
+
+// Whether the pushdown callback saw the user data it was registered with.
+bool claim_saw_user_data = false;
+int claim_user_data_marker = 0;
+
+void ClaimBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_context_handle context,
+                 duckdb_v2_error_info_handle *err) {
+	duckdb_v2_value_handle value = nullptr;
+	if (duckdb_v2_table_function_bind_get_arg_value(info, 0, &value, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	int64_t count = 0;
+	auto rc = duckdb_v2_value_get_bigint(value, &count, err);
+	duckdb_v2_value_destroy(&value);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto bigint = MakeTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, err);
+	if (!bigint) {
+		return;
+	}
+	rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("i"), bigint, err);
+	duckdb_v2_logical_type_destroy(&bigint);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_opaque bind_data = {new ClaimBind {count, -1}, DeleteClaimBind, nullptr};
+	duckdb_v2_table_function_bind_set_bind_data(info, &bind_data, err);
+}
+
+void ClaimPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle info, duckdb_v2_context_handle,
+                     duckdb_v2_error_info_handle *err) {
+	void *user_ptr = nullptr;
+	void *bind_ptr = nullptr;
+	idx_t count = 0;
+	if (duckdb_v2_table_function_filter_pushdown_get_user_data(info, &user_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_filter_pushdown_get_bind_data(info, &bind_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_filter_pushdown_get_filter_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	claim_saw_user_data = user_ptr == &claim_user_data_marker;
+	auto &bind = *static_cast<ClaimBind *>(bind_ptr);
+
+	for (idx_t i = 0; i < count; i++) {
+		duckdb_v2_expression_handle filter = nullptr;
+		DUCKDB_V2_EXPRESSION_TYPE type = DUCKDB_V2_EXPRESSION_TYPE_INVALID;
+		if (duckdb_v2_table_function_filter_pushdown_get_filter(info, i, &filter, err) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_expression_get_type(filter, &type, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+		if (type != DUCKDB_V2_EXPRESSION_TYPE_COMPARE_LESSTHAN) {
+			continue;
+		}
+		duckdb_v2_expression_handle left = nullptr;
+		duckdb_v2_expression_handle right = nullptr;
+		DUCKDB_V2_EXPRESSION_TYPE left_type = DUCKDB_V2_EXPRESSION_TYPE_INVALID;
+		DUCKDB_V2_EXPRESSION_TYPE right_type = DUCKDB_V2_EXPRESSION_TYPE_INVALID;
+		if (duckdb_v2_expression_get_child(filter, 0, &left, err) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_expression_get_child(filter, 1, &right, err) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_expression_get_type(left, &left_type, err) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_expression_get_type(right, &right_type, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+		if (left_type != DUCKDB_V2_EXPRESSION_TYPE_BOUND_COLUMN_REF ||
+		    right_type != DUCKDB_V2_EXPRESSION_TYPE_VALUE_CONSTANT) {
+			continue;
+		}
+		idx_t column = 0;
+		idx_t declared = 0;
+		duckdb_v2_value_handle value = nullptr;
+		if (duckdb_v2_expression_column_ref_get_index(left, &column, err) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_table_function_filter_pushdown_get_column_index(info, column, &declared, err) !=
+		        DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_expression_constant_get_value(right, &value, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+		int64_t bound = 0;
+		auto rc = duckdb_v2_value_get_bigint(value, &bound, err);
+		duckdb_v2_value_destroy(&value);
+		if (rc != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+		if (declared != 0) {
+			continue;
+		}
+		bind.bound = bound;
+		if (duckdb_v2_table_function_filter_pushdown_accept(info, i, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+	}
+}
+
+void ClaimInitGlobalCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
+                       duckdb_v2_error_info_handle *err) {
+	duckdb_v2_opaque state = {new ClaimGlobal {0}, DeleteClaimGlobal, nullptr};
+	duckdb_v2_table_function_init_global_set_global_state(info, &state, err);
+}
+
+void ClaimExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
+                 duckdb_v2_error_info_handle *err) {
+	void *bind_ptr = nullptr;
+	void *global_ptr = nullptr;
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	if (duckdb_v2_table_function_exec_get_bind_data(info, &bind_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &bind = *static_cast<ClaimBind *>(bind_ptr);
+	auto &global = *static_cast<ClaimGlobal *>(global_ptr);
+
+	duckdb_v2_vector_handle vec = nullptr;
+	void *raw = nullptr;
+	if (duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_vector_get_data_mutable(vec, &raw, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+
+	// Two rows past a claimed bound: they surface only if the engine dropped the predicate.
+	auto limit = bind.bound < 0 ? bind.count : bind.bound + 2;
+	if (limit > bind.count) {
+		limit = bind.count;
+	}
+	auto remaining = limit - global.position;
+	auto produced =
+	    remaining < static_cast<int64_t>(STANDARD_VECTOR_SIZE) ? remaining : static_cast<int64_t>(STANDARD_VECTOR_SIZE);
+	if (produced < 0) {
+		produced = 0;
+	}
+	auto *out = static_cast<int64_t *>(raw);
+	for (int64_t i = 0; i < produced; i++) {
+		out[i] = global.position + i;
+	}
+	global.position += produced;
+	duckdb_v2_vector_set_size(vec, static_cast<idx_t>(produced), err);
+}
+
+void FailingPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle, duckdb_v2_context_handle,
+                       duckdb_v2_error_info_handle *err) {
+	SetErrorInfo(err, DUCKDB_V2_ERROR_INPUT_INVALID, "pushdown refused");
+}
+
+void RegisterClaim(duckdb_v2_connection_handle conn, const char *name,
+                   duckdb_v2_table_function_filter_pushdown_callback_fn pushdown) {
+	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto function = MakeTable(conn, name);
+	TableSigParam(SigOf(function), "n", bigint);
+	duckdb_v2_opaque user_data = {&claim_user_data_marker, nullptr, nullptr};
+	REQUIRE(duckdb_v2_table_function_set_user_data(function, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ClaimBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, ClaimInitGlobalCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ClaimExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_filter_pushdown_callback(function, pushdown, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_table_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&bigint);
+}
+
+} // namespace
+
+TEST_CASE("V2 table: projection pushdown narrows the output chunk", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	RegisterProj(fx.conn, "proj_probe", true);
+	RegisterProj(fx.conn, "proj_plain", false);
+
+	using Cells = std::vector<int64_t>;
+	using Columns = std::vector<idx_t>;
+
+	// Two of three columns, in query order: the chunk holds exactly those, and the values prove the mapping.
+	REQUIRE(QueryCells(fx.conn, "SELECT z, x FROM proj_probe()") == Cells {200, 0, 201, 1, 202, 2});
+	REQUIRE(proj_global_columns == Columns {2, 0});
+	REQUIRE(proj_local_columns == Columns {2, 0});
+
+	// A query that needs no column at all still scans one.
+	REQUIRE(QueryCells(fx.conn, "SELECT count(*) FROM proj_probe()") == Cells {3});
+	REQUIRE(proj_global_columns.size() == 1);
+
+	// Without projection pushdown the chunk always holds every declared column, in declaration order.
+	REQUIRE(QueryCells(fx.conn, "SELECT z, x FROM proj_plain()") == Cells {200, 0, 201, 1, 202, 2});
+	REQUIRE(proj_global_columns == Columns {0, 1, 2});
+	REQUIRE(proj_local_columns == Columns {0, 1, 2});
+}
+
+TEST_CASE("V2 table: claimed filters are no longer applied by the engine", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	RegisterClaim(fx.conn, "claim_probe", ClaimPushdownCb);
+
+	// Nothing to claim: every row comes through.
+	claim_saw_user_data = false;
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM claim_probe(100) WHERE i % 2 = 0") == 50);
+	REQUIRE(claim_saw_user_data);
+
+	// The claimed bound plus the two rows the scan sneaks past it: the engine no longer filters them out.
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM claim_probe(100) WHERE i < 10") == 12);
+	// The unclaimed half of the conjunction is still applied above the scan.
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM claim_probe(100) WHERE i < 10 AND i % 2 = 0") == 6);
+	// A comparison the callback does not recognize stays with the engine.
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM claim_probe(100) WHERE i > 90") == 9);
+}
+
+TEST_CASE("V2 table: filter pushdown errors fail the query", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	RegisterClaim(fx.conn, "claim_fail", FailingPushdownCb);
+
+	// Without a predicate there is nothing to offer, so the callback never runs.
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM claim_fail(5)") == 5);
+	auto message = QueryError(fx.conn, "SELECT count(*) FROM claim_fail(5) WHERE i < 3");
+	REQUIRE(message.find("pushdown refused") != std::string::npos);
+}
+
+TEST_CASE("V2 table: pushdown null arguments", "[capi_v2][table_function]") {
+	idx_t count = 0;
+	void *data = nullptr;
+	REQUIRE(duckdb_v2_table_function_set_projection_pushdown(nullptr, true, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_set_filter_pushdown_callback(nullptr, ClaimPushdownCb, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_init_global_get_column_count(nullptr, &count, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_init_global_get_column_index(nullptr, 0, &count, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_init_local_get_column_count(nullptr, &count, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_init_local_get_column_index(nullptr, 0, &count, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_exec_get_column_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_exec_get_column_index(nullptr, 0, &count, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_filter_pushdown_get_user_data(nullptr, &data, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_filter_pushdown_get_bind_data(nullptr, &data, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+}
+
 } // namespace test_capi_v2

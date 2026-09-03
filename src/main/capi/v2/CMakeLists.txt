@@ -5,6 +5,7 @@ add_library_unity(
   capi_v2_stubs.cpp
   capi_v2_arena.cpp
   capi_v2_arrow.cpp
+  capi_v2_expression.cpp
   capi_v2_catalog.cpp
   capi_v2_column_data_collection.cpp
   capi_v2_connection.cpp

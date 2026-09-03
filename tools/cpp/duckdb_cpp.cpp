@@ -95,6 +95,10 @@ struct HandleTraits<DataChunk> {
 	using handle = duckdb_v2_data_chunk_handle;
 };
 template <>
+struct HandleTraits<Expression> {
+	using handle = duckdb_v2_expression_handle;
+};
+template <>
 struct HandleTraits<ColumnDataCollection> {
 	using handle = duckdb_v2_column_data_collection_handle;
 };
@@ -3489,20 +3493,23 @@ struct TableFunctionInfo {
 	TableFunction::InitLocalCallback init_local_callback = nullptr;
 	TableFunction::ExecCallback exec_callback = nullptr;
 	TableFunction::ProgressCallback progress_callback = nullptr;
+	TableFunction::FilterPushdownCallback filter_pushdown_callback = nullptr;
 	detail::UserData user_data;
 
 	TableFunctionInfo(TableFunction::BindCallback bind_callback, TableFunction::InitGlobalCallback init_global_callback,
 	                  TableFunction::InitLocalCallback init_local_callback, TableFunction::ExecCallback exec_callback,
-	                  TableFunction::ProgressCallback progress_callback, detail::UserData user_data)
+	                  TableFunction::ProgressCallback progress_callback,
+	                  TableFunction::FilterPushdownCallback filter_pushdown_callback, detail::UserData user_data)
 	    : bind_callback(bind_callback), init_global_callback(init_global_callback),
 	      init_local_callback(init_local_callback), exec_callback(exec_callback), progress_callback(progress_callback),
-	      user_data(std::move(user_data)) {
+	      filter_pushdown_callback(filter_pushdown_callback), user_data(std::move(user_data)) {
 	}
 
 	bool operator==(const TableFunctionInfo &other) const {
 		return bind_callback == other.bind_callback && init_global_callback == other.init_global_callback &&
 		       init_local_callback == other.init_local_callback && exec_callback == other.exec_callback &&
-		       progress_callback == other.progress_callback && user_data.get() == other.user_data.get();
+		       progress_callback == other.progress_callback &&
+		       filter_pushdown_callback == other.filter_pushdown_callback && user_data.get() == other.user_data.get();
 	}
 };
 
@@ -3702,12 +3709,42 @@ auto TableFunction::SetProgressCallback(ProgressCallback callback) & -> TableFun
 	return *this;
 }
 
+auto TableFunction::SetFilterPushdownCallback(FilterPushdownCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_filter_pushdown_callback, handle(), nullptr);
+		filter_pushdown_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_filter_pushdown_info_handle info,
+	                            duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_filter_pushdown_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input =
+			    detail::Factory::Make<FilterPushdownInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.filter_pushdown_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_filter_pushdown_callback, handle(), trampoline);
+	filter_pushdown_callback = callback;
+	return *this;
+}
+
+auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
+	CheckedAPICall(duckdb_v2_table_function_set_projection_pushdown, handle(), enable);
+	return *this;
+}
+
 auto TableFunction::Register() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
-	auto info = std::unique_ptr<TableFunctionInfo>(new TableFunctionInfo(bind_callback, init_global_callback,
-	                                                                     init_local_callback, exec_callback,
-	                                                                     progress_callback, std::move(user_data)));
+	auto info = std::unique_ptr<TableFunctionInfo>(
+	    new TableFunctionInfo(bind_callback, init_global_callback, init_local_callback, exec_callback,
+	                          progress_callback, filter_pushdown_callback, std::move(user_data)));
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<TableFunctionInfo>,
 	                         detail::TypedEquals<TableFunctionInfo>};
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
@@ -3798,6 +3835,20 @@ auto TableFunction::InitGlobalInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
 }
 
+auto TableFunction::InitGlobalInput::GetColumnCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_table_function_init_global_get_column_count,
+	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &count);
+	return count;
+}
+
+auto TableFunction::InitGlobalInput::GetColumnIndex(idx_t index) const -> idx_t {
+	idx_t column_index = 0;
+	CheckedAPICall(duckdb_v2_table_function_init_global_get_column_index,
+	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), index, &column_index);
+	return column_index;
+}
+
 void TableFunction::InitLocalInput::SetLocalStateInternal(void *data, void (*destructor)(void *)) {
 	duckdb_v2_opaque opaque {data, destructor, nullptr};
 	CheckedAPICall(duckdb_v2_table_function_init_local_set_local_state,
@@ -3828,6 +3879,20 @@ void *TableFunction::InitLocalInput::GetUserDataInternal() const {
 
 auto TableFunction::InitLocalInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
+}
+
+auto TableFunction::InitLocalInput::GetColumnCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_table_function_init_local_get_column_count,
+	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &count);
+	return count;
+}
+
+auto TableFunction::InitLocalInput::GetColumnIndex(idx_t index) const -> idx_t {
+	idx_t column_index = 0;
+	CheckedAPICall(duckdb_v2_table_function_init_local_get_column_index,
+	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), index, &column_index);
+	return column_index;
 }
 
 void *TableFunction::ExecInput::GetBindDataInternal() const {
@@ -3871,6 +3936,20 @@ auto TableFunction::ExecInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
 }
 
+auto TableFunction::ExecInput::GetColumnCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_table_function_exec_get_column_count,
+	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &count);
+	return count;
+}
+
+auto TableFunction::ExecInput::GetColumnIndex(idx_t index) const -> idx_t {
+	idx_t column_index = 0;
+	CheckedAPICall(duckdb_v2_table_function_exec_get_column_index,
+	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), index, &column_index);
+	return column_index;
+}
+
 void *TableFunction::ProgressInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
 	CheckedAPICall(duckdb_v2_table_function_progress_get_bind_data,
@@ -3900,6 +3979,119 @@ auto TableFunction::ProgressInput::SetProgress(double progress) -> void {
 
 auto TableFunction::ProgressInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
+}
+
+void *TableFunction::FilterPushdownInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_filter_pushdown_get_bind_data,
+	               static_cast<duckdb_v2_table_function_filter_pushdown_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::FilterPushdownInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_filter_pushdown_get_user_data,
+	               static_cast<duckdb_v2_table_function_filter_pushdown_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::FilterPushdownInput::GetFilterCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_table_function_filter_pushdown_get_filter_count,
+	               static_cast<duckdb_v2_table_function_filter_pushdown_info_handle>(args), &count);
+	return count;
+}
+
+auto TableFunction::FilterPushdownInput::GetFilter(idx_t index) const -> Expression {
+	duckdb_v2_expression_handle filter = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_filter_pushdown_get_filter,
+	               static_cast<duckdb_v2_table_function_filter_pushdown_info_handle>(args), index, &filter);
+	return detail::Factory::Make<Expression>(static_cast<void *>(filter));
+}
+
+auto TableFunction::FilterPushdownInput::Accept(idx_t index) -> void {
+	CheckedAPICall(duckdb_v2_table_function_filter_pushdown_accept,
+	               static_cast<duckdb_v2_table_function_filter_pushdown_info_handle>(args), index);
+}
+
+auto TableFunction::FilterPushdownInput::GetColumnCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_table_function_filter_pushdown_get_column_count,
+	               static_cast<duckdb_v2_table_function_filter_pushdown_info_handle>(args), &count);
+	return count;
+}
+
+auto TableFunction::FilterPushdownInput::GetColumnIndex(idx_t index) const -> idx_t {
+	idx_t column_index = 0;
+	CheckedAPICall(duckdb_v2_table_function_filter_pushdown_get_column_index,
+	               static_cast<duckdb_v2_table_function_filter_pushdown_info_handle>(args), index, &column_index);
+	return column_index;
+}
+
+auto TableFunction::FilterPushdownInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Bound Expression
+//----------------------------------------------------------------------------------------------------------------------
+
+Expression::Expression(void *impl) : detail::Handle<Expression>(impl) {
+}
+
+auto Expression::GetType() const -> ExpressionType {
+	auto type = DUCKDB_V2_EXPRESSION_TYPE_INVALID;
+	CheckedAPICall(duckdb_v2_expression_get_type, handle(), &type);
+	return static_cast<ExpressionType>(type);
+}
+
+auto Expression::GetReturnType() const -> LogicalType {
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_expression_get_return_type, handle(), &type);
+	return detail::Factory::Make<LogicalType>(type);
+}
+
+auto Expression::GetChildCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_expression_get_child_count, handle(), &count);
+	return count;
+}
+
+auto Expression::GetChild(idx_t index) const -> Expression {
+	duckdb_v2_expression_handle child = nullptr;
+	CheckedAPICall(duckdb_v2_expression_get_child, handle(), index, &child);
+	return detail::Factory::Make<Expression>(static_cast<void *>(child));
+}
+
+auto Expression::GetConstantValue() const -> Value {
+	duckdb_v2_value_handle value = nullptr;
+	CheckedAPICall(duckdb_v2_expression_constant_get_value, handle(), &value);
+	return detail::Factory::Make<Value>(value);
+}
+
+auto Expression::GetColumnIndex() const -> idx_t {
+	idx_t index = 0;
+	CheckedAPICall(duckdb_v2_expression_column_ref_get_index, handle(), &index);
+	return index;
+}
+
+auto Expression::GetFunctionName() const -> std::string {
+	duckdb_v2_identifier_t name = {nullptr, 0};
+	CheckedAPICall(duckdb_v2_expression_function_get_name, handle(), &name);
+	return std::string(FromStr(name));
+}
+
+auto Expression::GetFunctionQualifiedName() const -> QualifiedName {
+	duckdb_v2_qname_handle name = nullptr;
+	CheckedAPICall(duckdb_v2_expression_function_get_qname, handle(), &name);
+	return detail::Factory::Make<QualifiedName>(name);
+}
+
+auto Expression::GetCastMode() const -> CastMode {
+	auto mode = DUCKDB_V2_CAST_MODE_NORMAL;
+	CheckedAPICall(duckdb_v2_expression_cast_get_mode, handle(), &mode);
+	return static_cast<CastMode>(mode);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

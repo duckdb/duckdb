@@ -81,6 +81,7 @@ struct TypeParam;
 struct NamedParam;
 
 enum class LogicalTypeId : uint32_t;
+enum class CastMode : uint8_t;
 
 template <class CTX>
 class TypeBuilder;
@@ -3542,6 +3543,115 @@ public:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Bound Expression
+//----------------------------------------------------------------------------------------------------------------------
+
+/// The type of a bound expression node. Mirrors the C API's `DUCKDB_V2_EXPRESSION_TYPE`: the node types a filter
+/// predicate can contain, every other node type reporting `INVALID`.
+///
+/// Comparisons, `BETWEEN` and casts are regular scalar function calls once bound: they have the function's children
+/// and name, and only their type tells them apart from any other function. A cast has one child, the value being
+/// cast, and its target type is the node's return type.
+enum class ExpressionType : uint8_t {
+	/// A node type this API does not model. Its children can still be walked.
+	INVALID = 0,
+	/// A cast. One child; `Expression::GetCastMode` tells a `TRY_CAST` apart.
+	OPERATOR_CAST = 12,
+	/// Logical `NOT`. One child.
+	OPERATOR_NOT = 13,
+	/// `IS NULL`. One child.
+	OPERATOR_IS_NULL = 14,
+	/// `IS NOT NULL`. One child.
+	OPERATOR_IS_NOT_NULL = 15,
+	/// `=`. Two children.
+	COMPARE_EQUAL = 25,
+	/// `<>`. Two children.
+	COMPARE_NOTEQUAL = 26,
+	/// `<`. Two children.
+	COMPARE_LESSTHAN = 27,
+	/// `>`. Two children.
+	COMPARE_GREATERTHAN = 28,
+	/// `<=`. Two children.
+	COMPARE_LESSTHANOREQUALTO = 29,
+	/// `>=`. Two children.
+	COMPARE_GREATERTHANOREQUALTO = 30,
+	/// `IN`. The first child is the value tested, the remaining children are the candidates.
+	COMPARE_IN = 35,
+	/// `NOT IN`. The first child is the value tested, the remaining children are the candidates.
+	COMPARE_NOT_IN = 36,
+	/// `IS DISTINCT FROM`. Two children.
+	COMPARE_DISTINCT_FROM = 37,
+	/// `BETWEEN`. Three children: the value tested, the lower bound and the upper bound.
+	COMPARE_BETWEEN = 38,
+	/// `IS NOT DISTINCT FROM`. Two children.
+	COMPARE_NOT_DISTINCT_FROM = 40,
+	/// Logical `AND`. Two or more children.
+	CONJUNCTION_AND = 50,
+	/// Logical `OR`. Two or more children.
+	CONJUNCTION_OR = 51,
+	/// A constant. No children; read it with `Expression::GetConstantValue`.
+	VALUE_CONSTANT = 75,
+	/// A prepared statement parameter whose value is not known yet. No children.
+	VALUE_PARAMETER = 76,
+	/// A call to a scalar function other than the ones listed above. The children are its arguments; read the name
+	/// with `Expression::GetFunctionName`.
+	BOUND_FUNCTION = 141,
+	/// A `CASE` expression. The children are each `WHEN` condition followed by its `THEN` result, then the `ELSE`
+	/// result.
+	CASE_EXPR = 150,
+	/// `COALESCE`. One or more children.
+	OPERATOR_COALESCE = 152,
+	/// A reference to a column. No children; read it with `Expression::GetColumnIndex`.
+	BOUND_COLUMN_REF = 228,
+};
+
+/// A node of a bound expression tree: an expression the engine has resolved every column and function of, handed
+/// to callbacks that may want to look inside a predicate (see `TableFunction::FilterPushdownInput`). Borrowed and
+/// read-only: valid only for the duration of the callback that handed it out, and the children obtained via
+/// `GetChild` share their parent's lifetime.
+class Expression final : public detail::Handle<Expression> {
+	friend detail::Factory;
+
+public:
+	Expression(Expression &&) noexcept = default;
+	Expression &operator=(Expression &&) noexcept = default;
+	~Expression() override = default;
+
+	/// The node's type, which decides what its children mean and which of the accessors below apply.
+	auto GetType() const -> ExpressionType;
+	/// The logical type the node evaluates to. For a cast, the target type.
+	auto GetReturnType() const -> LogicalType;
+	/// How many child nodes the node has. Works for every type, including `ExpressionType::INVALID`.
+	auto GetChildCount() const -> idx_t;
+	/// A child node, ordered as `ExpressionType` describes.
+	/// @throws InvalidInputException When the index is out of bounds.
+	auto GetChild(idx_t index) const -> Expression;
+	/// The value of a `VALUE_CONSTANT` node.
+	/// @throws InvalidInputException When the node is not a constant.
+	auto GetConstantValue() const -> Value;
+	/// The column a `BOUND_COLUMN_REF` node points at. The index counts the columns of the operator the predicate is
+	/// evaluated against; resolve it through whatever handed out the expression, e.g.
+	/// `TableFunction::FilterPushdownInput::GetColumnIndex`.
+	/// @throws InvalidInputException When the node is not a column reference.
+	auto GetColumnIndex() const -> idx_t;
+	/// The name of the scalar function a function node calls: `BOUND_FUNCTION`, the comparisons, `COMPARE_BETWEEN`
+	/// and `OPERATOR_CAST`. A comparison's name is its operator, e.g. `<`; `BETWEEN` and casts carry internal names,
+	/// so dispatch on the type for those.
+	/// @throws InvalidInputException When the node is not a function call.
+	auto GetFunctionName() const -> std::string;
+	/// The qualified name of the scalar function a function node calls: the name of `GetFunctionName`, qualified with
+	/// the catalog and schema the function was resolved in where known.
+	/// @throws InvalidInputException When the node is not a function call.
+	auto GetFunctionQualifiedName() const -> QualifiedName;
+	/// Whether an `OPERATOR_CAST` node is a regular `CAST` or a `TRY_CAST`.
+	/// @throws InvalidInputException When the node is not a cast.
+	auto GetCastMode() const -> CastMode;
+
+private:
+	explicit Expression(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // Table Function
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -3567,6 +3677,7 @@ public:
 	class InitLocalInput;
 	class ExecInput;
 	class ProgressInput;
+	class FilterPushdownInput;
 
 	/// Called once per query while the function call is bound; declares the columns the function returns. Required.
 	using BindCallback = void (*)(BindInput &input);
@@ -3578,6 +3689,9 @@ public:
 	using ExecCallback = void (*)(ExecInput &input);
 	/// Called on demand during execution to report how far the scan has advanced. Optional.
 	using ProgressCallback = void (*)(ProgressInput &input);
+	/// Called while the query is optimized, possibly more than once, with the predicates the query applies to the
+	/// function's rows; accepts the ones the function will apply itself. Optional.
+	using FilterPushdownCallback = void (*)(FilterPushdownInput &input);
 
 	TableFunction(TableFunction &&) noexcept = default;
 	TableFunction &operator=(TableFunction &&) noexcept = default;
@@ -3619,6 +3733,13 @@ public:
 	auto SetInitLocalCallback(InitLocalCallback callback) & -> TableFunction &;
 	auto SetExecCallback(ExecCallback callback) & -> TableFunction &;
 	auto SetProgressCallback(ProgressCallback callback) & -> TableFunction &;
+	auto SetFilterPushdownCallback(FilterPushdownCallback callback) & -> TableFunction &;
+
+	/// Declares whether the function supports projection pushdown. Defaults to false. With it, the engine asks for
+	/// only the columns a query uses: the exec callback's output chunk holds one vector per requested column, and
+	/// the init and exec inputs' `GetColumnIndex` says which declared column each vector stands for. Without it the
+	/// output chunk always holds every declared column, and the engine drops the unused ones itself.
+	auto SetProjectionPushdown(bool enable) & -> TableFunction &;
 
 	/// Registers the function in the catalog it was created against. The function object remains valid and may be
 	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
@@ -3636,6 +3757,7 @@ private:
 	InitLocalCallback init_local_callback = nullptr;
 	ExecCallback exec_callback = nullptr;
 	ProgressCallback progress_callback = nullptr;
+	FilterPushdownCallback filter_pushdown_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -3734,6 +3856,14 @@ public:
 		/// @param max_threads The maximum thread count. Must be at least 1.
 		auto SetMaxThreads(idx_t max_threads) -> void;
 
+		/// How many columns the scan produces: with projection pushdown the columns the query uses, which is the number
+		/// of vectors in the exec callback's output chunk; without it, the columns declared in bind.
+		auto GetColumnCount() const -> idx_t;
+		/// Which declared column (in `BindInput::AddResultColumn` order) the scan's column at `index` stands for. The
+		/// identity without projection pushdown.
+		/// @throws InvalidInputException When the index is out of bounds.
+		auto GetColumnIndex(idx_t index) const -> idx_t;
+
 		/// The scan's context. Borrowed, valid only for the callback duration.
 		auto GetContext() const -> Context;
 
@@ -3783,6 +3913,12 @@ public:
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
 		}
+
+		/// How many columns the scan produces; see `InitGlobalInput::GetColumnCount`.
+		auto GetColumnCount() const -> idx_t;
+		/// Which declared column the scan's column at `index` stands for; see `InitGlobalInput::GetColumnIndex`.
+		/// @throws InvalidInputException When the index is out of bounds.
+		auto GetColumnIndex(idx_t index) const -> idx_t;
 
 		/// The scan's context. Borrowed, valid only for the callback duration.
 		auto GetContext() const -> Context;
@@ -3839,6 +3975,13 @@ public:
 		/// chunk's first vector, which the engine propagates to the others. Leaving it empty ends the scan.
 		/// @return A borrowed chunk, valid only for the callback duration.
 		auto GetOutputChunk() const -> DataChunk;
+
+		/// How many vectors the output chunk holds; see `InitGlobalInput::GetColumnCount`.
+		auto GetColumnCount() const -> idx_t;
+		/// Which declared column the output chunk's vector at `index` must be filled with; see
+		/// `InitGlobalInput::GetColumnIndex`.
+		/// @throws InvalidInputException When the index is out of bounds.
+		auto GetColumnIndex(idx_t index) const -> idx_t;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
 		auto GetContext() const -> Context;
@@ -3900,6 +4043,65 @@ public:
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the filter pushdown callback works with. Borrowed, valid only for the callback duration.
+	///
+	/// The callback runs while the query is optimized, after bind and before any init callback, with the predicates
+	/// the query applies to the function's rows. Accepting one with `Accept` is a promise: the engine stops
+	/// applying it, so the scan must produce only rows that satisfy it. Predicates left unaccepted are applied by
+	/// the engine as usual, so a callback that recognizes nothing can simply return. The optimizer may run the
+	/// callback more than once for the same query, each time with the predicates not yet accepted, and never with
+	/// none.
+	class FilterPushdownInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`, mutable: the same object the init and exec callbacks later
+		/// receive, so an accepted predicate can be recorded in it for the scan to apply.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> T & {
+			return *static_cast<T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many predicates are offered. They are combined with `AND`.
+		auto GetFilterCount() const -> idx_t;
+		/// A predicate: a bound expression evaluating to `BOOLEAN`. Resolve the column references it contains via
+		/// `GetColumnIndex`.
+		/// @return A borrowed expression, valid only for the callback duration.
+		/// @throws InvalidInputException When the index is out of bounds.
+		auto GetFilter(idx_t index) const -> Expression;
+		/// Accepts the predicate at `index`: the function will apply it itself.
+		/// @throws InvalidInputException When the index is out of bounds.
+		auto Accept(idx_t index) -> void;
+		/// How many columns the predicates can refer to: the columns the query reads from the function, which is what
+		/// `Expression::GetColumnIndex` indexes.
+		auto GetColumnCount() const -> idx_t;
+		/// Resolves the index a column reference node reports to the declared column (in `BindInput::AddResultColumn`
+		/// order) it refers to.
+		/// @throws InvalidInputException When the index is out of bounds.
+		auto GetColumnIndex(idx_t index) const -> idx_t;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		FilterPushdownInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
 };

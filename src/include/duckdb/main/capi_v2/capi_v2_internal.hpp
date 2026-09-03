@@ -26,6 +26,7 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 
@@ -260,6 +261,16 @@ inline auto Convert(duckdb_v2_value_handle val) -> CV2Value * {
 
 inline auto Convert(CV2Value *val) -> duckdb_v2_value_handle {
 	return reinterpret_cast<duckdb_v2_value_handle>(val);
+}
+
+using CV2Expression = duckdb::Expression;
+
+inline auto Convert(duckdb_v2_expression_handle expression) -> CV2Expression * {
+	return reinterpret_cast<CV2Expression *>(expression);
+}
+
+inline auto Convert(CV2Expression *expression) -> duckdb_v2_expression_handle {
+	return reinterpret_cast<duckdb_v2_expression_handle>(expression);
 }
 
 using CV2DataChunk = duckdb::DataChunk;
