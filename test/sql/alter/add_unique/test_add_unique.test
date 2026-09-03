@@ -26,3 +26,18 @@ statement error
 ALTER TABLE d ADD UNIQUE (i);
 ----
 <REGEX>:Constraint Error.*contains duplicates on indexed column.*
+
+statement ok
+CREATE TABLE r(i INT);
+
+statement ok
+BEGIN;
+
+statement ok
+ALTER TABLE r ADD UNIQUE (i);
+
+statement ok
+ROLLBACK;
+
+statement ok
+INSERT INTO r VALUES (1), (1);
