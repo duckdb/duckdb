@@ -59,6 +59,10 @@ struct HandleTraits<StatementIterator> {
 	using handle = duckdb_v2_statement_iterator_handle;
 };
 template <>
+struct HandleTraits<PreparedStatement> {
+	using handle = duckdb_v2_prepared_statement_handle;
+};
+template <>
 struct HandleTraits<Schema> {
 	using handle = duckdb_v2_schema_handle;
 };
@@ -628,6 +632,65 @@ auto Connection::Execute(const std::string &sql) -> QueryResult {
 		throw InvalidInputException("Execute expects exactly one statement; use ParseSQL for multi-statement input");
 	}
 	return Execute(statement);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Prepared statements
+//----------------------------------------------------------------------------------------------------------------------
+
+PreparedStatement::PreparedStatement(void *impl) : detail::Handle<PreparedStatement>(impl) {
+}
+
+PreparedStatement::~PreparedStatement() {
+	auto _h = handle();
+	duckdb_v2_prepared_statement_destroy(&_h);
+}
+
+auto Connection::Prepare(const SqlStatement &statement, bool require_cacheable) -> PreparedStatement {
+	// Borrowed, not consumed: the caller's SqlStatement keeps ownership and can be
+	// prepared or executed again.
+	duckdb_v2_prepared_statement_handle prepared = nullptr;
+	CheckedAPICall(duckdb_v2_prepared_statement_create, handle(), statement.handle(), require_cacheable, &prepared);
+	return detail::Factory::Make<PreparedStatement>(prepared);
+}
+
+auto PreparedStatement::Execute(const Value *parameters, idx_t parameter_count) -> QueryResult {
+	std::vector<duckdb_v2_value_handle> values;
+	values.reserve(parameter_count);
+	for (idx_t i = 0; i < parameter_count; i++) {
+		values.push_back(parameters[i].handle());
+	}
+	duckdb_v2_result_handle result = nullptr;
+	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), nullptr, parameter_count ? values.data() : nullptr,
+	               parameter_count, &result);
+	return detail::Factory::Make<QueryResult>(result);
+}
+
+auto PreparedStatement::Execute(const std::vector<NamedParam> &parameters) -> QueryResult {
+	// Split into the C API's parallel arrays; an empty name crosses as the positional
+	// {NULL, 0} view (mirrors Connection::Execute).
+	std::vector<duckdb_v2_identifier_t> names;
+	std::vector<duckdb_v2_value_handle> values;
+	names.reserve(parameters.size());
+	values.reserve(parameters.size());
+	for (const auto &param : parameters) {
+		names.push_back(param.name.empty() ? duckdb_v2_identifier_t {nullptr, 0} : ToStr(param.name));
+		values.push_back(param.value.handle());
+	}
+	duckdb_v2_result_handle result = nullptr;
+	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), names.empty() ? nullptr : names.data(),
+	               values.empty() ? nullptr : values.data(), static_cast<idx_t>(parameters.size()), &result);
+	return detail::Factory::Make<QueryResult>(result);
+}
+
+auto PreparedStatement::Execute() -> QueryResult {
+	return Execute(nullptr, 0);
+}
+
+auto PreparedStatement::ReusesPlan() const -> bool {
+	bool reuses = false;
+	CheckedAPICall(duckdb_v2_prepared_statement_reuses_plan, handle(), &reuses);
+	return reuses;
 }
 
 auto Connection::Interrupt() -> void {

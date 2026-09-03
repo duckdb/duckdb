@@ -180,7 +180,7 @@ TEST_CASE("V2 file system: EXCLUSIVE_CREATE refuses an existing file", "[capi_v2
 	duckdb_v2_error_info_handle err = nullptr;
 	(void)err;
 	REQUIRE(FsTryOpen(fs, path,
-	                  {DUCKDB_V2_FILE_FLAG_WRITE, {DUCKDB_V2_FILE_FLAG_CREATE}, DUCKDB_V2_FILE_FLAG_EXCLUSIVE_CREATE},
+	                  {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE, DUCKDB_V2_FILE_FLAG_EXCLUSIVE_CREATE},
 	                  &handle) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(handle == nullptr);
 

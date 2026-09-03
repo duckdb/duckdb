@@ -66,6 +66,7 @@ class Arena;
 class DataChunk;
 class ColumnDataCollection;
 class QueryResult;
+class PreparedStatement;
 
 struct TypeParam;
 struct NamedParam;
@@ -495,6 +496,47 @@ private:
 	explicit StatementIterator(void *impl);
 };
 
+/// A statement bound and planned once, executable repeatedly. Produced by `Connection::Prepare`.
+/// Where `Connection::Execute` re-binds on every call, this may run the plan it built at prepare time; ask
+/// `ReusesPlan` which one you got. Execution returns the same `QueryResult`, with identical behaviour.
+/// It keeps its connection's session alive, so it stays usable even after the `Connection` is gone.
+class PreparedStatement final : public detail::Handle<PreparedStatement> {
+	friend detail::Factory;
+
+public:
+	PreparedStatement(PreparedStatement &&) noexcept = default;
+	PreparedStatement &operator=(PreparedStatement &&) noexcept = default;
+
+	~PreparedStatement() override;
+
+	/// Executes with positional parameters ($1 = parameters[0]), returning a lazy streaming result.
+	/// Non-consuming: execute the same statement again, with the same values or different ones.
+	/// @param parameters Values for the statement's parameters, bound positionally.
+	/// @param parameter_count How many values `parameters` points at.
+	/// @return A streaming result. Execution is deferred until the result is read; binding errors throw here.
+	/// @throws Exception While an earlier result on the connection is still live. A failed execution leaves the
+	/// prepared statement usable.
+	auto Execute(const Value *parameters, idx_t parameter_count) -> QueryResult;
+
+	/// Executes a statement that takes no parameters.
+	auto Execute() -> QueryResult;
+
+	/// `std::vector` overload of the positional-parameter `Execute`.
+	auto Execute(const std::vector<Value> &parameters) -> QueryResult;
+
+	/// Executes with named parameters.
+	/// @param parameters One binding per parameter; each binds to $name, or positionally when its name is empty.
+	auto Execute(const std::vector<NamedParam> &parameters) -> QueryResult;
+
+	/// Whether executions reuse the plan built at prepare time, rather than re-binding each time and being no
+	/// faster than `Connection::Execute`. A static property of the built plan; see the C API's
+	/// `duckdb_v2_prepared_statement_reuses_plan` for what qualifies.
+	auto ReusesPlan() const -> bool;
+
+private:
+	explicit PreparedStatement(void *impl);
+};
+
 //----------------------------------------------------------------------------------------------------------------------
 // Connection
 //----------------------------------------------------------------------------------------------------------------------
@@ -596,6 +638,14 @@ public:
 	/// @param statement The statement to bind.
 	/// @return Its signature: the columns it will produce and the parameters it expects.
 	auto Bind(const SqlStatement &statement) const -> Signature;
+
+	/// Prepares a statement into a handle that can be executed repeatedly, borrowing it rather than consuming it.
+	/// @param statement The statement to prepare.
+	/// @param require_cacheable When true, fail rather than return a statement whose plan is re-bound on every
+	/// execution, so a caller who wants the handle only for the speedup finds out here.
+	/// @throws Exception On a bind or catalog error, while a result on this connection is still live, or when
+	/// `require_cacheable` is set and the plan would not be reused.
+	auto Prepare(const SqlStatement &statement, bool require_cacheable = false) -> PreparedStatement;
 
 	/// `Context::ParseType` outside a callback.
 	/// @param text A type as SQL spells it, e.g. "DECIMAL(18, 3)" or "STRUCT(a INTEGER, b VARCHAR)".
@@ -4181,8 +4231,11 @@ public:
 		auto AddNamedArgument(std::string_view name, const Value &value) -> void;
 
 		/// Claims the reference by naming a collection to read instead. The collection is borrowed: it must stay
-		/// alive, and must not be cleared, reset or destroyed, for as long as any result reading it is live. The three
-		/// claim forms, `SetFunctionName`, `SetCollection` and `SetSubquery`, are mutually exclusive.
+		/// alive, and must not be cleared, reset or destroyed, for as long as any result reading it is live. A
+		/// `PreparedStatement` over a claimed name extends that further: it captures the borrow in its plan and,
+		/// since a collection claim reads no database, reuses that plan without consulting the callback again
+		/// (`PreparedStatement::ReusesPlan` reports true). Destroy such statements before releasing the collection.
+		/// The three claim forms, `SetFunctionName`, `SetCollection` and `SetSubquery`, are mutually exclusive.
 		/// @param collection The collection to read.
 		/// @param column_names Names for its columns, in order; empty names them col1..colN.
 		/// @throws InvalidInputException When the names do not match the collection's columns, or a different claim
@@ -4533,6 +4586,10 @@ inline auto Connection::CreateType() -> TypeBuilder<Connection> {
 
 inline auto Connection::Execute(const SqlStatement &statement, const std::vector<Value> &parameters) -> QueryResult {
 	return Execute(statement, parameters.data(), parameters.size());
+}
+
+inline auto PreparedStatement::Execute(const std::vector<Value> &parameters) -> QueryResult {
+	return Execute(parameters.data(), parameters.size());
 }
 
 } // namespace cxx

@@ -974,6 +974,16 @@ typedef struct {
 	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_str sql, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_set_user_data)
 	(duckdb_v2_replacement_scan_handle scan, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_prepared_statement_create)
+	(duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, bool require_cacheable,
+	 duckdb_v2_prepared_statement_handle *out_prepared, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_prepared_statement_destroy)(duckdb_v2_prepared_statement_handle *prepared);
+	DUCKDB_V2_ERROR(*duckdb_v2_prepared_statement_execute)
+	(duckdb_v2_prepared_statement_handle prepared, const duckdb_v2_identifier_t *parameter_names,
+	 const duckdb_v2_value_handle *parameter_values, idx_t parameter_count, duckdb_v2_result_handle *out_result,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_prepared_statement_reuses_plan)
+	(duckdb_v2_prepared_statement_handle prepared, bool *out_reuses, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -1399,6 +1409,10 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_replacement_scan_set_function_name = duckdb_v2_replacement_scan_set_function_name;
 	result.duckdb_v2_replacement_scan_set_subquery = duckdb_v2_replacement_scan_set_subquery;
 	result.duckdb_v2_replacement_scan_set_user_data = duckdb_v2_replacement_scan_set_user_data;
+	result.duckdb_v2_prepared_statement_create = duckdb_v2_prepared_statement_create;
+	result.duckdb_v2_prepared_statement_destroy = duckdb_v2_prepared_statement_destroy;
+	result.duckdb_v2_prepared_statement_execute = duckdb_v2_prepared_statement_execute;
+	result.duckdb_v2_prepared_statement_reuses_plan = duckdb_v2_prepared_statement_reuses_plan;
 	return result;
 }
 

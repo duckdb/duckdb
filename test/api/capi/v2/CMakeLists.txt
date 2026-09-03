@@ -13,6 +13,7 @@ add_library_unity(
   test_capi_v2_file_system.cpp
   test_capi_v2_logical_type.cpp
   test_capi_v2_option.cpp
+  test_capi_v2_prepared_statement.cpp
   test_capi_v2_qname.cpp
   test_capi_v2_query.cpp
   test_capi_v2_replacement_scan.cpp

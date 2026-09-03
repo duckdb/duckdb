@@ -420,6 +420,14 @@ inline shared_ptr<ConnectionBusySlotV2> GetBusySlot(ClientContext &context) {
 	return context.registered_state->GetOrCreate<ConnectionBusySlotV2>(BUSY_SLOT_STATE_KEY);
 }
 
+//! Runs a prepared statement as a single-statement result, claiming the connection's
+//! live-result slot first. Defined in capi_v2_result.cpp: assembling a result is that
+//! module's business, and the prepared path reaches the same seam the stateless one does.
+//! `context` is the session the result holds on to, so it survives disconnect. Throws
+//! ResourceInUseException when the connection already has a live result.
+auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, PreparedStatement &prepared,
+                                identifier_map_t<BoundParameterData> &values) -> duckdb_v2_result_handle;
+
 //----------------------------------------------------------------------------------------------------------------------
 // Text sinks
 //----------------------------------------------------------------------------------------------------------------------

@@ -644,6 +644,42 @@ TEST_CASE("V2 replacement scan: collection column names", "[capi_v2][replacement
 	duckdb_v2_column_data_collection_destroy(&cdc);
 }
 
+TEST_CASE("V2 replacement scan: a prepared collection claim caches its borrow", "[capi_v2][replacement_scan]") {
+	EnvFixture fx;
+	auto cdc = ReplMakeCollection(fx.conn, {10, 20});
+
+	ReplRegistry registry;
+	registry.name = "cached_batch";
+	registry.collection = cdc;
+	ReplRegisterRegistry(fx.conn, registry);
+
+	duckdb_v2_statement_iterator_handle iter = nullptr;
+	REQUIRE(duckdb_v2_parse_sql(fx.conn, "SELECT col1 FROM cached_batch ORDER BY col1", &iter, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_sql_statement_handle stmt = nullptr;
+	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_statement_iterator_destroy(&iter);
+
+	duckdb_v2_prepared_statement_handle prepared = nullptr;
+	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, stmt, false, &prepared, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_sql_statement_destroy(&stmt);
+
+	// A collection claim reads no database, so nothing invalidates the plan: it is reused,
+	// which means the scan callback is NOT consulted again and the plan keeps the borrow it
+	// took at prepare time.
+	bool reuses = false;
+	REQUIRE(duckdb_v2_prepared_statement_reuses_plan(prepared, &reuses, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(reuses);
+
+	duckdb_v2_result_handle r = nullptr;
+	REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, nullptr, 0, &r, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(r) == 2);
+	duckdb_v2_result_destroy(&r);
+
+	duckdb_v2_prepared_statement_destroy(&prepared);
+	duckdb_v2_column_data_collection_destroy(&cdc);
+}
+
 TEST_CASE("V2 replacement scan: empty collection binds and yields no rows", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
 	auto cdc = ReplMakeCollection(fx.conn, {});

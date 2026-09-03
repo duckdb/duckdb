@@ -491,6 +491,33 @@ auto Convert(duckdb_v2_result_handle handle) -> ResultWrapperV2 * {
 	return reinterpret_cast<ResultWrapperV2 *>(handle);
 }
 
+auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, PreparedStatement &prepared,
+                                identifier_map_t<BoundParameterData> &values) -> duckdb_v2_result_handle {
+	auto wrapper = make_uniq<ResultWrapperV2>();
+	// One live result per connection, claimed the way statement_execute claims it and
+	// before PendingQuery runs, which would otherwise cancel the live stream.
+	auto busy_slot = GetBusySlot(*context);
+	void *expected = nullptr;
+	if (!busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {
+		throw ResourceInUseException("connection has a live result; drain, destroy, or interrupt it before starting "
+		                             "a new query (or open another connection)");
+	}
+	// On any failure below, the wrapper's destructor releases the slot.
+	wrapper->busy_slot = std::move(busy_slot);
+	wrapper->busy_slot->cancel_requested.store(false, std::memory_order_relaxed);
+	wrapper->context = context;
+	// A prepared statement is always one engine statement: preprocessing, expansion and
+	// the wrapping transaction all happened at prepare time, so this bypasses the fragment
+	// machinery and is always principal. fragment_count is 1 for metadata symmetry only.
+	wrapper->fragment_count = 1;
+	wrapper->BeginPending(prepared.PendingQuery(values, /*allow_stream_result=*/true), true);
+	// The engine runs a prepared statement through an internal EXECUTE, whose statement type
+	// would otherwise be what the result reports. Report the type of the statement that was
+	// prepared instead, so a prepared result is indistinguishable from a stateless one.
+	wrapper->statement_type = prepared.GetStatementType();
+	return Convert(wrapper.release());
+}
+
 } // namespace duckdb::capiv2
 
 //----------------------------------------------------------------------------------------------------------------------

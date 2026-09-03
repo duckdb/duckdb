@@ -5725,9 +5725,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_named_argument(duckd
  * Claims the reference by naming a column data collection to read instead.
  *
  * The collection is borrowed, not copied: the caller keeps ownership and must keep it alive, and must not clear, reset
- * or destroy it, for as long as any result reading it is live, since the result scans its buffers directly. A prepared
- * statement holds on to the collection it was bound against, so destroy such statements before releasing the
- * collection.
+ * or destroy it, for as long as any result reading it is live, since the result scans its buffers directly.
+ *
+ * A prepared statement extends that lifetime well beyond its own results. Preparing a statement over a claimed name
+ * captures the borrow in the plan, and since a collection claim reads no database there is nothing to invalidate that
+ * plan: `duckdb_v2_prepared_statement_reuses_plan()` reports true, and every later execution reuses the captured borrow
+ * without consulting the callback again. So dropping the name from whatever the callback resolves against does not
+ * release the collection, and releasing it while such a statement is live leaves the next execution reading freed
+ * memory. Destroy every prepared statement over a claimed name before clearing, resetting or destroying the collection
+ * behind it.
  *
  * By default the collection's columns are named col1..colN. Pass `column_names` to name them instead. When supplied,
  * `column_count` must equal the collection's column count and no name may be empty; pass NULL and 0 for the default
@@ -9639,6 +9645,162 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_to_string(duckdb_v2_value_handle va
                                                        duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for value --- */
+
+/* ============================================================================
+ * MODULE: prepared_statement
+ * ============================================================================ */
+
+/* --- Enums for prepared_statement --- */
+
+/* --- Struct forward declarations for prepared_statement --- */
+
+/* --- Types for prepared_statement --- */
+
+/*!
+ * An owned handle to a statement bound and planned once, executable repeatedly via
+ * `duckdb_v2_prepared_statement_execute()`. Construct with `duckdb_v2_prepared_statement_create()` and destroy with
+ * `duckdb_v2_prepared_statement_destroy()`. It keeps its connection's session alive, so it stays usable across
+ * executions and even after the connection is disconnected.
+ */
+typedef struct _duckdb_v2_prepared_statement {
+	void *internal_ptr;
+} * duckdb_v2_prepared_statement_handle;
+
+/* --- Constants for prepared_statement --- */
+
+/* --- Function pointer typedefs for prepared_statement --- */
+
+/* --- Functions for prepared_statement --- */
+
+/*!
+ * Prepares a parsed statement into a reusable handle. Non-consuming.
+ *
+ * Copies the statement's AST, then binds and plans it once. Binder and catalog errors surface here, exactly as they
+ * would from `duckdb_v2_statement_execute()`. The statement is borrowed rather than consumed, since a copy is what gets
+ * prepared, so it can be prepared again or executed directly; the caller destroys it with
+ * `duckdb_v2_sql_statement_destroy()`.
+ *
+ * By default this succeeds for any preparable statement, whether or not its plan will be reused; ask
+ * `duckdb_v2_prepared_statement_reuses_plan()` which one you got. Setting `require_cacheable` instead fails with
+ * `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup finds
+ * out here rather than after silently taking the slow path.
+ *
+ * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result. Drain, destroy, or interrupt that result
+ * first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection supplying the catalog, transaction, and parser state. The prepared statement belongs to
+ * it.
+ * @param statement The statement to prepare. Borrowed and copied, not consumed; destroy it with
+ * `duckdb_v2_sql_statement_destroy()`.
+ * @param require_cacheable When true, fail with `ERROR_INPUT_INVALID` unless the prepared plan will be reused across
+ * executions, as `duckdb_v2_prepared_statement_reuses_plan()` would report it.
+ * @param out_prepared On success, receives the new prepared statement. Owned by the caller; destroy via
+ * `duckdb_v2_prepared_statement_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_connection_handle conn,
+                                                                 duckdb_v2_sql_statement_handle statement,
+                                                                 bool require_cacheable,
+                                                                 duckdb_v2_prepared_statement_handle *out_prepared,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Executes a prepared statement, streaming its result. Non-consuming.
+ *
+ * Returns a result without executing anything: execution happens incrementally as the result is stepped or drained,
+ * exactly as with `duckdb_v2_statement_execute()`. The handle returned is an ordinary result, with identical behaviour
+ * throughout -- streaming, draining, the changed-row count of a DML statement, the output schema, the statement type,
+ * and the result type.
+ *
+ * `parameter_values` binds the statement's parameters as constants for this execution. Binding is positional by default
+ * ($1 = element 0); supply `parameter_names` to bind by name instead, where a non-empty entry binds its value to that
+ * named parameter ($name, matched case-insensitively) and a {NULL, 0} entry stays positional. Pass NULL for both
+ * arrays, or a count of 0, for a statement without parameters. Both arrays are borrowed and copied in, so the caller
+ * still owns and destroys them. A key set that does not match the statement's parameters is rejected with
+ * `ERROR_INPUT_INVALID`, with one exception: a named parameter left without a value reads the session variable of the
+ * same name (`SET VARIABLE`) when one exists.
+ *
+ * Not consumed: execute the same handle again, with the same values or different ones, as often as you like. Values are
+ * bound per execution and nothing carries over between them. A catalog change since the statement was prepared, or a
+ * parameter type that differs from the one the cached plan assumed, triggers a re-bind that is invisible apart from its
+ * cost.
+ *
+ * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result; drain, destroy, or interrupt it first,
+ * or execute on another connection. A failed execution, at any stage, leaves the prepared statement usable.
+ * `*out_result` is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param prepared The prepared statement to execute. Borrowed; not consumed.
+ * @param parameter_names Optional. An array of `parameter_count` parameter names; a non-empty entry binds its value to
+ * the named parameter ($name, case-insensitive), a {NULL, 0} entry keeps it positional ($1 = element 0). Pass NULL to
+ * bind everything positionally.
+ * @param parameter_values Optional. An array of `parameter_count` values. Each binds by name when `parameter_names`
+ * supplies one, and positionally ($1 = element 0) otherwise. Borrowed and copied in. Pass NULL for a statement without
+ * parameters.
+ * @param parameter_count The number of entries in `parameter_names` and `parameter_values`. Pass 0 for a statement
+ * without parameters.
+ * @param out_result On success, receives the new result. Owned by the caller; destroy via `duckdb_v2_result_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute(duckdb_v2_prepared_statement_handle prepared,
+                                                                  const duckdb_v2_identifier_t *parameter_names,
+                                                                  const duckdb_v2_value_handle *parameter_values,
+                                                                  idx_t parameter_count,
+                                                                  duckdb_v2_result_handle *out_result,
+                                                                  duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reports whether the prepared statement reuses its compiled plan across executions.
+ *
+ * True when executions reuse the plan built at prepare time, provided the supplied values match the planned parameter
+ * types and nothing the plan depends on has changed; false when the statement re-binds on every execution, making it no
+ * faster than `duckdb_v2_statement_execute()`. A plan is reused only when all parameter types were resolved at prepare
+ * time and the plan is cacheable: `SELECT 42` reuses, `SELECT $1::INTEGER + 1` reuses, a statement reading a base table
+ * does not (it re-binds so a catalog change is picked up), and `SELECT $1 + $2` does not (the types are unknown until
+ * values arrive).
+ *
+ * A static property of the built plan, fixed when the statement was prepared and independent of the values later passed
+ * to `duckdb_v2_prepared_statement_execute()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param prepared The prepared statement to inspect.
+ * @param out_reuses Receives true when the compiled plan is reused across executions, false when the statement re-binds
+ * each time.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_reuses_plan(duckdb_v2_prepared_statement_handle prepared,
+                                                                      bool *out_reuses,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys a prepared statement.
+ *
+ * Null-safe: passing NULL, or a slot already set to NULL, is a no-op. A result produced by
+ * `duckdb_v2_prepared_statement_execute()` is independently owned and keeps the session alive itself, so the prepared
+ * statement may be destroyed while results made from it are still live. On success the slot is set to NULL.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param prepared The prepared statement to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_destroy(duckdb_v2_prepared_statement_handle *prepared);
+
+/* --- Struct definitions for prepared_statement --- */
 
 /* ============================================================================
  * MODULE: query_result

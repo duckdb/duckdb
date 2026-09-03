@@ -324,8 +324,14 @@ functions:
 
       The collection is borrowed, not copied: the caller keeps ownership and must keep it alive, and must not clear,
       reset or destroy it, for as long as any result reading it is live, since the result scans its buffers directly.
-      A prepared statement holds on to the collection it was bound against, so destroy such statements before
-      releasing the collection.
+
+      A prepared statement extends that lifetime well beyond its own results. Preparing a statement over a claimed
+      name captures the borrow in the plan, and since a collection claim reads no database there is nothing to
+      invalidate that plan: `[[prepared_statement_reuses_plan]]` reports true, and every later execution reuses the
+      captured borrow without consulting the callback again. So dropping the name from whatever the callback resolves
+      against does not release the collection, and releasing it while such a statement is live leaves the next
+      execution reading freed memory. Destroy every prepared statement over a claimed name before clearing,
+      resetting or destroying the collection behind it.
 
       By default the collection's columns are named col1..colN. Pass `column_names` to name them instead. When
       supplied, `column_count` must equal the collection's column count and no name may be empty; pass NULL and 0
