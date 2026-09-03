@@ -144,6 +144,16 @@ parser.add_argument('-C', '--workdir', type=str, help='Change work directory')
 parser.add_argument('-y', '--noconfirm', action='store_true', help='Skip confirmation prompt')
 parser.add_argument('-q', '--silent', action='store_true', help='Suppress output')
 parser.add_argument('-f', '--force', action='store_true', help='Force formatting')
+parser.add_argument(
+    '--staged',
+    action='store_true',
+    help='Format the files staged for commit instead of the files changed since a revision',
+)
+parser.add_argument(
+    '--modified-list',
+    type=str,
+    help='Write the NUL-separated paths of the files that were actually rewritten to this file',
+)
 args = parser.parse_args()
 
 revision = args.revision
@@ -225,8 +235,12 @@ if check_only:
     action = "Checking"
 
 
-def get_changed_files(revision):
-    proc = subprocess.Popen(['git', 'diff', '--name-only', revision], stdout=subprocess.PIPE)
+def get_changed_files(revision, staged=False):
+    command = ['git', 'diff', '--name-only']
+    if staged:
+        command.append('--cached')
+    command.append(revision)
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE)
     files = proc.stdout.read().decode('utf8', errors='backslashreplace').split('\n')
     changed_files = []
     for f in files:
@@ -238,7 +252,17 @@ def get_changed_files(revision):
     return changed_files
 
 
-if os.path.isfile(revision):
+if args.staged:
+    print(action + " files staged for commit")
+    changed_files = get_changed_files(revision, staged=True)
+    if len(changed_files) == 0:
+        print("No staged files found!")
+        exit(0)
+
+    print("Changeset:")
+    for fname in changed_files:
+        print(fname)
+elif os.path.isfile(revision):
     print(action + " individual file: " + revision)
     changed_files = [revision]
 elif os.path.isdir(revision):
@@ -285,6 +309,8 @@ format_commands = {
 }
 
 difference_files = []
+modified_files = []
+failed_files = []
 
 header_top = "//===----------------------------------------------------------------------===//\n"
 header_top += "//                         DuckDB\n" + "//\n"
@@ -368,7 +394,7 @@ def file_is_generated(text):
 
 
 def format_file(f, full_path, directory, ext):
-    global difference_files
+    global difference_files, modified_files
     with open_utf8(full_path, 'r', errors='surrogateescape') as f:
         old_text = f.read()
     # do not format auto-generated files
@@ -398,10 +424,13 @@ def format_file(f, full_path, directory, ext):
             print(total_diff)
             difference_files.append(full_path)
     else:
+        if new_text == old_text:
+            return
         tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
         with open_utf8(tmpfile, 'w+', newline='\n', errors='surrogateescape') as f:
             f.write(new_text)
         shutil.move(tmpfile, full_path)
+        modified_files.append(full_path)
 
 
 class ToFormatFile:
@@ -448,7 +477,9 @@ def process_file(f):
         format_file(f.filename, f.full_path, f.directory, f.ext)
     except:
         print(traceback.format_exc())
-        sys.exit(1)
+        # sys.exit() in a worker thread only kills that thread, so the failure is
+        # collected here and turned into a non-zero exit code by the main thread
+        failed_files.append(f.full_path)
 
 
 # Create thread for each file
@@ -460,6 +491,17 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
     except KeyboardInterrupt:
         executor.shutdown(wait=True, cancel_futures=True)
         raise
+
+if args.modified_list:
+    with open(args.modified_list, 'wb') as f:
+        for fname in modified_files:
+            f.write(fname.encode('utf8', errors='surrogateescape') + b'\0')
+
+if failed_files:
+    print("Failed to format the following files:")
+    for fname in failed_files:
+        print("- " + fname)
+    exit(1)
 
 typos_status = run_typos_check()
 
