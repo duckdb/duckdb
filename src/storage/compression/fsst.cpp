@@ -505,7 +505,7 @@ void FSSTStorage::FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-struct FSSTScanState : public StringScanState {
+struct FSSTScanState : public SegmentScanState {
 	explicit FSSTScanState(const idx_t string_block_limit) {
 		ResetStoredDelta();
 		decompress_buffer.resize(string_block_limit + 1);
@@ -513,6 +513,7 @@ struct FSSTScanState : public StringScanState {
 
 	buffer_ptr<void> duckdb_fsst_decoder;
 	void *duckdb_fsst_decoder_ptr = nullptr;
+	BufferHandle handle;
 
 	vector<unsigned char> decompress_buffer;
 	bitpacking_width_t current_width;
