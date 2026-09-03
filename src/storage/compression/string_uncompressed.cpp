@@ -484,18 +484,18 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 	}
 
 	if (block < MAXIMUM_BLOCK) {
-		if (NumericCast<idx_t>(offset) >= segment.GetBlockSize()) {
-			ThrowOverflowStringOffsetOutOfBounds();
-		}
 		// read the overflow string from disk
 		// pin the initial handle and read the length
 		auto block_handle = state.GetHandle(segment.GetBlockHandle()->GetBlockManager(), block);
 		auto handle = buffer_manager.Pin(context, block_handle);
 
 		// read header
-		uint32_t length = Load<uint32_t>(handle.GetDataMutable() + offset);
+		auto string_space = segment.GetBlockSize() - sizeof(block_id_t);
+		CompressionSegmentReader reader(handle.GetDataMutable(), string_space, "overflow string block");
+		reader.SetPosition(NumericCast<idx_t>(offset));
+		uint32_t length = reader.Read<uint32_t>();
 		uint32_t remaining = length;
-		offset += sizeof(uint32_t);
+		offset = NumericCast<int32_t>(reader.Position());
 
 		BufferHandle target_handle;
 		string_t overflow_string;
@@ -540,13 +540,11 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 	// read the overflow string from memory
 	// first pin the handle, if it is not pinned yet
 	auto string_block = state.FindOverflowBlock(block);
-	if (NumericCast<idx_t>(offset) >= string_block.get().size) {
-		ThrowOverflowStringOffsetOutOfBounds();
-	}
 	auto handle = buffer_manager.Pin(context, string_block.get().block);
 	auto final_buffer = handle.GetDataMutable();
 	StringVector::AddHandle(result, std::move(handle));
-	return ReadStringWithLength(final_buffer, offset);
+	CompressionSegmentReader reader(final_buffer, string_block.get().offset, "in-memory overflow string block");
+	return ReadStringWithLength(reader, offset);
 }
 
 string_t UncompressedStringStorage::ReadString(data_ptr_t target, int32_t offset, uint32_t string_length) {
@@ -555,11 +553,11 @@ string_t UncompressedStringStorage::ReadString(data_ptr_t target, int32_t offset
 	return string_t(str_ptr, string_length);
 }
 
-string_t UncompressedStringStorage::ReadStringWithLength(data_ptr_t target, int32_t offset) {
-	auto ptr = target + offset;
-	auto str_length = Load<uint32_t>(ptr);
-	auto str_ptr = char_ptr_cast(ptr + sizeof(uint32_t));
-	return string_t(str_ptr, str_length);
+string_t UncompressedStringStorage::ReadStringWithLength(CompressionSegmentReader &reader, int32_t offset) {
+	reader.SetPosition(NumericCast<idx_t>(offset));
+	auto string_length = reader.Read<uint32_t>();
+	auto string_data = reader.ReadBytes(string_length);
+	return string_t(const_char_ptr_cast(string_data.data()), string_length);
 }
 
 void UncompressedStringStorage::WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset) {
