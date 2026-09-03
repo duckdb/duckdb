@@ -291,6 +291,18 @@ void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 
 template <class T>
 unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
+	bool invalidates_transaction = true;
+	if (!ErrorInvalidatesTransaction(error.Type())) {
+		// standard exceptions don't invalidate the transaction
+		invalidates_transaction = false;
+	} else if (Exception::InvalidatesDatabase(error.Type())) {
+		auto &db_instance = DatabaseInstance::GetDatabase(*this);
+		ValidChecker::Invalidate(db_instance, error.RawMessage());
+	}
+	if (invalidates_transaction) {
+		ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
+	}
+
 	ProcessError(error, query);
 	return make_uniq<T>(std::move(error));
 }
@@ -1123,19 +1135,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 			has_now = iterator.Peek();
 			return nullptr;
 		} catch (const std::exception &ex) {
-			ErrorData error(ex);
-			bool invalidates_transaction = true;
-			if (!ErrorInvalidatesTransaction(error.Type())) {
-				// standard exceptions don't invalidate the transaction
-				invalidates_transaction = false;
-			} else if (Exception::InvalidatesDatabase(error.Type())) {
-				auto &db_instance = DatabaseInstance::GetDatabase(*this);
-				ValidChecker::Invalidate(db_instance, error.RawMessage());
-			}
-			if (invalidates_transaction) {
-				ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
-			}
-			return ErrorResult<MaterializedQueryResult>(std::move(error), query);
+			return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
 		}
 	};
 
