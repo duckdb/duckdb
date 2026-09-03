@@ -1,0 +1,135 @@
+# name: test/sql/constraints/check/test_check_filter_contradiction.test
+# description: Filters that contradict a CHECK constraint are pruned
+# group: [check]
+
+statement ok
+CREATE TABLE t(a INTEGER, b INTEGER, CHECK (b = a + 1));
+
+statement ok
+INSERT INTO t SELECT range::INTEGER, (range + 1)::INTEGER FROM range(6144);
+
+# the filter is the negation of the CHECK constraint - the scan can be skipped entirely
+query II
+EXPLAIN SELECT count(*) FROM t WHERE b <> a + 1;
+----
+physical_plan	<REGEX>:(?s).*Empty Result.*
+
+query II
+EXPLAIN SELECT count(*) FROM t WHERE NOT (b = a + 1);
+----
+physical_plan	<REGEX>:(?s).*Empty Result.*
+
+query I
+SELECT count(*) FROM t WHERE b <> a + 1;
+----
+0
+
+# the filter must match the CHECK constraint exactly
+query II
+EXPLAIN SELECT count(*) FROM t WHERE b <> a + 2;
+----
+physical_plan	<!REGEX>:(?s).*Empty Result.*
+
+query I
+SELECT count(*) FROM t WHERE b <> a + 2;
+----
+6144
+
+# a CHECK constraint is satisfied by NULL, so the filter itself cannot be removed
+statement ok
+INSERT INTO t VALUES (NULL, 42);
+
+query I
+SELECT count(*) FROM t WHERE b = a + 1;
+----
+6144
+
+query I
+SELECT count(*) FROM t WHERE b <> a + 1;
+----
+0
+
+# inequality CHECK constraints
+statement ok
+CREATE TABLE ineq(a INTEGER, b INTEGER, CHECK (a < b));
+
+statement ok
+INSERT INTO ineq VALUES (1, 2), (3, 4);
+
+query II
+EXPLAIN SELECT * FROM ineq WHERE a >= b;
+----
+physical_plan	<REGEX>:(?s).*Empty Result.*
+
+query I
+SELECT count(*) FROM ineq WHERE a >= b;
+----
+0
+
+query II
+EXPLAIN SELECT * FROM ineq WHERE a <= b;
+----
+physical_plan	<!REGEX>:(?s).*Empty Result.*
+
+# the contradicting filter may be one of many conjuncts
+query II
+EXPLAIN SELECT * FROM ineq WHERE a > 0 AND a >= b;
+----
+physical_plan	<REGEX>:(?s).*Empty Result.*
+
+# CHECK constraints over a function call
+statement ok
+CREATE TABLE fun(s VARCHAR, CHECK (length(s) < 10));
+
+statement ok
+INSERT INTO fun VALUES ('hello');
+
+query II
+EXPLAIN SELECT * FROM fun WHERE length(s) >= 10;
+----
+physical_plan	<REGEX>:(?s).*Empty Result.*
+
+query I
+SELECT count(*) FROM fun WHERE length(s) >= 10;
+----
+0
+
+# columns that are not scanned do not trigger the rewrite
+query II
+EXPLAIN SELECT a FROM t WHERE a > 0;
+----
+physical_plan	<!REGEX>:(?s).*Empty Result.*
+
+# a boolean CHECK constraint negated with NOT
+statement ok
+CREATE TABLE bl(f BOOLEAN, CHECK (f));
+
+statement ok
+INSERT INTO bl VALUES (true), (NULL);
+
+query II
+EXPLAIN SELECT * FROM bl WHERE NOT f;
+----
+physical_plan	<REGEX>:(?s).*Empty Result.*
+
+query I
+SELECT count(*) FROM bl WHERE NOT f;
+----
+0
+
+query I
+SELECT count(*) FROM bl WHERE f;
+----
+1
+
+# volatile CHECK constraints hold at insertion time only - they cannot be used
+statement ok
+CREATE TABLE vol(a DOUBLE, CHECK (a < random()));
+
+statement ok
+INSERT INTO vol VALUES (0.0);
+
+query II
+EXPLAIN SELECT * FROM vol WHERE a >= random();
+----
+physical_plan	<!REGEX>:(?s).*Empty Result.*

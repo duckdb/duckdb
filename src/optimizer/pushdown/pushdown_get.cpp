@@ -1,12 +1,19 @@
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 
@@ -41,12 +48,93 @@ static void NormalizeColumnRefAliases(unique_ptr<Expression> &expr, const Logica
 	});
 }
 
+//! Rewrite the column references of a bound CHECK expression (which are storage indexes) into bindings of the get
+static bool RewriteCheckExpression(unique_ptr<Expression> &expr, const LogicalGet &get) {
+	unordered_map<idx_t, idx_t> storage_to_binding;
+	auto &column_ids = get.GetColumnIds();
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		StorageIndex storage_index;
+		if (column_ids[i].HasChildren() || !get.TryGetStorageIndex(column_ids[i], storage_index)) {
+			continue;
+		}
+		storage_to_binding[storage_index.GetPrimaryIndex()] = i;
+	}
+	bool success = true;
+	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
+	    expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &child) {
+		    auto entry = storage_to_binding.find(ref.Index());
+		    if (entry == storage_to_binding.end()) {
+			    // the column is not scanned by the get
+			    success = false;
+			    return;
+		    }
+		    child = make_uniq<BoundColumnRefExpression>(ref.GetReturnType(),
+		                                                ColumnBinding(get.table_index, ProjectionIndex(entry->second)));
+	    });
+	return success;
+}
+
+//! A CHECK constraint guarantees that its expression never evaluates to FALSE for any row in the table
+//! a filter that is the negation of a CHECK expression can therefore never be satisfied
+static bool IsNegation(const Expression &filter, const Expression &check) {
+	if (filter.GetExpressionType() == ExpressionType::OPERATOR_NOT) {
+		return filter.Cast<BoundOperatorExpression>().GetChildren()[0]->Equals(check);
+	}
+	if (!BoundComparisonExpression::IsComparison(filter) || !BoundComparisonExpression::IsComparison(check) ||
+	    NegateComparisonExpression(filter.GetExpressionType()) != check.GetExpressionType()) {
+		return false;
+	}
+	auto &filter_comparison = filter.Cast<BoundFunctionExpression>();
+	auto &check_comparison = check.Cast<BoundFunctionExpression>();
+	return BoundComparisonExpression::Left(filter_comparison)
+	           .Equals(BoundComparisonExpression::Left(check_comparison)) &&
+	       BoundComparisonExpression::Right(filter_comparison)
+	           .Equals(BoundComparisonExpression::Right(check_comparison));
+}
+
+//! Check if any of the filters contradicts a CHECK constraint of the scanned table
+bool FilterPushdown::CheckConstraintsUnsatisfiable(const LogicalGet &get) {
+	auto table = get.GetTable();
+	if (filters.empty() || !table) {
+		return false;
+	}
+	shared_ptr<Binder> binder;
+	for (auto &constraint : table->GetConstraints()) {
+		if (constraint->type != ConstraintType::CHECK) {
+			continue;
+		}
+		if (!binder) {
+			binder = Binder::CreateBinder(optimizer.context);
+		}
+		auto bound_constraint = binder->BindConstraint(*constraint, table->name, table->GetColumns());
+		auto check_expression = std::move(bound_constraint->Cast<BoundCheckConstraint>().expression);
+		if (check_expression->IsVolatile() || !check_expression->IsConsistent()) {
+			continue;
+		}
+		// the CheckBinder casts the CHECK expression to INTEGER - strip the cast to get back the predicate
+		if (!BoundCastExpression::IsCast(*check_expression) || !RewriteCheckExpression(check_expression, get)) {
+			continue;
+		}
+		auto &check_predicate = BoundCastExpression::Child(check_expression->Cast<BoundFunctionExpression>());
+		for (auto &filter : filters) {
+			if (IsNegation(*filter->filter, check_predicate)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op->Cast<LogicalGet>();
 
 	for (auto &filter : filters) {
 		NormalizeColumnRefAliases(filter->filter, get);
+	}
+
+	if (CheckConstraintsUnsatisfiable(get)) {
+		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
 
 	if (get.function.pushdown_complex_filter || get.function.filter_pushdown) {
