@@ -79,3 +79,18 @@ SELECT COUNT(*) FROM (
 )
 ----
 0
+
+# Test with midbuffer line ending
+statement ok
+COPY (
+    SELECT (repeat('p', 22) || chr(13) || chr(13) || chr(10) ||
+        string_agg(lpad(CAST(t.id AS VARCHAR), 2, '0') || ',' || repeat('x', 19) || chr(13) || chr(13) || chr(10), ''))::BLOB
+    FROM generate_series(0, 89) t(id)
+) TO '{TEST_DIR}/rrrn_mid.csv' (FORMAT BLOB);
+
+query II
+SELECT count(*), count(DISTINCT id) FROM read_csv('{TEST_DIR}/rrrn_mid.csv',
+    auto_detect=false, header=true, delim=',', columns={'id':'BIGINT','val':'VARCHAR'},
+    strict_mode=false, ignore_errors=true, buffer_size=4096, max_line_size=2048, parallel=true)
+----
+90	90

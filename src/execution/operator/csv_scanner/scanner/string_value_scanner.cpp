@@ -1482,14 +1482,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 				}
 				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 				iterator.pos.buffer_pos++;
-			}
-			// If we consumed newline characters but didn't add a row, and the previous
-			// buffer's scanner already fully counted the row (last_position overshoots the
-			// buffer), return early to avoid double-counting the next row. This handles
-			// \\r\\r\\n line endings where the first \\r triggered AddRow in the previous
-			// buffer and the remaining \\r\\n is here. We check that the first consumed
-			// character is \\r (not \\n) to avoid false-positives for \\r\\n line endings
-			// where \\r was at the end of the previous buffer and \\n is here.
+			}				// Avoid double-counting when \r\r\n line endings split across buffer boundary: first \r triggers AddRow in previous buffer, remaining \r\n is here. Check first consumed char is \r (not \n) to avoid false-positives.
 			if (over_buffer_string.empty() && iterator.pos.buffer_pos > pre_carry_pos &&
 			    result.last_position.buffer_pos > previous_buffer_handle->actual_size &&
 			    buffer_handle_ptr[pre_carry_pos] == '\r') {
