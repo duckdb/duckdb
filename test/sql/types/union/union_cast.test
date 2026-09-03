@@ -270,3 +270,43 @@ query I
 SELECT union_tag(1::INTEGER::UNION(f1 VARCHAR, t2 BIGINT)::UNION(F1 VARCHAR, T2 BIGINT, F3 TINYINT))
 ----
 T2
+
+# TRY_CAST should continue processing the remaining union members
+query III
+SELECT union_tag(cu), cu.a, cu.b
+FROM (
+    SELECT id, try_cast(u AS UNION(a INTEGER, b INTEGER)) AS cu
+    FROM (
+        VALUES
+            (1, union_value(a := 'x')::UNION(a VARCHAR, b INTEGER)),
+            (2, union_value(b := 42)::UNION(a VARCHAR, b INTEGER)),
+            (3, union_value(a := NULL::VARCHAR)::UNION(a VARCHAR, b INTEGER))
+    ) t(id, u)
+) result
+ORDER BY id;
+----
+NULL	NULL	NULL
+b		NULL	42
+a		NULL	NULL
+
+query III
+SELECT union_tag(cu), cu.a, cu.b
+FROM (
+    SELECT try_cast(
+        union_value(a := 'x')::UNION(a VARCHAR, b INTEGER)
+        AS UNION(a INTEGER, b INTEGER)
+    ) AS cu
+);
+----
+NULL	NULL	NULL
+
+query III
+SELECT union_tag(cu), cu.a, cu.b
+FROM (
+    SELECT try_cast(
+        union_value(a := NULL::VARCHAR)::UNION(a VARCHAR, b INTEGER)
+        AS UNION(a INTEGER, b INTEGER)
+    ) AS cu
+);
+----
+a	NULL	NULL

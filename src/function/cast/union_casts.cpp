@@ -231,6 +231,16 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 
 	auto target_member_is_mapped = vector<bool>(target_member_count);
 
+	auto all_ok {true};
+
+	// if constant vector,
+	// then one boolean is enough to record whether its active member failed to cast
+	auto constant_cast_failed {false};
+
+	auto &source_tag_vector = UnionVector::GetTags(source);
+
+	const bool source_is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+
 	// Perform the casts from source to target members
 	for (idx_t member_idx = 0; member_idx < source_member_count; member_idx++) {
 		auto target_member_idx = cast_data.tag_map[member_idx];
@@ -241,13 +251,44 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 
 		CastParameters child_parameters(parameters, member_cast.GetCastData(), lstate.local_states[member_idx]);
 		if (!member_cast.Cast(source_member_vector, target_member_vector, count, child_parameters)) {
-			return false;
+			all_ok = false;
+
+			// The target member validity mask already contains the rows that
+			// became NULL during the cast. now, compare it with the source validity
+			// to distinguish a failed conversion from an input that was already NULL.
+			VectorValidityIterator source_validity(source_member_vector);
+			VectorValidityIterator target_validity(target_member_vector);
+
+			if (source_is_constant) {
+				if (!ConstantVector::IsNull(source)) {
+					auto source_tag = ConstantVector::GetData<union_tag_t>(source_tag_vector)[0];
+
+					if (source_tag == member_idx && source_validity.IsValid(0) && !target_validity.IsValid(0)) {
+						constant_cast_failed = true;
+					}
+				}
+			} else {
+				auto source_tags = source_tag_vector.Values<union_tag_t>();
+
+				for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+					auto tag = source_tags[row_idx];
+
+					// Ignore NULL unions and rows where another member is active.
+					if (!tag.IsValid() || tag.GetValue() != member_idx) {
+						continue;
+					}
+
+					// A valid active source value becoming NULL means that this
+					// row's conversion failed. TRY_CAST must null the whole union.
+					if (source_validity.IsValid(row_idx) && !target_validity.IsValid(row_idx)) {
+						FlatVector::SetNull(result, row_idx, true);
+					}
+				}
+			}
 		}
 
 		target_member_is_mapped[target_member_idx] = true;
 	}
-
-	// All member casts succeeded!
 
 	// Set the unmapped target members to constant NULL.
 	// If we cast UNION(A, B) -> UNION(A, B, C) we need to invalidate C so that
@@ -261,13 +302,14 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 	}
 
 	// Update the tags in the result vector
-	auto &source_tag_vector = UnionVector::GetTags(source);
+
 	auto &result_tag_vector = UnionVector::GetTags(result);
 
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (source_is_constant) {
 		// Constant vector case optimization
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		if (ConstantVector::IsNull(source)) {
+
+		if (ConstantVector::IsNull(source) || constant_cast_failed) {
 			ConstantVector::SetNull(result, count_t(count));
 		} else {
 			// map the tag
@@ -287,26 +329,28 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 
 		// We assume that a union tag vector validity matches the union vector validity.
 		auto source_tag_entries = source_tag_vector.Values<union_tag_t>();
+		auto result_tag_data = FlatVector::GetDataMutable<union_tag_t>(result_tag_vector);
 
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 			auto entry = source_tag_entries[row_idx];
-			if (entry.IsValid()) {
-				// map the tag
-				auto target_tag = cast_data.tag_map[entry.GetValue()];
-				FlatVector::GetDataMutable<union_tag_t>(result_tag_vector)[row_idx] =
-				    UnsafeNumericCast<union_tag_t>(target_tag);
-			} else {
-				// Issue: The members of the result is not always flatvectors
-				// In the case of TryNullCast, the result member is constant.
+
+			// Propagate source NULLs and rows whose active member failed to cast.
+			if (!entry.IsValid() || FlatVector::IsNull(result, row_idx)) {
 				FlatVector::SetNull(result, row_idx, true);
+				continue;
 			}
+
+			// The active member cast succeeded, so map its source tag to the
+			// corresponding target union tag.
+			auto target_tag = cast_data.tag_map[entry.GetValue()];
+			result_tag_data[row_idx] = UnsafeNumericCast<union_tag_t>(target_tag);
 		}
 	}
 
 	FlatVector::SetSize(result, count_t(count));
 	result.Verify();
 
-	return true;
+	return all_ok;
 }
 
 static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -314,11 +358,10 @@ static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParamet
 	auto &cast_data = parameters.cast_data->Cast<UnionMemberBoundCastData>();
 
 	if (cast_data.is_member_to_member) {
-		UnionMemberToMemberCast(source, result, count, parameters);
-	} else {
-		ToUnionMemberCast(source, result, count, parameters);
+		return UnionMemberToMemberCast(source, result, count, parameters);
 	}
-	return true;
+
+	return ToUnionMemberCast(source, result, count, parameters);
 }
 
 BoundCastInfo DefaultCasts::ImplicitToUnionCast(BindCastInput &input, const LogicalType &source,
