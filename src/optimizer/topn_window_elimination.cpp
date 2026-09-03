@@ -1017,6 +1017,10 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			// However, we allow replacing references to join columns as they are equal to the other side by condition.
 			column_binding_map_t<ColumnBinding> replaceable_bindings;
 			for (auto &condition : join.conditions) {
+				// A condition that is not a left/right comparison has no bindings to replace
+				if (!condition.IsComparison()) {
+					continue;
+				}
 				if (condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
 					return false;
 				}
