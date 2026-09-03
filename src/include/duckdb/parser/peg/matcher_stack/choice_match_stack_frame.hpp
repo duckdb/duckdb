@@ -35,13 +35,13 @@ public:
 			SetResult(MatcherResult::Failure());
 			return;
 		}
-		child_state = make_uniq<MatchState>(match_state);
+		child_state.emplace(match_state);
 		stack.PushChildFrame(*this, choice_matcher.matchers[child_index].get(), *child_state);
 	}
 
 private:
 	const ChoiceMatcher &choice_matcher;
-	unique_ptr<MatchState> child_state;
+	optional<MatchState> child_state;
 	idx_t child_index = 0;
 	optional_idx start_offset;
 };
