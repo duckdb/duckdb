@@ -134,16 +134,20 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
 				                      info.name, existing_mode_str, attached_mode);
 			}
-			if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+			const bool same_attach = !existing_db->GetCatalog().HasConflictingAttachOptions(info.path, options);
+			if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
+			    (same_attach && !requires_tracking_attaches)) {
 				if (!options.default_table.Name().empty()) {
 					existing_db->GetCatalog().SetDefaultTable(options.default_table.Schema(),
 					                                          options.default_table.Name());
 				}
 				return existing_db;
 			}
-			// REPLACE: always drop the current attach so the same path is reopened (github #20748).
-			// Skipping on "same path, same options" left a stale handle when the file changed on disk.
-			DetachDatabase(context, info.name, OnEntryNotFound::RETURN_NULL);
+			if (same_attach) {
+				// Reopen file-based DuckDB so a replaced file is not served from a stale handle.
+				existing_db.reset();
+				DetachDatabase(context, info.name, OnEntryNotFound::RETURN_NULL);
+			}
 		}
 	}
 
@@ -153,12 +157,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		// Start trying to attach.
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
+			// first check if it exists within this transaction
 			auto &meta_transaction = MetaTransaction::Get(context);
-			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-				// We just detached this alias. Returning the still-held object is the stale-handle
-				// bug. Break and try a new attach; the file lock will error if the txn still has it.
-				break;
-			}
 			if (auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name)) {
 				// it does! return it
 				return existing_db;
