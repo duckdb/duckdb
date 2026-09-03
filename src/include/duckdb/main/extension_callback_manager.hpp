@@ -47,9 +47,9 @@ public:
 	void Register(PlannerExtension extension);
 	void Register(OptimizerExtension extension);
 	void Register(shared_ptr<OperatorExtension> extension);
-	void Register(const string &name, shared_ptr<StorageExtension> extension);
+	void Register(const Identifier &name, shared_ptr<StorageExtension> extension);
 	void Register(shared_ptr<ExtensionCallback> extension);
-	void Register(const string &name, shared_ptr<ProfilerExtension> extension);
+	void Register(const Identifier &name, shared_ptr<ProfilerExtension> extension);
 
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
@@ -57,10 +57,10 @@ public:
 	ExtensionCallbackIteratorHelper<DialectExtension> DialectExtensions() const;
 	ExtensionCallbackIteratorHelper<PlannerExtension> PlannerExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbacks() const;
-	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
-	optional_ptr<ProfilerExtension> FindProfilerExtension(const string &name) const;
+	optional_ptr<StorageExtension> FindStorageExtension(const Identifier &name) const;
+	optional_ptr<ProfilerExtension> FindProfilerExtension(const Identifier &name) const;
 	bool HasParserExtensions() const;
-	bool HasDialectExtension(const string &name) const;
+	bool HasDialectExtension(const Identifier &name) const;
 
 private:
 	mutex registry_lock;

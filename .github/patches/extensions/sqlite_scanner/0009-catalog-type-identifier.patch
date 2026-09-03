@@ -1,0 +1,12 @@
+diff --git a/src/include/storage/sqlite_catalog.hpp b/src/include/storage/sqlite_catalog.hpp
+--- a/src/include/storage/sqlite_catalog.hpp
++++ b/src/include/storage/sqlite_catalog.hpp
+@@ -25,7 +25,7 @@
+ 
+ public:
+ 	void Initialize(bool load_builtin) override;
+-	string GetCatalogType() override {
++	Identifier GetCatalogType() override {
+ 		return "sqlite";
+ 	}
+ 

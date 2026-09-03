@@ -19,8 +19,8 @@ class ExtensionInfo {
 public:
 	ExtensionInfo();
 
-	string orig_ext_name;
-	string alias;
+	Identifier orig_ext_name;
+	Identifier alias;
 	mutex lock;
 	atomic<bool> is_loaded;
 	unique_ptr<ExtensionInstallInfo> install_info;
@@ -50,15 +50,15 @@ class ExtensionManager {
 public:
 	explicit ExtensionManager(DatabaseInstance &db);
 
-	DUCKDB_API bool ExtensionIsLoaded(const string &name);
-	DUCKDB_API vector<string> GetExtensions();
-	DUCKDB_API optional_ptr<ExtensionInfo> GetExtensionInfo(const string &name);
+	DUCKDB_API bool ExtensionIsLoaded(const Identifier &name);
+	DUCKDB_API vector<Identifier> GetExtensions();
+	DUCKDB_API optional_ptr<ExtensionInfo> GetExtensionInfo(const Identifier &name);
 	DUCKDB_API unique_ptr<ExtensionActiveLoad> BeginLoad(const ExtensionLoadOptions &options);
 
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);
 
-	void RemoveExtensionInfo(const string &name);
+	void RemoveExtensionInfo(const Identifier &name);
 
 private:
 	DatabaseInstance &db;

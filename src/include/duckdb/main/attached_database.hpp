@@ -72,7 +72,7 @@ struct AttachOptions {
 	//! The recovery type of the database.
 	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	//! The file format type. The default type is a duckdb database file, but other file formats are possible.
-	string db_type;
+	Identifier db_type;
 	//! The verbatim path before extension-prefix stripping. Unset if not from an ATTACH statement.
 	optional<string> original_path;
 	//! Set of remaining (key, value) options

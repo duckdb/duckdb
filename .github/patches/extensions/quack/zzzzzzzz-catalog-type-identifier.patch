@@ -1,0 +1,13 @@
+diff --git a/src/include/storage/quack_catalog.hpp b/src/include/storage/quack_catalog.hpp
+index a541afc..61080d4 100644
+--- a/src/include/storage/quack_catalog.hpp
++++ b/src/include/storage/quack_catalog.hpp
+@@ -25,7 +25,7 @@ public:
+ 	~QuackCatalog() override;
+ 
+ public:
+-	string GetCatalogType() override {
++	Identifier GetCatalogType() override {
+ 		return "quack";
+ 	}
+ 	static QuackCatalog &GetQuackCatalog(ClientContext &context, Value &catalog_name);

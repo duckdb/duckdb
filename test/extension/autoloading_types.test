@@ -24,7 +24,7 @@ set autoinstall_known_extensions=false
 statement maybe
 SELECT '{}'::JSON;
 ----
-Catalog Error: Type with name "JSON" is not in the catalog, but it exists in the json extension.
+Catalog Error: Type with name "JSON" is not in the catalog, but it exists in the "json" extension.
 
 ### With autoloading, install and correct repo
 statement ok

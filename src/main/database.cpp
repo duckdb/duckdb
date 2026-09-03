@@ -346,14 +346,14 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	auto &fs = FileSystem::GetFileSystem(*this);
 	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
-	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
+	if (!config.options.database_type.empty() && config.options.database_type != "duckdb") {
 		// if we are opening an extension database - load the extension
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
 		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
-			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, {config.options.database_type});
+			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
 		}
 	}
 
@@ -586,11 +586,11 @@ idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
 
-bool DatabaseInstance::ExtensionIsLoaded(const string &name) {
+bool DatabaseInstance::ExtensionIsLoaded(const Identifier &name) {
 	return extension_manager->ExtensionIsLoaded(name);
 }
 
-bool DuckDB::ExtensionIsLoaded(const std::string &name) {
+bool DuckDB::ExtensionIsLoaded(const Identifier &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
@@ -657,11 +657,12 @@ const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 	return create_api_v1();
 }
 
-void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result, const string &extension_name,
+void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result,
+                                                   const string &extension_name_or_path,
                                                    ext_init_c_api_v2_fun_t init_fun,
                                                    optional_ptr<ClientContext> context, bool statically_linked) {
 	D_ASSERT(invoke_capi_v2);
-	invoke_capi_v2(*this, init_result, extension_name, init_fun, context, statically_linked);
+	invoke_capi_v2(*this, init_result, extension_name_or_path, init_fun, context, statically_linked);
 }
 
 LogManager &DatabaseInstance::GetLogManager() const {

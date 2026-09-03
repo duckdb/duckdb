@@ -1,5 +1,5 @@
 diff --git a/test/sql/aws_errors.test b/test/sql/aws_errors.test
-index 30d4f5a..2ee1d09 100644
+index 30d4f5a..7f04a45 100644
 --- a/test/sql/aws_errors.test
 +++ b/test/sql/aws_errors.test
 @@ -8,7 +8,7 @@ require no_extension_autoloading "EXPECTED: Test relies on explicit INSTALL and
@@ -7,7 +7,16 @@ index 30d4f5a..2ee1d09 100644
  create secret s1 (type s3, provider 'credential_chain');
  ----
 -Invalid Input Error: Secret provider credential_chain for type s3 does not exist, but it exists in the aws extension.
-+Invalid Input Error: Secret provider "credential_chain" for type "s3" does not exist, but it exists in the aws extension.
++Invalid Input Error: Secret provider "credential_chain" for type "s3" does not exist, but it exists in the "aws" extension.
  
  # Require statement will ensure this test is run with this extension loaded
  require aws
+@@ -19,7 +19,7 @@ require aws
+ statement error
+ create secret s1 (type s3, provider 'credential_chain', validation 'none');
+ ----
+-Secret type 's3' does not exist, but it exists in the httpfs extension
++Secret type "s3" does not exist, but it exists in the "httpfs" extension
+ 
+ require httpfs
+ 

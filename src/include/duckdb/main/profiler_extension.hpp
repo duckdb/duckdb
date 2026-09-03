@@ -27,8 +27,8 @@ public:
 	//! Creates the renderer for the registered format name
 	create_tree_renderer_t create_renderer = nullptr;
 
-	static void Register(DBConfig &config, const string &format_name, shared_ptr<ProfilerExtension> extension);
-	static optional_ptr<ProfilerExtension> Find(const ClientContext &context, const string &format_name);
+	static void Register(DBConfig &config, const Identifier &format_name, shared_ptr<ProfilerExtension> extension);
+	static optional_ptr<ProfilerExtension> Find(const ClientContext &context, const Identifier &format_name);
 };
 
 } // namespace duckdb

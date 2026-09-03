@@ -10,8 +10,8 @@ namespace duckdb {
 //! duckdb_v2_extension_handle, and the one get_api takes back.
 struct DuckDBExtensionLoadStateV2 {
 	DuckDBExtensionLoadStateV2(DatabaseInstance &db, const ExtensionInitResult &init_result,
-	                           const string &extension_name)
-	    : db(db), init_result(init_result), loader(db, extension_name) {
+	                           const string &extension_name_or_path)
+	    : db(db), init_result(init_result), loader(db, extension_name_or_path) {
 	}
 
 	static DuckDBExtensionLoadStateV2 &Get(duckdb_v2_extension_handle handle) {
@@ -119,7 +119,7 @@ const void *ExtensionGetAPIV2(duckdb_v2_extension_handle handle, const char *ver
 }
 
 //! Runs the entrypoint against a context that already has a transaction, and reports what the extension made of it.
-void CallEntrypoint(DuckDBExtensionLoadStateV2 &load_state, const string &extension_name,
+void CallEntrypoint(DuckDBExtensionLoadStateV2 &load_state, const string &extension_name_or_path,
                     ext_init_c_api_v2_fun_t init_fun, ClientContext &context, bool statically_linked) {
 	// The slot is always live: the extension populates it, it never allocates or destroys one (there is no
 	// error_info constructor in the API). Heap allocated so that an extension violating that and destroying it
@@ -140,7 +140,8 @@ void CallEntrypoint(DuckDBExtensionLoadStateV2 &load_state, const string &extens
 		error_info.release();
 	}
 
-	const string prefix = "An error was thrown during initialization of the extension '" + extension_name + "': ";
+	const string prefix =
+	    "An error was thrown during initialization of the extension '" + extension_name_or_path + "': ";
 
 	// A get_api refusal takes precedence: the entrypoint returns without touching the error slot in that case, because
 	// the reason was already recorded here.
@@ -160,7 +161,7 @@ void CallEntrypoint(DuckDBExtensionLoadStateV2 &load_state, const string &extens
 		throw FatalException("Extension '%s' did not initialize the C API struct. This indicates an error in the "
 		                     "extension: V2 C API extensions must call DUCKDB_EXTENSION_API_INIT before anything else "
 		                     "in their entrypoint.",
-		                     extension_name);
+		                     extension_name_or_path);
 	}
 }
 
@@ -174,20 +175,20 @@ auto GetExtensionLoader(duckdb_v2_extension_handle handle) -> ExtensionLoader & 
 
 } // namespace capiv2
 
-void InvokeCAPIV2Entrypoint(DatabaseInstance &db, const ExtensionInitResult &init_result, const string &extension_name,
-                            ext_init_c_api_v2_fun_t init_fun, optional_ptr<ClientContext> context,
-                            bool statically_linked) {
-	DuckDBExtensionLoadStateV2 load_state(db, init_result, extension_name);
+void InvokeCAPIV2Entrypoint(DatabaseInstance &db, const ExtensionInitResult &init_result,
+                            const string &extension_name_or_path, ext_init_c_api_v2_fun_t init_fun,
+                            optional_ptr<ClientContext> context, bool statically_linked) {
+	DuckDBExtensionLoadStateV2 load_state(db, init_result, extension_name_or_path);
 
 	// A context is only usable here if a transaction is already running on it, which is the case when loading through
 	// LOAD. Otherwise open one of our own, matching what a V1 extension does when it connects in its glue code.
 	if (context && context->transaction.HasActiveTransaction()) {
-		CallEntrypoint(load_state, extension_name, init_fun, *context, statically_linked);
+		CallEntrypoint(load_state, extension_name_or_path, init_fun, *context, statically_linked);
 		return;
 	}
 
 	CAPIV2LoadScope scope(db);
-	CallEntrypoint(load_state, extension_name, init_fun, scope.GetContext(), statically_linked);
+	CallEntrypoint(load_state, extension_name_or_path, init_fun, scope.GetContext(), statically_linked);
 	scope.Commit();
 }
 

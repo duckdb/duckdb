@@ -13,7 +13,7 @@ PRAGMA profiling_output = '{TEST_DIR}/profiler.json';
 statement error
 PRAGMA enable_profiling = 'html';
 ----
-Parser Error: Profiler file type ({TEST_DIR}/profiler.json) must either have the same file extension as the profiling output type (html), or be a '.txt' file. Set 'profiling_output' to a 'html' file or run "RESET profiling_output" first.
+Parser Error: Profiler file type ({TEST_DIR}/profiler.json) must either have the same file extension as the profiling output type ("html"), or be a '.txt' file. Set 'profiling_output' to a "html" file or run "RESET profiling_output" first.
 
 # RESET
 statement ok
@@ -44,7 +44,7 @@ RESET enable_profiling;
 statement error
 PRAGMA profiling_output = '{TEST_DIR}/profiler.json';
 ----
-Parser Error: Profiler file type ({TEST_DIR}/profiler.json) must either have the same file extension as the profiling output type (query_tree), or be a '.txt' file. Set "enable_profiling = 'json'" first.
+Parser Error: Profiler file type ({TEST_DIR}/profiler.json) must either have the same file extension as the profiling output type ("query_tree"), or be a '.txt' file. Set "enable_profiling = 'json'" first.
 
 # Make sure we can't write over another file:
 statement ok

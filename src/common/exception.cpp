@@ -332,7 +332,7 @@ MissingExtensionException::MissingExtensionException(const string &msg)
     : Exception(ExceptionType::MISSING_EXTENSION, msg) {
 }
 
-AutoloadException::AutoloadException(const string &extension_name, const string &message)
+AutoloadException::AutoloadException(const Identifier &extension_name, const string &message)
     : Exception(
           ExceptionType::AUTOLOAD,
           StringUtil::Format("An error occurred while trying to automatically install the required extension '%s:\n%s",

@@ -29,13 +29,13 @@ public:
 	virtual void OnConnectionClosed(ClientContext &context) {
 	}
 	//! Called before an extension starts loading
-	virtual void OnBeginExtensionLoad(DatabaseInstance &db, const string &name) {
+	virtual void OnBeginExtensionLoad(DatabaseInstance &db, const Identifier &name) {
 	}
 	//! Called after an extension is finished loading
-	virtual void OnExtensionLoaded(DatabaseInstance &db, const string &name) {
+	virtual void OnExtensionLoaded(DatabaseInstance &db, const Identifier &name) {
 	}
 	//! Called after an extension fails to load loading
-	virtual void OnExtensionLoadFail(DatabaseInstance &db, const string &name, const ErrorData &error) {
+	virtual void OnExtensionLoadFail(DatabaseInstance &db, const Identifier &name, const ErrorData &error) {
 	}
 
 	static void Register(DBConfig &config, shared_ptr<ExtensionCallback> extension);

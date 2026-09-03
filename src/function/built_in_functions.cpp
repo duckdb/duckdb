@@ -93,10 +93,10 @@ void BuiltinFunctions::AddFunction(CopyFunction function) {
 }
 
 struct ExtensionFunctionInfo : public ScalarFunctionInfo {
-	explicit ExtensionFunctionInfo(string extension_p) : extension(std::move(extension_p)) {
+	explicit ExtensionFunctionInfo(Identifier extension_p) : extension(std::move(extension_p)) {
 	}
 
-	string extension;
+	Identifier extension;
 };
 
 static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput &input) {

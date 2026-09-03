@@ -1,0 +1,95 @@
+diff --git a/src/include/storage/ducklake_catalog.hpp b/src/include/storage/ducklake_catalog.hpp
+--- a/src/include/storage/ducklake_catalog.hpp
++++ b/src/include/storage/ducklake_catalog.hpp
+@@ -100,7 +100,7 @@
+ 	void Initialize(bool load_builtin) override;
+ 	void Initialize(optional_ptr<ClientContext> context, bool load_builtin) override;
+ 	void FinalizeLoad(optional_ptr<ClientContext> context) override;
+-	string GetCatalogType() override {
++	Identifier GetCatalogType() override {
+ 		return "ducklake";
+ 	}
+ 	const string &MetadataDatabaseName() const {
+@@ -115,7 +115,7 @@
+ 	const string &DataPath() const {
+ 		return options.data_path;
+ 	}
+-	const string &MetadataType() const {
++	const Identifier &MetadataType() const {
+ 		return metadata_type;
+ 	}
+ 	bool IsInitialized() const {
+@@ -326,7 +326,7 @@
+ 	//! A unique tracker for catalog changes in uncommitted transactions.
+ 	atomic<idx_t> last_uncommitted_catalog_version;
+ 	//! The metadata server type
+-	string metadata_type;
++	Identifier metadata_type;
+ 	//! The resolved DuckLake spec version of the attached catalog
+ 	DuckLakeVersion ducklake_version = DuckLakeVersion::V1_0;
+ 	//! A per-instance identifier used to scope ObjectCache keys.
+diff --git a/src/include/storage/ducklake_metadata_manager.hpp b/src/include/storage/ducklake_metadata_manager.hpp
+--- a/src/include/storage/ducklake_metadata_manager.hpp
++++ b/src/include/storage/ducklake_metadata_manager.hpp
+@@ -117,7 +117,7 @@
+ 	virtual ~DuckLakeMetadataManager();
+ 
+ 	typedef unique_ptr<DuckLakeMetadataManager> (*create_t)(DuckLakeTransaction &transaction);
+-	static void Register(const string &name, create_t);
++	static void Register(const Identifier &name, create_t);
+ 
+ 	static unique_ptr<DuckLakeMetadataManager> Create(DuckLakeTransaction &transaction);
+ 
+@@ -517,7 +517,7 @@
+ 	void ClearInlinedTableCaches();
+ 
+ private:
+-	static unordered_map<string /* name */, create_t> metadata_managers;
++	static identifier_map_t<create_t> metadata_managers;
+ 	static mutex metadata_managers_lock;
+ 
+ 	//! Check which file IDs have inlined deletions (returns set of file IDs that have deletions)
+diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
+--- a/src/storage/ducklake_catalog.cpp
++++ b/src/storage/ducklake_catalog.cpp
+@@ -199,7 +199,7 @@
+ 	auto entry = options.metadata_parameters.find("type");
+ 	if (entry != options.metadata_parameters.end()) {
+ 		// metadata type is explicitly provided - fetch it
+-		metadata_type = entry->second.ToString();
++		metadata_type = Identifier(entry->second.ToString());
+ 	} else {
+ 		// extract from the connection string
+ 		string path = options.metadata_path;
+diff --git a/src/storage/ducklake_initializer.cpp b/src/storage/ducklake_initializer.cpp
+--- a/src/storage/ducklake_initializer.cpp
++++ b/src/storage/ducklake_initializer.cpp
+@@ -42,7 +42,7 @@
+ 	for (auto &option : options.metadata_parameters) {
+ 		attach_options.push_back(option.first + " " + option.second.ToSQLString());
+ 	}
+-	const string metadata_type = catalog.MetadataType();
++	const Identifier metadata_type = catalog.MetadataType();
+ 	if (metadata_type.empty() || metadata_type == "duckdb") {
+ 		// this is duckdb, we always do latest storage
+ 		attach_options.push_back(StringUtil::Format("STORAGE_VERSION '%s'", "latest"));
+diff --git a/src/storage/ducklake_metadata_manager.cpp b/src/storage/ducklake_metadata_manager.cpp
+--- a/src/storage/ducklake_metadata_manager.cpp
++++ b/src/storage/ducklake_metadata_manager.cpp
+@@ -42,14 +42,14 @@
+ }
+ optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
+ 
+-unordered_map<string /* name */, DuckLakeMetadataManager::create_t> DuckLakeMetadataManager::metadata_managers = {
++identifier_map_t<DuckLakeMetadataManager::create_t> DuckLakeMetadataManager::metadata_managers = {
+     {"postgres", PostgresMetadataManager::Create}, {"postgres_scanner", PostgresMetadataManager::Create},
+     {"quack", QuackMetadataManager::Create},       {"quack_scanner", QuackMetadataManager::Create},
+     {"sqlite", SQLiteMetadataManager::Create},     {"sqlite_scanner", SQLiteMetadataManager::Create}};
+ 
+ mutex DuckLakeMetadataManager::metadata_managers_lock;
+ 
+-void DuckLakeMetadataManager::Register(const string &name, DuckLakeMetadataManager::create_t create) {
++void DuckLakeMetadataManager::Register(const Identifier &name, DuckLakeMetadataManager::create_t create) {
+ 	lock_guard<mutex> lock(metadata_managers_lock);
+ 	if (metadata_managers.find(name) != metadata_managers.end()) {
+ 		throw InternalException("Metadata manager with name \"%s\" already exists!", name);

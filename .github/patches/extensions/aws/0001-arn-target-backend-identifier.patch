@@ -1,0 +1,13 @@
+diff --git a/src/arn_storage.cpp b/src/arn_storage.cpp
+index 1749f0f..99a24cd 100644
+--- a/src/arn_storage.cpp
++++ b/src/arn_storage.cpp
+@@ -34,7 +34,7 @@ struct ParsedArn {
+ 
+ struct ArnTarget {
+ 	//! Storage extension the ATTACH is dispatched to
+-	string backend;
++	Identifier backend;
+ 	string path;
+ 	//! Injected into AttachInfo::options and the already-bound AttachOptions
+ 	case_insensitive_map_t<Value> options;

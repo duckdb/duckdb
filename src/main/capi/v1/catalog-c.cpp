@@ -10,8 +10,8 @@ namespace {
 
 struct CCatalogWrapper {
 	Catalog &catalog;
-	string catalog_type;
-	CCatalogWrapper(Catalog &catalog, const string &catalog_type) : catalog(catalog), catalog_type(catalog_type) {
+	Identifier catalog_type;
+	CCatalogWrapper(Catalog &catalog, const Identifier &catalog_type) : catalog(catalog), catalog_type(catalog_type) {
 	}
 };
 

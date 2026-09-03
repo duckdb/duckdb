@@ -61,7 +61,7 @@ public:
 	duckdb::unique_ptr<DuckDB> db;
 	duckdb::unique_ptr<Connection> con;
 	duckdb::unique_ptr<DBConfig> config;
-	unordered_set<string> extensions;
+	identifier_set_t extensions;
 	unordered_map<string, duckdb::unique_ptr<DuckDB>> named_db;
 	unordered_map<string, duckdb::unique_ptr<Connection>> named_connection_map;
 	bool output_hash_mode = false;
@@ -123,7 +123,7 @@ public:
 	void EndLoop();
 	string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	string LoopReplacement(string text, const vector<LoopDefinition> &loops);
-	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+	static ExtensionLoadResult LoadExtension(DuckDB &db, const Identifier &extension);
 	void SkipTest(const string &reason);
 	static string GetSkipReasonSummary();
 	//! --emit-test-events: statement tallies (counted, not emitted) + the begin/end JSON events.

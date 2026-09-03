@@ -1,0 +1,14 @@
+diff --git a/src/include/storage/unity_catalog.hpp b/src/include/storage/unity_catalog.hpp
+--- a/src/include/storage/unity_catalog.hpp
++++ b/src/include/storage/unity_catalog.hpp
+@@ -48,8 +48,8 @@
+ public:
+ 	void Initialize(bool load_builtin) override;
+ 
+-	string GetCatalogType() override {
+-		return catalog_name;
++	Identifier GetCatalogType() override {
++		return Identifier(catalog_name);
+ 	}
+ 	static bool IsUnityCatalog(Catalog &cat) {
+ 		const auto &t = cat.GetCatalogType();

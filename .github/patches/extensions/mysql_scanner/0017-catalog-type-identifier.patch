@@ -1,0 +1,13 @@
+diff --git a/src/include/storage/mysql_catalog.hpp b/src/include/storage/mysql_catalog.hpp
+index e79a68f..9ceef2b 100644
+--- a/src/include/storage/mysql_catalog.hpp
++++ b/src/include/storage/mysql_catalog.hpp
+@@ -35,7 +35,7 @@ public:
+ 
+ public:
+ 	void Initialize(bool load_builtin) override;
+-	string GetCatalogType() override {
++	Identifier GetCatalogType() override {
+ 		return "mysql";
+ 	}
+ 

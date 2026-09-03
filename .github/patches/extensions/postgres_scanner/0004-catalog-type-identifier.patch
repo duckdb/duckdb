@@ -1,0 +1,13 @@
+diff --git a/src/include/storage/postgres_catalog.hpp b/src/include/storage/postgres_catalog.hpp
+index e344af7..82e6830 100644
+--- a/src/include/storage/postgres_catalog.hpp
++++ b/src/include/storage/postgres_catalog.hpp
+@@ -44,7 +44,7 @@ public:
+ 
+ public:
+ 	void Initialize(bool load_builtin) override;
+-	string GetCatalogType() override {
++	Identifier GetCatalogType() override {
+ 		return "postgres";
+ 	}
+ 	optional<Identifier> GetDefaultSchema() const override {

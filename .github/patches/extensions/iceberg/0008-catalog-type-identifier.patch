@@ -1,0 +1,12 @@
+diff --git a/src/include/catalog/rest/iceberg_catalog.hpp b/src/include/catalog/rest/iceberg_catalog.hpp
+--- a/src/include/catalog/rest/iceberg_catalog.hpp
++++ b/src/include/catalog/rest/iceberg_catalog.hpp
+@@ -152,7 +152,7 @@
+ 
+ public:
+ 	void Initialize(bool load_builtin) override;
+-	string GetCatalogType() override {
++	Identifier GetCatalogType() override {
+ 		return "iceberg";
+ 	}
+ 	bool SupportsTimeTravel() const override {

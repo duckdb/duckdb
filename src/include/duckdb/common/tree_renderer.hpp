@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -54,11 +55,11 @@ public:
 	virtual unique_ptr<BaseTreeRenderer> GetPrintRenderer();
 	//! Create a renderer for the given format, consulting the pluggable registry and configuring built-ins from the
 	//! client's "profiling_renderer_settings". Matched case-insensitively; throws if unknown, nullptr for "no_output".
-	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const string &name);
+	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const Identifier &name);
 	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const ProfilerPrintFormat &format);
 
 	//! Create a built-in renderer without configuring it or consulting the registry (no ClientContext available)
-	static unique_ptr<TreeRenderer> CreateRenderer(const string &name);
+	static unique_ptr<TreeRenderer> CreateRenderer(const Identifier &name);
 	static unique_ptr<TreeRenderer> CreateRenderer(const ProfilerPrintFormat &format);
 
 	//! Generic configuration of the renderer: passes renderer settings (e.g. from the "profiling_renderer_settings"

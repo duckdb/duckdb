@@ -74,16 +74,16 @@ public:
 
 	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
 	//! Runs a V2 C API extension entrypoint, see invoke_capi_v2
-	DUCKDB_API void InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result, const string &extension_name,
-	                                            ext_init_c_api_v2_fun_t init_fun, optional_ptr<ClientContext> context,
-	                                            bool statically_linked);
+	DUCKDB_API void InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result,
+	                                            const string &extension_name_or_path, ext_init_c_api_v2_fun_t init_fun,
+	                                            optional_ptr<ClientContext> context, bool statically_linked);
 
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 	DUCKDB_API static const DatabaseInstance &GetDatabase(const ClientContext &context);
 
-	DUCKDB_API bool ExtensionIsLoaded(const string &name);
+	DUCKDB_API bool ExtensionIsLoaded(const Identifier &name);
 
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) const;
 
@@ -169,9 +169,9 @@ public:
 	// Function pointer type for the C API extension init function
 	typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 	// Load a statically compiled C API extension by calling its init function directly (no vtable needed)
-	DUCKDB_API void LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t init_fun);
+	DUCKDB_API void LoadStaticCAPIExtension(const Identifier &name, ext_init_c_api_fun_t init_fun);
 	// Same, for an extension built against the V2 C API
-	DUCKDB_API void LoadStaticCAPIExtensionV2(const string &name, ext_init_c_api_v2_fun_t init_fun);
+	DUCKDB_API void LoadStaticCAPIExtensionV2(const Identifier &name, ext_init_c_api_v2_fun_t init_fun);
 
 	DUCKDB_API FileSystem &GetFileSystem();
 
@@ -181,7 +181,7 @@ public:
 	DUCKDB_API static const char *ReleaseCodename();
 	DUCKDB_API static idx_t StandardVectorSize();
 	DUCKDB_API static string Platform();
-	DUCKDB_API bool ExtensionIsLoaded(const string &name);
+	DUCKDB_API bool ExtensionIsLoaded(const Identifier &name);
 };
 
 } // namespace duckdb

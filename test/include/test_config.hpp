@@ -82,7 +82,7 @@ public:
 	string GetInitSqllogic();
 	string GetCleanupSqllogic();
 	SortStyle GetDefaultSortStyle();
-	vector<string> ExtensionToBeLoadedOnLoad();
+	vector<Identifier> ExtensionToBeLoadedOnLoad();
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
 	string GetTestEnv(const string &key, const string &default_value);

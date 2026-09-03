@@ -82,7 +82,7 @@ struct DBConfigOptions {
 	//! Database file path. May be empty for in-memory mode
 	string database_path;
 	//! Database type. If empty, automatically extracted from `database_path`, where a `type:path` syntax is expected
-	string database_type;
+	Identifier database_type;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
 	//! ATTACH-style options applied to the main database, e.g. IO_MODE. Same keys ATTACH accepts
