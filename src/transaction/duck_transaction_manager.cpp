@@ -380,6 +380,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	CommitInfo info;
 	info.commit_id = GetCommitTimestamp();
 
+	// must be read before DuckTransaction::Commit below, which can make ChangesMade() return false
+	const bool changes_made = transaction.ChangesMade();
+
 	// commit the UndoBuffer of the transaction
 	if (!error.HasError()) {
 		if (HasOtherTransactions(transaction)) {
@@ -405,7 +408,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		}
 	} else {
 		DUCKDB_LOG(context, TransactionLogType, db, "Commit", info.commit_id);
-		last_commit = info.commit_id;
+		if (changes_made) {
+			last_commit = info.commit_id;
+		}
 
 		// check if catalog changes were made
 		if (transaction.catalog_version >= TRANSACTION_ID_START) {
