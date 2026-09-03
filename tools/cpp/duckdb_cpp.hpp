@@ -3977,6 +3977,381 @@ private:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Copy Function
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A user-defined output format for `COPY ... TO`, built up with the setters and made live with `Register`.
+/// Create one against the `Connection` or `Extension` it will be registered in, describe it (name, callbacks), then
+/// call `Register`. The function object may be destroyed after registration; the registered function lives on in the
+/// catalog and is reached from SQL with `COPY ... TO 'path' (FORMAT name)`.
+///
+/// The engine gathers the rows being copied into batches and drives the callbacks in this order: bind (once, during
+/// planning), init (once per output file), batch (once per batch, possibly on several threads at once), flush (once
+/// per prepared batch, never concurrently for the same file) and finalize (once per output file). The batch callback
+/// prepares a batch for writing, e.g. encodes it into the output format; the flush callback writes the prepared form
+/// out.
+///
+/// The callbacks receive their state through the input objects: `SetUserData` plants data readable from every
+/// callback; the bind callback may plant bind data readable from every later callback; the init callback may plant
+/// per-file init data readable from the batch, flush and finalize callbacks of that file; and the batch callback hands
+/// its prepared batch data to the flush callback. A callback reports failure by throwing; the exception surfaces as
+/// the query's error.
+class CopyFunction final : public detail::Handle<CopyFunction> {
+	friend detail::Factory;
+
+public:
+	class BindInput;
+	class BatchSizeInput;
+	class InitInput;
+	class BatchInput;
+	class FlushInput;
+	class FinalizeInput;
+
+	/// Called once per COPY statement while it is bound. Optional.
+	using BindCallback = void (*)(BindInput &input);
+	/// Called after bind, for a COPY statement that sets no `BATCH_SIZE` itself, to report how many rows a batch
+	/// should carry; must call `SetTarget`. Optional: without it, a batch is cut for every chunk of rows sunk, i.e.
+	/// a vector at a time.
+	using BatchSizeCallback = void (*)(BatchSizeInput &input);
+	/// Called once per output file before its first batch is prepared. Optional; the file path is only available here.
+	using InitCallback = void (*)(InitInput &input);
+	/// Called to prepare a batch of rows for writing; may run on several threads at once. Required.
+	using BatchCallback = void (*)(BatchInput &input);
+	/// Called to write a prepared batch to the output; never concurrently for the same file. Required.
+	using FlushCallback = void (*)(FlushInput &input);
+	/// Called once per output file after its last batch has been flushed. Optional.
+	using FinalizeCallback = void (*)(FinalizeInput &input);
+
+	CopyFunction(CopyFunction &&) noexcept = default;
+	CopyFunction &operator=(CopyFunction &&) noexcept = default;
+
+	~CopyFunction() override;
+
+	/// Creates a function that `Register` adds to the connection's database.
+	static auto Create(const Connection &conn) -> CopyFunction;
+	/// Creates a function that `Register` adds through the loading extension.
+	static auto Create(const Extension &extension) -> CopyFunction;
+
+	/// Sets the function's name: the format SQL selects it with, as in `COPY ... TO 'path' (FORMAT name)`.
+	auto SetName(const std::string &name) & -> CopyFunction &;
+
+	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
+	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> CopyFunction & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	auto SetBindCallback(BindCallback callback) & -> CopyFunction &;
+	auto SetBatchSizeCallback(BatchSizeCallback callback) & -> CopyFunction &;
+	auto SetInitCallback(InitCallback callback) & -> CopyFunction &;
+	auto SetBatchCallback(BatchCallback callback) & -> CopyFunction &;
+	auto SetFlushCallback(FlushCallback callback) & -> CopyFunction &;
+	auto SetFinalizeCallback(FinalizeCallback callback) & -> CopyFunction &;
+
+	/// Registers the function in the catalog it was created against. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
+	/// @throws InvalidInputException When the name, batch callback or flush callback is missing.
+	auto Register() -> void;
+
+private:
+	explicit CopyFunction(void *impl);
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	BindCallback bind_callback = nullptr;
+	BatchSizeCallback batch_size_callback = nullptr;
+	InitCallback init_callback = nullptr;
+	BatchCallback batch_callback = nullptr;
+	FlushCallback flush_callback = nullptr;
+	FinalizeCallback finalize_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the bind callback works with. Borrowed, valid only for the callback duration.
+	class BindInput {
+		friend detail::Factory;
+
+	public:
+		/// Constructs bind data of type `T`, owned by the bound statement and readable from every later callback via
+		/// `GetBindData<T>`. The engine compares bind data when it compares statements: by `operator==` when `T` has
+		/// one, by identity otherwise.
+		template <class T, class... ARGS>
+		void SetBindData(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
+		}
+
+		/// The user data set via `CopyFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many columns are being copied: the columns of every batch's rows. Valid indices for `GetColumnName`
+		/// and `GetColumnType` are [0, GetColumnCount()).
+		auto GetColumnCount() const -> idx_t;
+
+		/// One column's name.
+		/// @param index Column index in [0, GetColumnCount()).
+		/// @throws InvalidInputException When the index is out of range.
+		auto GetColumnName(idx_t index) const -> std::string;
+
+		/// One column's type.
+		/// @param index Column index in [0, GetColumnCount()).
+		/// @throws InvalidInputException When the index is out of range.
+		auto GetColumnType(idx_t index) const -> LogicalType;
+
+		/// The binding context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		BindInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the batch size callback works with. Borrowed, valid only for the callback duration.
+	class BatchSizeInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `CopyFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Reports how many rows a batch should carry, as the target the engine cuts batches at; the callback must
+		/// call this. A batch may still be smaller (the last one of a file, or when `BATCH_SIZE_BYTES` cuts it first).
+		/// @param rows The number of rows a batch should carry; must be greater than 0.
+		auto SetTarget(idx_t rows) -> void;
+
+		/// The binding context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		BatchSizeInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the init callback works with. Borrowed, valid only for the callback duration.
+	class InitInput {
+		friend detail::Factory;
+
+	public:
+		/// Constructs init data of type `T`, owned by the file being written and readable from the batch, flush and
+		/// finalize callbacks of that file via `GetInitData<T>`. Batches may be prepared on several threads at once, so
+		/// the batch callback must synchronize its own access to it.
+		template <class T, class... ARGS>
+		void SetInitData(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetInitDataInternal(ptr, detail::TypedDelete<T>);
+		}
+
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `CopyFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The path of the file being written, after the engine's own rewrites (e.g. a temporary name while the file
+		/// is being written, or a per-partition path).
+		auto GetFilePath() const -> std::string;
+
+		/// The query context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		InitInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void SetInitDataInternal(void *data, void (*destructor)(void *));
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the batch callback works with. Borrowed, valid only for the callback duration.
+	class BatchInput {
+		friend detail::Factory;
+
+	public:
+		/// Constructs batch data of type `T`: the prepared form of the batch, handed to the flush callback via
+		/// `FlushInput::GetBatchData<T>` and freed once the batch has been flushed.
+		template <class T, class... ARGS>
+		void SetBatchData(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetBatchDataInternal(ptr, detail::TypedDelete<T>);
+		}
+
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The init data set via `InitInput::SetInitData` for the file this batch belongs to.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetInitData() const -> T & {
+			return *static_cast<T *>(GetInitDataInternal());
+		}
+
+		/// The user data set via `CopyFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Takes ownership of the rows of the batch: one column per column reported by `BindInput::GetColumnCount`,
+		/// in the same order. The batch can only be taken once; a batch that is never taken is released when the
+		/// callback returns. It may be kept beyond the callback, e.g. moved into the batch data via `SetBatchData`.
+		/// @throws InvalidInputException When the batch was already taken.
+		auto TakeBatch() -> ColumnDataCollection;
+
+		/// The query context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		BatchInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void SetBatchDataInternal(void *data, void (*destructor)(void *));
+		void *GetBindDataInternal() const;
+		void *GetInitDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the flush callback works with. Borrowed, valid only for the callback duration.
+	class FlushInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The init data set via `InitInput::SetInitData` for the file this batch belongs to.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetInitData() const -> T & {
+			return *static_cast<T *>(GetInitDataInternal());
+		}
+
+		/// The batch data set via `BatchInput::SetBatchData` for the batch being flushed.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBatchData() const -> T & {
+			return *static_cast<T *>(GetBatchDataInternal());
+		}
+
+		/// The user data set via `CopyFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The query context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		FlushInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetInitDataInternal() const;
+		void *GetBatchDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the finalize callback works with. Borrowed, valid only for the callback duration.
+	class FinalizeInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The init data set via `InitInput::SetInitData` for the file being finalized.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetInitData() const -> T & {
+			return *static_cast<T *>(GetInitDataInternal());
+		}
+
+		/// The user data set via `CopyFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The query context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		FinalizeInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetInitDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // Cast Function
 //----------------------------------------------------------------------------------------------------------------------
 
