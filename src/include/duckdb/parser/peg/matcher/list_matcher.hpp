@@ -18,7 +18,7 @@ public:
 		MatchState list_state(state);
 		vector<reference<ParseResult>> results;
 		// when suppress_suggestions is set, we discard any suggestions added by child matchers
-		auto saved_suggestion_size = suppress_suggestions ? list_state.suggestions.size() : 0;
+		auto saved_suggestion_size = suppress_suggestions ? list_state.context.suggestions.size() : 0;
 
 		optional_idx start_offset;
 		if (auto current = list_state.token_iterator.Current()) {
@@ -85,8 +85,8 @@ private:
 		if (!suppress_suggestions) {
 			return;
 		}
-		state.suggestions.erase(state.suggestions.begin() + NumericCast<int64_t>(saved_suggestion_size),
-		                        state.suggestions.end());
+		state.context.suggestions.erase(state.context.suggestions.begin() + NumericCast<int64_t>(saved_suggestion_size),
+		                                state.context.suggestions.end());
 	}
 
 public:
