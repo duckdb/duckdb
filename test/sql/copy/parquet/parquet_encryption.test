@@ -22,11 +22,11 @@ PRAGMA add_parquet_key('my_invalid_duck_key', 'ZHVjaw==')
 ----
 Invalid Input Error: Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)
 
-# we dont support this yet
+# unknown key name in column_keys should fail
 statement error
 COPY (SELECT 42 i) to '{TEST_DIR}/encrypted.parquet' (ENCRYPTION_CONFIG {column_keys: {key_name: ['col0', 'col1']}})
 ----
-Not implemented Error: Parquet encryption_config column_keys not yet implemented
+Binder Error: No key with name "key_name" exists
 
 statement error
 COPY (SELECT 42 i) to '{TEST_DIR}/encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'nonexistant'})
@@ -171,3 +171,126 @@ statement error
 SELECT * FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet', encryption_config={footer_key: 'key192'})
 ----
 Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
+
+# ============================================================
+# column_keys tests
+# ============================================================
+
+statement ok
+PRAGMA add_parquet_key('fk', '01234567891123450123456789112345');
+
+statement ok
+PRAGMA add_parquet_key('ck1', 'aabbccddeeff00112233445566778899');
+
+statement ok
+PRAGMA add_parquet_key('ck2', '99887766554433221100ffeeddccbbaa');
+
+# column_keys without footer_key should fail
+statement error
+COPY (SELECT 42 i) to '{TEST_DIR}/no_footer.parquet' (ENCRYPTION_CONFIG {column_keys: {ck1: [i]}});
+----
+Binder Error: encryption_config specifies column_keys but no footer_key
+
+# Create test table
+statement ok
+CREATE TABLE t1 AS SELECT i AS id, 'name_' || i AS name, i * 100 AS secret FROM range(100) t(i);
+
+# Write with column_keys
+statement ok
+COPY t1 TO '{TEST_DIR}/col_keys.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {ck1: [name], ck2: [secret]}});
+
+# Read with all keys — should return all data
+query III
+SELECT * FROM read_parquet('{TEST_DIR}/col_keys.parquet', encryption_config = {footer_key: 'fk', column_keys: {ck1: [name], ck2: [secret]}}) ORDER BY id LIMIT 3;
+----
+0	name_0	0
+1	name_1	100
+2	name_2	200
+
+# Read with swapped column mapping - should fail before decrypting pages
+statement error
+SELECT * FROM read_parquet('{TEST_DIR}/col_keys.parquet', encryption_config = {footer_key: 'fk', column_keys: {ck2: [name], ck1: [secret]}});
+----
+requires key "ck1", but encryption_config assigns key "ck2"
+
+# Read with only footer key (no column_keys) — columns using footer key work,
+# but columns with dedicated keys should fail
+statement error
+SELECT * FROM read_parquet('{TEST_DIR}/col_keys.parquet', encryption_config = {footer_key: 'fk'});
+----
+No column key was provided for encrypted Parquet column "name"
+
+# Read only footer-keyed column — should work (projection pushdown skips column-keyed pages)
+query I
+SELECT id FROM read_parquet('{TEST_DIR}/col_keys.parquet', encryption_config = {footer_key: 'fk'}) ORDER BY id LIMIT 3;
+----
+0
+1
+2
+
+# Duplicate column in column_keys — should fail
+statement error
+COPY t1 TO '{TEST_DIR}/dup.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {ck1: [name], ck2: [name]}});
+----
+assigned to multiple keys
+
+# Duplicate column in column_keys with different casing should fail
+statement error
+COPY t1 TO '{TEST_DIR}/dup_case.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {ck1: [name], ck2: [NAME]}});
+----
+assigned to multiple keys
+
+# Column names in column_keys are matched case-insensitively, but still use the column key
+statement ok
+COPY t1 TO '{TEST_DIR}/col_keys_case.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {ck1: [NAME]}});
+
+query II
+SELECT id, name FROM read_parquet('{TEST_DIR}/col_keys_case.parquet', encryption_config = {footer_key: 'fk', column_keys: {ck1: [name]}}) ORDER BY id LIMIT 3;
+----
+0	name_0
+1	name_1
+2	name_2
+
+# Non-existent column in column_keys — should fail
+statement error
+COPY t1 TO '{TEST_DIR}/bad_col.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {ck1: [nonexistent]}});
+----
+does not exist
+
+# Non-existent key name in column_keys — should fail
+statement error
+COPY t1 TO '{TEST_DIR}/bad_key.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {no_such_key: [name]}});
+----
+No key with name
+
+# Backward compat: files written with only footer_key still work
+query I
+SELECT * FROM read_parquet('{TEST_DIR}/encrypted256.parquet', encryption_config={footer_key: 'key256'})
+----
+42
+
+# Nested top-level columns use full Parquet paths in crypto metadata
+statement ok
+CREATE TABLE t_nested AS SELECT i AS id, {'name': 'nested_' || i, 'secret': i * 10}::STRUCT(name VARCHAR, secret BIGINT) AS info FROM range(3) t(i);
+
+statement ok
+COPY t_nested TO '{TEST_DIR}/col_keys_nested.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {ck1: [info]}});
+
+query II
+SELECT id, info.name FROM read_parquet('{TEST_DIR}/col_keys_nested.parquet', encryption_config = {footer_key: 'fk', column_keys: {ck1: [info]}}) ORDER BY id;
+----
+0	nested_0
+1	nested_1
+2	nested_2
+
+query I
+SELECT id FROM read_parquet('{TEST_DIR}/col_keys_nested.parquet', encryption_config = {footer_key: 'fk'}) ORDER BY id;
+----
+0
+1
+2
+
+statement error
+SELECT info.name FROM read_parquet('{TEST_DIR}/col_keys_nested.parquet', encryption_config = {footer_key: 'fk'});
+----
+No column key was provided for encrypted Parquet column "info.name"
