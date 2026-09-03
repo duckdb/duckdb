@@ -34,7 +34,7 @@ SELECT count(*) FROM data
 ----
 100
 
-# alias is gone after COMMIT (and is unbound in the txn; a failed query would abort it)
+# alias is gone after COMMIT
 statement error
 SELECT * FROM src.prepared_data
 ----

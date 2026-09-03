@@ -130,3 +130,19 @@ does not exist
 
 statement ok
 ROLLBACK
+
+# DETACH of an alias this transaction never used: re-ATTACH is allowed
+statement ok
+ATTACH '{TEST_DIR}/attach_transaction.db'
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DETACH attach_transaction
+
+statement ok
+ATTACH '{TEST_DIR}/attach_transaction.db'
+
+statement ok
+COMMIT

@@ -159,11 +159,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		}
 	}
 
-	// Detached in this transaction: name is unbound, but the AttachedDatabase object
-	// is still held. Plain ATTACH of that alias would mix two files under one txn name.
-	// ATTACH OR REPLACE is an explicit swap — do not apply this rule (see #20748).
-	if (info.on_conflict != OnCreateConflict::REPLACE_ON_CONFLICT &&
-	    MetaTransaction::Get(context).GetReferencedDatabaseOwning(info.name)) {
+	// Unbound alias whose AttachedDatabase this transaction still holds.
+	if (!GetDatabase(info.name) && MetaTransaction::Get(context).GetReferencedDatabaseOwning(info.name)) {
 		throw TransactionException("Cannot re-attach database %s in the same transaction that already used it",
 		                           info.name);
 	}
@@ -283,9 +280,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &n
 		return;
 	}
 
-	// Unbind the alias so GetDatabase no longer resolves it. Keep referenced_databases
-	// so in-flight transactions can still commit. Re-ATTACH of this alias is rejected
-	// via GetReferencedDatabaseOwning below.
+	// Drop the catalog name; keep the AttachedDatabase in referenced_databases until commit.
 	MetaTransaction::Get(context).DetachDatabase(*attached_db);
 
 	attached_db->OnDetach(context);
