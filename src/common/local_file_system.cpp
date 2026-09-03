@@ -5,6 +5,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
+#include "duckdb/common/process_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
@@ -14,6 +15,7 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
@@ -41,26 +43,14 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 #undef FILE_CREATE // woo mingw
 #endif
 
-// includes for giving a better error message on lock conflicts
-#if defined(__linux__) || defined(__APPLE__)
-#include <pwd.h>
-#endif
-
 #if defined(__linux__)
 // See https://man7.org/linux/man-pages/man2/fallocate.2.html
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE /* See feature_test_macros(7) */
 #endif
 #include <fcntl.h>
-#include <libgen.h>
-// See e.g.:
-// https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
-#elif defined(__APPLE__)
-#include <TargetConditionals.h>
-#if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1)
-#include <libproc.h>
-#endif
 #elif defined(_WIN32)
+// for giving a better error message on lock conflicts
 #include <restartmanager.h>
 #endif
 
@@ -279,93 +269,6 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 	return StatsFromStruct(s);
 }
 
-#if __APPLE__ && !TARGET_OS_IPHONE
-
-static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
-	if (pid == getpid()) {
-		return "Lock is already held in current process, likely another DuckDB instance";
-	}
-
-	string process_name, process_owner;
-	// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
-#ifdef PROC_PIDT_SHORTBSDINFO
-	// try to find out more about the process holding the lock
-	struct proc_bsdshortinfo proc;
-	if (proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &proc, PROC_PIDT_SHORTBSDINFO_SIZE) ==
-	    PROC_PIDT_SHORTBSDINFO_SIZE) {
-		process_name = proc.pbsi_comm; // only a short version however, let's take it in case proc_pidpath() below fails
-		// try to get actual name of conflicting process owner
-		auto pw = getpwuid(proc.pbsi_uid);
-		if (pw) {
-			process_owner = pw->pw_name;
-		}
-	}
-#else
-	return string();
-#endif
-	// try to get a better process name (full path)
-	char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
-	if (proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE) > 0) {
-		// somehow could not get the path, lets use some sensible fallback
-		process_name = full_exec_path;
-	}
-	return StringUtil::Format("Conflicting lock is held in %s%s",
-	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
-	                                                : StringUtil::Format("PID %d", pid),
-	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
-}
-
-#elif __linux__
-
-static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
-	if (pid == getpid()) {
-		return "Lock is already held in current process, likely another DuckDB instance";
-	}
-	string process_name, process_owner;
-
-	try {
-		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
-		auto cmdline = cmdline_file->ReadLine(QueryContext());
-		process_name = basename(const_cast<char *>(cmdline.c_str())); // NOLINT: old C API does not take const
-	} catch (std::exception &) {
-		// ignore
-	}
-
-	// we would like to provide a full path to the executable if possible but we might not have rights
-	{
-		char exe_target[PATH_MAX];
-		memset(exe_target, '\0', PATH_MAX);
-		auto proc_exe_link = StringUtil::Format("/proc/%d/exe", pid);
-		auto readlink_n = readlink(proc_exe_link.c_str(), exe_target, PATH_MAX);
-		if (readlink_n > 0) {
-			process_name = exe_target;
-		}
-	}
-
-	// try to find out who created that process
-	try {
-		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
-		auto uid = std::stoi(loginuid_file->ReadLine(QueryContext()));
-		auto pw = getpwuid(uid);
-		if (pw) {
-			process_owner = pw->pw_name;
-		}
-	} catch (std::exception &) {
-		// ignore
-	}
-
-	return StringUtil::Format("Conflicting lock is held in %s%s",
-	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
-	                                                : StringUtil::Format("PID %d", pid),
-	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
-}
-
-#else
-static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
-	return "";
-}
-#endif
-
 // Apply a fcntl advisory lock per flags.Lock(); throws (and closes fd) on failure. Shared
 // by OpenFile and MemoryMapFile.
 static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileOpenFlags flags) {
@@ -405,8 +308,13 @@ static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileO
 		rc = fcntl(fd, F_GETLK, &fl);
 		if (rc == -1) {
 			extended_error = strerror(errno);
+		} else if (fl.l_pid == ProcessUtil::CurrentProcessId()) {
+			extended_error = "Lock is already held in current process, likely another DuckDB instance";
 		} else {
-			extended_error = AdditionalProcessInfo(fs, fl.l_pid);
+			auto process = ProcessUtil::GetProcessDescription(fs, fl.l_pid);
+			if (!process.empty()) {
+				extended_error = "Conflicting lock is held in " + process;
+			}
 		}
 		if (flags.Lock() == FileLockType::WRITE_LOCK) {
 			// could we get a read lock?
