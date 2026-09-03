@@ -1151,6 +1151,9 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_set_init_callback)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_copy_to_init_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_identifier_render_quoted)
+	(duckdb_v2_identifier_t name, char *out_text, idx_t out_capacity, idx_t *out_length,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_prepared_statement_create)
 	(duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, bool require_cacheable,
 	 duckdb_v2_prepared_statement_handle *out_prepared, duckdb_v2_error_info_handle *err);
@@ -1667,6 +1670,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_copy_to_set_finalize_callback = duckdb_v2_copy_to_set_finalize_callback;
 	result.duckdb_v2_copy_to_set_flush_callback = duckdb_v2_copy_to_set_flush_callback;
 	result.duckdb_v2_copy_to_set_init_callback = duckdb_v2_copy_to_set_init_callback;
+	result.duckdb_v2_identifier_render_quoted = duckdb_v2_identifier_render_quoted;
 	result.duckdb_v2_prepared_statement_create = duckdb_v2_prepared_statement_create;
 	result.duckdb_v2_prepared_statement_destroy = duckdb_v2_prepared_statement_destroy;
 	result.duckdb_v2_prepared_statement_execute = duckdb_v2_prepared_statement_execute;

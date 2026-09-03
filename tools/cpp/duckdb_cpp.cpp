@@ -331,6 +331,10 @@ auto LibraryVersion() -> std::string {
 	return std::string(version.ptr, version.len);
 }
 
+auto RenderQuotedIdentifier(std::string_view name) -> std::string {
+	return RenderText(duckdb_v2_identifier_render_quoted, duckdb_v2_identifier_t {name.data(), name.size()});
+}
+
 //---------------------------------------------------------------------------
 // Environment
 //---------------------------------------------------------------------------
@@ -5270,19 +5274,6 @@ auto ReplacementScan::Input::GetContext() const -> Context {
 
 namespace {
 
-// Renders an identifier as SQL, doubling any embedded quotes.
-std::string QuoteIdentifier(std::string_view name) {
-	std::string out = "\"";
-	for (auto c : name) {
-		if (c == '"') {
-			out += '"';
-		}
-		out += c;
-	}
-	out += '"';
-	return out;
-}
-
 bool EqualsIgnoreCase(std::string_view a, std::string_view b) {
 	if (a.size() != b.size()) {
 		return false;
@@ -5383,7 +5374,7 @@ AppenderTablePlan PlanTableAppender(Connection &conn, std::string_view table) {
 		if (i > 0) {
 			columns += ", ";
 		}
-		columns += QuoteIdentifier(schema.GetFieldName(i));
+		columns += RenderQuotedIdentifier(schema.GetFieldName(i));
 		plan.column_names.emplace_back(schema.GetFieldName(i));
 		plan.types.push_back(schema.GetFieldType(i));
 	}

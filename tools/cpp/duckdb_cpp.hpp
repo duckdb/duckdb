@@ -815,6 +815,12 @@ public:
 /// "v1.5.0-dev123" on development builds.
 auto LibraryVersion() -> std::string;
 
+/// Renders a name as a SQL identifier, quoting and escaping only when required: the name itself when it is a legal
+/// bare identifier, or double-quoted with interior quotes doubled when it is a keyword or contains characters that
+/// require quoting. Use it for every name embedded in SQL text rather than quoting by hand.
+/// @param name The name to render.
+auto RenderQuotedIdentifier(std::string_view name) -> std::string;
+
 //----------------------------------------------------------------------------------------------------------------------
 // Logical Type
 //----------------------------------------------------------------------------------------------------------------------

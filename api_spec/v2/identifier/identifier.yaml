@@ -1,0 +1,50 @@
+module: identifier
+#
+# Operations on identifier-semantic names (the `identifier` alias declared in common). The engine matches identifiers
+# case-insensitively and quotes them into SQL only when required. Both are engine knowledge, so a name that will be
+# embedded in SQL text is rendered through this module rather than quoted by hand.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  identifier_render_quoted:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Renders a name as a SQL identifier, quoting and escaping only when required.
+
+      Produces the SQL text for the name: the name itself when it is already a legal bare identifier, or the name
+      double-quoted with interior double quotes doubled when it is a keyword or contains characters that require
+      quoting. This is the engine's own identifier rendering, so the result parses back to a name equal to the
+      input.
+
+      Writes into a caller-supplied buffer, so nothing is allocated on the caller's behalf and nothing has to be
+      freed. Pass out_text = NULL to size the buffer without rendering into it: out_length then receives the length,
+      and out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call
+      returns ERROR_INPUT_OBJECT_SIZE with out_length set to the required length and out_text left untouched.
+
+      out_length never counts the terminator, but a successful write always appends one, so the buffer is usable as
+      a C string.
+    parameters:
+      name:
+        type: identifier
+        description: The name to render. Borrowed for the call only.
+      out_text:
+        type: char
+        indirection: 1
+        kind: OUT
+        description: Caller-owned buffer receiving the text plus a null terminator, or NULL to only report the required length in out_length.
+      out_capacity:
+        type: idx
+        description: Bytes available in out_text, terminator included. Ignored when out_text is NULL.
+      out_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the text length excluding the null terminator — written on success and on ERROR_INPUT_OBJECT_SIZE.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR

@@ -2871,6 +2871,56 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_set_return_type(duckdb
 /* --- Struct definitions for function signature --- */
 
 /* ============================================================================
+ * MODULE: identifier
+ * ============================================================================ */
+
+/* --- Enums for identifier --- */
+
+/* --- Struct forward declarations for identifier --- */
+
+/* --- Types for identifier --- */
+
+/* --- Constants for identifier --- */
+
+/* --- Function pointer typedefs for identifier --- */
+
+/* --- Functions for identifier --- */
+
+/*!
+ * Renders a name as a SQL identifier, quoting and escaping only when required.
+ *
+ * Produces the SQL text for the name: the name itself when it is already a legal bare identifier, or the name
+ * double-quoted with interior double quotes doubled when it is a keyword or contains characters that require quoting.
+ * This is the engine's own identifier rendering, so the result parses back to a name equal to the input.
+ *
+ * Writes into a caller-supplied buffer, so nothing is allocated on the caller's behalf and nothing has to be freed.
+ * Pass out_text = NULL to size the buffer without rendering into it: out_length then receives the length, and
+ * out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call returns
+ * ERROR_INPUT_OBJECT_SIZE with out_length set to the required length and out_text left untouched.
+ *
+ * out_length never counts the terminator, but a successful write always appends one, so the buffer is usable as a C
+ * string.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param name The name to render. Borrowed for the call only.
+ * @param out_text Caller-owned buffer receiving the text plus a null terminator, or NULL to only report the required
+ * length in out_length.
+ * @param out_capacity Bytes available in out_text, terminator included. Ignored when out_text is NULL.
+ * @param out_length Receives the text length excluding the null terminator — written on success and on
+ * ERROR_INPUT_OBJECT_SIZE.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_identifier_render_quoted(duckdb_v2_identifier_t name, char *out_text,
+                                                                idx_t out_capacity, idx_t *out_length,
+                                                                duckdb_v2_error_info_handle *err);
+
+/* --- Struct definitions for identifier --- */
+
+/* ============================================================================
  * MODULE: logging
  * ============================================================================ */
 
