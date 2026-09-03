@@ -319,6 +319,9 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			value = Value::LIST(child_type, values);
 			return true;
 		} else if (function.FunctionName() == "map") {
+			if (function.GetArguments().size() != 2) {
+				return false;
+			}
 			Value keys;
 			if (!ConstructConstantFromExpression(function.GetArguments()[0].GetExpression(), keys)) {
 				return false;

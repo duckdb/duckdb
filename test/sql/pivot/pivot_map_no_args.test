@@ -1,0 +1,26 @@
+# name: test/sql/pivot/pivot_map_no_args.test
+# description: Test PIVOT IN-list with a map() call whose argument count is not 2 (issue #25276)
+# group: [pivot]
+
+statement ok
+CREATE TABLE t(col VARCHAR);
+
+query I
+SELECT * FROM t PIVOT (count(*) FOR col IN (CAST(map() AS VARCHAR)));
+----
+0
+
+statement error
+SELECT * FROM t PIVOT (count(*) FOR col IN (CAST(map(['a']) AS VARCHAR)));
+----
+No function matches the given name and argument types 'map(VARCHAR[])'
+
+statement error
+SELECT * FROM t PIVOT (count(*) FOR col IN (CAST(map(['a'],[1],[2]) AS VARCHAR)));
+----
+No function matches the given name and argument types 'map(VARCHAR[], INTEGER[], INTEGER[])'
+
+query I
+SELECT CAST(map() AS VARCHAR);
+----
+{}
