@@ -24,6 +24,7 @@ class ConflictManager;
 class IndexEntry;
 class IndexBinder;
 class TableIndexList;
+class TableIndexWriter;
 struct IndexStorageInfo;
 
 //! IndexBindState transitions index binding phases and marks entries whose physical index has been destroyed.
@@ -163,6 +164,10 @@ public:
 	IndexInfo GetStorageInfo() const;
 	//! Returns the in-memory size of the physical index, or zero if it is unbound.
 	idx_t GetInMemorySize() const;
+	//! Serializes the physical index into the checkpoint writer and registers its shadow index.
+	void Checkpoint(TableIndexWriter &writer);
+	//! Installs the shadow index produced by Checkpoint.
+	void CommitCheckpoint(unique_ptr<BoundIndex> shadow_index);
 	//! Serializes the physical index for a checkpoint.
 	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
 	//! Serializes the bound physical index for the write-ahead log.

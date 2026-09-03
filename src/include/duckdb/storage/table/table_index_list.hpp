@@ -28,8 +28,10 @@ class IndexWriteHandle;
 class IndexBinder;
 struct IndexStorageInfo;
 struct DataTableInfo;
+struct CheckpointedIndex;
 template <class T>
 class TableIndexIterationHelper;
+class TableIndexWriter;
 
 struct IndexSerializationInfo {
 	case_insensitive_map_t<Value> options;
@@ -132,6 +134,7 @@ public:
 	//! Verify a foreign key constraint.
 	void VerifyForeignKey(optional_ptr<const TableIndexList> delete_indexes, const vector<PhysicalIndex> &fk_keys,
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
+	void CheckPoint(TableIndexWriter &writer);
 	//! Returns the physical table columns referenced by any index.
 	unordered_set<column_t> GetIndexedColumns() const;
 	//! Returns the column sets of unique indexes matching the conflict target.
@@ -144,6 +147,7 @@ public:
 	unique_ptr<IndexStorageInfo> SerializeToWAL(const Identifier &name, const case_insensitive_map_t<Value> &options);
 
 public:
+	static void Serialize(const vector<CheckpointedIndex> &result, Serializer &serializer);
 	//! Initialize an index_chunk from a table.
 	static void InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
 	                                 vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info);

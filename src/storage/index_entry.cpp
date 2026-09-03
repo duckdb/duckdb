@@ -6,6 +6,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
@@ -473,6 +474,21 @@ idx_t IndexEntry::GetInMemorySize() const {
 	return owned_index->Cast<BoundIndex>().GetInMemorySize();
 }
 
+void IndexEntry::Checkpoint(TableIndexWriter &writer) {
+	auto entry_lock = lock.GetExclusiveLock();
+	owned_index->Checkpoint(writer);
+}
+
+void IndexEntry::CommitCheckpoint(unique_ptr<BoundIndex> shadow_index) {
+	auto entry_lock = lock.GetExclusiveLock();
+	if (!shadow_index) {
+		D_ASSERT(owned_index && !owned_index->IsBound());
+		return;
+	}
+	D_ASSERT(owned_index && owned_index->IsBound());
+	owned_index = std::move(shadow_index);
+}
+
 IndexStorageInfo IndexEntry::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
 	auto entry_lock = lock.GetExclusiveLock();
 	if (owned_index->IsBound()) {
@@ -485,7 +501,10 @@ IndexStorageInfo IndexEntry::SerializeToWAL(const case_insensitive_map_t<Value> 
 	auto entry_lock = lock.GetExclusiveLock();
 	// We never write an unbound index to the WAL.
 	D_ASSERT(owned_index->IsBound());
-	return owned_index->Cast<BoundIndex>().SerializeToWAL(options);
+	auto v1_0_0_option = options.find("v1_0_0_storage");
+	const bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
+	const auto storage_version = v1_0_0_storage ? StorageVersion::V1_0_0 : StorageVersion::V1_2_0;
+	return owned_index->Cast<BoundIndex>().SerializeToWAL(storage_version);
 }
 
 void IndexEntry::MergeCheckpointDeltas(const transaction_t checkpoint_id) {

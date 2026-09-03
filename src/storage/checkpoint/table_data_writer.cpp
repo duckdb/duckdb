@@ -1,4 +1,5 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -11,8 +12,6 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/data_table.hpp"
 
@@ -89,12 +88,19 @@ void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 	existing_next_row_id = next_row_id;
 }
 
+unique_ptr<TableIndexWriter> SingleFileTableDataWriter::GetTableIndexWriter(StorageVersion version) {
+	const auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
+	return make_uniq<SingleFileTableIndexWriter>(checkpoint_manager, checkpoint_manager.index_partial_block_manager,
+	                                             version, debug_verify_blocks);
+}
+
 void SingleFileTableDataWriter::FlushPartialBlocks() {
 	checkpoint_manager.partial_block_manager.FlushPartialBlocks();
 }
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
-                                              RowGroupCollection &collection, Serializer &serializer) {
+                                              RowGroupCollection &collection,
+                                              optional_ptr<TableIndexWriter> index_writer, Serializer &serializer) {
 	MetaBlockPointer pointer;
 	idx_t total_rows;
 	idx_t next_row_id;
@@ -188,33 +194,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	// prior: ser version 3
-	auto v1_0_0_storage = StorageManager::IsPriorToVersion(
-	    StorageVersion::V1_2_0, serializer.GetOptions().storage_compatibility.storage_version);
-	IndexSerializationInfo serialization_info;
-	if (!v1_0_0_storage) {
-		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
-	}
-	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
+	D_ASSERT(index_writer);
+	index_writer->Serialize(serializer);
 
-	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
-
-	if (debug_verify_blocks) {
-		for (auto &entry : index_storage_infos.ordered_infos) {
-			for (auto &allocator : entry.get().allocator_infos) {
-				for (auto &block : allocator.block_pointers) {
-					checkpoint_manager.verify_block_usage_count[block.block_id]++;
-				}
-			}
-		}
-	}
-
-	// write empty block pointers for forwards compatibility
-	vector<BlockPointer> compat_block_pointers;
-	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WriteList(
-	    104, "index_storage_infos", index_storage_infos.ordered_infos.size(),
-	    [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos.ordered_infos[i].get()); });
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WriteProperty(105, "next_row_id", next_row_id);
 	}

@@ -38,6 +38,8 @@ enum class ARTScanNodeResult : uint8_t;
 
 enum class ARTScanResult : uint8_t;
 
+enum class ARTSerializationFormat : uint8_t;
+
 enum class AccessMode : uint8_t;
 
 enum class AdaptiveFilterSource : uint8_t;
@@ -649,6 +651,9 @@ const char* EnumUtil::ToChars<ARTScanNodeResult>(ARTScanNodeResult value);
 
 template<>
 const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
+
+template<>
+const char* EnumUtil::ToChars<ARTSerializationFormat>(ARTSerializationFormat value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -1562,6 +1567,9 @@ ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value);
 
 template<>
 ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
+
+template<>
+ARTSerializationFormat EnumUtil::FromString<ARTSerializationFormat>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);

@@ -34,6 +34,12 @@ struct IndexScanState;
 
 enum class IndexAppendMode : uint8_t { DEFAULT = 0, IGNORE_DUPLICATES = 1, INSERT_DUPLICATES = 2 };
 
+//! Carries the information required to serialize a bound index to disk.
+struct BoundCheckpointedIndex {
+	IndexStorageInfo storage_info;
+	unique_ptr<BoundIndex> shadow_index;
+};
+
 class IndexAppendInfo {
 public:
 	IndexAppendInfo() : append_mode(IndexAppendMode::DEFAULT) {
@@ -192,9 +198,13 @@ public:
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
 
-	//! Serializes index memory to disk and returns the index storage information.
-	virtual IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
+	//! Checkpoint an index by creating a shadow index, where committing to disk can be deferred to a later moment
+	//! during the checkpoint.
+	void Checkpoint(TableIndexWriter &writer) final;
+
 	//! Serializes index memory to the WAL and returns the index storage information.
+	virtual IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
+	virtual IndexStorageInfo SerializeToWAL(StorageVersion storage_version);
 	virtual IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 
 	//! Execute the index expressions on an input chunk
@@ -210,6 +220,11 @@ public:
 	//! mapped_column_ids maps each buffered data column to its physical table column.
 	void ApplyBufferedReplays(const vector<LogicalType> &table_types, BufferedIndexReplays &buffered_replays,
 	                          const vector<StorageIndex> &mapped_column_ids);
+
+protected:
+	//! Produce a shadow index and associated metadata for a specific implementation of an index, used to checkpoint
+	//! a bound index.
+	virtual BoundCheckpointedIndex CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) = 0;
 
 protected:
 	friend class IndexDeltas;

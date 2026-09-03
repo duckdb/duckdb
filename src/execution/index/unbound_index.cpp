@@ -8,16 +8,17 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 namespace duckdb {
 
 UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info_p,
                            TableIOManager &table_io_manager, AttachedDatabase &db)
     : Index(create_info->Cast<CreateIndexInfo>().column_ids, table_io_manager, db), create_info(std::move(create_info)),
-      storage_info(std::move(storage_info_p)) {
+      storage_info(make_shared_ptr<const IndexStorageInfo>(std::move(storage_info_p))) {
 	// Memory safety check.
-	for (idx_t info_idx = 0; info_idx < storage_info.allocator_infos.size(); info_idx++) {
-		auto &info = storage_info.allocator_infos[info_idx];
+	for (idx_t info_idx = 0; info_idx < storage_info->allocator_infos.size(); info_idx++) {
+		auto &info = storage_info->allocator_infos[info_idx];
 		for (idx_t buffer_idx = 0; buffer_idx < info.buffer_ids.size(); buffer_idx++) {
 			if (info.buffer_ids[buffer_idx] > idx_t(MAX_ROW_ID)) {
 				throw InternalException("found invalid buffer ID in UnboundIndex constructor");
@@ -35,7 +36,7 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo 
 
 void UnboundIndex::ResetStorage() {
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
-	for (auto &info : storage_info.allocator_infos) {
+	for (auto &info : storage_info->allocator_infos) {
 		for (auto &block : info.block_pointers) {
 			if (block.IsValid()) {
 				block_manager.MarkBlockAsModified(block.block_id);
@@ -44,13 +45,17 @@ void UnboundIndex::ResetStorage() {
 	}
 }
 
+void UnboundIndex::Checkpoint(TableIndexWriter &writer) {
+	writer.AddUnboundIndex(GetStorageInfoPtr());
+}
+
 IndexStorageInfo UnboundIndex::CopyStorageInfo() const {
-	IndexStorageInfo result(storage_info.name);
-	result.root = storage_info.root;
-	result.options = storage_info.options;
-	result.allocator_infos = storage_info.allocator_infos;
-	result.buffers = storage_info.buffers;
-	result.root_block_ptr = storage_info.root_block_ptr;
+	IndexStorageInfo result(storage_info->name);
+	result.root = storage_info->root;
+	result.options = storage_info->options;
+	result.allocator_infos = storage_info->allocator_infos;
+	result.buffers = storage_info->buffers;
+	result.root_block_ptr = storage_info->root_block_ptr;
 	return result;
 }
 
