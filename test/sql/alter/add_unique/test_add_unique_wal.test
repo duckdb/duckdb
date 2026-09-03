@@ -1,0 +1,35 @@
+# name: test/sql/alter/add_unique/test_add_unique_wal.test
+# description: Persist ALTER TABLE ADD UNIQUE through WAL replay
+# group: [add_unique]
+
+load {TEST_DIR}/test_add_unique_wal.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1, 2), (3, 4);
+
+statement ok
+ALTER TABLE test ADD UNIQUE (j);
+
+restart
+
+statement error
+ALTER TABLE test ADD UNIQUE (j);
+----
+<REGEX>:Catalog Error.*an index with that name already exists for this table: UNIQUE_test_j.*
+
+statement error
+INSERT INTO test VALUES (5, 2);
+----
+<REGEX>:Constraint Error.*Duplicate key "j: 2" violates unique constraint.*
+
+statement ok
+INSERT INTO test VALUES (5, 6);

@@ -923,7 +923,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
 	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
-	if (!alter_info.IsAddPrimaryKey()) {
+	if (!alter_info.IsAddUniqueConstraint()) {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
@@ -972,9 +972,9 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto &storage = table.GetStorage();
-	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
-	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
-	                       index_storage_info.options);
+	auto constraint_type = unique_info.IsPrimaryKey() ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
+	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, constraint_type, index_storage_info.name,
+	                       column_ids, unbound_expressions, index_storage_info, index_storage_info.options);
 
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
 	auto index_instance = index_type->create_instance(input);
