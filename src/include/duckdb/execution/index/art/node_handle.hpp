@@ -68,8 +68,8 @@ public:
 
 	SlotHandle(const SlotHandle &) = delete;
 	SlotHandle &operator=(const SlotHandle &) = delete;
-	SlotHandle(SlotHandle &&) = default;
-	SlotHandle &operator=(SlotHandle &&) = default;
+	SlotHandle(SlotHandle &&) = delete;
+	SlotHandle &operator=(SlotHandle &&) = delete;
 
 public:
 	//! Returns the mutable slot.
