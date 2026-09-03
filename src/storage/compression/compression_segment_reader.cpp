@@ -44,6 +44,10 @@ void CompressionSegmentReader::ThrowArrayOutOfBounds() const {
 	throw DataCorruptionException("Corrupted %s: array count extends past the end of the segment", context);
 }
 
+void CompressionSegmentReader::ThrowDestinationTooSmall() const {
+	throw DataCorruptionException("Corrupted %s: read does not fit the destination buffer", context);
+}
+
 void CompressionSegmentReader::Align(idx_t alignment) {
 	if (alignment == 0) {
 		throw InternalException("CompressionSegmentReader::Align called with a zero alignment");

@@ -344,6 +344,11 @@ static bool TypeSupportsConstantFilter(const LogicalType &type) {
 	return false;
 }
 
+static bool TypeSupportsMultiColumnComparison(const LogicalType &type) {
+	auto physical = type.InternalType();
+	return TypeIsNumeric(physical) || physical == PhysicalType::BOOL;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &table_filters,
                                                                const vector<ColumnIndex> &column_ids, column_t expr_id,
                                                                vector<ExpressionValueInformation> &info_list) {
@@ -445,12 +450,35 @@ static bool IsDirectNumericColumnComparison(const Expression &expr, const vector
 	                                  comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 	                                  comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 	return supported_comparison && left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-	       right.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF && left.GetReturnType().IsNumeric() &&
-	       right.GetReturnType().IsNumeric();
+	       right.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       TypeSupportsMultiColumnComparison(left.GetReturnType()) &&
+	       TypeSupportsMultiColumnComparison(right.GetReturnType());
+}
+
+static bool IsMonotoneIntervalColumn(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION || expr.GetReturnType() != LogicalType::INTERVAL) {
+		return false;
+	}
+	const auto &function = expr.Cast<BoundFunctionExpression>();
+	return function.GetChildren().size() == 1 &&
+	       function.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       function.Function().GetStability() == FunctionStability::CONSISTENT &&
+	       IsKnownMonotonic(function.Function().GetArgProperties(0).monotonicity);
+}
+
+static bool IsMonotoneIntervalColumnComparison(const Expression &expr, const vector<ColumnBinding> &bindings) {
+	if (bindings.size() != 2 || bindings[0] == bindings[1] || !BoundComparisonExpression::IsComparison(expr)) {
+		return false;
+	}
+	const auto &comparison = expr.Cast<BoundFunctionExpression>();
+	return SupportedFilterComparison(comparison.GetExpressionType()) &&
+	       IsMonotoneIntervalColumn(BoundComparisonExpression::Left(comparison)) &&
+	       IsMonotoneIntervalColumn(BoundComparisonExpression::Right(comparison));
 }
 
 static bool CanPushdownMultiColumnExpression(const Expression &expr, const vector<ColumnBinding> &bindings) {
-	return IsDirectNumericColumnComparison(expr, bindings) || IsColumnConstantOr(expr);
+	return IsDirectNumericColumnComparison(expr, bindings) || IsMonotoneIntervalColumnComparison(expr, bindings) ||
+	       IsColumnConstantOr(expr);
 }
 
 static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(LogicalGet &get, const Expression &expr,

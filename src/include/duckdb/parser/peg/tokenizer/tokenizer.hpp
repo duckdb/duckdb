@@ -70,6 +70,7 @@ private:
 	//! `TokenizeInput()` is the one that appends `GetTerminator()` (clean) or `END_OF_INPUT`
 	//! (dirty) based on the return value.
 	bool TokenizeInputInternal(TokenizerBehavior &behavior) const;
+	static void PushOperatorToken(TokenizerBehavior &behavior, idx_t start, idx_t end);
 
 public:
 	bool IsSpecialOperator(const string &sql, idx_t pos, idx_t &op_len) const;

@@ -26,6 +26,9 @@ PYTHON ?= python3
 FORMAT_VENV ?= .cache/format-venv
 FORMAT_PYTHON := $(FORMAT_VENV)/bin/python
 FORMAT_SETUP_DEPS := format_venv
+CAPIGEN_VENV ?= .cache/capigen-venv
+CAPIGEN_PYTHON := $(CAPIGEN_VENV)/bin/python
+CAPIGEN_SETUP_DEPS := capigen_venv
 
 EXE_SUFFIX :=
 ifeq ($(OS),Windows_NT)
@@ -120,16 +123,18 @@ SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
 CORE_EXTENSIONS ?=
 UNSAFE_NUMERIC_CAST ?=
-ifdef OVERRIDE_GIT_DESCRIBE
-        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE="${OVERRIDE_GIT_DESCRIBE}"
-else
-        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE=""
-endif
-
-ifdef DUCKDB_EXPLICIT_VERSION
+ifdef DUCKDB_VERSION
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${DUCKDB_VERSION}"
+else ifdef OVERRIDE_GIT_DESCRIBE
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${OVERRIDE_GIT_DESCRIBE}"
+else ifdef DUCKDB_EXPLICIT_VERSION
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${DUCKDB_EXPLICIT_VERSION}"
 else
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION=""
+endif
+
+ifdef DUCKDB_COMMIT
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DGIT_COMMIT_HASH="${DUCKDB_COMMIT}"
 endif
 
 ifneq (${CXX_STANDARD}, )
@@ -366,12 +371,6 @@ endif
 ifeq (${OVERRIDE_NEW_DELETE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOVERRIDE_NEW_DELETE=1
 endif
-ifeq (${MAIN_BRANCH_VERSIONING}, 0)
-	CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
-endif
-ifeq (${MAIN_BRANCH_VERSIONING}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
-endif
 ifeq (${STANDALONE_DEBUG}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DSTANDALONE_DEBUG=1
 endif
@@ -545,7 +544,7 @@ TEST_CONFIGS_QUERY_VERIFICATION := \
 	test/configs/disable_optimizer.json \
 	test/configs/verification_projection.json \
 	test/configs/verify_column_bindings.json \
-	test/configs/transformer_trampoline_style.json
+	test/configs/heap_based_parser.json
 
 TEST_CONFIGS_EXECUTION := \
 	test/configs/internal_vector_serialization.json \
@@ -780,6 +779,16 @@ format_venv:
 	@$(FORMAT_PYTHON) -m pip show cmake-format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install cmake-format
 	@$(FORMAT_PYTHON) -m pip show clang_format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install clang_format==11.0.1
 
+# Venv holding capigen (the C API generator) and the formatters it needs, pinned by api_spec/pyproject.toml
+.PHONY: capigen_venv
+capigen_venv:
+	@if [ ! -x "$(CAPIGEN_PYTHON)" ]; then \
+		mkdir -p "$(dir $(CAPIGEN_VENV))" && \
+		$(PYTHON) -m venv "$(CAPIGEN_VENV)" && \
+		$(CAPIGEN_PYTHON) -m pip install -U pip; \
+	fi
+	@$(CAPIGEN_PYTHON) -m pip show capigen >/dev/null 2>&1 || $(CAPIGEN_PYTHON) -m pip install --group api_spec/pyproject.toml:generate
+
 benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \
@@ -913,8 +922,8 @@ generate-files-deps:
 	$(PYTHON) -m pip install --group api_spec/pyproject.toml:generate
 	$(PYTHON) -m pip install cxxheaderparser pcpp
 
-generate-files:
-	./scripts/capi_v1_regen.sh
+generate-files: $(CAPIGEN_SETUP_DEPS)
+	CAPIGEN_PYTHON="$(abspath $(CAPIGEN_PYTHON))" ./scripts/capi_v1_regen.sh
 	$(PYTHON) scripts/generate_functions.py
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py

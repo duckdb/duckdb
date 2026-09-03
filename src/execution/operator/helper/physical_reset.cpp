@@ -52,6 +52,7 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 	if (option->default_value) {
 		if (option->set_callback) {
 			SettingCallbackInfo info(context.client, variable_scope);
+			info.is_reset = true;
 			auto parameter_type = DBConfig::ParseLogicalType(option->parameter_type);
 			Value reset_val = Value(option->default_value).CastAs(context.client, parameter_type);
 			option->set_callback(info, reset_val);

@@ -102,6 +102,9 @@ static unique_ptr<BaseStatistics> MapExtractValueStats(ClientContext &, Function
 	auto value_copy = StructStats::GetChildStats(entry_stats, 1).Copy();
 	// missing keys return NULL
 	value_copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	if (!input.child_stats[0].CanHaveNoNull() || !input.child_stats[1].CanHaveNoNull()) {
+		value_copy.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+	}
 	return value_copy.ToUnique();
 }
 

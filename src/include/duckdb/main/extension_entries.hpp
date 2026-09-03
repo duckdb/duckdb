@@ -308,6 +308,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"duckdb_aws_session_id", "aws", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"duckdb_encodings", "encodings", CatalogType::TABLE_FUNCTION_ENTRY},
     {"duckdb_format_sql", "autocomplete", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"duckdb_proj_compiled_version", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"duckdb_proj_version", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -715,8 +716,11 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"pragma_rtree_index_info", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
     {"printf", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"product", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"quack_active_connections", "quack", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"quack_cancel", "quack", CatalogType::TABLE_FUNCTION_ENTRY},
     {"quack_check_token", "quack", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"quack_clear_cache", "quack", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"quack_connection_id", "quack", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"quack_identify", "quack", CatalogType::TABLE_FUNCTION_ENTRY},
     {"quack_nop_authorization", "quack", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"quack_query", "quack", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -767,6 +771,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"rtree_index_dump", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
     {"rtree_index_scan", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
     {"rtrim", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"scan_data_from_quack_client", "quack", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sem", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"set_bit", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"set_iceberg_schema_properties", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -1366,8 +1371,24 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"prefetch_all_parquet_files", "parquet"},
     {"quack_authentication_function", "quack"},
     {"quack_authorization_function", "quack"},
-    {"quack_fetch_batch_chunks", "quack"},
+    {"quack_cache_max_rows", "quack"},
+    {"quack_debug_drop_batch", "quack"},
+    {"quack_debug_duplicate_sends", "quack"},
+    {"quack_debug_emit_delay_ms", "quack"},
+    {"quack_debug_fetch_delay_ms", "quack"},
+    {"quack_debug_send_delay_ms", "quack"},
+    {"quack_default_client_id", "quack"},
+    {"quack_default_heartbeat_timeout", "quack"},
+    {"quack_enable_reconnects", "quack"},
+    {"quack_fetch_producer_buffer_bytes", "quack"},
+    {"quack_fetch_read_ahead", "quack"},
     {"quack_loaded_at_us", "quack"},
+    {"quack_prepare_inline_rows", "quack"},
+    {"quack_rebalance_buffer_bytes", "quack"},
+    {"quack_result_ttl", "quack"},
+    {"quack_server_keep_alive_timeout", "quack"},
+    {"quack_server_max_connections", "quack"},
+    {"quack_target_batch_bytes", "quack"},
     {"s3_access_key_id", "httpfs"},
     {"s3_allow_recursive_globbing", "httpfs"},
     {"s3_endpoint", "httpfs"},
@@ -1500,6 +1521,13 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"bearer/config", "httpfs"},
     {"mysql/config", "mysql_scanner"},
     {"postgres/config", "postgres_scanner"}}; // EXTENSION_SECRET_PROVIDERS
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
+    {"DuckLakeMetadata", "ducklake"},
+    {"Iceberg", "iceberg"},
+}; // END_OF_EXTENSION_LOG_TYPES
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete", "avro",       "aws",           "azure",   "core_functions",   "delta", "ducklake",

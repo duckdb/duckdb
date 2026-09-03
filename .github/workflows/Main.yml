@@ -2,9 +2,9 @@ name: Main
 on:
   workflow_dispatch:
     inputs:
-      override_git_describe:
+      duckdb_version:
         type: string
-      git_ref:
+      duckdb_commit:
         type: string
       skip_tests:
         type: boolean
@@ -71,7 +71,7 @@ jobs:
       (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
-      git_sha: ${{ steps.resolve_git_sha.outputs.git_sha }}
+      duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
       runner_linux_small: ${{ steps.runners.outputs.runner_linux_small }}
       runner_linux_x64: ${{ steps.runners.outputs.runner_linux_x64 }}
       runner_linux_22_x64: ${{ steps.runners.outputs.runner_linux_22_x64 }}
@@ -92,7 +92,7 @@ jobs:
       save_cache: ${{ steps.selection.outputs.save_cache }}
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
-      effective_git_describe: ${{ steps.version.outputs.effective_git_describe }}
+      duckdb_version: ${{ steps.version.outputs.duckdb_version }}
       staged_version: ${{ steps.version.outputs.staged_version }}
       extension_allow_failure_archs: ${{ steps.version.outputs.extension_allow_failure_archs }}
     env:
@@ -102,46 +102,57 @@ jobs:
         id: runners
         uses: duckdb/duckdb-ci/detect-runners@main
 
-      - name: Resolve git sha
-        id: resolve_git_sha
+      - name: Resolve DuckDB commit
+        id: resolve_duckdb_commit
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.git_ref }}" ]]; then
-            resolved_sha="$(gh api -X GET "/repos/${{ github.repository }}/commits" -f sha="${{ inputs.git_ref }}" -f per_page=1 --jq '.[0].sha')"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.duckdb_commit }}" ]]; then
+            resolved_commit="$(gh api -X GET "/repos/${{ github.repository }}/commits" -f sha="${{ inputs.duckdb_commit }}" -f per_page=1 --jq '.[0].sha')"
           else
-            resolved_sha="${{ github.sha }}"
+            resolved_commit="${{ github.sha }}"
           fi
-          echo "git_sha=$resolved_sha" >> "$GITHUB_OUTPUT"
-          echo "Using git_sha=$resolved_sha"
-
-      - name: Resolve version override
-        id: version
-        shell: bash
-        run: |
-          effective_git_describe="${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}"
-          staged_version=""
-          extension_allow_failure_archs=
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.git_ref }}" && -z "$effective_git_describe" ]]; then
-            effective_git_describe="v2.0.0-alpha${{ github.run_number }}"
-            commit="${{ steps.resolve_git_sha.outputs.git_sha }}"
-            staged_version="${commit:0:10}/$effective_git_describe"
-            extension_allow_failure_archs="windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
-          fi
-          {
-            echo "effective_git_describe=$effective_git_describe"
-            echo "staged_version=$staged_version"
-            echo "extension_allow_failure_archs=$extension_allow_failure_archs"
-          } >> "$GITHUB_OUTPUT"
-          echo "Using effective_git_describe=$effective_git_describe"
-          echo "Using staged_version=$staged_version"
-          echo "Using extension_allow_failure_archs=$extension_allow_failure_archs"
+          echo "duckdb_commit=$resolved_commit" >> "$GITHUB_OUTPUT"
+          echo "Using duckdb_commit=$resolved_commit"
 
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
           runner_provider: ${{ steps.runners.outputs.runner_provider }}
           fetch_depth: 0
-          ref: ${{ steps.resolve_git_sha.outputs.git_sha }}
+          ref: ${{ steps.resolve_duckdb_commit.outputs.duckdb_commit }}
+
+      - name: Resolve DuckDB version
+        id: version
+        shell: bash
+        env:
+          RESOLVED_COMMIT: ${{ steps.resolve_duckdb_commit.outputs.duckdb_commit }}
+          INPUT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.duckdb_version || '' }}
+        run: |
+          alpha_args=()
+          staged_version=""
+          extension_allow_failure_archs=
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.duckdb_commit }}" && -z "$INPUT_VERSION" ]]; then
+            alpha_args=(--alpha-run-number "${{ github.run_number }}")
+            extension_allow_failure_archs="windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
+          fi
+          version_output="$(python3 scripts/ci/version.py \
+            --duckdb-commit "$RESOLVED_COMMIT" \
+            --duckdb-version "$INPUT_VERSION" \
+            "${alpha_args[@]}" \
+            --github-output)"
+          printf '%s\n' "$version_output" >> "$GITHUB_OUTPUT"
+          duckdb_version="$(sed -n 's/^duckdb_version=//p' <<<"$version_output")"
+          if [[ ${#alpha_args[@]} -gt 0 ]]; then
+            staged_version="${RESOLVED_COMMIT:0:10}/$duckdb_version"
+          fi
+          {
+            echo "staged_version=$staged_version"
+            echo "extension_allow_failure_archs=$extension_allow_failure_archs"
+          } >> "$GITHUB_OUTPUT"
+          echo "Using duckdb_commit=$RESOLVED_COMMIT"
+          echo "Using duckdb_version=$duckdb_version"
+          echo "Using staged_version=$staged_version"
+          echo "Using extension_allow_failure_archs=$extension_allow_failure_archs"
 
       - name: Detect changes
         id: changed
@@ -250,6 +261,8 @@ jobs:
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -265,10 +278,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - id: describe_step
-      run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -304,13 +314,16 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
+    env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
 
     steps:
     - name: "Checkout"
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-        ref: ${{ needs.prepare.outputs.git_sha }}
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
     - name: Download relassert build artifact
       uses: actions/download-artifact@v8
       with:
@@ -344,7 +357,8 @@ jobs:
       - linux-relassert
       - linux-release
     with:
-      git_ref: ${{ needs.prepare.outputs.git_sha }}
+      duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
+      duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
       build_current_release: false
       run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
@@ -360,6 +374,9 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).ubuntu_24_04_amd64_lint }}
+    env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
 
     steps:
     - name: "Checkout"
@@ -367,7 +384,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - name: Tidy Check (clangd)
       run: |
@@ -395,8 +412,8 @@ jobs:
       - linux-relassert
       - linux-release
     with:
-      override_git_describe: ${{ needs.prepare.outputs.effective_git_describe }}
-      git_ref: ${{ needs.prepare.outputs.git_sha }}
+      duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
+      duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
@@ -416,6 +433,8 @@ jobs:
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
       GEN: make
 
     steps:
@@ -423,7 +442,7 @@ jobs:
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-        ref: ${{ needs.prepare.outputs.git_sha }}
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - uses: emscripten-core/setup-emsdk@v16
       with:
@@ -449,7 +468,8 @@ jobs:
       image: ${{ fromJson(needs.prepare.outputs.images)[matrix.config.image] }}
     env:
       GEN: ninja
-      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
 
     steps:
     - name: "Checkout"
@@ -457,7 +477,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - uses: ./.github/actions/ccache-action
       if: ${{ matrix.config.use_ccache }}
@@ -619,6 +639,8 @@ jobs:
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
       GEN: ninja
 
     steps:
@@ -627,7 +649,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -664,6 +686,9 @@ jobs:
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
 
     steps:
     - name: "Checkout"
@@ -671,7 +696,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -716,14 +741,15 @@ jobs:
     container:
       image: ${{ fromJson(needs.prepare.outputs.images)[matrix.config.image] }}
     env:
-      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
 
     steps:
     - name: "Checkout"
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-        ref: ${{ needs.prepare.outputs.git_sha }}
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
         fetch_depth: 0
 
     - uses: ./.github/actions/ccache-action
@@ -822,14 +848,14 @@ jobs:
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-        ref: ${{ needs.prepare.outputs.git_sha }}
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - name: Check staged extension install/load
       timeout-minutes: 10
       run: |
         python3 scripts/ci/check_staged_extensions.py \
-          --git-sha "${{ needs.prepare.outputs.git_sha }}" \
-          --version "${{ needs.prepare.outputs.effective_git_describe }}" \
+          --duckdb-commit "${{ needs.prepare.outputs.duckdb_commit }}" \
+          --duckdb-version "${{ needs.prepare.outputs.duckdb_version }}" \
           --extensions "httpfs,json,parquet,ducklake,iceberg,icu"
 
  swift:
@@ -840,7 +866,8 @@ jobs:
       - prepare
       - linux-relassert
     with:
-      git_ref: ${{ needs.prepare.outputs.git_sha }}
+      duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
+      duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
       runner_provider: ${{ needs.prepare.outputs.runner_provider }}
 
@@ -852,8 +879,8 @@ jobs:
       - prepare
       - linux-relassert
     with:
-      override_git_describe: ${{ needs.prepare.outputs.effective_git_describe }}
-      git_ref: ${{ needs.prepare.outputs.git_sha }}
+      duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
+      duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
       runners: ${{ needs.prepare.outputs.runners }}
       runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
@@ -865,8 +892,8 @@ jobs:
     secrets: inherit
     needs: prepare
     with:
-      override_git_describe: ${{ needs.prepare.outputs.effective_git_describe }}
-      git_ref: ${{ needs.prepare.outputs.git_sha }}
+      duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
+      duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_arm64 }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
@@ -881,6 +908,8 @@ jobs:
       - prepare
       - linux-relassert
     env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
@@ -889,7 +918,7 @@ jobs:
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
           runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-          ref: ${{ needs.prepare.outputs.git_sha }}
+          ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -931,6 +960,8 @@ jobs:
       - prepare
       - linux-relassert
     env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
       # Job-level on purpose: the Test step's `make unittest_release` depends on `release`, so a
       # step-scoped flag would silently reconfigure and rebuild WITH rtti and test the wrong binary.
       DISABLE_RTTI: 1
@@ -942,7 +973,7 @@ jobs:
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
           runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-          ref: ${{ needs.prepare.outputs.git_sha }}
+          ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -973,6 +1004,8 @@ jobs:
       - prepare
       - linux-relassert
     env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
       # Explicitly use GCC here so we check compiler support in the PR CI run.
       # Other CI job use Clang but GCC should continue to work well.
       CC: gcc
@@ -985,7 +1018,7 @@ jobs:
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
           runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-          ref: ${{ needs.prepare.outputs.git_sha }}
+          ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1008,6 +1041,8 @@ jobs:
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
       TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
@@ -1016,7 +1051,7 @@ jobs:
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-        ref: ${{ needs.prepare.outputs.git_sha }}
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -1054,6 +1089,9 @@ jobs:
     needs:
       - prepare
       - linux-release
+    env:
+      DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+      DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
     strategy:
       fail-fast: false
       matrix:
@@ -1072,7 +1110,7 @@ jobs:
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-        ref: ${{ needs.prepare.outputs.git_sha }}
+        ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -1153,7 +1191,8 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           REPOSITORY: ${{ github.repository }}
-          OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
+          DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
+          DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
           STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
         run: |
@@ -1167,13 +1206,8 @@ jobs:
             is_duckdb_repo=true
           fi
 
-          has_no_override=false
-          if [[ "$EVENT_NAME" != "workflow_dispatch" || -z "$OVERRIDE_GIT_DESCRIBE" ]]; then
-            has_no_override=true
-          fi
-
           run_release_dispatch=false
-          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$OVERRIDE_GIT_DESCRIBE" ]]; then
+          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$DUCKDB_VERSION" ]]; then
             run_release_dispatch=true
           fi
 
@@ -1185,11 +1219,10 @@ jobs:
           echo "summary dispatch context:"
           echo "  event_name=$EVENT_NAME"
           echo "  repository=$REPOSITORY"
-          echo "  override_git_describe=$OVERRIDE_GIT_DESCRIBE"
+          echo "  duckdb_version=$DUCKDB_VERSION"
           echo "  release_status_success=$RELEASE_STATUS_SUCCESS"
           echo "  is_release_event=$is_release_event"
           echo "  is_duckdb_repo=$is_duckdb_repo"
-          echo "  has_no_override=$has_no_override"
           echo "  run_release_dispatch=$run_release_dispatch"
           echo "  staged_version=$STAGED_VERSION"
           echo "  publish_latest_alpha=$publish_latest_alpha"
@@ -1210,8 +1243,8 @@ jobs:
             --repo duckdb/duckdb-workflow-trigger \
             --ref main \
             --field event=core_ready \
-            --field duckdb_version="${{ needs.prepare.outputs.effective_git_describe }}" \
-            --field duckdb_commit="${{ needs.prepare.outputs.git_sha }}" \
+            --field duckdb_version="${{ needs.prepare.outputs.duckdb_version }}" \
+            --field duckdb_commit="${{ needs.prepare.outputs.duckdb_commit }}" \
             --field status=success \
             --field source_run_url="$SOURCE_RUN_URL" \
             --field message="DuckDB Main CI release artifacts are ready"

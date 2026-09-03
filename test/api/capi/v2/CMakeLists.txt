@@ -5,12 +5,15 @@ add_library_unity(
   test_capi_v2_basic.cpp
   test_capi_v2_arena.cpp
   test_capi_v2_bytes.cpp
+  test_capi_v2_column_data_collection.cpp
   test_capi_v2_data_chunk.cpp
   test_capi_v2_error_info.cpp
   test_capi_v2_logical_type.cpp
   test_capi_v2_option.cpp
   test_capi_v2_query.cpp
   test_capi_v2_result.cpp
+  test_capi_v2_aggregate_function.cpp
+  test_capi_v2_scalar_function.cpp
   test_capi_v2_statement.cpp
   test_capi_v2_static_extension.cpp
   test_capi_v2_value.cpp

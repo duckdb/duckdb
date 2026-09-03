@@ -7,6 +7,26 @@
 namespace duckdb {
 
 static void PopulateKeywordMap(const ParsedGrammar &grammar, const string &root_rule_name, const string &rule_name,
+                               case_insensitive_set_t &keyword_map, case_insensitive_set_t &active_rules);
+
+static void ExpressionToKeyword(const ParsedGrammar &grammar, const string &root_rule_name, const string &rule_name,
+                                const PEGExpression &expression, case_insensitive_set_t &keyword_map,
+                                case_insensitive_set_t &active_rules) {
+	if (expression.type == PEGExpression::Type::LITERAL) {
+		keyword_map.insert(StringUtil::Lower(expression.text.GetString()));
+	} else if (expression.type == PEGExpression::Type::REFERENCE) {
+		PopulateKeywordMap(grammar, root_rule_name, expression.text.GetString(), keyword_map, active_rules);
+	} else if (expression.type == PEGExpression::Type::CHOICE) {
+		for (auto &child : expression.children) {
+			ExpressionToKeyword(grammar, root_rule_name, rule_name, child, keyword_map, active_rules);
+		}
+	} else {
+		throw InvalidInputException("Keyword grammar rule '%s' contains unsupported token '%s' in rule '%s'",
+		                            root_rule_name, expression.text.GetString(), rule_name);
+	}
+}
+
+static void PopulateKeywordMap(const ParsedGrammar &grammar, const string &root_rule_name, const string &rule_name,
                                case_insensitive_set_t &keyword_map, case_insensitive_set_t &active_rules) {
 	if (!active_rules.insert(rule_name).second) {
 		throw InvalidInputException("Keyword grammar rule '%s' contains a recursive reference to rule '%s'",
@@ -22,28 +42,7 @@ static void PopulateKeywordMap(const ParsedGrammar &grammar, const string &root_
 		                            rule_name);
 	}
 
-	bool expect_keyword = true;
-	for (auto &token : rule.recipe.tokens) {
-		if (expect_keyword) {
-			switch (token.type) {
-			case PEGTokenType::LITERAL:
-				keyword_map.insert(StringUtil::Lower(token.text.GetString()));
-				break;
-			case PEGTokenType::REFERENCE:
-				PopulateKeywordMap(grammar, root_rule_name, token.text.GetString(), keyword_map, active_rules);
-				break;
-			default:
-				throw InvalidInputException("Keyword grammar rule '%s' contains unsupported token '%s' in rule '%s'",
-				                            root_rule_name, token.text.GetString(), rule_name);
-			}
-		} else if (token.type != PEGTokenType::OPERATOR || token.text.GetString() != "/") {
-			throw InvalidInputException("Keyword grammar rule '%s' must contain only alternatives", root_rule_name);
-		}
-		expect_keyword = !expect_keyword;
-	}
-	if (expect_keyword) {
-		throw InvalidInputException("Keyword grammar rule '%s' ends with an incomplete alternative", root_rule_name);
-	}
+	ExpressionToKeyword(grammar, root_rule_name, rule_name, rule.recipe.expression, keyword_map, active_rules);
 	active_rules.erase(rule_name);
 }
 
