@@ -195,6 +195,21 @@ string QualifiedColumnName::ToString() const {
 	return result;
 }
 
+string QualifiedColumnName::ToDisplayString() const {
+	string result;
+	if (!catalog.empty()) {
+		result += SQLQuotedIdentifier::ToString(catalog) + ".";
+	}
+	if (!schema.empty()) {
+		result += SQLQuotedIdentifier::ToString(schema) + ".";
+	}
+	if (!table.empty()) {
+		result += SQLQuotedIdentifier::ToString(table) + ".";
+	}
+	result += SQLQuotedIdentifier::ToString(column);
+	return result;
+}
+
 bool QualifiedColumnName::IsQualified() const {
 	return !catalog.empty() || !schema.empty() || !table.empty();
 }
