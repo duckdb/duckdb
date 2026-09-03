@@ -101,7 +101,7 @@ unsafe_array_ptr<const uint8_t> StringScanState::SegmentLayout::GetDictionaryEnt
 }
 
 StringScanState::SegmentLayout StringScanState::ReadSegmentLayout(const BufferHandle &handle,
-                                                                 const ColumnSegment &segment) {
+                                                                  const ColumnSegment &segment) {
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "uncompressed string segment");
 	StringDictionaryContainer dictionary {reader.Read<uint32_t>(), reader.Read<uint32_t>()};
 	if (dictionary.end > reader.Size() || dictionary.size > dictionary.end) {
@@ -192,7 +192,7 @@ void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefe
 }
 
 unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(const QueryContext &context,
-	                                                                       ColumnSegment &segment) {
+                                                                       ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	return make_uniq<StringScanState>(std::move(handle), segment);
@@ -217,8 +217,9 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	for (idx_t i = 0; i < scan_count; i++) {
 		auto current_offset = base_data[start + i];
 		auto string_length = scan_state.layout.GetStringLength(current_offset, previous_offset);
+		auto entry = scan_state.layout.GetDictionaryEntry(current_offset, string_length);
 		result_data[result_offset + i] =
-		    FetchStringFromDict(state.context, segment, scan_state.layout, result, current_offset, string_length);
+		    FetchStringFromEntry(state.context, segment, result, entry, current_offset, string_length);
 		previous_offset = base_data[start + i];
 	}
 }
@@ -250,8 +251,8 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 		auto current_offset = base_data[index];
 		auto prev_offset = index > 0 ? base_data[index - 1] : 0;
 		auto string_length = scan_state.layout.GetStringLength(current_offset, prev_offset);
-		result_data[i] =
-		    FetchStringFromDict(state.context, segment, scan_state.layout, result, current_offset, string_length);
+		auto entry = scan_state.layout.GetDictionaryEntry(current_offset, string_length);
+		result_data[i] = FetchStringFromEntry(state.context, segment, result, entry, current_offset, string_length);
 	}
 }
 
@@ -296,8 +297,8 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	} else {
 		string_length = layout.GetStringLength(dict_offset, base_data[row_index - 1]);
 	}
-	result_data[result_idx] =
-	    FetchStringFromDict(state.context, segment, layout, result, dict_offset, string_length);
+	auto entry = layout.GetDictionaryEntry(dict_offset, string_length);
+	result_data[result_idx] = FetchStringFromEntry(state.context, segment, result, entry, dict_offset, string_length);
 }
 
 //===--------------------------------------------------------------------===//
