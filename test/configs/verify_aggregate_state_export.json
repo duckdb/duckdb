@@ -8,6 +8,7 @@
       "paths": [
         "test/optimizer/aggregate_reuse.test",
         "test/optimizer/deliminator.test",
+        "test/optimizer/pushdown/filter_cannot_pushdown.test",
         "test/optimizer/eager_aggregate_execution.test",
         "test/optimizer/eager_aggregate_execution_parquet.test",
         "test/optimizer/partial_aggregate_precomputation.test",

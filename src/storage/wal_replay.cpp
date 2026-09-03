@@ -1338,15 +1338,17 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 		for (auto &col : state.current_table->GetColumns().Physical()) {
 			column_ids.emplace_back(col.StorageOid());
 		}
-		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
 		auto current_row_id = storage.GetNextRowId();
 		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
-			auto row_id_writer = FlatVector::Writer<row_t>(row_id_vector, chunk.size());
-			for (idx_t r = 0; r < chunk.size(); r++) {
-				row_id_writer.WriteValue(NumericCast<row_t>(current_row_id + r));
+			// Deleted index entries are removed when the replay transaction commits. Duplicates can temporarily
+			// exist, similar to tuple WAL replay.
+			auto error = indexes.Append(nullptr, chunk, NumericCast<row_t>(current_row_id),
+			                            IndexAppendMode::INSERT_DUPLICATES, optional_idx());
+			if (error.HasError()) {
+				throw InternalException("Failed to append to index during ROW_GROUP_DATA WAL replay: %s",
+				                        error.Message());
 			}
 			current_row_id += chunk.size();
-			indexes.Append(chunk, row_id_vector);
 		}
 	}
 	storage.MergeStorage(new_row_groups, nullptr);
