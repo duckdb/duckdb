@@ -31,3 +31,24 @@ statement error
 execute q01(a, 2, 0)
 ----
 Invalid Input Error: Only scalar parameters, named parameters or NULL supported for EXECUTE
+
+statement error
+CREATE TABLE t_miss_parameters_order_01 (n INTEGER NULL, i INTEGER NULL, b BIGINT NULL, d DECIMAL(10, 2) NULL, v VARCHAR NULL);
+prepare insert_t_miss_parameters_order_01 as INSERT INTO t_miss_parameters_order_01 VALUES ($aa, $bb, $cc, $dd, $ee);
+execute insert_t_miss_parameters_order_01(aa:=null, bb:=203);
+----
+Values were not provided for the following parameters: cc, dd, ee
+
+statement error
+CREATE TABLE t_miss_parameters_order_02 (n INTEGER NULL, i INTEGER NULL, b BIGINT NULL, d DECIMAL(10, 2) NULL, v VARCHAR NULL);
+prepare insert_t_miss_parameters_order_02 as INSERT INTO t_miss_parameters_order_02  VALUES ($ee, $dd, $cc, $bb, $aa);
+execute insert_t_miss_parameters_order_02(aa:=null, bb:=203);
+----
+Values were not provided for the following parameters: ee, dd, cc
+
+statement error
+CREATE TABLE t_miss_parameters_order_03 (n INTEGER NULL, i INTEGER NULL, b BIGINT NULL, d DECIMAL(10, 2) NULL, v VARCHAR NULL);
+prepare insert_t_miss_parameters_order_03 as INSERT INTO t_miss_parameters_order_03  VALUES ($aa, $aa, $bb, $cc, $bb);
+execute insert_t_miss_parameters_order_03(aa:=null, cc:=203);
+----
+Values were not provided for the following parameters: bb
