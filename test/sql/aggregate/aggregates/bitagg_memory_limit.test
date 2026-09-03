@@ -1,0 +1,27 @@
+# name: test/sql/aggregate/aggregates/bitagg_memory_limit.test
+# description: Test BIT_AND/BIT_OR/BIT_XOR memory limit enforcement over BIT columns
+# group: [aggregates]
+
+statement ok
+SET memory_limit='256MB';
+
+statement ok
+SET threads=4;
+
+# disable spilling so the memory limit assertion below is deterministic, not a race against the
+# radix hash table's spill-to-disk speed
+statement ok
+PRAGMA temp_directory=''
+
+statement ok
+PRAGMA max_temp_directory_size='0B'
+
+# each of the 1,000,000 groups needs ~763 bytes of state (6096-bit value), i.e. ~750MB total,
+# which must be tracked against the 256MB memory_limit rather than allocated as untracked raw heap
+statement error
+SELECT count(*) AS groups, max(length(a)) AS bits
+FROM (SELECT g, bit_and(v) AS a, bit_or(v) AS o, bit_xor(v) AS x
+      FROM (SELECT i::BIGINT AS g, repeat('1', 6096)::BIT AS v FROM range(1000000) t(i))
+      GROUP BY g);
+----
+Out of Memory Error

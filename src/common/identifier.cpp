@@ -10,6 +10,10 @@ bool Identifier::StartsWith(const string &prefix) const {
 	return StringUtil::CIStartsWith(value, prefix);
 }
 
+bool Identifier::EndsWith(const string &suffix) const {
+	return StringUtil::CIEndsWith(value, suffix);
+}
+
 hash_t Identifier::Hash() const {
 	return StringUtil::CIHash(value);
 }

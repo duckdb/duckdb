@@ -37,11 +37,11 @@ unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 
 	auto key_val = input.GetNonNullConstant(0);
-	if (StringValue::Get(key_val).empty()) {
+	auto key = key_val.GetValue<Identifier>();
+	if (key.empty()) {
 		throw ParserException("Key name for current_setting must not be empty");
 	}
 
-	auto key = StringUtil::Lower(StringValue::Get(key_val));
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
 		auto extension_name = Catalog::AutoloadExtensionByConfigName(context, key);

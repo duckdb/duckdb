@@ -118,7 +118,7 @@ class ParquetMetaDataOperator {
 public:
 	template <ParquetMetadataOperatorType OP_TYPE>
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names);
+	                                     vector<LogicalType> &return_types, vector<Identifier> &names);
 	static unique_ptr<GlobalTableFunctionState> InitGlobal(ClientContext &context, TableFunctionInitInput &input);
 	template <ParquetMetadataOperatorType OP_TYPE>
 	static unique_ptr<LocalTableFunctionState> InitLocal(ExecutionContext &context, TableFunctionInitInput &input,
@@ -128,7 +128,7 @@ public:
 	                       const GlobalTableFunctionState *global_state);
 
 	template <ParquetMetadataOperatorType OP_TYPE>
-	static void BindSchema(vector<LogicalType> &return_types, vector<string> &names);
+	static void BindSchema(vector<LogicalType> &return_types, vector<Identifier> &names);
 
 	static OperatorPartitionData GetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 };
@@ -252,7 +252,7 @@ private:
 
 template <>
 void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::META_DATA>(vector<LogicalType> &return_types,
-                                                                                 vector<string> &names) {
+                                                                                 vector<Identifier> &names) {
 	names.emplace_back("file_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -354,6 +354,13 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::META_DATA>
 
 	names.emplace_back("geo_types");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("encoding_stats");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT({
+	    {"page_type", LogicalType::VARCHAR},
+	    {"encoding", LogicalType::VARCHAR},
+	    {"count", LogicalType::INTEGER},
+	})));
 }
 
 static Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
@@ -388,6 +395,27 @@ static Value ConvertParquetGeoStatsBBOX(const duckdb_parquet::GeospatialStatisti
 	    {"mmin", stats.bbox.__isset.mmin ? Value::DOUBLE(stats.bbox.mmin) : Value(LogicalTypeId::DOUBLE)},
 	    {"mmax", stats.bbox.__isset.mmax ? Value::DOUBLE(stats.bbox.mmax) : Value(LogicalTypeId::DOUBLE)},
 	});
+}
+
+static Value ConvertParquetEncodingStats(const duckdb_parquet::ColumnMetaData &col_meta) {
+	auto stat_type = LogicalType::STRUCT({
+	    {"page_type", LogicalType::VARCHAR},
+	    {"encoding", LogicalType::VARCHAR},
+	    {"count", LogicalType::INTEGER},
+	});
+	if (!col_meta.__isset.encoding_stats) {
+		return Value(LogicalType::LIST(stat_type));
+	}
+	vector<Value> stats;
+	stats.reserve(col_meta.encoding_stats.size());
+	for (auto &entry : col_meta.encoding_stats) {
+		stats.push_back(Value::STRUCT({
+		    {"page_type", Value(ConvertParquetElementToString(entry.page_type))},
+		    {"encoding", Value(ConvertParquetElementToString(entry.encoding))},
+		    {"count", Value::INTEGER(entry.count)},
+		}));
+	}
+	return Value::LIST(stat_type, std::move(stats));
 }
 
 static Value ConvertParquetGeoStatsTypes(const duckdb_parquet::GeospatialStatistics &stats) {
@@ -525,6 +553,9 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 
 	// geo_stats_types, LogicalType::LIST(LogicalType::VARCHAR)
 	output[30].get().Append(ConvertParquetGeoStatsTypes(col_meta.geospatial_statistics));
+
+	// encoding_stats, LogicalType::LIST(LogicalType::STRUCT(...))
+	output[31].get().Append(ConvertParquetEncodingStats(col_meta));
 }
 
 //===--------------------------------------------------------------------===//
@@ -539,7 +570,7 @@ public:
 
 template <>
 void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::SCHEMA>(vector<LogicalType> &return_types,
-                                                                              vector<string> &names) {
+                                                                              vector<Identifier> &names) {
 	names.emplace_back("file_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -688,7 +719,7 @@ public:
 
 template <>
 void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::KEY_VALUE_META_DATA>(
-    vector<LogicalType> &return_types, vector<string> &names) {
+    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("file_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -725,7 +756,7 @@ public:
 
 template <>
 void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FILE_META_DATA>(vector<LogicalType> &return_types,
-                                                                                      vector<string> &names) {
+                                                                                      vector<Identifier> &names) {
 	names.emplace_back("file_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -822,7 +853,7 @@ private:
 
 template <>
 void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::BLOOM_PROBE>(vector<LogicalType> &return_types,
-                                                                                   vector<string> &names) {
+                                                                                   vector<Identifier> &names) {
 	names.emplace_back("file_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -942,44 +973,44 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
 
 template <>
 void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FULL_METADATA>(vector<LogicalType> &return_types,
-                                                                                     vector<string> &names) {
+                                                                                     vector<Identifier> &names) {
 	names.emplace_back("parquet_file_metadata");
 	vector<LogicalType> file_meta_types;
-	vector<string> file_meta_names;
+	vector<Identifier> file_meta_names;
 	ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FILE_META_DATA>(file_meta_types, file_meta_names);
 	child_list_t<LogicalType> file_meta_children;
 	for (idx_t i = 0; i < file_meta_types.size(); i++) {
-		file_meta_children.emplace_back(make_pair(file_meta_names[i], file_meta_types[i]));
+		file_meta_children.emplace_back(make_pair(file_meta_names[i].GetIdentifierName(), file_meta_types[i]));
 	}
 	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT(std::move(file_meta_children))));
 
 	names.emplace_back("parquet_metadata");
 	vector<LogicalType> row_group_types;
-	vector<string> row_group_names;
+	vector<Identifier> row_group_names;
 	ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::META_DATA>(row_group_types, row_group_names);
 	child_list_t<LogicalType> row_group_children;
 	for (idx_t i = 0; i < row_group_types.size(); i++) {
-		row_group_children.emplace_back(make_pair(row_group_names[i], row_group_types[i]));
+		row_group_children.emplace_back(make_pair(row_group_names[i].GetIdentifierName(), row_group_types[i]));
 	}
 	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT(std::move(row_group_children))));
 
 	names.emplace_back("parquet_schema");
 	vector<LogicalType> schema_types;
-	vector<string> schema_names;
+	vector<Identifier> schema_names;
 	ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::SCHEMA>(schema_types, schema_names);
 	child_list_t<LogicalType> schema_children;
 	for (idx_t i = 0; i < schema_types.size(); i++) {
-		schema_children.emplace_back(make_pair(schema_names[i], schema_types[i]));
+		schema_children.emplace_back(make_pair(schema_names[i].GetIdentifierName(), schema_types[i]));
 	}
 	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT(std::move(schema_children))));
 
 	names.emplace_back("parquet_kv_metadata");
 	vector<LogicalType> kv_types;
-	vector<string> kv_names;
+	vector<Identifier> kv_names;
 	ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::KEY_VALUE_META_DATA>(kv_types, kv_names);
 	child_list_t<LogicalType> kv_children;
 	for (idx_t i = 0; i < kv_types.size(); i++) {
-		kv_children.emplace_back(make_pair(kv_names[i], kv_types[i]));
+		kv_children.emplace_back(make_pair(kv_names[i].GetIdentifierName(), kv_types[i]));
 	}
 	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT(std::move(kv_children))));
 }
@@ -1008,7 +1039,7 @@ void FullMetadataProcessor::ReadRow(vector<reference<Vector>> &output, idx_t row
 
 template <ParquetMetadataOperatorType OP_TYPE>
 unique_ptr<FunctionData> ParquetMetaDataOperator::Bind(ClientContext &context, TableFunctionBindInput &input,
-                                                       vector<LogicalType> &return_types, vector<string> &names) {
+                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
 	// Extract file paths from input using MultiFileReader (handles both single files and arrays)
 	auto multi_file_reader = MultiFileReader::CreateDefault("ParquetMetadata");
 	auto glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "parquet");

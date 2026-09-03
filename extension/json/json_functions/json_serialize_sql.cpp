@@ -282,7 +282,7 @@ struct ExecuteSqlTableFunction {
 	};
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
+	                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 		JSONFunctionLocalState local_state(context);
 		auto alc = local_state.json_allocator->GetYYAlc();
 

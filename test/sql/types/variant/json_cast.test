@@ -96,6 +96,37 @@ select '{"hello": [1,2,true, false, null], "test": [1, {"test": false}, ["blob",
 {"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
 {"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
 
+# Issue #23996: DECIMALs with no integer digit still produce valid JSON numbers
+query II
+SELECT 0.5::DECIMAL(1,1)::VARIANT::JSON, (-0.5::DECIMAL(1,1))::VARIANT::JSON;
+----
+0.5	-0.5
+
+query IIII
+SELECT 0.5::DECIMAL(4,4)::VARIANT::JSON,
+       0.5::DECIMAL(9,9)::VARIANT::JSON,
+       0.5::DECIMAL(18,18)::VARIANT::JSON,
+       0.5::DECIMAL(38,38)::VARIANT::JSON;
+----
+0.5000	0.500000000	0.500000000000000000	0.50000000000000000000000000000000000000
+
+query I
+SELECT [0.5::DECIMAL(1,1), -0.5::DECIMAL(1,1)]::VARIANT::JSON;
+----
+[0.5,-0.5]
+
+query I
+SELECT {'positive': 0.5::DECIMAL(1,1), 'negative': -0.5::DECIMAL(1,1)}::VARIANT::JSON;
+----
+{"negative":-0.5,"positive":0.5}
+
+query III
+SELECT json_valid(0.5::DECIMAL(1,1)::VARIANT::JSON),
+       json_valid([0.5::DECIMAL(1,1)]::VARIANT::JSON),
+       json_valid({'value': -0.5::DECIMAL(1,1)}::VARIANT::JSON);
+----
+true	true	true
+
 statement ok
 create table tbl(var JSON);
 

@@ -1,7 +1,11 @@
 ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / ShowExternalResourcesStmt
 
-CreateExternalResourceStmt <- 'CREATE' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? AttachOptions?
+CreateExternalResourceStmt <- 'CREATE' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? ExternalResourceCreationOptions?
 RegisterExternalResourceStmt <- 'REGISTER' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? 'FROM' Expression
 DestroyExternalResourceStmt <- 'DESTROY' 'EXTERNAL' 'RESOURCE' ColId
 ShowExternalResourcesStmt <- 'SHOW' ShowAllModifier? 'EXTERNAL' 'RESOURCES'
 ShowAllModifier <- 'ALL'
+
+# The recipe's create params. Its own rule rather than AttachOptions: the two option bags are
+# distinct, and a statement can carry both.
+ExternalResourceCreationOptions <- GenericCopyOptionList

@@ -124,3 +124,62 @@ WHERE x = 2 OR x IS NULL;
 -1	C
 2	A
 2	B
+
+# Statistics can make a cross-relation filter local to a materialized CTE reference.
+statement ok
+CREATE TABLE cte_filter_context(x INTEGER);
+
+statement ok
+INSERT INTO cte_filter_context VALUES (10), (20), (NULL);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN (FORMAT JSON) WITH cte AS MATERIALIZED (
+	SELECT i AS k, i % 10 AS v FROM range(1000000000) t(i)
+)
+SELECT count(*)
+FROM cte c, cte_filter_context s
+WHERE c.v IN (1, 2, 3, 4, 5, 6) OR s.x > 100;
+----
+logical_opt	<REGEX>:(?s).*"name": "CTE".*"name": "COMPARISON_JOIN".*"name": "RANGE".*"Join Type": "MARK".*"Expressions": "IN \(\.\.\.\)".*"name": "CTE_SCAN".*
+
+query I
+WITH cte AS MATERIALIZED (
+	SELECT i AS k, i % 10 AS v FROM range(100) t(i)
+)
+SELECT count(*)
+FROM cte c, cte_filter_context s
+WHERE c.v IN (1, 2, 3, 4, 5, 6) OR s.x > 100;
+----
+180
+
+# An unfiltered consumer still prevents pushing a partial consumer domain into the definition.
+query II
+EXPLAIN (FORMAT JSON) WITH cte AS MATERIALIZED (
+	SELECT i AS k, i % 10 AS v FROM range(1000000000) t(i)
+)
+SELECT count(*)
+FROM cte c, cte_filter_context s
+WHERE c.v IN (1, 2, 3, 4, 5, 6) OR s.x > 100
+UNION ALL
+SELECT count(*) FROM cte;
+----
+logical_opt	<!REGEX>:(?s).*"name": "CTE".*"name": "COMPARISON_JOIN".*"name": "RANGE".*"Join Type": "MARK".*"Expressions": "IN \(\.\.\.\)".*"name": "CTE_SCAN".*
+
+statement ok
+PRAGMA disable_optimizer;
+
+query I
+WITH cte AS MATERIALIZED (
+	SELECT i AS k, i % 10 AS v FROM range(100) t(i)
+)
+SELECT count(*)
+FROM cte c, cte_filter_context s
+WHERE c.v IN (1, 2, 3, 4, 5, 6) OR s.x > 100;
+----
+180
+
+statement ok
+PRAGMA enable_optimizer;

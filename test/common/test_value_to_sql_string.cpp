@@ -45,3 +45,18 @@ TEST_CASE("Value::ToSQLString round-trips MAP values", "[api]") {
 	// the explicit cast also preserves narrower integer subtypes
 	RequireRoundTrip(con, "MAP {1::SMALLINT: 2::SMALLINT}");
 }
+
+TEST_CASE("Value::ToSQLString round-trips STRUCT, BIT and UNION values", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	SECTION("STRUCT key containing a quote") {
+		RequireRoundTrip(con, "{'it''s': 42}");
+	}
+	SECTION("BIT value") {
+		RequireRoundTrip(con, "'101'::BIT");
+	}
+	SECTION("UNION member types") {
+		RequireRoundTrip(con, "union_value(i := 42::SMALLINT)::UNION(i SMALLINT, s VARCHAR)");
+	}
+}

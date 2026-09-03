@@ -177,11 +177,7 @@ int32_t GregorianCalendar::HandleGetExtendedYear() {
 		return InternalGet(CAL_YEAR, EPOCH_YEAR);
 	}
 	case CAL_YEAR_WOY: {
-		auto year_woy = InternalGet(CAL_YEAR_WOY);
-		if (InternalGet(CAL_ERA, AD) == BC) {
-			year_woy = 1 - year_woy;
-		}
-		return HandleGetExtendedYearFromWeekFields(year_woy, InternalGet(CAL_WEEK_OF_YEAR));
+		return HandleGetExtendedYearFromWeekFields(InternalGet(CAL_YEAR_WOY), InternalGet(CAL_WEEK_OF_YEAR));
 	}
 	default:
 		return EPOCH_YEAR;

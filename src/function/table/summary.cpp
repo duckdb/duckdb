@@ -8,13 +8,13 @@
 namespace duckdb {
 
 static unique_ptr<FunctionData> SummaryFunctionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("summary");
 
 	for (idx_t i = 0; i < input.input_table_types.size(); i++) {
 		return_types.push_back(input.input_table_types[i]);
-		names.emplace_back(input.input_table_names[i]);
+		names.push_back(input.input_table_names[i]);
 	}
 
 	return make_uniq<TableFunctionData>();

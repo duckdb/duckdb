@@ -39,3 +39,35 @@ ORDER BY row_group_id;
 122880
 122880
 16960
+
+# Propagate batch advances through a buffered CTE into a direct CTE consumer.
+query II
+EXPLAIN ANALYZE
+COPY (
+	WITH first AS MATERIALIZED (
+		SELECT i FROM cte_parquet_source WHERE i < 500000
+		UNION ALL
+		SELECT i FROM cte_parquet_source WHERE i >= 500000
+	), second AS MATERIALIZED (
+		SELECT i FROM first
+	)
+	SELECT i FROM second
+) TO '{TEST_DIR}/cte_nested_batch_exchange.parquet' (FORMAT parquet);
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: BUFFERED.*Fanout Mode: DIRECT.*Scan Mode: BATCH.*
+
+query III
+SELECT count(*), min(i), max(i)
+FROM read_parquet('{TEST_DIR}/cte_nested_batch_exchange.parquet');
+----
+1000000	0	999999
+
+query I
+SELECT count(*)
+FROM (
+	SELECT i, row_number() OVER () - 1 AS expected
+	FROM read_parquet('{TEST_DIR}/cte_nested_batch_exchange.parquet')
+)
+WHERE i != expected;
+----
+0

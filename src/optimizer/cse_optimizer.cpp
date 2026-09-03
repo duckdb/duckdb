@@ -52,6 +52,8 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:
+	// a lambda has no value of its own, so there is nothing to share between two occurrences of it
+	case ExpressionClass::BOUND_LAMBDA:
 		return;
 	default:
 		break;

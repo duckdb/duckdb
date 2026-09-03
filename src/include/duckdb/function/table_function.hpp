@@ -316,12 +316,12 @@ public:
 };
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
-                                                          vector<LogicalType> &return_types, vector<string> &names);
+                                                          vector<LogicalType> &return_types, vector<Identifier> &names);
 typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
 typedef unique_ptr<LogicalOperator> (*table_function_bind_operator_t)(ClientContext &context,
                                                                       TableFunctionBindInput &input,
                                                                       TableIndex bind_index,
-                                                                      vector<string> &return_names);
+                                                                      vector<Identifier> &return_names);
 typedef unique_ptr<GlobalTableFunctionState> (*table_function_init_global_t)(ClientContext &context,
                                                                              TableFunctionInitInput &input);
 typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(ExecutionContext &context,

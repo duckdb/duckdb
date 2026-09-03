@@ -206,6 +206,21 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 	return true;
 }
 
+ErrorData DuckTransaction::PreFlushOptimisticBlocks(AttachedDatabase &db) noexcept {
+	ErrorData error;
+	if (!ShouldWriteToWAL(db)) {
+		return error;
+	}
+	try {
+		storage->FlushBulkAppendBlocksAndSync(db);
+	} catch (std::exception &ex) {
+		// fail the commit: the flush machinery cannot safely be re-run after an error, and a failed
+		// fsync must not be retried (the retry can succeed without the data being durable)
+		error = ErrorData(ex);
+	}
+	return error;
+}
+
 ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &db,
                                       unique_ptr<StorageCommitState> &commit_state) noexcept {
 	ErrorData error_data;
@@ -222,13 +237,11 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 
 		auto wal_timer = profiler.StartTimer<MetricStorageWriteToWALLatency>();
 		undo_buffer.WriteToWAL(*wal, commit_state.get());
-		if (commit_state->HasRowGroupData()) {
-			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
-			// optimistically written blocks
-			// hence we need to ensure those optimistically written blocks are persisted
-			storage_manager.GetBlockManager().FileSync();
-		}
 		wal_timer.EndTimer();
+
+		// no FileSync is required here: any optimistically written blocks that the WAL references
+		// have already been synced by FlushBulkAppendBlocksAndSync, before the commit locks were taken
+		D_ASSERT(!commit_state->HasRowGroupData() || storage->SyncedFlushedBlocks());
 
 	} catch (std::exception &ex) {
 		// Call RevertCommit() outside this try-catch as it itself may throw

@@ -1,102 +1,35 @@
-import os
-import math
+import argparse
 import functools
+import math
+import os
 import shutil
-from benchmark import BenchmarkRunner, BenchmarkRunnerConfig, DEFAULT_TIMED_RUNS
 from dataclasses import dataclass
-from typing import Optional, List, Union, Dict
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+from benchmark import BenchmarkRunner
+from comparison import (
+    MAX_CONFIRMATION_RUNS,
+    MIN_CONFIRMATION_RUNS,
+    SAMPLE_BATCH_SIZE,
+    BenchmarkMeasurement,
+    benchmark_measurement,
+    confirmation_run_count,
+    sampling_batch_sizes,
+)
+
 
 print = functools.partial(print, flush=True)
 
-
-def is_number(s):
-    try:
-        float(s)
-        return True
-    except ValueError:
-        return False
-
-
-# Geometric mean of an array of numbers
-def geomean(xs):
-    if len(xs) == 0:
-        return 'EMPTY'
-    for entry in xs:
-        if not is_number(entry):
-            return entry
-    return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
-
-
-import argparse
-
-# Set up the argument parser
-parser = argparse.ArgumentParser(description="Benchmark script with old and new runners.")
-
-# Define the arguments
-parser.add_argument("--old", type=str, help="Path to the old runner.", required=True)
-parser.add_argument("--new", type=str, help="Path to the new runner.", required=True)
-parser.add_argument("--benchmarks", type=str, help="Path to the benchmark file.", required=True)
-parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
-parser.add_argument("--threads", type=int, help="Number of threads to use.")
-parser.add_argument("--memory_limit", type=str, help="Memory limit to use.")
-parser.add_argument("--nofail", action="store_true", help="Do not fail on regression.")
-parser.add_argument("--disable-timeout", action="store_true", help="Disable timeout.")
-parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600).")
-parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
-parser.add_argument("--no-summary", type=str, default=False, help="No summary in the end.")
-parser.add_argument(
-    "--timed-runs",
-    type=int,
-    default=DEFAULT_TIMED_RUNS,
-    help=f"Number of timed runs per benchmark (default: {DEFAULT_TIMED_RUNS}).",
-)
-parser.add_argument(
-    "--clear-benchmark-cache", action="store_true", help="Clear benchmark caches prior to running", default=False
-)
-parser.add_argument(
-    "--keep-benchmark-data", action="store_true", help="Benchmark data will not be deleted between tests", default=False
-)
-parser.add_argument(
-    "--regression-threshold-seconds",
-    type=float,
-    default=0.05,
-    help="REGRESSION_THRESHOLD_SECONDS value for large benchmarks.",
-)
-
-# Parse the arguments
-args = parser.parse_args()
-
-# Assign parsed arguments to variables
-old_runner_path = args.old
-new_runner_path = args.new
-benchmark_file = args.benchmarks
-verbose = args.verbose
-threads = args.threads
-memory_limit = args.memory_limit
-no_regression_fail = args.nofail
-disable_timeout = args.disable_timeout
-max_timeout = args.max_timeout
-root_dir = args.root_dir
-no_summary = args.no_summary
-clear_benchmark_cache = args.clear_benchmark_cache
-keep_benchmark_data = args.keep_benchmark_data
-regression_threshold_seconds = args.regression_threshold_seconds
-timed_runs = args.timed_runs
-
-
-# how many times we will run the experiment, to be sure of the regression
-NUMBER_REPETITIONS = 5
-# the threshold at which we consider something a regression (percentage)
-REGRESSION_THRESHOLD_PERCENTAGE = 0.1
-# minimal seconds diff for something to be a regression (for very fast benchmarks)
-REGRESSION_THRESHOLD_SECONDS = regression_threshold_seconds
-# hide benchmark changes that are below the noise floor in the final report
-DISPLAY_THRESHOLD_PERCENTAGE = 2.0
-TIMED_RUN_BATCH_SIZE = 5
+INITIAL_RUNS = 2 * SAMPLE_BATCH_SIZE
+REGRESSION_LIMIT = 1.10
+NOISE_THRESHOLD = 0.02
+GEOMEAN_REGRESSION_SECONDS = 0.050
 
 ANSI_RED = "\033[31m"
 ANSI_GREEN = "\033[32m"
+ANSI_YELLOW = "\033[33m"
+ANSI_GRAY = "\033[90m"
 ANSI_RESET = "\033[0m"
 
 BUCKET_UNCHANGED = "unchanged"
@@ -105,52 +38,368 @@ BUCKET_SLOWER = "slower"
 BUCKET_REGRESSION = "regression"
 BUCKET_FAILURE = "failure"
 
+OUTCOME_NO_REGRESSION = "no_regression"
+OUTCOME_REGRESSION = "regression"
+OUTCOME_FAILURE = "failure"
 
-def in_ci():
-    return os.getenv('CI') == 'true'
+
+@dataclass
+class BenchmarkResult:
+    benchmark: str
+    initial_measurement: Optional[BenchmarkMeasurement] = None
+    measurement: Optional[BenchmarkMeasurement] = None
+    old_failure: Optional[str] = None
+    new_failure: Optional[str] = None
+    initial_runs: int = 0
+    confirmation_runs: int = 0
+    outcome: str = OUTCOME_NO_REGRESSION
 
 
-def suite_name():
-    return Path(benchmark_file).stem
+@dataclass
+class FormattedDuration:
+    value: str
+    unit: str
+
+
+@dataclass
+class BenchmarkRow:
+    display_name: str
+    old_timing: Optional[FormattedDuration]
+    old_min: Optional[FormattedDuration]
+    old_max: Optional[FormattedDuration]
+    new_timing: Optional[FormattedDuration]
+    new_min: Optional[FormattedDuration]
+    new_max: Optional[FormattedDuration]
+    delta: Optional[FormattedDuration]
+    delta_percentage: str
+    runs: str
+    bucket: str
+    percentage: float = 0
+
+
+@dataclass
+class TableLayout:
+    benchmark_width: int
+    timing_number_width: int
+    timing_unit_width: int
+    timing_width: int
+    delta_number_width: int
+    delta_unit_width: int
+    delta_percentage_width: int
+    delta_width: int
+    runs_width: int
+
+
+def positive_integer(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return parsed
+
+
+def benchmark_argument(value: str) -> Tuple[str, str]:
+    name, separator, argument_value = value.partition("=")
+    if not separator or not name or not argument_value or name.startswith("-"):
+        raise argparse.ArgumentTypeError("must use NAME=VALUE with a non-empty name and value")
+    return name, argument_value
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Compare benchmarks from base and PR benchmark runners.")
+    parser.add_argument("--old", required=True, help="Path to the base benchmark runner.")
+    parser.add_argument("--new", required=True, help="Path to the PR benchmark runner.")
+    parser.add_argument("--benchmarks", required=True, help="Path to the benchmark list.")
+    parser.add_argument("--threads", type=int, help="Number of threads used by each benchmark runner.")
+    parser.add_argument("--memory-limit", help="Memory limit used by each benchmark runner.")
+    parser.add_argument(
+        "--samples", type=positive_integer, help="Fixed samples per binary; rounded up to a batch of five."
+    )
+    parser.add_argument(
+        "--early-stop", action="store_true", help="Stop after a ten-sample checkpoint within ±2 percent."
+    )
+    parser.add_argument("--verbose", action="store_true", help="Print raw benchmark runner output.")
+    parser.add_argument("--nofail", action="store_true", help="Report a geomean regression without failing.")
+    parser.add_argument("--disable-timeout", action="store_true", help="Disable the benchmark runner timeout.")
+    parser.add_argument(
+        "--benchmark-cache",
+        choices=("keep", "clear"),
+        default="keep",
+        help="Keep benchmark data or clear runner caches before running (default: keep).",
+    )
+    parser.add_argument(
+        "--benchmark-argument",
+        action="append",
+        type=benchmark_argument,
+        default=[],
+        help="Benchmark runner argument in NAME=VALUE form; may be specified more than once.",
+    )
+    return parser.parse_args()
+
+
+def clear_benchmark_caches(runner_paths: List[str]):
+    cache_paths = {
+        os.path.abspath(os.path.join(os.path.dirname(runner_path), "..", "..", "..", "duckdb_benchmark_data"))
+        for runner_path in runner_paths
+    }
+    for cache_path in cache_paths:
+        shutil.rmtree(cache_path, ignore_errors=True)
+
+
+def within_noise(measurement: BenchmarkMeasurement) -> bool:
+    return 1.0 - NOISE_THRESHOLD <= measurement.ratio <= 1.0 + NOISE_THRESHOLD
+
+
+def measurement_outcome(measurement: BenchmarkMeasurement) -> str:
+    return OUTCOME_REGRESSION if measurement.ratio >= REGRESSION_LIMIT else OUTCOME_NO_REGRESSION
+
+
+def run_paired_samples(
+    old_runner: BenchmarkRunner,
+    new_runner: BenchmarkRunner,
+    benchmark: str,
+    requested_runs: int,
+    initial_batch_index: int,
+    early_stop: bool = False,
+):
+    old_timings = []
+    new_timings = []
+    batch_index = initial_batch_index
+    batch_sizes = sampling_batch_sizes(requested_runs)
+    planned_runs = sum(batch_sizes)
+    for batch_size in batch_sizes:
+        if batch_index % 2 == 0:
+            old_batch, old_failure = old_runner.run(benchmark, batch_size)
+            new_batch, new_failure = new_runner.run(benchmark, batch_size)
+        else:
+            new_batch, new_failure = new_runner.run(benchmark, batch_size)
+            old_batch, old_failure = old_runner.run(benchmark, batch_size)
+
+        old_batch = old_batch or []
+        new_batch = new_batch or []
+        if old_failure or new_failure:
+            return old_timings, new_timings, old_failure, new_failure, batch_index, False
+        if len(old_batch) != len(new_batch):
+            failure = f"Paired benchmark batches produced different run counts: {len(old_batch)} and {len(new_batch)}"
+            return old_timings, new_timings, failure, failure, batch_index, False
+
+        old_timings.extend(old_batch)
+        new_timings.extend(new_batch)
+        batch_index += 1
+        completed_runs = len(old_timings)
+        if early_stop and completed_runs < planned_runs and completed_runs % (2 * SAMPLE_BATCH_SIZE) == 0:
+            if within_noise(benchmark_measurement(old_timings, new_timings)):
+                return old_timings, new_timings, None, None, batch_index, True
+
+    return old_timings, new_timings, None, None, batch_index, False
+
+
+def failed_benchmark_result(
+    benchmark: str,
+    old_failure: Optional[str],
+    new_failure: Optional[str],
+    initial_measurement: Optional[BenchmarkMeasurement],
+    initial_runs: int,
+    confirmation_runs: int,
+) -> BenchmarkResult:
+    return BenchmarkResult(
+        benchmark=benchmark,
+        initial_measurement=initial_measurement,
+        old_failure=old_failure,
+        new_failure=new_failure,
+        initial_runs=initial_runs,
+        confirmation_runs=confirmation_runs,
+        outcome=OUTCOME_FAILURE,
+    )
+
+
+def measurement_status(measurement: BenchmarkMeasurement, stopped_early: bool = False) -> str:
+    if stopped_early:
+        return "within ±2% (stopped early)"
+    if measurement.ratio >= REGRESSION_LIMIT:
+        return "regression"
+    if measurement.ratio > 1.0 + NOISE_THRESHOLD:
+        return "slower"
+    if measurement.ratio < 1.0 - NOISE_THRESHOLD:
+        return "faster"
+    return "within ±2%; no change"
+
+
+def run_fixed_benchmark(
+    old_runner: BenchmarkRunner,
+    new_runner: BenchmarkRunner,
+    benchmark: str,
+    samples: int,
+    early_stop: bool,
+    verbose: bool,
+) -> BenchmarkResult:
+    old_timings, new_timings, old_failure, new_failure, _, stopped_early = run_paired_samples(
+        old_runner, new_runner, benchmark, samples, 0, early_stop
+    )
+    run_count = min(len(old_timings), len(new_timings))
+    if old_failure or new_failure:
+        return failed_benchmark_result(benchmark, old_failure, new_failure, None, run_count, 0)
+
+    measurement = benchmark_measurement(old_timings, new_timings)
+    if verbose:
+        print(
+            f"samples: {benchmark}: {run_count} pairs | "
+            f"median change {format_ratio_change(measurement.ratio)} | {measurement_status(measurement, stopped_early)}"
+        )
+    return BenchmarkResult(
+        benchmark=benchmark,
+        initial_measurement=measurement,
+        measurement=measurement,
+        initial_runs=run_count,
+        outcome=measurement_outcome(measurement),
+    )
+
+
+def run_adaptive_benchmark(
+    old_runner: BenchmarkRunner,
+    new_runner: BenchmarkRunner,
+    benchmark: str,
+    early_stop: bool,
+    verbose: bool,
+) -> BenchmarkResult:
+    old_initial, new_initial, old_failure, new_failure, batch_index, _ = run_paired_samples(
+        old_runner, new_runner, benchmark, INITIAL_RUNS, 0
+    )
+    initial_count = min(len(old_initial), len(new_initial))
+    if old_failure or new_failure:
+        return failed_benchmark_result(benchmark, old_failure, new_failure, None, initial_count, 0)
+
+    initial_measurement = benchmark_measurement(old_initial, new_initial)
+    is_candidate = not within_noise(initial_measurement)
+    requested_confirmation_runs = confirmation_run_count(initial_measurement) if is_candidate else 0
+    if verbose:
+        decision = f"confirming with {requested_confirmation_runs} pairs" if is_candidate else "within ±2%; done"
+        print(
+            f"initial: {benchmark}: {initial_count} pairs | "
+            f"median change {format_ratio_change(initial_measurement.ratio)} | {decision}"
+        )
+
+    if not is_candidate:
+        return BenchmarkResult(
+            benchmark=benchmark,
+            initial_measurement=initial_measurement,
+            measurement=initial_measurement,
+            initial_runs=initial_count,
+            outcome=measurement_outcome(initial_measurement),
+        )
+
+    old_confirmation, new_confirmation, old_failure, new_failure, _, stopped_early = run_paired_samples(
+        old_runner,
+        new_runner,
+        benchmark,
+        requested_confirmation_runs,
+        batch_index,
+        early_stop,
+    )
+    confirmation_count = min(len(old_confirmation), len(new_confirmation))
+    if old_failure or new_failure:
+        return failed_benchmark_result(
+            benchmark,
+            old_failure,
+            new_failure,
+            initial_measurement,
+            initial_count,
+            confirmation_count,
+        )
+
+    measurement = benchmark_measurement(old_confirmation, new_confirmation)
+    if verbose:
+        print(
+            f"confirm: {benchmark}: {confirmation_count} pairs | "
+            f"median change {format_ratio_change(measurement.ratio)} | {measurement_status(measurement, stopped_early)}"
+        )
+    return BenchmarkResult(
+        benchmark=benchmark,
+        initial_measurement=initial_measurement,
+        measurement=measurement,
+        initial_runs=initial_count,
+        confirmation_runs=confirmation_count,
+        outcome=measurement_outcome(measurement),
+    )
+
+
+def in_ci() -> bool:
+    return os.getenv("CI") == "true"
 
 
 def append_step_summary(lines: List[str]):
     summary_path = os.getenv("GITHUB_STEP_SUMMARY")
     if not summary_path:
         return
-    with open(summary_path, "a", encoding="utf-8") as f:
-        f.write("\n".join(lines))
-        f.write("\n")
-
-
-def format_seconds(value: Union[float, str]) -> str:
-    if isinstance(value, str):
-        return value
-    return f"{value:.3f}s"
-
-
-def format_delta_seconds(delta: float) -> str:
-    if delta == 0:
-        return "0.000s"
-    if abs(delta) < 0.001:
-        if delta < 0:
-            return "-<0.001s"
-        return "<0.001s"
-    return f"{delta:+.3f}s"
+    with open(summary_path, "a", encoding="utf-8") as summary_file:
+        summary_file.write("\n".join(lines))
+        summary_file.write("\n")
 
 
 def format_percentage(value: float) -> str:
     if math.isfinite(value):
         return f"{value:+.1f}%"
-    return "+inf%"
+    return "-inf%" if value < 0 else "+inf%"
 
 
-def regression_delta(old_value: float, new_value: float) -> str:
-    delta_sec = new_value - old_value
-    delta_pct = ((new_value / old_value) - 1.0) * 100.0 if old_value > 0 else math.inf
-    if math.isfinite(delta_pct):
-        return f"{format_delta_seconds(delta_sec)} ({format_percentage(delta_pct)})"
-    return format_delta_seconds(delta_sec)
+def ratio_change(ratio: float) -> float:
+    return (ratio - 1.0) * 100.0
+
+
+def format_ratio_change(ratio: float) -> str:
+    return format_percentage(ratio_change(ratio))
+
+
+def duration_unit(value: float):
+    value = abs(value)
+    if value >= 1.0:
+        return 1.0, "s"
+    if value >= 0.001:
+        return 1000.0, "ms"
+    if value >= 0.000001:
+        return 1000000.0, "µs"
+    return 1000000000.0, "ns"
+
+
+def format_duration_parts(value: float, unit=None, signed: bool = False) -> FormattedDuration:
+    scale, suffix = unit or duration_unit(value)
+    scaled = value * scale
+    if signed and scaled > 0:
+        prefix = "+"
+    else:
+        prefix = ""
+    return FormattedDuration(f"{prefix}{scaled:.1f}", suffix)
+
+
+def format_duration(value: float, unit=None, signed: bool = False) -> str:
+    duration = format_duration_parts(value, unit, signed)
+    return f"{duration.value} {duration.unit}"
+
+
+def timing_parts(timing: float, minimum: float, maximum: float) -> Tuple[str, str]:
+    return format_duration(timing), f"[{format_duration(minimum)}…{format_duration(maximum)}]"
+
+
+def delta_parts(measurement: BenchmarkMeasurement) -> Tuple[FormattedDuration, str]:
+    delta = measurement.new_timing - measurement.old_timing
+    unit = duration_unit(delta) if delta else duration_unit(measurement.old_timing)
+    return format_duration_parts(delta, unit, signed=True), format_ratio_change(measurement.ratio)
+
+
+def delta_text(measurement: BenchmarkMeasurement) -> str:
+    delta, percentage = delta_parts(measurement)
+    return f"{delta.value} {delta.unit} ({percentage})"
+
+
+def gray(value: str) -> str:
+    return f"{ANSI_GRAY}{value}{ANSI_RESET}"
+
+
+def color_change(bucket: str, value: str) -> str:
+    if bucket in (BUCKET_REGRESSION, BUCKET_SLOWER, BUCKET_FAILURE):
+        return f"{ANSI_RED}{value}{ANSI_RESET}"
+    if bucket == BUCKET_FASTER:
+        return f"{ANSI_GREEN}{value}{ANSI_RESET}"
+    return f"{ANSI_GRAY}{value}{ANSI_RESET}"
 
 
 def emit_github_error(title: str, message: str):
@@ -158,43 +407,9 @@ def emit_github_error(title: str, message: str):
         print(f"::error title={title}::{message}")
 
 
-def benchmark_timing_summary(regression: "BenchmarkResult"):
-    old_timing = format_seconds(regression.old_result)
-    new_timing = format_seconds(regression.new_result)
-    return old_timing, new_timing
-
-
-def report_regression(regression: "BenchmarkResult", summary: List[dict], summary_lines: List[str]):
-    old_timing, new_timing = benchmark_timing_summary(regression)
-    error_title = "Regression benchmark"
-    if not isinstance(regression.old_result, str) and not isinstance(regression.new_result, str):
-        delta = regression_delta(regression.old_result, regression.new_result)
-        message = f"{suite_name()}: {regression.benchmark} regressed from {old_timing} to {new_timing} ({delta})"
-        summary_delta = delta
-    else:
-        message = f"{suite_name()}: {regression.benchmark} failed while comparing base and PR benchmark runs"
-        summary_delta = "benchmark run failed"
-    emit_github_error(error_title, message)
-    summary_lines.append(f"| `{regression.benchmark}` | `{old_timing}` | `{new_timing}` | `{summary_delta}` |")
-    if regression.old_failure or regression.new_failure:
-        new_data = {
-            "benchmark": regression.benchmark,
-            "old_failure": regression.old_failure,
-            "new_failure": regression.new_failure,
-        }
-        summary.append(new_data)
-
-
-@dataclass
-class BenchmarkRow:
-    result: "BenchmarkResult"
-    display_name: str
-    old_timing: str
-    new_timing: str
-    delta: str
-    change: str
-    bucket: str
-    percentage: float = 0
+def emit_github_warning(title: str, message: str):
+    if in_ci():
+        print(f"::warning title={title}::{message}")
 
 
 def benchmark_common_prefix(benchmarks: List[str]) -> str:
@@ -211,70 +426,66 @@ def benchmark_display_names(benchmarks: List[str]) -> Dict[str, str]:
     common_prefix = benchmark_common_prefix(benchmarks)
     display_names = {}
     for benchmark in benchmarks:
-        display_name = benchmark
-        if common_prefix and benchmark.startswith(common_prefix):
-            display_name = benchmark[len(common_prefix) :]
+        display_name = (
+            benchmark[len(common_prefix) :] if common_prefix and benchmark.startswith(common_prefix) else benchmark
+        )
         if display_name.endswith(".benchmark"):
             display_name = display_name[: -len(".benchmark")]
         display_names[benchmark] = display_name
     return display_names
 
 
-def is_regression(old_value: float, new_value: float) -> bool:
-    return (old_value + REGRESSION_THRESHOLD_SECONDS) * multiply_percentage < new_value
-
-
-def classify_result(result: "BenchmarkResult") -> str:
-    if isinstance(result.old_result, str) or isinstance(result.new_result, str):
+def classify_result(result: BenchmarkResult) -> str:
+    if result.outcome == OUTCOME_FAILURE:
         return BUCKET_FAILURE
-    if is_regression(result.old_result, result.new_result):
+    if result.outcome == OUTCOME_REGRESSION:
         return BUCKET_REGRESSION
-    if result.new_result > result.old_result:
+    assert result.measurement is not None
+    if result.measurement.ratio > 1.0 + NOISE_THRESHOLD:
         return BUCKET_SLOWER
-    if result.new_result < result.old_result:
+    if result.measurement.ratio < 1.0 - NOISE_THRESHOLD:
         return BUCKET_FASTER
     return BUCKET_UNCHANGED
 
 
-def benchmark_row(result: "BenchmarkResult", display_name: str) -> BenchmarkRow:
-    if isinstance(result.old_result, str) or isinstance(result.new_result, str):
+def format_run_count(result: BenchmarkResult) -> str:
+    return str(result.initial_runs + result.confirmation_runs)
+
+
+def benchmark_row(result: BenchmarkResult, display_name: str) -> BenchmarkRow:
+    bucket = classify_result(result)
+    if result.outcome == OUTCOME_FAILURE:
         return BenchmarkRow(
-            result=result,
-            display_name=display_name,
-            old_timing=format_seconds(result.old_result),
-            new_timing=format_seconds(result.new_result),
-            delta="failed",
-            change="failed",
-            bucket=BUCKET_FAILURE,
+            display_name,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            "",
+            format_run_count(result),
+            bucket,
         )
-    delta = result.new_result - result.old_result
-    percentage = ((result.new_result / result.old_result) - 1.0) * 100.0 if result.old_result > 0 else math.inf
+
+    measurement = result.measurement
+    assert measurement is not None
+    delta, delta_percentage = delta_parts(measurement)
     return BenchmarkRow(
-        result=result,
-        display_name=display_name,
-        old_timing=format_seconds(result.old_result),
-        new_timing=format_seconds(result.new_result),
-        delta=format_delta_seconds(delta),
-        change=format_percentage(percentage),
-        bucket=classify_result(result),
-        percentage=percentage,
+        display_name,
+        format_duration_parts(measurement.old_timing),
+        format_duration_parts(measurement.old_min),
+        format_duration_parts(measurement.old_max),
+        format_duration_parts(measurement.new_timing),
+        format_duration_parts(measurement.new_min),
+        format_duration_parts(measurement.new_max),
+        delta,
+        delta_percentage,
+        format_run_count(result),
+        bucket,
+        ratio_change(measurement.ratio),
     )
-
-
-def show_in_report(row: BenchmarkRow) -> bool:
-    if row.bucket in (BUCKET_REGRESSION, BUCKET_FAILURE):
-        return True
-    if not math.isfinite(row.percentage):
-        return True
-    return abs(row.percentage) >= DISPLAY_THRESHOLD_PERCENTAGE
-
-
-def color_change(row: BenchmarkRow, value: str) -> str:
-    if row.bucket in (BUCKET_REGRESSION, BUCKET_SLOWER, BUCKET_FAILURE):
-        return f"{ANSI_RED}{value}{ANSI_RESET}"
-    if row.bucket == BUCKET_FASTER:
-        return f"{ANSI_GREEN}{value}{ANSI_RESET}"
-    return value
 
 
 def row_sort_key(row: BenchmarkRow):
@@ -294,299 +505,431 @@ def row_sort_key(row: BenchmarkRow):
     return bucket_order[row.bucket], bucket_value, row.display_name
 
 
-def render_table(rows: List[BenchmarkRow]):
-    if len(rows) == 0:
-        return
-    headers = ["benchmark", "old", "new", "delta", "change"]
-    plain_rows = [[row.display_name, row.old_timing, row.new_timing, row.delta, row.change] for row in rows]
-    widths = [len(header) for header in headers]
-    for plain_row in plain_rows:
-        for index, value in enumerate(plain_row):
-            widths[index] = max(widths[index], len(value))
+def duration_slot(duration: FormattedDuration, number_width: int, unit_width: int) -> str:
+    return f"{duration.value.rjust(number_width)} {duration.unit.ljust(unit_width)}"
 
-    header = "  ".join(headers[index].ljust(widths[index]) for index in range(len(headers)))
-    separator = "  ".join("-" * widths[index] for index in range(len(headers)))
-    print(header)
-    print(separator)
+
+def plain_timing_cell(
+    timing: Optional[FormattedDuration],
+    minimum: Optional[FormattedDuration],
+    maximum: Optional[FormattedDuration],
+    layout: TableLayout,
+) -> str:
+    if timing is None:
+        return "failed"
+    assert minimum is not None and maximum is not None
+    timing_text = duration_slot(timing, layout.timing_number_width, layout.timing_unit_width)
+    minimum_text = duration_slot(minimum, layout.timing_number_width, layout.timing_unit_width)
+    maximum_text = duration_slot(maximum, layout.timing_number_width, layout.timing_unit_width)
+    return f"{timing_text} [{minimum_text}…{maximum_text}]"
+
+
+def styled_timing_cell(
+    timing: Optional[FormattedDuration],
+    minimum: Optional[FormattedDuration],
+    maximum: Optional[FormattedDuration],
+    layout: TableLayout,
+) -> str:
+    if timing is None:
+        return "failed"
+    assert minimum is not None and maximum is not None
+    timing_text = duration_slot(timing, layout.timing_number_width, layout.timing_unit_width)
+    minimum_text = duration_slot(minimum, layout.timing_number_width, layout.timing_unit_width)
+    maximum_text = duration_slot(maximum, layout.timing_number_width, layout.timing_unit_width)
+    return f"{timing_text} {gray(f'[{minimum_text}…{maximum_text}]')}"
+
+
+def plain_delta_cell(row: BenchmarkRow, layout: TableLayout) -> str:
+    if row.delta is None:
+        return "failed"
+    delta = duration_slot(row.delta, layout.delta_number_width, layout.delta_unit_width)
+    return f"{delta} ({row.delta_percentage.rjust(layout.delta_percentage_width)})"
+
+
+def table_layout(rows: List[BenchmarkRow]) -> TableLayout:
+    durations = []
+    deltas = []
+    percentages = []
+    for row in rows:
+        for duration in (row.old_timing, row.old_min, row.old_max, row.new_timing, row.new_min, row.new_max):
+            if duration is not None:
+                durations.append(duration)
+        if row.delta is not None:
+            deltas.append(row.delta)
+            percentages.append(row.delta_percentage)
+
+    timing_number_width = max([len(duration.value) for duration in durations] + [1])
+    timing_unit_width = max([len(duration.unit) for duration in durations] + [1])
+    delta_number_width = max([len(duration.value) for duration in deltas] + [1])
+    delta_unit_width = max([len(duration.unit) for duration in deltas] + [1])
+    delta_percentage_width = max([len(percentage) for percentage in percentages] + [1])
+
+    provisional = TableLayout(
+        benchmark_width=max([len(row.display_name) for row in rows] + [len("benchmark")]),
+        timing_number_width=timing_number_width,
+        timing_unit_width=timing_unit_width,
+        timing_width=0,
+        delta_number_width=delta_number_width,
+        delta_unit_width=delta_unit_width,
+        delta_percentage_width=delta_percentage_width,
+        delta_width=0,
+        runs_width=max([len(row.runs) for row in rows] + [len("runs")]),
+    )
+    timing_width = max(
+        [len(plain_timing_cell(row.old_timing, row.old_min, row.old_max, provisional)) for row in rows]
+        + [len("base median"), len("PR median")]
+    )
+    delta_width = max([len(plain_delta_cell(row, provisional)) for row in rows] + [len("delta median")])
+    provisional.timing_width = timing_width
+    provisional.delta_width = delta_width
+    return provisional
+
+
+def render_table(rows: List[BenchmarkRow], layout: TableLayout):
+    if not rows:
+        return
+    headers = ["benchmark", "base median", "PR median", "delta median", "runs"]
+    plain_rows = [
+        [
+            row.display_name,
+            plain_timing_cell(row.old_timing, row.old_min, row.old_max, layout),
+            plain_timing_cell(row.new_timing, row.new_min, row.new_max, layout),
+            plain_delta_cell(row, layout),
+            row.runs,
+        ]
+        for row in rows
+    ]
+    widths = [
+        layout.benchmark_width,
+        layout.timing_width,
+        layout.timing_width,
+        layout.delta_width,
+        layout.runs_width,
+    ]
+
+    print(
+        "  ".join(
+            headers[index].rjust(widths[index]) if index == 4 else headers[index].ljust(widths[index])
+            for index in range(len(headers))
+        )
+    )
+    print("  ".join("-" * widths[index] for index in range(len(headers))))
     for row, plain_row in zip(rows, plain_rows):
+        styled_row = [
+            row.display_name,
+            styled_timing_cell(row.old_timing, row.old_min, row.old_max, layout),
+            styled_timing_cell(row.new_timing, row.new_min, row.new_max, layout),
+            color_change(row.bucket, plain_delta_cell(row, layout)),
+            row.runs,
+        ]
         cells = []
-        for index, value in enumerate(plain_row):
-            padded = value.ljust(widths[index])
-            if headers[index] == "change":
-                padded = color_change(row, padded)
-            cells.append(padded)
+        for index, value in enumerate(styled_row):
+            if index == 4:
+                cells.append(" " * (widths[index] - len(plain_row[index])) + value)
+            else:
+                cells.append(value + " " * (widths[index] - len(plain_row[index])))
         print("  ".join(cells))
 
 
-def print_banner(title: str):
-    print("====================================================")
-    print(f"==============  {title.center(26)}  =============")
-    print("====================================================")
+def print_bucket(title: str, rows: List[BenchmarkRow], layout: TableLayout, unchanged_count: int = 0):
+    if title == "UNCHANGED (±2%)":
+        if not unchanged_count:
+            return
+    elif not rows:
+        return
     print("")
+    if title == "UNCHANGED (±2%)":
+        print(gray(title))
+        print(gray(f"{unchanged_count} benchmarks"))
+    else:
+        print(title)
+        render_table(rows, layout)
+
+
+def geomean(values: List[float]) -> Optional[float]:
+    if not values:
+        return None
+    return math.exp(math.fsum(math.log(value) for value in values) / len(values))
+
+
+def geomean_regressed(old_geomean: Optional[float], new_geomean: Optional[float]) -> bool:
+    if old_geomean is None or new_geomean is None:
+        return False
+    return new_geomean / old_geomean >= REGRESSION_LIMIT or new_geomean - old_geomean >= GEOMEAN_REGRESSION_SECONDS
+
+
+def print_geomean_summary(old_geomean: Optional[float], new_geomean: Optional[float], sample_text: str):
+    print("")
+    if old_geomean is None or new_geomean is None:
+        print(f"geomean: unavailable  {gray(sample_text)}")
+        return
+    old_text = format_duration(old_geomean)
+    new_text = format_duration(new_geomean)
+    measurement = BenchmarkMeasurement(
+        old_timing=old_geomean,
+        old_min=old_geomean,
+        old_max=old_geomean,
+        new_timing=new_geomean,
+        new_min=new_geomean,
+        new_max=new_geomean,
+        ratio=new_geomean / old_geomean,
+        runs=0,
+    )
+    if new_geomean > old_geomean:
+        bucket = BUCKET_SLOWER
+    elif new_geomean < old_geomean:
+        bucket = BUCKET_FASTER
+    else:
+        bucket = BUCKET_UNCHANGED
+    print(f"geomean: {old_text} -> {new_text}  {color_change(bucket, delta_text(measurement))}  {gray(sample_text)}")
+
+
+def sampling_description(samples: Optional[int], rounded_samples: Optional[int], early_stop: bool) -> str:
+    if samples is None:
+        description = (
+            f"sampling: adaptive; {INITIAL_RUNS} initial pairs, then "
+            f"{MIN_CONFIRMATION_RUNS}–{MAX_CONFIRMATION_RUNS} confirmation pairs outside ±2%"
+        )
+    else:
+        assert rounded_samples is not None
+        description = f"sampling: fixed; {rounded_samples} samples per binary"
+        if rounded_samples != samples:
+            description += f" (--samples={samples} rounded up)"
+        else:
+            description += f" (--samples={samples})"
+    if early_stop:
+        description += "; median early stop"
+    return description
 
 
 def print_benchmark_report(
     rows: List[BenchmarkRow],
     common_prefix: str,
-    result_text: str,
-    total_count: int,
-    hidden_noise_count: int,
-    time_a: Union[float, str],
-    time_b: Union[float, str],
+    samples: Optional[int],
+    rounded_samples: Optional[int],
+    early_stop: bool,
 ):
     buckets = {
-        BUCKET_UNCHANGED: [row for row in rows if row.bucket == BUCKET_UNCHANGED],
-        BUCKET_FASTER: [row for row in rows if row.bucket == BUCKET_FASTER],
-        BUCKET_SLOWER: [row for row in rows if row.bucket == BUCKET_SLOWER],
-        BUCKET_REGRESSION: [row for row in rows if row.bucket == BUCKET_REGRESSION],
-        BUCKET_FAILURE: [row for row in rows if row.bucket == BUCKET_FAILURE],
+        bucket: [row for row in rows if row.bucket == bucket]
+        for bucket in (BUCKET_UNCHANGED, BUCKET_FASTER, BUCKET_SLOWER, BUCKET_REGRESSION, BUCKET_FAILURE)
     }
-
-    print_banner("BENCHMARK QUERY AGGREGATES")
-    print(f"suite: {suite_name()}")
-    if common_prefix:
-        print(f"common prefix: {common_prefix}")
-    print(f"benchmarks: {total_count}")
-    if timed_runs:
-        print(f"timing: median of {timed_runs} timed runs")
-    else:
-        print("timing: median")
-    print(f"threshold: +{REGRESSION_THRESHOLD_PERCENTAGE * 100.0:.1f}% and +{REGRESSION_THRESHOLD_SECONDS:.3f}s")
-    print(f"display threshold: +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
-    print(f"hidden noise: {hidden_noise_count} benchmarks below +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
-    print(f"result: {result_text}")
-    print_geomean_summary(time_a, time_b)
-    print_bucket("UNCHANGED / NOISE", buckets[BUCKET_UNCHANGED], hidden_noise_count)
-    print_bucket("FASTER", buckets[BUCKET_FASTER])
-    print_bucket("SLOWER BELOW THRESHOLD", buckets[BUCKET_SLOWER])
-    print_bucket("REGRESSIONS", buckets[BUCKET_REGRESSION])
-    if len(buckets[BUCKET_FAILURE]) > 0:
-        print_bucket("FAILURES", buckets[BUCKET_FAILURE])
-
-
-def print_bucket(title: str, rows: List[BenchmarkRow], hidden_noise_count: int = 0):
     print("")
-    print(title)
-    if title == "UNCHANGED / NOISE":
-        print(f"{hidden_noise_count} benchmarks below +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
-        return
-    if len(rows) == 0:
-        print("0 benchmarks")
-        return
-    render_table(rows)
+    suite_text = f"{common_prefix} ({len(rows)} benchmarks)" if common_prefix else f"{len(rows)} benchmarks"
+    print(gray(f"suite: {suite_text}"))
+    print(gray(sampling_description(samples, rounded_samples, early_stop)))
+    print(gray("query regression: median change ≥ +10.0% (warning)"))
+    print(gray("CI failure: geomean change ≥ +10.0% or ≥ +50.0 ms"))
+    displayed_rows = [row for row in rows if row.bucket != BUCKET_UNCHANGED]
+    layout = table_layout(displayed_rows)
+    print_bucket("UNCHANGED (±2%)", buckets[BUCKET_UNCHANGED], layout, len(buckets[BUCKET_UNCHANGED]))
+    print_bucket("FASTER", buckets[BUCKET_FASTER], layout)
+    print_bucket("SLOWER (+2%…<+10%)", buckets[BUCKET_SLOWER], layout)
+    print_bucket("REGRESSIONS (≥+10%)", buckets[BUCKET_REGRESSION], layout)
+    print_bucket("FAILURES", buckets[BUCKET_FAILURE], layout)
 
 
-def print_geomean_summary(time_a: Union[float, str], time_b: Union[float, str]):
-    print("")
-    if isinstance(time_a, str) or isinstance(time_b, str):
-        print(f"geomean old: {time_a}")
-        print(f"geomean new: {time_b}")
-        return
-    delta_pct = ((time_b / time_a) - 1.0) * 100.0 if time_a > 0 else math.inf
-    row = BenchmarkRow(
-        result=BenchmarkResult("geomean", time_a, time_b),
-        display_name="geomean",
-        old_timing=format_seconds(time_a),
-        new_timing=format_seconds(time_b),
-        delta=format_delta_seconds(time_b - time_a),
-        change=format_percentage(delta_pct),
-        bucket=BUCKET_SLOWER if delta_pct > 0 else BUCKET_FASTER if delta_pct < 0 else BUCKET_UNCHANGED,
-        percentage=delta_pct,
-    )
-    print(f"geomean: {format_seconds(time_a)} -> {format_seconds(time_b)}  {color_change(row, row.change)}")
-
-
-if not os.path.isfile(old_runner_path):
-    print(f"Failed to find old runner {old_runner_path}")
-    exit(1)
-
-if not os.path.isfile(new_runner_path):
-    print(f"Failed to find new runner {new_runner_path}")
-    exit(1)
-
-if clear_benchmark_cache:
-    old_cache_path = os.path.join(os.path.dirname(old_runner_path), '..', '..', '..', 'duckdb_benchmark_data')
-    new_cache_path = os.path.join(os.path.dirname(new_runner_path), '..', '..', '..', 'duckdb_benchmark_data')
-    try:
-        shutil.rmtree(old_cache_path)
-    except:
-        pass
-    try:
-        shutil.rmtree(new_cache_path)
-    except:
-        pass
-
-config_dict = vars(args)
-old_runner = BenchmarkRunner(
-    BenchmarkRunnerConfig.from_params(old_runner_path, benchmark_file, runner_label="old", **config_dict)
-)
-new_runner = BenchmarkRunner(
-    BenchmarkRunnerConfig.from_params(new_runner_path, benchmark_file, runner_label="new", **config_dict)
-)
-
-benchmark_list = old_runner.benchmark_list
-
-summary = []
-
-
-@dataclass
-class BenchmarkResult:
-    benchmark: str
-    old_result: Union[float, str]
-    new_result: Union[float, str]
-    old_failure: Optional[str] = None
-    new_failure: Optional[str] = None
-
-
-def run_benchmarks_alternating(old_runner: BenchmarkRunner, new_runner: BenchmarkRunner, benchmark_list: List[str]):
-    old_results = {}
-    new_results = {}
-    old_failures = {}
-    new_failures = {}
-    requested_runs = max(timed_runs, 1) if timed_runs is not None else 1
-
-    for benchmark in benchmark_list:
-        old_timings = []
-        new_timings = []
-        old_failure = None
-        new_failure = None
-
-        while len(old_timings) < requested_runs or len(new_timings) < requested_runs:
-            if len(old_timings) < requested_runs:
-                timed_runs_override = None
-                if timed_runs is not None:
-                    timed_runs_override = min(TIMED_RUN_BATCH_SIZE, requested_runs - len(old_timings))
-
-                old_run_timings, old_failure = old_runner.run_benchmark_once(benchmark, timed_runs_override)
-                if old_failure is None and not old_run_timings:
-                    old_failure = "Benchmark did not produce any timings"
-                if old_run_timings:
-                    old_timings.extend(old_run_timings)
-
-            if len(new_timings) < requested_runs:
-                timed_runs_override = None
-                if timed_runs is not None:
-                    timed_runs_override = min(TIMED_RUN_BATCH_SIZE, requested_runs - len(new_timings))
-
-                new_run_timings, new_failure = new_runner.run_benchmark_once(benchmark, timed_runs_override)
-                if new_failure is None and not new_run_timings:
-                    new_failure = "Benchmark did not produce any timings"
-                if new_run_timings:
-                    new_timings.extend(new_run_timings)
-
-            if old_failure or new_failure:
-                break
-
-        if old_failure:
-            old_results[benchmark] = 'Failed to run benchmark ' + benchmark
-            old_failures[benchmark] = old_failure
-        else:
-            old_results[benchmark], old_failures[benchmark] = old_runner.complete_benchmark(benchmark, old_timings)
-
-        if new_failure:
-            new_results[benchmark] = 'Failed to run benchmark ' + benchmark
-            new_failures[benchmark] = new_failure
-        else:
-            new_results[benchmark], new_failures[benchmark] = new_runner.complete_benchmark(benchmark, new_timings)
-
-    return old_results, old_failures, new_results, new_failures
-
-
-multiply_percentage = 1.0 + REGRESSION_THRESHOLD_PERCENTAGE
-other_results: List[BenchmarkResult] = []
-error_list: List[BenchmarkResult] = []
-for i in range(NUMBER_REPETITIONS):
-    regression_list: List[BenchmarkResult] = []
-    if len(benchmark_list) == 0:
-        break
-    print(
-        f'''====================================================
-==============      ITERATION {i}        =============
-==============      REMAINING {len(benchmark_list)}        =============
-====================================================
-'''
+def markdown_row(result: BenchmarkResult) -> str:
+    measurement = result.measurement
+    if measurement is None:
+        return f"| `{result.benchmark}` | failed | failed | failed | `{format_run_count(result)}` |"
+    old_timing, old_range = timing_parts(measurement.old_timing, measurement.old_min, measurement.old_max)
+    new_timing, new_range = timing_parts(measurement.new_timing, measurement.new_min, measurement.new_max)
+    return (
+        f"| `{result.benchmark}` | `{old_timing} {old_range}` | `{new_timing} {new_range}` | "
+        f"`{delta_text(measurement)}` | `{format_run_count(result)}` |"
     )
 
-    old_results, old_failures, new_results, new_failures = run_benchmarks_alternating(
-        old_runner, new_runner, benchmark_list
-    )
 
-    for benchmark in benchmark_list:
-        old_res = old_results[benchmark]
-        new_res = new_results[benchmark]
-
-        old_fail = old_failures[benchmark]
-        new_fail = new_failures[benchmark]
-
-        if isinstance(old_res, str) or isinstance(new_res, str):
-            # benchmark failed to run - always a regression
-            error_list.append(BenchmarkResult(benchmark, old_res, new_res, old_fail, new_fail))
-        elif (no_regression_fail == False) and (
-            (old_res + REGRESSION_THRESHOLD_SECONDS) * multiply_percentage < new_res
-        ):
-            regression_list.append(BenchmarkResult(benchmark, old_res, new_res))
-        else:
-            other_results.append(BenchmarkResult(benchmark, old_res, new_res))
-    benchmark_list = [res.benchmark for res in regression_list]
-
-final_regression_results = regression_list + error_list
-all_results = other_results + final_regression_results
-display_names = benchmark_display_names([result.benchmark for result in all_results])
-rows = [benchmark_row(result, display_names[result.benchmark]) for result in all_results]
-rows.sort(key=row_sort_key)
-visible_rows = [row for row in rows if show_in_report(row)]
-hidden_noise_count = len(rows) - len(visible_rows)
-
-exit_code = 0
-summary = []
-if len(final_regression_results) > 0:
-    exit_code = 1
+def report_query_regressions(results: List[BenchmarkResult], suite: str):
+    if not results:
+        return
     summary_lines = [
-        f"## Regression Suite: `{suite_name()}`",
+        f"## Query Regressions: `{suite}`",
         "",
-        "| Benchmark | Base | PR | Delta |",
-        "| --- | --- | --- | --- |",
+        "| Benchmark | Base median | PR median | Delta median | Runs |",
+        "| --- | --- | --- | --- | --- |",
     ]
-    for regression in final_regression_results:
-        report_regression(regression, summary, summary_lines)
+    for result in results:
+        measurement = result.measurement
+        assert measurement is not None
+        emit_github_warning(
+            "Benchmark query regression",
+            f"{suite}: {result.benchmark} median changed by {format_ratio_change(measurement.ratio)} "
+            f"({format_duration(measurement.old_timing)} to {format_duration(measurement.new_timing)})",
+        )
+        summary_lines.append(markdown_row(result))
     append_step_summary(summary_lines + [""])
 
-has_failures = any(row.bucket == BUCKET_FAILURE for row in rows)
-has_regressions = any(row.bucket == BUCKET_REGRESSION for row in rows)
-if has_failures:
-    result_text = "benchmark failure detected"
-elif has_regressions:
-    result_text = "regression detected"
-else:
-    result_text = "no regressions detected"
 
-common_prefix = benchmark_common_prefix([result.benchmark for result in all_results])
-time_a = geomean(old_runner.complete_timings)
-time_b = geomean(new_runner.complete_timings)
-print_benchmark_report(visible_rows, common_prefix, result_text, len(rows), hidden_noise_count, time_a, time_b)
+def report_failures(results: List[BenchmarkResult], suite: str):
+    if not results:
+        return
+    summary_lines = [
+        f"## Benchmark Failures: `{suite}`",
+        "",
+        "| Benchmark | Base median | PR median | Delta median | Runs |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for result in results:
+        emit_github_error(
+            "Regression benchmark failure",
+            f"{suite}: {result.benchmark} failed while comparing base and PR benchmark runs",
+        )
+        summary_lines.append(markdown_row(result))
+    append_step_summary(summary_lines + [""])
 
-# nuke cached benchmark data between runs
-if not keep_benchmark_data:
-    if os.path.isdir("duckdb_benchmark_data"):
-        shutil.rmtree('duckdb_benchmark_data')
 
-if summary and not no_summary:
+def report_geomean_regression(old_geomean: float, new_geomean: float, nofail: bool):
+    delta = new_geomean - old_geomean
+    ratio = new_geomean / old_geomean
+    message = (
+        f"geomean changed from {format_duration(old_geomean)} to {format_duration(new_geomean)}; "
+        f"{format_duration(delta, signed=True)} ({format_ratio_change(ratio)})"
+    )
+    if nofail:
+        emit_github_warning("Geomean benchmark regression", message)
+    else:
+        emit_github_error("Geomean benchmark regression", message)
+    append_step_summary(["## Geomean Regression", "", message, ""])
+
+
+def print_failure_summary(failures: List[BenchmarkResult]):
+    if not failures:
+        return
     print(
-        '''\n\n====================================================
+        """\n
+====================================================
 ================  FAILURES SUMMARY  ================
 ====================================================
-'''
+"""
     )
-    # check the value is "true" otherwise you'll see the prefix in local run outputs
-    prefix = "::error::" if in_ci() else ""
-    for i, failure_message in enumerate(summary, start=1):
-        prefix_str = f"{prefix}{i}" if len(prefix) > 0 else f"{i}"
-        print(f"{prefix_str}: ", failure_message["benchmark"])
-        if failure_message["old_failure"] != failure_message["new_failure"]:
-            print("Old:\n", failure_message["old_failure"])
-            print("New:\n", failure_message["new_failure"])
+    for index, result in enumerate(failures, start=1):
+        print(f"{index}: {result.benchmark}")
+        if result.old_failure != result.new_failure:
+            print("Base:\n", result.old_failure)
+            print("PR:\n", result.new_failure)
         else:
-            print(failure_message["old_failure"])
+            print(result.old_failure)
         print("-", 52)
 
-exit(exit_code)
+
+def query_regression_text(count: int) -> str:
+    if count == 0:
+        return "no query regressions"
+    if count == 1:
+        return "1 query regression"
+    return f"{count} query regressions"
+
+
+def print_result(execution_failed: bool, gate_failed: bool, nofail: bool, query_regressions: int):
+    query_text = query_regression_text(query_regressions)
+    colored_query_text = (
+        f"{ANSI_YELLOW}{query_text}{ANSI_RESET}" if query_regressions else f"{ANSI_GRAY}{query_text}{ANSI_RESET}"
+    )
+    if execution_failed:
+        print(f"result: {ANSI_RED}failed; benchmark failure{ANSI_RESET}; {colored_query_text}")
+    elif gate_failed and nofail:
+        print(
+            f"result: {ANSI_GREEN}passed (--nofail){ANSI_RESET}; "
+            f"{ANSI_RED}geomean regression{ANSI_RESET}; {colored_query_text}"
+        )
+    elif gate_failed:
+        print(f"result: {ANSI_RED}failed; geomean regression{ANSI_RESET}; {colored_query_text}")
+    elif query_regressions:
+        print(f"result: {ANSI_GREEN}passed{ANSI_RESET}; {colored_query_text}")
+    else:
+        print(f"result: {ANSI_GREEN}passed; no query regressions{ANSI_RESET}")
+
+
+def main() -> int:
+    args = parse_arguments()
+    for label, path in (("base", args.old), ("PR", args.new)):
+        if not os.path.isfile(path):
+            print(f"Failed to find {label} runner {path}")
+            return 1
+    if not os.path.isfile(args.benchmarks):
+        print(f"Failed to find benchmark list {args.benchmarks}")
+        return 1
+
+    if args.benchmark_cache == "clear":
+        clear_benchmark_caches([args.old, args.new])
+
+    with open(args.benchmarks, "r", encoding="utf-8") as benchmark_file:
+        benchmarks = [line.strip() for line in benchmark_file if line.strip()]
+    suite = Path(args.benchmarks).stem
+    old_runner = BenchmarkRunner(
+        args.old,
+        "base",
+        args.threads,
+        args.memory_limit,
+        args.verbose,
+        args.disable_timeout,
+        args.benchmark_argument,
+    )
+    new_runner = BenchmarkRunner(
+        args.new,
+        "PR",
+        args.threads,
+        args.memory_limit,
+        args.verbose,
+        args.disable_timeout,
+        args.benchmark_argument,
+    )
+    rounded_samples = sum(sampling_batch_sizes(args.samples)) if args.samples is not None else None
+    if args.samples is None:
+        results = [
+            run_adaptive_benchmark(old_runner, new_runner, benchmark, args.early_stop, args.verbose)
+            for benchmark in benchmarks
+        ]
+    else:
+        results = [
+            run_fixed_benchmark(old_runner, new_runner, benchmark, args.samples, args.early_stop, args.verbose)
+            for benchmark in benchmarks
+        ]
+
+    execution_failures = [result for result in results if result.outcome == OUTCOME_FAILURE]
+    query_regressions = [result for result in results if result.outcome == OUTCOME_REGRESSION]
+    report_failures(execution_failures, suite)
+    report_query_regressions(query_regressions, suite)
+
+    display_names = benchmark_display_names([result.benchmark for result in results])
+    rows = [benchmark_row(result, display_names[result.benchmark]) for result in results]
+    rows.sort(key=row_sort_key)
+    geomean_measurements = [
+        result.initial_measurement if args.samples is None else result.measurement
+        for result in results
+        if (result.initial_measurement if args.samples is None else result.measurement) is not None
+    ]
+    old_geomean = geomean([measurement.old_timing for measurement in geomean_measurements])
+    new_geomean = geomean([measurement.new_timing for measurement in geomean_measurements])
+    gate_failed = geomean_regressed(old_geomean, new_geomean)
+    if gate_failed:
+        assert old_geomean is not None and new_geomean is not None
+        report_geomean_regression(old_geomean, new_geomean, args.nofail)
+
+    print_benchmark_report(
+        rows,
+        benchmark_common_prefix([result.benchmark for result in results]),
+        args.samples,
+        rounded_samples,
+        args.early_stop,
+    )
+    print_failure_summary(execution_failures)
+    if args.samples is None:
+        sample_text = f"(initial {INITIAL_RUNS} samples)"
+    elif args.early_stop:
+        sample_text = f"(up to {rounded_samples} samples)"
+    else:
+        sample_text = f"({rounded_samples} samples)"
+    print_geomean_summary(old_geomean, new_geomean, sample_text)
+    print_result(bool(execution_failures), gate_failed, args.nofail, len(query_regressions))
+
+    if execution_failures:
+        return 1
+    if gate_failed and not args.nofail:
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

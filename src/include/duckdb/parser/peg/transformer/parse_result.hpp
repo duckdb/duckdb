@@ -61,6 +61,7 @@ inline string TokenTypeToString(TokenType type) {
 }
 
 class PEGTransformer; // Forward declaration
+struct CompiledGrammarRule;
 
 enum class ParseResultType : uint8_t {
 	LIST,
@@ -134,9 +135,17 @@ public:
 
 	ParseResultType type;
 	string name;
+	optional_ptr<const CompiledGrammarRule> rule;
 	optional_idx offset;
 	//! Source length: for leaf tokens the token length; for composite results the enclosing extent of children
 	optional_idx length;
+
+	void SetRule(const CompiledGrammarRule &rule_p) {
+		rule = rule_p;
+	}
+	optional_ptr<const CompiledGrammarRule> GetRule() const {
+		return rule;
+	}
 
 	//! Returns the source location [offset, offset+length) of this parse result (length 0 when unknown)
 	QueryLocation GetLocation() const {

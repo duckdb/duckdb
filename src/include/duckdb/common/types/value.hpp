@@ -18,6 +18,7 @@
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 
 #include <cmath>
@@ -64,6 +65,8 @@ public:
 	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
 	//! Create a VARCHAR value
 	DUCKDB_API Value(String val); // NOLINT: Allow implicit conversion from `string`
+	//! Create a VARCHAR value
+	DUCKDB_API Value(std::string_view val);
 	//! Copy constructor
 	DUCKDB_API Value(const Value &other);
 	//! Move constructor
@@ -76,9 +79,6 @@ public:
 	// move assignment
 	DUCKDB_API Value &operator=(Value &&other) noexcept;
 
-	inline LogicalType &GetTypeMutable() {
-		return type_;
-	}
 	inline const LogicalType &type() const { // NOLINT
 		return type_;
 	}
@@ -202,6 +202,9 @@ public:
 	static Value BLOB_RAW(const string &data) { // NOLINT
 		return Value::BLOB(const_data_ptr_cast(data.c_str()), data.size());
 	}
+	static Value BLOB_RAW(std::string_view data) {
+		return Value::BLOB(const_data_ptr_cast(data.data()), data.size());
+	}
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	DUCKDB_API static Value BLOB(const string &data);
 	//! Creates a bitstring by casting a specified string to a bitstring
@@ -231,6 +234,10 @@ public:
 	template <class T>
 	T GetValueUnsafe() const;
 
+	//! Pointer to the inline-stored payload bytes. Only valid for constant-size physical types; the
+	//! pointer borrows the Value's storage and is valid until the Value is destroyed.
+	DUCKDB_API const_data_ptr_t GetPointerToData() const;
+
 	//! Return a copy of this value
 	Value Copy() const {
 		return Value(*this);
@@ -250,20 +257,18 @@ public:
 	                        bool strict = false) const;
 	DUCKDB_API Value CastAs(ClientContext &context, const LogicalType &target_type, bool strict = false) const;
 	DUCKDB_API Value DefaultCastAs(const LogicalType &target_type, bool strict = false) const;
-	//! Tries to cast this value to another type, and stores the result in "new_value"
-	DUCKDB_API bool TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
-	                          Value &new_value, string *error_message, bool strict = false) const;
-	DUCKDB_API bool TryCastAs(ClientContext &context, const LogicalType &target_type, Value &new_value,
-	                          string *error_message, bool strict = false) const;
-	DUCKDB_API bool DefaultTryCastAs(const LogicalType &target_type, Value &new_value, string *error_message,
-	                                 bool strict = false) const;
-	//! Tries to cast this value to another type, and stores the result in THIS value again
-	DUCKDB_API bool TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
-	                          bool strict = false);
-	DUCKDB_API bool TryCastAs(ClientContext &context, const LogicalType &target_type, bool strict = false);
-	DUCKDB_API bool DefaultTryCastAs(const LogicalType &target_type, bool strict = false);
+	//! Tries to cast this value to another type - returns the result, or nullopt if the cast is not possible.
+	//! Never throws on a failed cast; pass "error_message" to obtain the reason for the failure
+	DUCKDB_API optional<Value> TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input,
+	                                     const LogicalType &target_type, string *error_message = nullptr,
+	                                     bool strict = false) const;
+	DUCKDB_API optional<Value> TryCastAs(ClientContext &context, const LogicalType &target_type,
+	                                     string *error_message = nullptr, bool strict = false) const;
+	DUCKDB_API optional<Value> DefaultTryCastAs(const LogicalType &target_type, string *error_message = nullptr,
+	                                            bool strict = false) const;
 
-	DUCKDB_API void Reinterpret(LogicalType new_type);
+	//! Returns a copy of this value with its type replaced - the underlying value is reinterpreted, not cast
+	DUCKDB_API Value WithType(LogicalType new_type) const;
 
 	//! Serializes a Value to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;

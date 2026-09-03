@@ -25,6 +25,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/partition_stats.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -151,8 +152,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 		schema_col_names.push_back(Identifier(column.name));
 		schema_col_types.push_back(column.type);
 
-		auto res = MultiFileColumnDefinition(column.name, column.type);
-		res.identifier = column.identifier;
+		auto res = column.ToMultiFileColumnDefinition();
 #ifdef DEBUG
 		if (match_by_field_id) {
 			D_ASSERT(res.identifier.type().id() == LogicalTypeId::INTEGER);
@@ -161,7 +161,6 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 		}
 #endif
 
-		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
 		reader_bind.schema.emplace_back(res);
 	}
 	ParseFileRowNumberOption(reader_bind, options, return_types, names);
@@ -209,13 +208,13 @@ static bool GetBooleanArgument(const Identifier &key, const vector<Value> &optio
 	if (option_values.empty()) {
 		return true;
 	}
-	Value boolean_value;
 	string error_message;
-	if (!option_values[0].DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
+	auto boolean_value = option_values[0].DefaultTryCastAs(LogicalType::BOOLEAN, &error_message);
+	if (!boolean_value) {
 		throw InvalidInputException("Unable to cast \"%s\" to BOOLEAN for Parquet option %s",
 		                            option_values[0].ToString(), key);
 	}
-	return BooleanValue::Get(boolean_value);
+	return BooleanValue::Get(*boolean_value);
 }
 
 static bool ParquetScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {
@@ -228,52 +227,6 @@ static bool ParquetScanSupportPushdownExtract(const FunctionData &bind_data_p, c
 	auto &column = bind_data.columns[col_idx.index];
 	auto &column_type = column.type;
 	return column_type.id() == LogicalTypeId::STRUCT || column_type.id() == LogicalTypeId::VARIANT;
-}
-
-static void VerifyParquetSchemaParameter(const Value &schema) {
-	LogicalType::MAP(LogicalType::BLOB, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
-	                                                          {"type", LogicalType::VARCHAR},
-	                                                          {"default_value", LogicalType::VARCHAR}}}));
-	auto &map_type = schema.type();
-	if (map_type.id() != LogicalTypeId::MAP) {
-		throw InvalidInputException("'schema' expects a value of type MAP, not %s",
-		                            LogicalTypeIdToString(map_type.id()));
-	}
-	auto &key_type = MapType::KeyType(map_type);
-	auto &value_type = MapType::ValueType(map_type);
-
-	if (value_type.id() != LogicalTypeId::STRUCT) {
-		throw InvalidInputException("'schema' expects a STRUCT as the value type of the map");
-	}
-	auto &children = StructType::GetChildTypes(value_type);
-	if (children.size() < 3) {
-		throw InvalidInputException(
-		    "'schema' expects the STRUCT to have 3 children, 'name', 'type' and 'default_value");
-	}
-	if (children[0].first != "name") {
-		throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
-	}
-	if (children[0].second.id() != LogicalTypeId::VARCHAR) {
-		throw InvalidInputException("'schema' expects the 'name' field to be of type VARCHAR, not %s",
-		                            LogicalTypeIdToString(children[0].second.id()));
-	}
-	if (children[1].first != "type") {
-		throw InvalidInputException("'schema' expects the second field of the struct to be called 'type'");
-	}
-	if (children[1].second.id() != LogicalTypeId::VARCHAR) {
-		throw InvalidInputException("'schema' expects the 'type' field to be of type VARCHAR, not %s",
-		                            LogicalTypeIdToString(children[1].second.id()));
-	}
-	if (children[2].first != "default_value") {
-		throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
-	}
-	//! NOTE: default_value can be any type
-
-	if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
-		throw InvalidInputException(
-		    "'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
-		    LogicalTypeIdToString(key_type.id()));
-	}
 }
 
 static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
@@ -304,7 +257,7 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	auto &context = deserializer.Get<ClientContext &>();
 	auto files = deserializer.ReadProperty<vector<string>>(100, "files");
 	auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
-	auto names = deserializer.ReadProperty<vector<string>>(102, "names");
+	auto names = StringsToIdentifiers(deserializer.ReadProperty<vector<string>>(102, "names"));
 	auto serialization = deserializer.ReadProperty<ParquetOptionsSerialization>(103, "parquet_options");
 	auto table_columns =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<string>>(104, "table_columns", vector<string> {});
@@ -317,7 +270,9 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 		file_path.emplace_back(path);
 	}
 	FileGlobInput input(FileGlobOptions::FALLBACK_GLOB, "parquet");
-	input.allow_empty = serialization.file_options.allow_empty;
+	// we are restoring an already bound file list rather than globbing user input - it is legitimately empty
+	// when filter pushdown pruned every file away, and rejecting that makes the plan impossible to deserialize
+	input.allow_empty = true;
 
 	auto multi_file_reader = MultiFileReader::Create(function);
 	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path), input);
@@ -531,8 +486,20 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 		// no cached metadata - bail
 		return result;
 	}
+	const auto &parquet_options = parquet_data.GetParquetOptions();
+	string encryption_key_hash;
+	optional_ptr<const string> encryption_key_hash_ptr;
 	// first check if all caches are valid and there are no deletes
 	for (auto &cache : cached_metadata) {
+		if (cache.metadata->IsEncrypted() && parquet_options.encryption_config && !encryption_key_hash_ptr) {
+			auto hash_util = context.db->GetMbedTLSUtil(false);
+			encryption_key_hash =
+			    ParquetFileMetadataCache::CreateEncryptionKeyHash(*parquet_options.encryption_config, *hash_util);
+			encryption_key_hash_ptr = encryption_key_hash;
+		}
+		if (!cache.metadata->CanUseMetadataStatistics(parquet_options.encryption_config, encryption_key_hash_ptr)) {
+			return result;
+		}
 		if (cache.has_deletes) {
 			// we have deletes - don't return any partition stats
 			// FIXME: we could return with count approximate
@@ -563,6 +530,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["prefetch_strategy"] = LogicalType::VARCHAR;
+	table_function.named_parameters["utf8_validation"] = LogicalType::VARCHAR;
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
 	table_function.get_metrics = ParquetScanGetMetrics;
 	table_function.projection_expression_pushdown = ParquetProjectionExpressionPushdown;
@@ -585,7 +553,7 @@ unique_ptr<BaseFileReaderOptions> ParquetMultiFileInfo::InitializeOptions(Client
 }
 
 bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
-                                           BaseFileReaderOptions &file_options, vector<string> &expected_names,
+                                           BaseFileReaderOptions &file_options, vector<Identifier> &expected_names,
                                            vector<LogicalType> &expected_types) {
 	auto &parquet_options = file_options.Cast<ParquetFileReaderOptions>();
 	auto &options = parquet_options.options;
@@ -626,6 +594,13 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const Identif
 		options.prefetch_strategy = ParquetPrefetchStrategyOptionFromString(StringValue::Get(values[0]));
 		return true;
 	}
+	if (key == "utf8_validation") {
+		if (values.size() != 1) {
+			throw BinderException("Parquet utf8_validation cannot be empty!");
+		}
+		options.utf8_validation_option = StringColumnReader::GetUtf8ValidationOption(StringValue::Get(values[0]));
+		return true;
+	}
 	return false;
 }
 
@@ -658,16 +633,11 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier 
 	}
 	if (key == "schema") {
 		// Argument is a map that defines the schema
-		const auto &schema_value = val;
-		VerifyParquetSchemaParameter(schema_value);
-		const auto column_values = ListValue::GetChildren(schema_value);
-		if (column_values.empty()) {
+		auto schema = ParquetColumnDefinition::FromSchemaMap(context, val);
+		if (schema.empty()) {
 			throw BinderException("Parquet schema cannot be empty");
 		}
-		options.schema.reserve(column_values.size());
-		for (idx_t i = 0; i < column_values.size(); i++) {
-			options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, column_values[i]));
-		}
+		options.schema = std::move(schema);
 		file_options.auto_detect_hive_partitioning = false;
 		return true;
 	}
@@ -681,6 +651,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier 
 	}
 	if (key == "prefetch_strategy") {
 		options.prefetch_strategy = ParquetPrefetchStrategyOptionFromString(StringValue::Get(val));
+		return true;
+	}
+	if (key == "utf8_validation") {
+		options.utf8_validation_option = StringColumnReader::GetUtf8ValidationOption(StringValue::Get(val));
 		return true;
 	}
 	return false;

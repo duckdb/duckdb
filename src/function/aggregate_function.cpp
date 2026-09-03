@@ -1,10 +1,32 @@
 #include "duckdb/function/aggregate_function.hpp"
 
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+
+unique_ptr<BaseStatistics> AggregateFunction::PropagateInputValueStats(ClientContext &context,
+                                                                       BoundAggregateExpression &expr,
+                                                                       AggregateStatisticsInput &input) {
+	if (input.child_stats.empty() || expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+		return nullptr;
+	}
+	auto &child_stats = input.child_stats[0];
+	auto &return_type = expr.GetReturnType();
+	auto result = child_stats.GetType() == return_type
+	                  ? child_stats.ToUnique()
+	                  : CastStatistics::TryPropagate(child_stats, child_stats.GetType(), return_type);
+	if (!result) {
+		return nullptr;
+	}
+	result->ResetAdditiveStatistics();
+	// the result is NULL when the aggregate sees no valid rows
+	result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	return result;
+}
 
 AggregateInputData::AggregateInputData(const BoundAggregateExpression &expr, ArenaAllocator &allocator_p,
                                        AggregateCombineType combine_type_p)
@@ -52,7 +74,7 @@ void AggregateFinalizeInputData::InitializeLocalState() {
 
 bool AggregateFunctionProperties::operator==(const AggregateFunctionProperties &rhs) const {
 	return FunctionProperties::operator==(rhs) && order_dependent == rhs.order_dependent &&
-	       distinct_dependent == rhs.distinct_dependent;
+	       distinct_dependent == rhs.distinct_dependent && single_value_identity == rhs.single_value_identity;
 }
 bool AggregateFunctionProperties::operator!=(const AggregateFunctionProperties &rhs) const {
 	return !(*this == rhs);
@@ -64,8 +86,11 @@ bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rh
 	       init_local_state_finalize == rhs.init_local_state_finalize && cluster_update == rhs.cluster_update &&
 	       window == rhs.window && window_init == rhs.window_init && window_batch == rhs.window_batch &&
 	       bind == rhs.bind && destructor == rhs.destructor && statistics == rhs.statistics &&
-	       serialize == rhs.serialize && deserialize == rhs.deserialize && get_state_type == rhs.get_state_type &&
-	       export_aggregate_state == rhs.export_aggregate_state && import_aggregate_state == rhs.import_aggregate_state;
+	       serialize == rhs.serialize && deserialize == rhs.deserialize && direct_rewrite == rhs.direct_rewrite &&
+	       rewrite == rhs.rewrite && rewrite_policy == rhs.rewrite_policy &&
+	       rewrite_optimizer_type == rhs.rewrite_optimizer_type && rewrite_cost == rhs.rewrite_cost &&
+	       get_state_type == rhs.get_state_type && export_aggregate_state == rhs.export_aggregate_state &&
+	       import_aggregate_state == rhs.import_aggregate_state;
 }
 
 bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rhs) const {
@@ -81,7 +106,14 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &cont
 	return func_binder.BindAggregateFunction(*this, std::move(arguments));
 }
 
-BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function) {
+BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function)
+    // the function does not come from a function set - copy it into a definition of its own
+    : BoundAggregateFunction(make_shared_ptr<AggregateFunction>(function)) {
+}
+
+BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunction> function_p)
+    : definition(std::move(function_p)) {
+	auto &function = *definition;
 	name = function.name;
 	schema_name = function.GetSchemaName();
 	catalog_name = function.GetCatalogName();

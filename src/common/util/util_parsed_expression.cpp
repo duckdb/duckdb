@@ -158,7 +158,6 @@ ConstChildrenView ParsedExpression::Children() const {
 		}
 		break;
 	}
-	case ExpressionClass::BOUND_EXPRESSION:
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::CONSTANT:
@@ -292,7 +291,6 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 		}
 		break;
 	}
-	case ExpressionClass::BOUND_EXPRESSION:
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::CONSTANT:
@@ -949,10 +947,10 @@ bool TypeExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<TypeExpression>();
-	if (qualified_name != other_p.qualified_name) {
+	if (!ParsedExpression::ListEquals(children, other_p.children)) {
 		return false;
 	}
-	if (!ParsedExpression::ListEquals(children, other_p.children)) {
+	if (qualified_name != other_p.qualified_name) {
 		return false;
 	}
 	return true;
@@ -966,10 +964,10 @@ hash_t TypeExpression::Hash() const {
 
 unique_ptr<ParsedExpression> TypeExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<TypeExpression>(new TypeExpression());
-	copy->qualified_name = qualified_name;
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}
+	copy->qualified_name = qualified_name;
 	copy->CopyBase(*this);
 	return std::move(copy);
 }

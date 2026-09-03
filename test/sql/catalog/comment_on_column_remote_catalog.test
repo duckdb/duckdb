@@ -1,0 +1,48 @@
+# name: test/sql/catalog/comment_on_column_remote_catalog.test
+# description: COMMENT ON COLUMN while a remote catalog is attached (the remote pushdown optimizer inspects every statement)
+# group: [catalog]
+
+require quack
+
+require httpfs
+
+statement ok
+CALL quack_serve(token='test_token');
+
+statement ok
+ATTACH 'quack:localhost' AS qk (TOKEN 'test_token');
+
+statement ok
+CREATE TABLE tbl(i INTEGER, j INTEGER);
+
+statement ok
+COMMENT ON COLUMN tbl.i IS 'local column comment';
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 'tbl' AND column_name = 'i';
+----
+local column comment
+
+statement ok
+CREATE VIEW v AS SELECT i AS vi, j AS vj FROM tbl;
+
+statement ok
+COMMENT ON COLUMN v.vi IS 'local view column comment';
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 'v' AND column_name = 'vi';
+----
+local view column comment
+
+statement ok
+COMMENT ON COLUMN memory.main.tbl.j IS 'qualified local column comment';
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 'tbl' AND column_name = 'j';
+----
+qualified local column comment
+
+statement error
+COMMENT ON COLUMN missing_tbl.i IS 'no such table';
+----
+<REGEX>:Catalog Error:.*missing_tbl.*

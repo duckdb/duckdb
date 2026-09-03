@@ -52,6 +52,7 @@ void ParquetColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<LogicalType>(103, "type", type);
 	serializer.WriteProperty<Value>(104, "default_value", default_value);
 	serializer.WritePropertyWithDefault<Value>(105, "identifier", identifier, Value());
+	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(106, "children", children, vector<ParquetColumnDefinition>());
 }
 
 ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deserializer) {
@@ -61,6 +62,7 @@ ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deser
 	deserializer.ReadProperty<LogicalType>(103, "type", result.type);
 	deserializer.ReadProperty<Value>(104, "default_value", result.default_value);
 	deserializer.ReadPropertyWithExplicitDefault<Value>(105, "identifier", result.identifier, Value());
+	deserializer.ReadPropertyWithExplicitDefault<vector<ParquetColumnDefinition>>(106, "children", result.children, vector<ParquetColumnDefinition>());
 	return result;
 }
 
@@ -86,6 +88,7 @@ void ParquetOptionsSerialization::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(106, "explicit_cardinality", parquet_options.explicit_cardinality, 0);
 	serializer.WritePropertyWithDefault<bool>(107, "can_have_nan", parquet_options.can_have_nan, false);
 	serializer.WritePropertyWithDefault<ParquetPrefetchStrategyOption>(108, "prefetch_strategy", parquet_options.prefetch_strategy, ParquetPrefetchStrategyOption::AUTO);
+	serializer.WritePropertyWithDefault<StringColumnReader::Utf8ValidationOption>(109, "utf8_validation", parquet_options.utf8_validation_option, StringColumnReader::Utf8ValidationOption::STRICT_UTF8);
 }
 
 ParquetOptionsSerialization ParquetOptionsSerialization::Deserialize(Deserializer &deserializer) {
@@ -99,6 +102,7 @@ ParquetOptionsSerialization ParquetOptionsSerialization::Deserialize(Deserialize
 	deserializer.ReadPropertyWithExplicitDefault<idx_t>(106, "explicit_cardinality", result.parquet_options.explicit_cardinality, 0);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(107, "can_have_nan", result.parquet_options.can_have_nan, false);
 	deserializer.ReadPropertyWithExplicitDefault<ParquetPrefetchStrategyOption>(108, "prefetch_strategy", result.parquet_options.prefetch_strategy, ParquetPrefetchStrategyOption::AUTO);
+	deserializer.ReadPropertyWithExplicitDefault<StringColumnReader::Utf8ValidationOption>(109, "utf8_validation", result.parquet_options.utf8_validation_option, StringColumnReader::Utf8ValidationOption::STRICT_UTF8);
 	return result;
 }
 

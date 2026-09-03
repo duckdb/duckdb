@@ -149,17 +149,32 @@ static Value StringPairIterableToMap(const ITERABLE &iterable) {
 	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values));
 }
 
-string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &physical_operator, const string &class_p,
-                                                    const string &event, const vector<pair<string, string>> &info) {
+template <class PARAMETERS>
+static string ConstructPhysicalOperatorLogMessage(PhysicalOperatorType operator_type, const PARAMETERS &parameters,
+                                                  const string &class_p, const string &event,
+                                                  const vector<pair<string, string>> &info) {
 	child_list_t<Value> child_list = {
-	    {"operator_type", EnumUtil::ToString(physical_operator.type)},
-	    {"parameters", StringPairIterableToMap(physical_operator.ParamsToString())},
+	    {"operator_type", EnumUtil::ToString(operator_type)},
+	    {"parameters", StringPairIterableToMap(parameters)},
 	    {"class", class_p},
 	    {"event", event},
 	    {"info", StringPairIterableToMap(info)},
 	};
 
 	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &physical_operator, const string &class_p,
+                                                    const string &event, const vector<pair<string, string>> &info) {
+	return ConstructPhysicalOperatorLogMessage(physical_operator.type, physical_operator.ParamsToString(), class_p,
+	                                           event, info);
+}
+
+string PhysicalOperatorLogType::ConstructLogMessage(PhysicalOperatorType operator_type,
+                                                    const vector<pair<string, string>> &parameters,
+                                                    const string &class_p, const string &event,
+                                                    const vector<pair<string, string>> &info) {
+	return ConstructPhysicalOperatorLogMessage(operator_type, parameters, class_p, event, info);
 }
 
 //===--------------------------------------------------------------------===//

@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alp/alp_corrupt_exponent.test
+# description: An ALP exponent outside the supported range must be rejected
+# group: [alp]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alp_corrupt_exponent.db.gz {TEST_DIR}/alp_corrupt_exponent.db
+
+load {TEST_DIR}/alp_corrupt_exponent.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALP';
+----
+ALP
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALP segment: exponent 100 exceeds the maximum 18
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALP segment: exponent 100 exceeds the maximum 18

@@ -264,15 +264,15 @@ bool TryEncodeBoundKey(ClientContext &context, const Value &bound, string &resul
 	if (bound.IsNull()) {
 		return false;
 	}
-	Value variant_value;
-	if (!bound.TryCastAs(context, LogicalType::VARIANT(), variant_value, nullptr)) {
+	auto variant_value = bound.TryCastAs(context, LogicalType::VARIANT());
+	if (!variant_value) {
 		return false;
 	}
-	if (variant_value.IsNull()) {
+	if (variant_value->IsNull()) {
 		return false;
 	}
 	Vector input(LogicalType::VARIANT(), 1);
-	input.SetValue(0, variant_value);
+	input.SetValue(0, *variant_value);
 	Vector sort_key(LogicalType::BLOB, 1);
 	CreateVariantComparator(input, 1, sort_key);
 	auto key = sort_key.GetValue(0);

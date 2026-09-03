@@ -174,3 +174,17 @@ query I
 SELECT greatest(CAST(52392441565678.308 AS DECIMAL(17,3)), CAST(52392441565678.308 AS DECIMAL(17,3)));
 ----
 52392441565678.308
+
+# Volatile expressions must still be evaluated twice
+statement ok
+CREATE SEQUENCE least_greatest_sequence;
+
+query I
+SELECT greatest(nextval('least_greatest_sequence'), nextval('least_greatest_sequence'));
+----
+2
+
+query I
+SELECT least(nextval('least_greatest_sequence'), nextval('least_greatest_sequence'));
+----
+3

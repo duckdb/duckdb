@@ -1,6 +1,7 @@
 #include "duckdb/parser/statement/external_resource_statement.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
@@ -29,12 +30,13 @@ string ExternalResourceStatement::ToString() const {
 	case ExternalResourceOperation::CREATE:
 		result = "CREATE EXTERNAL RESOURCE " + SQLString(type);
 		if (!name.GetIdentifierName().empty()) {
-			result += " AS " + name.GetIdentifierName();
+			result += " AS " + SQLIdentifier(name);
 		}
 		if (!options.empty()) {
 			vector<string> stringified;
 			for (auto &opt : options) {
-				stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second->ToString()));
+				stringified.push_back(
+				    StringUtil::Format("%s %s", SQLIdentifier(opt.first).ToString(opt.first), opt.second->ToString()));
 			}
 			result += " (" + StringUtil::Join(stringified, ", ") + ")";
 		}
@@ -42,12 +44,12 @@ string ExternalResourceStatement::ToString() const {
 	case ExternalResourceOperation::REGISTER:
 		result = "REGISTER EXTERNAL RESOURCE " + SQLString(type);
 		if (!name.GetIdentifierName().empty()) {
-			result += " AS " + name.GetIdentifierName();
+			result += " AS " + SQLIdentifier(name);
 		}
 		result += " FROM " + (handle ? handle->ToString() : string());
 		break;
 	case ExternalResourceOperation::DESTROY:
-		result = "DESTROY EXTERNAL RESOURCE " + name.GetIdentifierName();
+		result = "DESTROY EXTERNAL RESOURCE " + SQLIdentifier(name);
 		break;
 	case ExternalResourceOperation::SHOW:
 		result = all ? "SHOW ALL EXTERNAL RESOURCES" : "SHOW EXTERNAL RESOURCES";

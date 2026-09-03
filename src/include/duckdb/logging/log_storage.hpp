@@ -69,7 +69,7 @@ public:
 	virtual const string GetStorageName() = 0;
 
 	static vector<LogicalType> GetSchema(LoggingTargetTable table);
-	static vector<string> GetColumnNames(LoggingTargetTable table);
+	static vector<Identifier> GetColumnNames(LoggingTargetTable table);
 
 	//! WRITING
 	DUCKDB_API virtual void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
@@ -203,7 +203,7 @@ protected:
 	//! Returns the writer for a table
 	CSVWriter &GetWriter(LoggingTargetTable table);
 	//! Configure a CSV writer by initializing its settings with the `writer_options` and `reader_options` settings
-	void SetWriterConfigs(CSVWriter &Writer, vector<string> column_names);
+	void SetWriterConfigs(CSVWriter &Writer, vector<Identifier> column_names);
 	//! Allows child classes to manipulate options
 	CSVWriterOptions &GetCSVWriterOptions();
 	//! Allows child classes to manipulate options

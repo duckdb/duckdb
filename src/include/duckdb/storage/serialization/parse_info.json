@@ -570,7 +570,23 @@
         "id": 211,
         "name": "parsed_options",
         "type": "identifier_map_t<ParsedExpression*>"
+      },
+      {
+        "id": 212,
+        "name": "qualified_name",
+        "serialize_property": "qualified_name",
+        "deserialize_property": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_condition": "qualified_name.Path().size() > 3",
+        "deserialize_default": "QualifiedName()",
+        "deserialize_skip_assign": true
       }
+    ],
+    "finalize_deserialization": [
+      "if (!qualified_name.Path().empty()) {",
+      "\tresult->SetQualifiedName(std::move(qualified_name));",
+      "}"
     ],
     "methods": {
       "SetQualifiedName": [
@@ -752,6 +768,34 @@
         "id": 205,
         "name": "alias",
         "type": "Identifier"
+      },
+      {
+        "id": 206,
+        "name": "repository_url",
+        "type": "string"
+      },
+      {
+        "id": 207,
+        "name": "public_keys",
+        "type": "vector<string>"
+      },
+      {
+        "id": 208,
+        "name": "on_conflict",
+        "type": "OnCreateConflict",
+        "default": "OnCreateConflict::ERROR_ON_CONFLICT"
+      },
+      {
+        "id": 209,
+        "name": "missing_ok",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 210,
+        "name": "load_after_install",
+        "type": "bool",
+        "default": "false"
       }
     ]
   },

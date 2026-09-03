@@ -5,7 +5,7 @@
 require parquet
 
 statement ok
-SET threads=4;
+SET threads=1;
 
 statement ok
 SET async_threads=2;
@@ -17,6 +17,77 @@ statement ok
 CREATE TABLE lifecycle AS
 SELECT i, i % 3 AS p, repeat('x', 10) AS payload
 FROM range(0, 4096) t(i);
+
+# Incomplete CSV and Parquet outputs are aborted by their writers
+statement error
+COPY (SELECT CASE WHEN i = 4096 THEN error('injected CSV failure') ELSE i::VARCHAR END AS v
+      FROM range(8192) t(i))
+TO '{TEST_DIR}/async_lifecycle_failed.csv' (FORMAT CSV, PRESERVE_ORDER false);
+----
+injected CSV failure
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/async_lifecycle_failed.csv');
+----
+0
+
+statement error
+COPY (SELECT CASE WHEN i = 4096 THEN error('injected compressed CSV failure') ELSE i::VARCHAR END AS v
+      FROM range(8192) t(i))
+TO '{TEST_DIR}/async_lifecycle_failed.csv.gz' (FORMAT CSV, COMPRESSION GZIP, PRESERVE_ORDER false);
+----
+injected compressed CSV failure
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/async_lifecycle_failed.csv.gz');
+----
+0
+
+statement error
+COPY (SELECT CASE WHEN i = 4096 THEN error('injected Parquet failure') ELSE i END AS v
+      FROM range(8192) t(i))
+TO '{TEST_DIR}/async_lifecycle_failed.parquet' (FORMAT PARQUET, PRESERVE_ORDER false);
+----
+injected Parquet failure
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/async_lifecycle_failed.parquet');
+----
+0
+
+# Non-exclusive abort preserves a pre-existing path
+statement ok
+COPY (SELECT 'before' AS v) TO '{TEST_DIR}/async_lifecycle_existing.csv' (FORMAT CSV);
+
+statement error
+COPY (SELECT CASE WHEN i = 4096 THEN error('injected existing CSV failure') ELSE i::VARCHAR END AS v
+      FROM range(8192) t(i))
+TO '{TEST_DIR}/async_lifecycle_existing.csv' (FORMAT CSV, USE_TMP_FILE false, PRESERVE_ORDER false);
+----
+injected existing CSV failure
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/async_lifecycle_existing.csv');
+----
+1
+
+statement ok
+COPY (SELECT 'before' AS v) TO '{TEST_DIR}/async_lifecycle_existing.parquet' (FORMAT PARQUET);
+
+statement error
+COPY (SELECT CASE WHEN i = 4096 THEN error('injected existing Parquet failure') ELSE i END AS v
+      FROM range(8192) t(i))
+TO '{TEST_DIR}/async_lifecycle_existing.parquet' (FORMAT PARQUET, USE_TMP_FILE false, PRESERVE_ORDER false);
+----
+injected existing Parquet failure
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/async_lifecycle_existing.parquet');
+----
+1
+
+statement ok
+SET threads=4;
 
 query II
 COPY lifecycle TO '{TEST_DIR}/async_lifecycle_single.parquet' (FORMAT PARQUET, RETURN_FILES);

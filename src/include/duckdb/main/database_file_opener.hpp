@@ -28,11 +28,11 @@ public:
 		return Logger::Get(db);
 	}
 
-	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) override {
+	SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) override {
 		return db.TryGetCurrentSetting(key, result);
 	}
 
-	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &) override {
+	SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result, FileOpenerInfo &) override {
 		return db.TryGetCurrentSetting(key, result);
 	}
 

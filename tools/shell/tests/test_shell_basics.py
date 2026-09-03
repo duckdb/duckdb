@@ -1127,6 +1127,17 @@ def test_duckbox(shell):
     result = test.run()
     result.check_stdout('0 rows')
 
+def test_duckbox_enum_type_rendering(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("SELECT 'A'::ENUM('A','a') AS upper_a, 'A'::ENUM('a','A') AS lower_a LIMIT 0")
+    )
+    result = test.run()
+    result.check_stdout("enum('A', 'a')")
+    result.check_stdout("enum('a', 'A')")
+    result.check_not_exist("enum('a', 'a')")
+
 def test_duckbox_malformed_json(shell):
     test = (
         ShellTest(shell)

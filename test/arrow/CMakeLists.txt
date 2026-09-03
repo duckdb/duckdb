@@ -7,6 +7,7 @@ add_library_unity(
   arrow_filter_pushdown.cpp
   arrow_dictionary_sentinel.cpp
   arrow_dict_nested_offset.cpp
+  arrow_list_view_nested_offset.cpp
   arrow_output_version_buffers.cpp)
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_arrow_roundtrip>

@@ -1,0 +1,19 @@
+# name: test/sql/storage/compression/alp/alp_out_of_range.test
+# description: Test ALP compression of values outside the int64 range
+# group: [alp]
+
+load {TEST_DIR}/test_alp_out_of_range.db
+
+statement ok
+CREATE TABLE integers(v DOUBLE);
+
+statement ok
+INSERT INTO integers SELECT 9223372036854775807.0 FROM range(3000);
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT count(*), count(*) FILTER (WHERE v != 9223372036854775807.0) FROM integers;
+----
+3000	0

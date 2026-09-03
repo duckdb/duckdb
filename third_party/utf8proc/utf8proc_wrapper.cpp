@@ -174,20 +174,34 @@ std::string Utf8Proc::RemoveInvalid(const char *s, size_t len) {
 		}
 
 		int first_pos_seq = i;
+		UnicodeType type = UnicodeType::ASCII;
+		UnicodeInvalidReason invalid_reason = UnicodeInvalidReason::BYTE_MISMATCH;
+		size_t invalid_pos = first_pos_seq;
+
 		if ((c & 0xE0) == 0xC0) {
 			/* 2 byte sequence */
 			int utf8char = c & 0x1F;
-			UTF8ExtraByteLoop<1, 0x000780>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
+			type = UTF8ExtraByteLoop<1, 0x000780>(first_pos_seq, utf8char, i, s, len, &invalid_reason, &invalid_pos);
 		} else if ((c & 0xF0) == 0xE0) {
 			/* 3 byte sequence */
 			int utf8char = c & 0x0F;
-			UTF8ExtraByteLoop<2, 0x00F800>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
+			type = UTF8ExtraByteLoop<2, 0x00F800>(first_pos_seq, utf8char, i, s, len, &invalid_reason, &invalid_pos);
 		} else if ((c & 0xF8) == 0xF0) {
 			/* 4 byte sequence */
 			int utf8char = c & 0x07;
-			UTF8ExtraByteLoop<3, 0x1F0000>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
+			type = UTF8ExtraByteLoop<3, 0x1F0000>(first_pos_seq, utf8char, i, s, len, &invalid_reason, &invalid_pos);
 		} else {
 			// invalid, do not write to output
+			continue;
+		}
+
+		if (type == UnicodeType::INVALID) {
+			// A bad continuation byte (not a truncated tail, not a bad codepoint after a fully well-formed sequence) 
+			// means the byte at invalid_pos was never actually consumed as part of this sequence 
+			// rewind so it gets reprocessed on its own next iteration
+			if (invalid_reason == UnicodeInvalidReason::BYTE_MISMATCH && i > first_pos_seq) {
+				i = invalid_pos - 1;
+			}
 			continue;
 		}
 

@@ -12,6 +12,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
@@ -32,23 +33,20 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 		auto field_name = StringUtil::Lower(field_types[i].first.GetIdentifierName());
 
 		if (fields.find(field_name) == fields.end()) {
-			throw BinderException("index_key: unknown field '%s' in path", field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: unknown field %s in path", field_types[i].first);
 		}
 
 		auto &field_value = field_values[i];
 		if (field_value.IsNull()) {
-			throw BinderException("index_key: path field '%s' cannot be NULL",
-			                      field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: path field %s cannot be NULL", field_types[i].first);
 		}
 		if (field_value.type().id() != LogicalTypeId::VARCHAR) {
-			throw BinderException("index_key: path field '%s' must be VARCHAR",
-			                      field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: path field %s must be VARCHAR", field_types[i].first);
 		}
 
 		auto value = StringValue::Get(field_value);
 		if (value.empty()) {
-			throw BinderException("index_key: path field '%s' cannot be empty",
-			                      field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: path field %s cannot be empty", field_types[i].first);
 		}
 		fields[field_name] = value;
 	}
@@ -77,42 +75,43 @@ static string GetStringArgument(const Value &value, const string &param_name) {
 	return StringValue::Get(value);
 }
 
-static BoundIndex &FindBoundIndex(TableIndexList &index_list, const Identifier &index_name,
-                                  const TableDescription &path) {
-	auto found = index_list.Find(index_name);
+static shared_ptr<IndexEntry> FindBoundIndexEntry(const TableIndexList &index_list, const Identifier &index_name,
+                                                  const TableDescription &path) {
+	auto found = index_list.FindEntry(index_name);
 	if (found) {
-		return *found;
+		return found;
 	}
 
 	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	vector<Identifier> available;
-	for (auto &idx : index_list.Indexes()) {
-		available.push_back(idx.GetIndexName());
+	for (auto entry : index_list.IndexEntries()) {
+		available.push_back(entry->GetName());
 	}
 
 	if (available.empty()) {
-		throw CatalogException("index_key: index '%s' was not found on table %s. No indexes found on this table.",
-		                       index_name.GetIdentifierName(), qualified_table);
+		throw CatalogException("index_key: index %s was not found on table %s. No indexes found on this table.",
+		                       index_name, qualified_table);
 	}
 	auto available_list = StringUtil::Join(available, ", ");
-	throw CatalogException("index_key: index '%s' was not found on table %s. Available indexes: %s",
-	                       index_name.GetIdentifierName(), qualified_table, available_list);
+	throw CatalogException("index_key: index %s was not found on table %s. Available indexes: %s", index_name,
+	                       qualified_table, available_list);
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(ART &art, vector<LogicalType> key_types) : art(art), key_types(std::move(key_types)) {
+	IndexKeyBindData(shared_ptr<IndexEntry> index_entry, vector<LogicalType> key_types)
+	    : index_entry(std::move(index_entry)), key_types(std::move(key_types)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<IndexKeyBindData>(art, key_types);
+		return make_uniq<IndexKeyBindData>(index_entry, key_types);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return &art == &other.art && key_types == other.key_types;
+		return index_entry.get() == other.index_entry.get() && key_types == other.key_types;
 	}
 
-	ART &art;
+	shared_ptr<IndexEntry> index_entry;
 	vector<LogicalType> key_types;
 };
 
@@ -132,6 +131,13 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	if (!table_entry.IsDuckTable()) {
 		throw BinderException("index_key: table '%s' is not a DuckDB table", qualified_table);
 	}
+
+	// index_key resolves index metadata during binding.
+	// Register the owning catalog so cached prepared statements rebind after catalog changes.
+	if (input.HasBinder()) {
+		auto &binder = input.GetBinder();
+		binder.GetStatementProperties().RegisterDBRead(table_entry.ParentCatalog(), context);
+	}
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
 	auto &data_table_info = *data_table.GetDataTableInfo();
@@ -141,17 +147,17 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	// option to this function to bind or not.
 	data_table_info.BindIndexes(context);
 
-	auto &index_list = data_table_info.GetIndexes();
-	auto &bound_index = FindBoundIndex(index_list, Identifier(index_name), path);
+	const auto &index_list = data_table_info.GetIndexes();
+	const auto index_entry = FindBoundIndexEntry(index_list, Identifier(index_name), path);
+	const auto index = index_entry->GetReadHandle<BoundIndex>();
 
-	auto index_type = bound_index.GetIndexType();
+	const auto &index_type = index->GetIndexType();
 	if (index_type != ART::TYPE_NAME) {
 		throw NotImplementedException(
 		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index_type);
 	}
-	auto &art = bound_index.Cast<ART>();
 
-	auto key_types = bound_index.logical_types;
+	auto key_types = index->GetLogicalTypes();
 
 	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
 	if (num_key_args != key_types.size()) {
@@ -171,7 +177,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 		bound_function.GetArguments().push_back(key_type);
 	}
 
-	return make_uniq<IndexKeyBindData>(art, std::move(key_types));
+	return make_uniq<IndexKeyBindData>(index_entry, std::move(key_types));
 }
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -187,10 +193,10 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
 	}
 
-	auto &art = bind_data.art;
+	const auto art = bind_data.index_entry->GetReadHandle<ART>();
 	unsafe_vector<ARTKey> keys(count);
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	art.GenerateKeys<>(allocator, key_chunk, keys);
+	art->GenerateKeys(allocator, key_chunk, keys);
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {

@@ -99,6 +99,7 @@ class JobStagesTest(unittest.TestCase):
                 repository=repository,
                 skip_tests=skip_tests,
                 changed_keys=changed_keys or set(),
+                runners={"linux_x64": "runner-x64", "linux_arm64": "runner-arm64"},
             )
         )
 
@@ -126,15 +127,19 @@ class JobStagesTest(unittest.TestCase):
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_merge_group_minimal_jobs(self):
-        selection = self._compute_job_selection("merge_group", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
+        selection = self._compute_job_selection(
+            "merge_group", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb", changed_keys={"osx"}
+        )
         required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
+        self.assertNotIn("osx", selection.enabled_jobs)
         self.assertTrue(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_main_includes_main_only_jobs(self):
-        selection = self._compute_job_selection("push", "main", "duckdb/duckdb")
+        selection = self._compute_job_selection("push", "main", "duckdb/duckdb", changed_keys={"osx"})
         self.assertIn("codecov", selection.enabled_jobs)
+        self.assertEqual(selection.enabled_jobs.count("osx"), 1)
         self.assertTrue(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
@@ -142,19 +147,79 @@ class JobStagesTest(unittest.TestCase):
         for ref_name in ["feature/my-branch", "main"]:
             push_selection = self._compute_job_selection("push", ref_name, "duckdb/duckdb")
             workflow_dispatch_selection = self._compute_job_selection("workflow_dispatch", ref_name, "duckdb/duckdb")
-            self.assertTrue(set(push_selection.enabled_jobs).issubset(set(workflow_dispatch_selection.enabled_jobs)))
+            expected_base_jobs = set(push_selection.enabled_jobs) - {"regression"}
+            self.assertTrue(expected_base_jobs.issubset(set(workflow_dispatch_selection.enabled_jobs)))
             self.assertTrue(set(job_stages.RELEASE_JOBS).issubset(set(workflow_dispatch_selection.enabled_jobs)))
+            self.assertNotIn("regression", workflow_dispatch_selection.enabled_jobs)
+            self.assertTrue(workflow_dispatch_selection.optimized_release)
+            self.assertEqual(len(workflow_dispatch_selection.linux_release_matrix), 4)
+            self.assertEqual(
+                [config["ccache_key"] for config in workflow_dispatch_selection.linux_release_matrix[:2]],
+                ["linux-cli-amd64-glibc", "linux-cli-arm64-glibc"],
+            )
+            self.assertEqual(
+                [config["build_artifact"] for config in workflow_dispatch_selection.linux_release_matrix],
+                [
+                    "linux-release-compat-build",
+                    "linux-release-arm64-compat-build",
+                    "linux-release-build",
+                    "linux-release-arm64-build",
+                ],
+            )
+            self.assertEqual(
+                [
+                    config["name"]
+                    for config in workflow_dispatch_selection.linux_release_matrix
+                    if config["is_canonical_build"]
+                ],
+                ["amd64 optimized", "arm64 optimized"],
+            )
             self.assertEqual(workflow_dispatch_selection.save_cache, push_selection.save_cache)
-
-    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
-    def test_repository_dispatch_adds_release_jobs(self):
-        selection = self._compute_job_selection("repository_dispatch", "feature/my-branch", "duckdb/duckdb")
-        self.assertTrue(set(job_stages.RELEASE_JOBS).issubset(set(selection.enabled_jobs)))
 
     def test_regular_branch_excludes_main_only_jobs(self):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
         self.assertNotIn("codecov", selection.enabled_jobs)
+        self.assertNotIn("osx", selection.enabled_jobs)
+        self.assertIn("linux-release-musl", selection.enabled_jobs)
+        self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
+        self.assertEqual([config["name"] for config in selection.linux_musl_matrix], ["arm64"])
         self.assertFalse(selection.save_cache)
+
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
+    def test_osx_changed_key_enables_osx(self):
+        for event_name in ["push", "pull_request"]:
+            selection = self._compute_job_selection(
+                event_name, "feature/my-branch", "duckdb/duckdb", changed_keys={"osx"}
+            )
+            self.assertIn("osx", selection.enabled_jobs)
+
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
+    def test_workflow_dispatch_with_skipped_tests_includes_optimized_release(self):
+        selection = self._compute_job_selection("workflow_dispatch", "main", "duckdb/duckdb", skip_tests=True)
+        self.assertIn("linux-release", selection.enabled_jobs)
+        self.assertNotIn("linux-release-tests", selection.enabled_jobs)
+        self.assertTrue(selection.optimized_release)
+        self.assertEqual(
+            [config["name"] for config in selection.linux_release_matrix],
+            ["amd64 compatibility", "arm64 compatibility", "amd64 optimized", "arm64 optimized"],
+        )
+        self.assertEqual(
+            [config["build_artifact"] for config in selection.linux_release_matrix],
+            [
+                "linux-release-compat-build",
+                "linux-release-arm64-compat-build",
+                "linux-release-build",
+                "linux-release-arm64-build",
+            ],
+        )
+        self.assertEqual(
+            [config["ccache_key"] for config in selection.linux_release_matrix[:2]],
+            ["linux-cli-amd64-glibc", "linux-cli-arm64-glibc"],
+        )
+        self.assertEqual(
+            [config["name"] for config in selection.linux_release_matrix if config["is_canonical_build"]],
+            ["amd64 optimized", "arm64 optimized"],
+        )
 
     def test_fork_saves_cache(self):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "somefork/duckdb")
@@ -163,6 +228,16 @@ class JobStagesTest(unittest.TestCase):
     def test_parse_changed_keys(self):
         parsed = job_stages.parse_changed_keys(" tEsts_slow,extensions\ngithub tests_slow ")
         self.assertEqual(parsed, {"tests_slow", "extensions", "github"})
+
+    def test_parse_runners(self):
+        self.assertEqual(
+            job_stages.parse_runners('{"linux_x64":"runner-x64","linux_arm64":"runner-arm64"}'),
+            {"linux_x64": "runner-x64", "linux_arm64": "runner-arm64"},
+        )
+        with self.assertRaises(ValueError):
+            job_stages.parse_runners('["runner-x64"]')
+        with self.assertRaises(ValueError):
+            job_stages.parse_runners('{"linux_x64":"runner-x64"}')
 
     def test_writes_github_output(self):
         selection = job_stages.JobSelection(enabled_jobs=["linux-relassert"], save_cache=False)
@@ -178,6 +253,9 @@ class JobStagesTest(unittest.TestCase):
 
         self.assertEqual(lines[0], "enabled_jobs=[\"linux-relassert\"]")
         self.assertEqual(lines[1], "save_cache=false")
+        self.assertEqual(lines[2], "optimized_release=false")
+        self.assertEqual(lines[3], "linux_release_matrix=[]")
+        self.assertEqual(lines[4], "linux_musl_matrix=[]")
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_main_prints_and_writes_outputs(self):
@@ -196,6 +274,8 @@ class JobStagesTest(unittest.TestCase):
                 "gh-readonly-queue/main/pr-1-abc",
                 "--repository",
                 "duckdb/duckdb",
+                "--runners",
+                '{"linux_x64":"runner-x64","linux_arm64":"runner-arm64"}',
             ]
             rc = job_stages.main()
             self.assertEqual(rc, 0)
@@ -207,6 +287,9 @@ class JobStagesTest(unittest.TestCase):
             selected_jobs = json.loads(payload)
             required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
             self.assertTrue(required_jobs.issubset(set(selected_jobs)))
+            output_values = dict(line.split("=", 1) for line in out.splitlines())
+            release_matrix = json.loads(output_values["linux_release_matrix"])
+            self.assertEqual(release_matrix[0]["runner"], "runner-x64")
         finally:
             sys.argv = old_argv
             if old_env is None:

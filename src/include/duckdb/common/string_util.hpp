@@ -131,6 +131,9 @@ public:
 	//! Returns the size in bytes of the longest common prefix
 	DUCKDB_API static idx_t GetCommonPrefixSize(const string &left, const string &right);
 
+	//! Replaces a prefix with its exclusive upper bound in byte order
+	DUCKDB_API static bool FindNextPrefix(string &prefix);
+
 	//! Repeat a string multiple times
 	DUCKDB_API static string Repeat(const string &str, const idx_t n);
 
@@ -227,6 +230,9 @@ public:
 
 	//! Case insensitive starts-with
 	DUCKDB_API static bool CIStartsWith(const string &str, const string &prefix);
+
+	//! Case insensitive ends-with
+	DUCKDB_API static bool CIEndsWith(const string &str, const string &suffix);
 
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);

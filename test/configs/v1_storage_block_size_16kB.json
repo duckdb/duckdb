@@ -25,6 +25,15 @@
       "paths": [
         "test/sql/storage/compression/alp/alp_min_max.test"
       ]
+    },
+    {
+      "reason": "CREATE SECURE VIEW requires v2.0.0 storage.",
+      "paths": [
+        "test/sql/catalog/view/secure_view.test",
+        "test/sql/optimizer/secure_view_explain.test",
+        "test/sql/optimizer/secure_view_pushdown.test",
+        "test/sql/optimizer/secure_view_statistics.test"
+      ]
     }
   ]
 }

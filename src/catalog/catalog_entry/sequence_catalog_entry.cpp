@@ -67,7 +67,7 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 		}
 	} else {
 		if (result < data.min_value || (overflow && data.increment < 0)) {
-			throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", name, data.min_value);
+			throw SequenceException("nextval: reached minimum value of sequence %s (%lld)", name, data.min_value);
 		}
 		if (result > data.max_value || overflow) {
 			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", name, data.max_value);
@@ -85,7 +85,7 @@ int64_t SequenceCatalogEntry::SetValue(DuckTransaction &transaction, int64_t val
 	{
 		lock_guard<mutex> seqlock(lock);
 		if (value < data.min_value || value > data.max_value) {
-			throw SequenceException("setval: value %lld is out of bounds for sequence \"%s\" (%lld..%lld)", value, name,
+			throw SequenceException("setval: value %lld is out of bounds for sequence %s (%lld..%lld)", value, name,
 			                        data.min_value, data.max_value);
 		}
 

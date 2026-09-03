@@ -305,8 +305,12 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 		auto stats =
 		    ParquetStatisticsUtils::TransformParquetStatistics(Type(), Schema(), *page_stats, /*can_have_nan=*/true);
 		auto &expr_filter = filter->Cast<ExpressionFilter>();
-		if (stats && expr_filter.CheckStatistics(*stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-			page_is_filtered_out = true;
+		if (stats) {
+			auto prune_result = expr_filter.CheckStatistics(*stats);
+			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+			    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+				page_is_filtered_out = true;
+			}
 		}
 	}
 	if (page_is_filtered_out) {
@@ -503,6 +507,9 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
 
 	if (chunk->__isset.crypto_metadata) {
+		if (!reader.metadata->crypto_metadata) {
+			throw InvalidInputException("File is encrypted but no file crypto metadata is set");
+		}
 		auto const file_aad = reader.GetUniqueFileIdentifier(reader.metadata->crypto_metadata->encryption_algorithm);
 		if (!file_aad.empty()) {
 			// If there is a file aad (identifier), this means that the Encrypted file is written by Arrow

@@ -397,7 +397,8 @@ struct LikeEscapeOperator {
 	template <class TA, class TB, class TC>
 	static inline bool Operation(TA str, TB pattern, TC escape) {
 		char escape_char = GetEscapeChar(escape);
-		return LikeOperatorFunction(str.GetData(), str.GetSize(), pattern.GetData(), pattern.GetSize(), escape_char);
+		return escape.GetSize() == 0 ? LikeOperatorFunction(str, pattern)
+		                             : LikeOperatorFunction(str, pattern, escape_char);
 	}
 };
 
@@ -415,7 +416,8 @@ struct LikeOperator {
 	}
 };
 
-bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0') {
+template <bool HAS_ESCAPE>
+bool ILikeOperatorFunctionInternal(string_t &str, string_t &pattern, char escape) {
 	auto str_data = str.GetData();
 	auto str_size = str.GetSize();
 	auto pat_data = pattern.GetData();
@@ -431,18 +433,26 @@ bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0')
 	LowerCase(pat_data, pat_size, pat_ldata.get());
 	string_t str_lcase(str_ldata.get(), UnsafeNumericCast<uint32_t>(str_llength));
 	string_t pat_lcase(pat_ldata.get(), UnsafeNumericCast<uint32_t>(pat_llength));
-	// '\0' is the "no escape" sentinel: use the non-escape matcher so embedded NUL bytes are matched literally
-	if (escape == '\0') {
+	if (!HAS_ESCAPE) {
 		return LikeOperatorFunction(str_lcase, pat_lcase);
 	}
 	return LikeOperatorFunction(str_lcase, pat_lcase, escape);
+}
+
+bool ILikeOperatorFunction(string_t &str, string_t &pattern) {
+	return ILikeOperatorFunctionInternal<false>(str, pattern, '\0');
+}
+
+bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape) {
+	return ILikeOperatorFunctionInternal<true>(str, pattern, escape);
 }
 
 struct ILikeEscapeOperator {
 	template <class TA, class TB, class TC>
 	static inline bool Operation(TA str, TB pattern, TC escape) {
 		char escape_char = GetEscapeChar(escape);
-		return ILikeOperatorFunction(str, pattern, escape_char);
+		return escape.GetSize() == 0 ? ILikeOperatorFunction(str, pattern)
+		                             : ILikeOperatorFunction(str, pattern, escape_char);
 	}
 };
 
@@ -523,6 +533,7 @@ void ILikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result
 		auto pattern = *ConstantVector::GetData<string_t>(pattern_vec);
 		auto escape = *ConstantVector::GetData<string_t>(escape_vec);
 		char escape_char = GetEscapeChar(escape);
+		bool has_escape = escape.GetSize() != 0;
 
 		// lowercase the pattern exactly once, up front
 		idx_t pat_llength = LowerLength(pattern.GetData(), pattern.GetSize());
@@ -533,8 +544,7 @@ void ILikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result
 		// the matcher cannot honor escape semantics, so only use it when the escape char never appears in the
 		// (lowercased) pattern, in which case escape is irrelevant and the pattern is a plain LIKE pattern
 		unique_ptr<LikeMatcher> matcher;
-		bool escape_active =
-		    escape_char != '\0' && memchr(pat_lcase.GetData(), escape_char, pat_lcase.GetSize()) != nullptr;
+		bool escape_active = has_escape && memchr(pat_lcase.GetData(), escape_char, pat_lcase.GetSize()) != nullptr;
 		if (!escape_active) {
 			matcher = LikeMatcher::CreateLikeMatcher(string(pat_lcase.GetData(), pat_lcase.GetSize()));
 		}
@@ -550,10 +560,9 @@ void ILikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result
 			}
 			LowerCase(str.GetData(), str.GetSize(), scratch.get());
 			string_t str_lcase(scratch.get(), UnsafeNumericCast<uint32_t>(str_llength));
-			// '\0' escape means no escape: use the non-escape matcher so embedded NUL bytes are matched literally
 			bool match = matcher ? matcher->Match(str_lcase)
-			                     : (escape_char == '\0' ? LikeOperatorFunction(str_lcase, pat_lcase)
-			                                            : LikeOperatorFunction(str_lcase, pat_lcase, escape_char));
+			                     : (has_escape ? LikeOperatorFunction(str_lcase, pat_lcase, escape_char)
+			                                   : LikeOperatorFunction(str_lcase, pat_lcase));
 			return INVERT ? !match : match;
 		});
 		return;

@@ -108,7 +108,8 @@ struct CreateExternalResourceState : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> CreateExternalResourceBind(ClientContext &context, TableFunctionBindInput &input,
-                                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                                           vector<LogicalType> &return_types,
+                                                           vector<Identifier> &names) {
 	auto result = make_uniq<CreateExternalResourceBindData>();
 	if (input.inputs[0].IsNull()) {
 		throw InvalidInputException("create_external_resource: the type name must not be NULL");
@@ -389,7 +390,8 @@ struct DestroyExternalResourceState : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DestroyExternalResourceBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
+                                                            vector<LogicalType> &return_types,
+                                                            vector<Identifier> &names) {
 	auto result = make_uniq<DestroyExternalResourceBindData>();
 	if (input.inputs[0].IsNull() || StringValue::Get(input.inputs[0]).empty()) {
 		throw InvalidInputException("destroy_external_resource: the deleter function must not be NULL or empty");

@@ -1,0 +1,38 @@
+# name: test/sql/types/test_interval_negation_overflow.test
+# description: Test for signed integer overflow via negation of INT64_MIN interval microseconds
+# group: [types]
+
+# Issue #25084: Signed Integer Overflow via Negation of INT64_MIN Interval Microseconds
+# SubtractTimeOperator::Operation negates right.micros without checking for INT64_MIN,
+# causing signed integer overflow (undefined behavior).
+
+# TIME - INTERVAL with INT64_MIN microseconds should throw an error, not overflow
+statement error
+SELECT TIME '12:00:00' - INTERVAL '-4611686018427387904 microseconds -4611686018427387904 microseconds';
+----
+<REGEX>:.*out of range.*
+
+# TIMETZ - INTERVAL with INT64_MIN microseconds should throw an error, not overflow
+statement error
+SELECT TIMETZ '12:00:00+00' - INTERVAL '-4611686018427387904 microseconds -4611686018427387904 microseconds';
+----
+<REGEX>:.*out of range.*
+
+# Interval::Invert with INT64_MIN micros should also throw
+statement error
+SELECT '1 hour'::INTERVAL - INTERVAL '9223372036854775807 microseconds 1 microseconds';
+----
+<REGEX>:.*out of range.*
+
+# Normal cases should still work
+statement ok
+SELECT TIME '12:00:00' - INTERVAL '1 hour';
+
+statement ok
+SELECT TIMETZ '12:00:00+00' - INTERVAL '1 hour';
+
+statement ok
+SELECT DATE '2024-01-01' - INTERVAL '1 month';
+
+statement ok
+SELECT TIMESTAMP '2024-01-01 12:00:00' - INTERVAL '1 day';

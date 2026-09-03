@@ -336,3 +336,16 @@ endloop
 
 endloop
 
+# Regression (#23986): BIGINT value span overflows int64 arithmetic in generic InterpolateOperator
+query III
+SELECT x, y, fill(y ORDER BY x) OVER () AS filled
+FROM (VALUES
+    (0::BIGINT,  9223372036854775807::BIGINT),
+    (1::BIGINT,  NULL),
+    (2::BIGINT, -9223372036854775807::BIGINT)) t(x, y)
+ORDER BY x;
+----
+0	9223372036854775807	9223372036854775807
+1	NULL	0
+2	-9223372036854775807	-9223372036854775807
+

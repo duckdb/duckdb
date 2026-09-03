@@ -156,6 +156,46 @@
 		"type": "scalar_function_set"
 	},
 	{
+		"name": "variant_extract_string",
+		"variants": [
+          {
+            "parameters": [
+              {
+                "name": "input_variant",
+                "type": "VARIANT"
+              },
+              {
+                "name": "path",
+                "type": "VARCHAR"
+              }
+            ],
+            "categories": [
+              "variant"
+            ],
+            "description": "Returns the stringified representation at `path` from the `input_variant`.",
+            "example": "variant_extract_string({'a': 42, 'b': [1,2,3])::VARIANT, 'b')"
+          },
+          {
+            "parameters": [
+              {
+                "name": "input_variant",
+                "type": "VARIANT"
+              },
+              {
+                "name": "path",
+                "type": "VARCHAR[]"
+              }
+            ],
+            "categories": [
+              "variant"
+            ],
+            "description": "Returns the stringified representation for each `path` from the `input_variant`.",
+            "example": "variant_extract_string({'a': 42, 'b': [1,2,3])::VARIANT, ['a', 'b'])"
+          }
+        ],
+      "type": "scalar_function_set"
+    },
+	{
 		"name": "variant_normalize",
 		"parameters": "input_variant",
 		"description": "Normalizes the `input_variant` to a canonical representation.",

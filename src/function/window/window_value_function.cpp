@@ -10,7 +10,6 @@
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/function/window/value_functions.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -180,8 +179,8 @@ struct WindowValueExecutor {
 	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 	//! Streaming APIs
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowValueStreamingState>(client, input, wexpr);
 	}
 };
@@ -357,11 +356,11 @@ public:
 			if (offset_value.IsNull()) {
 				return false;
 			}
-			Value bigint_value;
-			if (!offset_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+			auto bigint_value = offset_value.DefaultTryCastAs(LogicalType::BIGINT);
+			if (!bigint_value) {
 				return false;
 			}
-			offset = bigint_value.GetValue<int64_t>();
+			offset = bigint_value->GetValue<int64_t>();
 		}
 
 		//	We can only support LEAD and LAG values within one standard vector
@@ -382,7 +381,12 @@ public:
 			return false;
 		}
 		auto dflt_value = ExpressionExecutor::EvaluateScalar(client, *default_expr);
-		return dflt_value.DefaultTryCastAs(wexpr.GetReturnType(), result, nullptr, false);
+		auto cast_value = dflt_value.DefaultTryCastAs(wexpr.GetReturnType());
+		if (!cast_value) {
+			return false;
+		}
+		result = std::move(*cast_value);
+		return true;
 	}
 
 	WindowLeadLagStreamingState(ClientContext &context, const BoundWindowExpression &wexpr)
@@ -529,12 +533,12 @@ public:
 		}
 		return false;
 	}
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowLeadLagStreamingState>(client, wexpr);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state) {
+	                       Vector &result, WindowExecutorStreamingState &state) {
 		state.Cast<WindowLeadLagStreamingState>().Execute(context, input, delayed, delayed_capacity, result);
 	}
 };
@@ -792,11 +796,11 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 		        wexpr.WindowEnd() == WindowBoundary::UNBOUNDED_FOLLOWING);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state);
+	                       Vector &result, WindowExecutorStreamingState &state);
 };
 
 void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                          idx_t delayed_capacity, Vector &result, LocalSourceState &state) {
+                                          idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &state) {
 	auto &sstate = state.Cast<WindowValueStreamingState>();
 	auto &wexpr = sstate.wexpr;
 	const auto count = input.size();
@@ -914,11 +918,11 @@ struct WindowLastValueExecutor : public WindowValueExecutor {
 		       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state);
+	                       Vector &result, WindowExecutorStreamingState &state);
 };
 
 void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                         idx_t delayed_capacity, Vector &result, LocalSourceState &state) {
+                                         idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &state) {
 	//	Evaluate the argument and copy the values
 	auto &sstate = state.Cast<WindowValueStreamingState>();
 	auto &wexpr = sstate.wexpr;
@@ -1041,13 +1045,13 @@ public:
 		if (nth_value.IsNull()) {
 			return false;
 		}
-		Value bigint_value;
-		if (!nth_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+		auto bigint_value = nth_value.DefaultTryCastAs(LogicalType::BIGINT);
+		if (!bigint_value) {
 			return false;
 		}
 		//	Unlike PG we are currently accepting negative indices and mapping them to 0.
 		//	Streaming this will have the same behaviour if we use a 0 index.
-		const auto bigint = bigint_value.GetValue<int64_t>();
+		const auto bigint = bigint_value->GetValue<int64_t>();
 		nth_index = bigint > 0 ? UnsafeNumericCast<idx_t>(bigint) : 0;
 		return true;
 	}
@@ -1082,12 +1086,12 @@ struct WindowNthValueExecutor : public WindowValueExecutor {
 		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
 		       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 	}
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowNthValueStreamingState>(client, input, wexpr);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state) {
+	                       Vector &result, WindowExecutorStreamingState &state) {
 		state.Cast<WindowNthValueStreamingState>().StreamData(context, input, result);
 	}
 };
@@ -1122,13 +1126,13 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 	for (idx_t i = 0; i < count; ++i) {
 		if (!any_value || validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
 			++nth_count;
-		}
-		// One-based comparison.
-		if (nth_count == nth_index) {
-			auto v = arg.GetValue(i);
-			vec.Reference(v, count_t(count));
-			s = 1;
-			split.SetValue(s, v);
+			// One-based comparison.
+			if (nth_count == nth_index) {
+				auto v = arg.GetValue(i);
+				vec.Reference(v, count_t(count));
+				s = 1;
+				split.SetValue(s, v);
+			}
 		}
 		sel.set_index(i, s);
 	}
@@ -1307,7 +1311,7 @@ struct TryExtrapolateOperator {
 		if (lo > hi) {
 			return Operation<T>(hi, -d, lo, result);
 		}
-		const auto delta = LossyNumericCast<double>(hi - lo);
+		const auto delta = LossyNumericCast<double>(hi) - LossyNumericCast<double>(lo);
 		T offset;
 		if (d < 0) {
 			if (!TryCast::Operation(delta * (-d), offset)) {
@@ -1471,23 +1475,19 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input
 		return nullptr;
 	}
 
-	auto &orders = input.GetOrders();
-	auto &arg_orders = input.GetArgumentOrders();
+	auto &order_types = input.GetOrderTypes();
+	auto &arg_order_types = input.GetArgumentOrderTypes();
 
-	if (arg_orders.size() > 1 || (arg_orders.empty() && orders.size() != 1)) {
+	if (arg_order_types.size() > 1 || (arg_order_types.empty() && order_types.size() != 1)) {
 		throw BinderException("FILL functions must have only one ORDER BY expression");
 	}
 
 	LogicalType order_type;
-	if (arg_orders.empty()) {
-		D_ASSERT(!orders.empty());
-		auto &order_expr = orders[0].expression;
-		auto &bound = BoundExpression::GetExpression(*order_expr);
-		order_type = bound->GetReturnType();
+	if (arg_order_types.empty()) {
+		D_ASSERT(!order_types.empty());
+		order_type = order_types[0];
 	} else {
-		auto &order_expr = arg_orders[0].expression;
-		auto &bound = BoundExpression::GetExpression(*order_expr);
-		order_type = bound->GetReturnType();
+		order_type = arg_order_types[0];
 	}
 	if (!IsFillType(order_type)) {
 		throw BinderException("FILL ordering must support subtraction");

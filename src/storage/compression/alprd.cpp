@@ -8,6 +8,46 @@
 
 namespace duckdb {
 
+void ThrowAlpRDMetadataBeforeHeader() {
+	throw DataCorruptionException("Corrupted ALPRD segment: metadata ends before the segment header");
+}
+
+void ThrowAlpRDRightBitWidthOutOfRange(AlpRDConstants::BIT_WIDTH_TYPE bit_width,
+                                       AlpRDConstants::BIT_WIDTH_TYPE max_bit_width) {
+	throw DataCorruptionException("Corrupted ALPRD segment: right bit width %d exceeds %d", bit_width, max_bit_width);
+}
+
+void ThrowAlpRDLeftBitWidthOutOfRange(AlpRDConstants::BIT_WIDTH_TYPE bit_width) {
+	throw DataCorruptionException("Corrupted ALPRD segment: left bit width %d exceeds %d", bit_width,
+	                              AlpRDConstants::MAX_DICTIONARY_BIT_WIDTH);
+}
+
+void ThrowAlpRDDictionarySizeExceedsMaximum() {
+	throw DataCorruptionException("Corrupt database file: ALPRD dictionary size exceeds maximum");
+}
+
+void ThrowAlpRDMetadataTableOutOfBounds() {
+	throw DataCorruptionException("Corrupted ALPRD segment: metadata offset table exceeds the segment");
+}
+
+void ThrowAlpRDVectorOffsetOutOfBounds() {
+	throw DataCorruptionException("Corrupted ALPRD segment: vector offset is outside the data region");
+}
+
+void ThrowAlpRDVectorOffsetsInvalid() {
+	throw DataCorruptionException("Corrupted ALPRD segment: vector offsets do not describe a data range");
+}
+
+void ThrowAlpRDExceptionCountOutOfRange(AlpRDConstants::EXCEPTIONS_COUNT_TYPE exception_count, idx_t vector_size) {
+	throw DataCorruptionException("Corrupted ALPRD segment: exception count %d exceeds vector size %d", exception_count,
+	                              vector_size);
+}
+
+void ThrowAlpRDExceptionPositionOutOfRange(AlpRDConstants::EXCEPTION_POSITION_TYPE position, idx_t vector_size) {
+	throw DataCorruptionException("Corrupted ALPRD segment: exception position %d is outside vector size %d", position,
+	                              vector_size);
+}
+
 template <class T>
 CompressionFunction GetAlpRDFunction(PhysicalType data_type) {
 	throw NotImplementedException("GetAlpFunction not implemented for the given datatype");

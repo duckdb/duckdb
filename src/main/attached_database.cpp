@@ -341,9 +341,9 @@ void AttachedDatabase::Invalidate(const string &reason) {
 	string recovery = HasStorageManager() && GetStorageManager().InMemory()
 	                      ? "It is an in-memory database, so its data cannot be recovered."
 	                      : "Detach and reattach it before using it again.";
-	ValidChecker::Invalidate(*this, StringUtil::Format("Database \"%s\" has been invalidated because checkpointing "
+	ValidChecker::Invalidate(*this, StringUtil::Format("Database %s has been invalidated because checkpointing "
 	                                                   "failed. %s Original error: %s",
-	                                                   GetName().GetIdentifierName(), recovery, reason));
+	                                                   GetName(), recovery, reason));
 }
 
 void AttachedDatabase::SetInitialDatabase() {

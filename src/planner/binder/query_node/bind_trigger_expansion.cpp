@@ -50,7 +50,7 @@ unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node, TableCatal
 	if (expanded_tables.find(table) != expanded_tables.end()) {
 		if (global_binder_state->trigger_creation_table == &table) {
 			throw NotImplementedException("Recursive trigger chains are not yet supported (trigger cycle detected "
-			                              "through trigger \"%s\" on table \"%s\")",
+			                              "through trigger %s on table %s)",
 			                              global_binder_state->trigger_creation_name, table.name);
 		}
 		return nullptr;
@@ -613,7 +613,7 @@ unique_ptr<ExpressionBinder> Binder::SetupRowScope(TableIndex table_index, const
                                                    const vector<LogicalType> &col_types, const string &scope_name) {
 	bind_context.AddGenericBinding(table_index, Identifier(scope_name), col_names, col_types);
 	auto scope_binder = make_uniq<ExpressionBinder>(*this, context);
-	GetActiveBinders().push_back(*scope_binder);
+	PushScope(*scope_binder);
 	return scope_binder;
 }
 
@@ -679,7 +679,7 @@ BoundStatement Binder::ExpandRowTriggers(QueryNode &node, vector<unique_ptr<Pars
 
 		CorrelatedColumns corr_cols = std::move(child_binder->correlated_columns);
 		if (corr_cols.empty()) {
-			throw BinderException("FOR EACH ROW trigger \"%s\" on table \"%s\" must reference at least one NEW or OLD "
+			throw BinderException("FOR EACH ROW trigger %s on table %s must reference at least one NEW or OLD "
 			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",
 			                      trigger.name, table.name);
 		}
@@ -704,7 +704,7 @@ BoundStatement Binder::ExpandRowTriggers(QueryNode &node, vector<unique_ptr<Pars
 		trigger_plan = std::move(logi_trig);
 	}
 	// remove row_scope_binder
-	GetActiveBinders().pop_back();
+	PopScope();
 
 	Identifier trigger_cte_name(string(TRIGGER_BODY_CTE_PREFIX) + "row_" + uuid_suffix);
 	auto trigger_cte_idx = GenerateTableIndex();

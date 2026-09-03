@@ -1,13 +1,22 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
-CreateTypeInfo::CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY), bind_function(nullptr) {
+CreateTypeInfo::CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY) {
 }
 CreateTypeInfo::CreateTypeInfo(string name_p, LogicalType type_p, bind_logical_type_function_t bind_function_p)
-    : CreateInfo(CatalogType::TYPE_ENTRY), type(std::move(type_p)), bind_function(bind_function_p) {
+    : CreateInfo(CatalogType::TYPE_ENTRY), type(std::move(type_p)) {
+	SetTypeName(Identifier(std::move(name_p)));
+	if (bind_function_p) {
+		constructors.AddFunction(TypeConstructor::Unchecked(GetTypeName(), bind_function_p));
+	}
+}
+CreateTypeInfo::CreateTypeInfo(string name_p, LogicalType type_p, TypeConstructorSet constructors_p)
+    : CreateInfo(CatalogType::TYPE_ENTRY), type(std::move(type_p)), constructors(std::move(constructors_p)) {
 	SetTypeName(Identifier(std::move(name_p)));
 }
 
@@ -19,7 +28,7 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 	if (query) {
 		result->query = query->Copy();
 	}
-	result->bind_function = bind_function;
+	result->constructors = constructors;
 	return std::move(result);
 }
 

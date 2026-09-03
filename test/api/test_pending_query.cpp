@@ -275,6 +275,7 @@ TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
 			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
 			count += chunk->size();
 		}
+		REQUIRE(!result->HasError());
 		REQUIRE(count == 1000000);
 	}
 	SECTION("Buffered unordered exchange") {
@@ -289,6 +290,39 @@ TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
 			count += chunk->size();
 		}
 		REQUIRE(count == 1000000);
+	}
+	SECTION("Buffered batch-indexed exchange") {
+		auto pending = con.PendingQuery("WITH c AS MATERIALIZED ("
+		                                "SELECT i FROM integers WHERE i < 500000 "
+		                                "UNION ALL "
+		                                "SELECT i FROM integers WHERE i >= 500000) "
+		                                "SELECT i FROM c",
+		                                true);
+		REQUIRE(!pending->HasError());
+
+		auto result = pending->Execute();
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		idx_t count = 0;
+		while (auto chunk = result->Fetch()) {
+			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
+			count += chunk->size();
+		}
+		REQUIRE(!result->HasError());
+		REQUIRE(count == 1000000);
+	}
+	SECTION("Abandon buffered batch-indexed exchange") {
+		auto result = con.SendQuery("WITH c AS MATERIALIZED ("
+		                            "SELECT i FROM integers WHERE i < 500000 "
+		                            "UNION ALL "
+		                            "SELECT i FROM integers WHERE i >= 500000) "
+		                            "SELECT i FROM c");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->Fetch());
+
+		result->Cast<StreamQueryResult>().Close();
+		auto check = con.Query("SELECT 42");
+		REQUIRE(CHECK_COLUMN(check, 0, {42}));
 	}
 	SECTION("Ordered sink pipeline sequencing") {
 		auto pending = con.PendingQuery("WITH c1 AS MATERIALIZED (SELECT i FROM range(10000) t(i)), "

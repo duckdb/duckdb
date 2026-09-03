@@ -109,6 +109,9 @@ static const TestConfigOption test_config_options[] = {
     {"settings", "Configuration settings to apply",
      LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
      nullptr},
+    {"attach_options", "ATTACH-style options for the main database (e.g. IO_MODE)",
+     LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
+     nullptr},
     {"extends", "List of config files to extend from", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
@@ -769,9 +772,22 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 		for (const auto &value : list_children) {
 			auto &struct_children = StructValue::GetChildren(value);
 			ConfigSetting config_setting;
-			config_setting.name = StringValue::Get(struct_children[0]);
+			config_setting.name = struct_children[0].GetValue<Identifier>();
 			config_setting.value = StringValue::Get(struct_children[1]);
 			result.push_back(std::move(config_setting));
+		}
+	}
+	return result;
+}
+
+unordered_map<string, Value> TestConfiguration::GetMainDatabaseOptions() {
+	unordered_map<string, Value> result;
+	if (options.find("attach_options") != options.end()) {
+		auto entry = options["attach_options"];
+		auto list_children = ListValue::GetChildren(entry);
+		for (const auto &value : list_children) {
+			auto &struct_children = StructValue::GetChildren(value);
+			result[StringValue::Get(struct_children[0])] = struct_children[1];
 		}
 	}
 	return result;

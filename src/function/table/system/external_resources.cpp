@@ -46,7 +46,7 @@ struct ExternalResourcesGlobalState : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> ExternalResourcesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<ExternalResourcesBindData>();
 	for (auto &np : input.named_parameters) {
 		if (StringUtil::Lower(np.first.GetIdentifierName()) == "discover" && !np.second.IsNull()) {
@@ -233,7 +233,8 @@ struct RegisterExternalResourceState : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> RegisterExternalResourceBind(ClientContext &context, TableFunctionBindInput &input,
-                                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                                             vector<LogicalType> &return_types,
+                                                             vector<Identifier> &names) {
 	auto result = make_uniq<RegisterExternalResourceBindData>();
 	auto &resource = result->resource;
 	if (input.inputs[0].IsNull() || input.inputs[1].IsNull()) {
@@ -312,7 +313,7 @@ struct DeregisterExternalResourceState : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> DeregisterExternalResourceBind(ClientContext &context, TableFunctionBindInput &input,
                                                                vector<LogicalType> &return_types,
-                                                               vector<string> &names) {
+                                                               vector<Identifier> &names) {
 	auto result = make_uniq<DeregisterExternalResourceBindData>();
 	if (input.inputs[0].IsNull() || StringValue::Get(input.inputs[0]).empty()) {
 		throw InvalidInputException("deregister_external_resource: the name must not be NULL or empty");

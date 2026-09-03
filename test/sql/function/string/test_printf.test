@@ -144,6 +144,27 @@ SELECT printf('%c', 65)
 ----
 A
 
+# %c writes a single raw byte - it may not produce invalid UTF8
+statement error
+SELECT printf('%c', 255)
+----
+<REGEX>:Invalid Input Error:.*Invalid UTF8 produced by format string.*
+
+statement error
+SELECT lower(printf('%c', 255))
+----
+<REGEX>:Invalid Input Error:.*Invalid UTF8 produced by format string.*
+
+statement error
+SELECT strip_accents(printf('%c', 255))
+----
+<REGEX>:Invalid Input Error:.*Invalid UTF8 produced by format string.*
+
+statement error
+SELECT printf('%c', i) FROM range(200, 300) t(i)
+----
+<REGEX>:Invalid Input Error:.*Invalid UTF8 produced by format string.*
+
 # width trick
 query T
 SELECT printf('%*d', 5, 10)

@@ -119,6 +119,9 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownWindow(std::move(op));
 	case LogicalOperatorType::LOGICAL_UNNEST:
 		return PushdownUnnest(std::move(op));
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		// we can never push filters into a secure view - emit them above the view instead
+		return FinishPushdown(std::move(op));
 	default:
 		return FinishPushdown(std::move(op));
 	}

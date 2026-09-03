@@ -17,6 +17,7 @@
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/query_error_context.hpp"
@@ -81,6 +82,7 @@ class LogicalUpdate;
 class CreateStatement;
 class CatalogEntryRetriever;
 class QueryNode;
+class SQLStatement;
 
 //! Per-capability opt-in for remote catalogs. Each value gates a specific dispatch path or
 //! engine-wide accommodation:
@@ -89,11 +91,14 @@ class QueryNode;
 //!    counts attached remote catalogs).
 //!  - EXECUTE_QUERY_NODE: `RemoteExecute(QueryNode)` is implemented; the RemotePushdownOptimizer
 //!    may push down structured queries to this catalog.
+//!  - EXECUTE_STATEMENT: `RemoteExecute(SQLStatement)` is implemented; the RemotePushdownOptimizer
+//!    may push down non-query statements (DDL) to this catalog.
 //!  - CONNECT: `RemoteExecute(string)` is implemented; the CONNECT chokepoint may route raw SQL
 //!    to this catalog.
 enum class RemoteCapability : uint8_t {
 	IS_REMOTE,
 	EXECUTE_QUERY_NODE,
+	EXECUTE_STATEMENT,
 	CONNECT,
 };
 
@@ -395,10 +400,13 @@ public:
 		return false;
 	}
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node);
+	//! Execute a full (non-query) statement remotely - the returned table ref yields the statement's result
+	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<SQLStatement> statement);
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql);
 	virtual bool SupportsPushdown(const ParsedExpression &expression);
 	virtual bool SupportsPushdown(const TableRef &ref);
 	virtual bool SupportsPushdown(const QueryNode &node);
+	virtual bool SupportsPushdown(const SQLStatement &statement);
 	//! User-facing short identifier for this catalog (e.g. shown in the CLI prompt when CONNECT-ed).
 	//! Defaults to the AttachedDatabase name (the AS alias). Remote catalogs override to expose
 	//! backend-specific information — the URI for quack, host:port/dbname for postgres, etc.
@@ -409,15 +417,17 @@ public:
 		return CatalogLookupBehavior::STANDARD;
 	}
 
-	//! Returns the default schema of the catalog
-	virtual string GetDefaultSchema() const;
+	//! Returns the default schema of the catalog, or nullopt if the catalog has no default schema.
+	//! Catalogs without a default schema are never probed with an implicit schema for unqualified lookups.
+	//! A returned value is always non-empty - an empty Identifier means "unspecified" elsewhere in the catalog.
+	virtual optional<Identifier> GetDefaultSchema() const;
 
 	//! The default table is used for `SELECT * FROM <catalog_name>;`
 	//! FIXME: these should be virtual methods
 	DUCKDB_API bool HasDefaultTable() const;
 	DUCKDB_API void SetDefaultTable(const Identifier &schema, const Identifier &name);
-	DUCKDB_API string GetDefaultTable() const;
-	DUCKDB_API string GetDefaultTableSchema() const;
+	DUCKDB_API Identifier GetDefaultTable() const;
+	DUCKDB_API Identifier GetDefaultTableSchema() const;
 
 	//! Returns the dependency manager of this catalog - if the catalog has any
 	virtual optional_ptr<DependencyManager> GetDependencyManager();
@@ -471,12 +481,12 @@ public:
 
 	virtual void Verify();
 
-	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
+	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const Identifier &name);
 
 	//! Autoload the extension required for `configuration_name` or throw a CatalogException
-	static String AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name);
+	static String AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
-	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name);
+	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const Identifier &entry_name);
 	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
 
 	//! Called when the catalog is detached
@@ -487,8 +497,8 @@ protected:
 	AttachedDatabase &db;
 
 	//! (optionally) a default table to query for `SELECT * FROM <catalog_name>;`
-	string default_table;
-	string default_table_schema;
+	Identifier default_table;
+	Identifier default_table_schema;
 
 public:
 	//! Lookup an entry using TryLookupEntry, throws if entry not found and if_not_found == THROW_EXCEPTION

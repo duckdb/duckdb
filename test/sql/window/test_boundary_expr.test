@@ -143,3 +143,39 @@ ORDER BY id;
 ----
 1	2	2	2
 2	2	2	2
+
+# Issue #24632: dynamic ROWS frame start with NULL PRECEDING
+statement error
+SELECT COUNT(*) OVER (
+  ORDER BY id ROWS BETWEEN off PRECEDING AND CURRENT ROW
+)
+FROM (VALUES (1, NULL::INTEGER)) AS src(id, off);
+----
+Invalid Input Error: Window ROWS PRECEDING expression cannot be NULL
+
+# Issue #24632: dynamic ROWS frame start with NULL FOLLOWING
+statement error
+SELECT COUNT(*) OVER (
+  ORDER BY id ROWS BETWEEN off FOLLOWING AND UNBOUNDED FOLLOWING
+)
+FROM (VALUES (1, NULL::INTEGER)) AS src(id, off);
+----
+Invalid Input Error: Window ROWS FOLLOWING expression cannot be NULL
+
+# Issue #24632: dynamic ROWS frame end with NULL PRECEDING
+statement error
+SELECT COUNT(*) OVER (
+  ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND off PRECEDING
+)
+FROM (VALUES (1, NULL::INTEGER)) AS src(id, off);
+----
+Invalid Input Error: Window ROWS PRECEDING expression cannot be NULL
+
+# Issue #24632: dynamic ROWS frame end with NULL FOLLOWING
+statement error
+SELECT COUNT(*) OVER (
+  ORDER BY id ROWS BETWEEN CURRENT ROW AND off FOLLOWING
+)
+FROM (VALUES (1, NULL::INTEGER)) AS src(id, off);
+----
+Invalid Input Error: Window ROWS FOLLOWING expression cannot be NULL

@@ -148,7 +148,7 @@ struct ICUTableRange {
 
 	template <bool GENERATE_SERIES>
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
+	                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 		auto result = make_uniq<ICURangeBindData>(context, input.inputs);
 
 		return_types.push_back(LogicalType::TIMESTAMP_TZ);
@@ -229,6 +229,7 @@ struct ICUTableRange {
 		                             nullptr, Bind<false>, nullptr, RangeDateTimeLocalInit);
 		range_function.in_out_function = ICUTableRangeFunction<false>;
 		range_function.cardinality = Cardinality;
+		range_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 		range.AddFunction(range_function);
 
 		loader.RegisterFunction(range);

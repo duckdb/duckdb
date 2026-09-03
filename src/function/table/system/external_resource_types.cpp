@@ -22,7 +22,7 @@ struct RegisterExternalResourceTypeState : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> RegisterExternalResourceTypeBind(ClientContext &context, TableFunctionBindInput &input,
                                                                  vector<LogicalType> &return_types,
-                                                                 vector<string> &names) {
+                                                                 vector<Identifier> &names) {
 	auto result = make_uniq<RegisterExternalResourceTypeBindData>();
 	auto &type = result->type;
 
@@ -91,7 +91,8 @@ struct ExternalResourceTypesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> ExternalResourceTypesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                          vector<LogicalType> &return_types, vector<string> &names) {
+                                                          vector<LogicalType> &return_types,
+                                                          vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("kind");

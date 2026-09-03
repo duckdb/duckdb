@@ -1423,6 +1423,14 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 
 } // namespace
 
+bool CreateSortKeyHelpers::IsNullSortKey(const_data_ptr_t data, OrderByNullType null_order) {
+	auto null_byte = SortKeyVectorData::NULL_FIRST_BYTE;
+	if (null_order == OrderByNullType::NULLS_LAST) {
+		null_byte = SortKeyVectorData::NULL_LAST_BYTE;
+	}
+	return data[0] == null_byte;
+}
+
 idx_t CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
                                           OrderModifiers modifiers) {
 	DecodeSortKeyVectorData sort_key_data(result.GetType(), modifiers);
