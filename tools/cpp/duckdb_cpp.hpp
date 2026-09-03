@@ -32,6 +32,7 @@
 #include <string_view>
 #include <type_traits>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <tuple>
 #include <vector>
