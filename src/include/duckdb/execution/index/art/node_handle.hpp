@@ -78,13 +78,13 @@ public:
 		return slot.get();
 	}
 
-	//! Rebind to memory valid without this object owning a pin, dropping the previous pin if there was one.
+	//! Rebind without a pin; the caller must keep slot_p valid until the next Rebind or destruction.
 	void Rebind(NodePtr &slot_p) {
 		slot = slot_p;
 		pin.reset();
 	}
 
-	//! Rebind to a slot protected by pin_p, dropping the previous pin if there was one.
+	//! Rebind and own pin_p, which keeps slot_p valid until the next Rebind or destruction.
 	void Rebind(NodePtr &slot_p, NodeHandle &&pin_p) {
 		slot = slot_p;
 		pin.emplace(std::move(pin_p));
