@@ -1039,21 +1039,29 @@ typedef struct {
 	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_str sql, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_set_user_data)
 	(duckdb_v2_replacement_scan_handle scan, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_arrow_converter_array_to_chunk)
-	(duckdb_v2_context_handle context, struct ArrowArray *array, duckdb_v2_arrow_converter_handle converter,
-	 duckdb_v2_data_chunk_handle *out_chunk, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_arrow_converter_create)
-	(duckdb_v2_context_handle context, struct ArrowSchema *schema, duckdb_v2_arrow_converter_handle *out_converter,
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_exporter_append)
+	(duckdb_v2_arrow_exporter_handle exporter, duckdb_v2_data_chunk_handle *chunk, bool consume, bool flush,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR (*duckdb_v2_arrow_converter_destroy)(duckdb_v2_arrow_converter_handle *converter);
-	DUCKDB_V2_ERROR(*duckdb_v2_arrow_converter_get_schema)
-	(duckdb_v2_arrow_converter_handle converter, duckdb_v2_schema_handle *out_schema, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_to_arrow_array)
-	(duckdb_v2_context_handle context, duckdb_v2_data_chunk_handle chunk, struct ArrowArray *out_array,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_logical_types_to_arrow_schema)
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_exporter_create)
 	(duckdb_v2_context_handle context, const duckdb_v2_logical_type_handle *types, const duckdb_v2_str *names,
-	 idx_t count, struct ArrowSchema *out_schema, duckdb_v2_error_info_handle *err);
+	 idx_t count, idx_t batch_size, duckdb_v2_arrow_exporter_handle *out_exporter, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_arrow_exporter_destroy)(duckdb_v2_arrow_exporter_handle *exporter);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_exporter_get_schema)
+	(duckdb_v2_arrow_exporter_handle exporter, struct ArrowSchema *out_schema, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_exporter_next_array)
+	(duckdb_v2_arrow_exporter_handle exporter, struct ArrowArray *out_array, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_importer_append)
+	(duckdb_v2_arrow_importer_handle importer, struct ArrowArray *array, bool consume, bool flush,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_importer_create)
+	(duckdb_v2_context_handle context, struct ArrowSchema *schema, idx_t batch_size,
+	 duckdb_v2_arrow_importer_handle *out_importer, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_arrow_importer_destroy)(duckdb_v2_arrow_importer_handle *importer);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_importer_get_schema)
+	(duckdb_v2_arrow_importer_handle importer, duckdb_v2_schema_handle *out_schema, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_importer_next_chunk)
+	(duckdb_v2_arrow_importer_handle importer, duckdb_v2_data_chunk_handle *out_chunk,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_prepared_statement_create)
 	(duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, bool require_cacheable,
 	 duckdb_v2_prepared_statement_handle *out_prepared, duckdb_v2_error_info_handle *err);
@@ -1537,12 +1545,16 @@ typedef struct {
 #define duckdb_v2_replacement_scan_set_function_name     duckdb_ext_api.duckdb_v2_replacement_scan_set_function_name
 #define duckdb_v2_replacement_scan_set_subquery          duckdb_ext_api.duckdb_v2_replacement_scan_set_subquery
 #define duckdb_v2_replacement_scan_set_user_data         duckdb_ext_api.duckdb_v2_replacement_scan_set_user_data
-#define duckdb_v2_arrow_converter_array_to_chunk         duckdb_ext_api.duckdb_v2_arrow_converter_array_to_chunk
-#define duckdb_v2_arrow_converter_create                 duckdb_ext_api.duckdb_v2_arrow_converter_create
-#define duckdb_v2_arrow_converter_destroy                duckdb_ext_api.duckdb_v2_arrow_converter_destroy
-#define duckdb_v2_arrow_converter_get_schema             duckdb_ext_api.duckdb_v2_arrow_converter_get_schema
-#define duckdb_v2_data_chunk_to_arrow_array              duckdb_ext_api.duckdb_v2_data_chunk_to_arrow_array
-#define duckdb_v2_logical_types_to_arrow_schema          duckdb_ext_api.duckdb_v2_logical_types_to_arrow_schema
+#define duckdb_v2_arrow_exporter_append                  duckdb_ext_api.duckdb_v2_arrow_exporter_append
+#define duckdb_v2_arrow_exporter_create                  duckdb_ext_api.duckdb_v2_arrow_exporter_create
+#define duckdb_v2_arrow_exporter_destroy                 duckdb_ext_api.duckdb_v2_arrow_exporter_destroy
+#define duckdb_v2_arrow_exporter_get_schema              duckdb_ext_api.duckdb_v2_arrow_exporter_get_schema
+#define duckdb_v2_arrow_exporter_next_array              duckdb_ext_api.duckdb_v2_arrow_exporter_next_array
+#define duckdb_v2_arrow_importer_append                  duckdb_ext_api.duckdb_v2_arrow_importer_append
+#define duckdb_v2_arrow_importer_create                  duckdb_ext_api.duckdb_v2_arrow_importer_create
+#define duckdb_v2_arrow_importer_destroy                 duckdb_ext_api.duckdb_v2_arrow_importer_destroy
+#define duckdb_v2_arrow_importer_get_schema              duckdb_ext_api.duckdb_v2_arrow_importer_get_schema
+#define duckdb_v2_arrow_importer_next_chunk              duckdb_ext_api.duckdb_v2_arrow_importer_next_chunk
 #define duckdb_v2_prepared_statement_create              duckdb_ext_api.duckdb_v2_prepared_statement_create
 #define duckdb_v2_prepared_statement_destroy             duckdb_ext_api.duckdb_v2_prepared_statement_destroy
 #define duckdb_v2_prepared_statement_execute             duckdb_ext_api.duckdb_v2_prepared_statement_execute

@@ -115,8 +115,12 @@ struct HandleTraits<QueryResult> {
 	using handle = duckdb_v2_result_handle;
 };
 template <>
-struct HandleTraits<ArrowConverter> {
-	using handle = duckdb_v2_arrow_converter_handle;
+struct HandleTraits<ArrowImporter> {
+	using handle = duckdb_v2_arrow_importer_handle;
+};
+template <>
+struct HandleTraits<ArrowExporter> {
+	using handle = duckdb_v2_arrow_exporter_handle;
 };
 template <>
 struct HandleTraits<FunctionSignature> {
@@ -1030,18 +1034,6 @@ auto Schema::GetFieldType(idx_t index) const -> LogicalType {
 	duckdb_v2_logical_type_handle owned = nullptr;
 	CheckedAPICall(duckdb_v2_logical_type_copy, borrowed, &owned);
 	return detail::Factory::Make<LogicalType>(owned);
-}
-
-auto Schema::ToArrowSchema(const Context &context, ArrowSchema &out) const -> void {
-	// The C converter takes parallel name/type arrays. get_field borrows both, and they stay
-	// valid for the whole of this call, so nothing needs copying.
-	const auto count = GetFieldCount();
-	std::vector<duckdb_v2_logical_type_handle> types(count, nullptr);
-	std::vector<duckdb_v2_str> names(count, duckdb_v2_str {nullptr, 0});
-	for (idx_t i = 0; i < count; i++) {
-		CheckedAPICall(duckdb_v2_schema_get_field, handle(), i, &names[i], &types[i]);
-	}
-	CheckedAPICall(duckdb_v2_logical_types_to_arrow_schema, context.handle(), types.data(), names.data(), count, &out);
 }
 
 auto Connection::Bind(const SqlStatement &statement) const -> Signature {
@@ -2044,10 +2036,6 @@ auto DataChunk::Copy(const Context &ctx) const -> DataChunk {
 	return detail::Factory::Make<DataChunk>(copy, true);
 }
 
-auto DataChunk::ToArrowArray(const Context &context, ArrowArray &out) const -> void {
-	CheckedAPICall(duckdb_v2_data_chunk_to_arrow_array, context.handle(), handle(), &out);
-}
-
 auto DataChunk::GetRowCount() const -> idx_t {
 	idx_t count = 0;
 	CheckedAPICall(duckdb_v2_data_chunk_get_size, handle(), &count);
@@ -2324,30 +2312,94 @@ auto QueryResult::ToArrowStream(idx_t batch_size) -> ArrowStream {
 // Arrow
 //----------------------------------------------------------------------------------------------------------------------
 
-ArrowConverter::ArrowConverter(void *impl) : detail::Handle<ArrowConverter>(impl) {
+ArrowImporter::ArrowImporter(void *impl) : detail::Handle<ArrowImporter>(impl) {
 }
 
-ArrowConverter::ArrowConverter(const Context &context, ArrowSchema &schema) : detail::Handle<ArrowConverter>(nullptr) {
-	duckdb_v2_arrow_converter_handle converter = nullptr;
-	CheckedAPICall(duckdb_v2_arrow_converter_create, context.handle(), &schema, &converter);
-	impl = converter;
+ArrowImporter::ArrowImporter(const Context &context, ArrowSchema &schema, idx_t batch_size)
+    : detail::Handle<ArrowImporter>(nullptr) {
+	duckdb_v2_arrow_importer_handle importer = nullptr;
+	CheckedAPICall(duckdb_v2_arrow_importer_create, context.handle(), &schema, batch_size, &importer);
+	impl = importer;
 }
 
-ArrowConverter::~ArrowConverter() {
+ArrowImporter::~ArrowImporter() {
 	auto _h = handle();
-	duckdb_v2_arrow_converter_destroy(&_h);
+	duckdb_v2_arrow_importer_destroy(&_h);
 }
 
-auto ArrowConverter::ArrayToChunk(const Context &context, ArrowArray &array) const -> DataChunk {
+auto ArrowImporter::GetSchema() const -> Schema {
+	duckdb_v2_schema_handle schema = nullptr;
+	CheckedAPICall(duckdb_v2_arrow_importer_get_schema, handle(), &schema);
+	return detail::Factory::Make<Schema>(schema);
+}
+
+auto ArrowImporter::Append(ArrowArray &array, bool consume, bool flush) -> void {
+	CheckedAPICall(duckdb_v2_arrow_importer_append, handle(), &array, consume, flush);
+}
+
+auto ArrowImporter::Flush() -> void {
+	CheckedAPICall(duckdb_v2_arrow_importer_append, handle(), static_cast<ArrowArray *>(nullptr), false, true);
+}
+
+auto ArrowImporter::NextChunk() -> DataChunk {
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	CheckedAPICall(duckdb_v2_arrow_converter_array_to_chunk, context.handle(), &array, handle(), &chunk);
+	CheckedAPICall(duckdb_v2_arrow_importer_next_chunk, handle(), &chunk);
+	// A null handle, meaning the array is drained, becomes an empty DataChunk.
 	return detail::Factory::Make<DataChunk>(chunk, true);
 }
 
-auto ArrowConverter::GetSchema() const -> Schema {
-	duckdb_v2_schema_handle schema = nullptr;
-	CheckedAPICall(duckdb_v2_arrow_converter_get_schema, handle(), &schema);
-	return detail::Factory::Make<Schema>(schema);
+ArrowExporter::ArrowExporter(void *impl) : detail::Handle<ArrowExporter>(impl) {
+}
+
+ArrowExporter::ArrowExporter(const Context &context, const std::vector<LogicalType> &types,
+                             const std::vector<std::string> &names, idx_t batch_size)
+    : detail::Handle<ArrowExporter>(nullptr) {
+	// LogicalType is a Handle with a vtable, so its storage is not layout-compatible with a raw
+	// handle array; extract into contiguous buffers.
+	std::vector<duckdb_v2_logical_type_handle> type_handles;
+	std::vector<duckdb_v2_str> name_views;
+	type_handles.reserve(types.size());
+	name_views.reserve(names.size());
+	for (const auto &type : types) {
+		type_handles.push_back(type.handle());
+	}
+	for (const auto &name : names) {
+		name_views.push_back(ToStr(name));
+	}
+	if (type_handles.size() != name_views.size()) {
+		throw InvalidInputException("ArrowExporter: one name is required per column type");
+	}
+	duckdb_v2_arrow_exporter_handle exporter = nullptr;
+	CheckedAPICall(duckdb_v2_arrow_exporter_create, context.handle(),
+	               type_handles.empty() ? nullptr : type_handles.data(),
+	               name_views.empty() ? nullptr : name_views.data(), static_cast<idx_t>(type_handles.size()),
+	               batch_size, &exporter);
+	impl = exporter;
+}
+
+ArrowExporter::~ArrowExporter() {
+	auto _h = handle();
+	duckdb_v2_arrow_exporter_destroy(&_h);
+}
+
+auto ArrowExporter::GetSchema(ArrowSchema &out) const -> void {
+	CheckedAPICall(duckdb_v2_arrow_exporter_get_schema, handle(), &out);
+}
+
+auto ArrowExporter::Append(const DataChunk &chunk, bool flush) -> void {
+	// consume is false, so the C call leaves the chunk alone; the copy of the handle only gives it a slot to read.
+	auto raw = chunk.handle();
+	CheckedAPICall(duckdb_v2_arrow_exporter_append, handle(), &raw, false, flush);
+}
+
+auto ArrowExporter::Flush() -> void {
+	CheckedAPICall(duckdb_v2_arrow_exporter_append, handle(), static_cast<duckdb_v2_data_chunk_handle *>(nullptr),
+	               false, true);
+}
+
+auto ArrowExporter::NextArray(ArrowArray &out) -> bool {
+	CheckedAPICall(duckdb_v2_arrow_exporter_next_array, handle(), &out);
+	return out.release != nullptr;
 }
 
 ArrowStream::~ArrowStream() {

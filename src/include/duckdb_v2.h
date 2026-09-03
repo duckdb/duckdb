@@ -4697,15 +4697,31 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy(duckdb_v2_aggr
 /* --- Types for arrow --- */
 
 /*!
- * An owned, resolved interpretation of an ArrowSchema: the DuckDB logical type of every column plus the per-column
- * Arrow type information needed to import an array. Built once from an ArrowSchema with
- * `duckdb_v2_arrow_converter_create()` and reused across many arrays by `duckdb_v2_arrow_converter_array_to_chunk()`,
- * so a table function can resolve the schema at bind time and pay nothing per chunk. Read the resolved names and types
- * back with `duckdb_v2_arrow_converter_get_schema()`, and destroy with `duckdb_v2_arrow_converter_destroy()`.
+ * Converts Arrow arrays into DuckDB data chunks, against one resolved ArrowSchema. Create it with
+ * `duckdb_v2_arrow_importer_create()`, which resolves every column's DuckDB type once, so the same importer serves any
+ * number of arrays of that shape. `duckdb_v2_arrow_importer_get_schema()` reports the resolved DuckDB schema.
+ * `duckdb_v2_arrow_importer_append()` takes an array, `duckdb_v2_arrow_importer_next_chunk()` produces chunks from it,
+ * and `duckdb_v2_arrow_importer_destroy()` frees the importer.
+ *
+ * The importer borrows the context it was created with and must not outlive it. One array is in flight at a time, and
+ * an importer must not be used from two threads at once.
  */
-typedef struct _duckdb_v2_arrow_converter {
+typedef struct _duckdb_v2_arrow_importer {
 	void *internal_ptr;
-} * duckdb_v2_arrow_converter_handle;
+} * duckdb_v2_arrow_importer_handle;
+
+/*!
+ * Converts DuckDB data chunks into Arrow arrays, for one fixed list of columns. Create it with
+ * `duckdb_v2_arrow_exporter_create()`, which captures the session's Arrow settings and resolves the extension types
+ * once. `duckdb_v2_arrow_exporter_get_schema()` reports the Arrow schema. `duckdb_v2_arrow_exporter_append()` takes a
+ * chunk, `duckdb_v2_arrow_exporter_next_array()` produces arrays from it, and `duckdb_v2_arrow_exporter_destroy()`
+ * frees the exporter.
+ *
+ * An exporter must not be used from two threads at once.
+ */
+typedef struct _duckdb_v2_arrow_exporter {
+	void *internal_ptr;
+} * duckdb_v2_arrow_exporter_handle;
 
 /* --- Constants for arrow --- */
 
@@ -4716,33 +4732,31 @@ typedef struct _duckdb_v2_arrow_converter {
 /*!
  * Exports a result as a lazy ArrowArrayStream. Consuming.
  *
- * Takes the result by transfer, setting the slot to NULL, and fills the caller-allocated `out_stream`. The stream owns
- * the result from then on: releasing it does not drain anything, but it does close the query and free the connection's
- * live-result slot exactly as `duckdb_v2_result_destroy()` would, so the connection can run its next query. Release it
- * by calling `out_stream->release(out_stream)`.
+ * Takes ownership of the result, sets the slot to NULL, and fills the caller-allocated `out_stream`. The stream owns
+ * the result from then on. Releasing the stream, with `out_stream->release(out_stream)`, does not drain the result, but
+ * closes the query and frees the connection's live-result slot as `duckdb_v2_result_destroy()` would, so the connection
+ * can run its next query.
  *
- * The stream is lazy. Its `get_next` drives the result, stepping past waiting states internally until a batch is ready,
- * and coalesces DuckDB chunks into one Arrow array of up to `batch_size` rows. Its `get_schema` returns the Arrow
- * schema and never touches the catalog, because both the schema and the extension type map are built and cached while
- * this call still holds the query's transaction. That caching is a correctness requirement rather than an optimization:
- * building the schema can run extension populate-schema callbacks and read ENUM dictionaries, neither of which is
- * available once the transaction is gone.
+ * The stream's `get_next` drives the result, waiting internally until a batch is ready, and gathers DuckDB chunks into
+ * one Arrow array of up to `batch_size` rows. The Arrow schema and the extension type map are built and cached here,
+ * while the query's transaction is still active, because building them can run extension populate-schema callbacks and
+ * read ENUM dictionaries. `get_schema` returns a copy of the cached schema and never touches the catalog.
  *
- * Passing a result that has already yielded some chunks is allowed and produces a stream over what remains.
+ * A result that has already yielded some chunks is allowed and produces a stream over the remaining rows.
  *
- * A statement that expanded into a group whose row-producing fragment has not started yet is stepped far enough here
- * for its schema to be cached, which can block briefly; no rows are lost, since none can be produced before that
+ * If the statement expanded into a group whose row-producing fragment has not started yet, this call steps the result
+ * far enough to cache the schema, which may block briefly. No rows are lost, since none are produced before that
  * fragment is prepared. For an ordinary statement nothing executes here.
  *
  * The result is consumed on every path that reaches the engine, including failures. Only a null-argument rejection
- * leaves it intact, and `out_stream` is untouched unless the call succeeds.
+ * leaves it intact. `out_stream` is untouched unless the call succeeds.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param result The result to export. Consumed and set to NULL, except when the call rejects a null argument.
- * @param batch_size Target rows per Arrow array. Pass 0 for the default of 131072, which is 64 vectors in a default
- * build and matches pyarrow's dataset scanner.
+ * @param batch_size Maximum rows per Arrow array. Pass 0 for the default of 131072, which is 64 vectors in a default
+ * build.
  * @param out_stream Caller-allocated stream the library fills. Release it with `out_stream->release(out_stream)`.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
@@ -4753,156 +4767,272 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_to_arrow_stream(duckdb_v2_result_h
                                                               duckdb_v2_error_info_handle *err);
 
 /*!
- * Converts a list of column types and names into an Arrow schema.
+ * Resolves an Arrow schema into a reusable importer.
  *
- * Fills the caller-allocated `out_schema` using the Arrow options carried by `context`. The caller owns the result and
- * releases it with `out_schema->release(out_schema)`.
+ * Works out every column's DuckDB logical type and the Arrow type information the conversion needs, once, so any number
+ * of arrays of that shape can be imported without re-reading the schema. `schema` is read, not consumed: the caller
+ * keeps ownership and still releases it.
  *
- * `types` and `names` are parallel arrays of `count` entries, and may be NULL only when `count` is 0. Building the
- * schema can read the catalog -- extension populate-schema callbacks, ENUM dictionaries -- so `context` must have an
- * active transaction, which a callback context does.
+ * `batch_size` caps the rows per produced chunk. A long array is split across several chunks. Rows left over that do
+ * not fill a batch are held back and joined with the next array, unless the append asked to flush. Pass 0 for no
+ * maximum: each array becomes one chunk, however long it is.
  *
- * history:
- * - stable: v2.0.0
- *
- * @param context The context whose Arrow options and transaction drive the conversion.
- * @param types An array of `count` column types. May be NULL only when `count` is 0.
- * @param names An array of `count` column names, parallel to `types`. May be NULL only when `count` is 0.
- * @param count The number of columns, being the length of both `types` and `names`.
- * @param out_schema Caller-allocated schema the library fills. Release it with `out_schema->release(out_schema)`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_types_to_arrow_schema(duckdb_v2_context_handle context,
-                                                                     const duckdb_v2_logical_type_handle *types,
-                                                                     const duckdb_v2_str *names, idx_t count,
-                                                                     struct ArrowSchema *out_schema,
-                                                                     duckdb_v2_error_info_handle *err);
-
-/*!
- * Converts a data chunk into an Arrow array.
- *
- * Fills the caller-allocated `out_array`, using the Arrow options and extension type casts resolved from `context`. The
- * caller owns the result and releases it with `out_array->release(out_array)`. The chunk is borrowed, not consumed, and
- * stays valid afterwards.
- *
- * The Arrow schema for the array comes from `duckdb_v2_logical_types_to_arrow_schema()`, given the chunk's column
- * types; this call produces data only.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param context The context whose Arrow options and transaction drive the conversion.
- * @param chunk The chunk to convert. Borrowed; not consumed.
- * @param out_array Caller-allocated array the library fills. Release it with `out_array->release(out_array)`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_to_arrow_array(duckdb_v2_context_handle context,
-                                                                 duckdb_v2_data_chunk_handle chunk,
-                                                                 struct ArrowArray *out_array,
-                                                                 duckdb_v2_error_info_handle *err);
-
-/*!
- * Resolves an Arrow schema into a reusable converter.
- *
- * Interprets `schema` against `context`, working out each column's DuckDB logical type and the Arrow type information
- * an import needs, and returns a converter that `duckdb_v2_arrow_converter_array_to_chunk()` reuses across every array
- * of that shape. `schema` is read, not consumed: the caller keeps ownership and still releases it.
- *
- * Resolving reads the catalog for extension types, so `context` must have an active transaction. The converter itself
- * captures no context: build it under a bind-time context and use it at execution time under another.
- *
- * `*out_converter` is set to NULL on failure.
+ * Resolving reads the catalog for extension types, so `context` must have an active transaction. The importer keeps
+ * using that context for every conversion and must not outlive it. Within one connection the context is the same
+ * throughout, so an importer created in a bind callback is usable from the matching exec callback. `*out_importer` is
+ * set to NULL on failure.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param context The context used to resolve the Arrow types, extension types included.
  * @param schema The schema to resolve. Read, not consumed; the caller keeps ownership.
- * @param out_converter On success, receives the new converter. Owned by the caller; destroy via
- * `duckdb_v2_arrow_converter_destroy()`.
+ * @param batch_size Maximum rows per produced chunk, or 0 for no maximum.
+ * @param out_importer On success, receives the new importer. Owned by the caller; destroy via
+ * `duckdb_v2_arrow_importer_destroy()`.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_converter_create(duckdb_v2_context_handle context,
-                                                              struct ArrowSchema *schema,
-                                                              duckdb_v2_arrow_converter_handle *out_converter,
-                                                              duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_create(duckdb_v2_context_handle context,
+                                                             struct ArrowSchema *schema, idx_t batch_size,
+                                                             duckdb_v2_arrow_importer_handle *out_importer,
+                                                             duckdb_v2_error_info_handle *err);
 
 /*!
- * Converts an Arrow array into a data chunk, interpreting it through a converter. Consuming.
+ * Returns the resolved DuckDB schema.
  *
- * The chunk adopts the array's buffers zero-copy and `array->release` is set to NULL, so the caller must not release
- * `array` afterwards; destroying the chunk releases the Arrow data. Ownership transfers even on the failure paths that
- * have already taken it, so a caller must never release an array it has passed here.
+ * Writes an owned schema handle with the DuckDB name and logical type of every column the importer resolved. This is
+ * how a caller learns the DuckDB shape of an ArrowSchema, to declare a table function's result columns for instance,
+ * without reimplementing the mapping from Arrow format strings to logical types.
  *
- * The chunk is sized to the array's length, which may exceed the engine's vector size: that is the size of a chunk
- * flowing through a pipeline, not a cap on a chunk that stands alone.
- *
- * An array whose shape disagrees with the converter -- a different child count, a child length that does not match the
- * array's, a null or already-released child -- is rejected with `ERROR_INPUT_INVALID` rather than read. Only the
- * default, dictionary-encoded and run-end-encoded layouts are supported; any other reports
- * `ERROR_QUERY_NOT_IMPLEMENTED`. `*out_chunk` is set to NULL on failure.
+ * The fields were resolved at creation, so this reads no catalog and needs no transaction. `*out_schema` is set to NULL
+ * on failure.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param context The context used during the conversion.
- * @param array The array to convert. Its data is adopted by the chunk and its `release` is set to NULL.
- * @param converter The converter describing the array, from `duckdb_v2_arrow_converter_create()`.
- * @param out_chunk On success, receives the new chunk. Owned by the caller; destroy via
- * `duckdb_v2_data_chunk_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_converter_array_to_chunk(duckdb_v2_context_handle context,
-                                                                      struct ArrowArray *array,
-                                                                      duckdb_v2_arrow_converter_handle converter,
-                                                                      duckdb_v2_data_chunk_handle *out_chunk,
-                                                                      duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the converter's resolved columns as a schema.
- *
- * Writes an owned schema handle carrying the DuckDB name and logical type of every column the converter resolved. This
- * is how a caller learns the DuckDB shape of an arbitrary ArrowSchema, to declare a table function's result columns for
- * instance: mapping Arrow format strings onto logical types is engine knowledge, not something a binding should
- * reimplement.
- *
- * The fields are copied from what was resolved at creation, so this reads no catalog and needs no transaction.
- * `*out_schema` is set to NULL on failure.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param converter The converter to read.
+ * @param importer The importer to read.
  * @param out_schema On success, receives an owned schema. Destroy via `duckdb_v2_schema_destroy()`.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_converter_get_schema(duckdb_v2_arrow_converter_handle converter,
-                                                                  duckdb_v2_schema_handle *out_schema,
-                                                                  duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_get_schema(duckdb_v2_arrow_importer_handle importer,
+                                                                 duckdb_v2_schema_handle *out_schema,
+                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
- * Destroys an Arrow converter.
+ * Gives the importer one array to convert.
  *
- * Null-safe: passing NULL, or a slot already set to NULL, is a no-op. Chunks already produced through it are
- * independent of the converter and stay valid. On success the slot is set to NULL.
+ * Take the chunks with `duckdb_v2_arrow_importer_next_chunk()` until that returns NULL. Appending while the previous
+ * array still has rows left is rejected with `ERROR_INPUT_INVALID`. An array whose shape does not match the resolved
+ * schema -- a different child count, a child whose length differs from the array's, a null or already-released child --
+ * is rejected the same way, before anything is read.
+ *
+ * `flush` marks the end of the input: rows that do not fill a batch then come out as a final short chunk instead of
+ * being held back for the next array. Pass NULL for `array` with `flush` set to release the held rows without supplying
+ * more input.
+ *
+ * `consume` decides what happens to the caller's array.
+ *
+ * When true, the importer takes over the array and sets its `release` to NULL; the caller must not release it
+ * afterwards. The produced chunks reference the Arrow buffers directly, without copying, and keep them alive, so the
+ * chunks stay valid after the importer is destroyed. Prefer this path.
+ *
+ * When false, the caller keeps the array and must keep it valid until the drain finishes. The produced chunks are
+ * copies, so they do not depend on the array, at the cost of one copy per chunk.
+ *
+ * Either way, a chunk that joins rows held back from the previous array is a copy, since it cannot reference two
+ * arrays.
+ *
+ * Only the default, dictionary-encoded and run-end-encoded Arrow layouts are supported. Any other layout reports
+ * `ERROR_QUERY_NOT_IMPLEMENTED` when the column is converted.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param converter The converter to destroy.
+ * @param importer The importer to feed.
+ * @param array The array to convert. Its `release` is set to NULL when `consume` is true.
+ * @param consume True to hand the array over for a zero-copy import; false to keep it, in which case every produced
+ * chunk is a copy.
+ * @param flush True to mark the end of the input, releasing held rows as a final short chunk. Pass NULL for `array`
+ * with this set to flush without supplying more input.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_converter_destroy(duckdb_v2_arrow_converter_handle *converter);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_append(duckdb_v2_arrow_importer_handle importer,
+                                                             struct ArrowArray *array, bool consume, bool flush,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Produces the next chunk of the appended array, or NULL once the array is drained.
+ *
+ * Call it in a loop until `*out_chunk` is NULL. An importer with no array appended also returns NULL. Each chunk holds
+ * at most the importer's `batch_size` rows, or the whole array when that is 0. A chunk may start with rows held back
+ * from the previous array, and rows that do not fill a batch are held back in turn unless the append asked to flush. So
+ * NULL means the array has been read, not that all of its rows have come out.
+ *
+ * The conversion runs under the context the importer was created with, which must still be alive. `*out_chunk` is set
+ * to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param importer The importer to drain.
+ * @param out_chunk On success, receives the next chunk, or NULL once the array is drained. Destroy via
+ * `duckdb_v2_data_chunk_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_next_chunk(duckdb_v2_arrow_importer_handle importer,
+                                                                 duckdb_v2_data_chunk_handle *out_chunk,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys an importer.
+ *
+ * Null-safe: passing NULL, or a slot already set to NULL, is a no-op. Chunks already produced stay valid, including the
+ * zero-copy ones, which keep the Arrow buffers alive themselves. An array appended with `consume` true and not fully
+ * drained is released here. Rows held back for a next array are dropped. On success the slot is set to NULL.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param importer The importer to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_destroy(duckdb_v2_arrow_importer_handle *importer);
+
+/*!
+ * Creates an exporter for one fixed list of columns.
+ *
+ * Resolves the extension types and captures the session's Arrow settings, so every array this exporter produces matches
+ * the schema `duckdb_v2_arrow_exporter_get_schema()` reports, even if a setting changes afterwards.
+ *
+ * `batch_size` caps the rows per produced array. A long chunk is split across several arrays. Rows left over that do
+ * not fill a batch are held back and joined with the next chunk, unless the append asked to flush. Pass 0 for no
+ * maximum: each chunk becomes one array, however long it is.
+ *
+ * `types` and `names` are parallel arrays of `count` entries, borrowed and copied; they may be NULL only when `count`
+ * is 0. Resolving reads the catalog, so `context` must have an active transaction. `*out_exporter` is set to NULL on
+ * failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param context The context whose Arrow settings are captured and whose transaction resolves the types.
+ * @param types An array of `count` column types. May be NULL only when `count` is 0.
+ * @param names An array of `count` column names, parallel to `types`. May be NULL only when `count` is 0.
+ * @param count The number of columns, being the length of both `types` and `names`.
+ * @param batch_size Maximum rows per produced array, or 0 for no maximum.
+ * @param out_exporter On success, receives the new exporter. Owned by the caller; destroy via
+ * `duckdb_v2_arrow_exporter_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_create(duckdb_v2_context_handle context,
+                                                             const duckdb_v2_logical_type_handle *types,
+                                                             const duckdb_v2_str *names, idx_t count, idx_t batch_size,
+                                                             duckdb_v2_arrow_exporter_handle *out_exporter,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the Arrow schema of the arrays this exporter produces.
+ *
+ * Fills the caller-allocated `out_schema`. The caller owns the result and releases it with
+ * `out_schema->release(out_schema)`. Callable at any point, and always returns the same schema, since it is built from
+ * the settings captured at creation.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param exporter The exporter to read.
+ * @param out_schema Caller-allocated schema the library fills. Release it with `out_schema->release(out_schema)`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_get_schema(duckdb_v2_arrow_exporter_handle exporter,
+                                                                 struct ArrowSchema *out_schema,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Gives the exporter one chunk to convert.
+ *
+ * The chunk is converted in full before this returns. The conversion copies into freshly allocated Arrow buffers, so
+ * nothing of the caller's is retained. Every array completed by this chunk becomes available from
+ * `duckdb_v2_arrow_exporter_next_array()`; rows that do not complete a batch are held back and finished by the next
+ * chunk. Completed arrays queue up, so appending again before they are taken is allowed.
+ *
+ * `flush` marks the end of the input: the held rows are then finished as a final short array. Pass NULL for `chunk`
+ * with `flush` set to release the held rows without supplying more input.
+ *
+ * The chunk's types must match the ones the exporter was created with, or the call is rejected with
+ * `ERROR_INPUT_INVALID` before anything is read.
+ *
+ * `consume` decides only what happens to the caller's handle, since the data is copied either way. When true the chunk
+ * is destroyed and the slot set to NULL, saving a `duckdb_v2_data_chunk_destroy()` for a chunk the caller owns. When
+ * false the chunk is left untouched, which is what a chunk borrowed from a callback needs, such as the output chunk of
+ * a table function's exec callback, which the caller does not own and must not destroy.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param exporter The exporter to feed.
+ * @param chunk The chunk to convert. Destroyed and set to NULL only when `consume` is true.
+ * @param consume True to hand the chunk over, destroying it; false to leave the caller's handle untouched.
+ * @param flush True to mark the end of the input, releasing the held rows as a final short array. Pass NULL for `chunk`
+ * with this set to flush without supplying more input.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_append(duckdb_v2_arrow_exporter_handle exporter,
+                                                             duckdb_v2_data_chunk_handle *chunk, bool consume,
+                                                             bool flush, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Takes the next completed array, or reports that none is ready.
+ *
+ * Call it in a loop after every `duckdb_v2_arrow_exporter_append()` until `out_array->release` is NULL, which is how
+ * the Arrow C Data Interface signals "no array" and what a stream's `get_next` does at end of input. Rows held back
+ * towards an unfinished batch are not an array yet; they come out after a further append or a flush.
+ *
+ * Each array is owned by the caller and released with `out_array->release(out_array)`, independently of the exporter
+ * and of every other array.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param exporter The exporter to drain.
+ * @param out_array Caller-allocated array the library fills. Left released -- `release` NULL -- when none is ready.
+ * Release a filled one with `out_array->release(out_array)`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_next_array(duckdb_v2_arrow_exporter_handle exporter,
+                                                                 struct ArrowArray *out_array,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys an exporter.
+ *
+ * Null-safe: passing NULL, or a slot already set to NULL, is a no-op. Arrays already taken stay valid. Arrays still
+ * queued inside are released here, and rows held back towards an unfinished batch are dropped. On success the slot is
+ * set to NULL.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param exporter The exporter to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_destroy(duckdb_v2_arrow_exporter_handle *exporter);
 
 /* --- Struct definitions for arrow --- */
 

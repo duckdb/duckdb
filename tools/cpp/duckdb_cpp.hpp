@@ -40,9 +40,8 @@
 #include <cstring>
 #include <limits>
 
-// Arrow C Data Interface structs, defined by `duckdb_v2.h` or by the consumer's own Arrow headers, whichever is
-// included first -- both use the same ARROW_C_DATA_INTERFACE / ARROW_C_STREAM_INTERFACE guards, and the layouts are
-// byte-identical by spec. Forward declared so this header carries no Arrow definition of its own.
+// Arrow C Data Interface structs. Forward declared only: the definitions come from `duckdb_v2.h` or from the
+// consumer's own Arrow headers, under the standard ARROW_C_DATA_INTERFACE / ARROW_C_STREAM_INTERFACE guards.
 struct ArrowSchema;
 struct ArrowArray;
 struct ArrowArrayStream;
@@ -75,7 +74,8 @@ class ColumnDataCollection;
 class QueryResult;
 class PreparedStatement;
 class ArrowStream;
-class ArrowConverter;
+class ArrowImporter;
+class ArrowExporter;
 
 struct TypeParam;
 struct NamedParam;
@@ -1022,12 +1022,6 @@ public:
 	/// An owned copy of one field's type.
 	/// @param index Field index in [0, GetFieldCount()).
 	auto GetFieldType(idx_t index) const -> LogicalType;
-
-	/// Exports the fields as an Arrow schema into the caller-allocated `out`, which the caller then owns and
-	/// releases with `out.release(&out)`.
-	/// @param context A context with an active transaction: building the schema reads the catalog for extension
-	/// types and ENUM dictionaries.
-	auto ToArrowSchema(const Context &context, ArrowSchema &out) const -> void;
 
 private:
 	explicit Schema(void *impl);
@@ -2227,12 +2221,6 @@ public:
 	/// The `Context` flavor of `Copy`, inside a callback.
 	auto Copy(const Context &ctx) const -> DataChunk;
 
-	/// Exports this chunk as an Arrow array into the caller-allocated `out`, which the caller then owns and releases
-	/// with `out.release(&out)`. The chunk is borrowed and stays valid. Pair it with `Schema::ToArrowSchema` for the
-	/// schema; this produces data only.
-	/// @param context A context with an active transaction, whose Arrow options drive the conversion.
-	auto ToArrowArray(const Context &context, ArrowArray &out) const -> void;
-
 private:
 	explicit DataChunk(void *impl, bool owned);
 	bool owned = false; // TODO: This should be fixed C++ side
@@ -2470,40 +2458,103 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 // Arrow
 //----------------------------------------------------------------------------------------------------------------------
-// Interop with the Arrow C Data Interface, in both directions. Exporting fills a caller-allocated Arrow struct, which
-// the caller then releases; importing hands an Arrow array's buffers to a `DataChunk` zero-copy. Reading Arrow needs
-// its schema resolved first, which `ArrowConversionPlan` does once for any number of arrays of the same shape.
+// Interop with the Arrow C Data Interface, in both directions. `ArrowExporter` fills caller-allocated Arrow structs,
+// which the caller then releases; `ArrowImporter` hands an Arrow array's buffers to `DataChunk`s zero-copy. Both
+// resolve their schema once, at construction, and both gather rows up to a batch size across inputs, so the last
+// input is marked with `flush`.
 
-/// An owned, resolved interpretation of an `ArrowSchema`: every column's DuckDB type plus what importing an array
-/// needs. Build it once -- at a table function's bind time, say -- and reuse it for every array of that shape.
-/// The context is a per-call argument rather than something the converter captures, so one built under a bind-time
-/// context can be used at execution time under another.
-class ArrowConverter final : public detail::Handle<ArrowConverter> {
+/// Converts Arrow arrays into `DataChunk`s against one resolved `ArrowSchema`. Construct it once, for example at a
+/// table function's bind time, and reuse it for every array of that shape. Give it an array with `Append`, then call
+/// `NextChunk` until it returns an empty handle. Pass `flush` on the last array, or call `Flush`.
+/// The importer borrows the context it was created with and must not outlive it. One array is in flight at a time,
+/// and an importer must not be used from two threads at once.
+class ArrowImporter final : public detail::Handle<ArrowImporter> {
 	friend detail::Factory;
 
 public:
 	/// Resolves `schema` against `context`, extension types included.
 	/// @param context A context with an active transaction: resolving reads the catalog.
 	/// @param schema The schema to resolve. Read, not consumed; the caller keeps ownership.
-	ArrowConverter(const Context &context, ArrowSchema &schema);
+	/// @param batch_size Maximum rows per chunk. A long array is split across several chunks, and rows left over
+	/// that do not fill a batch are held back and joined with the next array unless flushed. 0 means no maximum:
+	/// one chunk per array.
+	ArrowImporter(const Context &context, ArrowSchema &schema, idx_t batch_size = 0);
 
-	ArrowConverter(ArrowConverter &&) noexcept = default;
-	ArrowConverter &operator=(ArrowConverter &&) noexcept = default;
+	ArrowImporter(ArrowImporter &&) noexcept = default;
+	ArrowImporter &operator=(ArrowImporter &&) noexcept = default;
 
-	~ArrowConverter() override;
+	~ArrowImporter() override;
 
-	/// Converts `array` into an owned chunk sized to the array's length, which may exceed the engine's vector size.
-	/// The chunk adopts the array's buffers zero-copy and `array.release` is set to NULL, so the caller must not
-	/// release `array` afterwards.
-	/// @throws InvalidInputException When the array's shape disagrees with what this converter resolved.
-	auto ArrayToChunk(const Context &context, ArrowArray &array) const -> DataChunk;
-
-	/// The resolved columns as an owned `Schema`: the DuckDB name and type of every column of the source
-	/// `ArrowSchema`, which is how a table function declares its result columns from an Arrow schema.
+	/// The resolved DuckDB schema: the name and logical type of every column, which is how a table function declares
+	/// its result columns from an Arrow schema.
 	auto GetSchema() const -> Schema;
 
+	/// Gives the importer one array to convert. Take the chunks with `NextChunk`.
+	/// @param array The array to convert.
+	/// @param consume True to hand it over: its `release` is set to NULL, and the chunks reference its buffers
+	/// zero-copy and keep them alive. False to keep it, in which case it must stay valid until the drain finishes and
+	/// every chunk is a copy. A chunk that joins rows held back from the previous array is a copy either way.
+	/// @param flush True to mark the end of the input, releasing rows that do not fill a batch as a final short chunk.
+	/// @throws InvalidInputException When the previous array is not drained, or the array's shape does not match the
+	/// resolved schema.
+	auto Append(ArrowArray &array, bool consume = true, bool flush = false) -> void;
+
+	/// Releases the held rows as a short chunk without supplying another array. Same as `Append` with no array and
+	/// `flush` set.
+	auto Flush() -> void;
+
+	/// The next chunk of the appended array, or an empty handle once the array is drained. Rows that do not fill a
+	/// batch are held back for the next array unless flushed, so an empty handle does not mean every row has come
+	/// out. Runs under the context the importer was created with, which must still be alive.
+	auto NextChunk() -> DataChunk;
+
 private:
-	explicit ArrowConverter(void *impl);
+	explicit ArrowImporter(void *impl);
+};
+
+/// Converts `DataChunk`s into Arrow arrays for one fixed column list. The session's Arrow settings are captured at
+/// construction, so the schema it reports and the arrays it produces always agree. Give it a chunk with `Append`,
+/// then call `NextArray` until it returns false. Pass `flush` on the last chunk, or call `Flush`.
+/// An exporter must not be used from two threads at once.
+class ArrowExporter final : public detail::Handle<ArrowExporter> {
+	friend detail::Factory;
+
+public:
+	/// @param context A context with an active transaction, whose Arrow settings are captured.
+	/// @param types The column types.
+	/// @param names The column names, one per type.
+	/// @param batch_size Maximum rows per array. A long chunk is split across several arrays, and rows left over
+	/// that do not fill a batch are held back and joined with the next chunk unless flushed. 0 means no maximum:
+	/// one array per chunk.
+	ArrowExporter(const Context &context, const std::vector<LogicalType> &types, const std::vector<std::string> &names,
+	              idx_t batch_size = 0);
+
+	ArrowExporter(ArrowExporter &&) noexcept = default;
+	ArrowExporter &operator=(ArrowExporter &&) noexcept = default;
+
+	~ArrowExporter() override;
+
+	/// The Arrow schema of the arrays this exporter produces, written into the caller-allocated `out`, which the
+	/// caller then owns and releases with `out.release(&out)`.
+	auto GetSchema(ArrowSchema &out) const -> void;
+
+	/// Converts one chunk in full, making the arrays it completed available from `NextArray`. The chunk is borrowed
+	/// and read before this returns, since the conversion copies. Rows that do not complete a batch are held back
+	/// and finished by the next chunk.
+	/// @param flush True to mark the end of the input, releasing the held rows as a final short array.
+	/// @throws InvalidInputException When the chunk's types do not match the exporter's.
+	auto Append(const DataChunk &chunk, bool flush = false) -> void;
+
+	/// Releases the held rows as a short array without supplying another chunk. Same as `Append` with `flush` set.
+	auto Flush() -> void;
+
+	/// Takes the next completed array into the caller-allocated `out`, which the caller then owns and releases.
+	/// @return False when none is ready, leaving `out` released. Rows held back towards an unfinished batch are not
+	/// an array yet; they come out after a further `Append` or a `Flush`.
+	auto NextArray(ArrowArray &out) -> bool;
+
+private:
+	explicit ArrowExporter(void *impl);
 };
 
 /// An owning handle to an Arrow C Data Interface stream, produced by `QueryResult::ToArrowStream`. Destroying it
