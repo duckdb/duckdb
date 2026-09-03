@@ -1,0 +1,48 @@
+# name: test/sql/peg_parser/deep_nesting.test
+# description: Test deeply nested input with the heap-based PEG parser
+# group: [peg_parser]
+
+statement ok
+SET heap_based_parser=true;
+
+statement ok
+SET max_expression_depth=1000000;
+
+query I
+FROM query('SELECT ' || repeat('(', 10000) || '1' || repeat(')', 10000));
+----
+1
+
+# Exercise nested list expressions through transformation and binding.
+statement ok
+SET max_expression_depth=1000;
+
+foreach depth 1 10 100
+
+query I
+FROM query('SELECT (' || repeat('[', {depth}) || '1' || repeat(']', {depth}) || ') IS NOT NULL');
+----
+1
+
+endloop
+
+statement ok
+SET max_expression_depth=100;
+
+statement error
+FROM query('SELECT (' || repeat('[', 500) || '1' || repeat(']', 500) || ') IS NOT NULL AS result');
+----
+<REGEX>:.*Max expression depth limit of 100 exceeded.*
+
+statement ok
+SET max_expression_depth=1000;
+
+query I
+FROM query('SELECT (NULL::INT' || repeat('[]', 100) || ') IS NULL');
+----
+true
+
+statement error
+FROM query('SELECT (NULL::INT' || repeat('[]', 10000) || ') IS NULL');
+----
+<REGEX>:.*Max expression depth limit of 1000 exceeded.*

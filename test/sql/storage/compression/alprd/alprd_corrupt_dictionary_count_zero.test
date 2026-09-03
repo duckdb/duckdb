@@ -1,0 +1,30 @@
+# name: test/sql/storage/compression/alprd/alprd_corrupt_dictionary_count_zero.test
+# description: An ALPRD segment with an empty dictionary decodes safely rather than erroring
+# group: [alprd]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alprd_corrupt_dictionary_count_zero.db.gz {TEST_DIR}/alprd_corrupt_dictionary_count_zero.db
+
+load {TEST_DIR}/alprd_corrupt_dictionary_count_zero.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALPRD' LIMIT 1;
+----
+ALPRD
+
+# The unused dictionary entries are zero, so every left part reads an initialized value.
+query I
+SELECT sum(a) IS NOT NULL FROM t;
+----
+true
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+query I
+SELECT sum(a) IS NOT NULL FROM t;
+----
+true

@@ -114,8 +114,14 @@ void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name) {
-	auto catalog = qualified_name.Catalog();
-	auto schema = qualified_name.Schema();
+	auto &path = qualified_name.Path();
+	if (path.size() != 2) {
+		// only a lone qualifier ("x.name") can be either a schema or a catalog - any deeper qualification is
+		// positional and is resolved by ResolveCatalog
+		return;
+	}
+	Identifier catalog;
+	Identifier schema = path[0];
 	BindSchemaOrCatalog(retriever, catalog, schema);
 	qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
 }
@@ -557,11 +563,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			// create a copy of the expression because we do not want to alter the original
 			auto expression = function->Cast<ScalarMacroFunction>().expression->Copy();
 			ExpressionBinder::QualifyColumnNames(*this, expression);
-			// scope for the map entries of this bind: the bound result is only used for verification
-			BoundExpressionScope verify_scope(GetBoundExpressions());
 			try {
-				error = binder.Bind(expression, 0, false);
-				if (error.HasError()) {
+				auto bind_result = binder.Bind(expression, 0, false);
+				if (bind_result.HasError()) {
+					error = std::move(bind_result.error);
 					error.Throw();
 				}
 			} catch (const std::exception &ex) {
@@ -649,9 +654,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw BinderException("Temporary triggers are not supported");
 	}
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres).
-	// Promote a catalog-qualified base table (e.g. attached_db.tbl) so downstream lookups carry the resolved
-	// catalog instead of a bare schema (matches the DROP TRIGGER path).
-	BindSchemaOrCatalog(create_trigger_info.base_table->GetQualifiedNameMutable());
 	TableDescription table_description(create_trigger_info.base_table->GetQualifiedName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
@@ -779,7 +781,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
 		}
 	}
-	// For FOR EACH ROW: register NEW (INSERT) or OLD (DELETE) as a generic binding so BindCorrelatedColumns can
+	// For FOR EACH ROW: register NEW (INSERT) or OLD (DELETE) as a generic binding so that scope resolution can
 	// resolve NEW.col / OLD.col references.
 	unique_ptr<ExpressionBinder> row_scope_binder;
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
@@ -803,7 +805,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (row_scope_binder) {
 		auto body_binder = Binder::CreateBinder(context, validation_binder.get());
 		auto bound_body = body_binder->Bind(*body_copy);
-		validation_binder->GetActiveBinders().pop_back();
+		validation_binder->PopScope();
 		if (body_binder->correlated_columns.empty()) {
 			throw BinderException("FOR EACH ROW trigger %s on table %s must reference at least one NEW or OLD "
 			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",
