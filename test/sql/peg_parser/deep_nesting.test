@@ -3,7 +3,7 @@
 # group: [peg_parser]
 
 statement ok
-SET debug_heap_based_parser=true;
+SET heap_based_parser=true;
 
 statement ok
 SET max_expression_depth=1000000;
