@@ -4,6 +4,7 @@ add_library_unity(
   test_capi_v2.cpp
   test_capi_v2_basic.cpp
   test_capi_v2_arena.cpp
+  test_capi_v2_arrow.cpp
   test_capi_v2_bytes.cpp
   test_capi_v2_cast_function.cpp
   test_capi_v2_column_data_collection.cpp

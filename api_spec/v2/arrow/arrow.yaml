@@ -1,0 +1,313 @@
+module: arrow
+#
+# Arrow C Data Interface interop: convert between DuckDB and Arrow in both directions, and
+# export a streaming result as an ArrowArrayStream.
+#
+# The three standard Arrow structs -- ArrowSchema, ArrowArray and ArrowArrayStream -- are
+# emitted into the generated header under the same ARROW_C_DATA_INTERFACE /
+# ARROW_C_STREAM_INTERFACE guards that pyarrow, nanoarrow and arrow use, so the definitions
+# coexist with a consumer's own Arrow headers (first definition wins; the layouts are
+# byte-identical by spec). They keep their upstream names and are deliberately NOT wrapped in
+# opaque duckdb_v2_arrow_* handles, because the ownership contract is caller-allocates /
+# library-fills: a binding author must be able to declare an ArrowSchema on the stack with only
+# this header in hand.
+#
+# Ownership follows the Arrow C Data Interface, not this API's usual handle rules, and is
+# restated per function. Exporting fills a caller-allocated struct and sets its `release`, which
+# the caller then calls. Importing transfers the source array's data into the produced data
+# chunk and nulls the source's `release`, so the caller must not release it afterwards.
+#
+# The converters take a `context` because they are meant to run inside a callback -- a scalar
+# function, a table function, a cast -- that already holds one with an active transaction.
+# Building an Arrow schema is not a pure function of the logical types: extension
+# populate-schema callbacks and ENUM dictionaries read the catalog. Code outside a callback
+# reaches Arrow through `result_to_arrow_stream`, which supplies the context itself.
+#
+# Schema and array conversion are separate on the import side on purpose. An ArrowSchema is
+# resolved once into an `arrow_converter`, and each array is then converted through that
+# plan, so a table function binds the schema in its bind callback and pays nothing per chunk.
+#
+# Deliberately out of scope, left to language bindings or to later work:
+#   - Registering an Arrow stream as a SQL table. A binding keeps its own name-to-stream
+#     registry and exposes it through an ordinary table function or a replacement scan; that
+#     composes from the general function API and needs nothing Arrow-specific beyond these
+#     converters.
+#   - Arrow IPC, the serialized wire format. A different transport from the C Data Interface,
+#     provided by the arrow extension as SQL functions reached through the normal query path.
+#   - A parallel, buffered Arrow collector. `result_to_arrow_stream` converts single-threaded
+#     as the consumer pulls; a pipelined collector has to be installed before execution starts,
+#     so it needs a query entry point that does not exist yet.
+#   - Database-level registration of custom Arrow type extensions, mapping to the engine's
+#     ArrowTypeExtension. It builds on this converter surface rather than changing it.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  arrow_converter:
+    description: |
+      An owned, resolved interpretation of an ArrowSchema: the DuckDB logical type of every column plus the per-column
+      Arrow type information needed to import an array. Built once from an ArrowSchema with
+      `[[arrow_converter_create]]` and reused across many arrays by `[[arrow_converter_array_to_chunk]]`, so a table
+      function can resolve the schema at bind time and pay nothing per chunk. Read the resolved names and types back
+      with `[[arrow_converter_get_schema]]`, and destroy with `[[arrow_converter_destroy]]`.
+    cleanup_with: arrow_converter_destroy
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Exporting to Arrow
+  #---------------------------------------------------------------------------------------------------------------------
+  result_to_arrow_stream:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Exports a result as a lazy ArrowArrayStream. Consuming.
+
+      Takes the result by transfer, setting the slot to NULL, and fills the caller-allocated `out_stream`. The stream
+      owns the result from then on: releasing it does not drain anything, but it does close the query and free the
+      connection's live-result slot exactly as `[[result_destroy]]` would, so the connection can run its next query.
+      Release it by calling `out_stream->release(out_stream)`.
+
+      The stream is lazy. Its `get_next` drives the result, stepping past waiting states internally until a batch is
+      ready, and coalesces DuckDB chunks into one Arrow array of up to `batch_size` rows. Its `get_schema` returns the
+      Arrow schema and never touches the catalog, because both the schema and the extension type map are built and
+      cached while this call still holds the query's transaction. That caching is a correctness requirement rather
+      than an optimization: building the schema can run extension populate-schema callbacks and read ENUM
+      dictionaries, neither of which is available once the transaction is gone.
+
+      Passing a result that has already yielded some chunks is allowed and produces a stream over what remains.
+
+      A statement that expanded into a group whose row-producing fragment has not started yet is stepped far enough
+      here for its schema to be cached, which can block briefly; no rows are lost, since none can be produced before
+      that fragment is prepared. For an ordinary statement nothing executes here.
+
+      The result is consumed on every path that reaches the engine, including failures. Only a null-argument
+      rejection leaves it intact, and `out_stream` is untouched unless the call succeeds.
+    role: method
+    belongs_to: result
+    parameters:
+      result:
+        type: result
+        indirection: 1
+        kind: IN_TRANSFER
+        description: The result to export. Consumed and set to NULL, except when the call rejects a null argument.
+      batch_size:
+        type: idx
+        description: |
+          Target rows per Arrow array. Pass 0 for the default of 131072, which is 64 vectors in a default build and
+          matches pyarrow's dataset scanner.
+      out_stream:
+        type: ArrowArrayStream
+        indirection: 1
+        kind: OUT
+        description: Caller-allocated stream the library fills. Release it with `out_stream->release(out_stream)`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  logical_types_to_arrow_schema:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Converts a list of column types and names into an Arrow schema.
+
+      Fills the caller-allocated `out_schema` using the Arrow options carried by `context`. The caller owns the
+      result and releases it with `out_schema->release(out_schema)`.
+
+      `types` and `names` are parallel arrays of `count` entries, and may be NULL only when `count` is 0. Building
+      the schema can read the catalog -- extension populate-schema callbacks, ENUM dictionaries -- so `context` must
+      have an active transaction, which a callback context does.
+    role: method
+    parameters:
+      context:
+        type: context
+        description: The context whose Arrow options and transaction drive the conversion.
+      types:
+        type: logical_type
+        indirection: 1
+        const: true
+        description: An array of `count` column types. May be NULL only when `count` is 0.
+      names:
+        type: str
+        indirection: 1
+        const: true
+        description: An array of `count` column names, parallel to `types`. May be NULL only when `count` is 0.
+      count:
+        type: idx
+        description: The number of columns, being the length of both `types` and `names`.
+      out_schema:
+        type: ArrowSchema
+        indirection: 1
+        kind: OUT
+        description: Caller-allocated schema the library fills. Release it with `out_schema->release(out_schema)`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_chunk_to_arrow_array:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Converts a data chunk into an Arrow array.
+
+      Fills the caller-allocated `out_array`, using the Arrow options and extension type casts resolved from
+      `context`. The caller owns the result and releases it with `out_array->release(out_array)`. The chunk is
+      borrowed, not consumed, and stays valid afterwards.
+
+      The Arrow schema for the array comes from `[[logical_types_to_arrow_schema]]`, given the chunk's column types;
+      this call produces data only.
+    role: method
+    belongs_to: data_chunk
+    parameters:
+      context:
+        type: context
+        description: The context whose Arrow options and transaction drive the conversion.
+      chunk:
+        type: data_chunk
+        description: The chunk to convert. Borrowed; not consumed.
+      out_array:
+        type: ArrowArray
+        indirection: 1
+        kind: OUT
+        description: Caller-allocated array the library fills. Release it with `out_array->release(out_array)`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Importing from Arrow
+  #---------------------------------------------------------------------------------------------------------------------
+  arrow_converter_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Resolves an Arrow schema into a reusable converter.
+
+      Interprets `schema` against `context`, working out each column's DuckDB logical type and the Arrow type
+      information an import needs, and returns a converter that `[[arrow_converter_array_to_chunk]]` reuses across every
+      array of that shape. `schema` is read, not consumed: the caller keeps ownership and still releases it.
+
+      Resolving reads the catalog for extension types, so `context` must have an active transaction. The converter itself
+      captures no context: build it under a bind-time context and use it at execution time under another.
+
+      `*out_converter` is set to NULL on failure.
+    role: constructor
+    belongs_to: arrow_converter
+    parameters:
+      context:
+        type: context
+        description: The context used to resolve the Arrow types, extension types included.
+      schema:
+        type: ArrowSchema
+        indirection: 1
+        description: The schema to resolve. Read, not consumed; the caller keeps ownership.
+      out_converter:
+        type: arrow_converter
+        indirection: 1
+        kind: OUT
+        description: On success, receives the new converter. Owned by the caller; destroy via `[[arrow_converter_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  arrow_converter_array_to_chunk:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Converts an Arrow array into a data chunk, interpreting it through a converter. Consuming.
+
+      The chunk adopts the array's buffers zero-copy and `array->release` is set to NULL, so the caller must not
+      release `array` afterwards; destroying the chunk releases the Arrow data. Ownership transfers even on the
+      failure paths that have already taken it, so a caller must never release an array it has passed here.
+
+      The chunk is sized to the array's length, which may exceed the engine's vector size: that is the size of a
+      chunk flowing through a pipeline, not a cap on a chunk that stands alone.
+
+      An array whose shape disagrees with the converter -- a different child count, a child length that does not match the
+      array's, a null or already-released child -- is rejected with `ERROR_INPUT_INVALID` rather than read. Only the
+      default, dictionary-encoded and run-end-encoded layouts are supported; any other reports
+      `ERROR_QUERY_NOT_IMPLEMENTED`. `*out_chunk` is set to NULL on failure.
+    role: method
+    belongs_to: arrow_converter
+    parameters:
+      context:
+        type: context
+        description: The context used during the conversion.
+      array:
+        type: ArrowArray
+        indirection: 1
+        description: The array to convert. Its data is adopted by the chunk and its `release` is set to NULL.
+      converter:
+        type: arrow_converter
+        description: The converter describing the array, from `[[arrow_converter_create]]`.
+      out_chunk:
+        type: data_chunk
+        indirection: 1
+        kind: OUT
+        description: On success, receives the new chunk. Owned by the caller; destroy via `[[data_chunk_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  arrow_converter_get_schema:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the converter's resolved columns as a schema.
+
+      Writes an owned schema handle carrying the DuckDB name and logical type of every column the converter resolved.
+      This is how a caller learns the DuckDB shape of an arbitrary ArrowSchema, to declare a table function's result
+      columns for instance: mapping Arrow format strings onto logical types is engine knowledge, not something a
+      binding should reimplement.
+
+      The fields are copied from what was resolved at creation, so this reads no catalog and needs no transaction.
+      `*out_schema` is set to NULL on failure.
+    role: getter
+    belongs_to: arrow_converter
+    parameters:
+      converter:
+        type: arrow_converter
+        description: The converter to read.
+      out_schema:
+        type: schema
+        indirection: 1
+        kind: OUT
+        description: On success, receives an owned schema. Destroy via `[[schema_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destructor
+  #---------------------------------------------------------------------------------------------------------------------
+  arrow_converter_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Destroys an Arrow converter.
+
+      Null-safe: passing NULL, or a slot already set to NULL, is a no-op. Chunks already produced through it are independent of the converter
+      and stay valid. On success the slot is set to NULL.
+    role: destructor
+    belongs_to: arrow_converter
+    parameters:
+      converter:
+        type: arrow_converter
+        indirection: 1
+        description: The converter to destroy.
+    return_type: ERROR

@@ -115,6 +115,10 @@ struct HandleTraits<QueryResult> {
 	using handle = duckdb_v2_result_handle;
 };
 template <>
+struct HandleTraits<ArrowConverter> {
+	using handle = duckdb_v2_arrow_converter_handle;
+};
+template <>
 struct HandleTraits<FunctionSignature> {
 	using handle = duckdb_v2_function_signature_handle;
 };
@@ -1026,6 +1030,18 @@ auto Schema::GetFieldType(idx_t index) const -> LogicalType {
 	duckdb_v2_logical_type_handle owned = nullptr;
 	CheckedAPICall(duckdb_v2_logical_type_copy, borrowed, &owned);
 	return detail::Factory::Make<LogicalType>(owned);
+}
+
+auto Schema::ToArrowSchema(const Context &context, ArrowSchema &out) const -> void {
+	// The C converter takes parallel name/type arrays. get_field borrows both, and they stay
+	// valid for the whole of this call, so nothing needs copying.
+	const auto count = GetFieldCount();
+	std::vector<duckdb_v2_logical_type_handle> types(count, nullptr);
+	std::vector<duckdb_v2_str> names(count, duckdb_v2_str {nullptr, 0});
+	for (idx_t i = 0; i < count; i++) {
+		CheckedAPICall(duckdb_v2_schema_get_field, handle(), i, &names[i], &types[i]);
+	}
+	CheckedAPICall(duckdb_v2_logical_types_to_arrow_schema, context.handle(), types.data(), names.data(), count, &out);
 }
 
 auto Connection::Bind(const SqlStatement &statement) const -> Signature {
@@ -2028,6 +2044,10 @@ auto DataChunk::Copy(const Context &ctx) const -> DataChunk {
 	return detail::Factory::Make<DataChunk>(copy, true);
 }
 
+auto DataChunk::ToArrowArray(const Context &context, ArrowArray &out) const -> void {
+	CheckedAPICall(duckdb_v2_data_chunk_to_arrow_array, context.handle(), handle(), &out);
+}
+
 auto DataChunk::GetRowCount() const -> idx_t {
 	idx_t count = 0;
 	CheckedAPICall(duckdb_v2_data_chunk_get_size, handle(), &count);
@@ -2281,6 +2301,86 @@ auto QueryResult::RenderBox(idx_t max_rows, idx_t max_width, idx_t max_col_width
 	CheckedAPICall(duckdb_v2_result_render_box, &raw, max_rows, max_width, max_col_width, ToStr(null_value),
 	               render_mode, limit, sink, &out);
 	return out;
+}
+
+auto QueryResult::ToArrowStream(idx_t batch_size) -> ArrowStream {
+	// Allocate before detaching: if this throws, the result is still ours and ~QueryResult
+	// frees it.
+	auto *stream = new ArrowArrayStream {};
+	auto raw = handle();
+	// The C call takes the result by transfer, consuming it on success and failure alike, so
+	// detach now and ~QueryResult will not double-free it.
+	this->release();
+	try {
+		CheckedAPICall(duckdb_v2_result_to_arrow_stream, &raw, batch_size, stream);
+	} catch (...) {
+		delete stream;
+		throw;
+	}
+	return detail::Factory::Make<ArrowStream>(stream);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Arrow
+//----------------------------------------------------------------------------------------------------------------------
+
+ArrowConverter::ArrowConverter(void *impl) : detail::Handle<ArrowConverter>(impl) {
+}
+
+ArrowConverter::ArrowConverter(const Context &context, ArrowSchema &schema) : detail::Handle<ArrowConverter>(nullptr) {
+	duckdb_v2_arrow_converter_handle converter = nullptr;
+	CheckedAPICall(duckdb_v2_arrow_converter_create, context.handle(), &schema, &converter);
+	impl = converter;
+}
+
+ArrowConverter::~ArrowConverter() {
+	auto _h = handle();
+	duckdb_v2_arrow_converter_destroy(&_h);
+}
+
+auto ArrowConverter::ArrayToChunk(const Context &context, ArrowArray &array) const -> DataChunk {
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	CheckedAPICall(duckdb_v2_arrow_converter_array_to_chunk, context.handle(), &array, handle(), &chunk);
+	return detail::Factory::Make<DataChunk>(chunk, true);
+}
+
+auto ArrowConverter::GetSchema() const -> Schema {
+	duckdb_v2_schema_handle schema = nullptr;
+	CheckedAPICall(duckdb_v2_arrow_converter_get_schema, handle(), &schema);
+	return detail::Factory::Make<Schema>(schema);
+}
+
+ArrowStream::~ArrowStream() {
+	if (stream) {
+		if (stream->release) {
+			stream->release(stream);
+		}
+		delete stream;
+	}
+}
+
+// The Arrow C stream interface reports failure only as an errno-style int with no error code, so both calls below
+// surface a generic INVALID_INPUT; the detail comes from get_last_error and is carried in the message.
+void ArrowStream::GetSchema(ArrowSchema &out) const {
+	if (!stream || !stream->release) {
+		throw InvalidInputException("ArrowStream::GetSchema on an empty stream");
+	}
+	if (stream->get_schema(stream, &out) != 0) {
+		const char *msg = stream->get_last_error ? stream->get_last_error(stream) : nullptr;
+		throw InvalidInputException(msg ? msg : "Arrow stream get_schema failed");
+	}
+}
+
+bool ArrowStream::Next(ArrowArray &out) const {
+	out.release = nullptr;
+	if (!stream || !stream->release) {
+		throw InvalidInputException("ArrowStream::Next on an empty stream");
+	}
+	if (stream->get_next(stream, &out) != 0) {
+		const char *msg = stream->get_last_error ? stream->get_last_error(stream) : nullptr;
+		throw InvalidInputException(msg ? msg : "Arrow stream get_next failed");
+	}
+	return out.release != nullptr;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

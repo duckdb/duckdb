@@ -1,4 +1,4 @@
-#include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/main/capi_v2/capi_v2_result_internal.hpp"
 
 namespace duckdb::capiv2 {
 namespace {

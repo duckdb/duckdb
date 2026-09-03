@@ -40,6 +40,13 @@
 #include <cstring>
 #include <limits>
 
+// Arrow C Data Interface structs, defined by `duckdb_v2.h` or by the consumer's own Arrow headers, whichever is
+// included first -- both use the same ARROW_C_DATA_INTERFACE / ARROW_C_STREAM_INTERFACE guards, and the layouts are
+// byte-identical by spec. Forward declared so this header carries no Arrow definition of its own.
+struct ArrowSchema;
+struct ArrowArray;
+struct ArrowArrayStream;
+
 namespace duckdb {
 namespace cxx {
 
@@ -67,6 +74,8 @@ class DataChunk;
 class ColumnDataCollection;
 class QueryResult;
 class PreparedStatement;
+class ArrowStream;
+class ArrowConverter;
 
 struct TypeParam;
 struct NamedParam;
@@ -1013,6 +1022,12 @@ public:
 	/// An owned copy of one field's type.
 	/// @param index Field index in [0, GetFieldCount()).
 	auto GetFieldType(idx_t index) const -> LogicalType;
+
+	/// Exports the fields as an Arrow schema into the caller-allocated `out`, which the caller then owns and
+	/// releases with `out.release(&out)`.
+	/// @param context A context with an active transaction: building the schema reads the catalog for extension
+	/// types and ENUM dictionaries.
+	auto ToArrowSchema(const Context &context, ArrowSchema &out) const -> void;
 
 private:
 	explicit Schema(void *impl);
@@ -2212,6 +2227,12 @@ public:
 	/// The `Context` flavor of `Copy`, inside a callback.
 	auto Copy(const Context &ctx) const -> DataChunk;
 
+	/// Exports this chunk as an Arrow array into the caller-allocated `out`, which the caller then owns and releases
+	/// with `out.release(&out)`. The chunk is borrowed and stays valid. Pair it with `Schema::ToArrowSchema` for the
+	/// schema; this produces data only.
+	/// @param context A context with an active transaction, whose Arrow options drive the conversion.
+	auto ToArrowArray(const Context &context, ArrowArray &out) const -> void;
+
 private:
 	explicit DataChunk(void *impl, bool owned);
 	bool owned = false; // TODO: This should be fixed C++ side
@@ -2447,6 +2468,100 @@ private:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Arrow
+//----------------------------------------------------------------------------------------------------------------------
+// Interop with the Arrow C Data Interface, in both directions. Exporting fills a caller-allocated Arrow struct, which
+// the caller then releases; importing hands an Arrow array's buffers to a `DataChunk` zero-copy. Reading Arrow needs
+// its schema resolved first, which `ArrowConversionPlan` does once for any number of arrays of the same shape.
+
+/// An owned, resolved interpretation of an `ArrowSchema`: every column's DuckDB type plus what importing an array
+/// needs. Build it once -- at a table function's bind time, say -- and reuse it for every array of that shape.
+/// The context is a per-call argument rather than something the converter captures, so one built under a bind-time
+/// context can be used at execution time under another.
+class ArrowConverter final : public detail::Handle<ArrowConverter> {
+	friend detail::Factory;
+
+public:
+	/// Resolves `schema` against `context`, extension types included.
+	/// @param context A context with an active transaction: resolving reads the catalog.
+	/// @param schema The schema to resolve. Read, not consumed; the caller keeps ownership.
+	ArrowConverter(const Context &context, ArrowSchema &schema);
+
+	ArrowConverter(ArrowConverter &&) noexcept = default;
+	ArrowConverter &operator=(ArrowConverter &&) noexcept = default;
+
+	~ArrowConverter() override;
+
+	/// Converts `array` into an owned chunk sized to the array's length, which may exceed the engine's vector size.
+	/// The chunk adopts the array's buffers zero-copy and `array.release` is set to NULL, so the caller must not
+	/// release `array` afterwards.
+	/// @throws InvalidInputException When the array's shape disagrees with what this converter resolved.
+	auto ArrayToChunk(const Context &context, ArrowArray &array) const -> DataChunk;
+
+	/// The resolved columns as an owned `Schema`: the DuckDB name and type of every column of the source
+	/// `ArrowSchema`, which is how a table function declares its result columns from an Arrow schema.
+	auto GetSchema() const -> Schema;
+
+private:
+	explicit ArrowConverter(void *impl);
+};
+
+/// An owning handle to an Arrow C Data Interface stream, produced by `QueryResult::ToArrowStream`. Destroying it
+/// releases the stream, which closes the query and frees the connection for its next one. Arrays handed out by
+/// `Next` are owned by the caller and released independently of this.
+///
+/// Unlike the other wrappers this does not derive from `detail::Handle`: it owns a raw `ArrowArrayStream` rather than
+/// an opaque DuckDB handle, so the handle machinery does not apply.
+class ArrowStream final {
+	friend detail::Factory;
+
+public:
+	ArrowStream(ArrowStream &&other) noexcept : stream(other.stream) {
+		other.stream = nullptr;
+	}
+	ArrowStream &operator=(ArrowStream &&other) noexcept {
+		std::swap(stream, other.stream);
+		return *this;
+	}
+	ArrowStream(const ArrowStream &) = delete;
+	ArrowStream &operator=(const ArrowStream &) = delete;
+
+	~ArrowStream();
+
+	/// True while this holds a live stream, false once it has been moved from or detached.
+	explicit operator bool() const noexcept {
+		return stream != nullptr;
+	}
+
+	/// Borrows the underlying stream, which this still owns. Hand its address to an Arrow consumer that does not
+	/// take ownership.
+	auto get() const noexcept -> ArrowArrayStream * {
+		return stream;
+	}
+
+	/// Detaches the underlying stream, handing the caller ownership and the duty to release it. Leaves this empty.
+	auto Detach() noexcept -> ArrowArrayStream * {
+		auto detached = stream;
+		stream = nullptr;
+		return detached;
+	}
+
+	/// Reads the stream's schema into `out`, which the caller then owns and releases.
+	/// @throws InvalidInputException On failure, or when this stream is empty.
+	void GetSchema(ArrowSchema &out) const;
+
+	/// Fetches the next array into `out`, which the caller then owns and releases.
+	/// @return False at end of stream, where `out` is left released.
+	/// @throws InvalidInputException On failure, or when this stream is empty.
+	bool Next(ArrowArray &out) const;
+
+private:
+	explicit ArrowStream(ArrowArrayStream *stream) : stream(stream) {
+	}
+	ArrowArrayStream *stream = nullptr;
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // Result
 //----------------------------------------------------------------------------------------------------------------------
 // A `QueryResult` is a lazily executed stream of chunks, produced by a query.
@@ -2576,6 +2691,12 @@ public:
 	/// "? rows", since there may have been more.
 	auto RenderBox(idx_t max_rows = 0, idx_t max_width = 0, idx_t max_col_width = 0, const std::string &null_value = "",
 	               idx_t render_mode = 0, idx_t limit = 0) -> std::string;
+
+	/// Exports the result as a lazy `ArrowStream`, consuming it. Nothing is executed here: the stream converts as its
+	/// consumer pulls. A result that has already yielded chunks produces a stream over what remains.
+	/// @param batch_size Target rows per Arrow array, 0 for the default of 131072.
+	/// @return The stream, which owns the query from now on and frees the connection when released.
+	auto ToArrowStream(idx_t batch_size = 0) -> ArrowStream;
 
 private:
 	explicit QueryResult(void *impl);
