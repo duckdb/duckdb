@@ -193,10 +193,10 @@ struct StateLocal {
 
 std::atomic<int> init_global_runs {0};
 std::atomic<int> init_local_runs {0};
-std::atomic<int> cardinality_runs {0};
 
 void StateBind(TableFunction::BindInput &input) {
 	input.AddResultColumn("v", input.GetContext().ParseType("BIGINT"));
+	input.SetCardinality(3, true);
 	input.SetBindData<RangeBind>(RangeBind {3});
 }
 
@@ -231,11 +231,6 @@ void StateExec(TableFunction::ExecInput &input) {
 		produced = 1;
 	}
 	vec.SetSize(produced);
-}
-
-void StateCardinality(TableFunction::CardinalityInput &input) {
-	cardinality_runs++;
-	input.SetCardinality(static_cast<idx_t>(input.GetBindData<RangeBind>().count), true);
 }
 
 // A bind callback that throws: the exception must surface as the query's error.
@@ -313,22 +308,19 @@ TEST_CASE("Stable C++API: table function user data, global and local state", "[c
 
 	init_global_runs = 0;
 	init_local_runs = 0;
-	cardinality_runs = 0;
 
 	auto function = TableFunction::Create(conn);
 	function.SetName("cpp_state").SetUserData<Seed>(Seed {42});
 	function.SetBindCallback(StateBind)
 	    .SetInitGlobalCallback(StateInitGlobal)
 	    .SetInitLocalCallback(StateInitLocal)
-	    .SetExecCallback(StateExec)
-	    .SetCardinalityCallback(StateCardinality);
+	    .SetExecCallback(StateExec);
 	function.Register();
 
 	// The bind data seeded three rows, each carrying the local state's tag, which came from the user data.
 	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_state()")) == std::vector<int64_t> {42, 42, 42});
 	REQUIRE(init_global_runs >= 1);
 	REQUIRE(init_local_runs >= 1);
-	REQUIRE(cardinality_runs >= 1);
 }
 
 TEST_CASE("Stable C++API: table function callbacks report failure by throwing", "[cpp_api]") {

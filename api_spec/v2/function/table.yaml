@@ -36,12 +36,6 @@ handles:
       The "exec" callback receives this handle and can use it to e.g. access the global and local state and write
       the next batch of rows to the output chunk.
 
-  table_function_cardinality_info:
-    description: |
-      A borrowed opaque handle to the arguments supplied to a table function during the "cardinality" estimation
-      phase. The "cardinality" callback receives this handle and can use it to report how many rows the scan is
-      expected to produce.
-
   table_function_progress_info:
     description: |
       A borrowed opaque handle to the arguments supplied to a table function during the "progress" phase. The
@@ -97,20 +91,6 @@ callbacks:
     parameters:
       info:
         type: table_function_exec_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
-      context:
-        type: context
-        description: Borrowed handle to the context of the query currently executing the callback.
-      err:
-        type: error_info
-        indirection: 1
-        description: Borrowed error info handle to use to report errors that occur during the callback.
-    return_type: void
-
-  table_function_cardinality_callback:
-    parameters:
-      info:
-        type: table_function_cardinality_info
         description: Borrowed opaque handle providing access to the information available to the callback.
       context:
         type: context
@@ -361,30 +341,6 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  table_function_set_cardinality_callback:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-01" ]
-    description: |
-      Sets the optional cardinality callback of the table function.
-
-      The cardinality callback is invoked during query optimization to estimate how many rows the scan will
-      produce, which the optimizer uses for cost-based decisions such as join ordering. It may be invoked more
-      than once per plan, so it should be cheap and free of side effects. Use
-      `[[table_function_bind_set_cardinality]]` instead when the row count is already known at bind time; the
-      callback takes precedence when both are provided.
-    parameters:
-      function:
-        type: table_function
-        description: The function to set the cardinality callback of.
-      callback:
-        type: table_function_cardinality_callback
-        description: The cardinality callback to set.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
   table_function_set_progress_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-01" ]
@@ -564,10 +520,8 @@ functions:
     description: |
       Sets the estimated number of rows the scan will produce.
 
-      A convenience for the common case where the row count is already known at bind time; use
-      `[[table_function_set_cardinality_callback]]` instead when the estimate depends on state only available
-      later. The estimate is a hint for the optimizer, not a limit: producing a different number of rows is not
-      an error. When both are provided the callback takes precedence.
+      The estimate is a hint for the optimizer, not a limit: producing a different number of rows is not an
+      error. Without it, the optimizer falls back on its own defaults.
     parameters:
       info:
         type: table_function_bind_info
@@ -861,72 +815,6 @@ functions:
         indirection: 1
         kind: OUT
         description: Receives the borrowed output chunk to write into.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  #---------------------------------------------------------------------------------------------------------------------
-  # Cardinality Callback Functions
-  #---------------------------------------------------------------------------------------------------------------------
-  table_function_cardinality_get_user_data:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
-    parameters:
-      info:
-        type: table_function_cardinality_info
-        description: The cardinality info handle.
-      data:
-        type: void
-        indirection: 2
-        kind: OUT
-        description: Receives the user data pointer, or null if none was set.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  table_function_cardinality_get_bind_data:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the bind data set by the function's bind callback.
-    parameters:
-      info:
-        type: table_function_cardinality_info
-        description: The cardinality info handle.
-      data:
-        type: void
-        indirection: 2
-        kind: OUT
-        description: Receives the bind data pointer, or null if none was set.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  table_function_cardinality_set_cardinality:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-01" ]
-    description: |
-      Reports the estimated number of rows the scan will produce.
-
-      The estimate is a hint for the optimizer, not a limit: producing a different number of rows is not an
-      error. A cardinality callback that returns without calling this reports no estimate at all, leaving the
-      optimizer to fall back on its own defaults.
-    parameters:
-      info:
-        type: table_function_cardinality_info
-        description: The cardinality info handle.
-      cardinality:
-        type: idx
-        description: The estimated number of rows.
-      is_exact:
-        type: bool
-        description: Whether the estimate is exact, which also makes it an upper bound on the row count.
       err:
         type: error_info
         indirection: 1

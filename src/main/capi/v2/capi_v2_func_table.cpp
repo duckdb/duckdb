@@ -7,8 +7,8 @@ namespace duckdb::capiv2 {
 class CV2TableFunctionInfo;
 
 //! The bind data of a bound call site. Besides the user's own bind data it carries a borrowed pointer back to the
-//! function info: the cardinality and progress hooks only receive the bind data, so it is their only route to the
-//! callbacks. The registered function owns the info and outlives every call site bound against it.
+//! function info: the progress hook only receives the bind data, so it is its only route to the callbacks. The
+//! registered function owns the info and outlives every call site bound against it.
 class CV2TableFunctionData final : public FunctionData {
 public:
 	shared_ptr<CV2UserData> handle;
@@ -119,23 +119,6 @@ static auto Convert(CV2TableExecInfo *info) -> duckdb_v2_table_function_exec_inf
 	return reinterpret_cast<duckdb_v2_table_function_exec_info_handle>(info);
 }
 
-class CV2TableCardinalityInfo {
-public:
-	void *in_user_data = nullptr;
-	void *in_bind_data = nullptr;
-
-	idx_t out_cardinality = 0;
-	bool out_is_exact = false;
-	bool out_set = false;
-};
-
-static auto Convert(duckdb_v2_table_function_cardinality_info_handle info) -> CV2TableCardinalityInfo * {
-	return reinterpret_cast<CV2TableCardinalityInfo *>(info);
-}
-static auto Convert(CV2TableCardinalityInfo *info) -> duckdb_v2_table_function_cardinality_info_handle {
-	return reinterpret_cast<duckdb_v2_table_function_cardinality_info_handle>(info);
-}
-
 class CV2TableProgressInfo {
 public:
 	void *in_user_data = nullptr;
@@ -158,7 +141,6 @@ public:
 	duckdb_v2_table_function_init_global_callback_fn init_global_cb = nullptr;
 	duckdb_v2_table_function_init_local_callback_fn init_local_cb = nullptr;
 	duckdb_v2_table_function_exec_callback_fn exec_cb = nullptr;
-	duckdb_v2_table_function_cardinality_callback_fn cardinality_cb = nullptr;
 	duckdb_v2_table_function_progress_callback_fn progress_cb = nullptr;
 	shared_ptr<CV2UserData> user_data = nullptr;
 
@@ -343,32 +325,11 @@ static auto CV2TableMakeStatistics(idx_t cardinality, bool is_exact) -> unique_p
 
 static auto CV2TableCardinality(ClientContext &context, const FunctionData *bind_data) -> unique_ptr<NodeStatistics> {
 	const auto &data = bind_data->Cast<CV2TableFunctionData>();
-	const auto &info = *data.info;
-
-	if (info.cardinality_cb) {
-		CV2TableCardinalityInfo args = {};
-		args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
-		args.in_bind_data = data.handle ? data.handle->GetData() : nullptr;
-
-		CV2ErrorInfo err = {};
-		auto err_ptr = Convert(&err);
-		info.cardinality_cb(Convert(&args), Convert(&context), &err_ptr);
-
-		if (err.HasError()) {
-			err.ThrowAsException();
-		}
-		if (args.out_set) {
-			return CV2TableMakeStatistics(args.out_cardinality, args.out_is_exact);
-		}
+	if (!data.cardinality_set) {
+		// No estimate at all: the optimizer falls back on its own defaults.
 		return nullptr;
 	}
-
-	if (data.cardinality_set) {
-		return CV2TableMakeStatistics(data.cardinality, data.cardinality_is_exact);
-	}
-
-	// No estimate at all: the optimizer falls back on its own defaults.
-	return nullptr;
+	return CV2TableMakeStatistics(data.cardinality, data.cardinality_is_exact);
 }
 
 static auto CV2TableProgress(ClientContext &context, const FunctionData *bind_data,
@@ -430,8 +391,8 @@ public:
 			function.SetVarArgs(signature.GetVarArgs());
 		}
 
-		// Always wired: it serves both the cardinality callback and the static estimate a bind callback may set,
-		// which is not known at registration. It reports no estimate when the function provides neither.
+		// Always wired: it serves the estimate a bind callback may set, which is not known at registration. It
+		// reports no estimate when the bind callback sets none.
 		function.cardinality = CV2TableCardinality;
 		if (info.progress_cb) {
 			function.table_scan_progress = CV2TableProgress;
@@ -590,14 +551,6 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_set_exec_callback(duckdb_v2_table_funct
                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
 	return WithErrorHandler(err, [&]() { Convert(function)->info.exec_cb = callback; });
-}
-
-DUCKDB_V2_ERROR
-duckdb_v2_table_function_set_cardinality_callback(duckdb_v2_table_function_handle function,
-                                                  duckdb_v2_table_function_cardinality_callback_fn callback,
-                                                  duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->info.cardinality_cb = callback; });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_set_progress_callback(duckdb_v2_table_function_handle function,
@@ -789,35 +742,6 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_exec_get_output_chunk(duckdb_v2_table_f
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(chunk);
 	return WithErrorHandler(err, [&]() { *chunk = Convert(Convert(info)->output); });
-}
-
-DUCKDB_V2_ERROR
-duckdb_v2_table_function_cardinality_get_user_data(duckdb_v2_table_function_cardinality_info_handle info, void **data,
-                                                   duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
-}
-
-DUCKDB_V2_ERROR
-duckdb_v2_table_function_cardinality_get_bind_data(duckdb_v2_table_function_cardinality_info_handle info, void **data,
-                                                   duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
-}
-
-DUCKDB_V2_ERROR
-duckdb_v2_table_function_cardinality_set_cardinality(duckdb_v2_table_function_cardinality_info_handle info,
-                                                     idx_t cardinality, bool is_exact,
-                                                     duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	return WithErrorHandler(err, [&]() {
-		auto &cardinality_info = *Convert(info);
-		cardinality_info.out_cardinality = cardinality;
-		cardinality_info.out_is_exact = is_exact;
-		cardinality_info.out_set = true;
-	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_progress_get_user_data(duckdb_v2_table_function_progress_info_handle info,

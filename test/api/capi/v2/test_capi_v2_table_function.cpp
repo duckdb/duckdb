@@ -528,28 +528,14 @@ void AnyColumnBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_c
 }
 
 // ---------------------------------------------------------------------------
-// Cardinality and progress
+// Progress
 // ---------------------------------------------------------------------------
 
 struct HookProbe {
-	idx_t cardinality_calls = 0;
 	idx_t progress_calls = 0;
-	bool cardinality_saw_bind_data = false;
 	bool progress_saw_global_state = false;
 };
 HookProbe hook_probe;
-
-void CardinalityCb(duckdb_v2_table_function_cardinality_info_handle info, duckdb_v2_context_handle,
-                   duckdb_v2_error_info_handle *err) {
-	hook_probe.cardinality_calls++;
-	void *bind_ptr = nullptr;
-	if (duckdb_v2_table_function_cardinality_get_bind_data(info, &bind_ptr, err) != DUCKDB_V2_ERROR_NONE) {
-		return;
-	}
-	hook_probe.cardinality_saw_bind_data = bind_ptr != nullptr;
-	auto count = bind_ptr ? static_cast<RangeBind *>(bind_ptr)->count : 0;
-	duckdb_v2_table_function_cardinality_set_cardinality(info, static_cast<idx_t>(count), true, err);
-}
 
 // Only the progress test uses this, and that test needs a full-size vector to stay quick.
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
@@ -806,31 +792,6 @@ TEST_CASE("V2 table: registration refusals", "[capi_v2][table_function]") {
 	}
 
 	duckdb_v2_logical_type_destroy(&bigint);
-}
-
-// ===========================================================================
-// Cardinality.
-// ===========================================================================
-
-TEST_CASE("V2 table: cardinality callback runs during planning", "[capi_v2][table_function]") {
-	EnvFixture fx;
-	hook_probe = HookProbe {};
-
-	auto function = MakeTable(fx.conn, "my_counted");
-	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, StateBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, StateInitGlobalCb, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_local_callback(function, StateInitLocalCb, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, StateExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_cardinality_callback(function, CardinalityCb, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
-
-	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM my_counted()") == 3);
-	REQUIRE(hook_probe.cardinality_calls >= 1);
-	REQUIRE(hook_probe.cardinality_saw_bind_data);
 }
 
 // ===========================================================================
