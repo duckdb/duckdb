@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
@@ -145,21 +147,24 @@ public:
 	static string MissingValuesException(const identifier_map_t<idx_t> &parameters,
 	                                     const identifier_map_t<PAYLOAD> &values, ClientContext *context = nullptr) {
 		// Missing values
-		identifier_set_t missing_set;
-		for (auto &pair : parameters) {
-			auto &name = pair.first;
+		vector<pair<idx_t, Identifier>> missing;
+		for (auto &param_pair : parameters) {
+			auto &name = param_pair.first;
 			if (!values.count(name)) {
 				Value variable_value;
 				if (context && AllowsUserVariableFallback(name) &&
 				    ClientConfig::GetConfig(*context).GetUserVariable(name, variable_value)) {
 					continue;
 				}
-				missing_set.insert(name);
+				missing.emplace_back(param_pair.second, name);
 			}
 		}
+		// Report missing parameters in the order they were declared, not hash-map iteration order.
+		std::sort(missing.begin(), missing.end(),
+		          [](const pair<idx_t, Identifier> &a, const pair<idx_t, Identifier> &b) { return a.first < b.first; });
 		vector<Identifier> missing_values;
-		for (auto &val : missing_set) {
-			missing_values.push_back(val);
+		for (auto &val : missing) {
+			missing_values.push_back(val.second);
 		}
 		return StringUtil::Format("Values were not provided for the following parameters: %s",
 		                          StringUtil::Join(missing_values, ", "));
