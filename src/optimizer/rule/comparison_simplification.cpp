@@ -191,6 +191,13 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType())) {
 			return nullptr;
 		}
+		// Narrowing casts can lose information even when CastIsInvertible allows it
+		// (e.g. INTEGER -> TINYINT). Pass try_cast=false regardless of whether this
+		// expression is a TRY_CAST: we're asking whether the type pair itself can
+		// lose information, not whether this particular cast throws at runtime.
+		if (BoundCastExpression::CastCanThrow(target_type, cast_expression.GetReturnType(), false)) {
+    		return nullptr;
+		}
 
 		// Can we cast the constant at all?
 		string error_message;
