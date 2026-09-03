@@ -455,8 +455,41 @@ static bool IsDirectNumericColumnComparison(const Expression &expr, const vector
 	       TypeSupportsMultiColumnComparison(right.GetReturnType());
 }
 
+static bool IsCaseConstantComparison(const Expression &expr) {
+	if (!BoundComparisonExpression::IsComparison(expr) || !SupportedFilterComparison(expr.GetExpressionType())) {
+		return false;
+	}
+	const auto &comparison = expr.Cast<BoundFunctionExpression>();
+	const auto &left = BoundComparisonExpression::Left(comparison);
+	const auto &right = BoundComparisonExpression::Right(comparison);
+	// Match (CASE op constant) or (constant op CASE); check constant is non-NULL and CASE return type is supported
+	if (left.GetExpressionClass() == ExpressionClass::BOUND_CASE &&
+	    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		auto &constant = right.Cast<BoundConstantExpression>();
+		return !constant.GetValue().IsNull() && TypeSupportsConstantFilter(left.GetReturnType());
+	} else if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+	           right.GetExpressionClass() == ExpressionClass::BOUND_CASE) {
+		auto &constant = left.Cast<BoundConstantExpression>();
+		return !constant.GetValue().IsNull() && TypeSupportsConstantFilter(right.GetReturnType());
+	}
+	return false;
+}
+
+static bool ReferencesMultipleColumns(const vector<ColumnBinding> &bindings) {
+	if (bindings.empty()) {
+		return false;
+	}
+	for (idx_t i = 1; i < bindings.size(); i++) {
+		if (bindings[i] != bindings[0]) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool CanPushdownMultiColumnExpression(const Expression &expr, const vector<ColumnBinding> &bindings) {
-	return IsDirectNumericColumnComparison(expr, bindings) || IsColumnConstantOr(expr);
+	return IsDirectNumericColumnComparison(expr, bindings) || IsColumnConstantOr(expr) ||
+	       (IsCaseConstantComparison(expr) && ReferencesMultipleColumns(bindings));
 }
 
 static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(LogicalGet &get, const Expression &expr,
