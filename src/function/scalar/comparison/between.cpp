@@ -12,8 +12,7 @@ namespace duckdb {
 
 struct BetweenFunctionData : public FunctionData {
 	BetweenFunctionData(bool lower_inclusive, bool upper_inclusive)
-	    : FunctionData(FunctionDataKind::BOUND_BETWEEN), lower_inclusive(lower_inclusive),
-	      upper_inclusive(upper_inclusive) {
+	    : lower_inclusive(lower_inclusive), upper_inclusive(upper_inclusive) {
 	}
 
 	bool lower_inclusive;
@@ -27,6 +26,11 @@ public:
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<BetweenFunctionData>();
 		return lower_inclusive == other.lower_inclusive && upper_inclusive == other.upper_inclusive;
+	}
+
+private:
+	FunctionDataKind GetKind() const override {
+		return FunctionDataKind::BOUND_BETWEEN;
 	}
 };
 

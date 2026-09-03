@@ -739,7 +739,7 @@ private:
 
 	void ExportChildren(const vector<unique_ptr<Expression>> &source, const LogicalPlanVerificationPath &path,
 	                    vector<unique_ptr<ParsedExpression>> &result, vector<LogicalPlanVerificationIssue> &issues,
-	                    optional<LogicalType> expected_type = {}) {
+	                    const optional<LogicalType> &expected_type = {}) {
 		vector<optional_ptr<const Expression>> source_refs;
 		vector<optional<LogicalType>> expected_types;
 		for (auto &child : source) {

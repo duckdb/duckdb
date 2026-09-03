@@ -387,10 +387,6 @@ public:
 		return true;
 	}
 
-	FunctionDataKind GetKind() const {
-		return FunctionDataKind::BOUND_CAST;
-	}
-
 	int32_t value = 0;
 };
 
@@ -402,10 +398,6 @@ public:
 
 	bool Equals(const FunctionData &) const override {
 		return true;
-	}
-
-	FunctionDataKind GetKind() const {
-		return FunctionDataKind::BOUND_BETWEEN;
 	}
 
 	int32_t value = 0;
