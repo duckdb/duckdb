@@ -44,6 +44,13 @@ unique_ptr<SortStrategy> SortStrategy::Factory(ClientContext &client,
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// NextBatch
+//===--------------------------------------------------------------------===//
+SinkNextBatchType SortStrategy::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &batch) const {
+	return SinkNextBatchType::READY;
+}
+
 void SortStrategy::RegisterHyperLogLog(LocalSinkState &, ParallelHyperLogLogLocalState &) const {
 	// NOP for all but HashedSort
 }
