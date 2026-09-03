@@ -1,0 +1,55 @@
+# name: test/sql/pivot/pivot_map_no_args.test
+# description: Test PIVOT IN-list with a map() call whose argument count is not 2 (issue #25276, #25278, #25279)
+# group: [pivot]
+
+statement ok
+CREATE TABLE t(col VARCHAR);
+
+query I
+SELECT * FROM t PIVOT (count(*) FOR col IN (CAST(map() AS VARCHAR)));
+----
+0
+
+statement error
+SELECT * FROM t PIVOT (count(*) FOR col IN (CAST(map(['a']) AS VARCHAR)));
+----
+No function matches the given name and argument types 'map(VARCHAR[])'
+
+statement error
+SELECT * FROM t PIVOT (count(*) FOR col IN (CAST(map(['a'],[1],[2]) AS VARCHAR)));
+----
+No function matches the given name and argument types 'map(VARCHAR[], INTEGER[], INTEGER[])'
+
+query I
+SELECT CAST(map() AS VARCHAR);
+----
+{}
+
+# issue #25278: same bug via an aggregate PIVOT with a different cast target type
+statement error
+SELECT * FROM (SELECT 1 AS a, 'x' AS b) t PIVOT (sum(a) FOR b IN (CAST(map() AS INTEGER)));
+----
+Conversion Error: Unimplemented type for cast (MAP("NULL", "NULL") -> INTEGER)
+
+# issue #25279: same pattern in a second location - the legacy pre-v1.5.0 PIVOT
+# backwards-compat constant-folding path used when serializing PIVOT views.
+# Only reachable once the #25276 fix above lets parsing fall back instead of crashing.
+statement ok
+SET storage_compatibility_version='v1.4.0';
+
+statement ok
+CREATE TABLE t2(year INT, jan INT, feb INT);
+
+statement ok
+INSERT INTO t2 VALUES (2024, 100, 200);
+
+statement ok
+CREATE VIEW v AS PIVOT t2 ON year IN (CAST(map() AS MAP(INT,INT)));
+
+query III
+SELECT * FROM v;
+----
+100	200	0
+
+statement ok
+RESET storage_compatibility_version;
