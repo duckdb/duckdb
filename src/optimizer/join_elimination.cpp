@@ -20,13 +20,9 @@
 
 namespace duckdb {
 
-//! Whether op can emit more rows than it consumes while passing its child's bindings through. Both properties
-//! are required: PIVOT can multiply rows but exposes only its own bindings; WINDOW passes child bindings through
-//! but preserves row count.
+//! True if op can emit more rows than it consumes while passing through its child's bindings.
+//! PIVOT multiplies rows but uses its own bindings; WINDOW passes bindings through but keeps the row count.
 static bool CanDuplicateChildBindings(const LogicalOperator &op) {
-	// LOGICAL_UNNEST keeps child bindings and can emit multiple rows per input.
-	// Do not speculate about LOGICAL_EXTENSION_OPERATOR: that would skip join
-	// elimination for extensions that do not duplicate rows.
 	return op.type == LogicalOperatorType::LOGICAL_UNNEST;
 }
 
@@ -146,7 +142,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 	}
 
 	if (op.children.size() == 1) {
-		// only the pipe below op loses its uniqueness, so the flag is restored on the way back up
+		// uniqueness is only lost below this operator
 		auto old_has_duplicate_child_bindings = pipe_info.has_duplicate_child_bindings;
 		if (CanDuplicateChildBindings(op)) {
 			pipe_info.has_duplicate_child_bindings = true;
