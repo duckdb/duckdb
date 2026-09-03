@@ -229,9 +229,9 @@ jobs:
           rm -rf build/release
           tar -xzf build/release-artifact.tar.gz -C build
 
-      - name: Install format tools
+      - name: Install parser tools
         if: ${{ !inputs.skip_tests }}
-        run: python3 scripts/ci/retry.py -- make -j4 format_tools
+        run: python3 scripts/ci/retry.py -- pip3 install --break-system-packages cxxheaderparser pcpp
 
       - name: Check if extension_entries.hpp is up to date
         if: ${{ !inputs.skip_tests }}
