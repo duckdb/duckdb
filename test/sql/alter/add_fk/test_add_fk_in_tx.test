@@ -1,0 +1,351 @@
+# name: test/sql/alter/add_fk/test_add_fk_in_tx.test
+# description: Test ALTER TABLE ADD FOREIGN KEY with transaction-local changes to PK/FK tables
+# group: [add_fk]
+
+#---------------------------------------------------------------------------
+# Scenario 1: INSERT valid FK row locally, then ALTER + COMMIT.
+# Constraint is enforced after commit.
+#---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk1 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk1 VALUES (1), (2), (3)
+
+statement ok
+CREATE TABLE fk1 (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO fk1 VALUES (1, 1), (2, 2)
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO fk1 VALUES (3, 3)
+
+statement ok
+ALTER TABLE fk1 ADD CONSTRAINT fk1_fk FOREIGN KEY (val) REFERENCES pk1(id)
+
+statement ok
+COMMIT
+
+statement ok
+INSERT INTO fk1 VALUES (4, 3)
+
+statement error
+INSERT INTO fk1 VALUES (4, 999)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+DROP TABLE fk1
+
+statement ok
+DROP TABLE pk1
+
+#---------------------------------------------------------------------------
+# Scenario 2: INSERT invalid FK row locally, then ALTER — must fail.
+#---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk2 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk2 VALUES (1), (2), (3)
+
+statement ok
+CREATE TABLE fk2 (id INTEGER)
+
+statement ok
+INSERT INTO fk2 VALUES (1), (2), (3)
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO fk2 VALUES (99)
+
+statement error
+ALTER TABLE fk2 ADD FOREIGN KEY (id) REFERENCES pk2(id)
+----
+<REGEX>:Constraint Error.*foreign key.*
+
+statement ok
+ROLLBACK
+
+query I
+SELECT COUNT(*) FROM fk2
+----
+3
+
+statement ok
+DROP TABLE fk2
+
+statement ok
+DROP TABLE pk2
+
+#---------------------------------------------------------------------------
+# Scenario 3: DELETE FK row locally, then ALTER — safe, should succeed.
+# The removed FK row cannot cause a violation.
+#---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk3 (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE fk3 (id INTEGER)
+
+statement ok
+INSERT INTO pk3 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO fk3 VALUES (1), (2), (3), (99)
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM fk3 WHERE id = 99
+
+statement ok
+ALTER TABLE fk3 ADD FOREIGN KEY (id) REFERENCES pk3(id)
+
+statement ok
+COMMIT
+
+statement error
+INSERT INTO fk3 VALUES (99)
+----
+<REGEX>:Constraint Error.*foreign key.*
+
+statement ok
+DROP TABLE fk3
+
+statement ok
+DROP TABLE pk3
+
+#---------------------------------------------------------------------------
+# Scenario 4: INSERT PK row locally that committed FK rows reference — should
+# succeed. Local PK index lookup must satisfy the constraint check.
+#---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk4 (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE fk4 (id INTEGER)
+
+statement ok
+INSERT INTO pk4 VALUES (1), (2)
+
+statement ok
+INSERT INTO fk4 VALUES (1), (2), (5)
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO pk4 VALUES (5)
+
+statement ok
+ALTER TABLE fk4 ADD FOREIGN KEY (id) REFERENCES pk4(id)
+
+statement ok
+COMMIT
+
+statement ok
+DROP TABLE fk4
+
+statement ok
+DROP TABLE pk4
+
+#---------------------------------------------------------------------------
+# Scenario 5: DELETE PK row locally that committed FK rows reference — must
+# fail. The ALTER must detect the dangling reference via the PK's local
+# delete_indexes.
+#---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk5 (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE fk5 (id INTEGER)
+
+statement ok
+INSERT INTO pk5 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO fk5 VALUES (1), (2), (3)
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM pk5 WHERE id = 2
+
+statement error
+ALTER TABLE fk5 ADD FOREIGN KEY (id) REFERENCES pk5(id)
+----
+<REGEX>:Constraint Error.*foreign key.*
+
+statement ok
+ROLLBACK
+
+statement ok
+DROP TABLE fk5
+
+statement ok
+DROP TABLE pk5
+
+#---------------------------------------------------------------------------
+# Scenario 6: UPDATE PK key locally (old value still referenced) — must
+# fail. UPDATE is internally DELETE+INSERT of the PK key.
+#---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk6 (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE fk6 (id INTEGER)
+
+statement ok
+INSERT INTO pk6 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO fk6 VALUES (1), (2), (3)
+
+statement ok
+BEGIN
+
+statement ok
+UPDATE pk6 SET id = 33 WHERE id = 3
+
+statement error
+ALTER TABLE fk6 ADD FOREIGN KEY (id) REFERENCES pk6(id)
+----
+<REGEX>:Constraint Error.*foreign key.*
+
+statement ok
+ROLLBACK
+
+statement ok
+DROP TABLE fk6
+
+statement ok
+DROP TABLE pk6
+
+#---------------------------------------------------------------------------
+# Scenario 7: ROLLBACK of ALTER — the constraint must not persist.
+#---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk7 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk7 VALUES (1), (2)
+
+statement ok
+CREATE TABLE fk7 (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO fk7 VALUES (1, 1)
+
+statement ok
+BEGIN
+
+statement ok
+ALTER TABLE fk7 ADD CONSTRAINT fk7_fk FOREIGN KEY (val) REFERENCES pk7(id)
+
+statement ok
+ROLLBACK
+
+statement ok
+INSERT INTO fk7 VALUES (2, 999)
+
+query II
+SELECT * FROM fk7 WHERE val = 999
+----
+2	999
+
+statement ok
+DROP TABLE fk7
+
+statement ok
+DROP TABLE pk7
+
+#---------------------------------------------------------------------------
+# Scenario 8: After ALTER, INSERT FK row referencing a locally-inserted PK
+# row — the DML path must consult the local PK index.
+#---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk8 (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE fk8 (id INTEGER)
+
+statement ok
+INSERT INTO pk8 VALUES (1), (2)
+
+statement ok
+INSERT INTO fk8 VALUES (1), (2)
+
+statement ok
+ALTER TABLE fk8 ADD FOREIGN KEY (id) REFERENCES pk8(id)
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO pk8 VALUES (10)
+
+statement ok
+INSERT INTO fk8 VALUES (10)
+
+statement ok
+COMMIT
+
+statement ok
+DROP TABLE fk8
+
+statement ok
+DROP TABLE pk8
+
+#---------------------------------------------------------------------------
+# Scenario 9: After ALTER, DELETE PK locally that FK rows reference — must
+# fail. Exercises DELETE_FK on committed FK data via the transactional path.
+#---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk9 (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE fk9 (id INTEGER)
+
+statement ok
+INSERT INTO pk9 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO fk9 VALUES (1), (2), (3)
+
+statement ok
+ALTER TABLE fk9 ADD FOREIGN KEY (id) REFERENCES pk9(id)
+
+statement ok
+BEGIN
+
+statement error
+DELETE FROM pk9 WHERE id = 1
+----
+<REGEX>:Constraint Error.*foreign key.*
+
+statement ok
+ROLLBACK
+
+statement ok
+DROP TABLE fk9
+
+statement ok
+DROP TABLE pk9
