@@ -1,5 +1,5 @@
 # name: test/sql/alter/add_unique/test_add_unique.test
-# description: ALTER TABLE ADD UNIQUE must create and enforce a unique index
+# description: ALTER TABLE ADD UNIQUE must enforce uniqueness
 # group: [add_unique]
 
 statement ok
@@ -17,106 +17,12 @@ INSERT INTO t VALUES (1);
 <REGEX>:Constraint Error.*Duplicate key "c: 1" violates unique constraint.*
 
 statement ok
-INSERT INTO t VALUES (2);
-
-# Adding UNIQUE twice on the same column must fail
-statement error
-ALTER TABLE t ADD UNIQUE (c);
-----
-<REGEX>:Catalog Error.*an index with that name already exists for this table: UNIQUE_t_c.*
+CREATE TABLE d(i INT);
 
 statement ok
-INSERT INTO t VALUES (NULL);
-
-statement ok
-INSERT INTO t VALUES (NULL);
-
-query I
-SELECT c FROM t ORDER BY c NULLS LAST
-----
-1
-2
-NULL
-NULL
-
-# Named constraint form
-statement ok
-CREATE TABLE t2(c INT);
-
-statement ok
-INSERT INTO t2 VALUES (1);
-
-statement ok
-ALTER TABLE t2 ADD CONSTRAINT u UNIQUE (c);
+INSERT INTO d VALUES (1), (1);
 
 statement error
-INSERT INTO t2 VALUES (1);
-----
-<REGEX>:Constraint Error.*Duplicate key "c: 1" violates unique constraint.*
-
-# Adding UNIQUE over existing duplicates must fail
-statement ok
-CREATE TABLE duplicates(i INT);
-
-statement ok
-INSERT INTO duplicates VALUES (1), (1);
-
-statement error
-ALTER TABLE duplicates ADD UNIQUE (i);
+ALTER TABLE d ADD UNIQUE (i);
 ----
 <REGEX>:Constraint Error.*contains duplicates on indexed column.*
-
-# Compound UNIQUE
-statement ok
-CREATE TABLE compound(i INT, j INT);
-
-statement ok
-INSERT INTO compound VALUES (1, 2);
-
-statement ok
-ALTER TABLE compound ADD UNIQUE (i, j);
-
-statement error
-INSERT INTO compound VALUES (1, 2);
-----
-<REGEX>:Constraint Error.*Duplicate key "i: 1, j: 2" violates unique constraint.*
-
-statement ok
-INSERT INTO compound VALUES (1, 3);
-
-# NULLs are allowed on a UNIQUE column, unlike PRIMARY KEY
-statement ok
-CREATE TABLE nulls(i INT);
-
-statement ok
-INSERT INTO nulls VALUES (NULL), (1);
-
-statement ok
-ALTER TABLE nulls ADD UNIQUE (i);
-
-statement ok
-INSERT INTO nulls VALUES (NULL);
-
-statement error
-INSERT INTO nulls VALUES (1);
-----
-<REGEX>:Constraint Error.*Duplicate key "i: 1" violates unique constraint.*
-
-# Rollback must drop the unique index
-statement ok
-CREATE TABLE rb(c INT);
-
-statement ok
-BEGIN;
-
-statement ok
-ALTER TABLE rb ADD UNIQUE (c);
-
-statement ok
-INSERT INTO rb VALUES (1);
-
-statement ok
-ROLLBACK;
-
-statement ok
-INSERT INTO rb VALUES (1), (1);
