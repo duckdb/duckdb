@@ -449,7 +449,7 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
 	auto &state = gstate.local_state->Cast<StreamingWindowState>();
 
-	if (state.initialized && state.lead_count) {
+	if (state.initialized && state.lead_count && !state.flushed_delayed) {
 		auto &delayed = state.delayed;
 		//	There are no more input rows
 		auto &input = state.shifted;
@@ -462,6 +462,7 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		}
 		ExecuteDelayed(context, delayed, input, output, gstate_p);
+		state.flushed_delayed = true;
 	}
 
 	return OperatorFinalizeResultType::FINISHED;

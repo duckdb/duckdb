@@ -158,6 +158,17 @@ FROM range(10) tbl(i);
 8	9
 9	50
 
+# Test final output with a resuming downstream operator
+query II
+SELECT count(*), sum(x)
+FROM (
+	SELECT unnest(range(200000)) AS u, x
+	FROM (SELECT lead(i, 1, 7) OVER () AS x FROM range(1) t(i))
+	LIMIT 200001
+)
+----
+200000	1400000
+
 # Test sparse leads
 query TT
 EXPLAIN
