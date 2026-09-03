@@ -206,6 +206,8 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto start = state.GetPositionInSegment();
+	D_ASSERT(start <= segment.count.load());
+	D_ASSERT(scan_count <= segment.count.load() - start);
 
 	auto base_data = scan_state.layout.offsets;
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
@@ -234,12 +236,17 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto start = state.GetPositionInSegment();
+	D_ASSERT(start <= segment.count.load());
+	D_ASSERT(vector_count <= segment.count.load() - start);
+	D_ASSERT(sel_count <= vector_count);
 
 	auto base_data = scan_state.layout.offsets;
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
 	for (idx_t i = 0; i < sel_count; i++) {
-		idx_t index = start + sel.get_index(i);
+		auto selection_index = sel.get_index(i);
+		D_ASSERT(selection_index < vector_count);
+		idx_t index = start + selection_index;
 		auto current_offset = base_data[index];
 		auto prev_offset = index > 0 ? base_data[index - 1] : 0;
 		auto string_length = scan_state.layout.GetStringLength(current_offset, prev_offset);
@@ -269,6 +276,10 @@ BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
 
 void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id,
                                                Vector &result, idx_t result_idx) {
+	D_ASSERT(row_id >= 0);
+	auto row_index = NumericCast<idx_t>(row_id);
+	D_ASSERT(row_index < segment.count.load());
+
 	// fetch a single row from the string segment
 	// first pin the main buffer if it is not already pinned
 	auto &handle = state.GetOrInsertHandle(segment);
@@ -277,7 +288,6 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	auto base_data = layout.offsets;
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
-	auto row_index = NumericCast<idx_t>(row_id);
 	auto dict_offset = base_data[row_index];
 	uint32_t string_length;
 	if (DUCKDB_UNLIKELY(row_id == 0LL)) {
