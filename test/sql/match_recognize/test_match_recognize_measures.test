@@ -20,8 +20,8 @@ SELECT a_val, b_val, mn, cl FROM ev MATCH_RECOGNIZE(
     ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
 ) ORDER BY a_val
 ----
-1	3	1	A
-4	5	2	A
+1	3	1	B
+4	5	2	B
 
 # ALL ROWS PER MATCH reports progress, so a variable reference only sees the match so far
 query IIIII
@@ -87,8 +87,8 @@ SELECT x FROM ev MATCH_RECOGNIZE(
     ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
 ) ORDER BY x
 ----
-10
-40
+30
+50
 
 # a table qualifier is not a pattern variable
 query I
@@ -97,8 +97,8 @@ SELECT x FROM ev AS t MATCH_RECOGNIZE(
     ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
 ) ORDER BY x
 ----
-1
-4
+3
+5
 
 statement ok
 create table im(i integer);
@@ -187,8 +187,8 @@ SELECT x FROM ev MATCH_RECOGNIZE(
     DEFINE A as v=1 AND CLASSIFIER()='A', B as v=0 AND CLASSIFIER()='B'
 ) ORDER BY x
 ----
-1
-4
+3
+5
 
 query II
 SELECT i, cl FROM ev MATCH_RECOGNIZE(
@@ -241,8 +241,8 @@ SELECT x FROM q MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x PATTERN (A A) DEFINE A as MATCH_NUMBER()<=2
 ) ORDER BY x
 ----
-1
-3
+2
+4
 
 # DEFINE and MEASURES agree on the number
 query I

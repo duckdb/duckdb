@@ -417,7 +417,7 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		RewriteMeasure(binder, child, config, symbols, running, inside_aggregate);
+		RewriteMeasure(binder, child, config, symbols, running, one_row, inside_aggregate);
 	});
 }
 
@@ -732,7 +732,9 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		for (auto &alias : measure_aliases) {
 			filter_node->select_list.push_back(make_uniq<ColumnRefExpression>(alias));
 		}
-		filter_node->where_clause = CreateStructExtract("__pattern_window", "is_match_start");
+		// the last row is the one reported: a bare column or CLASSIFIER() in MEASURES reads it
+		// directly, which is the FINAL semantics the standard gives them
+		filter_node->where_clause = CreateStructExtract("__pattern_window", "is_match_end");
 		select_node = std::move(filter_node);
 	}
 

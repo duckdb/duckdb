@@ -20,16 +20,16 @@ SELECT x FROM q MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x PATTERN (A A) DEFINE A as true
 ) ORDER BY x
 ----
-1
-3
+2
+4
 
 query I
 SELECT x FROM q MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x AFTER MATCH SKIP PAST LAST ROW PATTERN (A A) DEFINE A as true
 ) ORDER BY x
 ----
-1
-3
+2
+4
 
 # skipping to the next row keeps every match, including the overlapping ones
 query I
@@ -37,28 +37,35 @@ SELECT x FROM q MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x AFTER MATCH SKIP TO NEXT ROW PATTERN (A A) DEFINE A as true
 ) ORDER BY x
 ----
-1
 2
 3
+4
 
-# skipping to a pattern variable allows matches to abut
-query I
+# skipping to the row the match started on cannot advance, so it is an error
+statement error
 SELECT x FROM q MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x AFTER MATCH SKIP TO FIRST A PATTERN (A A) DEFINE A as true
 ) ORDER BY x
 ----
-1
-2
-3
+<REGEX>:Invalid Input Error:.*cannot advance.*
 
 query I
 SELECT x FROM q MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x AFTER MATCH SKIP TO LAST A PATTERN (A A) DEFINE A as true
 ) ORDER BY x
 ----
-1
 2
 3
+4
+
+# a quantified pattern started inside an earlier match is still its own match
+query I
+SELECT count(*) FROM q MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n ONE ROW PER MATCH
+    AFTER MATCH SKIP TO NEXT ROW PATTERN (A+) DEFINE A as true
+)
+----
+4
 
 # ROWS PER MATCH parses in both forms and combines with AFTER MATCH SKIP
 query I
@@ -66,8 +73,8 @@ SELECT x FROM q MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x ONE ROW PER MATCH PATTERN (A A) DEFINE A as true
 ) ORDER BY x
 ----
-1
-3
+2
+4
 
 # ALL ROWS PER MATCH reports every row of each match, not just the row it started on
 query I
@@ -98,8 +105,8 @@ SELECT x FROM q MATCH_RECOGNIZE(
     MEASURES i AS x PATTERN (A A) DEFINE A as true
 ) ORDER BY x
 ----
-1
-3
+2
+4
 
 # ordering direction changes which rows start a match
 query I
@@ -107,8 +114,8 @@ SELECT x FROM q MATCH_RECOGNIZE(
     ORDER BY i DESC MEASURES i AS x PATTERN (A A) DEFINE A as true
 ) ORDER BY x
 ----
-2
-4
+1
+3
 
 # PARTITION BY accepts arbitrary expressions
 query I
@@ -116,8 +123,8 @@ SELECT x FROM q MATCH_RECOGNIZE(
     PARTITION BY i%2 ORDER BY i MEASURES i AS x PATTERN (A A) DEFINE A as true
 ) ORDER BY x
 ----
-1
-2
+3
+4
 
 statement ok
 create table pt(p integer, i integer);
@@ -161,8 +168,8 @@ SELECT a, b, x FROM m MATCH_RECOGNIZE(
     PARTITION BY a, b ORDER BY i MEASURES i AS x PATTERN (A A) DEFINE A as true
 ) ORDER BY a, b, x
 ----
-1	1	1
-1	2	1
+1	1	2
+1	2	2
 
 statement ok
 create table coll(a integer, i integer);
@@ -176,7 +183,7 @@ SELECT x FROM coll MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x PATTERN (A A) DEFINE A as a=5
 ) ORDER BY x
 ----
-1
+2
 
 statement ok
 create table one(i integer);
@@ -216,8 +223,8 @@ SELECT z.x FROM q AS t MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x PATTERN (A A) DEFINE A as true
 ) AS z ORDER BY z.x
 ----
-1
-3
+2
+4
 
 # several MEASURES entries, and PREV/NEXT/FIRST/LAST inside DEFINE
 statement ok

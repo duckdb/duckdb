@@ -31,7 +31,7 @@ SELECT x, len FROM spanning MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x, count(*) AS len PATTERN (A+) DEFINE A as v=1
 )
 ----
-2040	21
+2060	21
 
 # the same match reported row by row
 query III
@@ -49,7 +49,7 @@ SELECT x, len FROM spanning MATCH_RECOGNIZE(
     DEFINE A as v=1 AND PREV(v)=0, B as v=1 AND LAST(A.v)=1
 )
 ----
-2040	21
+2060	21
 
 statement ok
 create table many_parts as select (i//3000)::int as p, i::int as i, (i%3)::int as v from range(0,9000) t(i);

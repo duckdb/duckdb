@@ -23,6 +23,7 @@ enum MatchRecognizeResult : idx_t {
 	CLASSIFIER = 0,
 	MATCH_NUMBER,
 	IS_MATCH_START,
+	IS_MATCH_END,
 	MATCH_START,
 	MATCH_END,
 	IS_EXCLUDED,
@@ -80,6 +81,7 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 				                                               : Value(MatchRecognizeSymbolName(symbols[span.symbol])));
 				fields[MATCH_NUMBER].SetValue(offset, Value::UBIGINT(span.match_number));
 				fields[IS_MATCH_START].SetValue(offset, Value::BOOLEAN(span.is_match_start));
+				fields[IS_MATCH_END].SetValue(offset, Value::BOOLEAN(row == span.match_end));
 				fields[MATCH_START].SetValue(offset, Value::UBIGINT(span.match_start));
 				fields[MATCH_END].SetValue(offset, Value::UBIGINT(span.match_end));
 				fields[IS_EXCLUDED].SetValue(offset, Value::BOOLEAN(span.excluded));
@@ -116,6 +118,7 @@ LogicalType WindowMatchRecognizeExecutor::ResultType() {
 	return LogicalType::LIST(LogicalType::STRUCT({{"classifier", LogicalType::VARCHAR},
 	                                              {"match_number", LogicalType::UBIGINT},
 	                                              {"is_match_start", LogicalType::BOOLEAN},
+	                                              {"is_match_end", LogicalType::BOOLEAN},
 	                                              {"match_start", LogicalType::UBIGINT},
 	                                              {"match_end", LogicalType::UBIGINT},
 	                                              {"is_excluded", LogicalType::BOOLEAN},
@@ -590,14 +593,21 @@ struct PatternMatcher {
 	               vector<uint8_t> &excluded_rows_p, bool conditions_are_row_local_p)
 	    : program(program_p), symbol_matches(symbol_matches_p), classifiers(classifiers_p),
 	      excluded_rows(excluded_rows_p), conditions_are_row_local(conditions_are_row_local_p),
-	      row_count(classifiers_p.size()), explored(program_p.code.size() * (classifiers_p.size() + 1), 0) {
+	      row_count(classifiers_p.size()), explored(program_p.code.size() * (classifiers_p.size() + 1), 0),
+	      epoch(conditions_are_row_local_p ? 1 : 0) {
 	}
 
 	//! Match starting at `start`, with `input_size` the first row beyond the partition
 	bool Match(idx_t start, idx_t input_size) {
 		if (!conditions_are_row_local) {
-			std::fill(explored.begin(), explored.end(), 0);
+			// stepping the epoch retires every record at once; the array itself only has to be
+			// cleared when the epoch wraps around to a value old records could still hold
+			if (++epoch == 0) {
+				std::fill(explored.begin(), explored.end(), 0);
+				epoch = 1;
+			}
 		}
+		attempt_marks.clear();
 		pending.clear();
 		pending.emplace_back(0, start);
 		while (!pending.empty()) {
@@ -606,13 +616,23 @@ struct PatternMatcher {
 			auto pc = state.first;
 			auto offset = state.second;
 			while (true) {
-				auto &slot = explored[pc * (row_count + 1) + offset];
-				if (slot) {
+				const auto slot_index = pc * (row_count + 1) + offset;
+				auto &slot = explored[slot_index];
+				if (slot == epoch) {
 					break;
 				}
-				slot = 1;
+				slot = epoch;
+				if (conditions_are_row_local) {
+					attempt_marks.push_back(slot_index);
+				}
 				auto &instruction = program.code[pc];
 				if (instruction.op == PatternOp::MATCH) {
+					// a record is only proof of a dead end when its subtree was searched to
+					// exhaustion. This search stopped early, so a later start must be free to walk
+					// these states again - persisting them would hide its matches.
+					for (auto mark : attempt_marks) {
+						explored[mark] = 0;
+					}
 					match_end = offset;
 					return true;
 				}
@@ -652,8 +672,13 @@ private:
 	vector<uint8_t> &excluded_rows;
 	bool conditions_are_row_local;
 	idx_t row_count;
-	//! One flag per (instruction, row): whether that state has been walked already
+	//! One record per (instruction, row): the epoch in which that state was walked
 	vector<uint8_t> explored;
+	//! Records matching this belong to the current attempt; the partition-wide memo of row-local
+	//! conditions never retires, so there it stays at 1
+	uint8_t epoch;
+	//! The records this attempt wrote into the partition-wide memo, undone if it finds a match
+	vector<idx_t> attempt_marks;
 	vector<pair<idx_t, idx_t>> pending;
 };
 
@@ -680,6 +705,11 @@ static idx_t SkipTo(const MatchRecognizeFunctionData &config, idx_t skip_symbol,
 		}
 		if (target.IsValid()) {
 			resume = target.GetIndex();
+			if (resume == match_start) {
+				throw InvalidInputException(
+				    "AFTER MATCH SKIP TO %s resumes at the row the match started on, so matching cannot advance",
+				    config.after_match_variable);
+			}
 		}
 		break;
 	}
@@ -747,11 +777,16 @@ public:
 		for (auto &navigation : config.navigations) {
 			navigation_symbols.push_back(lookup(navigation.symbol));
 		}
+		navigation_positions.resize(config.navigations.size());
 	}
 
 	void BeginMatch(idx_t start, idx_t number) {
 		match_start = start;
 		match_number = number;
+		for (auto &positions : navigation_positions) {
+			positions.clear();
+		}
+		next_row = start;
 	}
 	idx_t SkipSymbol() const {
 		return skip_symbol;
@@ -759,6 +794,26 @@ public:
 
 	bool Matches(idx_t index, idx_t row) {
 		D_ASSERT(index < config.symbols.size());
+		// Every classification passes through here, so the occurrence positions FIRST()/LAST() need
+		// can be kept as the match assembles instead of rescanning it per row. Testing a row again
+		// discards what was recorded from there on: those classifications belonged to an attempt the
+		// matcher has abandoned.
+		if (!navigation_positions.empty()) {
+			D_ASSERT(row <= next_row);
+			if (row < next_row) {
+				for (auto &positions : navigation_positions) {
+					while (!positions.empty() && positions.back() >= row) {
+						positions.pop_back();
+					}
+				}
+			}
+			for (idx_t i = 0; i < navigation_symbols.size(); i++) {
+				if (navigation_symbols[i] == index) {
+					navigation_positions[i].push_back(row);
+				}
+			}
+			next_row = row + 1;
+		}
 		if (index >= config.row_scoped.size() || !config.row_scoped[index]) {
 			return gstate.condition_values[index][row] != 0;
 		}
@@ -772,25 +827,40 @@ public:
 			row_chunk.Initialize(context.client, column_types, 1);
 			// one expression is evaluated at a time here, so the result holds a single column
 			row_result.Initialize(context.client, vector<LogicalType> {LogicalType::BOOLEAN}, 1);
+			// Each column is a dictionary over the group's rows whose selection is shared with the
+			// vector below, so pointing it at another row costs no allocation.
+			row_sel.Initialize(1);
+			for (idx_t col = 0; col < columns.size(); col++) {
+				row_chunk.data[col].Slice(columns[col], row_sel, 1);
+			}
+			navigation_sels.resize(config.navigations.size());
+			navigation_sliced.assign(config.navigations.size(), false);
+			for (auto &navigation_sel : navigation_sels) {
+				navigation_sel.Initialize(1);
+			}
+			row_chunk.SetCardinalityUnsafe(1);
 			ready = true;
 		}
 
-		row_chunk.Reset();
-		for (idx_t col = 0; col < columns.size(); col++) {
-			row_chunk.data[col].Slice(columns[col], row, row + 1);
+		row_sel.set_index(0, row);
+		if (config.depends_on_match_number) {
+			row_chunk.data[MATCH_NUMBER_FIELD].Reference(Value::UBIGINT(match_number), count_t(1));
 		}
-		row_chunk.data[MATCH_NUMBER_FIELD].Reference(Value::UBIGINT(match_number), count_t(1));
 		for (idx_t i = 0; i < config.navigations.size(); i++) {
 			auto &navigation = config.navigations[i];
-			auto target = Navigate(navigation, navigation_symbols[i], row);
+			auto target = Navigate(navigation, i, row);
 			if (target.IsValid()) {
-				row_chunk.data[navigation.field].Slice(columns[navigation.field], target.GetIndex(),
-				                                       target.GetIndex() + 1);
+				// a NULL reference below replaces the dictionary, so it has to be rebuilt after one
+				if (!navigation_sliced[i]) {
+					row_chunk.data[navigation.field].Slice(columns[navigation.field], navigation_sels[i], 1);
+					navigation_sliced[i] = true;
+				}
+				navigation_sels[i].set_index(0, target.GetIndex());
 			} else {
 				row_chunk.data[navigation.field].Reference(Value(columns[navigation.field].GetType()), count_t(1));
+				navigation_sliced[i] = false;
 			}
 		}
-		row_chunk.SetCardinalityUnsafe(1);
 
 		row_result.Reset();
 		if (!executors[index]) {
@@ -805,8 +875,8 @@ public:
 
 private:
 	//! The row FIRST()/LAST() navigates to, or an invalid index when the match has no such row
-	optional_idx Navigate(const MatchRecognizeFunctionData::Navigation &navigation, idx_t symbol, idx_t row) const {
-		auto &assignment = gstate.classifiers;
+	optional_idx Navigate(const MatchRecognizeFunctionData::Navigation &navigation, idx_t navigation_idx,
+	                      idx_t row) const {
 		if (navigation.symbol.empty()) {
 			// the match as a whole, counted from whichever end
 			if (navigation.last) {
@@ -815,21 +885,11 @@ private:
 			const auto target = match_start + navigation.offset;
 			return target > row ? optional_idx() : optional_idx(target);
 		}
-		idx_t seen = 0;
-		if (navigation.last) {
-			for (idx_t candidate = row + 1; candidate > match_start; candidate--) {
-				if (assignment[candidate - 1] == symbol && seen++ == navigation.offset) {
-					return candidate - 1;
-				}
-			}
-		} else {
-			for (idx_t candidate = match_start; candidate <= row; candidate++) {
-				if (assignment[candidate] == symbol && seen++ == navigation.offset) {
-					return candidate;
-				}
-			}
+		auto &positions = navigation_positions[navigation_idx];
+		if (positions.size() <= navigation.offset) {
+			return optional_idx();
 		}
-		return optional_idx();
+		return navigation.last ? positions[positions.size() - 1 - navigation.offset] : positions[navigation.offset];
 	}
 
 	ExecutionContext &context;
@@ -839,11 +899,21 @@ private:
 	vector<unique_ptr<ExpressionExecutor>> executors;
 	vector<unique_ptr<Expression>> conditions;
 	vector<idx_t> navigation_symbols;
+	//! The rows so far classified as each navigation's variable, in match order
+	vector<vector<idx_t>> navigation_positions;
+	//! One past the last row a classification was recorded for
+	idx_t next_row = 0;
 	idx_t skip_symbol = DConstants::INVALID_INDEX;
 	idx_t match_start = 0;
 	idx_t match_number = 1;
 	DataChunk row_chunk;
 	DataChunk row_result;
+	//! The selection behind the row_chunk dictionaries: entry 0 is the row being tested
+	SelectionVector row_sel;
+	//! One selection per navigation field, pointing at the row the navigation resolved to
+	vector<SelectionVector> navigation_sels;
+	//! Whether the navigation field still holds its dictionary rather than a NULL reference
+	vector<bool> navigation_sliced;
 	bool ready = false;
 };
 
