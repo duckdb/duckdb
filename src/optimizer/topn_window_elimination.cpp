@@ -1279,11 +1279,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	lhs->ResolveOperatorTypes();
 	rhs->ResolveOperatorTypes();
 
-	if (!HasExternalCTEReferences(*rhs)) {
-		RemoveUnusedColumns unused_optimizer(optimizer);
-		unused_optimizer.VisitOperator(rhs);
-		rhs->ResolveOperatorTypes();
-	}
+	// NOTE: the RHS is deliberately not pruned here. Running RemoveUnusedColumns on it before the join exists
+	// leaves the operators below referencing columns it removed, which trips debug_verify_column_bindings.
 
 	const idx_t rowid_column_count =
 	    params.include_row_number ? rhs->types.size() - (aggregate_offset + 1) : rhs->types.size() - aggregate_offset;
@@ -1308,6 +1305,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	if (params.include_row_number) {
 		// Add row_number to join result
 		join->right_projection_map.push_back(ProjectionIndex(rhs->types.size() - 1));
+	} else if (use_inner_reconstruction) {
+		// An empty projection map exposes every RHS column for an inner join. Project a narrow join key instead;
+		// UpdateTopmostBindings adds a projection that removes it from the final result.
+		join->right_projection_map.push_back(ProjectionIndex(aggregate_offset));
 	}
 
 	// Project the semantic LHS columns, excluding the row IDs used for reconstruction.
