@@ -288,7 +288,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(CatalogTransaction transaction, ClientContext &context,
-                                                   AlterInfo &info) {
+                                                    AlterInfo &info) {
 	D_ASSERT(!internal);
 
 	// Column comments have a special alter type
@@ -845,7 +845,7 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(CatalogTransaction transaction, ClientContext &context,
-                                                     RemoveColumnInfo &info) {
+                                                      RemoveColumnInfo &info) {
 	auto removed_index = GetColumnIndex(info.removed_column, info.if_column_exists);
 	if (!removed_index.IsValid()) {
 		if (!info.if_column_exists) {
@@ -892,8 +892,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(CatalogTransaction transac
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
 		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 	}
-	auto new_storage = make_shared_ptr<DataTable>(
-	    transaction, context, *storage, columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
+	auto new_storage = make_shared_ptr<DataTable>(transaction, context, *storage,
+	                                              columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage, triggers);
 }
 
