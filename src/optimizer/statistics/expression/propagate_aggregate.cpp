@@ -21,7 +21,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 	AggregateStatisticsInput input(aggr.BindInfo(), stats, node_stats.get());
 	const idx_t child_count = aggr.GetChildren().size();
 	auto result = aggr.Function().GetCallbacks().GetStatisticsCallback()(context, aggr, input);
-	removed_aggregate_children |= aggr.GetChildren().size() < child_count;
+	removed_expressions |= aggr.GetChildren().size() < child_count;
 	return result;
 }
 

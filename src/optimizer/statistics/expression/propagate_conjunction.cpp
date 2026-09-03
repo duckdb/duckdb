@@ -48,6 +48,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConjun
 		if (prune_child) {
 			expr.GetChildrenMutable().erase_at(expr_idx);
 			expr_idx--;
+			removed_expressions = true;
 			continue;
 		}
 		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(constant_value));
