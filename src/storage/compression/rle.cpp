@@ -272,19 +272,24 @@ struct RLEScanState : public SegmentScanState {
 		      unvalidated_row_count(segment_count) {
 		}
 
-		rle_count_t GetRunCount(idx_t entry_index) {
-			ValidateThrough(entry_index);
-			return run_counts[entry_index];
+		//! Validate enough runs to cover every row in the segment.
+		idx_t ValidateAllRuns() {
+			while (unvalidated_row_count > 0) {
+				ValidateThrough(validated_entry_count);
+			}
+			return validated_entry_count;
 		}
 
-		ValidatedRun GetRun(idx_t entry_index) {
+		//! Validate through entry_index and return that run.
+		ValidatedRun ValidateAndGetRun(idx_t entry_index) {
 			ValidateThrough(entry_index);
 			return {values[entry_index], run_counts[entry_index]};
 		}
 
-		unsafe_array_ptr<const T> GetRunValues() {
-			auto run_count = ValidateAllRuns();
-			return values.SubArray(0, run_count);
+		//! Return the first validated_run_count run values.
+		unsafe_array_ptr<const T> GetRunValues(idx_t validated_run_count) const {
+			D_ASSERT(validated_run_count <= validated_entry_count);
+			return values.SubArray(0, validated_run_count);
 		}
 
 		idx_t GetEntryCapacity() const {
@@ -305,13 +310,6 @@ struct RLEScanState : public SegmentScanState {
 				unvalidated_row_count -= run_count;
 				validated_entry_count++;
 			}
-		}
-
-		idx_t ValidateAllRuns() {
-			while (unvalidated_row_count > 0) {
-				ValidateThrough(validated_entry_count);
-			}
-			return validated_entry_count;
 		}
 
 		//! Values read from the segment between RLE_HEADER_SIZE and rle_count_offset.
@@ -346,29 +344,20 @@ struct RLEScanState : public SegmentScanState {
 	      layout(ReadSegmentLayout(handle, segment, segment_count)), entry_pos(0), position_in_entry(0) {
 	}
 
-	rle_count_t GetCurrentRunCount() {
-		auto run_count = layout.GetRunCount(entry_pos);
-		// Empty runs do not represent rows.
-		while (run_count == 0) {
-			ForwardToNextRun();
-			run_count = layout.GetRunCount(entry_pos);
-		}
-		return run_count;
-	}
-
-	ValidatedRun GetCurrentRun() {
-		auto run = layout.GetRun(entry_pos);
+	//! Advances past empty entries while validating the current run.
+	ValidatedRun ValidateAndGetCurrentRun() {
+		auto run = layout.ValidateAndGetRun(entry_pos);
 		// Empty runs do not represent rows.
 		while (run.length == 0) {
 			ForwardToNextRun();
-			run = layout.GetRun(entry_pos);
+			run = layout.ValidateAndGetRun(entry_pos);
 		}
 		return run;
 	}
 
 	inline void SkipInternal(idx_t skip_count) {
 		while (skip_count > 0) {
-			auto run_count = GetCurrentRunCount();
+			auto run_count = ValidateAndGetCurrentRun().length;
 			D_ASSERT(position_in_entry < run_count);
 			idx_t skip_amount = MinValue<idx_t>(skip_count, run_count - position_in_entry);
 
@@ -466,7 +455,7 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	// If we are scanning an entire Vector and it contains only a single run
-	auto current_run = scan_state.GetCurrentRun();
+	auto current_run = scan_state.ValidateAndGetCurrentRun();
 	if (scan_state.position_in_entry < current_run.length &&
 	    CanEmitConstantVector<ENTIRE_VECTOR>(scan_state.position_in_entry, current_run.length, scan_count)) {
 		RLEScanConstant<T>(scan_state, current_run, scan_count, result);
@@ -477,7 +466,7 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 
 	const idx_t result_end = result_offset + scan_count;
 	while (result_offset < result_end) {
-		auto run = scan_state.GetCurrentRun();
+		auto run = scan_state.ValidateAndGetCurrentRun();
 		auto run_count = run.length - scan_state.position_in_entry;
 		idx_t remaining_scan_count = result_end - result_offset;
 		T element = run.value;
@@ -518,7 +507,7 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	// If we are scanning an entire Vector and it contains only a single run we don't need to select at all
-	auto current_run = scan_state.GetCurrentRun();
+	auto current_run = scan_state.ValidateAndGetCurrentRun();
 	if (scan_state.position_in_entry < current_run.length &&
 	    CanEmitConstantVector<true>(scan_state.position_in_entry, current_run.length, vector_count)) {
 		RLEScanConstant<T>(scan_state, current_run, vector_count, result);
@@ -537,7 +526,7 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		// skip forward to the next index
 		scan_state.SkipInternal(next_idx - prev_idx);
 		// read the element
-		result_data.WriteValue(scan_state.GetCurrentRun().value);
+		result_data.WriteValue(scan_state.ValidateAndGetCurrentRun().value);
 		// move the next to the prev
 		prev_idx = next_idx;
 	}
@@ -556,8 +545,8 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 	if (!scan_state.matching_runs) {
 		// we haven't applied the filter yet
 		// apply the filter to all RLE values at once
-		auto run_values = scan_state.layout.GetRunValues();
-		auto total_run_count = run_values.size();
+		auto total_run_count = scan_state.layout.ValidateAllRuns();
+		auto run_values = scan_state.layout.GetRunValues(total_run_count);
 		auto data_pointer = const_cast<T *>(run_values.data());
 
 		// initialize the filter set to all false (all runs are filtered out)
@@ -595,7 +584,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		idx_t result_offset = 0;
 		idx_t result_end = sel_count;
 		while (result_offset < result_end) {
-			auto run = scan_state.GetCurrentRun();
+			auto run = scan_state.ValidateAndGetCurrentRun();
 			auto run_count = run.length - scan_state.position_in_entry;
 			idx_t remaining_scan_count = result_end - result_offset;
 			// the run is scanned - scan it
@@ -634,7 +623,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 			// skip forward to the next index
 			scan_state.SkipInternal(read_idx - prev_idx);
 			prev_idx = read_idx;
-			auto run = scan_state.GetCurrentRun();
+			auto run = scan_state.ValidateAndGetCurrentRun();
 			if (!scan_state.matching_runs[scan_state.entry_pos]) {
 				// this run is filtered out - we don't need to scan it
 				continue;
@@ -668,7 +657,7 @@ void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 	scan_state.Skip(segment, row_index);
 
 	auto result_data = FlatVector::GetDataMutable<T>(result);
-	result_data[result_idx] = scan_state.GetCurrentRun().value;
+	result_data[result_idx] = scan_state.ValidateAndGetCurrentRun().value;
 }
 
 //===--------------------------------------------------------------------===//
