@@ -8,6 +8,7 @@
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/prefix_handle.hpp"
 #include "duckdb/execution/index/art/art_operator.hpp"
 
 namespace duckdb {
@@ -42,39 +43,39 @@ void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, NodePtr &left, NodePtr 
 
 	auto pos = left_key.GetMismatchPos(right_key, depth);
 
-	left.Clear();
-	reference<NodePtr> left_ref(left);
-	if (pos != depth) {
-		// The row IDs share a prefix.
-		Prefix::New(art, left_ref, left_key, depth, pos - depth);
-	}
-
 	auto left_byte = left_key.data[pos];
 	auto right_byte = right_key.data[pos];
 
+	NodePtr replacement;
 	if (pos == Prefix::ROW_ID_COUNT) {
 		// The row IDs differ on the last byte.
-		Node7Leaf::New(art, left_ref);
-		Node7Leaf::InsertByte(art, left_ref, left_byte);
-		Node7Leaf::InsertByte(art, left_ref, right_byte);
-		left.SetGateStatus(status);
-		return;
+		Node7Leaf::New(art, replacement);
+		Node7Leaf::InsertByte(art, replacement, left_byte);
+		Node7Leaf::InsertByte(art, replacement, right_byte);
+	} else {
+		// Create and insert the (compressed) children.
+		// We inline directly into the node, instead of creating prefixes
+		// with a single inlined leaf as their child.
+		Node4::New(art, replacement);
+
+		NodePtr left_child;
+		Leaf::New(left_child, left_row_id);
+		Node4::InsertChild(art, replacement, left_byte, left_child);
+
+		NodePtr right_child;
+		Leaf::New(right_child, right_row_id);
+		Node4::InsertChild(art, replacement, right_byte, right_child);
 	}
 
-	// Create and insert the (compressed) children.
-	// We inline directly into the node, instead of creating prefixes
-	// with a single inlined leaf as their child.
-	Node4::New(art, left_ref);
+	if (pos != depth) {
+		// The row IDs share a prefix.
+		auto chain = PrefixHandle::New(art, left_key, depth, pos - depth);
+		chain.tail.Get() = replacement;
+		replacement = chain.root;
+	}
 
-	NodePtr left_child;
-	Leaf::New(left_child, left_row_id);
-	Node4::InsertChild(art, left_ref, left_byte, left_child);
-
-	NodePtr right_child;
-	Leaf::New(right_child, right_row_id);
-	Node4::InsertChild(art, left_ref, right_byte, right_child);
-
-	left.SetGateStatus(status);
+	replacement.SetGateStatus(status);
+	left = replacement;
 }
 
 void Leaf::TransformToNested(ART &art, NodePtr &node) {
