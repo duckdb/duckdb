@@ -161,7 +161,7 @@ struct MatchState {
 
 	TokenIterator token_iterator;
 	vector<MatcherSuggestion> &suggestions;
-	reference_set_t<const Matcher> added_suggestions;
+	unique_ptr<reference_set_t<const Matcher>> added_suggestions;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
 	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;

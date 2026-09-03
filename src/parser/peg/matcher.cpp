@@ -51,11 +51,15 @@ MatcherResult Matcher::MatchParseResult(MatchState &state) const {
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
-	auto entry = state.added_suggestions.find(*this);
-	if (entry != state.added_suggestions.end()) {
+	if (!state.added_suggestions) {
+		state.added_suggestions = make_uniq<reference_set_t<const Matcher>>();
+	}
+	auto &added_suggestions = *state.added_suggestions;
+	auto entry = added_suggestions.find(*this);
+	if (entry != added_suggestions.end()) {
 		return SuggestionType::MANDATORY;
 	}
-	state.added_suggestions.insert(*this);
+	added_suggestions.insert(*this);
 	return AddSuggestionInternal(state);
 }
 
