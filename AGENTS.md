@@ -267,6 +267,182 @@ DUCKDB_EXTENSIONS='json;icu' make
 - **Factory Pattern**: `Deserialize()` methods for object creation
 - **Class Hierarchy**: Base classes like `*Operator`, `*Entry`, `*Expression` with typed subclasses
 
+## Vector API
+
+The `Vector` API has been reworked: vectors carry their own size, and element access goes
+through typed iterators (reading) and typed writers (writing).
+
+**The old-style vector loops are deprecated and must not be used in new code:**
+
+```cpp
+// DON'T - legacy pattern
+UnifiedVectorFormat vdata;
+input.ToUnifiedFormat(count, vdata);
+auto data = UnifiedVectorFormat::GetData<int64_t>(vdata);
+auto result_data = FlatVector::GetData<int64_t>(result);
+auto &result_validity = FlatVector::ValidityMutable(result);
+for (idx_t i = 0; i < count; i++) {
+	auto idx = vdata.sel->get_index(i);
+	if (!vdata.validity.RowIsValid(idx)) {
+		result_validity.SetInvalid(i);
+		continue;
+	}
+	result_data[i] = data[idx] + 1;
+}
+```
+
+```cpp
+// DO - iterator + writer
+auto input_values = input.Values<int64_t>();
+auto writer = FlatVector::Writer<int64_t>(result, count);
+for (auto entry : input_values) {
+	if (!entry.IsValid()) {
+		writer.WriteNull();
+		continue;
+	}
+	writer.WriteValue(entry.GetValue() + 1);
+}
+```
+
+Headers: `duckdb/common/vector/vector_iterator.hpp` and `duckdb/common/vector/vector_writer.hpp`
+(the latter is pulled in by `flat_vector.hpp`).
+
+### Reading: `Vector::Values<T>()`
+
+`vec.Values<T>()` returns a `VectorIterator<T>` that works on *any* vector type (flat, constant,
+dictionary, sequence) - never call `Flatten()` just to be able to read a vector. Construct it
+**once, outside the loop** (it materializes a `UnifiedVectorFormat` internally), then iterate or
+index into it.
+
+```cpp
+auto values = vec.Values<string_t>();
+for (auto entry : values) {          // or: values[i]
+	entry.IsValid();                 // per-row validity
+	entry.GetValue();                // value (asserts validity)
+	entry.GetValueUnsafe();          // value without the validity assert
+	entry.GetIndex();                // row index
+}
+values.size();                       // == vec.size()
+values.CanHaveNull();                // hoist NULL handling out of the loop
+```
+
+Related iterators:
+- `vec.ValidValues<T>()` - skips NULL rows entirely (`VectorValidValueIterator<T>`), for loops that
+  only care about non-NULL values.
+- `vec.Validity()` - `VectorValidityIterator`, when only validity is needed.
+- `VectorIterator<T>` is not copyable (it owns a `UnifiedVectorFormat`) - build it once and pass it to
+  helpers as `const VectorIterator<T> &`.
+
+### Reading nested types
+
+Nested vectors have iterator specializations, so nested reads need neither `Flatten()` nor manual
+child/offset arithmetic:
+
+```cpp
+// STRUCT with a known schema: STRUCT(a BIGINT, b VARCHAR)
+auto structs = vec.Values<VectorStructType<int64_t, string_t>>();
+for (auto entry : structs) {
+	if (!entry.IsValid()) { ... }            // top-level struct NULL
+	auto a = entry.GetChildValue<0>();       // per-child ValueEntry
+	auto b = entry.GetChildValue<1>();
+	entry.ForEach([&](auto &child) { ... }); // all children in declaration order
+}
+
+// LIST(BIGINT) - nests recursively, e.g. VectorListType<VectorListType<double>>
+auto lists = vec.Values<VectorListType<int64_t>>();
+for (auto entry : lists) {
+	if (!entry.IsValid()) { ... }
+	entry.GetListLength();
+	entry.GetChildValue(idx);                // one child element
+	for (auto child : entry.GetChildValues()) { ... }
+}
+
+// VARIANT - traverses shredded and unshredded variants without unshredding
+VectorIterator<VectorVariantType> variants(vec);
+```
+
+Note: the `VectorListType<T>` iterator does not accept a `DICTIONARY_VECTOR` source - flatten the
+list vector first if it may be a dictionary.
+
+### Writing: `FlatVector::Writer<T>()`
+
+Writers are **push-based**: they write rows in order and track how many rows were written.
+`FlatVector::Writer<T>(result, count)` also sets the result vector's size, so no separate
+`SetSize` / `SetCardinality` call is needed. Use `FlatVector::Writer<T>(result, count, offset)`
+when appending at an offset. The writer asserts on destruction that exactly `count` rows were
+written - call `Truncate()` if you deliberately write fewer.
+
+```cpp
+auto writer = FlatVector::Writer<int64_t>(result, count);
+writer.WriteValue(value);
+writer.WriteNull();
+```
+
+`VectorWriter<string_t>` additionally offers `WriteStringRef(val)` (store a reference without
+copying into the vector's heap - the heap must then be kept alive via
+`StringVector::AddHeapReference`), `WriteEmptyString(len)` (write in place), and `GetHeap()`.
+
+Nested writers mirror the iterators:
+
+```cpp
+// STRUCT: WriteNull() propagates the NULL to every child, keeping the children in sync
+auto writer = FlatVector::Writer<VectorStructType<int64_t, string_t>>(result, count);
+writer.WriteValue([&](auto &a_writer, auto &b_writer) {
+	a_writer.WriteValue(1);
+	b_writer.WriteValue(string_t("hello"));
+});
+writer.ForEach([&](auto &child_writer) { ... });  // same operation for every child
+
+// LIST with a known length per row
+auto list_writer = FlatVector::Writer<VectorListType<int64_t>>(result, count);
+for (auto &child_writer : list_writer.WriteList(n)) {
+	child_writer.WriteValue(...);
+}
+
+// LIST with an unknown length - grows the child vector on demand,
+// the list entry is finalized when the returned writer goes out of scope
+auto list = list_writer.WriteDynamicList();
+while (...) {
+	list.WriteElement().WriteValue(...);
+}
+```
+
+If the element type is not known at compile time, use `FlatVector::Writer<list_entry_t>`, whose
+`WriteDynamicList()` returns a `DynamicListAppender` that appends ranges of another vector via
+`Append(source, sel, source_count, source_offset, copy_count)` / `AppendNulls(count)`.
+
+For the rare case where rows genuinely cannot be written in order, use
+`FlatVector::ScatterWriter<T>(vec)`, which supports random access (`writer[idx] = value`,
+`writer.SetInvalid(idx)`) while still handling string heap allocation.
+
+### Vectors carry their own size
+
+Vector methods no longer take a count - it is read from the vector (`vec.size()`). The
+count-taking overloads are marked `[[deprecated]]` and should not be used:
+
+| Deprecated | Use instead |
+| --- | --- |
+| `Flatten(count)`, `ToUnifiedFormat(count, data)`, `RecursiveToUnifiedFormat(input, count, data)` | the no-count overloads |
+| `Verify(count)`, `ToString(count)`, `Print(count)` | the no-count overloads |
+| `Resize(current_size, to_reserve)` | `Reserve(to_reserve)` |
+| `ListVector::GetEntry` / `ArrayVector::GetEntry` | `GetChild` / `GetChildMutable` |
+| `ListVector::GetData` | `FlatVector::GetData<list_entry_t>` |
+| `DataChunk::SetCardinality` | `DataChunk::CheckCardinality` (or `SetChildCardinality`) |
+| `DataChunk::SetValue` | `Vector::Append(Value)` (or `Vector::SetValue` for write-at-index) |
+
+When writing helper functions, take `const Vector &` and derive the count from the vector instead
+of threading a separate `count` parameter through the call chain.
+
+### When the legacy APIs are still appropriate
+
+- **Element-wise scalar functions**: prefer the executors (`UnaryExecutor`, `BinaryExecutor`,
+  `TernaryExecutor`, `GenericExecutor`) - they already handle vector types, validity and
+  constant-vector short-circuits. Reach for iterators/writers when the executors do not fit
+  (nested output, per-row loops with early exits, multiple outputs).
+- **Type-erased / physical-type-generic code** (hash tables, sorting, row layout, storage,
+  serialization) where the C++ type is not known at compile time: `ToUnifiedFormat(data)` (the
+  no-count overload) is still the right tool.
+
 ## Coding Guidelines (Key Points)
 
 ### C++ Style
