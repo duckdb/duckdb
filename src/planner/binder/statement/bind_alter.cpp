@@ -47,8 +47,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	auto create_index_info = make_uniq<CreateIndexInfo>();
 	create_index_info->table = table_info.GetQualifiedName().Name();
 	create_index_info->index_type = ART::TYPE_NAME;
-	create_index_info->constraint_type =
-	    unique_constraint.IsPrimaryKey() ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
+	create_index_info->constraint_type = unique_constraint.GetIndexConstraintType();
 
 	for (const auto &physical_index : bound_unique.keys) {
 		auto &col = column_list.GetColumn(physical_index);

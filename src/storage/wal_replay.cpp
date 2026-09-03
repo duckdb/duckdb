@@ -972,9 +972,9 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto &storage = table.GetStorage();
-	auto constraint_type = unique_info.IsPrimaryKey() ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
-	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, constraint_type, index_storage_info.name,
-	                       column_ids, unbound_expressions, index_storage_info, index_storage_info.options);
+	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, unique_info.GetIndexConstraintType(),
+	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
+	                       index_storage_info.options);
 
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
 	auto index_instance = index_type->create_instance(input);
