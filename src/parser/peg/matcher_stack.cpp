@@ -85,7 +85,7 @@ void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 		return;
 	}
 	D_ASSERT(frame.process);
-	auto step = frame.process->Resume(std::move(frame.child_result));
+	auto step = frame.process->Resume(frame.child_result);
 	frame.child_result.reset();
 	auto child = step.GetChild();
 	if (!child) {

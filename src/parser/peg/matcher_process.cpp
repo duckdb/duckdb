@@ -11,7 +11,7 @@ MatchStep MatchStep::Child(MatchInput input) {
 }
 
 MatchStep MatchStep::Complete(MatcherResult result) {
-	return MatchStep(nullopt, std::move(result));
+	return MatchStep(nullopt, result);
 }
 
 optional<MatchInput> MatchStep::GetChild() {

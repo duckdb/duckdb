@@ -33,7 +33,7 @@ static MatcherResult ExecuteRecursive(MatchInput input) {
 	auto process = matcher.StartMatch(state);
 	optional<MatcherResult> child_result;
 	while (true) {
-		auto step = process->Resume(std::move(child_result));
+		auto step = process->Resume(child_result);
 		child_result.reset();
 		auto child = step.GetChild();
 		if (!child) {

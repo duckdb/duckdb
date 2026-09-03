@@ -27,7 +27,6 @@ class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
-class MatchProcess;
 
 enum class SuggestionState : uint8_t {
 	SUGGEST_KEYWORD,
