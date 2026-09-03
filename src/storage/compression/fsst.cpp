@@ -679,7 +679,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		for (idx_t i = 0; i < scan_count; i++) {
 			uint32_t string_length = bitunpack_buffer[i + offsets.scan_offset];
 			result_data[i] = UncompressedStringStorage::FetchStringFromDict(
-			    segment, dict.end, result, baseptr,
+			    state.context, segment, dict.end, result, baseptr,
 			    UnsafeNumericCast<int32_t>(delta_decode_buffer[i + offsets.unused_delta_decoded_values]),
 			    string_length);
 		}
@@ -767,7 +767,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	uint32_t string_length = bitunpack_buffer[offsets.scan_offset];
 
 	string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(
-	    segment, dict.end, result, base_ptr,
+	    state.context, segment, dict.end, result, base_ptr,
 	    UnsafeNumericCast<int32_t>(delta_decode_buffer[offsets.unused_delta_decoded_values]), string_length);
 
 	auto &str_allocator = StringVector::GetStringAllocator(result);
