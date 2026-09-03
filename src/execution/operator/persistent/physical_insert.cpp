@@ -676,6 +676,12 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 
 	const auto append_count = collection.GetTotalRows();
 
+	if (append_count >= row_group_size) {
+		// flush thread-local optimistic data
+		lstate.optimistic_writer->WriteUnflushedRowGroups(optimistic_collection);
+		lstate.optimistic_writer->FinalFlush();
+	}
+
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
 	if (append_count < row_group_size) {
