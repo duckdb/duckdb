@@ -100,7 +100,7 @@ struct CSVReaderOptions {
 	//! Whether header names shall be normalized
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
-	unordered_set<string> force_not_null_names;
+	identifier_set_t force_not_null_names;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
 	//! Result size of sniffing phases

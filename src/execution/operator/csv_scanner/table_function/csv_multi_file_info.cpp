@@ -230,14 +230,14 @@ void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 			column_names.insert(name);
 		}
 		for (auto &force_name : options.force_not_null_names) {
-			if (column_names.find(Identifier(force_name)) == column_names.end()) {
+			if (column_names.find(force_name) == column_names.end()) {
 				throw BinderException("\"force_not_null\" expected to find %s, but it was not found in the table",
-				                      force_name);
+				                      force_name.GetIdentifierName());
 			}
 		}
 		D_ASSERT(options.force_not_null.empty());
 		for (idx_t i = 0; i < names.size(); i++) {
-			if (options.force_not_null_names.find(names[i].GetIdentifierName()) != options.force_not_null_names.end()) {
+			if (options.force_not_null_names.find(names[i]) != options.force_not_null_names.end()) {
 				options.force_not_null.push_back(true);
 			} else {
 				options.force_not_null.push_back(false);

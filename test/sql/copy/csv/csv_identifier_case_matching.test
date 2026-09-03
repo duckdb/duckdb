@@ -1,0 +1,24 @@
+# name: test/sql/copy/csv/csv_identifier_case_matching.test
+# description: CSV options and schema matching should use identifier semantics
+# group: [csv]
+
+statement ok
+COPY (SELECT '__NULL__'::VARCHAR AS "A") TO '{TEMP_DIR}/force_not_null_case.csv' (HEADER);
+
+query T
+SELECT CASE WHEN A IS NULL THEN 'null' ELSE 'not_null' END
+FROM read_csv('{TEMP_DIR}/force_not_null_case.csv', header = true, nullstr = '__NULL__', force_not_null = ['a']);
+----
+not_null
+
+statement ok
+COPY (SELECT 1 AS "A") TO '{TEMP_DIR}/csv_schema_case_1.csv' (HEADER);
+
+statement ok
+COPY (SELECT 2 AS "a") TO '{TEMP_DIR}/csv_schema_case_2.csv' (HEADER);
+
+query I
+SELECT SUM(A)
+FROM read_csv(['{TEMP_DIR}/csv_schema_case_1.csv', '{TEMP_DIR}/csv_schema_case_2.csv'], header = true);
+----
+3
