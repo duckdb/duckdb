@@ -88,8 +88,7 @@ ScalarFunction::ScalarFunction(std::initializer_list<FunctionParameter> params, 
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
-	return name == rhs.name && signature == rhs.signature && callbacks == rhs.callbacks &&
-	       properties == rhs.properties && sql_export == rhs.sql_export;
+	return name == rhs.name && signature == rhs.signature && callbacks == rhs.callbacks && properties == rhs.properties;
 }
 
 bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {

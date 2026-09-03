@@ -26,17 +26,13 @@ static unique_ptr<BoundAggregateExpression> BindAggregate(ClientContext &context
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
 	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), name));
-	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
+	vector<LogicalType> child_types;
 	for (auto &child : children) {
-		arguments.emplace_back(Identifier(), std::move(child));
+		child_types.push_back(child->GetReturnType());
 	}
+	const auto &function = entry.functions.GetFunctionByArguments(context, child_types);
 	FunctionBinder function_binder(context);
-	ErrorData error;
-	auto result = function_binder.BindAggregateFunction(entry, std::move(arguments), error, std::move(filter));
-	if (!result) {
-		error.Throw();
-	}
-	return result;
+	return function_binder.BindAggregateFunction(function, std::move(children), std::move(filter));
 }
 
 static unique_ptr<Expression> BindScalar(ClientContext &context, const char *name,

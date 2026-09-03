@@ -9,43 +9,14 @@
 
 namespace duckdb {
 
-static const LogicalType &GetAggregateReturnType(const BoundAggregateFunction &function) {
-	return function.GetReturnType();
-}
-
-static bool AggregateSQLExportChildrenMatchArguments(const vector<unique_ptr<Expression>> &children,
-                                                     const vector<LogicalType> &arguments) {
-	if (children.size() != arguments.size()) {
-		return false;
-	}
-	for (idx_t child_index = 0; child_index < children.size(); child_index++) {
-		if (!children[child_index] || children[child_index]->GetReturnType() != arguments[child_index]) {
-			return false;
-		}
-	}
-	return true;
-}
-
 BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction function,
                                                    vector<unique_ptr<Expression>> children,
                                                    unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
                                                    AggregateType aggr_type)
-    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, GetAggregateReturnType(function)),
+    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.GetReturnType()),
       function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)),
       aggr_type(aggr_type), state_export_mode(AggregateStateExportMode::NONE), filter(std::move(filter)) {
 	D_ASSERT(!this->function.GetName().empty());
-}
-
-void BoundAggregateExpression::SetCatalogSQLExportRecipe(QualifiedName name, vector<LogicalType> arguments,
-                                                         LogicalType return_type,
-                                                         aggregate_function_sql_export_t callback,
-                                                         bool requires_callback) {
-	sql_export_recipe = BoundAggregateFunctionSQLExportRecipe {BoundFunctionSQLExportType::CATALOG,
-	                                                           std::move(name),
-	                                                           std::move(arguments),
-	                                                           std::move(return_type),
-	                                                           callback,
-	                                                           requires_callback};
 }
 
 bool BoundAggregateExpression::IsVolatile() const {
@@ -152,7 +123,6 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() const {
 	copy->CopyProperties(*this);
 	copy->state_export_mode = state_export_mode;
 	copy->order_bys = order_bys ? order_bys->Copy() : nullptr;
-	copy->sql_export_recipe = sql_export_recipe;
 	return std::move(copy);
 }
 
@@ -165,13 +135,6 @@ void BoundAggregateExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(204, "filter", filter, unique_ptr<Expression>());
 	serializer.WritePropertyWithDefault(205, "order_bys", order_bys, unique_ptr<BoundOrderModifier>());
 	serializer.WritePropertyWithDefault(206, "state_export", state_export_mode, AggregateStateExportMode::NONE);
-	serializer.WriteProperty(207, "has_sql_export_recipe", sql_export_recipe.has_value());
-	if (sql_export_recipe) {
-		serializer.WriteProperty<uint8_t>(208, "sql_export_type", static_cast<uint8_t>(sql_export_recipe->type));
-		serializer.WriteProperty(209, "sql_export_name", sql_export_recipe->name);
-		serializer.WriteProperty(210, "sql_export_arguments", sql_export_recipe->arguments);
-		serializer.WriteProperty(211, "sql_export_return_type", sql_export_recipe->return_type);
-	}
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deserializer) {
@@ -187,24 +150,6 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithExplicitDefault(205, "order_bys", result->order_bys, unique_ptr<BoundOrderModifier>());
 	deserializer.ReadPropertyWithExplicitDefault(206, "state_export", result->state_export_mode,
 	                                             AggregateStateExportMode::NONE);
-	auto has_sql_export_recipe = deserializer.ReadPropertyWithDefault<bool>(207, "has_sql_export_recipe");
-	if (has_sql_export_recipe) {
-		auto export_type =
-		    static_cast<BoundFunctionSQLExportType>(deserializer.ReadProperty<uint8_t>(208, "sql_export_type"));
-		auto name = deserializer.ReadProperty<QualifiedName>(209, "sql_export_name");
-		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(210, "sql_export_arguments");
-		auto recipe_return_type = deserializer.ReadProperty<LogicalType>(211, "sql_export_return_type");
-		auto &definition = result->function.GetDefinition();
-		if (export_type != BoundFunctionSQLExportType::CATALOG || !definition ||
-		    name != QualifiedName(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName()) ||
-		    !AggregateSQLExportChildrenMatchArguments(result->children, arguments) ||
-		    recipe_return_type != result->GetReturnType()) {
-			throw SerializationException(
-			    "Bound aggregate SQL export recipe does not match the live catalog definition");
-		}
-		result->SetCatalogSQLExportRecipe(std::move(name), std::move(arguments), std::move(recipe_return_type),
-		                                  definition->GetSQLExportCallback(), definition->HasBindCallback());
-	}
 	if (result->state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
 		if (!return_type.IsAggregateState()) {
 			throw SerializationException("Aggregate State export should return an aggregate state type");

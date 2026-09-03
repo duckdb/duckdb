@@ -51,16 +51,13 @@ unique_ptr<Expression> RewriteOrderedFirst(AggregateRewriteInput &input) {
 	auto &catalog = Catalog::GetSystemCatalog(input.context);
 	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
 	    input.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), function_name));
-	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
+	vector<LogicalType> child_types;
 	for (auto &child : children) {
-		arguments.emplace_back(Identifier(), std::move(child));
+		child_types.push_back(child->GetReturnType());
 	}
-	ErrorData bind_error;
-	auto result = binder.BindAggregateFunction(entry, std::move(arguments), bind_error,
-	                                           std::move(aggregate->GetFilterMutable()), aggregate->GetAggregateType());
-	if (!result) {
-		bind_error.Throw();
-	}
+	const auto &function = entry.functions.GetFunctionByArguments(input.context, child_types);
+	auto result = binder.BindAggregateFunction(function, std::move(children), std::move(aggregate->GetFilterMutable()),
+	                                           aggregate->GetAggregateType());
 	return unique_ptr_cast<BoundAggregateExpression, Expression>(std::move(result));
 }
 

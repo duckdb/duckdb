@@ -327,24 +327,6 @@ public:
 	bool operator!=(const AggregateFunctionCallbacks &rhs) const;
 };
 
-//! Callbacks that select only the physical aggregate implementation and its state representation.
-struct AggregateFunctionExecutionCallbacks {
-	aggregate_size_t state_size = nullptr;
-	aggregate_initialize_t initialize = nullptr;
-	aggregate_update_t update = nullptr;
-	aggregate_combine_t combine = nullptr;
-	aggregate_finalize_t finalize = nullptr;
-	aggregate_init_local_state_finalize_t init_local_state_finalize = nullptr;
-	aggregate_cluster_update_t cluster_update = nullptr;
-	aggregate_window_t window = nullptr;
-	aggregate_wininit_t window_init = nullptr;
-	aggregate_window_batch_t window_batch = nullptr;
-	aggregate_destructor_t destructor = nullptr;
-	aggregate_get_state_type_t get_state_type = nullptr;
-	aggregate_finalize_t export_aggregate_state = nullptr;
-	aggregate_import_state_t import_aggregate_state = nullptr;
-};
-
 class AggregateFunctionProperties : public FunctionProperties {
 public:
 	//! Whether the aggregate is order dependent
@@ -370,38 +352,6 @@ public:
 	auto GetCallbacks() const -> const AggregateFunctionCallbacks & { return callbacks; }
 	auto GetCallbacks() -> AggregateFunctionCallbacks & { return callbacks; }
 	auto SetCallbacks(const AggregateFunctionCallbacks &value) -> void { callbacks = value; }
-	AggregateFunctionExecutionCallbacks GetExecutionCallbacks() const {
-		return {callbacks.state_size,
-		        callbacks.initialize,
-		        callbacks.update,
-		        callbacks.combine,
-		        callbacks.finalize,
-		        callbacks.init_local_state_finalize,
-		        callbacks.cluster_update,
-		        callbacks.window,
-		        callbacks.window_init,
-		        callbacks.window_batch,
-		        callbacks.destructor,
-		        callbacks.get_state_type,
-		        callbacks.export_aggregate_state,
-		        callbacks.import_aggregate_state};
-	}
-	void SetExecutionCallbacks(const AggregateFunctionExecutionCallbacks &value) {
-		callbacks.state_size = value.state_size;
-		callbacks.initialize = value.initialize;
-		callbacks.update = value.update;
-		callbacks.combine = value.combine;
-		callbacks.finalize = value.finalize;
-		callbacks.init_local_state_finalize = value.init_local_state_finalize;
-		callbacks.cluster_update = value.cluster_update;
-		callbacks.window = value.window;
-		callbacks.window_init = value.window_init;
-		callbacks.window_batch = value.window_batch;
-		callbacks.destructor = value.destructor;
-		callbacks.get_state_type = value.get_state_type;
-		callbacks.export_aggregate_state = value.export_aggregate_state;
-		callbacks.import_aggregate_state = value.import_aggregate_state;
-	}
 
 public: // Properties
 
@@ -650,7 +600,7 @@ public:
 
 public:
 	bool operator==(const AggregateFunction &rhs) const {
-		return callbacks == rhs.callbacks && sql_export == rhs.sql_export;
+		return callbacks == rhs.callbacks;
 	}
 	bool operator!=(const AggregateFunction &rhs) const {
 		return !(*this == rhs);

@@ -21,8 +21,6 @@ struct BoundBetweenExpression {
 
 	static bool LowerInclusive(const BoundFunctionExpression &between_expr);
 	static bool UpperInclusive(const BoundFunctionExpression &between_expr);
-	//! Whether the current function retains the built-in BETWEEN behavior
-	static bool HasCanonicalFunction(const BoundFunctionExpression &between_expr);
 	//! Whether the expression contains the bind data owned by the built-in BETWEEN implementation
 	static bool HasValidBindData(const BoundFunctionExpression &between_expr);
 

@@ -10,13 +10,9 @@
 
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/function/aggregate_function.hpp"
-#include "duckdb/planner/expression/bound_function_sql_export.hpp"
 #include <memory>
 
 namespace duckdb {
-
-struct ExportAggregateFunction;
-class FunctionBinder;
 
 class BoundAggregateExpression : public Expression {
 public:
@@ -36,11 +32,7 @@ public:
 		return function;
 	}
 	BoundAggregateFunction &FunctionMutable() {
-		sql_export_recipe.reset();
 		return function;
-	}
-	void SetExecutionCallbacks(const AggregateFunctionExecutionCallbacks &callbacks) {
-		function.SetExecutionCallbacks(callbacks);
 	}
 	const vector<unique_ptr<Expression>> &GetChildren() const {
 		return children;
@@ -52,11 +44,7 @@ public:
 		return bind_info;
 	}
 	unique_ptr<FunctionData> &BindInfoMutable() {
-		sql_export_recipe.reset();
 		return bind_info;
-	}
-	optional_ptr<const BoundAggregateFunctionSQLExportRecipe> GetSQLExportRecipe() const {
-		return sql_export_recipe ? &*sql_export_recipe : nullptr;
 	}
 	AggregateType GetAggregateType() const {
 		return aggr_type;
@@ -102,12 +90,6 @@ public:
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 private:
-	void SetCatalogSQLExportRecipe(QualifiedName name, vector<LogicalType> arguments, LogicalType return_type,
-	                               aggregate_function_sql_export_t callback, bool requires_callback);
-
-	friend struct ExportAggregateFunction;
-	friend class FunctionBinder;
-
 	//! The bound function expression
 	BoundAggregateFunction function;
 	//! List of arguments to the function
@@ -123,7 +105,5 @@ private:
 	unique_ptr<Expression> filter;
 	//! The order by expression for this aggregate - if any
 	unique_ptr<BoundOrderModifier> order_bys;
-	//! Authenticated logical SQL identity, independent of the current execution implementation
-	optional<BoundAggregateFunctionSQLExportRecipe> sql_export_recipe;
 };
 } // namespace duckdb

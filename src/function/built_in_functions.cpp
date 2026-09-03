@@ -125,13 +125,10 @@ static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput 
 	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
 	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), bound_function.GetName()));
 
+	// override the function with the extension function
+	auto func = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());
 	FunctionBinder function_binder(context);
-	ErrorData error;
-	auto result = function_binder.BindScalarFunction(function_entry, std::move(arguments), error);
-	if (!result) {
-		error.Throw();
-	}
-	return result;
+	return function_binder.BindScalarFunction(std::move(func), std::move(arguments));
 }
 
 void BuiltinFunctions::AddExtensionFunction(ScalarFunctionSet set) {

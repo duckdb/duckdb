@@ -113,11 +113,13 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			}
 			auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
 
+			vector<LogicalType> aggregation_input_types;
 			vector<unique_ptr<Expression>> bound_children;
 
 			// Bind the children of the aggregate function
 			for (auto &child : func_expr.GetArgumentsMutable()) {
 				auto bound_child = expression_binder.Bind(child.GetExpressionMutable());
+				aggregation_input_types.push_back(bound_child->GetReturnType());
 				bound_children.push_back(std::move(bound_child));
 			}
 
@@ -143,15 +145,16 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().Binding().column_index;
 			}
 
-			vector<pair<Identifier, unique_ptr<Expression>>> aggregate_arguments;
-			for (auto &child : bound_children) {
-				aggregate_arguments.emplace_back(Identifier(), std::move(child));
-			}
-			auto aggregate = function_binder.BindAggregateFunction(func, std::move(aggregate_arguments), error, nullptr,
-			                                                       AggregateType::NON_DISTINCT);
-			if (!aggregate) {
+			// Find the best matching aggregate function
+			auto best_function_idx =
+			    function_binder.BindFunction(func.name, func.functions, aggregation_input_types, error);
+			if (!best_function_idx.IsValid()) {
 				throw BinderException("No matching aggregate function\n%s", error.Message());
 			}
+			// Found a matching function, bind it as an aggregate
+			const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+			auto aggregate = function_binder.BindAggregateFunction(best_function, std::move(bound_children), nullptr,
+			                                                       AggregateType::NON_DISTINCT);
 
 			if (payload_references.find(aggregate_idx) != payload_references.end()) {
 				throw BinderException(func_expr.GetQueryLocation(),

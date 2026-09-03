@@ -328,7 +328,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 	const bool sum_fits_in_int64 =
 	    wide_negative > NumericLimits<int64_t>::Minimum() && wide_positive < NumericLimits<int64_t>::Maximum();
 	if (has_no_overflow_variant && sum_fits_in_int64) {
-		expr.SetExecutionCallbacks(GetSumAggregateNoOverflow(internal_type).GetExecutionCallbacks());
+		expr.FunctionMutable().ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
 	}
 
 	// Propagate stats.
