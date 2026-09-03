@@ -159,6 +159,14 @@ struct HandleTraits<QualifiedName> {
 	using handle = duckdb_v2_qname_handle;
 };
 template <>
+struct HandleTraits<TableDescription> {
+	using handle = duckdb_v2_table_description_handle;
+};
+template <>
+struct HandleTraits<ColumnDescription> {
+	using handle = duckdb_v2_column_description_handle;
+};
+template <>
 struct HandleTraits<FileSystem> {
 	using handle = duckdb_v2_file_system_handle;
 };
@@ -1049,6 +1057,12 @@ auto Connection::Bind(const SqlStatement &statement) const -> Signature {
 	duckdb_v2_schema_handle out_parameters = nullptr;
 	CheckedAPICall(duckdb_v2_statement_bind, handle(), statement.handle(), &out_schema, &out_parameters);
 	return Signature {detail::Factory::Make<Schema>(out_schema), detail::Factory::Make<Schema>(out_parameters)};
+}
+
+auto Connection::DescribeTable(const QualifiedName &name) const -> TableDescription {
+	duckdb_v2_table_description_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_connection_describe_table, handle(), name.handle(), &_h);
+	return detail::Factory::Make<TableDescription>(_h);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -5108,6 +5122,42 @@ auto QualifiedName::Hash() const -> uint64_t {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Table Description
+//----------------------------------------------------------------------------------------------------------------------
+
+TableDescription::TableDescription(void *impl) : detail::Handle<TableDescription>(impl) {
+}
+
+TableDescription::~TableDescription() {
+	auto _h = handle();
+	duckdb_v2_table_description_destroy(&_h);
+}
+
+auto TableDescription::GetQualifiedName() const -> QualifiedName {
+	duckdb_v2_qname_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_table_description_get_qname, handle(), &_h);
+	return detail::Factory::Make<QualifiedName>(_h);
+}
+
+auto TableDescription::GetColumnCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_table_description_get_column_count, handle(), &count);
+	return count;
+}
+
+auto TableDescription::GetColumn(idx_t index) const -> ColumnDescription {
+	duckdb_v2_column_description_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_table_description_get_column, handle(), index, &_h);
+	return detail::Factory::Make<ColumnDescription>(_h);
+}
+
+auto TableDescription::IsReadOnly() const -> bool {
+	bool result = false;
+	CheckedAPICall(duckdb_v2_table_description_is_readonly, handle(), &result);
+	return result;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // Replacement Scan
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -5455,6 +5505,45 @@ void Appender::Flush() {
 void Appender::Clear() {
 	ResetBuffer();
 	broken = false;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Column Description
+//----------------------------------------------------------------------------------------------------------------------
+
+ColumnDescription::ColumnDescription(void *impl) : detail::Handle<ColumnDescription>(impl) {
+}
+
+ColumnDescription::~ColumnDescription() {
+	auto _h = handle();
+	duckdb_v2_column_description_destroy(&_h);
+}
+
+auto ColumnDescription::GetName() const -> std::string_view {
+	duckdb_v2_identifier_t name = {nullptr, 0};
+	CheckedAPICall(duckdb_v2_column_description_get_name, handle(), &name);
+	return FromStr(name);
+}
+
+auto ColumnDescription::GetType() const -> LogicalType {
+	duckdb_v2_logical_type_handle borrowed = nullptr;
+	CheckedAPICall(duckdb_v2_column_description_get_type, handle(), &borrowed);
+	// get_type borrows the type; copy it into an owned handle the wrapper manages.
+	duckdb_v2_logical_type_handle owned = nullptr;
+	CheckedAPICall(duckdb_v2_logical_type_copy, borrowed, &owned);
+	return detail::Factory::Make<LogicalType>(owned);
+}
+
+auto ColumnDescription::HasDefault() const -> bool {
+	bool result = false;
+	CheckedAPICall(duckdb_v2_column_description_has_default, handle(), &result);
+	return result;
+}
+
+auto ColumnDescription::HasGenerated() const -> bool {
+	bool result = false;
+	CheckedAPICall(duckdb_v2_column_description_has_generated, handle(), &result);
+	return result;
 }
 
 } // namespace cxx

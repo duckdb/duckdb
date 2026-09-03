@@ -88,6 +88,8 @@ class CustomType;
 class CastFunction;
 class ReplacementScan;
 class QualifiedName;
+class TableDescription;
+class ColumnDescription;
 class FileSystem;
 class FileHandle;
 class FileOpenOptions;
@@ -647,6 +649,12 @@ public:
 	/// @param statement The statement to bind.
 	/// @return Its signature: the columns it will produce and the parameters it expects.
 	auto Bind(const SqlStatement &statement) const -> Signature;
+
+	/// Resolves a table name and snapshots its description: where it resolved, its columns, and per-column facts.
+	/// @param name A possibly partial table name, resolved through the search path exactly as SQL resolves it.
+	/// @throws Exception When the name resolves to nothing, to a view, or is ambiguous between a schema and an attached
+	/// database.
+	auto DescribeTable(const QualifiedName &name) const -> TableDescription;
 
 	/// Prepares a statement into a handle that can be executed repeatedly, borrowing it rather than consuming it.
 	/// @param statement The statement to prepare.
@@ -4959,6 +4967,68 @@ inline bool operator==(const QualifiedName &lhs, const QualifiedName &rhs) {
 inline bool operator!=(const QualifiedName &lhs, const QualifiedName &rhs) {
 	return !lhs.Equals(rhs);
 }
+
+//----------------------------------------------------------------------------------------------------------------------
+// Table Description
+//----------------------------------------------------------------------------------------------------------------------
+
+/// An owned snapshot of one base table, taken by `Connection::DescribeTable`: where the name resolved, the table's
+/// columns in declared order (generated columns included), and per-column catalog facts. Later DDL does not update it.
+class TableDescription final : public detail::Handle<TableDescription> {
+	friend detail::Factory;
+
+public:
+	TableDescription(TableDescription &&) noexcept = default;
+	TableDescription &operator=(TableDescription &&) noexcept = default;
+
+	~TableDescription() override;
+
+	/// The fully resolved name: the catalog, schema and table the lookup landed on, with the casing the table was
+	/// created with.
+	auto GetQualifiedName() const -> QualifiedName;
+
+	/// How many columns the table has, generated columns included.
+	auto GetColumnCount() const -> idx_t;
+
+	/// An owned description of one column, independent of this table description.
+	/// @param index Column index in [0, GetColumnCount()).
+	/// @throws Exception When the index is out of range.
+	auto GetColumn(idx_t index) const -> ColumnDescription;
+
+	/// Whether the catalog the table lives in was attached read-only.
+	auto IsReadOnly() const -> bool;
+
+private:
+	explicit TableDescription(void *impl);
+};
+
+/// An owned snapshot of one column of a described table, from `TableDescription::GetColumn`: its name, type and
+/// catalog facts. Independent of the table description it came from.
+class ColumnDescription final : public detail::Handle<ColumnDescription> {
+	friend detail::Factory;
+
+public:
+	ColumnDescription(ColumnDescription &&) noexcept = default;
+	ColumnDescription &operator=(ColumnDescription &&) noexcept = default;
+
+	~ColumnDescription() override;
+
+	/// The column name, with the casing it was declared with.
+	/// @return A view borrowed from this description, valid until it is destroyed.
+	auto GetName() const -> std::string_view;
+
+	/// An owned copy of the column type.
+	auto GetType() const -> LogicalType;
+
+	/// Whether the column declares a default expression. Generated columns report false.
+	auto HasDefault() const -> bool;
+
+	/// Whether the column is generated: computed by the engine and not writable.
+	auto HasGenerated() const -> bool;
+
+private:
+	explicit ColumnDescription(void *impl);
+};
 
 //----------------------------------------------------------------------------------------------------------------------
 // Replacement Scan

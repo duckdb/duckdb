@@ -987,6 +987,18 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_arrow_importer_next_chunk)
 	(duckdb_v2_arrow_importer_handle importer, duckdb_v2_data_chunk_handle *out_chunk,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_column_description_destroy)(duckdb_v2_column_description_handle *column);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_description_get_name)
+	(duckdb_v2_column_description_handle column, duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_description_get_type)
+	(duckdb_v2_column_description_handle column, duckdb_v2_logical_type_handle *type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_description_has_default)
+	(duckdb_v2_column_description_handle column, bool *has_default, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_description_has_generated)
+	(duckdb_v2_column_description_handle column, bool *has_generated, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_describe_table)
+	(duckdb_v2_connection_handle conn, duckdb_v2_qname_handle name, duckdb_v2_table_description_handle *desc,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_bind_get_column_count)
 	(duckdb_v2_copy_from_bind_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_bind_get_column_name)
@@ -1167,6 +1179,16 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_result_to_arrow_stream)
 	(duckdb_v2_result_handle *result, idx_t batch_size, struct ArrowArrayStream *out_stream,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_table_description_destroy)(duckdb_v2_table_description_handle *desc);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_description_get_column)
+	(duckdb_v2_table_description_handle desc, idx_t index, duckdb_v2_column_description_handle *column,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_description_get_column_count)
+	(duckdb_v2_table_description_handle desc, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_description_get_qname)
+	(duckdb_v2_table_description_handle desc, duckdb_v2_qname_handle *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_description_is_readonly)
+	(duckdb_v2_table_description_handle desc, bool *readonly, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -1598,6 +1620,12 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_arrow_importer_destroy = duckdb_v2_arrow_importer_destroy;
 	result.duckdb_v2_arrow_importer_get_schema = duckdb_v2_arrow_importer_get_schema;
 	result.duckdb_v2_arrow_importer_next_chunk = duckdb_v2_arrow_importer_next_chunk;
+	result.duckdb_v2_column_description_destroy = duckdb_v2_column_description_destroy;
+	result.duckdb_v2_column_description_get_name = duckdb_v2_column_description_get_name;
+	result.duckdb_v2_column_description_get_type = duckdb_v2_column_description_get_type;
+	result.duckdb_v2_column_description_has_default = duckdb_v2_column_description_has_default;
+	result.duckdb_v2_column_description_has_generated = duckdb_v2_column_description_has_generated;
+	result.duckdb_v2_connection_describe_table = duckdb_v2_connection_describe_table;
 	result.duckdb_v2_copy_from_bind_get_column_count = duckdb_v2_copy_from_bind_get_column_count;
 	result.duckdb_v2_copy_from_bind_get_column_name = duckdb_v2_copy_from_bind_get_column_name;
 	result.duckdb_v2_copy_from_bind_get_column_type = duckdb_v2_copy_from_bind_get_column_type;
@@ -1676,6 +1704,11 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_prepared_statement_execute = duckdb_v2_prepared_statement_execute;
 	result.duckdb_v2_prepared_statement_reuses_plan = duckdb_v2_prepared_statement_reuses_plan;
 	result.duckdb_v2_result_to_arrow_stream = duckdb_v2_result_to_arrow_stream;
+	result.duckdb_v2_table_description_destroy = duckdb_v2_table_description_destroy;
+	result.duckdb_v2_table_description_get_column = duckdb_v2_table_description_get_column;
+	result.duckdb_v2_table_description_get_column_count = duckdb_v2_table_description_get_column_count;
+	result.duckdb_v2_table_description_get_qname = duckdb_v2_table_description_get_qname;
+	result.duckdb_v2_table_description_is_readonly = duckdb_v2_table_description_is_readonly;
 	return result;
 }
 

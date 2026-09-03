@@ -23,6 +23,7 @@
 #include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
@@ -231,6 +232,24 @@ inline auto Convert(duckdb_v2_qname_handle name) -> CV2QualifiedName * {
 }
 inline auto Convert(CV2QualifiedName *name) -> duckdb_v2_qname_handle {
 	return reinterpret_cast<duckdb_v2_qname_handle>(name);
+}
+
+using CV2TableDescription = duckdb::TableDescription;
+
+inline auto Convert(duckdb_v2_table_description_handle desc) -> CV2TableDescription * {
+	return reinterpret_cast<CV2TableDescription *>(desc);
+}
+inline auto Convert(CV2TableDescription *desc) -> duckdb_v2_table_description_handle {
+	return reinterpret_cast<duckdb_v2_table_description_handle>(desc);
+}
+
+using CV2ColumnDescription = duckdb::ColumnDefinition;
+
+inline auto Convert(duckdb_v2_column_description_handle column) -> CV2ColumnDescription * {
+	return reinterpret_cast<CV2ColumnDescription *>(column);
+}
+inline auto Convert(CV2ColumnDescription *column) -> duckdb_v2_column_description_handle {
+	return reinterpret_cast<duckdb_v2_column_description_handle>(column);
 }
 
 using CV2Value = duckdb::Value;
