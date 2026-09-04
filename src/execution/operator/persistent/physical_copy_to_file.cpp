@@ -526,6 +526,8 @@ public:
 	//! Current append batch (unpartitioned write)
 	unique_ptr<ColumnDataCollection> batch;
 	ColumnDataAppendState batch_append_state;
+	//! Cuts chunks so BATCH_SIZE_BYTES is reachable
+	unique_ptr<CopyBatchAppender> batch_appender;
 
 	//! Local state (partitioned write)
 	unique_ptr<PartitionedCopyLocalState> partitioned_copy_local_state;
@@ -1947,6 +1949,8 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextBatchTask() {
 		// Uses entry-level validity mask iteration to skip 64 rows at a time (see ExecuteFlat in unary_executor.hpp)
 		D_ASSERT(batch_row_idx <= batch_scan_state.next_row_index);
 		const idx_t chunk_end = batch_scan_state.next_row_index;
+		const idx_t chunk_begin = batch_scan_state.current_row_index;
+		const idx_t row_before = batch_row_idx;
 		// Skip batch_row_idx itself if it's the start of the current partition
 		const idx_t search_start = batch_row_idx + (batch_row_idx == task.begin_idx ? 1 : 0);
 		if (search_start < chunk_end) {
@@ -1978,13 +1982,33 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextBatchTask() {
 			batch_row_idx = chunk_end;
 		}
 
-		// Did not find the next partition boundary, add chunk
+		// Did not find the next partition boundary, add the rows taken from this chunk
 		auto &segment = segments[batch_scan_state.segment_index];
+		const idx_t chunk_bytes = segment->GetChunkAllocationSize(batch_scan_state.chunk_index - 1);
+		const idx_t chunk_rows = chunk_end - chunk_begin;
+		const idx_t chunk_bytes_per_row = chunk_rows == 0 ? chunk_bytes : (chunk_bytes + chunk_rows - 1) / chunk_rows;
+		idx_t rows_taken = batch_row_idx - row_before;
+
+		// A batch can only end where this loop stops, so cut inside a chunk holding more than
+		// BATCH_SIZE_BYTES. The average row width avoids reading the chunk to get exact widths
+		bool cut_for_size = false;
+		const auto &batch_size_bytes = partitioned_copy.op.batch_size_bytes;
+		if (batch_size_bytes.IsValid() && rows_taken > 1 && chunk_bytes_per_row > 0) {
+			const idx_t limit = batch_size_bytes.GetIndex();
+			const idx_t budget = limit > current_batch_size_bytes ? limit - current_batch_size_bytes : 0;
+			const idx_t fits = MaxValue<idx_t>(budget / chunk_bytes_per_row, 1);
+			if (fits < rows_taken) {
+				batch_row_idx = row_before + fits;
+				rows_taken = fits;
+				found_next_partition = false; // we stopped short of the boundary
+				cut_for_size = true;
+			}
+		}
+		current_batch_size_bytes += chunk_bytes_per_row * rows_taken;
+
 		const auto current_batch_size = batch_row_idx - task.begin_idx;
-		current_batch_size_bytes += segment->GetChunkAllocationSize(batch_scan_state.chunk_index - 1);
 		const CopyFunctionBatchAnalyzer batch_analyzer(current_batch_size, current_batch_size_bytes,
-		                                               partitioned_copy.op.batch_size,
-		                                               partitioned_copy.op.batch_size_bytes);
+		                                               partitioned_copy.op.batch_size, batch_size_bytes);
 
 		// Move to the next chunk if we exhausted this one
 		if (batch_row_idx == batch_scan_state.next_row_index) {
@@ -1994,7 +2018,7 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextBatchTask() {
 			collection->NextScanIndex(batch_scan_state, chunk_index, segment_index, row_index);
 		}
 
-		if (found_next_partition || batch_analyzer.MeetsFlushCriteria()) {
+		if (cut_for_size || found_next_partition || batch_analyzer.MeetsFlushCriteria()) {
 			break; // Move to the next partition or batch
 		}
 	}
@@ -3052,6 +3076,7 @@ void PartitionedCopy::FlushDelayedPartitionRun(const vector<Value> &values, Part
 		auto batch = make_uniq<ColumnDataCollection>(context, write_types);
 		ColumnDataAppendState append_state;
 		batch->InitializeAppend(append_state);
+		CopyBatchAppender batch_appender(write_types, op.batch_size, op.batch_size_bytes);
 
 		const auto flush_batch = [&]() {
 			if (batch->Count() == 0) {
@@ -3065,13 +3090,15 @@ void PartitionedCopy::FlushDelayedPartitionRun(const vector<Value> &values, Part
 
 			batch = make_uniq<ColumnDataCollection>(context, write_types);
 			batch->InitializeAppend(append_state);
+			batch_appender.SetCollectionBytes(0);
 		};
 
 		while (collection.Scan(scan_state, scan_chunk)) {
-			batch->Append(append_state, scan_chunk);
-			const CopyFunctionBatchAnalyzer batch_analyzer(*batch, op.batch_size, op.batch_size_bytes);
-			if (batch_analyzer.MeetsFlushCriteria()) {
-				flush_batch();
+			idx_t offset = 0;
+			while (offset < scan_chunk.size()) {
+				if (batch_appender.AppendUntilFull(*batch, append_state, scan_chunk, offset)) {
+					flush_batch();
+				}
 			}
 		}
 		flush_batch();
@@ -3547,7 +3574,9 @@ CopyToFileLocalState::CopyToFileLocalState(const PhysicalCopyToFile &op_p, Execu
 	if (op.partition_output) {
 		++gstate.partitioned_copy->locals;
 		partitioned_copy_local_state = make_uniq<PartitionedCopyLocalState>();
+		return;
 	}
+	batch_appender = make_uniq<CopyBatchAppender>(op.expected_types, op.batch_size, op.batch_size_bytes);
 }
 
 //===--------------------------------------------------------------------===//
@@ -3697,16 +3726,18 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	}
 	auto &file_state = per_thread_output ? lstate.global_file_state : gstate.global_state;
 
-	if (!lstate.batch) {
-		lstate.batch = make_uniq<ColumnDataCollection>(context.client, expected_types);
-		lstate.batch->InitializeAppend(lstate.batch_append_state);
-	}
-	lstate.batch->Append(lstate.batch_append_state, chunk);
-
-	const CopyFunctionBatchAnalyzer batch_analyzer(*lstate.batch, batch_size, batch_size_bytes);
-	if (batch_analyzer.MeetsFlushCriteria()) {
-		lstate.batch_append_state.current_chunk_state.handles.clear();
-		PrepareAndFlushBatch(context.client, gstate, file_state, gstate.create_file_state_fun, std::move(lstate.batch));
+	idx_t offset = 0;
+	while (offset < chunk.size()) {
+		if (!lstate.batch) {
+			lstate.batch = make_uniq<ColumnDataCollection>(context.client, expected_types);
+			lstate.batch->InitializeAppend(lstate.batch_append_state);
+			lstate.batch_appender->SetCollectionBytes(0);
+		}
+		if (lstate.batch_appender->AppendUntilFull(*lstate.batch, lstate.batch_append_state, chunk, offset)) {
+			lstate.batch_append_state.current_chunk_state.handles.clear();
+			PrepareAndFlushBatch(context.client, gstate, file_state, gstate.create_file_state_fun,
+			                     std::move(lstate.batch));
+		}
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
