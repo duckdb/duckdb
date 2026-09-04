@@ -66,7 +66,7 @@ physical_plan	<REGEX>:.*JOIN.*
 query II
 explain select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb and a1.ida = 1;
 ----
-physical_plan	<REGEX>:.*JOIN.*
+physical_plan	<!REGEX>:.*JOIN.*
 
 query II
 explain select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb and a1.ida = b.valueb ;
@@ -244,3 +244,175 @@ query II
 explain select a.ida from b right join (select ida from a group by ida) as a on ida < idb;
 ----
 physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select b.idb from b left join (select ida from a group by ida) as a1 on b.idb = a1.ida;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select b.idb from (select ida from a group by ida) as a1 right join b on b.idb = a1.ida;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+statement ok
+select b.idb from b left join (select ida from a group by ida) as a1 on b.idb = a1.ida;
+
+statement ok
+select b.idb from (select ida from a group by ida) as a1 right join b on b.idb = a1.ida;
+
+statement ok
+create table pk_table (id int primary key, val int);
+
+statement ok
+create table fk_table (id int, fk_id int not null, foreign key (fk_id) references pk_table(id));
+
+statement ok
+create table fk_table_nullable (id int, fk_id int, foreign key (fk_id) references pk_table(id));
+
+statement ok
+insert into pk_table values (1, 10), (2, 20), (3, 30);
+
+statement ok
+insert into fk_table values (1, 1), (2, 2), (3, 3);
+
+statement ok
+insert into fk_table_nullable values (1, 1), (2, 2), (3, NULL);
+
+query II
+explain select fk_table.id from fk_table inner join pk_table on fk_table.fk_id = pk_table.id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select fk_table_nullable.id from fk_table_nullable inner join pk_table on fk_table_nullable.fk_id = pk_table.id;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select a.id from pk_table a inner join pk_table b on a.id = b.id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select fk_table.id from fk_table inner join pk_table on fk_table.fk_id = pk_table.id and pk_table.val > 10;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select fk_table.id from fk_table left join pk_table on fk_table.fk_id = pk_table.id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select fk_table_nullable.id from fk_table_nullable left join pk_table on fk_table_nullable.fk_id = pk_table.id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select fk_table.id, pk_table.val from fk_table left join pk_table on fk_table.fk_id = pk_table.id;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select fk_table.id from pk_table right join fk_table on pk_table.id = fk_table.fk_id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select fk_table_nullable.id from pk_table right join fk_table_nullable on pk_table.id = fk_table_nullable.fk_id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select * from fk_table semi join pk_table on fk_table.fk_id = pk_table.id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select * from fk_table_nullable semi join pk_table on fk_table_nullable.fk_id = pk_table.id;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select * from fk_table anti join pk_table on fk_table.fk_id = pk_table.id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select * from fk_table_nullable anti join pk_table on fk_table_nullable.fk_id = pk_table.id;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+statement ok
+create table customer (id int primary key, name varchar);
+
+statement ok
+create table orders (id int primary key, customer_id int not null, foreign key (customer_id) references customer(id));
+
+statement ok
+create table sales (id int primary key, order_id int not null, foreign key (order_id) references orders(id));
+
+statement ok
+insert into customer values (1, 'Alice'), (2, 'Bob');
+
+statement ok
+insert into orders values (1, 1), (2, 2);
+
+statement ok
+insert into sales values (1, 1), (2, 2);
+
+query II
+explain select s.* from sales s join orders o on s.order_id = o.id join customer c on o.customer_id = c.id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select s.* from customer c join orders o on c.id = o.customer_id join sales s on o.id = s.order_id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+statement ok
+select fk_table.id from fk_table inner join pk_table on fk_table.fk_id = pk_table.id;
+
+statement ok
+select fk_table_nullable.id from fk_table_nullable inner join pk_table on fk_table_nullable.fk_id = pk_table.id;
+
+statement ok
+select a.id from pk_table a inner join pk_table b on a.id = b.id;
+
+statement ok
+select fk_table.id from fk_table inner join pk_table on fk_table.fk_id = pk_table.id and pk_table.val > 10;
+
+statement ok
+select fk_table.id from fk_table left join pk_table on fk_table.fk_id = pk_table.id;
+
+statement ok
+select fk_table_nullable.id from fk_table_nullable left join pk_table on fk_table_nullable.fk_id = pk_table.id;
+
+statement ok
+select fk_table.id, pk_table.val from fk_table left join pk_table on fk_table.fk_id = pk_table.id;
+
+statement ok
+select fk_table.id from pk_table right join fk_table on pk_table.id = fk_table.fk_id;
+
+statement ok
+select fk_table_nullable.id from pk_table right join fk_table_nullable on pk_table.id = fk_table_nullable.fk_id;
+
+statement ok
+select * from fk_table semi join pk_table on fk_table.fk_id = pk_table.id;
+
+statement ok
+select * from fk_table_nullable semi join pk_table on fk_table_nullable.fk_id = pk_table.id;
+
+statement ok
+select * from fk_table anti join pk_table on fk_table.fk_id = pk_table.id;
+
+statement ok
+select * from fk_table_nullable anti join pk_table on fk_table_nullable.fk_id = pk_table.id;
+
+statement ok
+select s.* from sales s join orders o on s.order_id = o.id join customer c on o.customer_id = c.id;
+
+statement ok
+select s.* from customer c join orders o on c.id = o.customer_id join sales s on o.id = s.order_id;
