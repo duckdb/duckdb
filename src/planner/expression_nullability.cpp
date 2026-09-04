@@ -192,7 +192,8 @@ bool NotNullExpressionAnalyzer::IsNotNull(LogicalOperator &op, const Expression 
 			return false;
 		}
 		auto stats = table->GetStatistics(context, column_index.GetPrimaryIndex());
-		return stats && !stats->CanHaveNull();
+		// unknown statistics must not count as proof of non-nullability
+		return stats && stats->CanHaveNoNull() && !stats->CanHaveNull();
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		ColumnBinding binding;

@@ -388,17 +388,6 @@ if(${EXPORT_DYNAMIC_SYMBOLS})
 endif()
 
 set(VERSIONING_TAG_MATCH "v*.*.*")
-######
-# MAIN_BRANCH_VERSIONING default should be 'TRUE' for main branch and feature branches
-# MAIN_BRANCH_VERSIONING default should be 'FALSE' for release branches
-# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
-# - CMakeLists.txt
-# - scripts/package_build.py
-######
-option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
-if(${MAIN_BRANCH_VERSIONING})
-  set(VERSIONING_TAG_MATCH "v*.*.0*")
-endif()
 
 if (UNSAFE_NUMERIC_CAST)
   add_definitions(-DUNSAFE_NUMERIC_CAST=1)
@@ -413,7 +402,7 @@ endif()
 option(OSX_BUILD_UNIVERSAL "Build both architectures on OSX and create a single binary containing both." FALSE)
 if (OSX_BUILD_UNIVERSAL)
   if (NOT APPLE)
-    message(FATAL_ERROR, "This only makes sense on OSX")
+    message(FATAL_ERROR "This only makes sense on OSX")
   endif()
   SET(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
   set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum OS X deployment version" FORCE)
@@ -422,7 +411,7 @@ endif()
 if (OSX_BUILD_ARCH)
   message(STATUS "building for OSX architecture: ${OSX_BUILD_ARCH}")
   if (NOT APPLE)
-    message(FATAL_ERROR, "This only makes sense on OSX")
+    message(FATAL_ERROR "This only makes sense on OSX")
   endif()
   SET(CMAKE_OSX_ARCHITECTURES "${OSX_BUILD_ARCH}" CACHE STRING "Build architectures for Mac OS X" FORCE)
   set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum OS X deployment version" FORCE)
@@ -435,136 +424,87 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
-set(DUCKDB_BASE_VERSION_REGEX "^v[0-9]+[.][0-9]+[.][0-9]+")
-set(DUCKDB_PRERELEASE_VERSION_REGEX "${DUCKDB_BASE_VERSION_REGEX}-(alpha|rc)[0-9]+$")
-set(DUCKDB_RELEASE_VERSION_REGEX "${DUCKDB_BASE_VERSION_REGEX}$")
-set(DUCKDB_FULL_DESCRIBE_REGEX "${DUCKDB_BASE_VERSION_REGEX}(-(alpha|rc)[0-9]+)?-[0-9]+-g[a-f0-9]+$")
-
-if (OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_PRERELEASE_VERSION_REGEX}")
-  if (DUCKDB_EXPLICIT_VERSION)
-    if (DUCKDB_EXPLICIT_PLATFORM STREQUAL DUCKDB_EXPLICIT_PLATFORM)
-      message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' and DUCKDB_EXPLICIT_PLATFORM '${DUCKDB_EXPLICIT_PLATFORM}' are both set and different")
-    endif()
-  endif()
-  set (DUCKDB_EXPLICIT_VERSION "${OVERRIDE_GIT_DESCRIBE}")
+if (NOT DUCKDB_EXPLICIT_VERSION AND DEFINED ENV{DUCKDB_VERSION} AND NOT "$ENV{DUCKDB_VERSION}" STREQUAL "")
+  set(DUCKDB_EXPLICIT_VERSION "$ENV{DUCKDB_VERSION}")
+endif()
+if (NOT DUCKDB_EXPLICIT_VERSION AND OVERRIDE_GIT_DESCRIBE)
+  set(DUCKDB_EXPLICIT_VERSION "${OVERRIDE_GIT_DESCRIBE}")
+endif()
+if (NOT DUCKDB_EXPLICIT_VERSION AND DEFINED ENV{OVERRIDE_GIT_DESCRIBE} AND
+    NOT "$ENV{OVERRIDE_GIT_DESCRIBE}" STREQUAL "")
+  set(DUCKDB_EXPLICIT_VERSION "$ENV{OVERRIDE_GIT_DESCRIBE}")
+endif()
+if (NOT DEFINED GIT_COMMIT_HASH AND DEFINED ENV{DUCKDB_COMMIT} AND NOT "$ENV{DUCKDB_COMMIT}" STREQUAL "")
+  set(GIT_COMMIT_HASH "$ENV{DUCKDB_COMMIT}")
 endif()
 
-if (OVERRIDE_GIT_DESCRIBE)
-  find_package(Git)
-  if (Git_FOUND AND NOT DEFINED GIT_COMMIT_HASH)
-    execute_process(
-          COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          RESULT_VARIABLE GIT_HASH_RESULT
-          OUTPUT_VARIABLE GIT_COMMIT_HASH
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if (GIT_HASH_RESULT)
-      unset(GIT_COMMIT_HASH)
-      message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH")
-    endif()
+find_package(Git)
+if (Git_FOUND AND NOT DEFINED GIT_COMMIT_HASH)
+  execute_process(
+        COMMAND ${GIT_EXECUTABLE} log -1 --format=%H
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        RESULT_VARIABLE GIT_HASH_RESULT
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if (GIT_HASH_RESULT)
+    unset(GIT_COMMIT_HASH)
+    message(WARNING
+      "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%H'. "
+      "Consider providing DUCKDB_COMMIT")
   endif()
+endif()
+if (NOT DEFINED GIT_COMMIT_HASH)
+  set(GIT_COMMIT_HASH "0123456789")
+endif()
+string(LENGTH "${GIT_COMMIT_HASH}" GIT_COMMIT_HASH_LENGTH)
+if (NOT GIT_COMMIT_HASH MATCHES "^[a-fA-F0-9]+$" OR GIT_COMMIT_HASH_LENGTH LESS 10 OR GIT_COMMIT_HASH_LENGTH GREATER 64)
+  message(FATAL_ERROR "Invalid DuckDB commit '${GIT_COMMIT_HASH}'")
+endif()
+string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 GIT_COMMIT_HASH)
+string(TOLOWER "${GIT_COMMIT_HASH}" GIT_COMMIT_HASH)
 
-  if (OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_FULL_DESCRIBE_REGEX}")
-    set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}")
-  else()
-    if (OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_PRERELEASE_VERSION_REGEX}")
-      string(REGEX REPLACE "^(${DUCKDB_BASE_VERSION_REGEX}).*" "\\1" OVERRIDE_GIT_DESCRIBE_BASE "${OVERRIDE_GIT_DESCRIBE}")
-    elseif(OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_RELEASE_VERSION_REGEX}")
-      set(OVERRIDE_GIT_DESCRIBE_BASE "${OVERRIDE_GIT_DESCRIBE}")
+if(DUCKDB_EXPLICIT_VERSION)
+  set(DUCKDB_VERSION "${DUCKDB_EXPLICIT_VERSION}")
+  if (DUCKDB_VERSION MATCHES "^v([0-9]+)[.]([0-9]+)[.]([0-9]+)(-(alpha|rc|dev)([0-9]+))?$")
+    set(DUCKDB_MAJOR_VERSION "${CMAKE_MATCH_1}")
+    set(DUCKDB_MINOR_VERSION "${CMAKE_MATCH_2}")
+    set(DUCKDB_PATCH_VERSION "${CMAKE_MATCH_3}")
+    if (CMAKE_MATCH_5 STREQUAL "dev")
+      set(DUCKDB_DEV_ITERATION "${CMAKE_MATCH_6}")
     else()
-      message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' do not match supported versions, either fully specified 'vX.Y.Z-N-gGITHASH123' or 'vX.Y.Z-alphaW-N-gGITHASH123', version only 'vX.Y.Z' or prerelease like 'vX.Y.Z-alphaW' or 'vX.Y.Z-rcW")
+      set(DUCKDB_DEV_ITERATION "0")
     endif()
-    if (NOT DEFINED GIT_COMMIT_HASH)
-      set(GIT_COMMIT_HASH "0123456789")
-    endif()
-    set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE_BASE}-0-g${GIT_COMMIT_HASH}")
+  else()
+    set(DUCKDB_DEV_ITERATION "0")
   endif()
 else()
-  find_package(Git)
-  if(Git_FOUND)
-    if (NOT DEFINED GIT_COMMIT_HASH)
-      execute_process(
-            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE GIT_HASH_RESULT
-            OUTPUT_VARIABLE GIT_COMMIT_HASH
-            OUTPUT_STRIP_TRAILING_WHITESPACE)
-      if (GIT_HASH_RESULT)
-        unset(GIT_COMMIT_HASH)
-        message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH or OVERRIDE_GIT_DESCRIBE")
-      endif()
-    endif()
-    execute_process(
-          COMMAND ${GIT_EXECUTABLE} describe --tags --long --match "${VERSIONING_TAG_MATCH}"
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          RESULT_VARIABLE GIT_RESULT
-          OUTPUT_VARIABLE GIT_DESCRIBE
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if (GIT_RESULT)
-      if ("$ENV{GITHUB_EVENT_NAME}" STREQUAL "pull_request")
-        message(STATUS "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Continuing with dummy version v0.0.1 for pull_request CI")
-      else()
-        message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
-      endif()
-      if (NOT DEFINED GIT_COMMIT_HASH)
-        set(GIT_COMMIT_HASH "0123456789")
-      endif()
-      set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
-    endif()
-  else()
-    message(WARNING "Git NOT FOUND and EXTERNAL_GIT_DESCRIBE not provided, continuing with dummy version v0.0.1")
-    if (NOT DEFINED GIT_COMMIT_HASH)
-      set(GIT_COMMIT_HASH "0123456789")
-    endif()
-    set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
+  set(DUCKDB_RELEASE_VERSION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/ci/release_version.txt")
+  file(READ "${DUCKDB_RELEASE_VERSION_FILE}" DUCKDB_RELEASE_VERSION)
+  string(STRIP "${DUCKDB_RELEASE_VERSION}" DUCKDB_RELEASE_VERSION)
+  if (NOT DUCKDB_RELEASE_VERSION MATCHES "^([0-9]+)[.]([0-9]+)$")
+    message(FATAL_ERROR "Invalid release version '${DUCKDB_RELEASE_VERSION}' in ${DUCKDB_RELEASE_VERSION_FILE}")
   endif()
-endif()
-
-if (NOT GIT_DESCRIBE MATCHES "^v([0-9]+)\.([0-9]+)\.([0-9]+)(\-(alpha|rc)[0-9]+)?\-([0-9]+)\-g([a-f0-9]+)$")
-  message(FATAL_ERROR "Computed GIT_DESCRIBE '${GIT_DESCRIBE}' is not in the expected form 'vX.Y.Z-N-gGITHASH123'. Consider providing OVERRIDE_GIT_DESCRIBE explicitly to CMake")
-endif()
-
-set(DUCKDB_MAJOR_VERSION "${CMAKE_MATCH_1}")
-set(DUCKDB_MINOR_VERSION "${CMAKE_MATCH_2}")
-set(DUCKDB_PATCH_VERSION "${CMAKE_MATCH_3}")
-set(DUCKDB_SUFFIX_VERSION "${CMAKE_MATCH_4}")
-set(DUCKDB_DEV_ITERATION "${CMAKE_MATCH_6}")
-if (NOT DEFINED GIT_COMMIT_HASH)
-  set(GIT_COMMIT_HASH "${CMAKE_MATCH_7}")
+  set(DUCKDB_MAJOR_VERSION "${CMAKE_MATCH_1}")
+  set(DUCKDB_MINOR_VERSION "${CMAKE_MATCH_2}")
+  set(DUCKDB_PATCH_VERSION "0")
+  set(DUCKDB_DEV_ITERATION "0")
+  if (Git_FOUND)
+    execute_process(
+          COMMAND ${GIT_EXECUTABLE} rev-list --count HEAD
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          RESULT_VARIABLE GIT_COUNT_RESULT
+          OUTPUT_VARIABLE DUCKDB_DEV_ITERATION
+          OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (GIT_COUNT_RESULT)
+      set(DUCKDB_DEV_ITERATION "0")
+    endif()
+  endif()
+  set(DUCKDB_VERSION "v${DUCKDB_RELEASE_VERSION}.0-dev${DUCKDB_DEV_ITERATION}")
 endif()
 
 set(DUCKDB_VERSION_NUMBER "${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
 
-string(LENGTH "${GIT_COMMIT_HASH}" LENGTH_GIT_COMMIT_HASH)
-if (NOT ${LENGTH_GIT_COMMIT_HASH} EQUAL 10)
-   message(STATUS "GIT_COMMIT_HASH has length ${LENGTH_GIT_COMMIT_HASH} different than the expected 10")
-endif()
-
-string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 GIT_COMMIT_HASH)
-
-if(DUCKDB_EXPLICIT_VERSION)
-  # Use with care, this forces the version to the provided string, potentially breaking invariants in the process
-  set(DUCKDB_VERSION "${DUCKDB_EXPLICIT_VERSION}")
-elseif(DUCKDB_DEV_ITERATION EQUAL 0)
-  # on a tag; directly use the version
-  set(DUCKDB_VERSION
-      "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}${DUCKDB_SUFFIX_VERSION}")
-else()
-  # not on a tag, add a -devX suffix and bump non-prerelease tags
-  if(DUCKDB_SUFFIX_VERSION)
-  elseif(${MAIN_BRANCH_VERSIONING})
-    math(EXPR DUCKDB_MINOR_VERSION "${DUCKDB_MINOR_VERSION}+1")
-  else()
-    math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
-  endif()
-  set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
-endif()
-
-string(REGEX MATCH ".*dev.*" DUCKDB_EXTENSION_FOLDER_IS_VERSION "${DUCKDB_VERSION}")
-
-if(DUCKDB_EXPLICIT_VERSION)
-  set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_EXPLICIT_VERSION}")
-elseif(DUCKDB_EXTENSION_FOLDER_IS_VERSION AND NOT GIT_COMMIT_HASH STREQUAL "")
+if(DUCKDB_VERSION MATCHES "-dev[0-9]+$")
   set(DUCKDB_NORMALIZED_VERSION "${GIT_COMMIT_HASH}")
 else()
   set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_VERSION}")
@@ -898,10 +838,23 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_RELEASE
       "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
 
+  set(CMAKE_LTO_JOBS "" CACHE STRING "Number of LTO backend jobs")
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$" AND CMAKE_LTO)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=${CMAKE_LTO}")
+    if(CMAKE_LTO_JOBS AND CMAKE_LTO STREQUAL "thin")
+      foreach(LINKER_TYPE EXE SHARED MODULE)
+        set(CMAKE_${LINKER_TYPE}_LINKER_FLAGS_RELEASE
+            "${CMAKE_${LINKER_TYPE}_LINKER_FLAGS_RELEASE} -flto-jobs=${CMAKE_LTO_JOBS}")
+        set(CMAKE_${LINKER_TYPE}_LINKER_FLAGS_RELWITHDEBINFO
+            "${CMAKE_${LINKER_TYPE}_LINKER_FLAGS_RELWITHDEBINFO} -flto-jobs=${CMAKE_LTO_JOBS}")
+      endforeach()
+    endif()
   elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_LTO)
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
+    if(CMAKE_LTO_JOBS)
+      set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=${CMAKE_LTO_JOBS}")
+    else()
+      set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
+    endif()
   endif()
 
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
@@ -997,8 +950,16 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
     # checkout location. This lets ccache/sccache share objects between
     # different working copies (e.g. git worktrees) instead of missing on the
     # embedded absolute path.
-    file(RELATIVE_PATH rel_source_file ${CMAKE_CURRENT_BINARY_DIR}
-         ${CMAKE_CURRENT_SOURCE_DIR}/${source_file})
+    if(WIN32)
+      # MSVC applies the MAX_PATH limit to the unnormalized concatenation of
+      # the including file's directory and a relative include, so a deep
+      # enough checkout fails with C1083 on paths that resolve well below the
+      # limit. Use absolute paths on Windows.
+      set(rel_source_file ${CMAKE_CURRENT_SOURCE_DIR}/${source_file})
+    else()
+      file(RELATIVE_PATH rel_source_file ${CMAKE_CURRENT_BINARY_DIR}
+           ${CMAKE_CURRENT_SOURCE_DIR}/${source_file})
+    endif()
     file(
       APPEND ${temp_unit_build_file}
       "#include \"${rel_source_file}\"\n"
@@ -1024,8 +985,12 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
   if(${rebuild})
     file(WRITE ${unit_build_file} "// Unity Build generated by CMake\n")
     foreach(source_file ${files})
-      file(RELATIVE_PATH rel_source_file ${CMAKE_CURRENT_BINARY_DIR}
-           ${CMAKE_CURRENT_SOURCE_DIR}/${source_file})
+      if(WIN32)
+        set(rel_source_file ${CMAKE_CURRENT_SOURCE_DIR}/${source_file})
+      else()
+        file(RELATIVE_PATH rel_source_file ${CMAKE_CURRENT_BINARY_DIR}
+             ${CMAKE_CURRENT_SOURCE_DIR}/${source_file})
+      endif()
       file(
         APPEND ${unit_build_file}
         "#include \"${rel_source_file}\"\n"

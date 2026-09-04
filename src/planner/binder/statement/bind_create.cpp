@@ -114,8 +114,14 @@ void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name) {
-	auto catalog = qualified_name.Catalog();
-	auto schema = qualified_name.Schema();
+	auto &path = qualified_name.Path();
+	if (path.size() != 2) {
+		// only a lone qualifier ("x.name") can be either a schema or a catalog - any deeper qualification is
+		// positional and is resolved by ResolveCatalog
+		return;
+	}
+	Identifier catalog;
+	Identifier schema = path[0];
 	BindSchemaOrCatalog(retriever, catalog, schema);
 	qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
 }
@@ -270,7 +276,19 @@ QualifiedName Binder::BindTableName(const QualifiedName &name) {
 	return BindTableName(retriever, name);
 }
 
+void Binder::RegisterEntryRead(optional_ptr<Binder> binder, ClientContext &context, CatalogEntry &entry) {
+	if (!binder) {
+		// no binder available (e.g. when re-binding a deserialized plan) - nothing is cached in that case
+		return;
+	}
+	binder->GetStatementProperties().RegisterDBRead(entry.ParentCatalog(), context);
+}
+
 void Binder::BindCreateSchema(CreateSchemaInfo &info) {
+	if (info.temporary) {
+		// unsupported - otherwise the schema silently lands in (and is persisted to) the default catalog
+		throw BinderException("Temporary schemas are not supported");
+	}
 	// the qualified name carries the dotted path with the new schema as the last component; resolve its leading
 	// component into a catalog (prepending the default catalog when it is a schema)
 	info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
@@ -546,8 +564,9 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			auto expression = function->Cast<ScalarMacroFunction>().expression->Copy();
 			ExpressionBinder::QualifyColumnNames(*this, expression);
 			try {
-				error = binder.Bind(expression, 0, false);
-				if (error.HasError()) {
+				auto bind_result = binder.Bind(expression, 0, false);
+				if (bind_result.HasError()) {
+					error = std::move(bind_result.error);
 					error.Throw();
 				}
 			} catch (const std::exception &ex) {
@@ -630,10 +649,11 @@ void Binder::BindLogicalType(LogicalType &type) {
 bool BoundBodyContainsTrigger(const LogicalOperator &op);
 
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
+	if (create_trigger_info.temporary) {
+		// unsupported - a trigger is temporary iff its base table is (see below)
+		throw BinderException("Temporary triggers are not supported");
+	}
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres).
-	// Promote a catalog-qualified base table (e.g. attached_db.tbl) so downstream lookups carry the resolved
-	// catalog instead of a bare schema (matches the DROP TRIGGER path).
-	BindSchemaOrCatalog(create_trigger_info.base_table->GetQualifiedNameMutable());
 	TableDescription table_description(create_trigger_info.base_table->GetQualifiedName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
@@ -652,6 +672,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 
 	// Trigger inherits the catalog and the (possibly nested) schema from the base table
 	create_trigger_info.SetQualifiedName(table.schema.GetQualifiedName(create_trigger_info.GetQualifiedName().Name()));
+	// ... and its temporariness, so that a trigger on a temporary table lands in the temp catalog
+	create_trigger_info.temporary = table.temporary;
 
 	auto &schema = BindCreateSchema(create_trigger_info);
 
@@ -759,7 +781,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
 		}
 	}
-	// For FOR EACH ROW: register NEW (INSERT) or OLD (DELETE) as a generic binding so BindCorrelatedColumns can
+	// For FOR EACH ROW: register NEW (INSERT) or OLD (DELETE) as a generic binding so that scope resolution can
 	// resolve NEW.col / OLD.col references.
 	unique_ptr<ExpressionBinder> row_scope_binder;
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
@@ -783,7 +805,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (row_scope_binder) {
 		auto body_binder = Binder::CreateBinder(context, validation_binder.get());
 		auto bound_body = body_binder->Bind(*body_copy);
-		validation_binder->GetActiveBinders().pop_back();
+		validation_binder->PopScope();
 		if (body_binder->correlated_columns.empty()) {
 			throw BinderException("FOR EACH ROW trigger %s on table %s must reference at least one NEW or OLD "
 			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",
@@ -878,6 +900,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::INDEX_ENTRY: {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
+		if (create_index_info.temporary) {
+			// unsupported - an index is temporary iff the table it is created on is (see below)
+			throw BinderException("Temporary indexes are not supported");
+		}
 
 		// Plan the table scan - the table lives in the same (possibly nested) schema as the index.
 		TableDescription table_description(create_index_info.GetQualifiedName().WithName(create_index_info.table));

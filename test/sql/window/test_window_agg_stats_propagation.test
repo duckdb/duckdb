@@ -1,0 +1,62 @@
+# name: test/sql/window/test_window_agg_stats_propagation.test
+# description: stats-dependent aggregates (BITSTRING_AGG) must work as window aggregates (issue #23663)
+# group: [window]
+
+statement ok
+CREATE TABLE bt AS SELECT * FROM (VALUES (1)) AS v(id);
+
+# regular aggregate infers the required min/max from statistics
+query I
+SELECT BITSTRING_AGG(id)::VARCHAR AS regular FROM bt;
+----
+1
+
+# same one-argument aggregate as a window aggregate (was: Binder Error could not retrieve statistics)
+query II
+SELECT id, BITSTRING_AGG(id) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)::VARCHAR AS w
+FROM bt
+ORDER BY id;
+----
+1	1
+
+statement ok
+CREATE TABLE bt3 AS SELECT * FROM (VALUES (1),(2),(3)) AS v(id);
+
+# a whole-partition window aggregate equals the regular aggregate
+query II
+SELECT id, BITSTRING_AGG(id) OVER ()::VARCHAR AS w FROM bt3 ORDER BY id;
+----
+1	111
+2	111
+3	111
+
+# count(column) over a NOT NULL column is rewritten to count_star with zero children during
+# statistics propagation; the rewrite must reach the window expression, not a discarded copy.
+statement ok
+CREATE TABLE cnt AS SELECT * FROM (VALUES (1), (2), (3)) AS v(id);
+
+query II
+SELECT id, COUNT(id) OVER () FROM cnt ORDER BY id;
+----
+1	3
+2	3
+3	3
+
+# framed / streaming shapes of the same rewrite
+query II
+SELECT id, COUNT(id) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM cnt ORDER BY id;
+----
+1	1
+2	2
+3	3
+
+# and the rewrite must NOT fire when the column is nullable
+statement ok
+CREATE TABLE cntn AS SELECT * FROM (VALUES (1), (NULL), (3)) AS v(id);
+
+query II
+SELECT id, COUNT(id) OVER () FROM cntn ORDER BY id NULLS LAST;
+----
+1	2
+3	2
+NULL	2

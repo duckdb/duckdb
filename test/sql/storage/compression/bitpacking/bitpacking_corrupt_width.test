@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_corrupt_width.test
+# description: A bitpacking group with a stored width past sizeof(T)*8 must error, not read past the block
+# group: [bitpacking]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/bitpacking_corrupt_width.db.gz {TEST_DIR}/bitpacking_corrupt_width.db
+
+load {TEST_DIR}/bitpacking_corrupt_width.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='BitPacking';
+----
+BitPacking
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted bitpacking segment: bit width exceeds the physical type width
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted bitpacking segment: bit width exceeds the physical type width
