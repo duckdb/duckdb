@@ -46,34 +46,33 @@ namespace duckdb {
 	throw DataCorruptionException("Corrupted uncompressed string segment: overflow string offset is outside its block");
 }
 
-static uint32_t GetStringOffsetMagnitude(int32_t offset) {
-	if (offset == NumericLimits<int32_t>::Minimum()) {
+uint32_t StringScanState::SegmentLayout::ValidateAndGetDictionaryOffset(int32_t encoded_offset) const {
+	if (encoded_offset == NumericLimits<int32_t>::Minimum()) {
 		ThrowStringOffsetMinimumValue();
 	}
-	if (offset < 0) {
-		return NumericCast<uint32_t>(-offset);
-	}
-	return NumericCast<uint32_t>(offset);
-}
 
-uint32_t StringScanState::SegmentLayout::GetDictionaryOffsetMagnitude(int32_t offset) const {
-	auto magnitude = GetStringOffsetMagnitude(offset);
-	if (magnitude > dictionary.size) {
-		ThrowStringOffsetOutsideDictionary(magnitude, dictionary.size);
+	uint32_t dictionary_offset;
+	if (encoded_offset < 0) {
+		dictionary_offset = NumericCast<uint32_t>(-encoded_offset);
+	} else {
+		dictionary_offset = NumericCast<uint32_t>(encoded_offset);
 	}
-	return magnitude;
+	if (dictionary_offset > dictionary.size) {
+		ThrowStringOffsetOutsideDictionary(dictionary_offset, dictionary.size);
+	}
+	return dictionary_offset;
 }
 
 StringScanState::DictionaryEntry
 StringScanState::SegmentLayout::CreateDictionaryEntry(int32_t current_offset, int32_t previous_offset,
-                                                      uint32_t previous_magnitude) const {
-	auto current_magnitude = GetDictionaryOffsetMagnitude(current_offset);
-	if (current_magnitude < previous_magnitude) {
-		ThrowDecreasingStringOffset(current_magnitude, previous_magnitude);
+                                                      uint32_t previous_dictionary_offset) const {
+	auto current_dictionary_offset = ValidateAndGetDictionaryOffset(current_offset);
+	if (current_dictionary_offset < previous_dictionary_offset) {
+		ThrowDecreasingStringOffset(current_dictionary_offset, previous_dictionary_offset);
 	}
 
-	// The magnitude must advance by a string's size or BIG_STRING_MARKER_SIZE.
-	auto string_length = current_magnitude - previous_magnitude;
+	// The dictionary offset must advance by a string's size or BIG_STRING_MARKER_SIZE.
+	auto string_length = current_dictionary_offset - previous_dictionary_offset;
 	if (current_offset < 0) {
 		if (string_length == 0) {
 			if (current_offset != previous_offset) {
@@ -85,15 +84,15 @@ StringScanState::SegmentLayout::CreateDictionaryEntry(int32_t current_offset, in
 	}
 
 	auto is_overflow = current_offset < 0 && string_length > 0;
-	return {dictionary_data.SubArray(dictionary.size - current_magnitude, string_length), is_overflow};
+	return {dictionary_data.SubArray(dictionary.size - current_dictionary_offset, string_length), is_overflow};
 }
 
 StringScanState::DictionaryEntry StringScanState::SegmentLayout::GetDictionaryEntry(idx_t row_index) const {
 	D_ASSERT(row_index < offsets.size());
 	auto current_offset = offsets[row_index];
 	auto previous_offset = row_index > 0 ? offsets[row_index - 1] : 0;
-	auto previous_magnitude = GetDictionaryOffsetMagnitude(previous_offset);
-	return CreateDictionaryEntry(current_offset, previous_offset, previous_magnitude);
+	auto previous_dictionary_offset = ValidateAndGetDictionaryOffset(previous_offset);
+	return CreateDictionaryEntry(current_offset, previous_offset, previous_dictionary_offset);
 }
 
 StringScanState::DictionaryCursor StringScanState::SegmentLayout::GetCursor(idx_t row_index) const {
@@ -101,20 +100,20 @@ StringScanState::DictionaryCursor StringScanState::SegmentLayout::GetCursor(idx_
 }
 
 StringScanState::DictionaryCursor::DictionaryCursor(const SegmentLayout &layout_p, idx_t row_index_p)
-    : layout(layout_p), row_index(row_index_p), previous_offset(0), previous_magnitude(0) {
+    : layout(layout_p), row_index(row_index_p), previous_offset(0), previous_dictionary_offset(0) {
 	D_ASSERT(row_index <= layout.offsets.size());
 	if (row_index > 0) {
 		previous_offset = layout.offsets[row_index - 1];
-		previous_magnitude = layout.GetDictionaryOffsetMagnitude(previous_offset);
+		previous_dictionary_offset = layout.ValidateAndGetDictionaryOffset(previous_offset);
 	}
 }
 
 StringScanState::DictionaryEntry StringScanState::DictionaryCursor::Next() {
 	D_ASSERT(row_index < layout.offsets.size());
 	auto current_offset = layout.offsets[row_index];
-	auto entry = layout.CreateDictionaryEntry(current_offset, previous_offset, previous_magnitude);
+	auto entry = layout.CreateDictionaryEntry(current_offset, previous_offset, previous_dictionary_offset);
 	previous_offset = current_offset;
-	previous_magnitude += UnsafeNumericCast<uint32_t>(entry.data.size());
+	previous_dictionary_offset += UnsafeNumericCast<uint32_t>(entry.data.size());
 	row_index++;
 	return entry;
 }
