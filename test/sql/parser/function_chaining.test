@@ -106,3 +106,16 @@ query I
 EXECUTE v1('Hello World')
 ----
 hello
+
+# chaining on a column whose name differs in case from the reference
+query I
+SELECT strftime(ci.purchasedate.nullif('1899-12-30T00:00:00'), '%Y-%m-%d')
+FROM (VALUES (TIMESTAMP '2026-01-01')) AS ci("PurchaseDate")
+----
+2026-01-01
+
+query I
+SELECT strftime(ci.PURCHASEDATE.nullif('1899-12-30T00:00:00'), '%Y-%m-%d')
+FROM (VALUES (TIMESTAMP '2026-01-01')) AS ci("PurchaseDate")
+----
+2026-01-01
