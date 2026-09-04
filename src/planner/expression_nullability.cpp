@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression_nullability.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 #include <algorithm>
 
@@ -28,6 +30,24 @@ static bool GetColumnRefBinding(const Expression &expr, ColumnBinding &binding) 
 	}
 	binding = colref.Binding();
 	return true;
+}
+
+//! Row-group statistics only cover committed row groups: rows appended earlier in the current
+//! transaction live in LocalStorage. Those rows are visible to scans but invisible to the
+//! statistics, so a NOT-NULL proof derived from the statistics does not hold for them.
+//! Return true while such rows exist.
+static bool TableHasUncommittedAppends(ClientContext &context, TableCatalogEntry &table) {
+	// only actual DuckDB tables maintain a transaction-local append collection
+	auto duck_table = dynamic_cast<DuckTableEntry *>(&table);
+	if (!duck_table) {
+		return false;
+	}
+	auto &local_storage = LocalStorage::Get(context, table.ParentCatalog());
+	auto local_table_storage = local_storage.GetStorage(duck_table->GetStorage());
+	if (!local_table_storage) {
+		return false;
+	}
+	return local_table_storage->GetCollection().GetTotalRows() > 0;
 }
 
 static bool FilterRejectsNull(const Expression &filter, const Expression &expr) {
@@ -189,6 +209,11 @@ bool NotNullExpressionAnalyzer::IsNotNull(LogicalOperator &op, const Expression 
 		auto &column_index = get.GetColumnIndex(binding);
 		if (!column_index.HasPrimaryIndex() || column_index.HasChildren() ||
 		    column_index.GetPrimaryIndex() == DConstants::INVALID_INDEX) {
+			return false;
+		}
+		// the statistics snapshot does not see rows appended earlier in this transaction: treat
+		// the NOT-NULL proof derived from them as invalid while such rows exist
+		if (TableHasUncommittedAppends(context, *table)) {
 			return false;
 		}
 		auto stats = table->GetStatistics(context, column_index.GetPrimaryIndex());
