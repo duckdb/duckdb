@@ -1,6 +1,8 @@
 
 #include "duckdb/function/match_recognize.hpp"
 
+#include "duckdb/main/settings.hpp"
+
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"

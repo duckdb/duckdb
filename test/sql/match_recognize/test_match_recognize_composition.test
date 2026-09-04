@@ -108,3 +108,115 @@ SELECT count(*) FROM ev MATCH_RECOGNIZE(
 )
 ----
 3
+
+# A match is a table reference, so everything that consumes one should be able to consume this.
+
+statement ok
+create view mv as SELECT p, n FROM ev MATCH_RECOGNIZE(
+    PARTITION BY g ORDER BY i MEASURES count(*) AS n, g AS p PATTERN (A+) DEFINE A AS v > 0
+);
+
+query II
+SELECT p, n FROM mv ORDER BY p
+----
+1	3
+2	3
+
+statement ok
+create table mt as SELECT g AS p, n FROM ev MATCH_RECOGNIZE(
+    PARTITION BY g ORDER BY i MEASURES count(*) AS n PATTERN (A+) DEFINE A AS v > 0
+);
+
+query II
+SELECT p, n FROM mt ORDER BY p
+----
+1	3
+2	3
+
+statement ok
+create table mi(p integer, n bigint);
+
+statement ok
+INSERT INTO mi SELECT g, n FROM ev MATCH_RECOGNIZE(
+    PARTITION BY g ORDER BY i MEASURES count(*) AS n PATTERN (A+) DEFINE A AS v > 0
+);
+
+query II
+SELECT p, n FROM mi ORDER BY p
+----
+1	3
+2	3
+
+# a parameter reaches both a condition and a measure
+statement ok
+PREPARE pq AS SELECT count(*) FROM ev MATCH_RECOGNIZE(
+    PARTITION BY g ORDER BY i MEASURES count(*) AS n PATTERN (A+) DEFINE A AS v > ?
+);
+
+query I
+EXECUTE pq(2)
+----
+1
+
+statement ok
+PREPARE pm AS SELECT sum(n) FROM ev MATCH_RECOGNIZE(
+    PARTITION BY g ORDER BY i MEASURES count(*) + ? AS n PATTERN (A+) DEFINE A AS v > 0
+);
+
+query I
+EXECUTE pm(10)
+----
+26
+
+# an input that is not a table at all
+query I
+SELECT n FROM (VALUES (1,1),(2,2)) t(i,v) MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n PATTERN (A+) DEFINE A AS 1 = 1
+)
+----
+2
+
+statement ok
+create table nothing(i integer, v integer);
+
+query I
+SELECT count(*) FROM nothing MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n PATTERN (A+) DEFINE A AS 1 = 1
+)
+----
+0
+
+# Partitions are matched independently and handed out to whichever thread is free, so the answer
+# must not depend on how many there are. A thousand partitions is enough for more than one to be in
+# flight at once.
+
+statement ok
+create table parallel_input as
+    SELECT (i // 7)::INTEGER AS p, i::INTEGER AS i, (hash(i) % 5)::INTEGER AS v FROM range(0, 7000) t(i);
+
+statement ok
+pragma threads=1;
+
+query III
+SELECT count(*), sum(len), max(len) FROM parallel_input MATCH_RECOGNIZE(
+    PARTITION BY p ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A B+) DEFINE A AS v = 0, B AS B.v > PREV(B.v)
+)
+----
+912	2082	5
+
+statement ok
+pragma threads=4;
+
+query III
+SELECT count(*), sum(len), max(len) FROM parallel_input MATCH_RECOGNIZE(
+    PARTITION BY p ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A B+) DEFINE A AS v = 0, B AS B.v > PREV(B.v)
+)
+----
+912	2082	5
+
+statement ok
+pragma threads=1;
