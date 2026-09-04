@@ -13,7 +13,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/swar.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_structural_cursor.hpp"
 
 namespace duckdb {
 
@@ -204,6 +204,37 @@ protected:
 	//! Initializes the scanner
 	virtual void Initialize();
 
+	//! Finds the structural bytes of the current buffer, mutable because the line finder is const
+	mutable CSVStructuralCursor cursor;
+
+	//! The byte patterns of the dialect that end a skip of the cursor
+	static vector<SwarBlock::BytePattern> StopPatterns(const CSVStateMachine &state_machine) {
+		const auto &options = state_machine.state_machine_options;
+		vector<SwarBlock::BytePattern> patterns;
+		const auto &delimiter = options.delimiter.GetValue();
+		patterns.emplace_back(static_cast<uint8_t>(delimiter.empty() ? '\0' : delimiter[0]), 0xff);
+		const char quote = options.quote.GetValue();
+		if (quote != '\0') {
+			patterns.emplace_back(static_cast<uint8_t>(quote), 0xff);
+		}
+		// the byte class holding \n and \r
+		patterns.emplace_back(0x08, 0xf8);
+		const char comment = options.comment.GetValue();
+		if (comment != '\0') {
+			patterns.emplace_back(static_cast<uint8_t>(comment), 0xff);
+		}
+		const char escape = options.escape.GetValue();
+		if (escape != '\0' && escape != quote) {
+			patterns.emplace_back(static_cast<uint8_t>(escape), 0xff);
+		}
+		return patterns;
+	}
+
+	//! Binds the cursor to the current buffer
+	void BindCursor() const {
+		cursor.Bind(*cur_buffer_handle);
+	}
+
 	//! Process one chunk
 	template <class T>
 	void Process(T &result) {
@@ -223,6 +254,7 @@ protected:
 		} else {
 			to_pos = cur_buffer_handle->actual_size;
 		}
+		BindCursor();
 		while (iterator.pos.buffer_pos < to_pos) {
 			state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 			switch (states.states[1]) {
@@ -313,21 +345,7 @@ protected:
 				ever_quoted = true;
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
-				while (iterator.pos.buffer_pos + 8 < to_pos) {
-					const uint64_t value =
-					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
-					if (SwarWord::MaybeZeroBytes((value ^ state_machine->transition_array.quote) &
-					                             (value ^ state_machine->transition_array.escape))) {
-						break;
-					}
-					iterator.pos.buffer_pos += 8;
-				}
-
-				while (state_machine->transition_array
-				           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
-				       iterator.pos.buffer_pos < to_pos - 1) {
-					iterator.pos.buffer_pos++;
-				}
+				cursor.SkipUntilStop(state_machine->transition_array.skip_quoted, to_pos, iterator.pos.buffer_pos);
 			} break;
 			case CSVState::UNQUOTED: {
 				if (states.states[0] == CSVState::MAYBE_QUOTED) {
@@ -348,50 +366,19 @@ protected:
 				iterator.pos.buffer_pos++;
 				used_unstrictness = true;
 				break;
-			case CSVState::STANDARD: {
+			case CSVState::STANDARD:
 				iterator.pos.buffer_pos++;
-				while (iterator.pos.buffer_pos + 8 < to_pos) {
-					uint64_t value =
-					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
-					if (SwarWord::MaybeZeroBytes((value ^ state_machine->transition_array.delimiter) &
-					                             (value ^ state_machine->transition_array.new_line) &
-					                             (value ^ state_machine->transition_array.carriage_return) &
-					                             (value ^ state_machine->transition_array.escape) &
-					                             (value ^ state_machine->transition_array.comment))) {
-						break;
-					}
-					iterator.pos.buffer_pos += 8;
-				}
-				while (state_machine->transition_array
-				           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
-				       iterator.pos.buffer_pos < to_pos - 1) {
-					iterator.pos.buffer_pos++;
-				}
+				cursor.SkipUntilStop(state_machine->transition_array.skip_standard, to_pos, iterator.pos.buffer_pos);
 				break;
-			}
 			case CSVState::QUOTED_NEW_LINE:
 				T::QuotedNewLine(result);
 				iterator.pos.buffer_pos++;
 				break;
-			case CSVState::COMMENT: {
+			case CSVState::COMMENT:
 				T::SetComment(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
-				while (iterator.pos.buffer_pos + 8 < to_pos) {
-					const uint64_t value =
-					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
-					if (SwarWord::MaybeZeroBytes((value ^ state_machine->transition_array.new_line) &
-					                             (value ^ state_machine->transition_array.carriage_return))) {
-						break;
-					}
-					iterator.pos.buffer_pos += 8;
-				}
-				while (state_machine->transition_array
-				           .skip_comment[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
-				       iterator.pos.buffer_pos < to_pos - 1) {
-					iterator.pos.buffer_pos++;
-				}
+				cursor.SkipUntilStop(state_machine->transition_array.skip_comment, to_pos, iterator.pos.buffer_pos);
 				break;
-			}
 			default:
 				iterator.pos.buffer_pos++;
 				break;
