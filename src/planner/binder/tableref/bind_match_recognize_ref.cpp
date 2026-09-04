@@ -366,6 +366,51 @@ static unique_ptr<ParsedExpression> MatchScopedValue(const MatchRecognizeConfig 
 	return CreateStructExtract(std::move(window), MATCH_RECOGNIZE_VALUE_FIELD);
 }
 
+//! PREV and NEXT navigate the ordered partition rather than the rows of the match, so they do not
+//! depend on the match at all. A measure's are computed per input row below the pattern window and
+//! read back from above it, which is the route a DEFINE condition's already take.
+static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const WindowExpression &pattern_window,
+                                   const case_insensitive_map_t<vector<string>> &symbols, SelectNode &subquery,
+                                   idx_t &counter) {
+	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
+		auto &function = expr->Cast<FunctionExpression>();
+		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
+		if (function_name == "PREV" || function_name == "NEXT") {
+			auto &arguments = function.GetArgumentsMutable();
+			if (arguments.empty() || arguments.size() > 2) {
+				throw BinderException("%s() takes an expression and an optional offset", function_name);
+			}
+			for (auto &argument : arguments) {
+				HoistMeasureNavigation(argument.GetExpressionMutable(), pattern_window, symbols, subquery, counter);
+			}
+			auto &inner = *arguments[0].GetExpressionMutable();
+			if (inner.GetExpressionType() == ExpressionType::COLUMN_REF) {
+				auto &names = inner.Cast<ColumnRefExpression>().ColumnNames();
+				if (names.size() == 2 && symbols.find(names[0].GetIdentifierName()) != symbols.end()) {
+					throw NotImplementedException("%s() navigates the ordered partition rather than the match, so "
+					                              "naming a pattern variable inside it is not supported",
+					                              function_name);
+				}
+			}
+			auto navigation = pattern_window.Copy();
+			auto &window = navigation->Cast<WindowExpression>();
+			window.SetFunctionName(function_name == "PREV" ? "lag" : "lead");
+			window.GetArgumentsMutable() = std::move(arguments);
+			auto column = "__mr_win_" + to_string(counter++);
+			window.SetAlias(Identifier(column));
+			subquery.select_list.push_back(std::move(navigation));
+			// the navigation may be the whole measure, whose alias names the output column
+			auto alias = expr->GetAlias();
+			expr = make_uniq<ColumnRefExpression>(Identifier(column));
+			expr->SetAlias(std::move(alias));
+			return;
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
+		HoistMeasureNavigation(child, pattern_window, symbols, subquery, counter);
+	});
+}
+
 //! Rewrite a MEASURES expression into something evaluable next to the pattern window
 static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, const MatchRecognizeConfig &config,
                            const case_insensitive_map_t<vector<string>> &symbols, bool running, bool one_row,
@@ -392,6 +437,11 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 		}
 		// logical navigation over the rows of the match. LAST(X.c) is what an unadorned X.c already
 		// means, so both share the masking; only the end they read from differs.
+		if ((function_name == "FIRST" || function_name == "LAST") && function.GetArguments().size() == 2) {
+			// a DEFINE condition is resolved by the matcher, which counts the match's rows as it assembles
+			// them; a measure is a window over the match, and a window has no nth from the end
+			throw NotImplementedException("An offset for %s() is only supported in a DEFINE condition", function_name);
+		}
 		if ((function_name == "FIRST" || function_name == "LAST") && function.GetArguments().size() == 1) {
 			auto inner = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
 			vector<string> symbol;
@@ -697,6 +747,11 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	for (auto &navigation : navigations) {
 		hidden_columns.push_back(navigation.column);
+	}
+
+	for (auto &expr : ref.config->measures_expression_list) {
+		HoistMeasureNavigation(expr, window_template->Cast<WindowExpression>(), measure_symbols, *define_select_node,
+		                       nav_counter);
 	}
 
 	for (idx_t nav_idx = 0; nav_idx < nav_counter; nav_idx++) {

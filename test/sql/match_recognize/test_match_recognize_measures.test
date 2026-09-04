@@ -416,3 +416,96 @@ CREATE TABLE running(final INTEGER)
 
 statement ok
 SELECT final FROM running
+
+# PREV and NEXT navigate the ordered partition rather than the rows of the match, so a measure may
+# use them to reach a row the match does not cover - including one before it starts.
+
+statement ok
+create table pnav(p integer, i integer, v integer);
+
+statement ok
+insert into pnav values (1,1,10),(1,2,20),(1,3,30),(2,4,40),(2,5,50);
+
+query II
+SELECT i, prev_v FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES PREV(v) AS prev_v ALL ROWS PER MATCH PATTERN (A+) DEFINE A as true
+) ORDER BY i
+----
+1	NULL
+2	10
+3	20
+4	30
+5	40
+
+query II
+SELECT i, next_v FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES NEXT(v) AS next_v ALL ROWS PER MATCH PATTERN (A+) DEFINE A as true
+) ORDER BY i
+----
+1	20
+2	30
+3	40
+4	50
+5	NULL
+
+# an offset counts that many rows back
+query II
+SELECT i, prev_v FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES PREV(v, 2) AS prev_v ALL ROWS PER MATCH PATTERN (A+) DEFINE A as true
+) ORDER BY i
+----
+1	NULL
+2	NULL
+3	10
+4	20
+5	30
+
+# ONE ROW PER MATCH reports the match, so the navigation is relative to the row it ends on
+query I
+SELECT prev_v FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES PREV(v) AS prev_v PATTERN (A A) DEFINE A as true
+) ORDER BY prev_v
+----
+10
+30
+
+# the partition bounds it: row 4 starts one, so there is nothing before it
+query II
+SELECT i, prev_v FROM pnav MATCH_RECOGNIZE(
+    PARTITION BY p ORDER BY i MEASURES PREV(v) AS prev_v ALL ROWS PER MATCH PATTERN (A+) DEFINE A as true
+) ORDER BY i
+----
+1	NULL
+2	10
+3	20
+4	NULL
+5	40
+
+# it composes like any other expression
+query II
+SELECT i, d FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES v - PREV(v) AS d ALL ROWS PER MATCH PATTERN (A+) DEFINE A as true
+) ORDER BY i
+----
+1	NULL
+2	10
+3	10
+4	10
+5	10
+
+# naming a pattern variable inside one asks about the match, which is not what it navigates
+statement error
+SELECT prev_v FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES PREV(A.v) AS prev_v PATTERN (A+) DEFINE A as true
+)
+----
+<REGEX>:Not implemented Error:.*navigates the ordered partition rather than the match.*
+
+# FIRST and LAST are the other way round: they count the match's rows, which the matcher does while
+# it assembles them and a window over the finished match cannot
+statement error
+SELECT p FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES FIRST(v, 1) AS p PATTERN (A+) DEFINE A as true
+)
+----
+<REGEX>:Not implemented Error:.*offset for FIRST\(\) is only supported in a DEFINE condition.*
