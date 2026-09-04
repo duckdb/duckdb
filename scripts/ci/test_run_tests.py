@@ -1276,6 +1276,34 @@ Replacing deprecated string __TEST_DIR__ in path "__TEST_DIR__/hnsw_reclaim_spac
             ["/duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/hnsw/hnsw_lateral_join_group.test"],
         )
 
+    def test_fatal_stdout_failure_preserves_stacktrace(self):
+        batch = ["test/sql/crash.test"]
+        stdout = """
+[0/1] (0%): test/sql/crash.test
+/duckdb/test/sqlite/test_sqllogictest.cpp:41: FAILED:
+  {Unknown expression after the reported line}
+due to a fatal error condition:
+  SIGSEGV - Segmentation violation signal
+
+/duckdb/build/release/test/unittest(duckdb::CrashHere()+0x12) [0x1234]
+/duckdb/build/release/src/libduckdb.so(duckdb::Execute()+0x34) [0x5678]
+===============================================================================
+test cases: 1 | 1 failed
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, "", batch, returncode=-11)
+        self.assertEqual(
+            strip_ansi_lines(lines)[1:],
+            [
+                "error: FAIL test/sql/crash.test",
+                "",
+                "SIGSEGV - Segmentation violation signal",
+                "",
+                "/duckdb/build/release/test/unittest(duckdb::CrashHere()+0x12) [0x1234]",
+                "/duckdb/build/release/src/libduckdb.so(duckdb::Execute()+0x34) [0x5678]",
+            ],
+        )
+        self.assertEqual(reproduce_batch, batch)
+
     def test_signal_only_failure_prefers_returncode_over_unrelated_stdout(self):
         batch = ["test/sql/crash.test"]
         lines, reproduce_batch = run_tests.summarize_failure_output(
