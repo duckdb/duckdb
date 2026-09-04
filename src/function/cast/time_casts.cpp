@@ -153,7 +153,8 @@ BoundCastInfo DefaultCasts::TimestampTzCastSwitch(BindCastInput &input, const Lo
 		// timestamp with time zone to timestamp (us)
 		return ReinterpretCast;
 	case LogicalTypeId::TIMESTAMP_NS:
-		// timestamptz (us) to timestamp (ns)
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		// timestamptz (us) to timestamp [with time zone] (ns)
 		return BoundCastInfo(
 		    &VectorCastHelpers::TryCastErrorLoop<timestamp_tz_t, timestamp_ns_t, TryCastTimestampErrorMessage>);
 	case LogicalTypeId::TIMESTAMP_MS:
