@@ -71,6 +71,7 @@ static const ConfigurationOption internal_options[] = {
 
     DUCKDB_GLOBAL(DeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_GLOBAL(AccessModeSetting),
+    DUCKDB_LOCAL(ActiveGrammarExtensionsSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorFlushThresholdSetting),

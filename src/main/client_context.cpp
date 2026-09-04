@@ -36,6 +36,7 @@
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
@@ -1599,7 +1600,7 @@ SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index,
 	return config.user_settings.TryGetSetting(db_config.user_settings, setting_index, result);
 }
 
-ParserOptions ClientContext::GetParserOptions() const {
+ParserOptions ClientContext::GetParserOptions() {
 	ParserOptions options;
 	options.identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
@@ -1608,7 +1609,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
-	options.parser_cache = &db->GetParserCache();
+	options.compiled_grammar = CompiledGrammar::Get(*this);
 	return options;
 }
 

@@ -1,0 +1,55 @@
+# name: test/extension/test_loadable_grammar_extension.test
+# description: Test a loadable extension that changes the PEG grammar.
+# group: [extension]
+
+require skip_reload
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_extension';
+
+statement ok
+SET active_grammar_extensions = ['pipe_query_syntax'];
+
+statement ok
+SET heap_based_parser=true;
+
+statement ok
+CREATE TABLE produce(item VARCHAR, category VARCHAR, sales INTEGER);
+
+statement ok
+INSERT INTO produce VALUES
+    ('apples', 'fruit', 10),
+    ('apples', 'fruit', 15),
+    ('bananas', 'fruit', 20),
+    ('cashews', 'nut', 30),
+    ('carrots', 'vegetable', 40);
+
+query TII
+FROM produce
+  |> WHERE
+        item != 'bananas'
+        AND category IN ('fruit', 'nut')
+  |> AGGREGATE COUNT(*) AS num_items, SUM(sales) AS total_sales
+     GROUP BY item
+  |> ORDER BY item DESC;
+----
+cashews	1	30
+apples	2	25
+
+query I
+FROM produce
+  |> WHERE category = 'fruit'
+  |> SELECT item
+  |> DISTINCT
+  |> ORDER BY item
+  |> LIMIT 1;
+----
+apples
+
+query TII
+FROM produce
+  |> WHERE item = 'cashews'
+  |> EXTEND sales * 2 AS doubled_sales
+  |> SELECT item, sales, doubled_sales;
+----
+cashews	30	60

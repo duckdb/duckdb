@@ -17,7 +17,7 @@
 namespace duckdb {
 class ExtensionCallbackManager;
 class ParserExtension;
-struct ParserCache;
+struct CompiledGrammar;
 
 struct ParserOptions {
 	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
@@ -27,7 +27,7 @@ struct ParserOptions {
 	idx_t max_expression_depth = 1000;
 	optional_ptr<const ExtensionCallbackManager> extensions;
 	AllowParserOverride parser_override_setting = AllowParserOverride::DEFAULT_OVERRIDE;
-	optional_ptr<ParserCache> parser_cache;
+	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 
 } // namespace duckdb

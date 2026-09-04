@@ -14,7 +14,7 @@ add_library_unity(
   test_external_file_cache.cpp
   test_hyperlog.cpp
   test_lru_cache.cpp
-  test_numeric_cast.cpp
+  test_numeric_utils.cpp
   test_parse_expression.cpp
   test_parse_load_statement.cpp
   test_parse_logical_type.cpp

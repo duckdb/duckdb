@@ -22,6 +22,7 @@
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 
 namespace duckdb {
 

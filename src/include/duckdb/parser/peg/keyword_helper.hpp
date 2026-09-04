@@ -12,7 +12,6 @@
 #include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb {
-struct ParserCache;
 
 enum class PEGKeywordCategory : uint8_t {
 	KEYWORD_NONE,

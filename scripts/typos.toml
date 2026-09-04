@@ -6,6 +6,7 @@ extend-exclude = [
   "/extension/jemalloc/",
   "/extension/tpcds/dsdgen/",
   "/extension/tpch/dbgen/",
+  "/scripts/ci/image_version.txt",
   "/scripts/generate_extensions_function.py",
   "/src/common/crypto/md5.cpp",
   "/src/include/duckdb/main/extension_entries.hpp",

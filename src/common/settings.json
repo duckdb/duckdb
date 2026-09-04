@@ -16,6 +16,17 @@
         ]
     },
     {
+        "name": "active_grammar_extensions",
+        "description": "The grammar extensions used by the parser",
+        "type": "VARCHAR[]",
+        "scope": "local",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ],
+        "custom_implementation": true
+    },
+    {
         "name": "allocator_background_threads",
         "description": "Whether to enable the allocator background thread.",
         "type": "BOOLEAN",
