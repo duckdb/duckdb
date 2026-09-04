@@ -8242,6 +8242,19 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowPatternPrima
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowPatternPermuteInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> row_pattern;
+	auto row_pattern_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
+	for (auto &row_pattern_item : row_pattern_items) {
+		auto row_pattern_value = transformer.Transform<unique_ptr<ParsedExpression>>(row_pattern_item.get());
+		row_pattern.push_back(std::move(row_pattern_value));
+	}
+	auto result = TransformRowPatternPermute(transformer, std::move(row_pattern));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowPatternGroupInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -12209,6 +12222,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"RowPatternTerm", &PEGTransformerFactory::TransformRowPatternTermInternal},
 	    {"RowPatternFactor", &PEGTransformerFactory::TransformRowPatternFactorInternal},
 	    {"RowPatternPrimary", &PEGTransformerFactory::TransformRowPatternPrimaryInternal},
+	    {"RowPatternPermute", &PEGTransformerFactory::TransformRowPatternPermuteInternal},
 	    {"RowPatternGroup", &PEGTransformerFactory::TransformRowPatternGroupInternal},
 	    {"RowPatternExclusion", &PEGTransformerFactory::TransformRowPatternExclusionInternal},
 	    {"RowPatternLabel", &PEGTransformerFactory::TransformRowPatternLabelInternal},

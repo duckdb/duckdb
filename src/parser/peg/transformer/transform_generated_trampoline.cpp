@@ -2234,6 +2234,9 @@ static const TransformFrameOps ROW_PATTERN_FACTOR_OPS = {"RowPatternFactor",
 static const TransformFrameOps ROW_PATTERN_PRIMARY_OPS = {"RowPatternPrimary",
                                                           &PEGTransformerFactory::InitializeRowPatternPrimaryTrampoline,
                                                           &PEGTransformerFactory::FinalizeRowPatternPrimaryTrampoline};
+static const TransformFrameOps ROW_PATTERN_PERMUTE_OPS = {"RowPatternPermute",
+                                                          &PEGTransformerFactory::InitializeRowPatternPermuteTrampoline,
+                                                          &PEGTransformerFactory::FinalizeRowPatternPermuteTrampoline};
 static const TransformFrameOps ROW_PATTERN_GROUP_OPS = {"RowPatternGroup",
                                                         &PEGTransformerFactory::InitializeRowPatternGroupTrampoline,
                                                         &PEGTransformerFactory::FinalizeRowPatternGroupTrampoline};
@@ -3860,6 +3863,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"RowPatternTerm", &ROW_PATTERN_TERM_OPS},
 	    {"RowPatternFactor", &ROW_PATTERN_FACTOR_OPS},
 	    {"RowPatternPrimary", &ROW_PATTERN_PRIMARY_OPS},
+	    {"RowPatternPermute", &ROW_PATTERN_PERMUTE_OPS},
 	    {"RowPatternGroup", &ROW_PATTERN_GROUP_OPS},
 	    {"RowPatternExclusion", &ROW_PATTERN_EXCLUSION_OPS},
 	    {"RowPatternLabel", &ROW_PATTERN_LABEL_OPS},
@@ -20327,6 +20331,33 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeRowPatternPrimaryTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                            TransformStackFrame &frame) {
 	auto result = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeRowPatternPermuteTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		stack.PushFrame(list_items[child_idx].get(), ROW_PATTERN_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeRowPatternPermuteTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
+	auto dynamic_child_count = dynamic_list_items.size();
+	vector<unique_ptr<ParsedExpression>> row_pattern;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		row_pattern.push_back(frame.TakeResult<unique_ptr<ParsedExpression>>(i));
+	}
+	auto result = TransformRowPatternPermute(transformer, std::move(row_pattern));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 

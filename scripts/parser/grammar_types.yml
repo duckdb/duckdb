@@ -543,6 +543,7 @@ Expression:
     - RowPatternTerm
     - RowPatternFactor
     - RowPatternPrimary
+    - RowPatternPermute
     - RowPatternGroup
     - RowPatternExclusion
     - RowPatternLabel

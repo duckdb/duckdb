@@ -3818,6 +3818,10 @@ public:
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeRowPatternPrimaryTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeRowPatternPermuteTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeRowPatternPermuteTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeRowPatternGroupTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -7931,6 +7935,10 @@ public:
 	                          const optional<MatchRecognizeQuantifier> &row_pattern_quantifier);
 	static unique_ptr<TransformResultValue> TransformRowPatternPrimaryInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformRowPatternPermuteInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformRowPatternPermute(PEGTransformer &transformer,
+	                                                               vector<unique_ptr<ParsedExpression>> row_pattern);
 	static unique_ptr<TransformResultValue> TransformRowPatternGroupInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformRowPatternExclusionInternal(PEGTransformer &transformer,

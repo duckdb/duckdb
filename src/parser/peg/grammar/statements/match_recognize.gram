@@ -35,7 +35,9 @@ RowPattern <- RowPatternTerm RowPatternAlternative*
 RowPatternAlternative <- '|' RowPatternTerm
 RowPatternTerm <- RowPatternFactor+
 RowPatternFactor <- RowPatternPrimary RowPatternQuantifier?
-RowPatternPrimary <- RowPatternExclusion / RowPatternGroup / RowPatternLabel
+# PERMUTE has to be tried before a plain label, which would otherwise consume the keyword
+RowPatternPrimary <- RowPatternPermute / RowPatternExclusion / RowPatternGroup / RowPatternLabel
+RowPatternPermute <- 'PERMUTE' Parens(List(RowPattern))
 RowPatternGroup <- Parens(RowPattern)
 RowPatternExclusion <- '{' '-' RowPattern '-' '}'
 RowPatternLabel <- ColLabelOrString

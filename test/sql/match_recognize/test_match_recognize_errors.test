@@ -234,3 +234,12 @@ query I
 SELECT count(*) FROM q MATCH_RECOGNIZE(ORDER BY i ALL ROWS PER MATCH PATTERN (A) DEFINE A as true)
 ----
 2
+
+# PERMUTE is spelled out as every order of its parts, so the program the matcher walks - and the
+# record of explored states sized on it - grows with the factorial of the list
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(
+    MEASURES i AS x PATTERN (PERMUTE(A, B, C, D, E, F, G)) DEFINE A as true
+)
+----
+<REGEX>:Parser Error.*PERMUTE takes at most 6 parts.*

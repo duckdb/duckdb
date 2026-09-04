@@ -6,6 +6,8 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/tableref/match_recognize_ref.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -302,6 +304,42 @@ PEGTransformerFactory::TransformRowPatternFactor(PEGTransformer &transformer,
 	}
 	return make_uniq_base<ParsedExpression, QuantifiedExpression>(std::move(row_pattern_primary), quantifier.min_count,
 	                                                              quantifier.max_count, false, quantifier.reluctant);
+}
+
+//! PERMUTE(A, B, C) matches its parts in any order, which is the alternation of every arrangement of
+//! them taken in lexicographic order of the list as written. Expanding it here keeps the matcher's
+//! program the only thing that has to understand a pattern.
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformRowPatternPermute(PEGTransformer &transformer,
+                                                  vector<unique_ptr<ParsedExpression>> row_pattern) {
+	// every arrangement is spelled out, so the program grows with the factorial of the list and the
+	// matcher's record of explored states grows with it
+	static constexpr idx_t MAX_PERMUTE_PARTS = 6;
+	if (row_pattern.size() > MAX_PERMUTE_PARTS) {
+		throw ParserException("PERMUTE takes at most %llu parts, because it stands for every order of them",
+		                      MAX_PERMUTE_PARTS);
+	}
+	vector<idx_t> order;
+	for (idx_t i = 0; i < row_pattern.size(); i++) {
+		order.push_back(i);
+	}
+
+	unique_ptr<ParsedExpression> result;
+	do {
+		vector<unique_ptr<ParsedExpression>> parts;
+		parts.reserve(order.size());
+		for (auto index : order) {
+			parts.push_back(row_pattern[index]->Copy());
+		}
+		auto arrangement = parts.size() == 1
+		                       ? std::move(parts[0])
+		                       : make_uniq_base<ParsedExpression, ConcatenationExpression>(std::move(parts));
+		// alternation is left-associative here, as it is when it is written out
+		result =
+		    result ? make_uniq_base<ParsedExpression, AlternationExpression>(std::move(result), std::move(arrangement))
+		           : std::move(arrangement);
+	} while (std::next_permutation(order.begin(), order.end()));
+	return result;
 }
 
 //! {- P -} matches P and takes part in the match, but its rows are left out of the output
