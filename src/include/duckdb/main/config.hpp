@@ -65,6 +65,7 @@ class ExtensionCallback;
 class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
+class HTTPTransportManager;
 class HTTPUtil;
 class DatabaseFilePathManager;
 class ExtensionCallbackManager;
@@ -319,6 +320,7 @@ public:
 
 	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
 	HTTPUtil &GetHTTPUtil() const;
+	DUCKDB_API HTTPTransportManager &GetHTTPTransportManager();
 
 private:
 	mutable mutex config_lock;
@@ -330,10 +332,8 @@ private:
 	unique_ptr<IndexTypeSet> index_types;
 	unique_ptr<ExtensionCallbackManager> callback_manager;
 	bool is_user_config = true;
-	//! HTTP Request utility functions
-	shared_ptr<HTTPUtil> http_util;
-	vector<shared_ptr<HTTPUtil>> old_http_utils;
-	mutex http_util_lock;
+	//! HTTP provider publication and bounded client ownership
+	unique_ptr<HTTPTransportManager> http_transport_manager;
 };
 
 } // namespace duckdb

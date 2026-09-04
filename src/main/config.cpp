@@ -2,6 +2,7 @@
 
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/http_transport_manager.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -960,13 +961,15 @@ SerializationOptions::SerializationOptions(AttachedDatabase &db) {
 }
 
 void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {
-	lock_guard<mutex> guard(http_util_lock);
-	old_http_utils.push_back(http_util);
-	http_util.atomic_store(new_http_util);
+	http_transport_manager->SetHTTPUtil(new_http_util);
 }
 
 HTTPUtil &DBConfig::GetHTTPUtil() const {
-	return *http_util.atomic_load();
+	return http_transport_manager->GetHTTPUtil();
+}
+
+HTTPTransportManager &DBConfig::GetHTTPTransportManager() {
+	return *http_transport_manager;
 }
 
 } // namespace duckdb
