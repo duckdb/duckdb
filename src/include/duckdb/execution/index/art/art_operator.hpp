@@ -386,7 +386,7 @@ private:
 		}
 
 		NodePtr leaf;
-		NodePtrHandle leaf_handle(leaf, NodePtrHandle::ExternalStorage {});
+		NodePtrHandle leaf_handle(leaf, EXTERNAL_NODE_PTR_STORAGE);
 		if (depth + 1 < key.len) {
 			// Outside of gates, we create a prefix for the inlined leaf.
 			auto count = key.len - depth - 1;

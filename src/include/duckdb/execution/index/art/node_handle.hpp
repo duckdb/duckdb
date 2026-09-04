@@ -53,17 +53,18 @@ private:
 	NType type;
 };
 
+//! Indicates that a NodePtr storage location remains valid without a NodeHandle.
+struct ExternalNodePtrStorageTag {
+};
+
+static constexpr ExternalNodePtrStorageTag EXTERNAL_NODE_PTR_STORAGE {};
+
 //! NodePtrHandle provides mutable access to a NodePtr storage location.
 //! If the NodePtr is stored in a node, the handle owns the NodeHandle that keeps that node pinned.
 class NodePtrHandle {
 public:
-	//! Identifies NodePtr storage that remains valid without a NodeHandle.
-	struct ExternalStorage {
-	};
-
-public:
 	//! Start at externally managed NodePtr storage.
-	NodePtrHandle(NodePtr &node_ptr_p, ExternalStorage) : node_ptr(node_ptr_p) {
+	NodePtrHandle(NodePtr &node_ptr_p, ExternalNodePtrStorageTag) : node_ptr(node_ptr_p) {
 	}
 
 	//! Start at a NodePtr stored in the node pinned by handle_p.
