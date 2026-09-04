@@ -36,6 +36,8 @@ string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) cons
 }
 
 void ShreddedVectorBuffer::SetVectorType(VectorType new_vector_type) {
+	// Callers must flatten first (see Vector::FlattenAndSetConstant); Vector::SetVectorType could do this
+	// automatically for all non-flat/constant buffers (dictionary, sequence, FSST, shredded) instead.
 	throw InternalException("ShreddedVectorBuffer::SetVectorType is not implemented and shouldn't be reached");
 }
 

@@ -1,0 +1,70 @@
+# name: test/sql/cast/string_to_struct_variant_cast.test
+# description: cast strings into structs with VARIANT fields (issue #25298)
+# group: [cast]
+
+query I
+SELECT '{"v":"hello"}'::STRUCT(v VARIANT);
+----
+{'v': hello}
+
+query I
+SELECT '{"a":1, "b":{"c":2}}'::STRUCT(a VARIANT, b STRUCT(c VARIANT));
+----
+{'a': 1, 'b': {'c': 2}}
+
+statement ok
+CREATE TABLE variant_struct_tbl(col VARCHAR);
+
+statement ok
+INSERT INTO variant_struct_tbl (VALUES ('{"v":"hello"}'), ('{"v":"world"}'), (NULL));
+
+query I
+SELECT col::STRUCT(v VARIANT) FROM variant_struct_tbl;
+----
+{'v': hello}
+{'v': world}
+NULL
+
+query I
+SELECT '[{"v":1}, {"v":2}]'::STRUCT(v VARIANT)[];
+----
+[{'v': 1}, {'v': 2}]
+
+query I
+SELECT '[{v: 1}, {v: 2}]'::STRUCT(v VARIANT)[2];
+----
+[{'v': 1}, {'v': 2}]
+
+query I
+SELECT '{k={v: hello}}'::MAP(VARCHAR, STRUCT(v VARIANT));
+----
+{k={'v': hello}}
+
+query I
+SELECT '{v: NULL}'::STRUCT(v VARIANT);
+----
+{'v': NULL}
+
+query I
+SELECT TRY_CAST('{v: hello}' AS STRUCT(v VARIANT));
+----
+{'v': hello}
+
+query I
+SELECT TRY_CAST('not a struct' AS STRUCT(v VARIANT));
+----
+NULL
+
+statement error
+SELECT '{v: hello'::STRUCT(v VARIANT);
+----
+can't be cast to the destination type STRUCT(v VARIANT)
+
+# larger than a single vector, to exercise the batch (non-constant) cast path at scale
+statement ok
+CREATE TABLE big_variant_struct_tbl AS SELECT ('{v: ' || i || '}')::VARCHAR AS s FROM range(5000) t(i);
+
+query III
+SELECT count(*), min((s::STRUCT(v VARIANT)).v::INT), max((s::STRUCT(v VARIANT)).v::INT) FROM big_variant_struct_tbl;
+----
+5000	0	4999
