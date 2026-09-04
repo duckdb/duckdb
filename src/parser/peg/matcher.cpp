@@ -47,7 +47,7 @@ static MatcherResult ExecuteRecursive(MatchInput input) {
 
 MatcherResult Matcher::MatchParseResult(MatchState &state) const {
 	MatchInput input {*this, state};
-	if (state.use_heap_based_parser) {
+	if (state.context.use_heap_based_parser) {
 		MatchStack stack;
 		return stack.Execute(input);
 	}
@@ -55,11 +55,15 @@ MatcherResult Matcher::MatchParseResult(MatchState &state) const {
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
-	auto entry = state.added_suggestions.find(*this);
-	if (entry != state.added_suggestions.end()) {
+	if (!state.added_suggestions) {
+		state.added_suggestions = make_uniq<reference_set_t<const Matcher>>();
+	}
+	auto &added_suggestions = *state.added_suggestions;
+	auto entry = added_suggestions.find(*this);
+	if (entry != added_suggestions.end()) {
 		return SuggestionType::MANDATORY;
 	}
-	state.added_suggestions.insert(*this);
+	added_suggestions.insert(*this);
 	return AddSuggestionInternal(state);
 }
 
@@ -75,7 +79,7 @@ void Matcher::Print() const {
 }
 
 void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
-	suggestions.push_back(std::move(suggestion));
+	context.suggestions.push_back(std::move(suggestion));
 }
 
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
