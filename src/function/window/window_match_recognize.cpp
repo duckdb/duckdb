@@ -131,6 +131,10 @@ LogicalType WindowMatchRecognizeExecutor::ResultType() {
 //! Point a condition's column references at the window's argument list
 static void RebindToArguments(unique_ptr<Expression> &expr, const expression_map_t<idx_t> &argument_index,
                               idx_t match_number_index, bool &reads_match_number) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		// the matcher evaluates a condition per candidate row, which a subquery cannot be reduced to
+		throw BinderException("A DEFINE condition may not contain a subquery");
+	}
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto entry = argument_index.find(*expr);
 		if (entry == argument_index.end()) {

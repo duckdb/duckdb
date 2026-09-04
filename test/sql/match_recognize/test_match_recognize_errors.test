@@ -83,6 +83,21 @@ SELECT count(*) FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A B) DEFINE A as
 ----
 0
 
+# a condition is settled per candidate row, which a subquery cannot be reduced to
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as i > (SELECT min(j) FROM q))
+----
+<REGEX>:Binder Error.*DEFINE condition may not contain a subquery.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as i IN (SELECT j FROM q))
+----
+<REGEX>:Binder Error.*DEFINE condition may not contain a subquery.*
+
+# a measure is computed once per match rather than per candidate row, so it may have one
+statement ok
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES (SELECT min(j) FROM q) AS x PATTERN (A) DEFINE A as true)
+
 # CLASSIFIER() and MATCH_NUMBER() both resolve inside DEFINE
 statement ok
 SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as CLASSIFIER() = 'A')
