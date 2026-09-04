@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// reader/variant/parquet_variant_iterator.hpp
+// duckdb/common/types/variant/parquet_variant_iterator.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,7 +16,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "reader/variant/variant_binary_decoder.hpp"
+#include "duckdb/common/types/variant/variant_binary_decoder.hpp"
 
 namespace duckdb {
 
@@ -52,7 +52,7 @@ struct ShreddedGroupView {
 	vector<unique_ptr<ShreddedGroupView>> fields;
 
 	//! Build the view recursively from a group Vector
-	void Build(Vector &group);
+	DUCKDB_API void Build(Vector &group);
 };
 
 class ParquetVariantIterator;
@@ -111,14 +111,14 @@ public:
 		return kind == Kind::MISSING;
 	}
 
-	VariantLogicalType GetTypeId() const;
+	DUCKDB_API VariantLogicalType GetTypeId() const;
 	//! Returns the fixed-width primitive payload (loaded / re-encoded as T)
 	template <class T>
 	T GetData() const;
-	string_t GetString() const;
-	VariantDecimalProperties GetDecimalProperties() const;
-	ParquetObjectIterator GetObjectChildren(VariantIterationOrder order) const;
-	ParquetArrayIterator GetArrayChildren() const;
+	DUCKDB_API string_t GetString() const;
+	DUCKDB_API VariantDecimalProperties GetDecimalProperties() const;
+	DUCKDB_API ParquetObjectIterator GetObjectChildren(VariantIterationOrder order) const;
+	DUCKDB_API ParquetArrayIterator GetArrayChildren() const;
 
 private:
 	explicit ParquetVariantNode(Kind kind) : kind(kind) {
@@ -149,11 +149,11 @@ struct ParquetObjectEntry {
 class ParquetObjectIterator {
 public:
 	//! Shredded object (typed fields + optional binary overlay)
-	ParquetObjectIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view, idx_t index,
-	                      const_data_ptr_t overlay, const_data_ptr_t overlay_end);
+	DUCKDB_API ParquetObjectIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view, idx_t index,
+	                                 const_data_ptr_t overlay, const_data_ptr_t overlay_end);
 	//! Binary object
-	ParquetObjectIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata, const_data_ptr_t data,
-	                      const_data_ptr_t end);
+	DUCKDB_API ParquetObjectIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata,
+	                                 const_data_ptr_t data, const_data_ptr_t end);
 
 public:
 	const ParquetObjectEntry *begin() const { // NOLINT: match stl API
@@ -174,16 +174,16 @@ private:
 class ParquetArrayIterator {
 public:
 	//! Shredded array
-	ParquetArrayIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view, idx_t index);
+	DUCKDB_API ParquetArrayIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view, idx_t index);
 	//! Binary array
-	ParquetArrayIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata, const_data_ptr_t data,
-	                     const_data_ptr_t end);
+	DUCKDB_API ParquetArrayIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata,
+	                                const_data_ptr_t data, const_data_ptr_t end);
 
 public:
 	idx_t size() const {
 		return length;
 	}
-	ParquetVariantNode operator[](idx_t i) const;
+	DUCKDB_API ParquetVariantNode operator[](idx_t i) const;
 
 private:
 	reference<const ParquetVariantIterator> state;
@@ -207,30 +207,30 @@ private:
 //! are fetched by value (no materialization).
 class ParquetVariantIterator {
 public:
-	ParquetVariantIterator(Vector &metadata, Vector &group);
+	DUCKDB_API ParquetVariantIterator(Vector &metadata, Vector &group);
 	//! Binary-only: each row is a full Spark variant-encoded value (the metadata blob immediately followed
 	//! by the value blob). There is no shredded group - the value is read right after the metadata.
-	explicit ParquetVariantIterator(Vector &metadata);
+	DUCKDB_API explicit ParquetVariantIterator(Vector &metadata);
 
 public:
 	//! Reset the per-row state (lazily-decoded metadata) for a new row
-	void BeginRow(idx_t row);
+	DUCKDB_API void BeginRow(idx_t row);
 	//! Resolve the root value of 'row' (a missing root is promoted to a SQL NULL)
-	ParquetVariantNode Root(idx_t row) const;
+	DUCKDB_API ParquetVariantNode Root(idx_t row) const;
 	//! Resolve the root of a binary-only row: the value blob starts right after the metadata
-	ParquetVariantNode BinaryRoot() const;
+	DUCKDB_API ParquetVariantNode BinaryRoot() const;
 	//! Resolve the value of the group 'view' at logical position 'index'
-	ParquetVariantNode ResolveGroup(const ShreddedGroupView &view, idx_t index) const;
+	DUCKDB_API ParquetVariantNode ResolveGroup(const ShreddedGroupView &view, idx_t index) const;
 
 	//! The (lazily-decoded) Variant metadata of the current row
-	const VariantMetadata &GetMetadata() const;
+	DUCKDB_API const VariantMetadata &GetMetadata() const;
 
 	//! The recursive view of the Parquet group tree (used by the shredded-conversion path)
 	const ShreddedGroupView &GetRootView() const {
 		return root_view;
 	}
 	//! Emit the binary value in ['data', 'end') of the current row into the builder (BeginRow must precede)
-	void EmitBinary(const_data_ptr_t data, const_data_ptr_t end, VariantBuilder &builder) const;
+	DUCKDB_API void EmitBinary(const_data_ptr_t data, const_data_ptr_t end, VariantBuilder &builder) const;
 
 private:
 	ShreddedGroupView root_view;
@@ -248,10 +248,15 @@ class ParquetVariantConversion {
 public:
 	//! Convert binary Variant values (each row being the metadata blob followed by the value blob) into the
 	//! canonical VARIANT 'result' in a single pass
-	static void ConvertBinary(Vector &metadata_and_value, Vector &result, idx_t count);
+	DUCKDB_API static void ConvertBinary(Vector &metadata_and_value, Vector &result, idx_t count);
 	//! 'variant_bytes_to_variant': decode a binary Variant value (metadata followed by value) into a VARIANT.
 	//! The inverse of 'variant_to_parquet_variant'.
-	static ScalarFunction GetBytesToVariantFunction();
+	DUCKDB_API static ScalarFunction GetBytesToVariantFunction();
+
+	//! Convert VARIANT values into the Parquet Variant layout declared by 'result's type —
+	//! struct<metadata BLOB, value BLOB[, typed_value ...]>. This is 'variant_to_parquet_variant's
+	//! conversion, and also the storage of the arrow.parquet.variant canonical extension type.
+	DUCKDB_API static void ToParquetVariant(const Vector &variant, idx_t count, Vector &result);
 };
 
 } // namespace duckdb
