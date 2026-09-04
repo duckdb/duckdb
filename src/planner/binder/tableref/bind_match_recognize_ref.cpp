@@ -115,6 +115,26 @@ static void CheckAndZapQualifiers(ParsedExpression &root_expr, const string &def
 	});
 }
 
+//! CLASSIFIER() reads as the symbol being defined only because the row being tested is the one the
+//! condition decides on. Under navigation it names another row, whose symbol is state the matcher holds
+//! while it assembles the match and not anything the plan below it can produce.
+static void CheckNavigatedClassifier(const ParsedExpression &expr, bool navigated) {
+	if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
+		auto &function = expr.Cast<FunctionExpression>();
+		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
+		if (function_name == "CLASSIFIER" && function.GetArguments().empty()) {
+			if (navigated) {
+				throw NotImplementedException("CLASSIFIER() cannot be navigated in a DEFINE condition");
+			}
+			return;
+		}
+		navigated = navigated || function_name == "PREV" || function_name == "NEXT" || function_name == "FIRST" ||
+		            function_name == "LAST";
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { CheckNavigatedClassifier(child, navigated); });
+}
+
 static void ReplaceFunctions(unique_ptr<ParsedExpression> &expr, const WindowExpression &pattern_window,
                              const string &define_name) {
 	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
@@ -538,6 +558,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 			throw BinderException("MATCH_RECOGNIZE defines pattern variable \"%s\" more than once", define_name);
 		}
 
+		CheckNavigatedClassifier(*expr, false);
 		// a reference to another variable is navigation over that variable's rows, so it has to
 		// become one before the navigation is pulled out
 		NavigateOtherSymbols(expr, define_name, declared_symbols);

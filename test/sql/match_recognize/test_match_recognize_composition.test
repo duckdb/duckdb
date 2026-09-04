@@ -1,0 +1,110 @@
+# name: test/sql/match_recognize/test_match_recognize_composition.test
+# description: MATCH_RECOGNIZE as an ordinary table reference - stacked, grouped, joined and unioned
+# group: [match_recognize]
+
+statement ok
+pragma threads=1;
+
+statement ok
+create table ev(g integer, i integer, v integer);
+
+statement ok
+insert into ev values (1,1,1),(1,2,2),(1,3,1),(2,4,3),(2,5,4),(2,6,3);
+
+# the output of one is the input of the next
+query II
+SELECT i, n FROM (
+    SELECT i, v FROM ev MATCH_RECOGNIZE(ORDER BY i ALL ROWS PER MATCH PATTERN (A+) DEFINE A AS v > 1)
+) x MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n ALL ROWS PER MATCH PATTERN (B+) DEFINE B AS v > 2
+) ORDER BY i
+----
+4	1
+5	2
+6	3
+
+# a grouped result is a table reference like any other
+query II
+SELECT g, n FROM (
+    SELECT g, sum(v) AS v FROM ev GROUP BY g
+) t MATCH_RECOGNIZE(
+    ORDER BY g MEASURES count(*) AS n, g AS g PATTERN (A+) DEFINE A AS v > 5
+) ORDER BY g
+----
+2	1
+
+# and so is the match's own output
+query II
+SELECT count(*) AS c, sum(n) AS s FROM ev MATCH_RECOGNIZE(
+    PARTITION BY g ORDER BY i MEASURES count(*) AS n PATTERN (A+) DEFINE A AS v > 0
+)
+----
+2	6
+
+# a window function above the match sees the matches, not the rows they were built from
+query III
+SELECT g, n, sum(n) OVER () AS tot FROM ev MATCH_RECOGNIZE(
+    PARTITION BY g ORDER BY i MEASURES count(*) AS n PATTERN (A+) DEFINE A AS v > 0
+) ORDER BY g
+----
+1	3	6
+2	3	6
+
+# a match joined back to the rows it came from
+query III
+WITH m AS (
+    SELECT g, n FROM ev MATCH_RECOGNIZE(
+        PARTITION BY g ORDER BY i MEASURES count(*) AS n PATTERN (A+) DEFINE A AS v > 0
+    )
+)
+SELECT m.g, m.n, count(ev.i) AS rows FROM m JOIN ev USING (g) GROUP BY m.g, m.n ORDER BY m.g
+----
+1	3	3
+2	3	3
+
+# two of them in one statement, each with its own pattern variables
+query II
+SELECT 'a' AS src, n FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n PATTERN (A+) DEFINE A AS v > 2
+)
+UNION ALL
+SELECT 'b', n FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n PATTERN (B+) DEFINE B AS v < 2
+)
+ORDER BY src, n
+----
+a	3
+b	1
+b	1
+
+# CLASSIFIER() reads as the symbol being defined because the row being tested is the one the
+# condition decides on. Naming another row's symbol is a different question, and not one the
+# matcher answers yet - it used to answer it with this row's symbol.
+statement error
+SELECT count(*) FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n PATTERN (A B) DEFINE A AS true, B AS PREV(CLASSIFIER()) = 'A'
+)
+----
+<REGEX>:Not implemented Error:.*CLASSIFIER\(\) cannot be navigated.*
+
+statement error
+SELECT count(*) FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n PATTERN (A B) DEFINE A AS true, B AS NEXT(CLASSIFIER()) = 'A'
+)
+----
+<REGEX>:Not implemented Error:.*CLASSIFIER\(\) cannot be navigated.*
+
+statement error
+SELECT count(*) FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n PATTERN (A B) DEFINE A AS true, B AS LAST(CLASSIFIER()) = 'A'
+)
+----
+<REGEX>:Not implemented Error:.*CLASSIFIER\(\) cannot be navigated.*
+
+# on its own it still resolves
+query I
+SELECT count(*) FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n PATTERN (A B) DEFINE A AS true, B AS CLASSIFIER() = 'B'
+)
+----
+3
