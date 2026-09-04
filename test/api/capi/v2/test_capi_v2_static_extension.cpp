@@ -26,6 +26,15 @@ TEST_CASE("Test loading a statically linked V2 C API extension", "[capi_v2]") {
 	auto logs = con.Query("SELECT message FROM duckdb_logs WHERE type = 'CppApiStaticDemo'");
 	REQUIRE(CHECK_COLUMN(logs, 0, {"cpp_api_static_demo loaded, parsed DECIMAL(18,3)"}));
 
+	// The entrypoint registered a scalar function through the C++ wrapper. It reads all three data slots:
+	// 5 * factor(3) + 2 + offset(3 + 7) = 27.
+	auto madd = con.Query("SELECT cpp_demo_madd(5, 2)");
+	REQUIRE(CHECK_COLUMN(madd, 0, {27}));
+
+	// And it runs vectorized over a table, with the bind/init data recomputed per query.
+	auto vectorized = con.Query("SELECT sum(cpp_demo_madd(r::INTEGER, 1)) FROM range(100) t(r)");
+	REQUIRE(CHECK_COLUMN(vectorized, 0, {3 * 4950 + 100 * 11}));
+
 	// Loading it a second time is a no-op rather than an error
 	db.LoadStaticCAPIExtensionV2("cpp_api_static_demo", cpp_api_static_demo_init_c_api_v2);
 }

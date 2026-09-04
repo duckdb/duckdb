@@ -6,6 +6,7 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "sqlite/catch_test_reporter.hpp"
 #include "sqlite/sqllogic_test_logger.hpp"
 #include "sqlite/sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
@@ -65,6 +66,10 @@ static bool TryReadExactSQLLogicTestFilter(const vector<string> &input_files, ve
 
 int main(int argc_in, char *argv[]) {
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
+
+	// route the sqllogictest runner's verdicts into the Catch session
+	static CatchTestReporter catch_reporter;
+	TestReporter::Set(catch_reporter);
 
 	auto &test_config = TestConfiguration::Get();
 	try {

@@ -2199,7 +2199,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto result_row_groups = result->GetRowGroups();
 	for (auto &node : row_groups->SegmentNodes()) {
 		auto &current_row_group = node.GetNode();
-		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor);
+		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor, new_column_stats);
 		// merge in the statistics
 		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 
@@ -2272,8 +2272,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 
 	for (auto &node : row_groups->SegmentNodes()) {
 		auto &current_row_group = node.GetNode();
-		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
-		                                                 scan_state.table_state, node, scan_chunk, transaction);
+		auto new_row_group =
+		    current_row_group.AlterType(*result, target_type, changed_idx, executor, scan_state.table_state, node,
+		                                scan_chunk, transaction, changed_stats);
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result_row_groups->AppendSegment(std::move(new_row_group), node.GetRowStart());
 	}

@@ -697,18 +697,17 @@ bool ART::HasLegacyGeometryKeys() const {
 //===--------------------------------------------------------------------===//
 // Point and range lookups
 //===--------------------------------------------------------------------===//
-bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) const {
+bool ART::FullScan(RowIdVectorOutput &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
 	Iterator it(*this);
 	it.FindMinimum(tree);
 	const auto empty_key = ARTKey();
-	RowIdSetOutput output(row_ids, max_count);
-	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
+	return it.Scan(empty_key, row_ids, false) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchEqual(const ARTKey &key, idx_t max_count, set<row_t> &row_ids) const {
+bool ART::SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const {
 	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
 	if (!leaf) {
 		return true;
@@ -717,11 +716,10 @@ bool ART::SearchEqual(const ARTKey &key, idx_t max_count, set<row_t> &row_ids) c
 	Iterator it(*this);
 	it.FindMinimum(leaf.Get());
 	const auto empty_key = ARTKey();
-	RowIdSetOutput output(row_ids, max_count);
-	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
+	return it.Scan(empty_key, row_ids, false) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchGreater(const ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) const {
+bool ART::SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -736,11 +734,10 @@ bool ART::SearchGreater(const ARTKey &key, bool equal, idx_t max_count, set<row_
 
 	// We continue the scan. We do not check the bounds as any value following this value is
 	// greater and satisfies our predicate.
-	RowIdSetOutput output(row_ids, max_count);
-	return it.Scan(ARTKey(), output, false) == ARTScanResult::COMPLETED;
+	return it.Scan(ARTKey(), row_ids, false) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchLess(const ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) const {
+bool ART::SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -755,12 +752,11 @@ bool ART::SearchLess(const ARTKey &upper_bound, bool equal, idx_t max_count, set
 	}
 
 	// Continue the scan until we reach the upper bound.
-	RowIdSetOutput output(row_ids, max_count);
-	return it.Scan(upper_bound, output, equal) == ARTScanResult::COMPLETED;
+	return it.Scan(upper_bound, row_ids, equal) == ARTScanResult::COMPLETED;
 }
 
 bool ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal, bool right_equal,
-                           idx_t max_count, set<row_t> &row_ids) const {
+                           RowIdVectorOutput &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -774,16 +770,15 @@ bool ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound,
 	}
 
 	// Continue the scan until we reach the upper bound.
-	RowIdSetOutput output(row_ids, max_count);
-	return it.Scan(upper_bound, output, right_equal) == ARTScanResult::COMPLETED;
+	return it.Scan(upper_bound, row_ids, right_equal) == ARTScanResult::COMPLETED;
 }
 
-bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) const {
+bool ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	if (scan_state.values[0].IsNull()) {
 		// full scan
 		lock_guard<mutex> l(lock);
-		return FullScan(max_count, row_ids);
+		return FullScan(row_ids);
 	}
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
@@ -795,15 +790,15 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 		// Single predicate.
 		switch (scan_state.expressions[0]) {
 		case ExpressionType::COMPARE_EQUAL:
-			return SearchEqual(key, max_count, row_ids);
+			return SearchEqual(key, row_ids);
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return SearchGreater(key, true, max_count, row_ids);
+			return SearchGreater(key, true, row_ids);
 		case ExpressionType::COMPARE_GREATERTHAN:
-			return SearchGreater(key, false, max_count, row_ids);
+			return SearchGreater(key, false, row_ids);
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			return SearchLess(key, true, max_count, row_ids);
+			return SearchLess(key, true, row_ids);
 		case ExpressionType::COMPARE_LESSTHAN:
-			return SearchLess(key, false, max_count, row_ids);
+			return SearchLess(key, false, row_ids);
 		default:
 			throw InternalException("Index scan type not implemented");
 		}
@@ -816,7 +811,7 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 
 	bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 	bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
-	return SearchCloseRange(key, upper_bound, left_equal, right_equal, max_count, row_ids);
+	return SearchCloseRange(key, upper_bound, left_equal, right_equal, row_ids);
 }
 
 //===--------------------------------------------------------------------===//

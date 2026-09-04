@@ -152,11 +152,23 @@ void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, b
 		return;
 	}
 	if (running) {
-		// Called while already running: this should only happen when we print optimizer output
+		// Called while already running: this happens when statement setup follows parser timing,
+		// or when we print optimizer output.
 		// D_ASSERT(PrintOptimizerOutput());
+		query_metrics.query_sql = query;
 		return;
 	}
 	Start(query);
+}
+void QueryProfiler::AddParserTime(const Profiler &parser_timer) {
+	if (!running || !IsEnabled()) {
+		return;
+	}
+	auto parser_time_ns = parser_timer.ElapsedNanos();
+	if (!parser_time_ns) {
+		return;
+	}
+	query_metrics.UpdateMetric(MetricParserTotalTime::Name, parser_time_ns);
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {

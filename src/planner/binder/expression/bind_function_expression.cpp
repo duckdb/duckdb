@@ -238,6 +238,10 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 		throw BinderException(msg);
 	}
 
+	// The lambda reading failed - the JSON reading binds the same nodes from scratch. Any child the
+	// lambda attempt already bound is therefore bound twice, which repeats that bind's side effects
+	// (correlated-column registration, subquery planning). Only the deprecated arrow syntax is
+	// ambiguous enough to reach here, so this goes away with it rather than being worked around.
 	auto json_bind_result = BindFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	if (!json_bind_result.HasError()) {
 		return json_bind_result;
@@ -256,10 +260,9 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 	auto func = qualifier.QualifyFunction(function);
 	if (!func) {
 		// function was not found - check if we this is a table function (to throw a more helpful error message)
-		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
+		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.GetQualifiedName(),
 		                                      error_context);
-		auto table_func = GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
-		                                  table_function_lookup, OnEntryNotFound::RETURN_NULL);
+		auto table_func = GetCatalogEntry(table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
 			                      "Function %s is a table function but it was used as a scalar function. This "
@@ -267,10 +270,8 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 			                      function.FunctionName());
 		}
 		// not a table function - rebind to throw an error
-		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
-		                                error_context);
-		func = GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
-		                       function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.GetQualifiedName(), error_context);
+		func = GetCatalogEntry(function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *func;
 }
@@ -304,9 +305,17 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::MACRO_ENTRY:
 		// macro function
 		return BindMacro(function, func.Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
-	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
-		// aggregate function
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
+		// an aggregate belongs to the innermost query level in which one of its arguments resolves a
+		// column of that level, so that the level collecting it is the one the arguments refer to
+		if (!binder.GetEnclosingScopes().empty()) {
+			auto owner = ResolveAggregateOwner(function, 0);
+			if (owner.IsValid() && owner.GetIndex() != 0) {
+				return BindAggregateInEnclosingScope(function, owner.GetIndex(), depth, expr_ptr);
+			}
+		}
 		return BindAggregate(function, func.Cast<AggregateFunctionCatalogEntry>(), depth);
+	}
 	case CatalogType::WINDOW_FUNCTION_ENTRY:
 		// window function
 		return BindWindow(function, func.Cast<WindowFunctionCatalogEntry>(), depth);
@@ -315,13 +324,37 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	}
 }
 
+BindResult ExpressionBinder::BindAggregateInEnclosingScope(FunctionExpression &aggregate, idx_t owner, idx_t depth,
+                                                           unique_ptr<ParsedExpression> &expr_ptr) {
+	// Bind a copy at each candidate scope. Binding rewrites the nodes it manages to bind - a column
+	// reference becomes the qualified form of the scope that owns it - so a failed attempt must not be
+	// handed to the next scope out. Moving the original aside also keeps `aggregate` valid throughout,
+	// since it aliases the node `expr_ptr` held on entry.
+	auto original = std::move(expr_ptr);
+	ErrorData bind_error;
+	for (optional_idx scope = owner; scope.IsValid(); scope = ResolveAggregateOwner(aggregate, scope.GetIndex() + 1)) {
+		expr_ptr = original->Copy();
+		auto result = DispatchToScope(scope.GetIndex(), expr_ptr, depth);
+		if (!result.HasError()) {
+			return result;
+		}
+		if (!bind_error.HasError()) {
+			// report the innermost owner's error: that is the level the arguments actually name
+			bind_error = std::move(result.error);
+		}
+	}
+	expr_ptr = std::move(original);
+	return BindResult(std::move(bind_error));
+}
+
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
 	// bind the children of the function expression
 	ErrorData error;
 
 	// bind each child
+	vector<unique_ptr<Expression>> bound_children;
 	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
-		BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error);
+		bound_children.push_back(BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error));
 	}
 
 	if (error.HasError()) {
@@ -337,8 +370,9 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// overload.
 	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 	arguments.reserve(function.GetArguments().size());
-	for (auto &arg : function.GetArgumentsMutable()) {
-		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
+	for (idx_t i = 0; i < function.GetArgumentsMutable().size(); i++) {
+		auto &arg = function.GetArgumentsMutable()[i];
+		auto bound_arg = std::move(bound_children[i]);
 
 		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
 		// and pass them all positionally. We do alias them by their name though, so that alias-capturing functions
@@ -390,6 +424,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	vector<LogicalType> function_child_types;
+	vector<unique_ptr<Expression>> bound_children(function.GetArguments().size());
 	ErrorData error;
 
 	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
@@ -403,22 +438,21 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			                  "'. You might need to add explicit type casts.");
 		}
 
-		BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error);
+		bound_children[i] = BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error);
 		if (error.HasError()) {
 			return BindResult(std::move(error));
 		}
 
-		const auto &child = BoundExpression::GetExpression(*args[i].GetExpressionMutable());
-		function_child_types.push_back(child->GetReturnType());
+		function_child_types.push_back(bound_children[i]->GetReturnType());
 	}
 
 	if (lambda_expr_idx == 1) {
 		// get the logical type of the children of the list
-		auto &list_child = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
-		if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
-		    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
-		    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
-		    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
+		auto &list_child = *bound_children[0];
+		if (list_child.GetReturnType().id() != LogicalTypeId::LIST &&
+		    list_child.GetReturnType().id() != LogicalTypeId::ARRAY &&
+		    list_child.GetReturnType().id() != LogicalTypeId::SQLNULL &&
+		    list_child.GetReturnType().id() != LogicalTypeId::UNKNOWN) {
 			return BindResult("Invalid LIST argument during lambda function binding!");
 		}
 	}
@@ -468,11 +502,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		}
 	}
 
-	// successfully bound: replace the node with a BoundExpression
+	// successfully bound: keep the bound lambda alongside the other bound children
 	auto alias = args[lambda_expr_idx].GetExpression().GetAlias();
 	bind_lambda_result.expression->SetAlias(alias);
 
-	args[lambda_expr_idx].GetExpressionMutable() = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
+	bound_children[lambda_expr_idx] = std::move(bind_lambda_result.expression);
 
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -480,11 +514,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// all children bound successfully
 	// extract the children and types
-	vector<unique_ptr<Expression>> children;
-	for (idx_t i = 0; i < args.size(); i++) {
-		auto &child = BoundExpression::GetExpression(*args[i].GetExpressionMutable());
-		children.push_back(std::move(child));
-	}
+	auto children = std::move(bound_children);
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children[lambda_expr_idx]->Cast<BoundLambdaExpression>();
@@ -568,6 +598,11 @@ optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const Identifier &c
                                                              const EntryLookupInfo &lookup_info,
                                                              OnEntryNotFound on_entry_not_found) {
 	return binder.GetCatalogEntry(catalog, schema, lookup_info, on_entry_not_found);
+}
+
+optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const EntryLookupInfo &lookup_info,
+                                                             OnEntryNotFound on_entry_not_found) {
+	return binder.GetCatalogEntry(lookup_info, on_entry_not_found);
 }
 
 } // namespace duckdb

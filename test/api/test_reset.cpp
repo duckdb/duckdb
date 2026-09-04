@@ -232,7 +232,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "debug_verification_mode",
 	    "standard_vector_size",
 	    "warnings_as_errors", // requires logging to be enabled
-	    "debug_transformer_trampoline_style",
+	    "debug_heap_based_parser",
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }

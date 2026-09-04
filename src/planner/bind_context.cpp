@@ -55,7 +55,7 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const Identifier &column_n
 			continue;
 		}
 		if (binding.HasMatchingBinding(column_name)) {
-			if (result || is_using_binding) {
+			if (result) {
 				throw BinderException(context,
 				                      "Ambiguous reference to column name %s (use: '%s.%s' "
 				                      "or '%s.%s')",
