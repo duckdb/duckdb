@@ -174,6 +174,9 @@ ConstChildrenView ParsedExpression::Children() const {
 		case ExpressionType::QUANTIFIER:
 			result.Append(*Cast<QuantifiedExpression>().child);
 			break;
+		case ExpressionType::ANCHOR:
+			// an anchor takes no row and has nothing under it
+			break;
 		default:
 			throw NotImplementedException("Unimplemented pattern expression type %s",
 			                              ExpressionTypeToString(GetExpressionType()));
@@ -328,6 +331,9 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 			break;
 		case ExpressionType::QUANTIFIER:
 			result.Append(Cast<QuantifiedExpression>().child);
+			break;
+		case ExpressionType::ANCHOR:
+			// an anchor takes no row and has nothing under it
 			break;
 		default:
 			throw NotImplementedException("Unimplemented pattern expression type %s",

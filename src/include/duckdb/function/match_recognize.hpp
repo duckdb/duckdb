@@ -119,6 +119,26 @@ public:
 	}
 };
 
+class BoundAnchorExpression : public Expression {
+public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::PATTERN;
+
+	explicit BoundAnchorExpression(bool at_end_p)
+	    : Expression(ExpressionType::ANCHOR, ExpressionClass::PATTERN, LogicalType::BOOLEAN), at_end(at_end_p) {
+	}
+
+	//! ^ holds only at the first row of the partition, $ only past its last
+	bool at_end;
+
+	string ToString() const override {
+		return at_end ? "$" : "^";
+	}
+
+	unique_ptr<Expression> Copy() const override {
+		return make_uniq<BoundAnchorExpression>(at_end);
+	}
+};
+
 struct MatchRecognizeFunctionData : FunctionData {
 	unique_ptr<Expression> pattern;
 	//! One condition per pattern symbol, evaluated by the matcher rather than precomputed. Column

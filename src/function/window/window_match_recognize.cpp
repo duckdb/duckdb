@@ -165,6 +165,9 @@ static void ResolvePatternSymbols(unique_ptr<Expression> &pattern, const case_in
 		}
 		return;
 	}
+	if (pattern->GetExpressionType() == ExpressionType::ANCHOR) {
+		return;
+	}
 	switch (pattern->GetExpressionType()) {
 	case ExpressionType::ALTERNATION: {
 		auto &alternation = pattern->Cast<BoundAlternationExpression>();
@@ -296,6 +299,9 @@ static void SerializePattern(Serializer &serializer, const Expression &pattern) 
 		serializer.WritePropertyWithDefault(105, "reluctant", quantifier.reluctant, false);
 		break;
 	}
+	case ExpressionType::ANCHOR:
+		serializer.WriteProperty(101, "at_end", pattern.Cast<BoundAnchorExpression>().at_end);
+		break;
 	case ExpressionType::VALUE_CONSTANT:
 		serializer.WriteProperty(101, "symbol", pattern.Cast<BoundConstantExpression>().GetValue());
 		break;
@@ -331,6 +337,8 @@ static unique_ptr<Expression> DeserializePattern(Deserializer &deserializer) {
 		return make_uniq_base<Expression, BoundQuantifierExpression>(std::move(child), min_count, max_count, excluded,
 		                                                             reluctant);
 	}
+	case ExpressionType::ANCHOR:
+		return make_uniq_base<Expression, BoundAnchorExpression>(deserializer.ReadProperty<bool>(101, "at_end"));
 	case ExpressionType::VALUE_CONSTANT:
 		return make_uniq_base<Expression, BoundConstantExpression>(deserializer.ReadProperty<Value>(101, "symbol"));
 	default:
@@ -490,7 +498,7 @@ static void FetchHashGroup(ColumnDataCollection &input, DataChunk &result_chunk)
 //! An instruction of the compiled pattern. Compiling the tree into a program makes "what to do
 //! after this node" a position in that program rather than a place in a recursive walk, which is
 //! what lets the matcher recognise a state it has already explored.
-enum class PatternOp : uint8_t { SYMBOL, SPLIT, JUMP, MATCH };
+enum class PatternOp : uint8_t { SYMBOL, SPLIT, JUMP, ANCHOR, MATCH };
 
 struct PatternInstruction {
 	PatternOp op = PatternOp::MATCH;
@@ -500,6 +508,8 @@ struct PatternInstruction {
 	//! SPLIT: where to go first, then where to go if that fails. JUMP: where to go.
 	idx_t target = 0;
 	idx_t alternative = 0;
+	//! ANCHOR: whether it holds past the partition's last row rather than at its first
+	bool at_end = false;
 };
 
 using SymbolMatcher = std::function<bool(idx_t symbol, idx_t row)>;
@@ -517,6 +527,13 @@ struct PatternProgram {
 			symbol.symbol = NumericCast<idx_t>(node.Cast<BoundConstantExpression>().GetValue().GetValue<uint64_t>());
 			symbol.excluded = excluded;
 			code.push_back(symbol);
+			break;
+		}
+		case ExpressionType::ANCHOR: {
+			PatternInstruction anchor;
+			anchor.op = PatternOp::ANCHOR;
+			anchor.at_end = node.Cast<BoundAnchorExpression>().at_end;
+			code.push_back(anchor);
 			break;
 		}
 		case ExpressionType::CONCATENATION:
@@ -609,8 +626,8 @@ struct PatternMatcher {
 	      epoch(conditions_are_row_local_p ? 1 : 0) {
 	}
 
-	//! Match starting at `start`, with `input_size` the first row beyond the partition
-	bool Match(idx_t start, idx_t input_size) {
+	//! Match starting at `start`, within the partition [`partition_start`, `input_size`)
+	bool Match(idx_t start, idx_t partition_start, idx_t input_size) {
 		if (!conditions_are_row_local) {
 			// stepping the epoch retires every record at once; the array itself only has to be
 			// cleared when the epoch wraps around to a value old records could still hold
@@ -655,6 +672,14 @@ struct PatternMatcher {
 				if (instruction.op == PatternOp::SPLIT) {
 					pending.emplace_back(instruction.alternative, offset);
 					pc = instruction.target;
+					continue;
+				}
+				if (instruction.op == PatternOp::ANCHOR) {
+					// an anchor takes no row, so it either holds where the walk stands or it does not
+					if (offset != (instruction.at_end ? input_size : partition_start)) {
+						break;
+					}
+					pc++;
 					continue;
 				}
 				if (offset >= input_size) {
@@ -965,7 +990,7 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 		auto row = partition_start;
 		while (row <= partition_end) {
 			row_conditions.BeginMatch(row, match_number + 1);
-			if (!matcher.Match(row, partition_end + 1)) {
+			if (!matcher.Match(row, partition_start, partition_end + 1)) {
 				row++;
 				continue;
 			}

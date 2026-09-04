@@ -351,6 +351,14 @@ PEGTransformerFactory::TransformRowPatternExclusion(PEGTransformer &transformer,
 	return std::move(result);
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPatternStart(PEGTransformer &transformer) {
+	return make_uniq_base<ParsedExpression, AnchorExpression>(false);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPatternEnd(PEGTransformer &transformer) {
+	return make_uniq_base<ParsedExpression, AnchorExpression>(true);
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowPatternLabel(PEGTransformer &transformer,
                                                                              const Identifier &col_label_or_string) {
 	return make_uniq_base<ParsedExpression, ColumnRefExpression>(col_label_or_string);

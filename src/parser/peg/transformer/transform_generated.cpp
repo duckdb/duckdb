@@ -8255,6 +8255,26 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowPatternPermu
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowPatternAnchorInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPatternStartInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto result = TransformPatternStart(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPatternEndInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto result = TransformPatternEnd(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowPatternGroupInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -12223,6 +12243,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"RowPatternFactor", &PEGTransformerFactory::TransformRowPatternFactorInternal},
 	    {"RowPatternPrimary", &PEGTransformerFactory::TransformRowPatternPrimaryInternal},
 	    {"RowPatternPermute", &PEGTransformerFactory::TransformRowPatternPermuteInternal},
+	    {"RowPatternAnchor", &PEGTransformerFactory::TransformRowPatternAnchorInternal},
+	    {"PatternStart", &PEGTransformerFactory::TransformPatternStartInternal},
+	    {"PatternEnd", &PEGTransformerFactory::TransformPatternEndInternal},
 	    {"RowPatternGroup", &PEGTransformerFactory::TransformRowPatternGroupInternal},
 	    {"RowPatternExclusion", &PEGTransformerFactory::TransformRowPatternExclusionInternal},
 	    {"RowPatternLabel", &PEGTransformerFactory::TransformRowPatternLabelInternal},

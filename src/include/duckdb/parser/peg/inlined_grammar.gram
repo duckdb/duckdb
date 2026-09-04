@@ -1668,8 +1668,12 @@ RowPatternAlternative <- '|' RowPatternTerm
 RowPatternTerm <- RowPatternFactor+
 RowPatternFactor <- RowPatternPrimary RowPatternQuantifier?
 # PERMUTE has to be tried before a plain label, which would otherwise consume the keyword
-RowPatternPrimary <- RowPatternPermute / RowPatternExclusion / RowPatternGroup / RowPatternLabel
+RowPatternPrimary <- RowPatternPermute / RowPatternExclusion / RowPatternGroup / RowPatternAnchor / RowPatternLabel
 RowPatternPermute <- 'PERMUTE' Parens(List(RowPattern))
+# ^ and $ hold at the ends of the partition without taking a row
+RowPatternAnchor <- PatternStart / PatternEnd
+PatternStart <- '^'
+PatternEnd <- '$'
 RowPatternGroup <- Parens(RowPattern)
 RowPatternExclusion <- '{' '-' RowPattern '-' '}'
 RowPatternLabel <- ColLabelOrString

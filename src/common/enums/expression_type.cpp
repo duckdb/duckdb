@@ -129,6 +129,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "CONCATENATION";
 	case ExpressionType::QUANTIFIER:
 		return "QUANTIFIER";
+	case ExpressionType::ANCHOR:
+		return "ANCHOR";
 	case ExpressionType::BOUND_REF:
 		return "BOUND_REF";
 	case ExpressionType::BOUND_COLUMN_REF:

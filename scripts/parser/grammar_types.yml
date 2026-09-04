@@ -544,6 +544,9 @@ Expression:
     - RowPatternFactor
     - RowPatternPrimary
     - RowPatternPermute
+    - RowPatternAnchor
+    - PatternStart
+    - PatternEnd
     - RowPatternGroup
     - RowPatternExclusion
     - RowPatternLabel

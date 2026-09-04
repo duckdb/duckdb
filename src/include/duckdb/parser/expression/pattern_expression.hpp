@@ -79,6 +79,25 @@ public:
 	bool reluctant;
 };
 
+//! ^ and $: holds at the start or the end of the partition, and takes no row
+class AnchorExpression : public PatternExpression {
+public:
+	explicit AnchorExpression(bool at_end_p) : PatternExpression(ExpressionType::ANCHOR), at_end(at_end_p) {
+	}
+
+public:
+	string ToString() const override;
+
+	bool Equals(const ParsedExpression &other) const override;
+
+	unique_ptr<ParsedExpression> Copy() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
+
+	bool at_end;
+};
+
 //! A | B: either side matches
 class AlternationExpression : public PatternExpression {
 public:

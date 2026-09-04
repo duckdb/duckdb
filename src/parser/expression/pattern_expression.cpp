@@ -17,6 +17,8 @@ unique_ptr<ParsedExpression> PatternExpression::Deserialize(Deserializer &deseri
 		return QuantifiedExpression::Deserialize(deserializer);
 	case ExpressionType::ALTERNATION:
 		return AlternationExpression::Deserialize(deserializer);
+	case ExpressionType::ANCHOR:
+		return AnchorExpression::Deserialize(deserializer);
 	default:
 		throw SerializationException("Unsupported pattern expression type %s", ExpressionTypeToString(type));
 	}
@@ -174,6 +176,36 @@ unique_ptr<ParsedExpression> AlternationExpression::Deserialize(Deserializer &de
 	auto child_left = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child_left");
 	auto child_right = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "child_right");
 	return make_uniq_base<ParsedExpression, AlternationExpression>(std::move(child_left), std::move(child_right));
+}
+
+//===--------------------------------------------------------------------===//
+// Anchor
+//===--------------------------------------------------------------------===//
+string AnchorExpression::ToString() const {
+	return at_end ? "$" : "^";
+}
+
+bool AnchorExpression::Equals(const ParsedExpression &other_p) const {
+	if (!ParsedExpression::Equals(other_p)) {
+		return false;
+	}
+	return at_end == other_p.Cast<AnchorExpression>().at_end;
+}
+
+unique_ptr<ParsedExpression> AnchorExpression::Copy() const {
+	auto copy = make_uniq<AnchorExpression>(at_end);
+	copy->CopyBase(*this);
+	return std::move(copy);
+}
+
+void AnchorExpression::Serialize(Serializer &serializer) const {
+	ParsedExpression::Serialize(serializer);
+	serializer.WritePropertyWithDefault<bool>(200, "at_end", at_end, false);
+}
+
+unique_ptr<ParsedExpression> AnchorExpression::Deserialize(Deserializer &deserializer) {
+	auto at_end = deserializer.ReadPropertyWithExplicitDefault<bool>(200, "at_end", false);
+	return make_uniq_base<ParsedExpression, AnchorExpression>(at_end);
 }
 
 } // namespace duckdb

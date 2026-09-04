@@ -74,6 +74,8 @@ BindResult ExpressionBinder::BindPatternExpression(unique_ptr<ParsedExpression> 
 		    std::move(bound_child.expression), quantifier.min_count, quantifier.max_count, quantifier.excluded,
 		    quantifier.reluctant));
 	}
+	case ExpressionType::ANCHOR:
+		return BindResult(make_uniq_base<Expression, BoundAnchorExpression>(expr->Cast<AnchorExpression>().at_end));
 	default:
 		throw NotImplementedException("Unimplemented pattern expression %s",
 		                              ExpressionTypeToString(expr->GetExpressionType()));

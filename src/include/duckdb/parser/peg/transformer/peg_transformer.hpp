@@ -3822,6 +3822,18 @@ public:
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeRowPatternPermuteTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeRowPatternAnchorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeRowPatternAnchorTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializePatternStartTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizePatternStartTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializePatternEndTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizePatternEndTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeRowPatternGroupTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -7939,6 +7951,14 @@ public:
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformRowPatternPermute(PEGTransformer &transformer,
 	                                                               vector<unique_ptr<ParsedExpression>> row_pattern);
+	static unique_ptr<TransformResultValue> TransformRowPatternAnchorInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformPatternStartInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformPatternStart(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformPatternEndInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformPatternEnd(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformRowPatternGroupInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformRowPatternExclusionInternal(PEGTransformer &transformer,

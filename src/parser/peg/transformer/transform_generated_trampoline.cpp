@@ -2237,6 +2237,14 @@ static const TransformFrameOps ROW_PATTERN_PRIMARY_OPS = {"RowPatternPrimary",
 static const TransformFrameOps ROW_PATTERN_PERMUTE_OPS = {"RowPatternPermute",
                                                           &PEGTransformerFactory::InitializeRowPatternPermuteTrampoline,
                                                           &PEGTransformerFactory::FinalizeRowPatternPermuteTrampoline};
+static const TransformFrameOps ROW_PATTERN_ANCHOR_OPS = {"RowPatternAnchor",
+                                                         &PEGTransformerFactory::InitializeRowPatternAnchorTrampoline,
+                                                         &PEGTransformerFactory::FinalizeRowPatternAnchorTrampoline};
+static const TransformFrameOps PATTERN_START_OPS = {"PatternStart",
+                                                    &PEGTransformerFactory::InitializePatternStartTrampoline,
+                                                    &PEGTransformerFactory::FinalizePatternStartTrampoline};
+static const TransformFrameOps PATTERN_END_OPS = {"PatternEnd", &PEGTransformerFactory::InitializePatternEndTrampoline,
+                                                  &PEGTransformerFactory::FinalizePatternEndTrampoline};
 static const TransformFrameOps ROW_PATTERN_GROUP_OPS = {"RowPatternGroup",
                                                         &PEGTransformerFactory::InitializeRowPatternGroupTrampoline,
                                                         &PEGTransformerFactory::FinalizeRowPatternGroupTrampoline};
@@ -3864,6 +3872,9 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"RowPatternFactor", &ROW_PATTERN_FACTOR_OPS},
 	    {"RowPatternPrimary", &ROW_PATTERN_PRIMARY_OPS},
 	    {"RowPatternPermute", &ROW_PATTERN_PERMUTE_OPS},
+	    {"RowPatternAnchor", &ROW_PATTERN_ANCHOR_OPS},
+	    {"PatternStart", &PATTERN_START_OPS},
+	    {"PatternEnd", &PATTERN_END_OPS},
 	    {"RowPatternGroup", &ROW_PATTERN_GROUP_OPS},
 	    {"RowPatternExclusion", &ROW_PATTERN_EXCLUSION_OPS},
 	    {"RowPatternLabel", &ROW_PATTERN_LABEL_OPS},
@@ -20358,6 +20369,51 @@ PEGTransformerFactory::FinalizeRowPatternPermuteTrampoline(PEGTransformer &trans
 		row_pattern.push_back(frame.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
 	auto result = TransformRowPatternPermute(transformer, std::move(row_pattern));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeRowPatternAnchorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeRowPatternAnchorTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializePatternStartTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePatternStartTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = TransformPatternStart(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializePatternEndTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePatternEndTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	auto result = TransformPatternEnd(transformer);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
