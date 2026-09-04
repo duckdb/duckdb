@@ -1509,8 +1509,12 @@ SourceResultType PipelineBroadcastExchange::ReserveScanLocked(
 		auto position = consumer.position++;
 		buffer->ReserveRead(position, scan_state.spool_reader, next_chunk, batch_index, spool_read);
 		if (spool_read.IsSet()) {
+#ifdef D_ASSERT_IS_ENABLED
 			auto inserted = consumer.in_flight_reads.insert(position);
 			D_ASSERT(inserted.second);
+#else
+			consumer.in_flight_reads.insert(position);
+#endif
 		} else {
 			consumer.rows_read += next_chunk->size();
 			RetireChunksLocked();
@@ -1557,8 +1561,12 @@ SourceResultType PipelineBroadcastExchange::ReserveBatchScanLocked(
 				scan_state.reported_batch_index = batch_range.batch_index;
 				if (spool_read.IsSet()) {
 					spool_read.batch_sequence = batch_sequence;
+#ifdef D_ASSERT_IS_ENABLED
 					auto inserted = consumer.in_flight_reads.insert(position);
 					D_ASSERT(inserted.second);
+#else
+					consumer.in_flight_reads.insert(position);
+#endif
 				} else {
 					position_entry->second++;
 					consumer.rows_read += next_chunk->size();
@@ -1617,8 +1625,12 @@ SourceResultType PipelineBroadcastExchange::ReserveBatchScanLocked(
 		if (consumer.next_batch_sequence < buffer->NextBatchSequence()) {
 			auto batch_sequence = consumer.next_batch_sequence++;
 			auto &batch_range = buffer->GetBatchRange(batch_sequence);
+#ifdef D_ASSERT_IS_ENABLED
 			auto inserted = consumer.active_batch_positions.emplace(batch_sequence, batch_range.begin_position);
 			D_ASSERT(inserted.second);
+#else
+			consumer.active_batch_positions.emplace(batch_sequence, batch_range.begin_position);
+#endif
 			scan_state.batch_sequence = batch_sequence;
 			continue;
 		}
