@@ -2,6 +2,8 @@
 #include "duckdb/parallel/scan_read_ahead.hpp"
 
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -87,11 +89,36 @@ private:
 	shared_ptr<ReadAheadJobCompletion> completion;
 };
 
+//! Async task that opens one file ahead of decoding and releases the pending-open count when destroyed
+class FileOpenTask : public BaseExecutorTask {
+public:
+	FileOpenTask(TaskExecutor &executor, shared_ptr<atomic<idx_t>> pending_opens_p, std::function<void()> open_fn_p)
+	    : BaseExecutorTask(executor), pending_opens(std::move(pending_opens_p)), open_fn(std::move(open_fn_p)) {
+	}
+	~FileOpenTask() override {
+		// the task reports completion before the scheduler drops it, so the read-ahead may already be gone
+		const auto previous = pending_opens->fetch_sub(1);
+		D_ASSERT(previous > 0);
+		(void)previous;
+	}
+
+	void ExecuteTask() override {
+		open_fn();
+	}
+
+private:
+	shared_ptr<atomic<idx_t>> pending_opens;
+	std::function<void()> open_fn;
+};
+
 ScanReadAheadJob::~ScanReadAheadJob() = default;
 
 ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
                              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
-    : read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)) {
+    : context(context), read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)),
+      open_window(MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() * 2,
+                                  memory_governor ? 0 : read_ahead_depth)),
+      pending_opens(make_shared_ptr<atomic<idx_t>>(0)) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	backlog_budget = memory_governor ? memory_governor->BackpressureBudget() : NumericLimits<idx_t>::Maximum();
 	executor = make_shared_ptr<TaskExecutor>(context, TaskSchedulerType::ASYNC);
@@ -189,6 +216,8 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
 					throw InternalException("Read-ahead exhausted with jobs still held back, "
 					                        "batch indexes must be gapless from 0");
 				}
+				// a failed async open ends the scan through the producer, surface its error before reporting done
+				ThrowIfError();
 				return ScanReadAheadAcquire::EXHAUSTED;
 			}
 		}
@@ -236,7 +265,10 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	}
 	job->io_bytes = MaxValue<idx_t>(job->io_bytes, MINIMUM_JOB_IO_CHARGE);
 	pending_io_bytes += job->io_bytes;
-	// schedule the reads detached on the async pool right away
+	// schedule the reads detached on the async pool right away, logged under their own label
+	if (!read_tasks.empty()) {
+		DUCKDB_LOG(context, AsyncTaskScheduleLogType, "READ_AHEAD", read_tasks.size());
+	}
 	for (auto &task : read_tasks) {
 		executor->ScheduleTask(std::move(task));
 	}
@@ -258,6 +290,16 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 
 void ScanReadAhead::PushError(ErrorData error) {
 	executor->PushError(std::move(error));
+}
+
+void ScanReadAhead::ScheduleFileOpen(std::function<void()> open_fn) {
+	++*pending_opens;
+	// the task decrements pending_opens in its destructor, so the count stays balanced even if scheduling throws
+	executor->ScheduleTask(make_uniq<FileOpenTask>(*executor, pending_opens, std::move(open_fn)));
+}
+
+bool ScanReadAhead::CanScheduleOpen() const {
+	return pending_opens->load() < open_window;
 }
 
 void ScanReadAhead::ThrowIfError() {

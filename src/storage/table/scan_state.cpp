@@ -73,6 +73,10 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 	return sampling_info;
 }
 
+idx_t TableScanState::RowsScanned() const {
+	return table_state.rows_scanned + local_state.rows_scanned;
+}
+
 ScanFilter::ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids,
                        TableFilter &filter)
     : scan_column_index(index), table_column_index(column_ids[index]), filter(filter), always_true(false) {
@@ -302,7 +306,8 @@ bool CollectionScanState::Scan(DataChunk &result, TableScanType type, optional_p
 	return false;
 }
 
-bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks) {
+bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks,
+                                        bool register_assignment) {
 	if (!row_group) {
 		return false;
 	}
@@ -319,8 +324,37 @@ bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<uni
 		return true;
 	}
 	prepared_vector.prepare_state = VectorPrepareState::IO_REGISTERED;
-	tasks = current_row_group.CollectScanIOTasks(*this, prepared_vector.max_count);
+	if (register_assignment) {
+		tasks = RegisterAssignmentIO();
+	} else if (!assignment_io_registered) {
+		// read-ahead jobs registered their whole assignment when produced, otherwise collect the vector's I/O
+		tasks = current_row_group.CollectScanIOTasks(*this, prepared_vector.max_count);
+	}
 	return true;
+}
+
+vector<unique_ptr<AsyncTask>> CollectionScanState::RegisterAssignmentIO() {
+	D_ASSERT(row_group);
+	D_ASSERT(!assignment_io_registered);
+	assignment_io_registered = true;
+	auto &current_row_group = row_group->GetNode();
+	return current_row_group.CollectScanIOTasks(*this, current_row_group.PrefetchRowCount(*this));
+}
+
+void CollectionScanState::InitializeColumnScans() {
+	if (column_scans_pending) {
+		row_group->GetNode().InitializeColumnScans(*this);
+	}
+}
+
+void TableScanState::InitializeColumnScans() {
+	table_state.InitializeColumnScans();
+	local_state.InitializeColumnScans();
+}
+
+idx_t CollectionScanState::RemainingAssignmentRows() const {
+	const idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
+	return current_row < max_row_group_row ? max_row_group_row - current_row : 0;
 }
 
 void CollectionScanState::ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result) {

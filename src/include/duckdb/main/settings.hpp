@@ -613,6 +613,17 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugLocalFileSystemDelayMsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_local_file_system_delay_ms";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: time to sleep before local file system open/read/write operations";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugOrderVerificationSetting {
 	using RETURN_TYPE = DebugOrderVerification;
 	static constexpr const char *Name = "debug_order_verification";
@@ -1834,8 +1845,8 @@ struct ProgressBarTimeSetting {
 struct ReadAheadDepthSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "read_ahead_depth";
-	static constexpr const char *Description = "Number of scan jobs the multi-file reader prefetches ahead of "
-	                                           "decoding. -1 = automatic (based on thread count), 0 = disabled.";
+	static constexpr const char *Description = "Number of scan jobs prefetched ahead of decoding. -1 = automatic "
+	                                           "(backlog bounded by a memory budget), 0 = disabled.";
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "-1";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;

@@ -89,6 +89,35 @@ struct ScanReadAheadJobWrapper final : public ScanReadAheadJob, public JOB_STATE
 	}
 };
 
+//! Pool of scan states handed back by finished jobs, recycled so learned scan state carries over to later jobs
+template <class STATE>
+class ScanStatePool {
+public:
+	void Push(unique_ptr<STATE> state) {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		states.push_back(std::move(state));
+	}
+	//! Pop a recycled state, returns null when none is available
+	unique_ptr<STATE> TryPop() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		if (states.empty()) {
+			return nullptr;
+		}
+		auto state = std::move(states.back());
+		states.pop_back();
+		return state;
+	}
+	//! Take every pooled state
+	vector<unique_ptr<STATE>> TakeAll() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return std::move(states);
+	}
+
+private:
+	annotated_mutex lock;
+	vector<unique_ptr<STATE>> states DUCKDB_GUARDED_BY(lock);
+};
+
 //! Outcome of ScanReadAhead::AcquireJob
 enum class ScanReadAheadAcquire : uint8_t {
 	ACQUIRED,  //! a job with settled I/O is now held
@@ -120,6 +149,14 @@ public:
 	//! On PARKED the caller must yield holding the claimed job and settle it with WaitForJob when it resumes.
 	ScanReadAheadAcquire AcquireJob(ClientContext &context, TableFunctionInput &data_p,
 	                                const ProduceJobCallback &claim_and_schedule, unique_ptr<ScanReadAheadJob> &job);
+
+	//! Push an error onto the async executor
+	void PushError(ErrorData error);
+
+	//! Schedule a file-open closure on the async pool, opening files ahead of decoding
+	void ScheduleFileOpen(std::function<void()> open_fn);
+	//! Whether another file-open may be scheduled without exceeding the open-ahead window
+	bool CanScheduleOpen() const;
 
 private:
 	//! Settles the reservation taken by TryReserveSlot
@@ -156,18 +193,19 @@ private:
 	bool TryReserveSlot();
 	//! Schedule the job's I/O and admit the job to the queue
 	void PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
-	//! Push an error onto the async executor
-	void PushError(ErrorData error);
 	//! Throw if any read-ahead thread or task pushed an error
 	void ThrowIfError();
 	//! Release a read-ahead slot
 	void ReleaseSlot();
 
 private:
+	ClientContext &context;
 	//! Maximum number of jobs scheduled ahead of decoding, unlimited in the -1 auto mode
 	const idx_t read_ahead_depth;
 	//! Async memory governor
 	unique_ptr<ManagedAsyncMemoryGovernor> memory_governor;
+	//! Maximum file-opens scheduled ahead of decoding on the async pool
+	const idx_t open_window;
 	//! Backlog budget granted by the reservation, refreshed whenever a job is pushed
 	atomic<idx_t> backlog_budget {0};
 
@@ -184,6 +222,8 @@ private:
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
+	//! File-opens scheduled on the async pool that have not completed yet
+	shared_ptr<atomic<idx_t>> pending_opens;
 	//! Async I/O executor (async pool)
 	shared_ptr<TaskExecutor> executor;
 };

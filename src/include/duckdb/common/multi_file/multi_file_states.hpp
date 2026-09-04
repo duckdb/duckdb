@@ -190,29 +190,12 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	unique_ptr<GlobalTableFunctionState> global_state;
 
 	unique_ptr<ScanReadAhead> read_ahead;
-	//! Scan states of finished read-ahead jobs, recycled so learned scan state carries over
-	vector<unique_ptr<LocalTableFunctionState>> state_pool;
+	ScanStatePool<LocalTableFunctionState> state_pool;
 
 	optional_ptr<const PhysicalOperator> op;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
-	}
-
-	//! Push a finished job's scan state, so learned scan state carries over to jobs created later
-	void PushState(unique_ptr<LocalTableFunctionState> state) {
-		lock_guard<mutex> guard(lock);
-		state_pool.push_back(std::move(state));
-	}
-	//! Pop a recycled scan state, returns null when none is available
-	unique_ptr<LocalTableFunctionState> TryPopState() {
-		lock_guard<mutex> guard(lock);
-		if (state_pool.empty()) {
-			return nullptr;
-		}
-		auto state = std::move(state_pool.back());
-		state_pool.pop_back();
-		return state;
 	}
 
 	bool CanRemoveColumns() const {
@@ -233,6 +216,13 @@ enum class MultiFileDecodeResult : uint8_t {
 	CONTINUE,         //! keep looping
 	RETURN_TO_CALLER, //! return from the scan (a chunk was emitted, or the operator parked on async I/O)
 	JOB_FINISHED      //! job is done
+};
+
+//! Outcome of claiming the next scan job from the current file
+enum class MultiFileClaimResult : uint8_t {
+	CLAIMED,   //! the current file's next unit of work (e.g. a parquet row group)
+	EXHAUSTED, //! the scan is exhausted
+	WAIT_OPEN  //! the current file is still being opened
 };
 
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
