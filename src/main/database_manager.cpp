@@ -134,6 +134,16 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
 				                      info.name, existing_mode_str, attached_mode);
 			}
+			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT &&
+			    options.vacuum_rebuild_indexes_threshold.IsValid()) {
+				auto previous_setting = existing_db->GetVacuumRebuildIndexThreshold();
+				auto new_setting = options.vacuum_rebuild_indexes_threshold.GetIndex();
+				if (previous_setting != new_setting) {
+					throw BinderException("Cannot re-attach with a different vacuum_rebuild_indexes setting "
+					                      "(previous: %d, new: %d)",
+					                      previous_setting, new_setting);
+				}
+			}
 			const bool same_attach = !existing_db->GetCatalog().HasConflictingAttachOptions(info.path, options);
 			if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
 			    (same_attach && !requires_tracking_attaches)) {
