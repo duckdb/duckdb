@@ -54,9 +54,9 @@ public:
 
 	private:
 		friend struct DictionaryCursor;
-		uint32_t GetDictionaryOffsetMagnitude(int32_t offset) const;
+		uint32_t ValidateAndGetDictionaryOffset(int32_t encoded_offset) const;
 		DictionaryEntry CreateDictionaryEntry(int32_t current_offset, int32_t previous_offset,
-		                                      uint32_t previous_magnitude) const;
+		                                      uint32_t previous_dictionary_offset) const;
 	};
 
 	struct DictionaryCursor {
@@ -68,7 +68,7 @@ public:
 		const SegmentLayout &layout;
 		idx_t row_index;
 		int32_t previous_offset;
-		uint32_t previous_magnitude;
+		uint32_t previous_dictionary_offset;
 	};
 
 	static SegmentLayout ReadSegmentLayout(const BufferHandle &handle, const ColumnSegment &segment);
