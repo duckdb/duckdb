@@ -1454,6 +1454,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 				iterator.pos.buffer_pos++;
 			}
 		} else {
+			idx_t pre_carry_pos = iterator.pos.buffer_pos;
 			while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
 			       (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' ||
 			        buffer_handle_ptr[iterator.pos.buffer_pos] == '\r')) {
@@ -1481,6 +1482,13 @@ void StringValueScanner::ProcessOverBufferValue() {
 				}
 				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 				iterator.pos.buffer_pos++;
+			} // Avoid double-counting when \r\r\n line endings split across buffer boundary: first \r triggers AddRow
+			  // in previous buffer, remaining \r\n is here. Check first consumed char is \r (not \n) to avoid
+			  // false-positives.
+			if (over_buffer_string.empty() && iterator.pos.buffer_pos > pre_carry_pos &&
+			    result.last_position.buffer_pos > previous_buffer_handle->actual_size &&
+			    buffer_handle_ptr[pre_carry_pos] == '\r') {
+				return;
 			}
 		}
 	}
