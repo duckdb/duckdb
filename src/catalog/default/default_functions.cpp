@@ -1,5 +1,6 @@
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
@@ -230,7 +231,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(co
 }
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro,
-                                                                              ParserOptions options) {
+                                                                              const ParserOptions &options) {
 	auto bind_info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 	// Build a full CREATE MACRO statement and let the parser handle parameters, types, and defaults.
 	// macro_definition may contain multiple comma-separated overloads, e.g. "(x) AS x, (x, y) AS x+y".
@@ -264,7 +265,7 @@ static bool DefaultFunctionMatches(const DefaultMacro &macro, const Identifier &
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name,
-                                                         ParserOptions options) {
+                                                         const ParserOptions &options) {
 	auto &schema = input_schema;
 	auto &name = input_name;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
@@ -282,7 +283,7 @@ DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatal
 unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                       const Identifier &entry_name) {
 	ParserOptions options;
-	options.parser_cache = &context.db->GetParserCache();
+	options.compiled_grammar = CompiledGrammar::Get(context);
 	auto info = GetDefaultFunction(schema.name, entry_name, options);
 	if (info) {
 		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());

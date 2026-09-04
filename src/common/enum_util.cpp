@@ -186,6 +186,7 @@
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/grammar_change.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
@@ -2796,6 +2797,30 @@ const char* EnumUtil::ToChars<GeometryType>(GeometryType value) {
 template<>
 GeometryType EnumUtil::FromString<GeometryType>(const char *value) {
 	return static_cast<GeometryType>(StringUtil::StringToEnum(GetGeometryTypeValues(), 8, "GeometryType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetGrammarChangeTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(GrammarChangeType::ADD_RULE), "ADD_RULE" },
+		{ static_cast<uint32_t>(GrammarChangeType::ADD_CHOICE), "ADD_CHOICE" },
+		{ static_cast<uint32_t>(GrammarChangeType::PREPEND_CHOICE), "PREPEND_CHOICE" },
+		{ static_cast<uint32_t>(GrammarChangeType::REMOVE_CHOICE), "REMOVE_CHOICE" },
+		{ static_cast<uint32_t>(GrammarChangeType::REPLACE_CHOICE), "REPLACE_CHOICE" },
+		{ static_cast<uint32_t>(GrammarChangeType::REPLACE_RULE), "REPLACE_RULE" },
+		{ static_cast<uint32_t>(GrammarChangeType::SET_TRANSFORM), "SET_TRANSFORM" },
+		{ static_cast<uint32_t>(GrammarChangeType::ADD_TERMINAL_RULE_OVERRIDE), "ADD_TERMINAL_RULE_OVERRIDE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<GrammarChangeType>(GrammarChangeType value) {
+	return StringUtil::EnumToString(GetGrammarChangeTypeValues(), 8, "GrammarChangeType", static_cast<uint32_t>(value));
+}
+
+template<>
+GrammarChangeType EnumUtil::FromString<GrammarChangeType>(const char *value) {
+	return static_cast<GrammarChangeType>(StringUtil::StringToEnum(GetGrammarChangeTypeValues(), 8, "GrammarChangeType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetGroupByExpressionInfoTypeValues() {

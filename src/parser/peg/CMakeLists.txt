@@ -10,6 +10,7 @@ add_library_unity(
   matcher.cpp
   matcher_stack.cpp
   compiled_grammar.cpp
+  grammar_change.cpp
   matcher_factory.cpp
   parser_packrat.cpp
   peg_parser.cpp

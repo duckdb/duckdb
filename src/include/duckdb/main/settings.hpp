@@ -126,6 +126,18 @@ struct AccessModeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ActiveGrammarExtensionsSetting {
+	using RETURN_TYPE = vector<string>;
+	static constexpr const char *Name = "active_grammar_extensions";
+	static constexpr const char *Description = "The grammar extensions used by the parser";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static bool OnLocalSet(ClientContext &context, const Value &input);
+	static bool OnLocalReset(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AllocatorBackgroundThreadsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allocator_background_threads";
