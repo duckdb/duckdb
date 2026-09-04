@@ -161,8 +161,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		mapped_column_ids.emplace_back(col);
 	}
 	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
-	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
-	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
+	auto checkpoint_id = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
 
 	// The bound expressions of the indexes (and their bound column references) are in relation to
 	// ALL table columns, so we create an empty table chunk based on the table types. It references
@@ -539,7 +538,7 @@ idx_t LocalStorage::Delete(DataTable &table, DuckTableEntry &table_entry, Vector
 	}
 
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
-	idx_t delete_count = storage->GetCollection().Delete(TransactionData(0, 0), table_entry, ids, count);
+	idx_t delete_count = storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count);
 	storage->deleted_rows += delete_count;
 	return delete_count;
 }
@@ -551,7 +550,7 @@ void LocalStorage::Update(DataTable &table, DuckTableEntry &table_entry, Vector 
 	D_ASSERT(storage);
 
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
-	storage->GetCollection().Update(TransactionData(0, 0), table_entry, ids, column_ids, updates);
+	storage->GetCollection().Update(TransactionData::Unversioned(), table_entry, ids, column_ids, updates);
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {
