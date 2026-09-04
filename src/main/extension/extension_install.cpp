@@ -1,5 +1,6 @@
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
+#include "duckdb/common/http_transport_manager.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/database_file_opener.hpp"
@@ -443,23 +444,19 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		headers.Insert("If-None-Match", StringUtil::Format("%s", install_info->etag));
 	}
 
-	auto &http_util = HTTPUtil::Get(db);
-	unique_ptr<HTTPParams> params;
-	if (context) {
-		params = http_util.InitializeParameters(*context, url);
-	} else {
-		params = http_util.InitializeParameters(db, url);
-	}
+	auto &manager = db.config.GetHTTPTransportManager();
+	auto session = context ? manager.CreateSession(*context, url) : manager.CreateSession(db, url);
+	auto &params = session.Parameters();
 
 	// Unclear what's peculiar about extension install flow, but those two parameters are needed
 	// to avoid lengthy retry on 304
-	params->follow_location = false;
-	params->keep_alive = false;
+	params.follow_location = false;
+	params.keep_alive = false;
 
-	GetRequestInfo get_request(url, headers, *params, nullptr, nullptr);
+	GetRequestInfo get_request(url, headers, params, nullptr, nullptr);
 	get_request.try_request = true;
 
-	auto response = http_util.Request(get_request);
+	auto response = session.Request(get_request);
 	if (!response->Success()) {
 		// if we should not retry or exceeded the number of retries - bubble up the error
 		string message;
