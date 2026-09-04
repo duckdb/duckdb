@@ -556,7 +556,7 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 	return ReadStringWithLength(reader, offset);
 }
 
-string_t UncompressedStringStorage::ReadStringWithLength(CompressionSegmentReader &reader, int32_t offset) {
+string_t UncompressedStringStorage::ReadStringWithLength(CompressionSegmentReader reader, int32_t offset) {
 	reader.SetPosition(NumericCast<idx_t>(offset));
 	auto string_length = reader.Read<uint32_t>();
 	auto string_data = reader.ReadBytes(string_length);

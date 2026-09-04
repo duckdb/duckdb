@@ -272,7 +272,7 @@ public:
 	                              int32_t &result_offset);
 	static string_t ReadOverflowString(const QueryContext &context, ColumnSegment &segment, Vector &result,
 	                                   block_id_t block, int32_t offset);
-	static string_t ReadStringWithLength(CompressionSegmentReader &reader, int32_t offset);
+	static string_t ReadStringWithLength(CompressionSegmentReader reader, int32_t offset);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 
 	// FIXME: Remove this raw pointer helper once FSST no longer needs it.
