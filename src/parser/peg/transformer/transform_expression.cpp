@@ -192,8 +192,7 @@ PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer,
 			function_expr->GetArgumentsMutable().insert(function_expr->GetArgumentsMutable().begin(), std::move(expr));
 			// A method-chained call names a function too, so it takes the same rewrites.
 			auto lowercase_name = StringUtil::Lower(function_expr->FunctionName().GetIdentifierName());
-			if (auto rewritten =
-			        TransformParserFunctionRewrite(lowercase_name, function_expr->GetArgumentsMutable())) {
+			if (auto rewritten = TransformParserFunctionRewrite(lowercase_name, function_expr->GetArgumentsMutable())) {
 				expr = std::move(rewritten);
 			} else {
 				expr = std::move(function_expr);
