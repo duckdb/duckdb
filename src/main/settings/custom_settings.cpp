@@ -1789,6 +1789,10 @@ void EnableObjectCacheSetting::OnSet(SettingCallbackInfo &info, Value &) {
 	WarnDeprecatedSetting(info, EnableObjectCacheSetting::Name);
 }
 
+void ErrorOnDivisionByZeroSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, ErrorOnDivisionByZeroSetting::Name);
+}
+
 void ExperimentalMetadataReuseSetting::OnSet(SettingCallbackInfo &info, Value &) {
 	WarnDeprecatedSetting(info, ExperimentalMetadataReuseSetting::Name);
 }
@@ -1803,10 +1807,6 @@ void LegacyDisableNullTypeSetting::OnSet(SettingCallbackInfo &info, Value &) {
 
 void LegacyMetricsFormatSetting::OnSet(SettingCallbackInfo &info, Value &) {
 	WarnDeprecatedSetting(info, LegacyMetricsFormatSetting::Name);
-}
-
-void NullOnDivisionByZeroSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, NullOnDivisionByZeroSetting::Name);
 }
 
 void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value &input) {

@@ -1093,6 +1093,17 @@ struct EnabledLogTypes {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ErrorOnDivisionByZeroSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "error_on_division_by_zero";
+	static constexpr const char *Description = "Throw an error instead of returning NULL when dividing by zero.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct ErrorsAsJSONSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "errors_as_json";
@@ -1600,17 +1611,6 @@ struct NestedLoopJoinThresholdSetting {
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct NullOnDivisionByZeroSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "null_on_division_by_zero";
-	static constexpr const char *Description = "Return NULL instead of throwing an error when dividing by zero.";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct OldImplicitCastingSetting {

@@ -1143,7 +1143,7 @@ namespace {
 
 [[noreturn]] void ThrowDivisionByZero(const Expression &expr) {
 	throw InvalidInputException("Division by zero in expression %s. Use TRY(...) to return NULL for this expression, "
-	                            "or SET null_on_division_by_zero=true to return NULL for all divisions by zero.",
+	                            "or SET error_on_division_by_zero=false to return NULL for all divisions by zero.",
 	                            expr.ToString());
 }
 
@@ -1263,7 +1263,7 @@ template <class OP>
 unique_ptr<FunctionData> BindDivisionByZero(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(context);
+	auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(context);
 	bound_function.SetFunctionCallback(
 	    GetBinaryFunctionZeroCheck<OP>(bound_function.GetReturnType().InternalType(), null_on_zero));
 	return nullptr;
@@ -1272,7 +1272,7 @@ unique_ptr<FunctionData> BindDivisionByZero(BindScalarFunctionInput &input) {
 unique_ptr<FunctionData> BindIntervalDivide(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	if (Settings::Get<NullOnDivisionByZeroSetting>(context)) {
+	if (!Settings::Get<ErrorOnDivisionByZeroSetting>(context)) {
 		bound_function.SetFunctionCallback(BinaryScalarFunctionZeroCheck<interval_t, double, interval_t, DivideOperator,
 		                                                                 BinaryZeroCheckWrapper<true>>);
 	} else {
@@ -1290,7 +1290,7 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(BindScalarFunctionInput &input)
 	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType()));
 	} else {
-		auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(context);
+		auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(context);
 		bound_function.SetFunctionCallback(
 		    GetBinaryFunctionZeroCheck<OP>(bound_function.GetReturnType().InternalType(), null_on_zero));
 	}
@@ -1334,7 +1334,7 @@ struct DividePropagateStatistics {
 };
 
 // When propagation fails the divisor range may contain zero, and division by zero either raises or (with
-// null_on_division_by_zero) produces NULLs that the inputs do not have: return no statistics instead of the
+// error_on_division_by_zero=false) produces NULLs that the inputs do not have: return no statistics instead of the
 // validity-only statistics that PropagateNumericStats falls back to.
 unique_ptr<BaseStatistics> PropagateIntegerDivideStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto stats = PropagateNumericStats<TryDivideOperator, DividePropagateStatistics, DivideOperator>(context, input);
@@ -1391,7 +1391,7 @@ static unique_ptr<FunctionData> BindDecimalModulo(BindScalarFunctionInput &input
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 	}
 	auto &result_type = bound_function.GetReturnType();
-	auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(input.GetClientContext());
+	auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(input.GetClientContext());
 	bound_function.SetFunctionCallback(GetBinaryFunctionZeroCheck<OP>(result_type.InternalType(), null_on_zero));
 	return std::move(bind_data);
 }

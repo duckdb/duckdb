@@ -155,6 +155,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(EnableProgressBarPrintSetting),
     DUCKDB_SETTING(EnableViewDependenciesSetting),
     DUCKDB_GLOBAL(EnabledLogTypes),
+    DUCKDB_SETTING_CALLBACK(ErrorOnDivisionByZeroSetting),
     DUCKDB_SETTING(ErrorsAsJSONSetting),
     DUCKDB_SETTING_CALLBACK(ExperimentalMetadataReuseSetting),
     DUCKDB_SETTING_CALLBACK(ExplainOutputSetting),
@@ -201,7 +202,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(MaxVacuumTasksSetting),
     DUCKDB_SETTING(MergeJoinThresholdSetting),
     DUCKDB_SETTING(NestedLoopJoinThresholdSetting),
-    DUCKDB_SETTING_CALLBACK(NullOnDivisionByZeroSetting),
     DUCKDB_SETTING(OldImplicitCastingSetting),
     DUCKDB_LOCAL(OperatorMemoryLimitSetting),
     DUCKDB_SETTING(OrderByNonIntegerLiteralSetting),
@@ -250,7 +250,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 130),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 131),
                                                      DUCKDB_SETTING_ALIAS("null_order", 60),
                                                      DUCKDB_SETTING_ALIAS("profile_output", 153),
                                                      DUCKDB_SETTING_ALIAS("user", 173),
