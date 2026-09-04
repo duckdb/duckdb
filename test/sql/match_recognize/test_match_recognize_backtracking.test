@@ -400,3 +400,103 @@ SELECT count(*) FROM rows_aaaaa MATCH_RECOGNIZE(
 )
 ----
 5
+
+# The cases above are a handful of rows each, so an engine that tries every split still answers them.
+# These are the same shapes at a length where that is not an option: ((A+)+ B) over a thousand rows
+# splits into 2^999 candidates, and the run below never matches, so an engine that explores them would
+# have to explore all of them. If one of these ever stops returning, it has not become slow - it has
+# stopped being polynomial, and the test will hang rather than fail.
+
+statement ok
+CREATE TABLE long_a AS SELECT i::INTEGER AS i, 'a' AS c FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE long_ab AS SELECT i::INTEGER AS i, CASE WHEN i = 999 THEN 'b' ELSE 'a' END AS c FROM range(1000) t(i);
+
+# nothing to end on, so every way of splitting the run fails
+query II
+SELECT count(*), max(len) FROM long_a MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ((A+)+ B)
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
+)
+----
+0	NULL
+
+query II
+SELECT count(*), max(len) FROM long_a MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+ A+ A+ B)
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
+)
+----
+0	NULL
+
+query II
+SELECT count(*), max(len) FROM long_a MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A* A* A* A* B)
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
+)
+----
+0	NULL
+
+# the same shapes with the B at the very end, so the search succeeds only after the whole run
+query II
+SELECT count(*), max(len) FROM long_ab MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ((A+)+ B)
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
+)
+----
+1	1000
+
+query II
+SELECT count(*), max(len) FROM long_ab MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+ A+ A+ B)
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
+)
+----
+1	1000
+
+# a greedy run that has to give back a row a thousand rows after it took it
+query II
+SELECT count(*), max(len) FROM long_ab MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+ B)
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
+)
+----
+1	1000
+
+# a star inside a star over a long run: the inner one can still match nothing at every step
+query II
+SELECT count(*), max(len) FROM long_a MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ((A*)*)
+    DEFINE A AS A.c = 'a'
+)
+----
+1	1000
+
+# n optional repetitions followed by n mandatory ones, at n = 50 rather than n = 4
+statement ok
+CREATE TABLE fifty_a AS SELECT i::INTEGER AS i, 'a' AS c FROM range(50) t(i);
+
+query II
+SELECT count(*), max(len) FROM fifty_a MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ((A{0,1}){50} A{50})
+    DEFINE A AS A.c = 'a'
+)
+----
+1	50
