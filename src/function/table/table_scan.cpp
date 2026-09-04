@@ -835,15 +835,27 @@ static bool TryScanIndexes(const TableIndexList &indexes, const ColumnList &colu
 		}
 
 		// If found, update the bound column ref within index_expr
+		bool rewrite_possible = true;
 		ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
 			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				return;
 			}
 
-			// A single-column index expression binds every column reference to its sole input.
 			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
-			bound_column_ref_expr.BindingMutable().column_index = scan_column_index;
+			auto index_column_ordinal = bound_column_ref_expr.Binding().column_index;
+			if (index_column_ordinal >= indexed_columns.size()) {
+				rewrite_possible = false;
+				return;
+			}
+
+			// A single-column index expression binds every column reference to its sole input.
+			auto &binding = bound_column_ref_expr.BindingMutable();
+			binding.table_index = TableIndex(0);
+			binding.column_index = scan_column_index;
 		});
+		if (!rewrite_possible) {
+			continue;
+		}
 
 		// Try to find a matching filter for the column.
 		auto filter = filter_set.TryGetFilterByColumnIndex(scan_column_index);
