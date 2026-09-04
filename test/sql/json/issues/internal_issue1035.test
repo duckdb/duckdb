@@ -21,13 +21,14 @@ SELECT json_merge_patch_diff(
 {}
 
 # Vuln153: json_normalize()
-# "[" * 1000 + "]" * 1000
-statement error
-SELECT json_normalize(
-  (repeat('{"a":', 200000) || '1' || repeat('}', 200000))::JSON
+query I
+SELECT length(
+  json_normalize(
+    (repeat('{"a":', 200000) || '1' || repeat('}', 200000))::JSON
+  )
 )
 ----
-json_normalize: JSON exceeds maximum recursion depth of 128
+1200001
 
 # Vuln154: json_merge_patch()
 

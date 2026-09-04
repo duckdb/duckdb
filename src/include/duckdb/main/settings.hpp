@@ -613,16 +613,6 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct DebugHeapBasedParserSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "debug_heap_based_parser";
-	static constexpr const char *Description = "DEBUG SETTING: use the experimental heap-based PEG parser";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
 struct DebugOrderVerificationSetting {
 	using RETURN_TYPE = DebugOrderVerification;
 	static constexpr const char *Name = "debug_order_verification";
@@ -1301,6 +1291,16 @@ struct GeometryMinimumShreddingSize {
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "30000";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct HeapBasedParserSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "heap_based_parser";
+	static constexpr const char *Description = "Use the heap-based PEG parser";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
