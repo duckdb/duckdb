@@ -14,6 +14,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 
 namespace duckdb {
 
@@ -84,7 +85,7 @@ private:
 	void AddReplacementAliases(const BindingReplacementGraph &replacements);
 	Binder &binder;
 	column_binding_map_t<ColumnBinding> correlated_aliases;
-	column_binding_map_t<idx_t> replacement_map;
+	column_binding_map_t<CorrelatedAggregateReplacement> replacement_map;
 	const CorrelatedColumns &correlated_columns;
 	vector<LogicalType> delim_types;
 

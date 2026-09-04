@@ -23,7 +23,10 @@
 #include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/table_description.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 
@@ -223,6 +226,33 @@ inline auto Convert(CV2LogicalType *opt) -> duckdb_v2_logical_type_handle {
 	return reinterpret_cast<duckdb_v2_logical_type_handle>(opt);
 }
 
+using CV2QualifiedName = duckdb::QualifiedName;
+
+inline auto Convert(duckdb_v2_qname_handle name) -> CV2QualifiedName * {
+	return reinterpret_cast<CV2QualifiedName *>(name);
+}
+inline auto Convert(CV2QualifiedName *name) -> duckdb_v2_qname_handle {
+	return reinterpret_cast<duckdb_v2_qname_handle>(name);
+}
+
+using CV2TableDescription = duckdb::TableDescription;
+
+inline auto Convert(duckdb_v2_table_description_handle desc) -> CV2TableDescription * {
+	return reinterpret_cast<CV2TableDescription *>(desc);
+}
+inline auto Convert(CV2TableDescription *desc) -> duckdb_v2_table_description_handle {
+	return reinterpret_cast<duckdb_v2_table_description_handle>(desc);
+}
+
+using CV2ColumnDescription = duckdb::ColumnDefinition;
+
+inline auto Convert(duckdb_v2_column_description_handle column) -> CV2ColumnDescription * {
+	return reinterpret_cast<CV2ColumnDescription *>(column);
+}
+inline auto Convert(CV2ColumnDescription *column) -> duckdb_v2_column_description_handle {
+	return reinterpret_cast<duckdb_v2_column_description_handle>(column);
+}
+
 using CV2Value = duckdb::Value;
 
 inline auto Convert(duckdb_v2_value_handle val) -> CV2Value * {
@@ -231,6 +261,16 @@ inline auto Convert(duckdb_v2_value_handle val) -> CV2Value * {
 
 inline auto Convert(CV2Value *val) -> duckdb_v2_value_handle {
 	return reinterpret_cast<duckdb_v2_value_handle>(val);
+}
+
+using CV2Expression = duckdb::Expression;
+
+inline auto Convert(duckdb_v2_expression_handle expression) -> CV2Expression * {
+	return reinterpret_cast<CV2Expression *>(expression);
+}
+
+inline auto Convert(CV2Expression *expression) -> duckdb_v2_expression_handle {
+	return reinterpret_cast<duckdb_v2_expression_handle>(expression);
 }
 
 using CV2DataChunk = duckdb::DataChunk;

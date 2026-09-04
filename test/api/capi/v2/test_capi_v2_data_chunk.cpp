@@ -1015,6 +1015,7 @@ TEST_CASE("V2: vector_flatten CONSTANT → FLAT", "[capi_v2][data_chunk]") {
 //     on a fixture that has different valid/invalid rows under sel.
 // ===========================================================================
 
+#if (STANDARD_VECTOR_SIZE > 3)
 TEST_CASE("V2: DICTIONARY vector view", "[capi_v2][data_chunk]") {
 	// Build a FLAT INTEGER vector backing the dictionary. Mark row 1
 	// invalid so validity-follows-sel has something to expose.
@@ -1068,6 +1069,7 @@ TEST_CASE("V2: DICTIONARY vector view", "[capi_v2][data_chunk]") {
 		REQUIRE(RowValid(view, SelAt(view.sel, i)));
 	}
 }
+#endif
 
 // ===========================================================================
 // vector_get_view rejects OTHER (FSST / SEQUENCE / SHREDDED) vectors

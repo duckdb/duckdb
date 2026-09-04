@@ -131,22 +131,20 @@ struct SortedAggregateBindData : public FunctionData {
 			                    make_uniq<BoundReferenceExpression>(buffered_types[entry.column],
 			                                                        UnsafeNumericCast<idx_t>(entry.column + 1)));
 		}
-		sort = make_uniq<Sort>(context, orders, sort_types, scan_cols);
+		sort = make_shared_ptr<Sort>(context, orders, sort_types, scan_cols);
 	}
 
 	SortedAggregateBindData(const SortedAggregateBindData &other)
 	    : context(other.context), function(other.function), sort_types(other.sort_types), scan_cols(other.scan_cols),
-	      scan_types(other.scan_types), buffered_cols(other.buffered_cols), buffered_types(other.buffered_types),
-	      buffered_struct_type(other.buffered_struct_type), buffered_funcs(other.buffered_funcs),
-	      sorted_on_args(other.sorted_on_args), threshold(other.threshold) {
+	      scan_types(other.scan_types), sort(other.sort), buffered_cols(other.buffered_cols),
+	      buffered_types(other.buffered_types), buffered_struct_type(other.buffered_struct_type),
+	      buffered_funcs(other.buffered_funcs), sorted_on_args(other.sorted_on_args), threshold(other.threshold) {
 		if (other.bind_info) {
 			bind_info = other.bind_info->Copy();
 		}
 		for (auto &order : other.orders) {
 			orders.emplace_back(order.Copy());
 		}
-
-		sort = make_uniq<Sort>(context, orders, sort_types, scan_cols);
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -188,8 +186,8 @@ struct SortedAggregateBindData : public FunctionData {
 	vector<column_t> scan_cols;
 	//! The types of the sunk columns
 	vector<LogicalType> scan_types;
-	//! The shared sort specification
-	unique_ptr<Sort> sort;
+	//! The immutable shared sort specification
+	shared_ptr<const Sort> sort;
 
 	//! The mapping from inputs to buffered columns
 	vector<column_t> buffered_cols;

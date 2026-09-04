@@ -1,0 +1,26 @@
+# name: benchmark/micro/aggregate/recursive_sorted_aggregate_copy.benchmark
+# description: Repeated sorted aggregate bind data copies in a recursive CTE
+# group: [aggregate]
+
+name Recursive Sorted Aggregate Copy
+group aggregate
+
+init
+PREPARE recursive_sorted_aggregate_copy AS
+WITH RECURSIVE r(iter, asc_value, desc_value) AS (
+	VALUES (0, 'seed'::VARCHAR, 'seed'::VARCHAR)
+	UNION ALL
+	SELECT iter + 1,
+	       string_agg(v, ',' ORDER BY ord ASC NULLS FIRST),
+	       string_agg(v, ',' ORDER BY ord DESC NULLS LAST)
+	FROM r, (VALUES ('a', 2), ('b', 1), ('n', NULL)) t(v, ord)
+	WHERE iter < 1000
+	GROUP BY iter
+)
+SELECT * FROM r WHERE iter = 1000;
+
+run
+EXECUTE recursive_sorted_aggregate_copy;
+
+result III
+1000	n,b,a	a,b,n

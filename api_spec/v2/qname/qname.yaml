@@ -1,0 +1,263 @@
+module: qname
+#
+# A qualified name: the ordered path of identifiers that names a database
+# object. The path is the whole representation -- partial qualification is
+# expressed by path length (["t"], ["s","t"], ["c","s","t"]), never by empty
+# placeholder parts, and the last part is always the object itself. Deciding
+# whether a two-part name means catalog.object or schema.object belongs to
+# resolution, not to the name.
+#
+# Names are handed out as owned handles rather than borrowed views because the
+# engine spells them several different ways internally, and several of those
+# are mutable in place; an owned handle is a snapshot the caller keeps for as
+# long as it likes, with no lifetime tied to whatever produced it.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  qname:
+    description: |
+      An owned qualified name: an ordered path of one to three non-empty identifier parts whose last element is the
+      object name. Construct with `[[qname_parse]]` or `[[qname_create]]`, read with `[[qname_get_part_count]]` and
+      `[[qname_get_part]]`, render back to SQL with `[[qname_render]]`, compare with `[[qname_equals]]`, and destroy
+      with `[[qname_destroy]]`. Two handles are compared with `[[qname_equals]]`, never by pointer.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  qname_parse:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Parses SQL text into a qualified name.
+
+      Applies the engine's qualified-name rules: dots separate parts, and a double-quoted part may contain dots and
+      doubled interior quotes. More than three parts and an unterminated quote are rejected with the parser's own
+      error; text without at least one non-empty part is rejected with `ERROR_INPUT_INVALID`. When the parts are
+      already separate, build the name with `[[qname_create]]` rather than joining them and parsing the result.
+    role: constructor
+    belongs_to: qname
+    parameters:
+      text:
+        type: str
+        description: The name text to parse. Borrowed for the call only.
+      name:
+        type: qname
+        indirection: 1
+        kind: OUT
+        description: On success, receives the qualified name. Owned by the caller; destroy via `[[qname_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  qname_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Creates a qualified name from its parts.
+
+      The parts are ordered outermost first, so the last one is the object name. Between one and three parts are
+      accepted -- the engine qualifies at most catalog.schema.name today -- and every part must be non-empty:
+      partial qualification is expressed by passing fewer parts, never by empty placeholders. Zero parts, more than
+      three, and an empty part are all rejected with `ERROR_INPUT_INVALID`. The parts are borrowed and copied.
+    role: constructor
+    belongs_to: qname
+    parameters:
+      parts:
+        type: identifier
+        indirection: 1
+        const: true
+        description: An array of `part_count` non-empty identifier views, outermost first.
+      part_count:
+        type: idx
+        description: The number of parts, between one and three.
+      name:
+        type: qname
+        indirection: 1
+        kind: OUT
+        description: On success, receives the qualified name. Owned by the caller; destroy via `[[qname_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Inspection
+  #---------------------------------------------------------------------------------------------------------------------
+  qname_get_part_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Returns how many parts the qualified name has.
+
+      Always at least one. Valid indices for `[[qname_get_part]]` are [0, count), and the object name is the part at
+      count - 1.
+    role: getter
+    belongs_to: qname
+    parameters:
+      name:
+        type: qname
+        description: The qualified name.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of parts.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  qname_get_part:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Borrows one part of the qualified name.
+
+      Parts are ordered outermost first, so the object name is the part at `[[qname_get_part_count]]` - 1. The view
+      is valid until the qualified name is destroyed. An index outside [0, count) is rejected with
+      `ERROR_INPUT_OUT_OF_RANGE`.
+    role: getter
+    belongs_to: qname
+    parameters:
+      name:
+        type: qname
+        description: The qualified name.
+      index:
+        type: idx
+        description: Zero-based part index.
+      part:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the part, valid until the qualified name is destroyed.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  qname_render:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Renders the qualified name as SQL text.
+
+      Joins the parts with dots, quoting and escaping each one only where the identifier requires it, so the result
+      parses back through `[[qname_parse]]` to an equal name.
+
+      Writes into a caller-supplied buffer, so nothing is allocated on the caller's behalf and nothing has to be
+      freed. Pass out_text = NULL to size the buffer without rendering into it: out_length then receives the length,
+      and out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call
+      returns ERROR_INPUT_OBJECT_SIZE with out_length set to the required length and out_text left untouched.
+
+      out_length never counts the terminator, but a successful write always appends one, so the buffer is usable as
+      a C string.
+    role: getter
+    belongs_to: qname
+    parameters:
+      name:
+        type: qname
+        description: The qualified name to render.
+      out_text:
+        type: char
+        indirection: 1
+        kind: OUT
+        description: Caller-owned buffer receiving the text plus a null terminator, or NULL to only report the required length in out_length.
+      out_capacity:
+        type: idx
+        description: Bytes available in out_text, terminator included. Ignored when out_text is NULL.
+      out_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the text length excluding the null terminator — written on success and on ERROR_INPUT_OBJECT_SIZE.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  qname_equals:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Compares two qualified names.
+
+      True when both have the same number of parts and every part matches case-insensitively, which is the engine's
+      own identifier equality: casing never distinguishes two names. This is the only way to compare names; two
+      handles holding equal names are still distinct pointers.
+    role: getter
+    belongs_to: qname
+    parameters:
+      left:
+        type: qname
+        description: The first qualified name.
+      right:
+        type: qname
+        description: The second qualified name.
+      result:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the two names are equal.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  qname_hash:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Hashes a qualified name.
+
+      Consistent with `[[qname_equals]]`: names that compare equal hash equal, casing differences included. The value
+      is not stable across processes or library versions, so use it for in-process lookup tables only and never
+      persist it.
+    role: getter
+    belongs_to: qname
+    parameters:
+      name:
+        type: qname
+        description: The qualified name to hash.
+      hash:
+        type: u64
+        indirection: 1
+        kind: OUT
+        description: Receives the hash value.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy
+  #---------------------------------------------------------------------------------------------------------------------
+  qname_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Destroys the qualified name, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+      double-destruction. Any part views borrowed from it become dangling.
+    role: destructor
+    belongs_to: qname
+    parameters:
+      name:
+        type: qname
+        description: The qualified name to destroy.
+        indirection: 1
+    return_type: ERROR

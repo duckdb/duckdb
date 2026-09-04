@@ -1,0 +1,303 @@
+module: catalog
+#
+# Resolve-and-read catalog primitives: look one named object up and read the
+# facts of its resolution. Enumeration (listing tables, schemas, columns)
+# stays in SQL, where the system table functions already provide it.
+
+# // TODO: Maybe we should just remove this API, you can get this information from the system tables instead.
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  table_description:
+    description: |
+      An owned snapshot of one base table taken at creation: where the name resolved, the table's columns, and
+      per-column catalog facts. Later DDL does not update it. Create with `[[connection_describe_table]]`, read the
+      resolved location via `[[table_description_get_qname]]`, and the columns via
+      `[[table_description_get_column_count]]` and `[[table_description_get_column]]`. Destroy via
+      `[[table_description_destroy]]`.
+  column_description:
+    description: |
+      An owned snapshot of one column of a described table: its name, type, and catalog facts. Obtain with
+      `[[table_description_get_column]]`, read with `[[column_description_get_name]]`,
+      `[[column_description_get_type]]`, `[[column_description_has_default]]` and
+      `[[column_description_has_generated]]`, and destroy with `[[column_description_destroy]]`.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  connection_describe_table:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Resolves a table name and snapshots its description.
+
+      Resolves name in the connection's catalogs and returns an owned description of the table it names. name may be
+      partial: an unqualified or schema-qualified name resolves through the connection's search path, exactly as the
+      same name resolves in SQL. A two-part name tries the first part as a schema and as an attached database, as SQL
+      does, and is rejected when both readings exist. A name that resolves to nothing is rejected with the engine's
+      missing-table error; a name that resolves to a view is rejected with the engine's not-a-table error, since a
+      description snapshots a base table.
+    role: constructor
+    belongs_to: table_description
+    parameters:
+      conn:
+        type: connection
+        description: The connection whose catalogs and search path resolve the name.
+      name:
+        type: qname
+        description: The possibly partial table name to resolve. Borrowed for the call only.
+      desc:
+        type: table_description
+        indirection: 1
+        kind: OUT
+        description: On success, receives the owned description. Destroy via `[[table_description_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Table Description
+  #---------------------------------------------------------------------------------------------------------------------
+  table_description_get_qname:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the resolved qualified name of the described table.
+
+      Returns an owned copy of the fully resolved name: the catalog, schema, and table the lookup landed on, with the
+      casing the table was created with, never an echo of the requested name. Rendering it produces SQL that pins the
+      described table regardless of search path.
+    role: getter
+    belongs_to: table_description
+    parameters:
+      desc:
+        type: table_description
+        description: The description.
+      name:
+        type: qname
+        indirection: 1
+        kind: OUT
+        description: Receives the owned resolved name. Destroy via `[[qname_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_description_is_readonly:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns whether the described table's catalog is read-only.
+
+      True when the catalog the name resolved into was attached read-only, in which case no write to the table can
+      succeed. False does not by itself prove a write will succeed; it clears the catalog-level check only.
+    role: getter
+    belongs_to: table_description
+    parameters:
+      desc:
+        type: table_description
+        description: The description.
+      readonly:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the catalog is read-only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_description_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns of the described table.
+
+      Counts every column in declared order, generated columns included. Valid indices for
+      `[[table_description_get_column]]` are [0, count).
+    role: getter
+    belongs_to: table_description
+    parameters:
+      desc:
+        type: table_description
+        description: The description.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the column count.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_description_get_column:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns an owned description of the column at index.
+
+      Columns are numbered in declared order, generated columns included. An out-of-range index is rejected with
+      `ERROR_INPUT_OUT_OF_RANGE`.
+    role: getter
+    belongs_to: table_description
+    parameters:
+      desc:
+        type: table_description
+        description: The description.
+      index:
+        type: idx
+        description: Zero-based column index.
+      column:
+        type: column_description
+        indirection: 1
+        kind: OUT
+        description: Receives the owned column description. Destroy via `[[column_description_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_description_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Destroys the table description, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+      double-destruction. Column descriptions obtained from it are independent and stay valid.
+    role: destructor
+    belongs_to: table_description
+    parameters:
+      desc:
+        type: table_description
+        description: The description to destroy.
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Column Description
+  #---------------------------------------------------------------------------------------------------------------------
+  column_description_get_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Borrows the name of the column.
+
+      The name carries the casing the column was declared with.
+    role: getter
+    belongs_to: column_description
+    parameters:
+      column:
+        type: column_description
+        description: The column description.
+      name:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the column name. Valid until the column description is destroyed.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  column_description_get_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Borrows the type of the column.
+    role: getter
+    belongs_to: column_description
+    parameters:
+      column:
+        type: column_description
+        description: The column description.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives the borrowed column type. Valid until the column description is destroyed; do not destroy it.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  column_description_has_default:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns whether the column has a default value.
+
+      True when the column declares a default expression; the engine evaluates it for rows that omit the column.
+      Generated columns report false.
+    role: getter
+    belongs_to: column_description
+    parameters:
+      column:
+        type: column_description
+        description: The column description.
+      has_default:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the column has a default value.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  column_description_has_generated:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns whether the column is generated.
+
+      True when the column is a generated column, computed by the engine from a generation expression and not
+      writable.
+    role: getter
+    belongs_to: column_description
+    parameters:
+      column:
+        type: column_description
+        description: The column description.
+      has_generated:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the column is generated.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  column_description_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Destroys the column description, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+      double-destruction. Any name or type borrowed from it becomes dangling.
+    role: destructor
+    belongs_to: column_description
+    parameters:
+      column:
+        type: column_description
+        description: The column description to destroy.
+        indirection: 1
+    return_type: ERROR

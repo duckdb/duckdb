@@ -504,6 +504,10 @@ public:
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeAddConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                               TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeAddColumnTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                          TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -4945,6 +4949,12 @@ public:
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<AlterTableInfo> TransformAddConstraint(PEGTransformer &transformer,
 	                                                         unique_ptr<Constraint> top_level_constraint);
+	static unique_ptr<TransformResultValue> TransformDropConstraintInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<AlterTableInfo> TransformDropConstraint(PEGTransformer &transformer,
+	                                                          const optional<bool> &if_exists,
+	                                                          const Identifier &identifier,
+	                                                          const optional<bool> &drop_behavior);
 	static unique_ptr<TransformResultValue> TransformAddColumnInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<AlterTableInfo> TransformAddColumn(PEGTransformer &transformer, const bool &has_result,
