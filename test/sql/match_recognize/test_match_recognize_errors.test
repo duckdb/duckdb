@@ -243,3 +243,72 @@ SELECT 1 FROM q MATCH_RECOGNIZE(
 )
 ----
 <REGEX>:Parser Error.*PERMUTE takes at most 6 parts.*
+
+statement ok
+create table skips(seq integer, c varchar);
+
+statement ok
+insert into skips values (1,'a'),(2,'a'),(3,'b'),(4,'a'),(5,'c');
+
+# Resuming at the row the match started on would find the same match again and never move, so it is
+# refused rather than looped. Oracle refuses it too.
+statement error
+SELECT count(*) FROM skips MATCH_RECOGNIZE(
+    ORDER BY seq MEASURES count(*) AS n AFTER MATCH SKIP TO FIRST A
+    PATTERN (A+ B) DEFINE A AS c='a', B AS c='b'
+)
+----
+<REGEX>:Invalid Input Error:.*SKIP TO A resumes at the row the match started on.*
+
+statement error
+SELECT count(*) FROM skips MATCH_RECOGNIZE(
+    ORDER BY seq MEASURES count(*) AS n AFTER MATCH SKIP TO LAST A
+    PATTERN (A B) DEFINE A AS c='a', B AS c='b'
+)
+----
+<REGEX>:Invalid Input Error:.*SKIP TO A resumes at the row the match started on.*
+
+# An optional variable that took no rows leaves the skip with nowhere to go. Oracle answers
+# ORA-62514, "AFTER MATCH SKIP TO variable is not bounded in the match found".
+statement error
+SELECT count(*) FROM skips MATCH_RECOGNIZE(
+    ORDER BY seq MEASURES count(*) AS n AFTER MATCH SKIP TO LAST B
+    PATTERN (A+ B?) DEFINE A AS c='a', B AS c='z'
+)
+----
+<REGEX>:Invalid Input Error:.*SKIP TO B found a match with no row matched to B.*
+
+# the same skip is fine once the variable does take a row
+query I
+SELECT count(*) FROM skips MATCH_RECOGNIZE(
+    ORDER BY seq MEASURES count(*) AS n AFTER MATCH SKIP TO LAST B
+    PATTERN (A+ B) DEFINE A AS c='a', B AS c='b'
+)
+----
+1
+
+# Oracle takes three modifiers here that decide which matches reach the output. None are supported
+# yet, so they are refused by the parser rather than quietly ignored.
+statement error
+SELECT count(*) FROM skips MATCH_RECOGNIZE(
+    ORDER BY seq MEASURES count(*) AS n ALL ROWS PER MATCH WITH UNMATCHED ROWS
+    PATTERN (B) DEFINE B AS c='b'
+)
+----
+<REGEX>:Parser Error.*syntax error.*
+
+statement error
+SELECT count(*) FROM skips MATCH_RECOGNIZE(
+    ORDER BY seq MEASURES count(*) AS n ALL ROWS PER MATCH OMIT EMPTY MATCHES
+    PATTERN (B*) DEFINE B AS c='b'
+)
+----
+<REGEX>:Parser Error.*syntax error.*
+
+statement error
+SELECT count(*) FROM skips MATCH_RECOGNIZE(
+    ORDER BY seq MEASURES count(*) AS n ALL ROWS PER MATCH SHOW EMPTY MATCHES
+    PATTERN (B*) DEFINE B AS c='b'
+)
+----
+<REGEX>:Parser Error.*syntax error.*

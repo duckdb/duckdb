@@ -745,13 +745,17 @@ static idx_t SkipTo(const MatchRecognizeFunctionData &config, idx_t skip_symbol,
 				break;
 			}
 		}
-		if (target.IsValid()) {
-			resume = target.GetIndex();
-			if (resume == match_start) {
-				throw InvalidInputException(
-				    "AFTER MATCH SKIP TO %s resumes at the row the match started on, so matching cannot advance",
-				    config.after_match_variable);
-			}
+		// the symbol carries the internal prefix, which is no help to whoever wrote the query
+		const auto variable = MatchRecognizeSymbolName(config.after_match_variable);
+		if (!target.IsValid()) {
+			throw InvalidInputException("AFTER MATCH SKIP TO %s found a match with no row matched to %s, so there is "
+			                            "nowhere to resume from",
+			                            variable, variable);
+		}
+		resume = target.GetIndex();
+		if (resume == match_start) {
+			throw InvalidInputException(
+			    "AFTER MATCH SKIP TO %s resumes at the row the match started on, so matching cannot advance", variable);
 		}
 		break;
 	}
