@@ -259,7 +259,7 @@ static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("confi
                                                      DUCKDB_SETTING_ALIAS("enable_caching_operators", 40),
                                                      DUCKDB_SETTING_ALIAS("force_bitpacking_mode", 42),
                                                      DUCKDB_SETTING_ALIAS("force_mbedtls_unsafe", 47),
-                                                     DUCKDB_SETTING_ALIAS("force_update_to_delete_and_insert", 49),
+                                                     DUCKDB_SETTING_ALIAS("force_update_to_del_and_insert", 49),
                                                      DUCKDB_SETTING_ALIAS("force_variant_shredding", 50),
                                                      DUCKDB_SETTING_ALIAS("memory_limit", 132),
                                                      DUCKDB_SETTING_ALIAS("null_order", 68),

@@ -2089,7 +2089,7 @@ struct PreserveInsertionOrderSetting {
 struct ProduceArrowStringViewSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "produce_arrow_string_view";
-	static constexpr const char *Description = "DEPRECATED: Use enable_arrow_string_view instead";
+	static constexpr const char *Description = "DEPRECATED: Already controlled by enable_arrow_string_view";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = true;
