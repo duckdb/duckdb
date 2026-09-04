@@ -788,8 +788,9 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 	DuckDB db(nullptr, &config);
 	Connection connection(db);
 	auto build_directory = TestConfiguration::Get().GetTestEnv("BUILD_DIR", "build/reldebug");
-	auto extension_body =
-	    ReadExtensionBinary(build_directory + "/extension/autocomplete/autocomplete.duckdb_extension");
+	const string extension_filename = "loadable_extension_demo.duckdb_extension";
+	const string extension_url = "http://mock.test/" + extension_filename;
+	auto extension_body = ReadExtensionBinary(build_directory + "/test/extension/" + extension_filename);
 
 	SECTION("client-context and database openers preserve provider capture") {
 		auto first = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::SHARED, "first");
@@ -804,15 +805,14 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 			}
 		};
 
-		const string url = "http://mock.test/autocomplete.duckdb_extension";
 		ExtensionInstallOptions options;
 		options.force_install = true;
 		options.use_etags = true;
-		auto context_info = ExtensionHelper::InstallExtension(*connection.context, url, options);
+		auto context_info = ExtensionHelper::InstallExtension(*connection.context, extension_url, options);
 		first->state->callback = nullptr;
 		REQUIRE(context_info);
 		CHECK(context_info->etag == "mock-etag");
-		CHECK(first->state->initialized_paths == vector<string> {url});
+		CHECK(first->state->initialized_paths == vector<string> {extension_url});
 		CHECK(first->state->initialized_with_context == vector<bool> {true});
 		CHECK(first->state->created == 1);
 		CHECK(first->state->live == 0);
@@ -820,10 +820,10 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 
 		second->state->response_mode = MockResponseMode::NOT_MODIFIED;
 		auto &local_fs = FileSystem::GetLocal(*db.instance);
-		auto database_info = ExtensionHelper::InstallExtension(*db.instance, local_fs, url, options);
+		auto database_info = ExtensionHelper::InstallExtension(*db.instance, local_fs, extension_url, options);
 		REQUIRE(database_info);
 		CHECK(database_info->etag == "mock-etag");
-		CHECK(second->state->initialized_paths == vector<string> {url});
+		CHECK(second->state->initialized_paths == vector<string> {extension_url});
 		CHECK(second->state->initialized_with_context == vector<bool> {false});
 		CHECK(second->state->observed_if_none_match == "mock-etag");
 		CHECK(second->state->created == 1);
@@ -835,12 +835,11 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 		provider->state->response_body = extension_body;
 		provider->state->retries = 1;
 		db.instance->config.SetHTTPUtil(provider);
-		const string url = "http://mock.test/autocomplete.duckdb_extension";
 		ExtensionInstallOptions options;
 		options.force_install = true;
 
 		provider->state->response_sequence = {MockResponseMode::REQUEST_ERROR, MockResponseMode::SUCCESS};
-		REQUIRE(ExtensionHelper::InstallExtension(*connection.context, url, options));
+		REQUIRE(ExtensionHelper::InstallExtension(*connection.context, extension_url, options));
 		CHECK(provider->state->response_attempt == 2);
 		CHECK(provider->state->created == 2);
 		CHECK(provider->state->destroyed == 1);
@@ -848,7 +847,7 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 
 		provider->state->response_attempt = 0;
 		provider->state->response_sequence = {MockResponseMode::CLIENT_THROW, MockResponseMode::SUCCESS};
-		REQUIRE(ExtensionHelper::InstallExtension(*connection.context, url, options));
+		REQUIRE(ExtensionHelper::InstallExtension(*connection.context, extension_url, options));
 		CHECK(provider->state->response_attempt == 2);
 		CHECK(provider->state->created == 3);
 		CHECK(provider->state->destroyed == 2);
@@ -856,7 +855,7 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 
 		provider->state->response_attempt = 0;
 		provider->state->response_sequence = {MockResponseMode::RETRYABLE_HTTP_ERROR, MockResponseMode::SUCCESS};
-		REQUIRE(ExtensionHelper::InstallExtension(*connection.context, url, options));
+		REQUIRE(ExtensionHelper::InstallExtension(*connection.context, extension_url, options));
 		CHECK(provider->state->response_attempt == 2);
 		CHECK(provider->state->created == 4);
 		CHECK(provider->state->destroyed == 3);
@@ -866,8 +865,8 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 		provider->state->response_attempt = 0;
 		provider->state->response_sequence = {MockResponseMode::REQUEST_ERROR, MockResponseMode::SUCCESS};
 		provider->state->return_null_after_first = true;
-		auto null_retry_error =
-		    CaptureExceptionMessage([&]() { ExtensionHelper::InstallExtension(*connection.context, url, options); });
+		auto null_retry_error = CaptureExceptionMessage(
+		    [&]() { ExtensionHelper::InstallExtension(*connection.context, extension_url, options); });
 		CHECK(StringUtil::Contains(null_retry_error, "HTTP provider returned a null client during retry"));
 		CHECK(provider->state->response_attempt == 1);
 		CHECK(provider->state->created == 4);
@@ -877,7 +876,7 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 		provider->state->response_attempt = 0;
 		provider->state->response_sequence = {MockResponseMode::SUCCESS};
 		provider->state->return_null_after_first = false;
-		REQUIRE(ExtensionHelper::InstallExtension(*connection.context, url, options));
+		REQUIRE(ExtensionHelper::InstallExtension(*connection.context, extension_url, options));
 		CHECK(provider->state->created == 5);
 		CHECK(provider->state->high_water == 1);
 	}
@@ -886,10 +885,9 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 		auto provider = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::SHARED);
 		provider->state->response_body = extension_body;
 		db.instance->config.SetHTTPUtil(provider);
-		const string success_url = "http://mock.test/autocomplete.duckdb_extension";
 		ExtensionInstallOptions options;
 		options.force_install = true;
-		REQUIRE(ExtensionHelper::InstallExtension(*connection.context, success_url, options));
+		REQUIRE(ExtensionHelper::InstallExtension(*connection.context, extension_url, options));
 		CHECK(provider->state->live == 1);
 
 		provider->state->response_mode = MockResponseMode::NULL_RESPONSE;
