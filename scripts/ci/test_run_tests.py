@@ -1196,6 +1196,54 @@ unittest is a Catch v2.13.7 host application.
             ],
         )
 
+    def test_empty_stdout_assertion_uses_sqllogictest_stderr_diagnostics(self):
+        batch = ["/tmp/fail.test"]
+        stdout = """
+Filters: /tmp/fail.test
+
+[0/1] (0%): /tmp/fail.test
+-------------------------------------------------------------------------------
+/tmp/fail.test
+-------------------------------------------------------------------------------
+/duckdb/test/sqlite/test_sqllogictest.cpp:47
+...............................................................................
+
+/tmp/fail.test:314: FAILED:
+
+
+[1/1] (100%): /tmp/fail.test took 0.015s
+===============================================================================
+test cases:  1 |  0 passed | 1 failed
+assertions: 28 | 27 passed | 1 failed
+"""
+        stderr = """
+1. /tmp/fail.test:314
+================================================================================
+Query unexpectedly failed (/tmp/fail.test:314)
+ (/tmp/fail.test:314)!
+================================================================================
+SELECT x'303132' IN (SELECT * FROM t1);
+================================================================================
+Actual result:
+================================================================================
+Binder Error: Cannot compare values of type BLOB and INTEGER in IN/ANY/ALL clause - an explicit cast is required
+
+LINE 1: SELECT x'303132' IN (SELECT * FROM t1)
+                            ^^^^^^^^^^^^^^^^^^
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
+        stripped_lines = strip_ansi_lines(lines)
+
+        self.assertEqual(reproduce_batch, batch)
+        self.assertIn("error: FAIL /tmp/fail.test", stripped_lines)
+        self.assertIn(
+            "Binder Error: Cannot compare values of type BLOB and INTEGER in IN/ANY/ALL clause - "
+            "an explicit cast is required",
+            stripped_lines,
+        )
+        self.assertIn("LINE 1: SELECT x'303132' IN (SELECT * FROM t1)", stripped_lines)
+        self.assertIn("                            ^^^^^^^^^^^^^^^^^^", stripped_lines)
+
     def test_fatal_stdout_failure_uses_last_started_test_and_signal(self):
         batch = [
             "/duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/slow/hnsw_reclaim_storage.test_slow",
