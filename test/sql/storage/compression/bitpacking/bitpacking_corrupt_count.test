@@ -8,6 +8,9 @@ unzip data/storage/corrupt/bitpacking_corrupt_count.db.gz {TEST_DIR}/bitpacking_
 
 load {TEST_DIR}/bitpacking_corrupt_count.db readonly
 
+statement ok
+USE bitpacking_corrupt_count
+
 query I
 SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='BitPacking';
 ----
