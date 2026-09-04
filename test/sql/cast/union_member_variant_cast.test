@@ -1,0 +1,58 @@
+# name: test/sql/cast/union_member_variant_cast.test
+# description: cast unions into unions with VARIANT members
+# group: [cast]
+
+query I
+SELECT union_value(a := 42)::UNION(a VARIANT);
+----
+42
+
+query I
+SELECT union_value(a := 'hello')::UNION(a VARIANT);
+----
+hello
+
+# the target union has members the source does not
+query I
+SELECT union_value(a := 42)::UNION(a VARIANT, b INTEGER);
+----
+42
+
+query I
+SELECT union_tag(union_value(a := 42)::UNION(a VARIANT, b INTEGER));
+----
+a
+
+query I
+SELECT union_value(a := NULL::INTEGER)::UNION(a VARIANT);
+----
+NULL
+
+# nested: a struct member carrying a VARIANT field
+query I
+SELECT union_value(a := {'v': 42})::UNION(a STRUCT(v VARIANT));
+----
+{'v': 42}
+
+# several members shredded in the same cast
+query I
+SELECT union_value(a := 42)::UNION(a VARIANT, b VARIANT);
+----
+42
+
+statement ok
+CREATE TABLE union_tbl AS SELECT * FROM (VALUES (union_value(a := 42)), (union_value(a := 7)), (NULL)) t(u);
+
+query I
+SELECT u::UNION(a VARIANT) FROM union_tbl;
+----
+42
+7
+NULL
+
+query I
+SELECT variant_typeof((u::UNION(a VARIANT)).a) FROM union_tbl;
+----
+INT32
+INT32
+VARIANT_NULL
