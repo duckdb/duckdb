@@ -447,6 +447,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_transformer_trampoline_style",
+        "description": "Use the experimental trampoline-style parser transformer",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verification_mode",
         "description": "DEBUG SETTING: toggle the verification mode.",
         "type": "VARCHAR",
@@ -535,6 +542,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "default_io_mode",
+        "description": "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)",
+        "type": "ENUM<FileIOMode>",
+        "default_value": "BUFFERED_IO",
+        "default_scope": "global"
     },
     {
         "name": "default_null_order",
@@ -806,7 +820,10 @@
         "type": "VARCHAR",
         "scope": "global",
         "default_value": "",
-        "is_deprecated": true
+        "is_deprecated": true,
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "extension_repository_directory",
@@ -1138,7 +1155,10 @@
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false",
-        "is_deprecated": true
+        "is_deprecated": true,
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "operator_memory_limit",
@@ -1163,6 +1183,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "parallelize_sequential_sources",
+        "description": "Whether to automatically parallelize sequential sources",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
     },
     {
         "name": "partitioned_write_flush_threshold",
@@ -1239,7 +1266,10 @@
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false",
-        "is_deprecated": true
+        "is_deprecated": true,
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "profiling_coverage",
