@@ -899,7 +899,12 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 	}
 	plan = std::move(join);
 	if (empty_aggregate) {
-		plan = make_uniq<LogicalCrossProduct>(std::move(plan), std::move(empty_aggregate));
+		// The RHS always produces one row, making this equivalent to a cross product.
+		// Keep it non-reorderable because projection maps depend on the output order.
+		auto cross_product = make_uniq<LogicalComparisonJoin>(JoinType::LEFT);
+		cross_product->children.push_back(std::move(plan));
+		cross_product->children.push_back(std::move(empty_aggregate));
+		plan = std::move(cross_product);
 	}
 	result.bindings = CreateContiguousState(ColumnBinding(left_index, ProjectionIndex(0)));
 	return result;
