@@ -71,7 +71,8 @@ BindResult ExpressionBinder::BindPatternExpression(unique_ptr<ParsedExpression> 
 			return BindResult(bound_child.error);
 		}
 		return BindResult(make_uniq_base<Expression, BoundQuantifierExpression>(
-		    std::move(bound_child.expression), quantifier.min_count, quantifier.max_count, quantifier.excluded));
+		    std::move(bound_child.expression), quantifier.min_count, quantifier.max_count, quantifier.excluded,
+		    quantifier.reluctant));
 	}
 	default:
 		throw NotImplementedException("Unimplemented pattern expression %s",

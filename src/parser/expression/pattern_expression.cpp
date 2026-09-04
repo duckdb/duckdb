@@ -66,29 +66,31 @@ unique_ptr<ParsedExpression> ConcatenationExpression::Deserialize(Deserializer &
 // Quantifier
 //===--------------------------------------------------------------------===//
 QuantifiedExpression::QuantifiedExpression(unique_ptr<ParsedExpression> child_p, optional_idx min_count_p,
-                                           optional_idx max_count_p, bool excluded_p)
+                                           optional_idx max_count_p, bool excluded_p, bool reluctant_p)
     : PatternExpression(ExpressionType::QUANTIFIER), child(std::move(child_p)), min_count(min_count_p),
-      max_count(max_count_p), excluded(excluded_p) {
+      max_count(max_count_p), excluded(excluded_p), reluctant(reluctant_p) {
 	if (min_count.IsValid() && max_count.IsValid() && min_count.GetIndex() > max_count.GetIndex()) {
 		throw ParserException("Min count cannot be larger than max count");
 	}
 }
 
-string QuantifiedExpression::QuantifierString(optional_idx min_count, optional_idx max_count) {
+string QuantifiedExpression::QuantifierString(optional_idx min_count, optional_idx max_count, bool reluctant) {
+	const char *suffix = reluctant ? "?" : "";
 	if (!min_count.IsValid() && !max_count.IsValid()) {
+		// nothing to be reluctant about: the part matches exactly once either way
 		return "";
 	}
 	if (min_count.IsValid() && min_count.GetIndex() == 0 && !max_count.IsValid()) {
-		return "*";
+		return "*" + string(suffix);
 	}
 	if (min_count.IsValid() && min_count.GetIndex() == 1 && !max_count.IsValid()) {
-		return "+";
+		return "+" + string(suffix);
 	}
 	if (min_count.IsValid() && min_count.GetIndex() == 0 && max_count.IsValid() && max_count.GetIndex() == 1) {
-		return "?";
+		return "?" + string(suffix);
 	}
-	return StringUtil::Format("{%s,%s}", min_count.IsValid() ? to_string(min_count.GetIndex()) : "",
-	                          max_count.IsValid() ? to_string(max_count.GetIndex()) : "");
+	return StringUtil::Format("{%s,%s}%s", min_count.IsValid() ? to_string(min_count.GetIndex()) : "",
+	                          max_count.IsValid() ? to_string(max_count.GetIndex()) : "", suffix);
 }
 
 string QuantifiedExpression::ToString() const {
@@ -98,7 +100,7 @@ string QuantifiedExpression::ToString() const {
 		inner = "(" + inner + ")";
 	}
 	auto quantified = excluded ? "{- " + inner + " -}" : inner;
-	return quantified + QuantifierString(min_count, max_count);
+	return quantified + QuantifierString(min_count, max_count, reluctant);
 }
 
 bool QuantifiedExpression::Equals(const ParsedExpression &other_p) const {
@@ -106,14 +108,15 @@ bool QuantifiedExpression::Equals(const ParsedExpression &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<QuantifiedExpression>();
-	if (min_count != other.min_count || max_count != other.max_count || excluded != other.excluded) {
+	if (min_count != other.min_count || max_count != other.max_count || excluded != other.excluded ||
+	    reluctant != other.reluctant) {
 		return false;
 	}
 	return ParsedExpression::Equals(child, other.child);
 }
 
 unique_ptr<ParsedExpression> QuantifiedExpression::Copy() const {
-	auto copy = make_uniq<QuantifiedExpression>(child->Copy(), min_count, max_count, excluded);
+	auto copy = make_uniq<QuantifiedExpression>(child->Copy(), min_count, max_count, excluded, reluctant);
 	copy->CopyBase(*this);
 	return std::move(copy);
 }
@@ -124,6 +127,7 @@ void QuantifiedExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<optional_idx>(201, "min_count", min_count, optional_idx());
 	serializer.WritePropertyWithDefault<optional_idx>(202, "max_count", max_count, optional_idx());
 	serializer.WritePropertyWithDefault<bool>(203, "excluded", excluded, false);
+	serializer.WritePropertyWithDefault<bool>(204, "reluctant", reluctant, false);
 }
 
 unique_ptr<ParsedExpression> QuantifiedExpression::Deserialize(Deserializer &deserializer) {
@@ -131,7 +135,9 @@ unique_ptr<ParsedExpression> QuantifiedExpression::Deserialize(Deserializer &des
 	auto min_count = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(201, "min_count", optional_idx());
 	auto max_count = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(202, "max_count", optional_idx());
 	auto excluded = deserializer.ReadPropertyWithExplicitDefault<bool>(203, "excluded", false);
-	return make_uniq_base<ParsedExpression, QuantifiedExpression>(std::move(child), min_count, max_count, excluded);
+	auto reluctant = deserializer.ReadPropertyWithExplicitDefault<bool>(204, "reluctant", false);
+	return make_uniq_base<ParsedExpression, QuantifiedExpression>(std::move(child), min_count, max_count, excluded,
+	                                                              reluctant);
 }
 
 //===--------------------------------------------------------------------===//

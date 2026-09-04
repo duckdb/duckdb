@@ -470,3 +470,91 @@ SELECT n FROM lbl MATCH_RECOGNIZE(
 )
 ----
 2
+
+# A quantifier is greedy: it takes as many repetitions as it can and gives them back only when the
+# rest of the pattern needs them. A trailing ? reverses that - it takes as few as it can and only
+# takes more when the rest of the pattern does not fit otherwise.
+
+statement ok
+create table abc(i integer, c varchar);
+
+statement ok
+insert into abc values (1,'a'),(2,'a'),(3,'a'),(4,'b');
+
+query II
+SELECT count(*), max(len) FROM abc MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+ B) DEFINE A AS c='a', B AS true
+)
+----
+1	4
+
+# one A, then B takes the row after it, twice over
+query II
+SELECT count(*), max(len) FROM abc MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+? B) DEFINE A AS c='a', B AS true
+)
+----
+2	2
+
+query II
+SELECT count(*), max(len) FROM abc MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A* B) DEFINE A AS c='a', B AS true
+)
+----
+1	4
+
+# no A at all, so every row is a match of its own
+query II
+SELECT count(*), max(len) FROM abc MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A*? B) DEFINE A AS c='a', B AS true
+)
+----
+4	1
+
+query II
+SELECT count(*), max(len) FROM abc MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A{1,3}) DEFINE A AS c='a'
+)
+----
+1	3
+
+# the lower bound is still a floor: it takes one and stops
+query II
+SELECT count(*), max(len) FROM abc MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A{1,3}?) DEFINE A AS c='a'
+)
+----
+3	1
+
+# ?? is the optional quantifier made reluctant, which prefers leaving it out
+query II
+SELECT count(*), max(len) FROM abc MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A?? B) DEFINE A AS c='a', B AS true
+)
+----
+4	1
+
+# a reluctant quantifier still has to reach the end of the pattern, so it gives ground when the
+# tail cannot be satisfied any other way
+query II
+SELECT count(*), max(len) FROM abc MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS len
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (A+? C) DEFINE A AS c='a', C AS c='b'
+)
+----
+1	4

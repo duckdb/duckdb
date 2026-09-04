@@ -40,7 +40,10 @@ RowPatternGroup <- Parens(RowPattern)
 RowPatternExclusion <- '{' '-' RowPattern '-' '}'
 RowPatternLabel <- ColLabelOrString
 
-RowPatternQuantifier <- QuantifierStar / QuantifierPlus / QuantifierOptional / QuantifierRange
+# a trailing ? makes the quantifier reluctant: it prefers the fewest repetitions rather than the most
+RowPatternQuantifier <- RowPatternQuantifierKind QuantifierReluctant?
+RowPatternQuantifierKind <- QuantifierStar / QuantifierPlus / QuantifierOptional / QuantifierRange
+QuantifierReluctant <- '?'
 QuantifierStar <- '*'
 QuantifierPlus <- '+'
 QuantifierOptional <- '?'

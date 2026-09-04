@@ -34,6 +34,8 @@ enum class MatchRecognizeAfterMatch : uint8_t {
 struct MatchRecognizeQuantifier {
 	optional_idx min_count;
 	optional_idx max_count;
+	//! A trailing ?: prefer the fewest repetitions rather than the most
+	bool reluctant = false;
 };
 
 //! An AFTER MATCH SKIP clause, with the target variable for the TO FIRST/LAST forms

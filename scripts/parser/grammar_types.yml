@@ -1907,6 +1907,7 @@ MeasureSemantics:
     - MeasureSemantics
     - RunningSemantics
     - FinalSemantics
+    - QuantifierReluctant
 MatchRecognizeRows:
   type: "MatchRecognizeRows"
   rules:
@@ -1927,6 +1928,7 @@ MatchRecognizeQuantifier:
   type: "MatchRecognizeQuantifier"
   rules:
     - RowPatternQuantifier
+    - RowPatternQuantifierKind
     - QuantifierStar
     - QuantifierPlus
     - QuantifierOptional

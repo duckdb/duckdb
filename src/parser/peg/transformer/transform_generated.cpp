@@ -8270,9 +8270,30 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowPatternLabel
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformRowPatternQuantifierInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto row_pattern_quantifier_kind = transformer.Transform<MatchRecognizeQuantifier>(list_pr.GetChild(0));
+	optional<bool> quantifier_reluctant {};
+	auto &quantifier_reluctant_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (quantifier_reluctant_opt.HasResult()) {
+		auto quantifier_reluctant_value = transformer.Transform<bool>(quantifier_reluctant_opt.GetResult());
+		quantifier_reluctant = quantifier_reluctant_value;
+	}
+	auto result = TransformRowPatternQuantifier(transformer, row_pattern_quantifier_kind, quantifier_reluctant);
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformRowPatternQuantifierKindInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = transformer.Transform<MatchRecognizeQuantifier>(choice_pr.GetResult());
 	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformQuantifierReluctantInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto result = TransformQuantifierReluctant(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierStarInternal(PEGTransformer &transformer,
@@ -12192,6 +12213,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"RowPatternExclusion", &PEGTransformerFactory::TransformRowPatternExclusionInternal},
 	    {"RowPatternLabel", &PEGTransformerFactory::TransformRowPatternLabelInternal},
 	    {"RowPatternQuantifier", &PEGTransformerFactory::TransformRowPatternQuantifierInternal},
+	    {"RowPatternQuantifierKind", &PEGTransformerFactory::TransformRowPatternQuantifierKindInternal},
+	    {"QuantifierReluctant", &PEGTransformerFactory::TransformQuantifierReluctantInternal},
 	    {"QuantifierStar", &PEGTransformerFactory::TransformQuantifierStarInternal},
 	    {"QuantifierPlus", &PEGTransformerFactory::TransformQuantifierPlusInternal},
 	    {"QuantifierOptional", &PEGTransformerFactory::TransformQuantifierOptionalInternal},

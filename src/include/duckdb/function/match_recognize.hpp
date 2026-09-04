@@ -89,9 +89,10 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::PATTERN;
 
 	BoundQuantifierExpression(unique_ptr<Expression> child_p, optional_idx min_count_p, optional_idx max_count_p,
-	                          bool excluded_p = false)
+	                          bool excluded_p = false, bool reluctant_p = false)
 	    : Expression(ExpressionType::QUANTIFIER, ExpressionClass::PATTERN, LogicalType::BOOLEAN),
-	      child(std::move(child_p)), min_count(min_count_p), max_count(max_count_p), excluded(excluded_p) {
+	      child(std::move(child_p)), min_count(min_count_p), max_count(max_count_p), excluded(excluded_p),
+	      reluctant(reluctant_p) {
 	}
 
 	unique_ptr<Expression> child;
@@ -100,6 +101,8 @@ public:
 	optional_idx max_count;
 	//! {- ... -}: the rows this matches take part in the match but are left out of the output
 	bool excluded;
+	//! A trailing ?: prefer the fewest repetitions rather than the most
+	bool reluctant;
 
 	static string QuantifierToString(optional_idx min_count, optional_idx max_count) {
 		return StringUtil::Format("{%s,%s}", min_count.IsValid() ? to_string(min_count.GetIndex()) : "",
@@ -112,7 +115,7 @@ public:
 
 	unique_ptr<Expression> Copy() const override {
 		auto child_copy = child->Copy();
-		return make_uniq<BoundQuantifierExpression>(std::move(child_copy), min_count, max_count, excluded);
+		return make_uniq<BoundQuantifierExpression>(std::move(child_copy), min_count, max_count, excluded, reluctant);
 	}
 };
 

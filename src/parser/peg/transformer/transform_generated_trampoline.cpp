@@ -2246,6 +2246,12 @@ static const TransformFrameOps ROW_PATTERN_LABEL_OPS = {"RowPatternLabel",
 static const TransformFrameOps ROW_PATTERN_QUANTIFIER_OPS = {
     "RowPatternQuantifier", &PEGTransformerFactory::InitializeRowPatternQuantifierTrampoline,
     &PEGTransformerFactory::FinalizeRowPatternQuantifierTrampoline};
+static const TransformFrameOps ROW_PATTERN_QUANTIFIER_KIND_OPS = {
+    "RowPatternQuantifierKind", &PEGTransformerFactory::InitializeRowPatternQuantifierKindTrampoline,
+    &PEGTransformerFactory::FinalizeRowPatternQuantifierKindTrampoline};
+static const TransformFrameOps QUANTIFIER_RELUCTANT_OPS = {
+    "QuantifierReluctant", &PEGTransformerFactory::InitializeQuantifierReluctantTrampoline,
+    &PEGTransformerFactory::FinalizeQuantifierReluctantTrampoline};
 static const TransformFrameOps QUANTIFIER_STAR_OPS = {"QuantifierStar",
                                                       &PEGTransformerFactory::InitializeQuantifierStarTrampoline,
                                                       &PEGTransformerFactory::FinalizeQuantifierStarTrampoline};
@@ -3858,6 +3864,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"RowPatternExclusion", &ROW_PATTERN_EXCLUSION_OPS},
 	    {"RowPatternLabel", &ROW_PATTERN_LABEL_OPS},
 	    {"RowPatternQuantifier", &ROW_PATTERN_QUANTIFIER_OPS},
+	    {"RowPatternQuantifierKind", &ROW_PATTERN_QUANTIFIER_KIND_OPS},
+	    {"QuantifierReluctant", &QUANTIFIER_RELUCTANT_OPS},
 	    {"QuantifierStar", &QUANTIFIER_STAR_OPS},
 	    {"QuantifierPlus", &QUANTIFIER_PLUS_OPS},
 	    {"QuantifierOptional", &QUANTIFIER_OPTIONAL_OPS},
@@ -20370,6 +20378,32 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeRowPatternLabelT
 void PEGTransformerFactory::InitializeRowPatternQuantifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                      TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	auto &quantifier_reluctant_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (quantifier_reluctant_opt.HasResult()) {
+		stack.PushFrame(quantifier_reluctant_opt.GetResult(), QUANTIFIER_RELUCTANT_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	stack.PushFrame(list_pr.GetChild(0), ROW_PATTERN_QUANTIFIER_KIND_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeRowPatternQuantifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto row_pattern_quantifier_kind = frame.TakeResult<MatchRecognizeQuantifier>(0);
+	optional<bool> quantifier_reluctant {};
+	if (frame.child_results[1]) {
+		quantifier_reluctant = frame.TakeResult<bool>(1);
+	}
+	auto result = TransformRowPatternQuantifier(transformer, row_pattern_quantifier_kind, quantifier_reluctant);
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeRowPatternQuantifierKindTrampoline(PEGTransformer &transformer,
+                                                                         TransformStack &stack,
+                                                                         TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto &choice_result = choice_pr.GetResult();
 	frame.ReserveChildSlots(1);
@@ -20382,10 +20416,22 @@ void PEGTransformerFactory::InitializeRowPatternQuantifierTrampoline(PEGTransfor
 }
 
 unique_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeRowPatternQuantifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                              TransformStackFrame &frame) {
+PEGTransformerFactory::FinalizeRowPatternQuantifierKindTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
 	auto result = frame.TakeResult<MatchRecognizeQuantifier>(0);
 	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeQuantifierReluctantTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeQuantifierReluctantTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto result = TransformQuantifierReluctant(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierStarTrampoline(PEGTransformer &transformer, TransformStack &stack,

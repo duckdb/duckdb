@@ -293,6 +293,7 @@ static void SerializePattern(Serializer &serializer, const Expression &pattern) 
 		serializer.WriteProperty(102, "min_count", quantifier.min_count);
 		serializer.WriteProperty(103, "max_count", quantifier.max_count);
 		serializer.WriteProperty(104, "excluded", quantifier.excluded);
+		serializer.WritePropertyWithDefault(105, "reluctant", quantifier.reluctant, false);
 		break;
 	}
 	case ExpressionType::VALUE_CONSTANT:
@@ -326,7 +327,9 @@ static unique_ptr<Expression> DeserializePattern(Deserializer &deserializer) {
 		auto min_count = deserializer.ReadProperty<optional_idx>(102, "min_count");
 		auto max_count = deserializer.ReadProperty<optional_idx>(103, "max_count");
 		auto excluded = deserializer.ReadProperty<bool>(104, "excluded");
-		return make_uniq_base<Expression, BoundQuantifierExpression>(std::move(child), min_count, max_count, excluded);
+		auto reluctant = deserializer.ReadPropertyWithExplicitDefault<bool>(105, "reluctant", false);
+		return make_uniq_base<Expression, BoundQuantifierExpression>(std::move(child), min_count, max_count, excluded,
+		                                                             reluctant);
 	}
 	case ExpressionType::VALUE_CONSTANT:
 		return make_uniq_base<Expression, BoundConstantExpression>(deserializer.ReadProperty<Value>(101, "symbol"));
@@ -542,26 +545,31 @@ struct PatternProgram {
 			for (idx_t i = 0; i < min_count; i++) {
 				Compile(*quantifier.child, limit, inner);
 			}
+			// the matcher takes a split's target before its alternative, so which of the two is the
+			// repetition and which is the way out is what greedy and reluctant come down to
+			const auto reluctant = quantifier.reluctant;
 			if (!quantifier.max_count.IsValid()) {
-				// greedy: going round again is preferred over leaving the loop
 				const auto loop = code.size();
 				auto split = Emit(PatternOp::SPLIT);
-				code[split].target = code.size();
+				const auto again = code.size();
 				Compile(*quantifier.child, limit, inner);
 				code[Emit(PatternOp::JUMP)].target = loop;
-				code[split].alternative = code.size();
+				const auto leave = code.size();
+				code[split].target = reluctant ? leave : again;
+				code[split].alternative = reluctant ? again : leave;
 				break;
 			}
 			const auto max_count = MinValue(quantifier.max_count.GetIndex(), min_count + limit);
 			vector<idx_t> exits;
 			for (idx_t i = min_count; i < max_count; i++) {
 				auto split = Emit(PatternOp::SPLIT);
-				code[split].target = code.size();
+				const auto again = code.size();
+				(reluctant ? code[split].alternative : code[split].target) = again;
 				exits.push_back(split);
 				Compile(*quantifier.child, limit, inner);
 			}
 			for (auto exit_split : exits) {
-				code[exit_split].alternative = code.size();
+				(reluctant ? code[exit_split].target : code[exit_split].alternative) = code.size();
 			}
 			break;
 		}

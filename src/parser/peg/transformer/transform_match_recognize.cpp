@@ -301,7 +301,7 @@ PEGTransformerFactory::TransformRowPatternFactor(PEGTransformer &transformer,
 		quantifier.max_count = 1;
 	}
 	return make_uniq_base<ParsedExpression, QuantifiedExpression>(std::move(row_pattern_primary), quantifier.min_count,
-	                                                              quantifier.max_count);
+	                                                              quantifier.max_count, false, quantifier.reluctant);
 }
 
 //! {- P -} matches P and takes part in the match, but its rows are left out of the output
@@ -342,6 +342,20 @@ MatchRecognizeQuantifier PEGTransformerFactory::TransformQuantifierPlus(PEGTrans
 	MatchRecognizeQuantifier result;
 	result.min_count = 1;
 	return result;
+}
+
+//! A trailing ? on any of the forms below makes it reluctant
+MatchRecognizeQuantifier
+PEGTransformerFactory::TransformRowPatternQuantifier(PEGTransformer &transformer,
+                                                     const MatchRecognizeQuantifier &row_pattern_quantifier_kind,
+                                                     const optional<bool> &quantifier_reluctant) {
+	auto result = row_pattern_quantifier_kind;
+	result.reluctant = quantifier_reluctant.has_value();
+	return result;
+}
+
+bool PEGTransformerFactory::TransformQuantifierReluctant(PEGTransformer &transformer) {
+	return true;
 }
 
 MatchRecognizeQuantifier PEGTransformerFactory::TransformQuantifierOptional(PEGTransformer &transformer) {

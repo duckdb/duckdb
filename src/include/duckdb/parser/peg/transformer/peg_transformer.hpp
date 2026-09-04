@@ -3836,6 +3836,16 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeRowPatternQuantifierTrampoline(PEGTransformer &transformer,
 	                                                                               TransformStack &stack,
 	                                                                               TransformStackFrame &frame);
+	static void InitializeRowPatternQuantifierKindTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternQuantifierKindTrampoline(PEGTransformer &transformer,
+	                                                                                   TransformStack &stack,
+	                                                                                   TransformStackFrame &frame);
+	static void InitializeQuantifierReluctantTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierReluctantTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
 	static void InitializeQuantifierStarTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -7933,6 +7943,15 @@ public:
 	                                                             const Identifier &col_label_or_string);
 	static unique_ptr<TransformResultValue> TransformRowPatternQuantifierInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
+	static MatchRecognizeQuantifier
+	TransformRowPatternQuantifier(PEGTransformer &transformer,
+	                              const MatchRecognizeQuantifier &row_pattern_quantifier_kind,
+	                              const optional<bool> &quantifier_reluctant);
+	static unique_ptr<TransformResultValue> TransformRowPatternQuantifierKindInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformQuantifierReluctantInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static bool TransformQuantifierReluctant(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformQuantifierStarInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static MatchRecognizeQuantifier TransformQuantifierStar(PEGTransformer &transformer);

@@ -54,11 +54,11 @@ public:
 class QuantifiedExpression : public PatternExpression {
 public:
 	QuantifiedExpression(unique_ptr<ParsedExpression> child_p, optional_idx min_count_p, optional_idx max_count_p,
-	                     bool excluded_p = false);
+	                     bool excluded_p = false, bool reluctant_p = false);
 
 public:
 	//! The quantifier as it is written after the part it applies to, empty when both bounds are unset
-	static string QuantifierString(optional_idx min_count, optional_idx max_count);
+	static string QuantifierString(optional_idx min_count, optional_idx max_count, bool reluctant);
 
 	string ToString() const override;
 
@@ -75,6 +75,8 @@ public:
 	optional_idx max_count;
 	//! {- ... -}: the rows this matches take part in the match but are left out of the output
 	bool excluded;
+	//! A trailing ?: prefer the fewest repetitions rather than the most
+	bool reluctant;
 };
 
 //! A | B: either side matches
