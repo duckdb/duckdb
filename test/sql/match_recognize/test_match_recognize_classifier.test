@@ -1,0 +1,155 @@
+# name: test/sql/match_recognize/test_match_recognize_classifier.test
+# description: MATCH_RECOGNIZE classifiers, match numbering and ROWS PER MATCH
+# group: [match_recognize]
+
+statement ok
+pragma threads=1;
+
+statement ok
+create table ev(i integer, v integer);
+
+statement ok
+insert into ev values (1,1),(2,0),(3,0),(4,1),(5,0),(6,1);
+
+# PATTERN (A B+) finds 0-2 and 3-4; row 6 starts no match because no B follows it.
+# ALL ROWS PER MATCH reports every row of every match, tagged with the variable that matched it.
+query IIIIII
+SELECT i, __pattern_window.classifier, __pattern_window.match_number, __pattern_window.is_match_start,
+       __pattern_window.match_start, __pattern_window.match_end
+FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1	A	1	true	0	2
+2	B	1	false	0	2
+3	B	1	false	0	2
+4	A	2	true	3	4
+5	B	2	false	3	4
+
+# ONE ROW PER MATCH reports only the row each match starts on
+query III
+SELECT x, cl, mn
+FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl, MATCH_NUMBER() AS mn
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+3	B	1
+5	B	2
+
+# the default is ONE ROW PER MATCH
+query I
+SELECT x FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+3
+5
+
+statement ok
+create table alt(i integer, v integer);
+
+statement ok
+insert into alt values (1,1),(2,0),(3,1);
+
+# the classifier names the alternative that matched
+query II
+SELECT i, __pattern_window.classifier FROM alt MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A | B) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1	A
+2	B
+3	A
+
+statement ok
+create table im(i integer);
+
+statement ok
+insert into im values (1),(2);
+
+# a symbol that is used but not defined still classifies its row
+query II
+SELECT i, __pattern_window.classifier FROM im MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A Z) DEFINE A as true
+) ORDER BY x
+----
+1	A
+2	Z
+
+statement ok
+create table pv(p integer, i integer);
+
+statement ok
+insert into pv values (1,1),(1,2),(1,3),(1,4),(2,1),(2,2);
+
+# match numbering restarts in every partition
+query IIII
+SELECT p, i, __pattern_window.classifier, __pattern_window.match_number FROM pv MATCH_RECOGNIZE(
+    PARTITION BY p ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B) DEFINE A as true, B as true
+) ORDER BY p, i
+----
+1	1	A	1
+1	2	B	1
+1	3	A	2
+1	4	B	2
+2	1	A	1
+2	2	B	1
+
+statement ok
+create table rb(i integer);
+
+statement ok
+insert into rb values (1),(2),(3),(4),(5),(6);
+
+# with a repeated variable, SKIP TO FIRST and SKIP TO LAST resume at different rows.
+# PATTERN (A B B) matches [p, p+2] and classifies p+1 and p+2 as B.
+query I
+SELECT x FROM rb MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ONE ROW PER MATCH AFTER MATCH SKIP TO FIRST B PATTERN (A B B)
+    DEFINE A as true, B as true
+) ORDER BY x
+----
+3
+4
+5
+6
+
+query I
+SELECT x FROM rb MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ONE ROW PER MATCH AFTER MATCH SKIP TO LAST B PATTERN (A B B)
+    DEFINE A as true, B as true
+) ORDER BY x
+----
+3
+5
+
+# SKIP PAST LAST ROW resumes after the whole match, SKIP TO NEXT ROW resumes one row in
+query I
+SELECT x FROM rb MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW PATTERN (A B B)
+    DEFINE A as true, B as true
+) ORDER BY x
+----
+3
+6
+
+query I
+SELECT x FROM rb MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ONE ROW PER MATCH AFTER MATCH SKIP TO NEXT ROW PATTERN (A B B)
+    DEFINE A as true, B as true
+) ORDER BY x
+----
+3
+4
+5
+6
+
+# a quantifier may not give up a repetition it needs: (A B C) cannot match the final two rows
+query I
+SELECT count(*) FROM rb MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ONE ROW PER MATCH AFTER MATCH SKIP TO NEXT ROW PATTERN (A B C)
+    DEFINE A as true, B as true, C as true
+)
+----
+4

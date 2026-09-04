@@ -178,6 +178,9 @@ BoundStatement Binder::Bind(TableRef &ref) {
 	case TableReferenceType::DELIM_GET:
 		result = Bind(ref.Cast<DelimGetRef>());
 		break;
+	case TableReferenceType::MATCH_RECOGNIZE:
+		result = Bind(ref.Cast<MatchRecognizeRef>());
+		break;
 	case TableReferenceType::BOUND_TABLE_REF:
 		result = Bind(ref.Cast<BoundRefWrapper>());
 		break;

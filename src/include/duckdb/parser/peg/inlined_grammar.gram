@@ -313,7 +313,6 @@ ReservedKeyword <- 'ALL' /
 'FROM' /
 'GROUP' /
 'HAVING' /
-'QUALIFY' /
 'IN' /
 'INITIALLY' /
 'INTERSECT' /
@@ -322,6 +321,7 @@ ReservedKeyword <- 'ALL' /
 'LATERAL' /
 'LEADING' /
 'LIMIT' /
+'MATCH_RECOGNIZE' /
 'NOT' /
 'NULL' /
 'OFFSET' /
@@ -330,10 +330,11 @@ ReservedKeyword <- 'ALL' /
 'OR' /
 'ORDER' /
 'PIVOT' /
-'PIVOT_WIDER' /
 'PIVOT_LONGER' /
+'PIVOT_WIDER' /
 'PLACING' /
 'PRIMARY' /
+'QUALIFY' /
 'REFERENCES' /
 'RETURNING' /
 'SELECT' /
@@ -403,6 +404,7 @@ UnreservedKeyword <- 'ABORT' /
 'ASSIGNMENT' /
 'ATTACH' /
 'ATTRIBUTE' /
+'AUTO' /
 'BACKWARD' /
 'BEFORE' /
 'BEGIN' /
@@ -412,8 +414,8 @@ UnreservedKeyword <- 'ABORT' /
 'CASCADE' /
 'CASCADED' /
 'CATALOG' /
-'CENTURY' /
 'CENTURIES' /
+'CENTURY' /
 'CHAIN' /
 'CHARACTERISTICS' /
 'CHECKPOINT' /
@@ -451,6 +453,7 @@ UnreservedKeyword <- 'ABORT' /
 'DEFAULTS' /
 'DEFERRED' /
 'DEFINER' /
+'DEFINES' /
 'DELETE' /
 'DELIMITER' /
 'DELIMITERS' /
@@ -522,8 +525,8 @@ UnreservedKeyword <- 'ABORT' /
 'INSTALL' /
 'INSTEAD' /
 'INVOKER' /
-'JSON' /
 'ISOLATION' /
+'JSON' /
 'KEY' /
 'LABEL' /
 'LANGUAGE' /
@@ -548,8 +551,8 @@ UnreservedKeyword <- 'ABORT' /
 'METHOD' /
 'MICROSECOND' /
 'MICROSECONDS' /
-'MILLENNIUM' /
 'MILLENNIA' /
+'MILLENNIUM' /
 'MILLISECOND' /
 'MILLISECONDS' /
 'MINUTE' /
@@ -642,9 +645,9 @@ UnreservedKeyword <- 'ABORT' /
 'SCOPE' /
 'SCROLL' /
 'SEARCH' /
-'SECRET' /
 'SECOND' /
 'SECONDS' /
+'SECRET' /
 'SECURE' /
 'SECURITY' /
 'SEQUENCE' /
@@ -674,6 +677,7 @@ UnreservedKeyword <- 'ABORT' /
 'STRICT' /
 'STRIP' /
 'SUBSCRIPTION' /
+'SUBSET' /
 'SYSID' /
 'SYSTEM' /
 'TABLES' /
@@ -1626,6 +1630,74 @@ RepositoryPrefix <- 'WITH'? 'PREFIX' StringLiteral
 RepositoryPublicKey <- 'USING'? 'PUBLIC' ('KEYS' / 'KEY') List(StringLiteral)
 DropExtensionRepositoryStmt <- 'DROP' 'EXTENSION' 'REPOSITORY' IfExists? ColIdOrString
 
+TableMatchRecognizeClause <- 'MATCH_RECOGNIZE' Parens(MatchRecognizeBody) TableAlias?
+MatchRecognizeBody <- MatchRecognizeClause+
+MatchRecognizeClause <- MRPartition / MROrderBy / MRMeasures / MRRows / MRSkip / MRPattern / MRSubset / MRDefineAuto / MRDefine
+MRPartition <- WindowPartition
+MROrderBy <- OrderByClause
+MRMeasures <- MeasuresClause
+MRRows <- RowsPerMatch
+MRSkip <- AfterMatchSkip
+MRPattern <- PatternClause
+MRSubset <- SubsetClause
+MRDefineAuto <- ('DEFINE' / 'DEFINES') 'AUTO'
+MRDefine <- DefineClause
+
+MeasuresClause <- 'MEASURES' List(MeasuresElement)
+MeasuresElement <- MeasureSemantics? Expression 'AS' ColLabelOrString
+MeasureSemantics <- RunningSemantics / FinalSemantics
+RunningSemantics <- 'RUNNING'
+FinalSemantics <- 'FINAL'
+
+RowsPerMatch <- OneRowPerMatch / AllRowsPerMatch
+OneRowPerMatch <- 'ONE' 'ROW' 'PER' 'MATCH'
+AllRowsPerMatch <- 'ALL' 'ROWS' 'PER' 'MATCH'
+
+AfterMatchSkip <- 'AFTER' 'MATCH' 'SKIP' AfterMatchSkipTarget
+AfterMatchSkipTarget <- SkipToNextRow / SkipPastLastRow / SkipToFirstVar / SkipToLastVar
+SkipToNextRow <- 'TO' 'NEXT' 'ROW'
+SkipPastLastRow <- 'PAST' 'LAST' 'ROW'
+SkipToFirstVar <- 'TO' 'FIRST' ColLabelOrString
+SkipToLastVar <- 'TO' 'LAST' ColLabelOrString
+
+PatternClause <- 'PATTERN' Parens(RowPattern)
+
+# alternation binds loosest, then concatenation, then quantifiers
+RowPattern <- RowPatternTerm RowPatternAlternative*
+RowPatternAlternative <- '|' RowPatternTerm
+RowPatternTerm <- RowPatternFactor+
+RowPatternFactor <- RowPatternPrimary RowPatternQuantifier?
+# PERMUTE has to be tried before a plain label, which would otherwise consume the keyword
+RowPatternPrimary <- RowPatternPermute / RowPatternExclusion / RowPatternGroup / RowPatternAnchor / RowPatternLabel
+RowPatternPermute <- 'PERMUTE' Parens(List(RowPattern))
+# ^ and $ hold at the ends of the partition without taking a row
+RowPatternAnchor <- PatternStart / PatternEnd
+PatternStart <- '^'
+PatternEnd <- '$'
+RowPatternGroup <- Parens(RowPattern)
+RowPatternExclusion <- '{' '-' RowPattern '-' '}'
+RowPatternLabel <- ColLabelOrString
+
+# a trailing ? makes the quantifier reluctant: it prefers the fewest repetitions rather than the most
+RowPatternQuantifier <- RowPatternQuantifierKind QuantifierReluctant?
+RowPatternQuantifierKind <- QuantifierStar / QuantifierPlus / QuantifierOptional / QuantifierRange
+QuantifierReluctant <- '?'
+QuantifierStar <- '*'
+QuantifierPlus <- '+'
+QuantifierOptional <- '?'
+QuantifierRange <- '{' QuantifierBounds '}'
+QuantifierBounds <- QuantifierMinMax / QuantifierMin / QuantifierMax / QuantifierExact
+QuantifierMinMax <- NumberLiteral ',' NumberLiteral
+QuantifierMin <- NumberLiteral ','
+QuantifierMax <- ',' NumberLiteral
+QuantifierExact <- NumberLiteral
+
+SubsetClause <- 'SUBSET' List(SubsetElement)
+SubsetElement <- ColLabelOrString '=' Parens(List(ColLabelOrString))
+
+DefineClause <- ('DEFINE' / 'DEFINES') List(DefineElement)
+DefineElement <- ColLabelOrString 'AS' Expression
+
 MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?
 MergeIntoUsingClause <- 'USING' TableRef
 MergeMatch <- MatchedClause / NotMatchedClause
@@ -1748,7 +1820,7 @@ TableAliasColon <- ColIdOrString ':'
 ValuesRef <- TableAliasColon? ValuesClause TableAlias?
 ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
 
-JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
+JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause / TableMatchRecognizeClause
 
 TablePivotClause <- 'PIVOT' Parens(TablePivotClauseBody) TableAlias?
 TablePivotClauseBody <- TargetList 'FOR' PivotValueList+ PivotGroupByList?
