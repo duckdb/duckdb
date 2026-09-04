@@ -295,7 +295,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 				new_entry.set->VerifyExistenceOfDependency(commit_id, new_entry);
 			}
 		} else if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
-			old_entry.set->CommitDrop(commit_id, VisibilityBound::Before(transaction.start_time), old_entry);
+			old_entry.set->CommitDrop(commit_id, transaction.view.visibility_bound, old_entry);
 		}
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
@@ -318,8 +318,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 				// Transaction view at bind time (what the trigger saw when it was created).
 				// Use commit_id as the transaction_id so that earlier catalog changes in this
 				// same transaction (already stamped with commit_id) are visible here.
-				CatalogTransaction bind_txn(duck_catalog.GetDatabase(), commit_id,
-				                            VisibilityBound::Before(transaction.start_time));
+				CatalogTransaction bind_txn(duck_catalog.GetDatabase(), commit_id, transaction.view.visibility_bound);
 				// Transaction view at commit time (all changes committed before this commit)
 				CatalogTransaction commit_txn(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID,
 				                              VisibilityBound::Through(commit_id));
@@ -357,7 +356,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 	case UndoFlags::INSERT_TUPLE: {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
-		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.transaction_id) {
+		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.GetTransactionId()) {
 			auto &storage = info->table->GetStorage();
 			auto table_name = storage.GetTableName();
 			auto table_modification = storage.TableModification();
@@ -371,7 +370,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
-		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.transaction_id) {
+		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.GetTransactionId()) {
 			auto &storage = info->table->GetStorage();
 			auto table_name = storage.GetTableName();
 			auto table_modification = storage.TableModification();
@@ -384,7 +383,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
-		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.transaction_id) {
+		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.GetTransactionId()) {
 			auto &storage = info->table->GetStorage();
 			auto table_name = storage.GetTableName();
 			auto table_modification = storage.TableModification();

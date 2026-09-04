@@ -48,9 +48,6 @@ public:
 
 	void Checkpoint(ClientContext &context, bool force = false) override;
 
-	transaction_t LowestActiveId() const {
-		return lowest_active_id;
-	}
 	VisibilityBound LowestVisibilityBound() const {
 		return lowest_visibility_bound;
 	}
@@ -111,6 +108,14 @@ private:
 	//! Remove the given transaction from the list of active transactions
 	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction, bool store_transaction,
 	                                              unique_ptr<DuckCleanupInfo> cleanup_info) noexcept;
+	//! Recompute lowest_visibility_bound over the active transactions, leaving out `exclude`, and
+	//! return its index among them (their count when absent). Caller holds the transaction lock
+	idx_t UpdateLowestVisibilityBound(optional_ptr<DuckTransaction> exclude) noexcept;
+	//! Move the committed transactions below the cleanup info's lowest visibility bound into it.
+	//! Caller holds the transaction lock; must not allocate (see CreateCleanupInfo)
+	void SweepCommittedTransactions(DuckCleanupInfo &cleanup_info) noexcept;
+	//! Hand a cleanup to the background cleanup thread, if it has anything to do
+	void QueueCleanup(unique_ptr<DuckCleanupInfo> cleanup_info);
 
 	//! Whether or not we can checkpoint
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
@@ -126,8 +131,6 @@ private:
 	transaction_t current_start_timestamp;
 	//! The current transaction ID used by transactions
 	transaction_t current_transaction_id;
-	//! The lowest active transaction id
-	atomic<transaction_t> lowest_active_id;
 	//! The lowest bound any active transaction reads at. A version preceding it is visible to
 	//! every active transaction, so whatever it supersedes can be cleaned up or compacted
 	atomic<VisibilityBound> lowest_visibility_bound;
