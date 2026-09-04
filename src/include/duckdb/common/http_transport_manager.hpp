@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-class DBConfig;
+struct DBConfig;
 struct HTTPTransportManagerTestHelper;
 
 //! Owns provider publication and bounded HTTP clients for one DatabaseInstance.
@@ -162,7 +162,7 @@ private:
 	};
 
 private:
-	friend class DBConfig;
+	friend struct DBConfig;
 	friend class DatabaseInstance;
 	friend struct HTTPTransportManagerTestHelper;
 
