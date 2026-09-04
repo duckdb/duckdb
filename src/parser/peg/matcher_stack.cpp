@@ -9,7 +9,7 @@ namespace duckdb {
 optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
 	D_ASSERT(IsEnabled(matcher, state));
 	auto token_index = state.token_iterator.Position();
-	auto cached_result = state.packrat_cache->Lookup(matcher, token_index);
+	auto cached_result = state.context.packrat_cache->Lookup(matcher, token_index);
 	if (!cached_result) {
 		token_index_before = token_index;
 		max_token_index_before = state.GetMaxTokenIndex();
@@ -17,7 +17,7 @@ optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &ma
 	}
 
 	state.token_iterator.SetPosition(cached_result->token_index_after);
-	state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
+	state.context.max_token_index = MaxValue(state.context.max_token_index, cached_result->max_token_index_seen);
 	if (cached_result->success) {
 		return MatcherResult::Success(cached_result->result);
 	}
@@ -33,7 +33,7 @@ void PackratMatchState::StoreResult(const Matcher &matcher, MatchState &state, c
 	cache_entry.token_index_after = state.token_iterator.Position();
 	cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
 	cache_entry.result = result.GetParseResult();
-	state.packrat_cache->Store(matcher, token_index_before.GetIndex(), cache_entry);
+	state.context.packrat_cache->Store(matcher, token_index_before.GetIndex(), cache_entry);
 }
 
 MatchStackFrame::MatchStackFrame(match_frame_index_t frame_index_p, const Matcher &matcher_p, MatchState &state_p)

@@ -22,7 +22,7 @@ enum class MatchResultState : uint8_t { NONE, FAILURE, SUCCESS };
 
 struct PackratMatchState {
 	static bool IsEnabled(const Matcher &matcher, const MatchState &state) {
-		return state.packrat_cache && matcher.IsPackratMemoized() && matcher.GetPackratId().IsValid();
+		return state.context.packrat_cache && matcher.IsPackratMemoized() && matcher.GetPackratId().IsValid();
 	}
 
 	optional<MatcherResult> TryLoadCachedResult(const Matcher &matcher, MatchState &state);

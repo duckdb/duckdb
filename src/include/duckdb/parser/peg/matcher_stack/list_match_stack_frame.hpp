@@ -9,7 +9,7 @@ class ListMatchStackFrame : public MatchStackFrame {
 public:
 	ListMatchStackFrame(match_frame_index_t frame_index, const ListMatcher &matcher, MatchState &state)
 	    : MatchStackFrame(frame_index, matcher, state), list_matcher(matcher), list_state(state) {
-		saved_suggestion_size = matcher.suppress_suggestions ? list_state.suggestions.size() : 0;
+		saved_suggestion_size = matcher.suppress_suggestions ? list_state.context.suggestions.size() : 0;
 		if (auto current = list_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
@@ -60,8 +60,9 @@ private:
 		if (!list_matcher.suppress_suggestions) {
 			return;
 		}
-		list_state.suggestions.erase(list_state.suggestions.begin() + NumericCast<int64_t>(saved_suggestion_size),
-		                             list_state.suggestions.end());
+		list_state.context.suggestions.erase(list_state.context.suggestions.begin() +
+		                                         NumericCast<int64_t>(saved_suggestion_size),
+		                                     list_state.context.suggestions.end());
 	}
 
 private:
