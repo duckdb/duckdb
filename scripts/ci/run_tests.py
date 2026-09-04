@@ -996,6 +996,10 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             if detail_lines:
                 detail_lines.append("")
             detail_lines.extend(preferred_assertion.detail_lines)
+    if not snippet_lines and test_name is not None and line_number is not None:
+        snippet_lines = render_test_snippet(test_name, line_number)
+    if not detail_lines and stderr_info.failing_summary_block:
+        detail_lines.extend(stderr_info.failing_summary_block)
     if not detail_lines:
         if stdout_info.fallback_failure_block:
             stdout_failure_test_name, stdout_failure_block = stdout_info.fallback_failure_block
@@ -1004,10 +1008,6 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             )
             reproduce_batch = [test_name] if test_name else list(batch)
             detail_lines.extend(stdout_failure_block)
-    if not snippet_lines and test_name is not None and line_number is not None:
-        snippet_lines = render_test_snippet(test_name, line_number)
-    if not detail_lines and stderr_info.failing_summary_block:
-        detail_lines.extend(stderr_info.failing_summary_block)
     if not detail_lines:
         detail_lines.extend(extract_interesting_failure_block(stderr_lines))
     if not detail_lines:
