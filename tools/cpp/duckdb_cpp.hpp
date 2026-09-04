@@ -405,13 +405,17 @@ public:
 	/// @param name The type's unqualified name, e.g. "LIST" or "DECIMAL".
 	/// @param params The type's parameters, in the order SQL takes them. A `TypeParam` with an empty name is considered
 	/// a positional parameter.
-	auto CreateType(std::string_view name, const std::vector<TypeParam> &params = {}) const -> LogicalType;
+	auto CreateType(std::string_view name, const std::vector<TypeParam> &params) const -> LogicalType;
+	/// Parameterless overload of the above.
+	auto CreateType(std::string_view name) const -> LogicalType;
 
 	/// The id-keyed twin of `CreateType`: the id resolves to its canonical name and binds like it.
 	/// @param id The type's id. Without parameters, only ids that name a complete type on their own are accepted;
 	/// parameterized kinds such as LIST or DECIMAL require parameters.
 	/// @param params The type's parameters, as in the name-keyed overload.
-	auto CreateType(LogicalTypeId id, const std::vector<TypeParam> &params = {}) const -> LogicalType;
+	auto CreateType(LogicalTypeId id, const std::vector<TypeParam> &params) const -> LogicalType;
+	/// Parameterless overload of the above.
+	auto CreateType(LogicalTypeId id) const -> LogicalType;
 
 	/// Starts composing a type step by step.
 	/// @return A `TypeBuilder` over this context, for composing a nested type without assembling the parameter vector
@@ -587,13 +591,17 @@ public:
 	/// @param name The type's unqualified name, e.g. "LIST" or "DECIMAL".
 	/// @param params The type's parameters, in the order SQL takes them. A `TypeParam` with an empty name is
 	/// positional.
-	auto CreateType(std::string_view name, const std::vector<TypeParam> &params = {}) -> LogicalType;
+	auto CreateType(std::string_view name, const std::vector<TypeParam> &params) -> LogicalType;
+	/// Parameterless overload of the above.
+	auto CreateType(std::string_view name) -> LogicalType;
 
 	/// The id-keyed twin of `CreateType`: the id resolves to its canonical name and binds like it.
 	/// @param id The type's id. Without parameters, only ids that name a complete type on their own are accepted;
 	/// parameterized kinds such as LIST or DECIMAL require parameters.
 	/// @param params The type's parameters, as in the name-keyed overload.
-	auto CreateType(LogicalTypeId id, const std::vector<TypeParam> &params = {}) -> LogicalType;
+	auto CreateType(LogicalTypeId id, const std::vector<TypeParam> &params) -> LogicalType;
+	/// Parameterless overload of the above.
+	auto CreateType(LogicalTypeId id) -> LogicalType;
 
 	/// Starts composing a type step by step.
 	/// @return A `TypeBuilder` over this connection, for composing a nested type without assembling the parameter
