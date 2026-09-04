@@ -42,8 +42,6 @@
 #include <string.h>
 #include <float.h>
 
-#include "duckdb/common/fast_mem.hpp"
-
 namespace duckdb_yyjson {
 
 /*==============================================================================
