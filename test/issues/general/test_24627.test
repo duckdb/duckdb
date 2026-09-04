@@ -1,0 +1,60 @@
+# name: test/issues/general/test_24627.test
+# description: Issue 24627 - Preserve GROUPING bindings through aggregate function rewrites
+# group: [general]
+
+statement ok
+CREATE TABLE t(g INTEGER, x INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1, 1), (1, 2);
+
+statement ok
+SET debug_verify_column_bindings = true;
+
+# The ordered-list rewrite inserts a projection for list_sort. GROUPING results must remain visible above it.
+query III
+SELECT GROUPING(g) AS gr, g, list(x ORDER BY x) AS xs
+FROM t
+GROUP BY g
+ORDER BY ALL;
+----
+0	1	[1, 2]
+
+# Preserve GROUPING through the same rewrite when grouping sets are expanded.
+query III
+SELECT GROUPING(g) AS gr, g, list(x ORDER BY x) AS xs
+FROM t
+GROUP BY ROLLUP(g)
+ORDER BY gr, g NULLS FIRST;
+----
+0	1	[1, 2]
+1	NULL	[1, 2]
+
+statement ok
+CREATE TABLE multiple_groups(a INTEGER, b INTEGER, x INTEGER);
+
+statement ok
+INSERT INTO multiple_groups VALUES (1, 10, 2), (1, 10, 1);
+
+# Cover multiple grouping-function bindings and their projection offsets.
+query IIIIII
+SELECT GROUPING(a), GROUPING(b), GROUPING(a, b), a, b, list(x ORDER BY x)
+FROM multiple_groups
+GROUP BY ROLLUP(a, b)
+ORDER BY GROUPING(a, b), a NULLS FIRST, b NULLS FIRST;
+----
+0	0	0	1	10	[1, 2]
+0	1	1	1	NULL	[1, 2]
+1	1	3	NULL	NULL	[1, 2]
+
+# Verify that the fix preserves the ordered-list optimization rather than skipping it.
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II
+EXPLAIN SELECT GROUPING(g), g, list(x ORDER BY x) FROM t GROUP BY g;
+----
+logical_opt	<REGEX>:.*list_sort.*
+
+statement ok
+SET debug_verify_column_bindings = false;

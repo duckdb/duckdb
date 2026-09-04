@@ -377,6 +377,7 @@ private:
 		auto proj_index = optimizer.binder.GenerateTableIndex();
 		const auto group_count = aggr.groups.size();
 		vector<unique_ptr<Expression>> projection_expressions;
+		projection_expressions.reserve(group_count + aggr_count + aggr.grouping_functions.size());
 
 		// Pass group bindings through and register them in the aggregate_map
 		for (idx_t group_idx = 0; group_idx < group_count; group_idx++) {
@@ -409,6 +410,16 @@ private:
 			auto final_result = rule.CreateProjectionExpression(aggr_type, std::move(aggr_ref),
 			                                                    std::move(rewrite_info.additional_expressions));
 			projection_expressions.push_back(std::move(final_result));
+		}
+
+		// Keep GROUPING() results in the output order defined by LogicalAggregate::GetColumnBindings().
+		// Without these mappings, the projection leaves stale grouping-function references in its parents.
+		for (idx_t grouping_idx = 0; grouping_idx < aggr.grouping_functions.size(); grouping_idx++) {
+			ColumnBinding grouping_binding(aggr.groupings_index, ProjectionIndex(grouping_idx));
+			auto projection_idx = ProjectionIndex(group_count + aggr_count + grouping_idx);
+			aggregate_map[grouping_binding] = ColumnBinding(proj_index, projection_idx);
+			projection_expressions.push_back(
+			    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, grouping_binding));
 		}
 
 		auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_expressions));
