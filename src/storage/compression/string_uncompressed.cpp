@@ -414,7 +414,7 @@ void UncompressedStringStorage::SetDictionary(ColumnSegment &segment, BufferHand
 }
 
 StringDictionaryContainer UncompressedStringStorage::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
-	auto startptr = handle.GetDataMutable() + segment.GetBlockOffset();
+	auto startptr = handle.Ptr() + segment.GetBlockOffset();
 	StringDictionaryContainer container;
 	container.size = Load<uint32_t>(startptr);
 	container.end = Load<uint32_t>(startptr + sizeof(uint32_t));
@@ -501,7 +501,7 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 		// read header
 		auto block_size = segment.GetBlockSize();
 		auto string_space = block_size - sizeof(block_id_t);
-		CompressionSegmentReader block_reader(handle.GetDataMutable(), block_size, "overflow string block");
+		CompressionSegmentReader block_reader(handle.Ptr(), block_size, "overflow string block");
 		auto reader = block_reader.GetSubReader(0, string_space, "overflow string data");
 		reader.SetPosition(NumericCast<idx_t>(offset));
 		uint32_t length = reader.Read<uint32_t>();
@@ -532,12 +532,12 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 				block_id_t next_block = block_reader.Get<block_id_t>(string_space);
 				block_handle = state.GetHandle(segment.GetBlockHandle()->GetBlockManager(), next_block);
 				handle = buffer_manager.Pin(context, block_handle);
-				block_reader = CompressionSegmentReader(handle.GetDataMutable(), block_size, "overflow string block");
+				block_reader = CompressionSegmentReader(handle.Ptr(), block_size, "overflow string block");
 				reader = block_reader.GetSubReader(0, string_space, "overflow string data");
 			}
 		}
 		if (allocate_block) {
-			auto final_buffer = target_handle.GetDataMutable();
+			auto final_buffer = target_handle.Ptr();
 			StringVector::AddHandle(result, std::move(target_handle));
 			return string_t(const_char_ptr_cast(final_buffer), length);
 		} else {
@@ -550,7 +550,7 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 	// first pin the handle, if it is not pinned yet
 	auto string_block = state.FindOverflowBlock(block);
 	auto handle = buffer_manager.Pin(context, string_block.get().block);
-	auto final_buffer = handle.GetDataMutable();
+	auto final_buffer = handle.Ptr();
 	StringVector::AddHandle(result, std::move(handle));
 	CompressionSegmentReader reader(final_buffer, string_block.get().offset, "in-memory overflow string block");
 	return ReadStringWithLength(reader, offset);
