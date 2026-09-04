@@ -8,6 +8,9 @@ unzip data/storage/corrupt/rle_corrupt_run_undercount.db.gz {TEST_DIR}/rle_corru
 
 load {TEST_DIR}/rle_corrupt_run_undercount.db readonly
 
+statement ok
+USE rle_corrupt_run_undercount
+
 query I
 SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='RLE';
 ----

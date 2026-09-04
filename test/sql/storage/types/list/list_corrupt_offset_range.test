@@ -8,6 +8,9 @@ unzip data/storage/corrupt/list_corrupt_offset_range.db.gz {TEST_DIR}/list_corru
 
 load {TEST_DIR}/list_corrupt_offset_range.db readonly
 
+statement ok
+USE list_corrupt_offset_range
+
 statement error
 SELECT count(*) FROM (SELECT unnest(a) FROM t);
 ----

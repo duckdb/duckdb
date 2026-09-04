@@ -8,6 +8,9 @@ unzip data/storage/corrupt/bitpacking_corrupt_metadata_underflow.db.gz {TEST_DIR
 
 load {TEST_DIR}/bitpacking_corrupt_metadata_underflow.db readonly
 
+statement ok
+USE bitpacking_corrupt_metadata_underflow
+
 query I
 SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='BitPacking';
 ----
