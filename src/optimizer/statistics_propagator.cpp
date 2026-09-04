@@ -81,6 +81,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		result = PropagateStatistics(node.Cast<LogicalJoin>(), node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		result = PropagateStatistics(node.Cast<LogicalLimit>(), node_ptr);
+		break;
 	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
 		result = PropagateStatistics(node.Cast<LogicalPositionalJoin>(), node_ptr);
 		break;

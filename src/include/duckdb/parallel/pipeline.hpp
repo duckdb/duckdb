@@ -206,7 +206,7 @@ private:
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	vector<weak_ptr<Pipeline>> parents;
-	//! The dependencies of this pipeline
+	//! The dependencies of this pipeline in other MetaPipelines
 	vector<weak_ptr<Pipeline>> dependencies;
 	//! Pipelines that must be initialized before this pipeline can consume their dataflow output
 	vector<weak_ptr<Pipeline>> dataflow_dependencies;

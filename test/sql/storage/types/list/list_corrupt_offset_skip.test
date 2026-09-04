@@ -1,0 +1,25 @@
+# name: test/sql/storage/types/list/list_corrupt_offset_skip.test
+# description: Decreasing list offset reached through Skip must error
+# group: [list]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/list_corrupt_offset_skip.db.gz {TEST_DIR}/list_corrupt_offset_skip.db
+
+load {TEST_DIR}/list_corrupt_offset_skip.db readonly
+
+# id filter rejects whole vectors, forcing the Skip path
+statement error
+SELECT a FROM t WHERE id = 7000;
+----
+Data Corruption Error: Corrupted LIST column: later offset is smaller than the preceding offset
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT a FROM t WHERE id = 7000;
+----
+Data Corruption Error: Corrupted LIST column: later offset is smaller than the preceding offset

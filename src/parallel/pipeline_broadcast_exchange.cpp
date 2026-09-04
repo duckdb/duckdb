@@ -616,8 +616,9 @@ PipelineBroadcastExchangeLocalState::~PipelineBroadcastExchangeLocalState() = de
 
 PipelineBroadcastExchange::PipelineBroadcastExchange(ClientContext &context, vector<LogicalType> types_p,
                                                      PipelineBroadcastExchangeCompletionMode completion_mode_p,
-                                                     OrderPreservationType source_order_p, bool use_batch_index_p)
-    : context(context), types(std::move(types_p)), completion_mode(completion_mode_p),
+                                                     OrderPreservationType source_order_p, bool use_batch_index_p,
+                                                     PipelineBroadcastExchangeBufferMode buffer_mode_p)
+    : context(context), types(std::move(types_p)), completion_mode(completion_mode_p), buffer_mode(buffer_mode_p),
       order_mode(use_batch_index_p                                   ? PipelineBroadcastExchangeOrderMode::BATCH_INDEX
                  : source_order_p == OrderPreservationType::NO_ORDER ? PipelineBroadcastExchangeOrderMode::UNORDERED
                                                                      : PipelineBroadcastExchangeOrderMode::SEQUENTIAL),
@@ -1838,6 +1839,10 @@ bool PipelineBroadcastExchange::ShouldStopProducerLocked() const {
 }
 
 bool PipelineBroadcastExchange::ShouldThrottleProducerLocked() const {
+	if (buffer_mode == PipelineBroadcastExchangeBufferMode::BUFFER_ALL) {
+		// the rows are buffered until the consumer runs - the producer is never blocked
+		return false;
+	}
 	if (buffer->HasSharedSpool()) {
 		return false;
 	}
@@ -1845,8 +1850,12 @@ bool PipelineBroadcastExchange::ShouldThrottleProducerLocked() const {
 }
 
 bool PipelineBroadcastExchange::ShouldCreateSharedSpoolLocked() const {
-	return !buffer->HasSharedSpool() && (!direct_pipelines.empty() || active_consumers > 1) &&
-	       buffer->BufferedCount() >= PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS;
+	if (buffer->HasSharedSpool() || buffer->BufferedCount() < PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS) {
+		return false;
+	}
+	// the spool holds the rows outside of the in-memory buffer, spilling to disk if required
+	return buffer_mode == PipelineBroadcastExchangeBufferMode::BUFFER_ALL || !direct_pipelines.empty() ||
+	       active_consumers > 1;
 }
 
 void PipelineBroadcastExchange::CreateSharedSpoolLocked(vector<ExchangeLogEntry> &log_entries) {

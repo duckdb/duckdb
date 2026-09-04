@@ -8,7 +8,7 @@ statement ok
 ATTACH ':memory:' AS trampoline_use_catalog
 
 statement ok
-SET debug_transformer_trampoline_style=true
+SET heap_based_parser=true
 
 query I
 SELECT 1;
