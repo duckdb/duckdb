@@ -1206,6 +1206,13 @@
         "default_value": "100"
     },
     {
+        "name": "password",
+        "description": "The password to use. Ignored for legacy compatibility.",
+        "type": "VARCHAR",
+        "default_scope": "global",
+        "default_value": ""
+    },
+    {
         "name": "perfect_ht_threshold",
         "description": "Threshold in bytes for when to use a perfect hash table",
         "type": "UBIGINT",
@@ -1450,6 +1457,16 @@
         "type": "VARCHAR[]",
         "scope": "local",
         "custom_implementation": true
+    },
+    {
+        "name": "username",
+        "description": "The username to use. Ignored for legacy compatibility.",
+        "type": "VARCHAR",
+        "default_scope": "global",
+        "default_value": "",
+        "aliases": [
+            "user"
+        ]
     },
     {
         "name": "vacuum_rebuild_indexes",

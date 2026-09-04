@@ -214,6 +214,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ParallelizeSequentialSourcesSetting),
     DUCKDB_SETTING(PartitionedWriteFlushThresholdSetting),
     DUCKDB_SETTING(PartitionedWriteMaxOpenFilesSetting),
+    DUCKDB_SETTING(PasswordSetting),
     DUCKDB_SETTING_CALLBACK(PerfectHtThresholdSetting),
     DUCKDB_SETTING_CALLBACK(PinThreadsSetting),
     DUCKDB_SETTING(PivotFilterThresholdSetting),
@@ -244,6 +245,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_LOCAL(TrackedMetricsSetting),
+    DUCKDB_SETTING(UsernameSetting),
     DUCKDB_SETTING_CALLBACK(VacuumRebuildIndexesSetting),
     DUCKDB_SETTING_CALLBACK(ValidateExternalFileCacheSetting),
     DUCKDB_SETTING(VariantMinimumShreddingSizeSetting),
@@ -261,9 +263,10 @@ static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("enabl
                                                      DUCKDB_SETTING_ALIAS("force_variant_shredding", 49),
                                                      DUCKDB_SETTING_ALIAS("memory_limit", 132),
                                                      DUCKDB_SETTING_ALIAS("null_order", 67),
-                                                     DUCKDB_SETTING_ALIAS("profile_output", 155),
+                                                     DUCKDB_SETTING_ALIAS("profile_output", 156),
+                                                     DUCKDB_SETTING_ALIAS("user", 176),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 30),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 173),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 174),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

@@ -2003,6 +2003,18 @@ struct PartitionedWriteMaxOpenFilesSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct PasswordSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "password";
+	static constexpr const char *Description = "The password to use. Ignored for legacy compatibility.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct PerfectHtThresholdSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "perfect_ht_threshold";
@@ -2395,6 +2407,18 @@ struct TrackedMetricsSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct UsernameSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "username";
+	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct VacuumRebuildIndexesSetting {
