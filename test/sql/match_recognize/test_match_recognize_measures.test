@@ -501,11 +501,44 @@ SELECT prev_v FROM pnav MATCH_RECOGNIZE(
 ----
 <REGEX>:Not implemented Error:.*navigates the ordered partition rather than the match.*
 
-# FIRST and LAST are the other way round: they count the match's rows, which the matcher does while
-# it assembles them and a window over the finished match cannot
-statement error
-SELECT p FROM pnav MATCH_RECOGNIZE(
-    ORDER BY i MEASURES FIRST(v, 1) AS p PATTERN (A+) DEFINE A as true
+# FIRST and LAST count the match's own rows instead, so an offset on them steps in from the end it
+# names rather than over the partition
+query IIII
+SELECT f0, f1, l0, l1 FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES FIRST(v, 0) AS f0, FIRST(v, 1) AS f1, LAST(v, 0) AS l0, LAST(v, 1) AS l1
+    PATTERN (A+) DEFINE A as true
 )
 ----
-<REGEX>:Not implemented Error:.*offset for FIRST\(\) is only supported in a DEFINE condition.*
+10	20	50	40
+
+# reported as the match grows, LAST(v, 1) is the row before the current one and FIRST(v, 1) is the
+# match's second row once it has one
+query III
+SELECT i, f1, l1 FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES FIRST(v, 1) AS f1, LAST(v, 1) AS l1
+    ALL ROWS PER MATCH PATTERN (A+) DEFINE A as true
+) ORDER BY i
+----
+1	NULL	NULL
+2	20	10
+3	20	20
+4	20	30
+5	20	40
+
+statement ok
+create table tie(ts integer, k integer);
+
+statement ok
+insert into tie values (1,10),(2,12),(3,12),(4,15);
+
+# Counting in from the end walks the match the other way round, and a stable descending sort is not
+# the exact reverse of a stable ascending one. Two rows tied on the ordering key would land in a
+# different order in the two directions, and FIRST and LAST would disagree about which is which:
+# here the tied pair is ts 2 and 3, so the second row in is 2 and the second row back is 3.
+query IIII
+SELECT f0, f1, l0, l1 FROM tie MATCH_RECOGNIZE(
+    ORDER BY k MEASURES FIRST(ts, 0) AS f0, FIRST(ts, 1) AS f1, LAST(ts, 0) AS l0, LAST(ts, 1) AS l1
+    PATTERN (A{4}) DEFINE A AS 1 = 1
+)
+----
+1	2	4	3

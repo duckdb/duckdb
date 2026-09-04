@@ -339,33 +339,90 @@ static unique_ptr<ParsedExpression> ClassifiedValue(const vector<string> &symbol
 	return std::move(result);
 }
 
+//! An ordering as the sorter will actually apply it, with the session's defaults filled in. A
+//! reversed window has to spell both out, because "the opposite of the default" is not something the
+//! enums can say.
+static void ResolveOrder(ClientContext &context, OrderType &type, OrderByNullType &null_order) {
+	if (type == OrderType::ORDER_DEFAULT) {
+		type = Settings::Get<DefaultOrderSetting>(context);
+	}
+	if (null_order != OrderByNullType::ORDER_DEFAULT) {
+		return;
+	}
+	const auto ascending = type == OrderType::ASCENDING;
+	switch (Settings::Get<DefaultNullOrderSetting>(context)) {
+	case DefaultOrderByNullType::NULLS_FIRST:
+		null_order = OrderByNullType::NULLS_FIRST;
+		break;
+	case DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC:
+		null_order = ascending ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		break;
+	case DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC:
+		null_order = ascending ? OrderByNullType::NULLS_FIRST : OrderByNullType::NULLS_LAST;
+		break;
+	default:
+		null_order = OrderByNullType::NULLS_LAST;
+		break;
+	}
+}
+
 //! A reference to <symbol>.<column> resolves to that column on the last row the variable matched.
 //! ONE ROW PER MATCH reports a finished match, so it sees the whole match (FINAL semantics); ALL ROWS
 //! PER MATCH reports progress, so it only sees the match up to the current row (RUNNING semantics).
-static void ScopeToMatch(WindowExpression &window, const MatchRecognizeConfig &config, bool running) {
-	window.WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
-	window.WindowEndMutable() = running ? WindowBoundary::CURRENT_ROW_ROWS : WindowBoundary::UNBOUNDED_FOLLOWING;
+static void ScopeToMatch(ClientContext &context, WindowExpression &window, const MatchRecognizeConfig &config,
+                         bool running, bool reversed = false) {
+	// walked backwards, the rows that came before the current one come after it
+	window.WindowStartMutable() =
+	    running && reversed ? WindowBoundary::CURRENT_ROW_ROWS : WindowBoundary::UNBOUNDED_PRECEDING;
+	window.WindowEndMutable() =
+	    running && !reversed ? WindowBoundary::CURRENT_ROW_ROWS : WindowBoundary::UNBOUNDED_FOLLOWING;
 
 	// matches are numbered within a partition, so both are needed to identify one
 	for (auto &expr : config.partition_expressions) {
 		window.PartitionsMutable().push_back(expr->Copy());
 	}
 	window.PartitionsMutable().push_back(CreateStructExtract("__pattern_window", "match_number"));
+	// Every window says which way round it walks, rather than leaning on the order its input happens
+	// to arrive in. Windows that leave it unsaid are free to be grouped with one that says the
+	// opposite, and then they walk that way too.
 	for (auto &order : config.order_by_expressions) {
-		window.OrderByMutable().emplace_back(order.type, order.null_order, order.expression->Copy());
+		auto type = order.type;
+		auto null_order = order.null_order;
+		if (reversed) {
+			ResolveOrder(context, type, null_order);
+			type = type == OrderType::DESCENDING ? OrderType::ASCENDING : OrderType::DESCENDING;
+			null_order =
+			    null_order == OrderByNullType::NULLS_FIRST ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		}
+		window.OrderByMutable().emplace_back(type, null_order, order.expression->Copy());
 	}
+	// A stable descending sort is not the exact reverse of a stable ascending one, so tied rows would
+	// land in a different order in the two directions and FIRST(x, n) and LAST(x, n) would disagree
+	// about which of them is which. The row's place in the partition is unique, so ordering on it last
+	// leaves nothing tied.
+	window.OrderByMutable().emplace_back(reversed ? OrderType::DESCENDING : OrderType::ASCENDING,
+	                                     OrderByNullType::NULLS_LAST,
+	                                     CreateStructExtract("__pattern_window", "row_index"));
 }
 
 //! Takes a value packed by PackValue and reports it from the first or last row of the match that carries
 //! one. IGNORE NULLS is what makes it that row rather than the first or last row of the match.
-static unique_ptr<ParsedExpression> MatchScopedValue(const MatchRecognizeConfig &config,
+static unique_ptr<ParsedExpression> MatchScopedValue(ClientContext &context, const MatchRecognizeConfig &config,
                                                      unique_ptr<ParsedExpression> packed, bool running,
-                                                     bool first = false) {
-	auto window = make_uniq<WindowExpression>("", "", first ? "first_value" : "last_value");
+                                                     bool first = false, idx_t offset = 0) {
+	// nth_value counts from the frame's first row, so counting back from the match's last one is the
+	// same window walked the other way round
+	const auto reversed = !first && offset > 0;
+	auto window =
+	    make_uniq<WindowExpression>("", "", offset > 0 ? "nth_value" : (first ? "first_value" : "last_value"));
 	window->GetArgumentsMutable().emplace_back(std::move(packed));
+	if (offset > 0) {
+		window->GetArgumentsMutable().emplace_back(
+		    make_uniq<ConstantExpression>(Value::BIGINT(NumericCast<int64_t>(offset + 1))));
+	}
 	window->HasIgnoreNullsMutable() = true;
 	window->IgnoreNullsMutable() = true;
-	ScopeToMatch(*window, config, running);
+	ScopeToMatch(context, *window, config, running, reversed);
 	return CreateStructExtract(std::move(window), MATCH_RECOGNIZE_VALUE_FIELD);
 }
 
@@ -440,12 +497,20 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 		}
 		// logical navigation over the rows of the match. LAST(X.c) is what an unadorned X.c already
 		// means, so both share the masking; only the end they read from differs.
-		if ((function_name == "FIRST" || function_name == "LAST") && function.GetArguments().size() == 2) {
-			// a DEFINE condition is resolved by the matcher, which counts the match's rows as it assembles
-			// them; a measure is a window over the match, and a window has no nth from the end
-			throw NotImplementedException("An offset for %s() is only supported in a DEFINE condition", function_name);
-		}
-		if ((function_name == "FIRST" || function_name == "LAST") && function.GetArguments().size() == 1) {
+		if ((function_name == "FIRST" || function_name == "LAST") && !function.GetArguments().empty() &&
+		    function.GetArguments().size() <= 2) {
+			idx_t offset = 0;
+			if (function.GetArguments().size() == 2) {
+				auto &offset_expr = *function.GetArgumentsMutable()[1].GetExpressionMutable();
+				if (offset_expr.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+					throw BinderException("The offset of %s() must be a constant", function_name);
+				}
+				auto offset_value = offset_expr.Cast<ConstantExpression>().GetValue();
+				if (!offset_value.DefaultTryCastAs(LogicalType::UBIGINT)) {
+					throw BinderException("The offset of %s() must be a non-negative integer", function_name);
+				}
+				offset = NumericCast<idx_t>(offset_value.GetValue<uint64_t>());
+			}
 			auto inner = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
 			vector<string> symbol;
 			if (inner->GetExpressionType() == ExpressionType::COLUMN_REF) {
@@ -460,7 +525,8 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 			RewriteMeasure(binder, inner, config, symbols, running, one_row, inside_aggregate);
 			auto packed = PackValue(std::move(inner));
 			auto masked = symbol.empty() ? std::move(packed) : ClassifiedValue(symbol, std::move(packed));
-			expr = MatchScopedValue(config, std::move(masked), running, function_name == "FIRST");
+			expr =
+			    MatchScopedValue(binder.context, config, std::move(masked), running, function_name == "FIRST", offset);
 			return;
 		}
 		// an aggregate in MEASURES aggregates the rows of the match
@@ -487,7 +553,7 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 			} else {
 				window->FilterMutable() = std::move(in_match);
 			}
-			ScopeToMatch(*window, config, running);
+			ScopeToMatch(binder.context, *window, config, running);
 			expr = std::move(window);
 			return;
 		}
@@ -505,7 +571,8 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 				expr = ClassifiedValue(entry->second, std::move(column));
 				return;
 			}
-			expr = MatchScopedValue(config, ClassifiedValue(entry->second, PackValue(std::move(column))), running);
+			expr = MatchScopedValue(binder.context, config,
+			                        ClassifiedValue(entry->second, PackValue(std::move(column))), running);
 			return;
 		}
 		if (colref.IsQualified()) {
@@ -542,7 +609,10 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		partitions.push_back(expr->Copy());
 	}
 	pattern_window->PartitionsMutable() = std::move(partitions);
-	pattern_window->OrderByMutable() = std::move(ref.config->order_by_expressions);
+	// the measures need the ordering too, so the pattern window takes a copy rather than the original
+	for (auto &order : ref.config->order_by_expressions) {
+		pattern_window->OrderByMutable().emplace_back(order.type, order.null_order, order.expression->Copy());
+	}
 
 	// {- -} only decides which of a match's rows reach the output, so it needs rows in the output to
 	// act on. ONE ROW PER MATCH reports the match rather than its rows, leaving it nothing to do.

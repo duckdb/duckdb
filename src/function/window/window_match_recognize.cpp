@@ -27,7 +27,8 @@ enum MatchRecognizeResult : idx_t {
 	MATCH_START,
 	MATCH_END,
 	IS_EXCLUDED,
-	IS_EMPTY
+	IS_EMPTY,
+	ROW_INDEX
 };
 
 //	MATCH_NUMBER() is the first field of the packed column struct
@@ -86,6 +87,7 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 				fields[MATCH_END].SetValue(offset, Value::UBIGINT(span.match_end));
 				fields[IS_EXCLUDED].SetValue(offset, Value::BOOLEAN(span.excluded));
 				fields[IS_EMPTY].SetValue(offset, Value::BOOLEAN(span.empty));
+				fields[ROW_INDEX].SetValue(offset, Value::UBIGINT(row));
 				offset++;
 			}
 		}
@@ -122,7 +124,10 @@ LogicalType WindowMatchRecognizeExecutor::ResultType() {
 	                                              {"match_start", LogicalType::UBIGINT},
 	                                              {"match_end", LogicalType::UBIGINT},
 	                                              {"is_excluded", LogicalType::BOOLEAN},
-	                                              {"is_empty", LogicalType::BOOLEAN}}));
+	                                              {"is_empty", LogicalType::BOOLEAN},
+	                                              // the row's place in the partition, which gives a measure's
+	                                              // window a total order even when the ORDER BY has ties
+	                                              {"row_index", LogicalType::UBIGINT}}));
 }
 
 //===--------------------------------------------------------------------===//
