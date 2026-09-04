@@ -8,6 +8,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/optimizer/constraint_propagator.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -225,6 +226,8 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 		inner_idx = 0;
 		outer_idx = 1;
 		break;
+	case JoinType::INNER:
+		break;
 	}
 	default:
 		return std::move(pipe_info.root);
@@ -254,10 +257,52 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 		}
 	}
 
-	if (pipe_info.distinct_groups.empty()) {
-		return std::move(pipe_info.root);
+	// 1. guarantee output uniqueness via constraints
+	if (!is_output_unique) {
+		vector<ColumnBinding> inner_keys;
+		vector<ColumnBinding> outer_keys;
+
+		for (auto &cond : join.conditions) {
+			if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+				continue;
+			}
+
+			auto &inner_expr = (inner_idx == 0) ? cond.LeftReference() : cond.RightReference();
+			auto &outer_expr = (inner_idx == 0) ? cond.RightReference() : cond.LeftReference();
+
+			if (inner_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+				inner_keys.push_back(inner_expr->Cast<BoundColumnRefExpression>().Binding());
+			}
+			if (outer_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+				outer_keys.push_back(outer_expr->Cast<BoundColumnRefExpression>().Binding());
+			}
+		}
+
+		if (!inner_keys.empty()) {
+			ConstraintPropagator inner_prop;
+			inner_prop.VisitOperator(*join.children[inner_idx]);
+
+			if (inner_prop.IsJoinKeyUnique(inner_keys)) {
+				if (join.join_type == JoinType::INNER) {
+					ConstraintPropagator outer_prop;
+					outer_prop.VisitOperator(*join.children[outer_idx]);
+
+					auto inner_props_it = inner_prop.properties_map.find(inner_keys[0].table_index);
+					if (inner_props_it != inner_prop.properties_map.end() && inner_props_it->second.base_table) {
+						Identifier inner_table_name = inner_props_it->second.base_table->name;
+
+						// Check if outer keys form an FK pointing to the inner table
+						if (outer_prop.IsForeignKey(outer_keys, inner_table_name)) {
+							is_output_unique = true;
+						}
+					}
+				} else {
+					// For LEFT/RIGHT JOIN, uniqueness is enough!
+					is_output_unique = true;
+				}
+			}
+		}
 	}
-	// 1. TODO: guarantee by primary/foreign key
 
 	if (!is_output_unique) {
 		is_output_unique = true;
