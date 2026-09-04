@@ -1,0 +1,11 @@
+# name: test/parquet/page_v2_size_mismatch.test
+# group: [parquet]
+
+require parquet
+
+# data page v2 with is_compressed=false and a compressed codec, where the page header
+# claims a compressed size larger than the uncompressed size it is read into
+statement error
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/page_v2_size_mismatch.parquet');
+----
+Page size mismatch
