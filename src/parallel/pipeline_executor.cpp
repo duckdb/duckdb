@@ -78,26 +78,21 @@ bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 		    flushing_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx + 1];
 		auto &current_operator = pipeline.operators[flushing_idx].get();
 
-		OperatorFinalizeResultType finalize_result;
+		// In-process operators here mean an earlier push of curr_chunk was interrupted (the chunk budget
+		// ran out, or the Sink blocked). We resume that push rather than flushing the operator again, and
+		// leave should_flush_current_idx alone: it still reflects the last actual FinalExecute.
+		const bool resuming_push = !in_process_operators.empty();
 
-		if (in_process_operators.empty()) {
+		if (!resuming_push) {
 			curr_chunk.Reset();
 			StartOperator(current_operator);
-			finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator.op_state,
-			                                                *intermediate_states[flushing_idx]);
+			auto finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator.op_state,
+			                                                     *intermediate_states[flushing_idx]);
 			EndOperator(current_operator, &curr_chunk);
-		} else {
-			// Reset flag and reflush the last chunk we were flushing.
-			finalize_result = OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
+			should_flush_current_idx = finalize_result == OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		}
 
 		auto push_result = ExecutePushInternal(curr_chunk, chunk_budget, flushing_idx + 1);
-
-		if (finalize_result == OperatorFinalizeResultType::HAVE_MORE_OUTPUT) {
-			should_flush_current_idx = true;
-		} else {
-			should_flush_current_idx = false;
-		}
 
 		switch (push_result) {
 		case OperatorResultType::BLOCKED: {
