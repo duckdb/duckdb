@@ -312,12 +312,23 @@ static unique_ptr<ParsedExpression> CreateStructExtract(const string &column_nam
 constexpr const char *MATCH_RECOGNIZE_VALUE_FIELD = "v";
 
 //! struct_pack(v := <value>) is never NULL, so a NULL the value itself holds stays apart from the NULL
-//! that masks a row the variable did not match - which is the NULL that MatchScopedValue walks back over
+//! that masks a row the variable did not match - which is the NULL that MatchScopedValue walks back over.
+//! An empty match covers no rows, so the row that carries it has no value to report and is masked too.
 static unique_ptr<ParsedExpression> PackValue(unique_ptr<ParsedExpression> value) {
 	value->SetAlias(Identifier(MATCH_RECOGNIZE_VALUE_FIELD));
 	vector<unique_ptr<ParsedExpression>> fields;
 	fields.push_back(std::move(value));
-	return make_uniq<FunctionExpression>("struct_pack", std::move(fields));
+	auto packed = make_uniq<FunctionExpression>("struct_pack", std::move(fields));
+
+	auto in_match = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT,
+	                                              CreateStructExtract("__pattern_window", "is_empty"));
+	auto result = make_uniq<CaseExpression>();
+	CaseCheck check;
+	check.when_expr = std::move(in_match);
+	check.then_expr = std::move(packed);
+	result->CaseChecksMutable().push_back(std::move(check));
+	result->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	return std::move(result);
 }
 
 //! CASE WHEN <classifier> IN (symbols) THEN <column> END - NULL on every row none of them matched.

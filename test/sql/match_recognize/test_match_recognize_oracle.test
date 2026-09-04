@@ -21,6 +21,9 @@ statement ok
 CREATE TABLE evt (g INTEGER, seq INTEGER, c VARCHAR(1));
 
 statement ok
+CREATE TABLE odd (p INTEGER, k INTEGER, v INTEGER);
+
+statement ok
 INSERT INTO ticks VALUES
     ('AAA', 1, 10),
     ('AAA', 2, 8),
@@ -43,6 +46,9 @@ INSERT INTO ticks VALUES
 
 statement ok
 INSERT INTO evt VALUES (1, 1, 'a'), (1, 2, 'a'), (1, 3, 'b'), (1, 4, 'a'), (1, 5, 'c'), (2, 1, 'b'), (2, 2, 'b'), (2, 3, 'b'), (3, 1, 'a');
+
+statement ok
+INSERT INTO odd VALUES (1, 1, 1), (2, NULL, 1), (2, NULL, 2), (2, NULL, 3), (3, 5, 1), (3, 5, 2), (3, 5, 3), (4, 1, 0), (4, 2, 0);
 
 # v shape
 query TIIII
@@ -700,3 +706,189 @@ FROM ticks MATCH_RECOGNIZE (
 AAA	1	6	8
 AAA	6	5	7
 AAA	10	3	NULL
+
+# empty match numbering
+query IIITI
+SELECT g, seq, mno, cls, len
+FROM evt MATCH_RECOGNIZE (
+  PARTITION BY g ORDER BY seq
+  MEASURES MATCH_NUMBER() AS mno, CLASSIFIER() AS cls, COUNT(*) AS len
+  ALL ROWS PER MATCH
+  PATTERN (B*)
+  DEFINE B AS c = 'b'
+) ORDER BY g, seq
+----
+1	1	1	NULL	0
+1	2	2	NULL	0
+1	3	3	B	1
+1	4	4	NULL	0
+1	5	5	NULL	0
+2	1	1	B	1
+2	2	1	B	2
+2	3	1	B	3
+3	1	1	NULL	0
+
+# empty match aggregates
+query IIITT
+SELECT g, mno, len, s_seq, l_seq
+FROM evt MATCH_RECOGNIZE (
+  PARTITION BY g ORDER BY seq
+  MEASURES MATCH_NUMBER() AS mno, COUNT(*) AS len, SUM(seq) AS s_seq, LAST(seq) AS l_seq
+  ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+  PATTERN (B*)
+  DEFINE B AS c = 'b'
+) ORDER BY g, mno
+----
+1	1	0	NULL	NULL
+1	2	0	NULL	NULL
+1	3	1	3	3
+1	4	0	NULL	NULL
+1	5	0	NULL	NULL
+2	1	3	6	3
+3	1	0	NULL	NULL
+
+# measure of unmatched variable
+query IITI
+SELECT g, first_seq, last_b, cnt_b
+FROM evt MATCH_RECOGNIZE (
+  PARTITION BY g ORDER BY seq
+  MEASURES FIRST(seq) AS first_seq, LAST(B.seq) AS last_b, COUNT(B.seq) AS cnt_b
+  ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+  PATTERN (A B?)
+  DEFINE A AS c = 'a', B AS c = 'z'
+) ORDER BY g, first_seq
+----
+1	1	NULL	0
+1	2	NULL	0
+1	4	NULL	0
+3	1	NULL	0
+
+# single row partition
+query III
+SELECT p, mno, len
+FROM odd MATCH_RECOGNIZE (
+  PARTITION BY p ORDER BY k
+  MEASURES MATCH_NUMBER() AS mno, COUNT(*) AS len
+  ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+  PATTERN (A{2})
+  DEFINE A AS 1 = 1
+) ORDER BY p, mno
+----
+2	1	2
+3	1	2
+4	1	2
+
+# nothing matches
+query III
+SELECT p, mno, len
+FROM odd MATCH_RECOGNIZE (
+  PARTITION BY p ORDER BY k
+  MEASURES MATCH_NUMBER() AS mno, COUNT(*) AS len
+  ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+  PATTERN (A+)
+  DEFINE A AS v > 100
+) ORDER BY p, mno
+----
+
+# prev before partition start
+query IITT
+SELECT g, seq, p2, n2
+FROM evt MATCH_RECOGNIZE (
+  PARTITION BY g ORDER BY seq
+  MEASURES PREV(seq, 2) AS p2, NEXT(seq, 2) AS n2
+  ALL ROWS PER MATCH
+  PATTERN (A+)
+  DEFINE A AS 1 = 1
+) ORDER BY g, seq
+----
+1	1	NULL	3
+1	2	NULL	4
+1	3	1	5
+1	4	2	NULL
+1	5	3	NULL
+2	1	NULL	3
+2	2	NULL	NULL
+2	3	1	NULL
+3	1	NULL	NULL
+
+# exclusion of whole pattern
+query IIIT
+SELECT g, seq, mno, cls
+FROM evt MATCH_RECOGNIZE (
+  PARTITION BY g ORDER BY seq
+  MEASURES MATCH_NUMBER() AS mno, CLASSIFIER() AS cls
+  ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
+  PATTERN ({- A+ -})
+  DEFINE A AS c = 'a'
+) ORDER BY g, seq
+----
+
+# exclusion then tail
+query IIIT
+SELECT g, seq, mno, cls
+FROM evt MATCH_RECOGNIZE (
+  PARTITION BY g ORDER BY seq
+  MEASURES MATCH_NUMBER() AS mno, CLASSIFIER() AS cls
+  ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
+  PATTERN (A {- B -} A)
+  DEFINE A AS c = 'a', B AS c = 'b'
+) ORDER BY g, seq
+----
+1	2	1	A
+1	4	1	A
+
+# subset of one
+query III
+SELECT g, first_seq, last_u
+FROM evt MATCH_RECOGNIZE (
+  PARTITION BY g ORDER BY seq
+  MEASURES FIRST(seq) AS first_seq, LAST(U.seq) AS last_u
+  ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+  PATTERN (A+ B?)
+  SUBSET U = (A)
+  DEFINE A AS c = 'a', B AS c = 'b'
+) ORDER BY g, first_seq
+----
+1	1	2
+1	4	4
+3	1	1
+
+# subset with offset
+query IIIT
+SELECT g, first_seq, u0, u1
+FROM evt MATCH_RECOGNIZE (
+  PARTITION BY g ORDER BY seq
+  MEASURES FIRST(seq) AS first_seq, LAST(U.seq, 0) AS u0, LAST(U.seq, 1) AS u1
+  ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+  PATTERN ((A | B)+)
+  SUBSET U = (A, B)
+  DEFINE A AS c = 'a', B AS c = 'b'
+) ORDER BY g, first_seq
+----
+1	1	4	3
+2	1	3	2
+3	1	1	NULL
+
+# overlapping matches all rows
+query IIIT
+SELECT g, seq, mno, cls
+FROM evt MATCH_RECOGNIZE (
+  PARTITION BY g ORDER BY seq
+  MEASURES MATCH_NUMBER() AS mno, CLASSIFIER() AS cls
+  ALL ROWS PER MATCH AFTER MATCH SKIP TO NEXT ROW
+  PATTERN (A A)
+  DEFINE A AS 1 = 1
+) ORDER BY g, mno, seq
+----
+1	1	1	A
+1	2	1	A
+1	2	2	A
+1	3	2	A
+1	3	3	A
+1	4	3	A
+1	4	4	A
+1	5	4	A
+2	1	1	A
+2	2	1	A
+2	2	2	A
+2	3	2	A
