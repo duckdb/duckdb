@@ -13,7 +13,6 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -47,6 +46,9 @@ struct MatchRecognizeAfterMatchClause {
 struct MatchRecognizeSubset {
 	string name;
 	vector<string> members;
+
+	void Serialize(Serializer &serializer) const;
+	static MatchRecognizeSubset Deserialize(Deserializer &deserializer);
 };
 
 //! One clause of a MATCH_RECOGNIZE body. The clauses may be written in any order, so the parser
@@ -73,16 +75,23 @@ struct MatchRecognizeConfig {
 	vector<OrderByNode> order_by_expressions;
 	vector<unique_ptr<ParsedExpression>> measures_expression_list;
 	vector<unique_ptr<ParsedExpression>> defines_expression_list;
-	MatchRecognizeRows rows_per_match;
-	MatchRecognizeAfterMatch after_match;
-	unique_ptr<ConstantExpression> after_match_variable;
+	MatchRecognizeRows rows_per_match = MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_DEFAULT;
+	MatchRecognizeAfterMatch after_match = MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_DEFAULT;
+	//! The target pattern variable for the SKIP TO FIRST/LAST forms, empty for the other forms
+	string after_match_variable;
 	unique_ptr<ParsedExpression> pattern;
 	vector<MatchRecognizeSubset> subsets;
 	//! DEFINE AUTO: take each variable's condition from the column of the same name
 	bool define_auto = false;
+
+	unique_ptr<MatchRecognizeConfig> Copy() const;
+	bool Equals(const MatchRecognizeConfig &other) const;
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<MatchRecognizeConfig> Deserialize(Deserializer &deserializer);
 };
 
-//! Represents a SHOW/DESCRIBE/SUMMARIZE statement
+//! A MATCH_RECOGNIZE clause applied to a table reference
 class MatchRecognizeRef : public TableRef {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::MATCH_RECOGNIZE;

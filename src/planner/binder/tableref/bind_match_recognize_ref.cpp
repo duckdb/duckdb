@@ -5,6 +5,7 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/pattern_expression.hpp"
@@ -460,8 +461,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		subset_names.insert(subset.name);
 	}
 	if (!subset_names.empty()) {
-		if (ref.config->after_match_variable &&
-		    subset_names.count(ref.config->after_match_variable->GetValue().ToString())) {
+		if (subset_names.count(ref.config->after_match_variable)) {
 			throw NotImplementedException("AFTER MATCH SKIP TO a SUBSET variable is not supported yet");
 		}
 		for (auto &expr : ref.config->defines_expression_list) {
@@ -625,8 +625,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	arguments.emplace_back(make_uniq<ConstantExpression>(Value::LIST(LogicalType::VARCHAR, std::move(symbol_values))));
 
 	auto skip_variable = Value(LogicalType::VARCHAR);
-	if (ref.config->after_match_variable) {
-		skip_variable = Value(DefineColumnName(ref.config->after_match_variable->GetValue().ToString()));
+	if (!ref.config->after_match_variable.empty()) {
+		skip_variable = Value(DefineColumnName(ref.config->after_match_variable));
 	}
 	arguments.emplace_back(make_uniq<ConstantExpression>(std::move(skip_variable)));
 	arguments.emplace_back(

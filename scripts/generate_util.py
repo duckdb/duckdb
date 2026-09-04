@@ -819,6 +819,12 @@ def main():
     with open(JSON_PATH, 'r') as f:
         entries = json.load(f)
 
+    # An entry that both hands off its switch case and writes its own class code is a dispatcher rather than a
+    # concrete expression - it has no members to generate these methods from
+    entries = [
+        entry for entry in entries if not (entry.get('custom_implementation') and entry.get('custom_switch_code'))
+    ]
+
     # Collect base (parent) functions for inheritance
     base_functions = []
     for entry in entries:

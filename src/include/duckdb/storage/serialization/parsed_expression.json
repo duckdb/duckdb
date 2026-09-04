@@ -362,6 +362,13 @@
     ]
   },
   {
+    "class": "PatternExpression",
+    "base": "ParsedExpression",
+    "enum": "PATTERN",
+    "custom_implementation": true,
+    "custom_switch_code": "result = PatternExpression::Deserialize(deserializer);\nbreak;"
+  },
+  {
     "class": "PositionalReferenceExpression",
     "base": "ParsedExpression",
     "enum": "POSITIONAL_REFERENCE",

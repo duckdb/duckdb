@@ -136,9 +136,7 @@ PEGTransformerFactory::TransformMatchRecognizeBody(PEGTransformer &transformer,
 			break;
 		case MatchRecognizeClauseKind::SKIP:
 			config->after_match = clause.skip.after_match;
-			if (!clause.skip.variable.empty()) {
-				config->after_match_variable = make_uniq<ConstantExpression>(Value(clause.skip.variable));
-			}
+			config->after_match_variable = clause.skip.variable;
 			break;
 		case MatchRecognizeClauseKind::PATTERN:
 			config->pattern = std::move(clause.pattern);

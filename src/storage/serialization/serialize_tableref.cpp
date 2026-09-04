@@ -191,10 +191,16 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
 
 void MatchRecognizeRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "input", input);
+	serializer.WritePropertyWithDefault<unique_ptr<MatchRecognizeConfig>>(201, "config", config);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(202, "column_name_alias", column_name_alias);
 }
 
 unique_ptr<TableRef> MatchRecognizeRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<MatchRecognizeRef>(new MatchRecognizeRef());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "input", result->input);
+	deserializer.ReadPropertyWithDefault<unique_ptr<MatchRecognizeConfig>>(201, "config", result->config);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(202, "column_name_alias", result->column_name_alias);
 	return std::move(result);
 }
 
