@@ -716,3 +716,58 @@ SELECT count(*), max(len) FROM anch MATCH_RECOGNIZE(
 )
 ----
 0	NULL
+
+# PERMUTE stands for the alternation of every order of its parts, taken in the order the list is
+# written. That is not just how it is implemented here, it is what it means, so the two spellings
+# have to answer the same question - including which arrangement wins when more than one fits.
+#
+# This shape is one where they could come apart. Three of the six arrangements can start at the
+# first row, and they do not all match the same rows, so the answer says which arrangement was
+# preferred rather than merely that one was found. Oracle answers the fourth arrangement for the
+# PERMUTE and the third for the alternation written out, which are different rows; both spellings
+# here answer the third, which is the one the list order asks for.
+
+statement ok
+create table perm3(i integer, v integer);
+
+statement ok
+insert into perm3 values (1,0),(2,1),(3,1),(4,2),(5,0),(6,2),(7,1);
+
+query IT
+SELECT i, cls FROM perm3 MATCH_RECOGNIZE(
+    ORDER BY i MEASURES CLASSIFIER() AS cls
+    ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (PERMUTE(A A C C | A B C B, A* (B C | A A A)??, B))
+    DEFINE A AS A.v > 0, B AS B.v < 2, C AS 1 = 1
+) ORDER BY i
+----
+1	B
+2	C
+3	A
+4	A
+5	C
+6	C
+7	B
+
+query IT
+SELECT i, cls FROM perm3 MATCH_RECOGNIZE(
+    ORDER BY i MEASURES CLASSIFIER() AS cls
+    ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (
+      (A A C C | A B C B) (A* (B C | A A A)??) (B)
+    | (A A C C | A B C B) (B) (A* (B C | A A A)??)
+    | (A* (B C | A A A)??) (A A C C | A B C B) (B)
+    | (A* (B C | A A A)??) (B) (A A C C | A B C B)
+    | (B) (A A C C | A B C B) (A* (B C | A A A)??)
+    | (B) (A* (B C | A A A)??) (A A C C | A B C B)
+    )
+    DEFINE A AS A.v > 0, B AS B.v < 2, C AS 1 = 1
+) ORDER BY i
+----
+1	B
+2	C
+3	A
+4	A
+5	C
+6	C
+7	B
