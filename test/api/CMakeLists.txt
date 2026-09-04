@@ -11,6 +11,7 @@ add_subdirectory(cpp)
 
 set(TEST_API_OBJECTS
     test_api.cpp
+    test_process_util.cpp
     test_bind_statement.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp

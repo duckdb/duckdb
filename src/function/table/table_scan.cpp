@@ -11,6 +11,7 @@
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -130,20 +131,16 @@ public:
 
 class DuckIndexScanState : public TableScanGlobalState {
 public:
-	DuckIndexScanState(ClientContext &context, const FunctionData *bind_data_p)
-	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), arena(Allocator::Get(context)),
-	      row_ids(nullptr), row_id_count(0), finished_first_phase(false), started_last_phase(false) {
+	DuckIndexScanState(ClientContext &context, const FunctionData *bind_data_p, unsafe_vector<row_t> &&row_ids_p)
+	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), row_ids(std::move(row_ids_p)),
+	      finished_first_phase(row_ids.empty()), started_last_phase(false) {
 	}
 
 	//! The batch index of the next Sink.
 	//! Also determines the offset of the next chunk. I.e., offset = next_batch_index * STANDARD_VECTOR_SIZE.
 	atomic<idx_t> next_batch_index;
-	//! The arena allocator containing the memory of the row IDs.
-	ArenaAllocator arena;
-	//! A pointer to the row IDs.
-	row_t *row_ids;
-	//! The number of scanned row IDs.
-	idx_t row_id_count;
+	//! Finalized before construction and only read by Fetch tasks.
+	unsafe_vector<row_t> row_ids;
 	//! The column IDs of the to-be-scanned columns.
 	vector<StorageIndex> column_ids;
 	//! True, if no more row IDs must be scanned.
@@ -201,7 +198,7 @@ public:
 					next_batch_index++;
 
 					offset = l_state.batch_index * STANDARD_VECTOR_SIZE;
-					auto remaining = row_id_count - offset;
+					auto remaining = row_ids.size() - offset;
 					scan_count = remaining <= STANDARD_VECTOR_SIZE ? remaining : STANDARD_VECTOR_SIZE;
 					finished_first_phase = remaining <= STANDARD_VECTOR_SIZE ? true : false;
 					phase_to_be_performed = ExecutionPhase::STORAGE;
@@ -223,7 +220,7 @@ public:
 			}
 			case ExecutionPhase::STORAGE: {
 				// Scan (in parallel) storage
-				auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids + offset);
+				auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids.data() + offset);
 				Vector local_vector(LogicalType::ROW_TYPE, row_id_data, scan_count);
 
 				if (CanRemoveFilterColumns()) {
@@ -268,11 +265,11 @@ public:
 	}
 
 	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const override {
-		if (row_id_count == 0) {
+		if (row_ids.empty()) {
 			return 100;
 		}
 		auto scanned_rows = next_batch_index * STANDARD_VECTOR_SIZE;
-		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(row_id_count));
+		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(row_ids.size()));
 		return percentage > 100 ? 100 : percentage;
 	}
 
@@ -650,23 +647,11 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 }
 
 unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
-                                                             const TableScanBindData &bind_data, set<row_t> &row_ids,
+                                                             const TableScanBindData &bind_data,
+                                                             unsafe_vector<row_t> &&row_ids,
                                                              unique_ptr<StorageLockKey> vacuum_lock) {
-	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
+	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get(), std::move(row_ids));
 	g_state->vacuum_lock = std::move(vacuum_lock);
-	g_state->finished_first_phase = row_ids.empty() ? true : false;
-	g_state->started_last_phase = false;
-
-	if (!row_ids.empty()) {
-		auto row_id_ptr = g_state->arena.AllocateAligned(row_ids.size() * sizeof(row_t));
-		g_state->row_ids = reinterpret_cast<row_t *>(row_id_ptr);
-		g_state->row_id_count = row_ids.size();
-
-		idx_t row_id_count = 0;
-		for (const auto row_id : row_ids) {
-			g_state->row_ids[row_id_count++] = row_id;
-		}
-	}
 
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	if (input.CanRemoveFilterColumns()) {
@@ -861,7 +846,8 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 }
 
 bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list, TableFunctionInitInput &input,
-                  TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
+                  TableFilterSet &filter_set, RowIdVectorOutput &row_ids) {
+	row_ids.Reset();
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
 	if (art->UnboundExpressionCount() > 1) {
@@ -876,37 +862,8 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 		return false;
 	}
 
-	// Resolve bound column references in the index_expr against the current input projection
-	ProjectionIndex updated_index_column;
-	bool found_index_column_in_input = false;
-
-	// Find the indexed column amongst the input columns
-	for (idx_t i = 0; i < input.column_ids.size(); ++i) {
-		if (input.column_ids[i] == indexed_columns[0]) {
-			updated_index_column = ProjectionIndex(i);
-			found_index_column_in_input = true;
-			break;
-		}
-	}
-
-	// If found, update the bound column ref within index_expr
-	if (found_index_column_in_input) {
-		ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
-			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-				return;
-			}
-
-			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
-
-			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.Binding().column_index == indexed_columns[0]) {
-				bound_column_ref_expr.BindingMutable().column_index = updated_index_column;
-			}
-		});
-	}
-
-	// Get ART column.
-	auto &col = column_list.GetColumn(LogicalIndex(indexed_columns[0]));
+	// Get ART column. GetColumnIds returns physical column IDs, which skip generated columns.
+	auto &col = column_list.GetColumn(PhysicalIndex(indexed_columns[0]));
 
 	// The indexes of the filters match input.column_indexes, which are: i -> column_index.
 	// Try to find a filter on the ART column.
@@ -923,6 +880,15 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 		return false;
 	}
 
+	// A bound column reference in an unbound index expression is an ordinal into indexed_columns, which is not the
+	// column's position in this scan. Rebind the references to the ART column's position in the scan input.
+	ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
+		if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return;
+		}
+		expr.Cast<BoundColumnRefExpression>().BindingMutable().column_index = storage_index;
+	});
+
 	// Try to find a matching filter for the column.
 	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index);
 	if (!filter) {
@@ -933,11 +899,12 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 	for (const auto &filter_expr : expressions) {
 		auto scan_state = art->TryInitializeScan(*index_expr, *filter_expr);
 		if (!scan_state) {
+			row_ids.Reset();
 			return false;
 		}
 
-		if (!art->Scan(*scan_state, max_count, row_ids)) {
-			row_ids.clear();
+		if (!art->Scan(*scan_state, row_ids)) {
+			row_ids.Reset();
 			return false;
 		}
 		for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
@@ -947,12 +914,13 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 			}
 			auto delta_scan_state = delta_index->TryInitializeScan(*index_expr, *filter_expr);
 			if (!delta_scan_state) {
+				row_ids.Reset();
 				return false;
 			}
 
 			// Check if we can use an index scan, and already retrieve the matching row ids.
-			if (!delta_index->Scan(*delta_scan_state, max_count, row_ids)) {
-				row_ids.clear();
+			if (!delta_index->Scan(*delta_scan_state, row_ids)) {
+				row_ids.Reset();
 				return false;
 			}
 		}
@@ -1004,7 +972,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	auto &column_list = duck_table.GetColumns();
 	bool index_scan = false;
-	set<row_t> row_ids;
+	RowIdVectorOutput row_ids(max_count);
 
 	info->BindIndexes(context, ART::TYPE_NAME);
 
@@ -1022,8 +990,10 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
 			continue;
 		}
-		auto index = entry->GetReadHandle<ART>();
-		index_scan = TryScanIndex(index, column_list, input, filter_set, max_count, row_ids);
+		{
+			auto index = entry->GetReadHandle<ART>();
+			index_scan = TryScanIndex(index, column_list, input, filter_set, row_ids);
+		}
 		if (index_scan) {
 			// found an index - break
 			break;
@@ -1033,7 +1003,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	if (!index_scan) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
-	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids, std::move(vacuum_lock));
+	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids.TakeRows(), std::move(vacuum_lock));
 }
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, TableFunctionGetStatisticsInput &input) {
