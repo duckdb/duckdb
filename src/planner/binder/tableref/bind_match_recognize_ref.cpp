@@ -533,7 +533,10 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	for (auto &expr : ref.config->defines_expression_list) {
 		auto define_name = expr->GetAlias().GetIdentifierName();
 		D_ASSERT(!define_name.empty());
-		D_ASSERT(pattern_symbols.find(define_name) == pattern_symbols.end());
+		if (pattern_symbols.find(define_name) != pattern_symbols.end()) {
+			// a symbol stands for one condition, so a second one for the same symbol has nowhere to go
+			throw BinderException("MATCH_RECOGNIZE defines pattern variable \"%s\" more than once", define_name);
+		}
 
 		// a reference to another variable is navigation over that variable's rows, so it has to
 		// become one before the navigation is pulled out

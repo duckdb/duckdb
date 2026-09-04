@@ -415,3 +415,58 @@ SELECT count(*), max(first_day), max(len) FROM climbs MATCH_RECOGNIZE(
 )
 ----
 1	2	5
+
+# Pattern variables are identifiers, so they are written and matched the way every other identifier
+# in DuckDB is: case-insensitively, and quoted when they need to be.
+
+statement ok
+create table lbl(i integer, v integer, a integer);
+
+statement ok
+insert into lbl values (1,1,10),(2,2,20),(3,1,30);
+
+# a quoted variable keeps the spelling it was written with, and that is what CLASSIFIER() reports
+query II
+SELECT i, __pattern_window.classifier FROM lbl MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN ("lo"+) DEFINE "lo" AS "lo".v > 0
+) ORDER BY i
+----
+1	lo
+2	lo
+3	lo
+
+# the pattern and the definition do not have to agree on case
+query I
+SELECT x FROM lbl MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A+) DEFINE a AS a.v = 1
+) ORDER BY x
+----
+1
+3
+
+# quoting also allows a name that is not an identifier on its own
+query II
+SELECT i, __pattern_window.classifier FROM lbl MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN ("up down"+) DEFINE "up down" AS "up down".v > 1
+) ORDER BY i
+----
+2	up down
+
+# a variable may be named after one of the input's columns: the qualifier says which is meant, so
+# a.a reads column a on the rows variable a matched
+query II
+SELECT i, av FROM lbl MATCH_RECOGNIZE(
+    ORDER BY i MEASURES a.a AS av ALL ROWS PER MATCH PATTERN (a+) DEFINE a AS a.a > 10
+) ORDER BY i
+----
+2	20
+3	30
+
+# a SUBSET name is an identifier too
+query I
+SELECT n FROM lbl MATCH_RECOGNIZE(
+    ORDER BY i MEASURES last("u".v) AS n PATTERN ("x" "y") SUBSET "u" = ("x", "y")
+    DEFINE "x" AS "x".v = 1, "y" AS "y".v = 2
+)
+----
+2

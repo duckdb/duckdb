@@ -83,6 +83,18 @@ SELECT count(*) FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A B) DEFINE A as
 ----
 0
 
+# a symbol stands for one condition, so defining it twice has nowhere to put the second
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A A) DEFINE A as i=1, A as i=2)
+----
+<REGEX>:Binder Error.*defines pattern variable "A" more than once.*
+
+# identifiers are case-insensitive here as everywhere else, so these are the same variable
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A A) DEFINE A as i=1, "a" as i=2)
+----
+<REGEX>:Binder Error.*defines pattern variable.*more than once.*
+
 # a condition is settled per candidate row, which a subquery cannot be reduced to
 statement error
 SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as i > (SELECT min(j) FROM q))
