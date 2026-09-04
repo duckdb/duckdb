@@ -115,6 +115,12 @@ DUCKDB_V2_ERROR duckdb_v2_column_data_collection_reset(duckdb_v2_column_data_col
 	return WithErrorHandler(err, [&]() { Convert(collection)->Reset(); });
 }
 
+DUCKDB_V2_ERROR duckdb_v2_column_data_collection_clear(duckdb_v2_column_data_collection_handle collection,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(collection);
+	return WithErrorHandler(err, [&]() { Convert(collection)->ResetForReuse(); });
+}
+
 DUCKDB_V2_ERROR duckdb_v2_column_data_collection_destroy(duckdb_v2_column_data_collection_handle *collection) {
 	return WithErrorHandler(nullptr, [&]() {
 		if (collection && *collection) {

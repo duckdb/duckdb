@@ -94,11 +94,14 @@ bool IsValidTypeEntry(optional_ptr<CatalogEntry> entry) {
 // lookup), expression-valued params (values arrive pre-folded here), and
 // query-location error context. If engine type binding changes, this
 // mirror must follow. Runs inside a transaction; the caller provides it.
-LogicalType BindTypeByNameV2(ClientContext &context, const string &name, const vector<TypeArgument> &args) {
-	EntryLookupInfo lookup(CatalogType::TYPE_ENTRY, QualifiedName(Identifier(name)));
+LogicalType BindTypeByNameV2(ClientContext &context, const QualifiedName &name, const vector<TypeArgument> &args) {
+	EntryLookupInfo lookup(CatalogType::TYPE_ENTRY, name);
 	CatalogEntryRetriever retriever(context);
 	optional_ptr<CatalogEntry> entry;
-	if (!DatabaseManager::Get(context).HasAttachedDatabase()) {
+	if (name.Path().size() > 1) {
+		// The caller named a catalog or schema: resolve exactly that, without falling back to the system catalog.
+		entry = retriever.GetEntry(lookup, OnEntryNotFound::THROW_EXCEPTION);
+	} else if (!DatabaseManager::Get(context).HasAttachedDatabase()) {
 		entry = retriever.GetEntry(
 		    EntryLookupInfo(lookup, QualifiedName(Identifier::SystemCatalog(), Identifier::InvalidSchema(),
 		                                          lookup.GetEntryIdentifier())));
@@ -230,7 +233,8 @@ static void CreateLogicalTypeFromIdV2(duckdb::ClientContext &context, DUCKDB_V2_
 	}
 	// Bind errors propagate.
 	auto args = CollectTypeArgsV2(param_names, param_values, param_count);
-	auto bound = BindTypeByNameV2(context, duckdb::EnumUtil::ToString(id), args);
+	auto bound =
+	    BindTypeByNameV2(context, duckdb::QualifiedName(duckdb::Identifier(duckdb::EnumUtil::ToString(id))), args);
 	*out_type = Convert(new duckdb::LogicalType(std::move(bound)));
 }
 
@@ -298,7 +302,7 @@ DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_text(duckdb_v2_connection_
 	});
 }
 
-static void CreateLogicalTypeFromArgsV2(duckdb::ClientContext &context, duckdb_v2_identifier_t name,
+static void CreateLogicalTypeFromArgsV2(duckdb::ClientContext &context, duckdb_v2_qname_handle name,
                                         const duckdb_v2_identifier_t *param_names,
                                         const duckdb_v2_value_handle *param_values, idx_t param_count,
                                         duckdb_v2_logical_type_handle *out_type) {
@@ -308,12 +312,11 @@ static void CreateLogicalTypeFromArgsV2(duckdb::ClientContext &context, duckdb_v
 	*out_type = nullptr;
 	auto args = CollectTypeArgsV2(param_names, param_values, param_count);
 	// Bind errors propagate.
-	auto str = duckdb::string(Convert(name));
-	auto bound = BindTypeByNameV2(context, str, args);
+	auto bound = BindTypeByNameV2(context, *Convert(name), args);
 	*out_type = Convert(new duckdb::LogicalType(std::move(bound)));
 }
 
-DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_name(duckdb_v2_context_handle ctx, duckdb_v2_identifier_t name,
+DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_name(duckdb_v2_context_handle ctx, duckdb_v2_qname_handle name,
                                                         const duckdb_v2_identifier_t *param_names,
                                                         const duckdb_v2_value_handle *param_values, idx_t param_count,
                                                         duckdb_v2_logical_type_handle *out_type,
@@ -328,7 +331,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_name(duckdb_v2_context_handle
 }
 
 DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_name(duckdb_v2_connection_handle conn,
-                                                           duckdb_v2_identifier_t name,
+                                                           duckdb_v2_qname_handle name,
                                                            const duckdb_v2_identifier_t *param_names,
                                                            const duckdb_v2_value_handle *param_values,
                                                            idx_t param_count, duckdb_v2_logical_type_handle *out_type,

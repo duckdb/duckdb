@@ -657,10 +657,17 @@ inline duckdb_v2_logical_type_handle MakeType(duckdb_v2_connection_handle conn, 
 			name_views.push_back(Convert(n));
 		}
 	}
+	// The type name is a qualified name; an unqualified one is a single part.
+	duckdb_v2_identifier_t parts[1] = {Convert(name)};
+	duckdb_v2_qname_handle qname = nullptr;
+	DUCKDB_V2_ERROR rc = duckdb_v2_qname_create(parts, 1, &qname, nullptr);
 	duckdb_v2_logical_type_handle t = nullptr;
-	DUCKDB_V2_ERROR rc = duckdb_v2_connection_create_type_from_name(
-	    conn, Convert(name), names ? name_views.data() : nullptr, values.empty() ? nullptr : values.data(),
-	    values.size(), &t, nullptr);
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		rc = duckdb_v2_connection_create_type_from_name(conn, qname, names ? name_views.data() : nullptr,
+		                                                values.empty() ? nullptr : values.data(), values.size(), &t,
+		                                                nullptr);
+	}
+	duckdb_v2_qname_destroy(&qname);
 	for (auto &v : values) {
 		duckdb_v2_value_destroy(&v);
 	}
