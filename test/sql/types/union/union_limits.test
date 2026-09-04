@@ -36,14 +36,14 @@ CREATE TABLE tbl1 (u UNION(
     a225 INT, a226 INT, a227 INT, a228 INT, a229 INT, a230 INT, a231 INT, a232 INT,
     a233 INT, a234 INT, a235 INT, a236 INT, a237 INT, a238 INT, a239 INT, a240 INT,
     a241 INT, a242 INT, a243 INT, a244 INT, a245 INT, a246 INT, a247 INT, a248 INT,
-    a249 INT, a250 INT, a251 INT, a252 INT, a253 INT, a254 INT, a255 INT, a256 INT
+    a249 INT, a250 INT, a251 INT, a252 INT, a253 INT, a254 INT, a255 INT
 ))
 
 statement ok
-INSERT INTO tbl1 VALUES (union_value(a256 := 1337)), (union_value(a1 := 42))
+INSERT INTO tbl1 VALUES (union_value(a255 := 1337)), (union_value(a1 := 42))
 
 query I
-SELECT u.a256 FROM tbl1;
+SELECT u.a255 FROM tbl1;
 ----
 1337
 NULL

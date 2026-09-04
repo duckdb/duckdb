@@ -8,6 +8,7 @@
       "paths": [
         "test/optimizer/aggregate_reuse.test",
         "test/optimizer/deliminator.test",
+        "test/optimizer/pushdown/filter_cannot_pushdown.test",
         "test/optimizer/eager_aggregate_execution.test",
         "test/optimizer/eager_aggregate_execution_parquet.test",
         "test/optimizer/partial_aggregate_precomputation.test",
@@ -62,7 +63,8 @@
         "test/sql/prepared/prepared_statistics_optimization.test",
         "test/sql/types/struct/struct_equality_bug.test",
         "test/sql/types/timestamp/test_infinite_time.test",
-        "test/sql/variant/variant_comparator.test"
+        "test/sql/variant/variant_comparator.test",
+        "test/sql/window/test_window_agg_stats_propagation.test"
       ]
     },
     {

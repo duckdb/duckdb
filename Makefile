@@ -969,14 +969,18 @@ bundle-library: release
 
 .PHONY: gather-libs
 
+GATHER_LIBS_BUILD_DIR ?= build/release
+GATHER_LIBS_PREFIX ?= lib
+GATHER_LIBS_EXTENSION ?= a
+
 gather-libs:
-	cd build/release && \
+	cd $(GATHER_LIBS_BUILD_DIR) && \
 	rm -rf libs && \
 	mkdir -p libs && \
-	cp src/libduckdb_static.a libs/. && \
-	cp third_party/*/libduckdb_*.a libs/. && \
-	cp extension/libduckdb_generated_extension_loader.a libs/. && \
-	cp extension/*/lib*_extension.a libs/.
+	cp src/$(GATHER_LIBS_PREFIX)duckdb_static.$(GATHER_LIBS_EXTENSION) libs/. && \
+	cp third_party/*/$(GATHER_LIBS_PREFIX)duckdb_*.$(GATHER_LIBS_EXTENSION) libs/. && \
+	cp extension/$(GATHER_LIBS_PREFIX)duckdb_generated_extension_loader.$(GATHER_LIBS_EXTENSION) libs/. && \
+	cp extension/*/$(GATHER_LIBS_PREFIX)*_extension.$(GATHER_LIBS_EXTENSION) libs/.
 
 #### Setup VCPKG to correct version 2025.12.12 tag is 84bab45d415d22042bd0b9081aea57f362da3f35
 vcpkg/scripts/buildsystems/vcpkg.cmake:

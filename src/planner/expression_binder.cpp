@@ -113,13 +113,11 @@ BindResult ExpressionBinder::DispatchToScope(idx_t scope, unique_ptr<ParsedExpre
 BindResult ExpressionBinder::BindInEnclosingScope(ColumnRefExpression &col_ref, idx_t depth,
                                                   unique_ptr<ParsedExpression> &expr_ptr, ErrorData local_error) {
 	auto bind_error = std::move(local_error);
-#ifdef DEBUG
 	// the index of a scope is a depth, so a scope pushed or popped while the search is running would
 	// shift every index underneath it
 	const auto initial_scope_count = ScopeCount();
-#endif
 	idx_t scope = 1;
-	while (scope < ScopeCount()) {
+	while (scope < initial_scope_count) {
 		D_ASSERT(ScopeCount() == initial_scope_count);
 		auto resolution = ResolveColumn(col_ref, scope);
 		if (!resolution.found) {
