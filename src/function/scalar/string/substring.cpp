@@ -312,6 +312,39 @@ struct SubstringStatsParameters {
 	optional_idx character_count;
 };
 
+void PropagateStrictFunctionValidity(BaseStatistics &result, const vector<BaseStatistics> &child_stats) {
+	D_ASSERT(!child_stats.empty());
+	result.CopyValidity(child_stats[0]);
+	for (idx_t child_idx = 1; child_idx < child_stats.size(); child_idx++) {
+		if (child_stats[child_idx].CanHaveNull()) {
+			result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		}
+		if (!child_stats[child_idx].CanHaveNoNull()) {
+			result.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+		}
+	}
+}
+
+unique_ptr<FunctionData> SubstringBind(BindScalarFunctionInput &input) {
+	auto offset = input.TryGetConstant(1);
+	if (!offset || offset->IsNull()) {
+		return nullptr;
+	}
+	auto offset_value = offset->DefaultCastAs(LogicalType::BIGINT).GetValue<int64_t>();
+	int64_t length_value = NumericLimits<uint32_t>::Maximum();
+	if (input.GetArguments().size() == 3) {
+		auto length = input.TryGetConstant(2);
+		if (!length || length->IsNull()) {
+			return nullptr;
+		}
+		length_value = length->DefaultCastAs(LogicalType::BIGINT).GetValue<int64_t>();
+	}
+	if (SubstringInSupportedRange(offset_value, length_value)) {
+		input.GetBoundFunction().SetErrorMode(FunctionErrors::CANNOT_ERROR);
+	}
+	return nullptr;
+}
+
 bool TryGetConstantInt64(const Expression &expression, int64_t &result) {
 	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return false;
@@ -360,10 +393,35 @@ bool TryGetSubstringStatsParameters(BoundFunctionExpression &expr, SubstringStat
 unique_ptr<BaseStatistics> SubstringStatsFromSharedPrefix(FunctionStatisticsInput &input) {
 	auto &expr = input.expr;
 	SubstringStatsParameters parameters;
-	if (!TryGetSubstringStatsParameters(expr, parameters)) {
-		return nullptr;
+	auto has_parameters = TryGetSubstringStatsParameters(expr, parameters);
+	unique_ptr<BaseStatistics> result;
+	if (has_parameters) {
+		result = PropagateStringSliceStats(input, parameters.start_character_index, parameters.character_count);
 	}
-	return PropagateStringSliceStats(input, parameters.start_character_index, parameters.character_count);
+
+	optional_idx max_output_length;
+	if (has_parameters && parameters.character_count.IsValid()) {
+		auto bytes_per_character = StringStats::CanContainUnicode(input.child_stats[0]) ? 4 : 1;
+		auto character_count = parameters.character_count.GetIndex();
+		if (character_count <= NumericLimits<uint32_t>::Maximum() / bytes_per_character) {
+			max_output_length = character_count * bytes_per_character;
+		}
+	}
+	if (StringStats::HasMaxStringLength(input.child_stats[0])) {
+		auto input_max = StringStats::MaxStringLength(input.child_stats[0]);
+		max_output_length = max_output_length.IsValid() ? MinValue<idx_t>(max_output_length.GetIndex(), input_max)
+		                                                : optional_idx(input_max);
+	}
+	if (!result && max_output_length.IsValid()) {
+		result = StringStats::CreateUnknown(input.expr.GetReturnType()).ToUnique();
+	}
+	if (max_output_length.IsValid()) {
+		StringStats::SetMaxStringLength(*result, NumericCast<uint32_t>(max_output_length.GetIndex()));
+	}
+	if (result) {
+		PropagateStrictFunctionValidity(*result, input.child_stats);
+	}
+	return result;
 }
 
 unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -383,7 +441,13 @@ unique_ptr<BaseStatistics> SubstringGraphemePropagateStats(ClientContext &contex
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.FunctionMutable().SetFunctionCallback(SubstringFunctionASCII);
 	}
-	return nullptr;
+	if (!StringStats::HasMaxStringLength(input.child_stats[0])) {
+		return nullptr;
+	}
+	auto result = StringStats::CreateUnknown(expr.GetReturnType());
+	StringStats::SetMaxStringLength(result, StringStats::MaxStringLength(input.child_stats[0]));
+	PropagateStrictFunctionValidity(result, input.child_stats);
+	return result.ToUnique();
 }
 
 } // namespace
@@ -391,10 +455,10 @@ unique_ptr<BaseStatistics> SubstringGraphemePropagateStats(ClientContext &contex
 ScalarFunctionSet SubstringFun::GetFunctions() {
 	ScalarFunctionSet substr("substring");
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, nullptr,
+	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, SubstringBind,
 	                                  SubstringPropagateStats));
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, SubstringPropagateStats));
+	                                  SubstringFunction<SubstringUnicodeOp>, SubstringBind, SubstringPropagateStats));
 	// throws if the offset or length are out of the supported range
 	substr.SetFallible();
 	return (substr);
@@ -403,10 +467,10 @@ ScalarFunctionSet SubstringFun::GetFunctions() {
 ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	ScalarFunctionSet substr_grapheme("substring_grapheme");
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, nullptr,
-	                                           SubstringGraphemePropagateStats));
+	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>,
+	                                           SubstringBind, SubstringGraphemePropagateStats));
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                                           SubstringFunction<SubstringGraphemeOp>, nullptr,
+	                                           SubstringFunction<SubstringGraphemeOp>, SubstringBind,
 	                                           SubstringGraphemePropagateStats));
 	// throws if the offset or length are out of the supported range
 	substr_grapheme.SetFallible();
