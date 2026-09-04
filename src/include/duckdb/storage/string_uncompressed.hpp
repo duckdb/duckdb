@@ -263,26 +263,25 @@ public:
 			auto dict_end = base_ptr + dict_end_offset;
 			auto dict_pos = dict_end - dict_offset;
 			auto entry = unsafe_array_ptr<const uint8_t>(dict_pos, string_length);
-			return FetchStringFromEntry(context, segment, result, entry, dict_offset, string_length);
+			return FetchStringFromEntry(context, segment, result, entry, dict_offset);
 		} else if (string_length == 0) {
 			auto entry = unsafe_array_ptr<const uint8_t>(base_ptr, 0);
-			return FetchStringFromEntry(context, segment, result, entry, dict_offset, string_length);
+			return FetchStringFromEntry(context, segment, result, entry, dict_offset);
 		} else {
 			// read overflow string
 			auto marker = base_ptr + dict_end_offset - AbsValue<int32_t>(dict_offset);
 			auto entry = unsafe_array_ptr<const uint8_t>(marker, BIG_STRING_MARKER_SIZE);
-			return FetchStringFromEntry(context, segment, result, entry, dict_offset, string_length);
+			return FetchStringFromEntry(context, segment, result, entry, dict_offset);
 		}
 	}
 
 	inline static string_t FetchStringFromEntry(const QueryContext &context, ColumnSegment &segment, Vector &result,
-	                                            unsafe_array_ptr<const uint8_t> entry, int32_t dict_offset,
-	                                            uint32_t string_length) {
+	                                            unsafe_array_ptr<const uint8_t> entry, int32_t dict_offset) {
 		if (DUCKDB_LIKELY(dict_offset >= 0)) {
 			// regular string - fetch from dictionary
 			auto str_ptr = const_char_ptr_cast(entry.data());
-			return string_t(str_ptr, string_length);
-		} else if (string_length == 0) {
+			return string_t(str_ptr, NumericCast<uint32_t>(entry.size()));
+		} else if (entry.empty()) {
 			// NULL values are stored as a copy of the previous entry's dictionary offset (see
 			// StringAppendBase). When the previous entry is a big (overflow) string, its offset is
 			// negative, so the NULL inherits that negative offset even though it references no
