@@ -969,20 +969,6 @@ struct DefaultCollationSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct DefaultIoModeSetting {
-	using RETURN_TYPE = FileIOMode;
-	static constexpr const char *Name = "default_io_mode";
-	static constexpr const char *Description =
-	    "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "BUFFERED_IO";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
 struct DefaultNullOrderSetting {
 	using RETURN_TYPE = DefaultOrderByNullType;
 	static constexpr const char *Name = "default_null_order";
@@ -1963,18 +1949,6 @@ struct OrderedAggregateThresholdSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
-struct ParallelizeSequentialSourcesSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "parallelize_sequential_sources";
-	static constexpr const char *Description = "Whether to automatically parallelize sequential sources";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "true";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct PartitionedWriteFlushThresholdSetting {

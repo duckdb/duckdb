@@ -4,10 +4,7 @@
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
 #include "duckdb/common/enums/show_behavior.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/dialect_extension.hpp"
-#include "duckdb/storage/storage_info.hpp"
-#include "duckdb/storage/storage_options.hpp"
 #include "test_helpers.hpp"
 
 #include <iostream>
@@ -79,8 +76,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allow_parser_override_extension", {EnumUtil::ToString(AllowParserOverride::FALLBACK_OVERRIDE)}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 	    {"show_behavior", {EnumUtil::ToString(ShowBehaviorType::TABLE)}},
-	    {"default_io_mode", {EnumUtil::ToString(FileIOMode::MMAP)}},
-	    {"parallelize_sequential_sources", {Value(false)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
 #else
