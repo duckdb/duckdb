@@ -94,29 +94,6 @@ StringDictionaryEntry StringSegmentLayout::GetDictionaryEntry(idx_t row_index) c
 	return CreateDictionaryEntry(current_offset, previous_offset, previous_dictionary_offset);
 }
 
-StringDictionaryCursor StringSegmentLayout::GetCursor(idx_t row_index) const {
-	return StringDictionaryCursor(*this, row_index);
-}
-
-StringDictionaryCursor::StringDictionaryCursor(const StringSegmentLayout &layout_p, idx_t row_index_p)
-    : layout(layout_p), row_index(row_index_p), previous_offset(0), previous_dictionary_offset(0) {
-	D_ASSERT(row_index <= layout.offsets.size());
-	if (row_index > 0) {
-		previous_offset = layout.offsets[row_index - 1];
-		previous_dictionary_offset = layout.ValidateAndGetDictionaryOffset(previous_offset);
-	}
-}
-
-StringDictionaryEntry StringDictionaryCursor::Next() {
-	D_ASSERT(row_index < layout.offsets.size());
-	auto current_offset = layout.offsets[row_index];
-	auto entry = layout.CreateDictionaryEntry(current_offset, previous_offset, previous_dictionary_offset);
-	previous_offset = current_offset;
-	previous_dictionary_offset += UnsafeNumericCast<uint32_t>(entry.data.size());
-	row_index++;
-	return entry;
-}
-
 StringSegmentLayout StringSegmentLayout::Read(const BufferHandle &handle, const ColumnSegment &segment) {
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "uncompressed string segment");
 	StringDictionaryContainer dictionary {reader.Read<uint32_t>(), reader.Read<uint32_t>()};
@@ -226,11 +203,19 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	D_ASSERT(scan_count <= segment.count.load() - start);
 
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
-	auto cursor = layout.GetCursor(start);
+	int32_t previous_offset = 0;
+	uint32_t previous_dictionary_offset = 0;
+	if (start > 0) {
+		previous_offset = layout.offsets[start - 1];
+		previous_dictionary_offset = layout.ValidateAndGetDictionaryOffset(previous_offset);
+	}
 
 	for (idx_t i = 0; i < scan_count; i++) {
-		auto entry = cursor.Next();
+		auto current_offset = layout.offsets[start + i];
+		auto entry = layout.CreateDictionaryEntry(current_offset, previous_offset, previous_dictionary_offset);
 		result_data[result_offset + i] = FetchStringFromEntry(state.context, segment, result, entry);
+		previous_offset = current_offset;
+		previous_dictionary_offset += UnsafeNumericCast<uint32_t>(entry.data.size());
 	}
 }
 

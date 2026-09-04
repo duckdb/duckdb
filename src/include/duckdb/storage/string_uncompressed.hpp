@@ -32,8 +32,6 @@ struct StringDictionaryContainer {
 	}
 };
 
-struct StringDictionaryCursor;
-
 struct StringDictionaryEntry {
 	unsafe_array_ptr<const uint8_t> data;
 	bool is_overflow;
@@ -49,25 +47,12 @@ struct StringSegmentLayout {
 
 	static StringSegmentLayout Read(const BufferHandle &handle, const ColumnSegment &segment);
 	StringDictionaryEntry GetDictionaryEntry(idx_t row_index) const;
-	StringDictionaryCursor GetCursor(idx_t row_index) const;
 
 private:
-	friend struct StringDictionaryCursor;
+	friend struct UncompressedStringStorage;
 	uint32_t ValidateAndGetDictionaryOffset(int32_t encoded_offset) const;
 	StringDictionaryEntry CreateDictionaryEntry(int32_t current_offset, int32_t previous_offset,
 	                                            uint32_t previous_dictionary_offset) const;
-};
-
-struct StringDictionaryCursor {
-	StringDictionaryCursor(const StringSegmentLayout &layout, idx_t row_index);
-
-	StringDictionaryEntry Next();
-
-private:
-	const StringSegmentLayout &layout;
-	idx_t row_index;
-	int32_t previous_offset;
-	uint32_t previous_dictionary_offset;
 };
 
 struct StringScanState : public SegmentScanState {
