@@ -736,7 +736,12 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 					supported = false;
 					break;
 				}
-				input_stats.push_back(GetStatistics(storage_index)->Copy());
+				auto column_stats = GetStatistics(storage_index);
+				if (!column_stats) {
+					supported = false;
+					break;
+				}
+				input_stats.push_back(column_stats->Copy());
 			}
 			if (!supported) {
 				continue;
