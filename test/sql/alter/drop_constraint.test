@@ -1,0 +1,13 @@
+# name: test/sql/alter/drop_constraint.test
+# description: ALTER TABLE DROP CONSTRAINT reaches the unsupported transformer path
+# group: [alter]
+
+statement error
+ALTER TABLE t DROP CONSTRAINT pk;
+----
+Not implemented Error: No support for that ALTER TABLE option yet!
+
+statement error
+ALTER TABLE t DROP CONSTRAINT IF EXISTS pk CASCADE;
+----
+Not implemented Error: No support for that ALTER TABLE option yet!
