@@ -540,7 +540,7 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 		if (allocate_block) {
 			auto final_buffer = target_handle.GetDataMutable();
 			StringVector::AddHandle(result, std::move(target_handle));
-			return ReadString(final_buffer, 0, length);
+			return string_t(const_char_ptr_cast(final_buffer), length);
 		} else {
 			overflow_string.Finalize();
 			return overflow_string;
@@ -555,12 +555,6 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 	StringVector::AddHandle(result, std::move(handle));
 	CompressionSegmentReader reader(final_buffer, string_block.get().offset, "in-memory overflow string block");
 	return ReadStringWithLength(reader, offset);
-}
-
-string_t UncompressedStringStorage::ReadString(data_ptr_t target, int32_t offset, uint32_t string_length) {
-	auto ptr = target + offset;
-	auto str_ptr = char_ptr_cast(ptr);
-	return string_t(str_ptr, string_length);
 }
 
 string_t UncompressedStringStorage::ReadStringWithLength(CompressionSegmentReader &reader, int32_t offset) {
