@@ -639,7 +639,7 @@ bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const Cre
 		throw InternalException("Unknown CreateDirectoryMode");
 	}
 	auto normalized_dir = ExpandPath(directory, opener);
-	if (mkdir(normalized_dir.c_str(), 0755) == 0) {
+	if (mkdir(normalized_dir.c_str(), 0777) == 0) {
 		return true;
 	}
 	auto error = errno;
