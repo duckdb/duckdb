@@ -166,7 +166,8 @@ struct MatchState {
 	MatchState(TokenIterator &token_iterator_p, MatchContext &context_p)
 	    : token_iterator(token_iterator_p), context(context_p) {
 	}
-	MatchState(MatchState &state) : token_iterator(state.token_iterator), context(state.context), rule(state.rule) {
+	MatchState(const MatchState &state)
+	    : token_iterator(state.token_iterator), context(state.context), rule(state.rule) {
 	}
 
 	TokenIterator token_iterator;
