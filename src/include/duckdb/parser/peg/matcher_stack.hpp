@@ -13,16 +13,9 @@
 
 namespace duckdb {
 
-using match_frame_index_t = idx_t;
-
-class MatchStack;
-
-enum class MatchFrameState : uint8_t { INITIALIZE, EXECUTE };
-enum class MatchResultState : uint8_t { NONE, FAILURE, SUCCESS };
-
 struct PackratMatchState {
 	static bool IsEnabled(const Matcher &matcher, const MatchState &state) {
-		return state.packrat_cache && matcher.IsPackratMemoized() && matcher.GetPackratId().IsValid();
+		return state.context.packrat_cache && matcher.IsPackratMemoized() && matcher.GetPackratId().IsValid();
 	}
 
 	optional<MatcherResult> TryLoadCachedResult(const Matcher &matcher, MatchState &state);
@@ -34,41 +27,31 @@ private:
 };
 
 struct MatchStackFrame {
-	MatchStackFrame(match_frame_index_t frame_index, const Matcher &matcher, MatchState &state);
-	virtual ~MatchStackFrame() = default;
+public:
+	explicit MatchStackFrame(MatchInput input);
 
-	virtual void Execute(MatchStack &stack) = 0;
-	void SetResult(const MatcherResult &result);
-	bool HasResult() const;
-	MatcherResult GetResult() const;
-	void SetChildResult(const MatcherResult &result);
-	bool HasChildResult() const;
-	MatcherResult TakeChildResult();
+public:
+	bool IsInitialized() const;
 
-	const match_frame_index_t frame_index;
+public:
 	const Matcher &matcher;
 	MatchState &match_state;
-	MatchFrameState state = MatchFrameState::INITIALIZE;
-	MatchResultState result_state = MatchResultState::NONE;
-	optional_ptr<ParseResult> parse_result;
-	MatchResultState child_result_state = MatchResultState::NONE;
-	optional_ptr<ParseResult> child_parse_result;
+	unique_ptr<MatchProcess> process;
+	optional<MatcherResult> child_result;
+	optional<MatcherResult> result;
 	PackratMatchState packrat_state;
 };
 
 class MatchStack {
 public:
-	MatcherResult Execute(const Matcher &matcher, MatchState &state);
-	void PushChildFrame(MatchStackFrame &parent, const Matcher &matcher, MatchState &state);
+	MatcherResult Execute(MatchInput input);
 
 private:
-	static bool IsTerminalMatcher(const Matcher &matcher);
-	MatcherResult ExecuteTerminalMatcher(const Matcher &matcher, MatchState &state);
-	void PushFrame(const Matcher &matcher, MatchState &state);
+	MatcherResult ExecuteAtomicMatcher(MatchInput input);
+	void PushFrame(MatchInput input);
 	void InitializeFrame(MatchStackFrame &frame);
 	void ExecuteFrame(MatchStackFrame &frame);
 	MatcherResult FinalizeFrame(MatchStackFrame &frame);
-	MatcherResult ExecuteInternal(const Matcher &matcher, MatchState &state);
 
 private:
 	vector<unique_ptr<MatchStackFrame>> frames;

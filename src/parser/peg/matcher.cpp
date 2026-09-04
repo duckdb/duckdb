@@ -18,44 +18,52 @@
 
 namespace duckdb {
 
-MatcherResult Matcher::MatchParseResult(MatchState &state) const {
-	state.rule = rule;
-	if (state.use_heap_based_parser) {
-		MatchStack stack;
-		return stack.Execute(*this, state);
-	}
-	auto result = MatcherResult::Failure();
-	if (!state.packrat_cache || !IsPackratMemoized() || !GetPackratId().IsValid()) {
-		result = MatchParseResultInternal(state);
-	} else {
-		auto token_index = state.token_iterator.Position();
-		auto cached_result = state.packrat_cache->Lookup(*this, token_index);
+static MatcherResult ExecuteRecursive(MatchInput input) {
+	auto &matcher = input.matcher;
+	auto &state = input.state;
+	state.rule = matcher.GetRule();
+	PackratMatchState packrat_state;
+	if (PackratMatchState::IsEnabled(matcher, state)) {
+		auto cached_result = packrat_state.TryLoadCachedResult(matcher, state);
 		if (cached_result) {
-			state.token_iterator.SetPosition(cached_result->token_index_after);
-			state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
-			if (cached_result->success) {
-				result = MatcherResult::Success(cached_result->result);
-			}
-		} else {
-			auto max_token_index_before = state.GetMaxTokenIndex();
-			result = MatchParseResultInternal(state);
-			ParserPackratEntry cache_entry;
-			cache_entry.success = result.IsSuccess();
-			cache_entry.token_index_after = state.token_iterator.Position();
-			cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
-			cache_entry.result = result.GetParseResult();
-			state.packrat_cache->Store(*this, token_index, cache_entry);
+			return *cached_result;
 		}
 	}
-	return result;
+
+	auto process = matcher.StartMatch(state);
+	optional<MatcherResult> child_result;
+	while (true) {
+		auto step = process->Resume(child_result);
+		child_result.reset();
+		auto child = step.GetChild();
+		if (!child) {
+			auto result = step.GetResult();
+			packrat_state.StoreResult(matcher, state, result);
+			return result;
+		}
+		child_result = ExecuteRecursive(*child);
+	}
+}
+
+MatcherResult Matcher::MatchParseResult(MatchState &state) const {
+	MatchInput input {*this, state};
+	if (state.context.use_heap_based_parser) {
+		MatchStack stack;
+		return stack.Execute(input);
+	}
+	return ExecuteRecursive(input);
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
-	auto entry = state.added_suggestions.find(*this);
-	if (entry != state.added_suggestions.end()) {
+	if (!state.added_suggestions) {
+		state.added_suggestions = make_uniq<reference_set_t<const Matcher>>();
+	}
+	auto &added_suggestions = *state.added_suggestions;
+	auto entry = added_suggestions.find(*this);
+	if (entry != added_suggestions.end()) {
 		return SuggestionType::MANDATORY;
 	}
-	state.added_suggestions.insert(*this);
+	added_suggestions.insert(*this);
 	return AddSuggestionInternal(state);
 }
 
@@ -71,7 +79,7 @@ void Matcher::Print() const {
 }
 
 void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
-	suggestions.push_back(std::move(suggestion));
+	context.suggestions.push_back(std::move(suggestion));
 }
 
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {

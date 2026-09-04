@@ -5,15 +5,15 @@
 namespace duckdb {
 
 //! Consumes the END_OF_INPUT sentinel; wired into the grammar's EndOfInput rule.
-class EndOfInputMatcher : public Matcher {
+class EndOfInputMatcher : public AtomicMatcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::END_OF_INPUT;
 
 public:
-	EndOfInputMatcher() : Matcher(TYPE) {
+	EndOfInputMatcher() : AtomicMatcher(TYPE) {
 	}
 
-	MatcherResult MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchAtomic(MatchState &state) const override {
 		auto current = state.token_iterator.Current();
 		if (current && current->type == TokenType::END_OF_INPUT) {
 			state.token_iterator.Advance();

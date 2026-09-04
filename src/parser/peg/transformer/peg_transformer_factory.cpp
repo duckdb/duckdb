@@ -91,10 +91,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	ParseResultAllocator parse_result_allocator;
 	ParserPackratCache packrat_cache;
 	idx_t max_token_index = token_iterator.Position();
-	const bool use_heap_based_parser = options.heap_based_parser && !grammar.HasGrammarChanges();
-	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index,
-	                 MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, use_heap_based_parser,
-	                 &packrat_cache);
+	MatchContext match_context(suggestions, parse_result_allocator, max_token_index, MatchMode::BUILD_PARSE_RESULT,
+	                           options.identifier_case_mode, options.heap_based_parser, &packrat_cache);
+	MatchState state(token_iterator, match_context);
 	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
 	if (!match_result.IsSuccess()) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
