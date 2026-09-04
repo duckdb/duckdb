@@ -231,7 +231,7 @@ jobs:
 
       - name: Install parser tools
         if: ${{ !inputs.skip_tests }}
-        run: python3 scripts/ci/retry.py -- pip3 install --break-system-packages cxxheaderparser pcpp
+        run: python3 scripts/ci/retry.py -- pip3 install --break-system-packages cxxheaderparser==2.0.0 pcpp==1.30 typos==1.45.1
 
       - name: Check if extension_entries.hpp is up to date
         if: ${{ !inputs.skip_tests }}
