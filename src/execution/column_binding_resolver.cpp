@@ -8,7 +8,6 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
-#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -183,6 +182,15 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &ext_op = op.Cast<LogicalExtensionOperator>();
+		if (ext_op.GetTypeBindingVerificationIdentifier()) {
+			bindings.clear();
+			types.clear();
+			VisitOperatorChildren(op);
+			VisitOperatorExpressions(op);
+			bindings = op.GetColumnBindings();
+			types = op.types;
+			return;
+		}
 		// Just to be very sure, we clear before and after resolving extension operator column bindings
 		// This skips checks, but makes sure we don't break any extension operators with type verification
 		types.clear();
@@ -247,39 +255,6 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	                        expr.Binding().table_index.index, expr.Binding().column_index,
 	                        LogicalOperator::ColumnBindingsToString(bindings));
 	// LCOV_EXCL_STOP
-}
-
-unordered_set<TableIndex> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) {
-	unordered_set<TableIndex> result;
-	for (auto &child : op.children) {
-		auto child_indexes = VerifyInternal(*child);
-		for (auto index : child_indexes) {
-			D_ASSERT(index.IsValid());
-			if (result.find(index) != result.end()) {
-				throw InternalException("Duplicate table index \"%lld\" found", index.index);
-			}
-			result.insert(index);
-		}
-	}
-	auto indexes = op.GetTableIndex();
-	for (auto index : indexes) {
-		D_ASSERT(index.IsValid());
-		if (result.find(index) != result.end()) {
-			throw InternalException("Duplicate table index \"%lld\" found", index.index);
-		}
-		result.insert(index);
-	}
-	return result;
-}
-
-void ColumnBindingResolver::Verify(ClientContext &context, LogicalOperator &op) {
-	if (!Settings::Get<DebugVerifyColumnBindingsSetting>(context)) {
-		return;
-	}
-	op.ResolveOperatorTypes();
-	ColumnBindingResolver resolver(true);
-	resolver.VisitOperator(op);
-	VerifyInternal(op);
 }
 
 } // namespace duckdb

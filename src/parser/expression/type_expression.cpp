@@ -25,14 +25,9 @@ TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, Expres
 }
 
 string TypeExpression::ToString() const {
-	string result;
 	auto &type_name = qualified_name.Name();
-	if (!qualified_name.Catalog().empty()) {
-		result += SQLIdentifier(qualified_name.Catalog()) + ".";
-	}
-	if (!qualified_name.Schema().empty()) {
-		result += SQLIdentifier(qualified_name.Schema()) + ".";
-	}
+	// render the full qualification - the schema path can be nested (e.g. s1.s2.s3.my_type)
+	string result = qualified_name.QualificationToString();
 
 	auto &params = children;
 

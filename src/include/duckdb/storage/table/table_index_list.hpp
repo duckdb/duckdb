@@ -61,8 +61,8 @@ public:
 	                 IndexAppendMode append_mode, optional_idx active_checkpoint);
 	//! Reverts an append to all index entries.
 	void RevertAppend(DataChunk &chunk, Vector &row_ids);
-	//! Reverts an append made directly to all bound physical indexes.
-	void RevertIndexAppend(DataChunk &chunk, row_t row_start);
+	//! Reverts an append with generated row IDs starting at row_start.
+	void RevertAppend(DataChunk &chunk, row_t row_start);
 	//! Appends deleted rows to all unique indexes.
 	void AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids);
 	//! Applies a removal or removal rollback to all index entries.

@@ -576,18 +576,35 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	handle->Read(context, &block_header_size, sizeof(idx_t), sizeof(idx_t));
 
 	idx_t offset = sizeof(idx_t) * 2;
+	if (EncryptTemporaryFiles()) {
+		offset += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+	}
+
+	// block_size and block_header_size are read off disk: validate them against the physical file before
+	// using them to size an allocation or to offset into the buffer. WriteTemporaryBuffer lays out the file
+	// as [size][header_size][optional nonce/tag][payload], where the payload is GetAllocSize(header + size).
+	auto file_size = handle->GetFileSize();
+	if (block_header_size > file_size || block_size > file_size) {
+		throw IOException(
+		    "Corrupt temporary file \"%s\": block header size (%llu) or block size (%llu) exceeds file size %llu", path,
+		    block_header_size, block_size, file_size);
+	}
+	if (offset + GetAllocSize(block_header_size + block_size) != file_size) {
+		throw IOException("Corrupt temporary file \"%s\": header describes %llu bytes but file is %llu", path,
+		                  offset + GetAllocSize(block_header_size + block_size), file_size);
+	}
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
 	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer));
 
 	if (EncryptTemporaryFiles()) {
-		// encrypted
+		// encrypted: the nonce/tag sit between the two size words and the payload (which starts at offset)
 		//! Read nonce and tag from file.
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
-		handle->Read(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
+		handle->Read(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, sizeof(idx_t) * 2);
 
 		//! Read and decrypt the buffer.
-		buffer->Read(context, *handle, offset + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+		buffer->Read(context, *handle, offset);
 		EncryptionEngine::DecryptTemporaryBuffer(GetDatabase(), buffer->InternalBuffer(), buffer->AllocSize(),
 		                                         encryption_metadata);
 	} else {

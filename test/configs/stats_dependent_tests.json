@@ -22,7 +22,9 @@
         "test/sql/storage/types/variant/variant_comparator_stats.test",
         "test/sql/types/variant/variant_cast_stats.test",
         "test/sql/alter/alter_type/test_alter_type.test",
+        "test/sql/alter/alter_type/alter_type_distinct_stats.test",
         "test/sql/alter/add_col/test_add_col_stats.test",
+        "test/sql/alter/add_col/test_add_col_distinct_stats.test",
         "test/sql/copy/return_stats.test",
         "test/sql/copy/parquet/parquet_stats.test",
         "test/sql/copy/parquet/writer/parquet_write_decimals.test",
@@ -54,7 +56,8 @@
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
         "test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow",
         "test/sql/types/geo/geometry_vertex_extract.test",
-        "test/sql/optimizer/secure_view_statistics.test"
+        "test/sql/optimizer/secure_view_statistics.test",
+        "test/sql/window/test_window_agg_stats_propagation.test"
       ]
     }
   ]

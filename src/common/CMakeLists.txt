@@ -57,11 +57,13 @@ add_library_unity(
   path.cpp
   fsst.cpp
   gzip_file_system.cpp
+  hash_functions.cpp
   identifier.cpp
   memory_safety.cpp
   hive_partitioning.cpp
   json_document.cpp
   pipe_file_system.cpp
+  process_util.cpp
   local_file_system.cpp
   memory_mapped_file.cpp
   error_data.cpp

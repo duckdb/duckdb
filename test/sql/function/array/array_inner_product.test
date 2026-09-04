@@ -58,3 +58,23 @@ array_inner_product: Array arguments must be of the same size
 
 
 endloop
+
+# Strict binary array functions are NULL when either parent array is NULL.
+statement ok
+ATTACH '{TEST_DIR}/array_fold_validity.duckdb' AS array_fold_db (ROW_GROUP_SIZE 2048)
+
+statement ok
+CREATE TABLE array_fold_db.inputs AS
+SELECT NULL::DOUBLE[2] AS a, [1::DOUBLE, 1]::DOUBLE[2] AS b
+FROM range(6144) tbl(i)
+
+query I
+SELECT count(*) FROM array_fold_db.inputs WHERE array_inner_product(a, b) IS NOT NULL;
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*) FROM array_fold_db.inputs WHERE array_inner_product(a, b) IS NOT NULL;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*

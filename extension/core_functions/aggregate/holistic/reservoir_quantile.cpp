@@ -1,3 +1,4 @@
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -9,6 +10,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <stdlib.h>
 
 namespace duckdb {
@@ -54,23 +56,25 @@ struct ReservoirQuantileState {
 };
 
 struct ReservoirQuantileBindData : public FunctionData {
-	ReservoirQuantileBindData() {
+	ReservoirQuantileBindData() : decimal_type(LogicalType::INVALID) {
 	}
 	ReservoirQuantileBindData(double quantile_p, idx_t sample_size_p)
-	    : quantiles(1, quantile_p), sample_size(sample_size_p) {
+	    : quantiles(1, quantile_p), sample_size(sample_size_p), decimal_type(LogicalType::INVALID) {
 	}
 
 	ReservoirQuantileBindData(vector<double> quantiles_p, idx_t sample_size_p)
-	    : quantiles(std::move(quantiles_p)), sample_size(sample_size_p) {
+	    : quantiles(std::move(quantiles_p)), sample_size(sample_size_p), decimal_type(LogicalType::INVALID) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<ReservoirQuantileBindData>(quantiles, sample_size);
+		auto result = make_uniq<ReservoirQuantileBindData>(quantiles, sample_size);
+		result->decimal_type = decimal_type;
+		return std::move(result);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<ReservoirQuantileBindData>();
-		return quantiles == other.quantiles && sample_size == other.sample_size;
+		return quantiles == other.quantiles && sample_size == other.sample_size && decimal_type == other.decimal_type;
 	}
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
@@ -78,17 +82,21 @@ struct ReservoirQuantileBindData : public FunctionData {
 		auto &bind_data = bind_data_p->Cast<ReservoirQuantileBindData>();
 		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
 		serializer.WriteProperty(101, "sample_size", bind_data.sample_size);
+		serializer.WriteProperty(102, "decimal_type", bind_data.decimal_type);
 	}
 
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 		auto result = make_uniq<ReservoirQuantileBindData>();
 		deserializer.ReadProperty(100, "quantiles", result->quantiles);
 		deserializer.ReadProperty(101, "sample_size", result->sample_size);
+		result->decimal_type =
+		    deserializer.ReadPropertyWithExplicitDefault<LogicalType>(102, "decimal_type", LogicalType::INVALID);
 		return std::move(result);
 	}
 
 	vector<double> quantiles;
 	idx_t sample_size;
+	LogicalType decimal_type;
 };
 
 struct ReservoirQuantileOperation {
@@ -316,34 +324,94 @@ unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input
 		}
 	}
 
-	if (arguments.size() == 2) {
-		return make_uniq<ReservoirQuantileBindData>(quantiles, 8192ULL);
-	}
-	auto sample_size_val = input.GetNonNullConstant(2);
-	auto sample_size = sample_size_val.GetValue<int32_t>();
+	idx_t sample_size = 8192ULL;
 
-	if (sample_size_val.IsNull() || sample_size <= 0) {
-		throw BinderException("Size of the RESERVOIR_QUANTILE sample must be bigger than 0");
+	if (arguments.size() == 3) {
+		auto sample_size_val = input.GetNonNullConstant(2);
+		auto sample_size_int = sample_size_val.GetValue<int32_t>();
+
+		if (sample_size_val.IsNull() || sample_size_int <= 0) {
+			throw BinderException("Size of the RESERVOIR_QUANTILE sample must be bigger than 0");
+		}
+		sample_size = NumericCast<idx_t>(sample_size_int);
 	}
 
-	return make_uniq<ReservoirQuantileBindData>(quantiles, NumericCast<idx_t>(sample_size));
+	return make_uniq<ReservoirQuantileBindData>(quantiles, sample_size);
+}
+
+static unique_ptr<FunctionData> DeserializeReservoirQuantileDecimal(Deserializer &deserializer,
+                                                                    BoundAggregateFunction &function);
+
+static void SetDecimalImplementation(BoundAggregateFunction &function, const LogicalType &decimal_type, bool is_list) {
+	auto declared_arguments = function.GetArguments();
+	if (is_list) {
+		function.ReplaceImplementation(GetReservoirQuantileListAggregateFunction(decimal_type));
+	} else {
+		switch (decimal_type.InternalType()) {
+		case PhysicalType::INT16:
+			function.ReplaceImplementation(
+			    AggregateFunction::UnaryAggregate<ReservoirQuantileState<int16_t>, int16_t, int16_t,
+			                                      ReservoirQuantileScalarOperation>(decimal_type, decimal_type));
+			break;
+		case PhysicalType::INT32:
+			function.ReplaceImplementation(
+			    AggregateFunction::UnaryAggregate<ReservoirQuantileState<int32_t>, int32_t, int32_t,
+			                                      ReservoirQuantileScalarOperation>(decimal_type, decimal_type));
+			break;
+		case PhysicalType::INT64:
+			function.ReplaceImplementation(
+			    AggregateFunction::UnaryAggregate<ReservoirQuantileState<int64_t>, int64_t, int64_t,
+			                                      ReservoirQuantileScalarOperation>(decimal_type, decimal_type));
+			break;
+		case PhysicalType::INT128:
+			function.ReplaceImplementation(
+			    AggregateFunction::UnaryAggregate<ReservoirQuantileState<hugeint_t>, hugeint_t, hugeint_t,
+			                                      ReservoirQuantileScalarOperation>(decimal_type, decimal_type));
+			break;
+		default:
+			throw InternalException("Invalid physical type for decimal reservoir quantile");
+		}
+	}
+	for (idx_t i = function.GetArguments().size(); i < declared_arguments.size(); i++) {
+		function.GetArguments().push_back(declared_arguments[i]);
+	}
+
+	function.SetName("reservoir_quantile");
+	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
+	function.SetDeserializeCallback(DeserializeReservoirQuantileDecimal);
+}
+
+static unique_ptr<FunctionData> DeserializeReservoirQuantileDecimal(Deserializer &deserializer,
+                                                                    BoundAggregateFunction &function) {
+	auto result = ReservoirQuantileBindData::Deserialize(deserializer, function);
+	auto &bind_data = result->Cast<ReservoirQuantileBindData>();
+	auto &return_type = deserializer.Get<const LogicalType &>();
+	bool is_list = function.GetReturnType().id() == LogicalTypeId::LIST || return_type.id() == LogicalTypeId::LIST;
+	if (bind_data.decimal_type.id() == LogicalTypeId::INVALID && !function.GetArguments().empty() &&
+	    function.GetArguments()[0].id() == LogicalTypeId::DECIMAL) {
+		bind_data.decimal_type = function.GetArguments()[0];
+	}
+
+	if (bind_data.decimal_type.id() != LogicalTypeId::INVALID) {
+		SetDecimalImplementation(function, bind_data.decimal_type, is_list);
+	}
+
+	return result;
 }
 
 unique_ptr<FunctionData> BindReservoirQuantileDecimal(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	// the implementation is unary - restore the quantile arguments that ReplaceImplementation drops, they are only
-	// folded into the bind data below
-	auto declared_arguments = function.GetArguments();
-	function.ReplaceImplementation(GetReservoirQuantileAggregateFunction(arguments[0]->GetReturnType().InternalType()));
-	for (idx_t i = function.GetArguments().size(); i < declared_arguments.size(); i++) {
-		function.GetArguments().push_back(declared_arguments[i]);
-	}
-	auto bind_data = BindReservoirQuantile(input);
-	function.SetName("reservoir_quantile");
-	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
-	function.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
-	return bind_data;
+
+	auto decimal_type = arguments[0]->GetReturnType();
+	bool is_list = arguments[1]->GetReturnType().id() == LogicalTypeId::LIST;
+
+	auto bind_data_ptr = BindReservoirQuantile(input);
+	auto &bind_data = bind_data_ptr->Cast<ReservoirQuantileBindData>();
+	bind_data.decimal_type = decimal_type;
+
+	SetDecimalImplementation(function, decimal_type, is_list);
+	return bind_data_ptr;
 }
 
 AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
@@ -370,7 +438,7 @@ AggregateFunction GetReservoirQuantileListAggregate(const LogicalType &type) {
 }
 
 void DefineReservoirQuantile(AggregateFunctionSet &set, const LogicalType &type) {
-	//	Four versions: type, scalar/list[, count]
+	//    Four versions: type, scalar/list[, count]
 	auto fun = GetReservoirQuantileAggregate(type.InternalType());
 	set.AddFunction(fun);
 
@@ -387,10 +455,15 @@ void DefineReservoirQuantile(AggregateFunctionSet &set, const LogicalType &type)
 
 void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const vector<LogicalType> &arguments,
                                          const LogicalType &return_value) {
-	AggregateFunction fun(arguments, return_value, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                      BindReservoirQuantileDecimal);
+	auto fun = AggregateFunction::UnaryAggregate<ReservoirQuantileState<int64_t>, int64_t, int64_t,
+	                                             ReservoirQuantileScalarOperation>(arguments[0], return_value);
+	fun.SetBindCallback(BindReservoirQuantileDecimal);
 	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
-	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
+	fun.SetDeserializeCallback(DeserializeReservoirQuantileDecimal);
+
+	fun.GetSignature().GetParameter(0).SetName("x");
+	fun.GetSignature().AddParameter("quantile", arguments[1]);
+
 	set.AddFunction(fun);
 
 	fun.GetSignature().AddParameter("sample_size", LogicalType::INTEGER);
