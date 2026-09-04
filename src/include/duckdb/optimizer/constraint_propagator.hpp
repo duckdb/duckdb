@@ -4,7 +4,6 @@
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
@@ -24,10 +23,13 @@ struct ForeignKeyReference {
 struct ConstraintProperties {
 	vector<column_binding_set_t> unique_sets;
 	vector<ForeignKeyReference> foreign_keys;
+	column_binding_set_t not_null_columns;
+	bool has_filter = false;
 	optional_ptr<TableCatalogEntry> base_table = nullptr;
 
 	bool IsUnique(const vector<ColumnBinding> &cols) const;
-	bool IsForeignKey(const vector<ColumnBinding> &cols, const Identifier &referenced_table) const;
+	bool IsForeignKey(const vector<ColumnBinding> &cols, const Identifier &schema, const Identifier &table) const;
+	bool IsNotNull(const vector<ColumnBinding> &cols) const;
 };
 
 class ConstraintPropagator : public LogicalOperatorVisitor {
@@ -36,8 +38,10 @@ public:
 
 	void VisitOperator(LogicalOperator &op) override;
 
-	bool IsJoinKeyUnique(const vector<ColumnBinding> &join_keys);
-	bool IsForeignKey(const vector<ColumnBinding> &join_keys, const Identifier &referenced_table);
+	bool IsKeyUnique(const vector<ColumnBinding> &keys);
+	bool IsForeignKey(const vector<ColumnBinding> &join_keys, const Identifier &schema,
+	                  const Identifier &referenced_table);
+	bool IsNotNull(const vector<ColumnBinding> &join_keys);
 };
 
 } // namespace duckdb
