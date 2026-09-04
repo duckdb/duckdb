@@ -336,6 +336,8 @@ public:
 
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	bool single_value_identity = false;
+	//! Whether arbitrary partial states can be combined during window aggregation
+	bool window_state_combine_safe = true;
 
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
@@ -382,6 +384,8 @@ public: // Properties
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
 	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
+	auto IsWindowStateCombineSafe() const -> bool { return properties.window_state_combine_safe; }
+	auto SetWindowStateCombineSafe(bool value) -> void { properties.window_state_combine_safe = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }

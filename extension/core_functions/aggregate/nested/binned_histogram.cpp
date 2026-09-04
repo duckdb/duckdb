@@ -391,6 +391,7 @@ unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &in
 	}
 
 	function.ReplaceImplementation(GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType()));
+	function.SetWindowStateCombineSafe(!arguments[1]->HasParameter() && arguments[1]->IsFoldable());
 	return nullptr;
 }
 
