@@ -88,7 +88,7 @@ d
 statement error
 CREATE TABLE t3 (i BOUNDED(200, 300));
 ----
-Binder Error: BOUNDED type must have one modifier
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER, INTEGER\).*
 
 statement ok
 CREATE TYPE user_type AS INTEGER
@@ -102,12 +102,12 @@ Binder Error: Type "user_type" does not take any type parameters
 statement error
 SELECT 1::BOUNDED(NULL)
 ----
-BOUNDED type modifier must be integer
+<REGEX>:Binder Error.*Type parameter .bound. for type .BOUNDED. cannot be NULL.*
 
 statement error
 SELECT 1::BOUNDED(900000000000000000)
 ----
-BOUNDED type modifier must be integer
+<REGEX>:Binder Error.*does not accept type parameters \(BIGINT\).*
 
 
 # MinMax Type
@@ -136,12 +136,12 @@ Conversion Error: Value 10 is outside of range [0,1]
 statement error
 SELECT 10::MINMAX(1337);
 ----
-Binder Error: MINMAX type must have two modifiers
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER\).*
 
 statement error
 SELECT 10::MINMAX('foob', 10);
 ----
-Binder Error: MINMAX type modifiers must be integers
+<REGEX>:Binder Error.*does not accept type parameters \(VARCHAR, INTEGER\).*
 
 statement error
 SELECT 10::MINMAX(10, (NULL::INTEGER));

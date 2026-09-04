@@ -23,6 +23,9 @@ hugeint_t GetPreviousPowerOfTen(hugeint_t input) {
 enum class NiceRounding { CEILING, ROUND };
 
 hugeint_t RoundToNumber(hugeint_t input, hugeint_t num, NiceRounding rounding) {
+	if (num == 0) {
+		return input;
+	}
 	if (rounding == NiceRounding::ROUND) {
 		return (input + (num / 2)) / num * num;
 	} else {
@@ -130,6 +133,10 @@ struct EquiWidthBinsInteger {
 
 		const hugeint_t span = max - min;
 		hugeint_t step = span / Hugeint::Convert(bin_count);
+		if (step == 0) {
+			// the bin count exceeds the number of boundaries in the range - clamp to the smallest possible step
+			step = 1;
+		}
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
 			hugeint_t new_step = MakeNumberNice(step, step, NiceRounding::ROUND);
@@ -186,11 +193,13 @@ struct EquiWidthBinsDouble {
 			// we allow for more bins when doing nice rounding since the bin count is approximate
 			bin_count *= 2;
 		}
-		if (step == 0) {
-			throw InternalException("step is 0!?");
-		}
 
 		const double round_multiplication = 10 / step_power_of_ten;
+		if (max - step >= max || (nice_rounding && !Value::IsFinite(round_multiplication))) {
+			// the span is too small to compute a step size - return only the max boundary
+			result.push_back(max);
+			return result;
+		}
 		for (double bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			// because floating point addition adds inaccuracies, we add rounding at every step
 			double real_boundary = bin_boundary;

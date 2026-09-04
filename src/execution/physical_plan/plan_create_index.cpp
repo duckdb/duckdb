@@ -152,8 +152,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 		need_sort = index_type->build_sort(sort_input);
 	}
 
-	// Determine if this is a fresh index creation or an ALTER TABLE ADD INDEX
-	auto need_filter = op.alter_table_info == nullptr;
+	// CREATE INDEX and ALTER ADD UNIQUE skip NULL keys. ALTER ADD PRIMARY KEY must see NULLs to reject them.
+	const auto is_add_primary_key = op.alter_table_info && op.info->constraint_type == IndexConstraintType::PRIMARY;
+	auto need_filter = !is_add_primary_key;
 
 	// Construct the plan
 	auto plan = &scan;

@@ -204,6 +204,9 @@ def run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_roo
         pch_size = format_bytes(directory_size(pch_dir))
         print_status(f'attempt {attempt_id} finished exit={result.returncode} in {elapsed:.1f}s; pch size: {pch_size}')
         if result.returncode == 0:
+            # Clear the preambles before the next chunk. They are not reused across chunks, and letting them
+            # accumulate fills the runner's disk, after which clangd reports phantom diagnostics.
+            reset_pch_dir(pch_dir)
             return None
         retryable = is_retryable_failure(result)
         if retries >= MAX_RETRIES or not retryable:

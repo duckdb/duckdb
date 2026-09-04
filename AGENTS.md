@@ -229,6 +229,7 @@ DuckDB supports two types of extensions:
 - Extensions are located in a separate git repository
 - Full list in `.github/config/out_of_tree_extensions.cmake`
 - When changes have to be made, they have to be made in patch files stored in `.github/patches`
+- Before adapting an out-of-tree extension, changing its pinned revision, or modifying `.github/patches/extensions`, read and follow `.github/patches/extensions/AGENTS.md`.
 
 Building with extensions:
 ```bash
@@ -265,6 +266,121 @@ DUCKDB_EXTENSIONS='json;icu' make
 - **Visitor Pattern**: For tree traversal (e.g., `LogicalOperatorVisitor`, `ExpressionIterator`)
 - **Factory Pattern**: `Deserialize()` methods for object creation
 - **Class Hierarchy**: Base classes like `*Operator`, `*Entry`, `*Expression` with typed subclasses
+
+## Vector API
+
+Vectors carry their own size, and element access goes through typed iterators (reading) and typed
+writers (writing). **The old-style vector loops are deprecated and must not be used in new code:**
+
+```cpp
+// DON'T - legacy pattern: ToUnifiedFormat + manual sel/validity indexing
+auto idx = vdata.sel->get_index(i);
+if (!vdata.validity.RowIsValid(idx)) {
+	result_validity.SetInvalid(i);
+}
+result_data[i] = data[idx] + 1;
+```
+
+```cpp
+// DO - iterator + writer
+auto input_values = input.Values<int64_t>();
+auto writer = FlatVector::Writer<int64_t>(result, count);
+for (auto entry : input_values) {
+	if (!entry.IsValid()) {
+		writer.WriteNull();
+		continue;
+	}
+	writer.WriteValue(entry.GetValue() + 1);
+}
+```
+
+Exceptions: element-wise scalar functions should still use the executors (`UnaryExecutor`,
+`BinaryExecutor`, `GenericExecutor`, ...), and type-erased code that does not know the C++ type at
+compile time (hash tables, sorting, row layout, storage) still uses `ToUnifiedFormat(data)`.
+
+Headers: `duckdb/common/vector/vector_iterator.hpp`, `duckdb/common/vector/vector_writer.hpp`.
+
+### Reading: `Vector::Values<T>()`
+
+Works on any vector type - never `Flatten()` just to read. Build it once, outside the loop (it
+materializes a `UnifiedVectorFormat`), then iterate or index into it. It is not copyable; pass it to
+helpers as `const VectorIterator<T> &`.
+
+```cpp
+auto values = vec.Values<string_t>();
+for (auto entry : values) {   // or: values[i], values.size(), values.CanHaveNull()
+	entry.IsValid();          // per-row validity
+	entry.GetValue();         // value (asserts validity); GetValueUnsafe() skips the assert
+	entry.GetIndex();         // row index
+}
+```
+
+Also `vec.ValidValues<T>()` (skips NULL rows entirely) and `vec.Validity()` (validity only).
+
+Nested types have iterator specializations, so nested reads need no child/offset arithmetic:
+
+```cpp
+// STRUCT(BIGINT, VARCHAR)
+auto structs = vec.Values<VectorStructType<int64_t, string_t>>();
+for (auto entry : structs) {
+	entry.IsValid();                         // top-level struct NULL
+	auto a = entry.GetChildValue<0>();       // per-child ValueEntry
+	entry.ForEach([&](auto &child) { ... }); // all children in declaration order
+}
+
+// LIST(BIGINT) - nests recursively, e.g. VectorListType<VectorListType<double>>
+auto lists = vec.Values<VectorListType<int64_t>>();
+for (auto entry : lists) {
+	entry.GetListLength();
+	entry.GetChildValue(idx);
+	for (auto child : entry.GetChildValues()) { ... }
+}
+
+// VARIANT - traverses shredded and unshredded variants without unshredding
+VectorIterator<VectorVariantType> variants(vec);
+```
+
+The `VectorListType<T>` iterator does not accept a `DICTIONARY_VECTOR` source - flatten first if the
+list vector may be a dictionary.
+
+### Writing: `FlatVector::Writer<T>()`
+
+Writers are push-based: rows are written in order, and the writer sets the result vector's size
+itself (no `SetSize` / `SetCardinality` call). Use the `(result, count, offset)` overload to append
+at an offset. On destruction the writer asserts that exactly `count` rows were written - call
+`Truncate()` if you deliberately write fewer.
+
+```cpp
+auto writer = FlatVector::Writer<int64_t>(result, count);
+writer.WriteValue(value);
+writer.WriteNull();
+```
+
+`VectorWriter<string_t>` adds `WriteStringRef(val)` (reference without copying into the vector heap -
+keep it alive via `StringVector::AddHeapReference`), `WriteEmptyString(len)` and `GetHeap()`.
+
+Nested writers mirror the iterators:
+
+```cpp
+// STRUCT: WriteNull() propagates to every child, keeping the children in sync
+auto writer = FlatVector::Writer<VectorStructType<int64_t, string_t>>(result, count);
+writer.WriteValue([&](auto &a_writer, auto &b_writer) { ... });
+writer.ForEach([&](auto &child_writer) { ... });  // same operation for every child
+
+// LIST, known length per row
+for (auto &child_writer : list_writer.WriteList(n)) {
+	child_writer.WriteValue(...);
+}
+
+// LIST, unknown length - grows on demand, finalized when the returned writer goes out of scope
+auto list = list_writer.WriteDynamicList();
+list.WriteElement().WriteValue(...);
+```
+
+If the element type is not known at compile time, `FlatVector::Writer<list_entry_t>` has a
+`WriteDynamicList()` returning a `DynamicListAppender` (`Append(source, sel, ...)` / `AppendNulls`).
+For the rare case where rows cannot be written in order, `FlatVector::ScatterWriter<T>(vec)` supports
+random access (`writer[idx] = value`, `writer.SetInvalid(idx)`).
 
 ## Coding Guidelines (Key Points)
 

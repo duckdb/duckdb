@@ -103,11 +103,6 @@ void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 	}
 }
 
-void IndexEntry::RevertIndexAppend(DataChunk &chunk, Vector &row_ids) {
-	auto entry_lock = lock.GetExclusiveLock();
-	owned_index->Cast<BoundIndex>().Delete(chunk, row_ids);
-}
-
 void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
 	auto entry_lock = lock.GetSharedLock();
 	if (owned_index->GetConstraintType() == IndexConstraintType::NONE || !owned_index->IsBound()) {

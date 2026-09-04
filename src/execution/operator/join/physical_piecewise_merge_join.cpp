@@ -723,6 +723,9 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			if (predicate) {
 				result_count = state.pred_executor.SelectExpression(chunk, state.pred_matches);
 				chunk.Slice(state.pred_matches, result_count);
+				for (idx_t i = 0; i < result_count; i++) {
+					state.pred_matches.set_index(i, sel->get_index(state.pred_matches.get_index(i)));
+				}
 				sel = &state.pred_matches;
 			}
 
