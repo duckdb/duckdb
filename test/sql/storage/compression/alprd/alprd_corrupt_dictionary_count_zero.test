@@ -8,6 +8,9 @@ unzip data/storage/corrupt/alprd_corrupt_dictionary_count_zero.db.gz {TEST_DIR}/
 
 load {TEST_DIR}/alprd_corrupt_dictionary_count_zero.db readonly
 
+statement ok
+USE alprd_corrupt_dictionary_count_zero
+
 query I
 SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALPRD' LIMIT 1;
 ----
