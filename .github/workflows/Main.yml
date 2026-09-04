@@ -576,12 +576,21 @@ jobs:
       run: |
         assets=()
         if [[ "${{ matrix.config.publish_source }}" == "true" ]]; then
-          zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
+          zip -j libduckdb-src.zip \
+            src/include/duckdb.h \
+            src/include/duckdb_v2.h \
+            src/include/duckdb_extension.h \
+            src/include/duckdb_extension_v2.h
           assets+=(libduckdb-src.zip)
         fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
           make gather-libs
-          zip -r -j static-libs-${{ matrix.config.artifact_suffix }}.zip src/include/duckdb.h build/release/libs/
+          zip -r -j static-libs-${{ matrix.config.artifact_suffix }}.zip \
+            src/include/duckdb.h \
+            src/include/duckdb_v2.h \
+            src/include/duckdb_extension.h \
+            src/include/duckdb_extension_v2.h \
+            build/release/libs/
           assets+=(static-libs-${{ matrix.config.artifact_suffix }}.zip)
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
