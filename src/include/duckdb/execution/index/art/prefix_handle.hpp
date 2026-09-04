@@ -33,8 +33,8 @@ public:
 	PrefixHandle &operator=(PrefixHandle &&) = default;
 
 public:
-	//! Create a new prefix chain. The slot points to the child of the last prefix node.
-	static void New(ART &art, SlotHandle &slot, const ARTKey &key, const idx_t depth, idx_t count);
+	//! Create a new prefix chain. The node points to the child of the last prefix node.
+	static void New(ART &art, NodePtrHandle &node, const ARTKey &key, const idx_t depth, idx_t count);
 
 	//! Create a new deprecated prefix node and return a handle to it.
 	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node);
@@ -60,7 +60,7 @@ public:
 		Data()[pos] = byte;
 	}
 
-	//! Returns the child slot. The reference is valid while this PrefixHandle is alive.
+	//! Returns the child NodePtr. The reference is valid while this PrefixHandle is alive.
 	NodePtr &Child(const ART &art) {
 		return ChildRef(art, handle);
 	}
@@ -69,17 +69,17 @@ public:
 		return std::move(handle);
 	}
 
-	//! Get a mutable reference to the child slot of the prefix.
+	//! Get a mutable reference to the child NodePtr of the prefix.
 	static NodePtr &ChildRef(const ART &art, NodeHandle &handle) {
 		return *reinterpret_cast<NodePtr *>(handle.GetPtr() + art.PrefixCount() + 1);
 	}
 
-	//! Get a mutable reference to the child slot using an explicit prefix byte count.
+	//! Get a mutable reference to the child NodePtr using an explicit prefix byte count.
 	static NodePtr &ChildRefWithCount(NodeHandle &handle, const idx_t count) {
 		return ChildRefWithCount(handle.GetPtr(), count);
 	}
 
-	//! Get a mutable reference to the child slot using an explicit prefix byte count.
+	//! Get a mutable reference to the child NodePtr using an explicit prefix byte count.
 	static NodePtr &ChildRefWithCount(const data_ptr_t data, const idx_t count) {
 		return *reinterpret_cast<NodePtr *>(data + count + 1);
 	}
@@ -91,7 +91,7 @@ public:
 	static OptionalNodePtr TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state);
 
 private:
-	static PrefixHandle NewInternal(ART &art, SlotHandle &slot, const_data_ptr_t data, const uint8_t count,
+	static PrefixHandle NewInternal(ART &art, NodePtrHandle &node, const_data_ptr_t data, const uint8_t count,
 	                                const idx_t offset);
 
 	static NodeHandle TransformToDeprecatedAppend(NodeHandle tail_handle, ART &art, FixedSizeAllocator &allocator,

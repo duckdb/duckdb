@@ -67,12 +67,12 @@ void Prefix::New(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, cons
 	}
 }
 
-PrefixHandle PrefixHandle::NewInternal(ART &art, SlotHandle &slot, const_data_ptr_t data, const uint8_t count,
+PrefixHandle PrefixHandle::NewInternal(ART &art, NodePtrHandle &node, const_data_ptr_t data, const uint8_t count,
                                        const idx_t offset) {
-	slot.Ref() = NodePtr::GetAllocator(art, PREFIX).New();
-	slot.Ref().SetMetadata(static_cast<uint8_t>(PREFIX));
+	node.Get() = NodePtr::GetAllocator(art, PREFIX).New();
+	node.Get().SetMetadata(static_cast<uint8_t>(PREFIX));
 
-	PrefixHandle prefix(NodeHandle(art, slot.Ref()));
+	PrefixHandle prefix(NodeHandle(art, node.Get()));
 	prefix.SetCount(art, count);
 	if (data) {
 		D_ASSERT(count);
@@ -82,17 +82,17 @@ PrefixHandle PrefixHandle::NewInternal(ART &art, SlotHandle &slot, const_data_pt
 	return prefix;
 }
 
-void PrefixHandle::New(ART &art, SlotHandle &slot, const ARTKey &key, const idx_t depth, idx_t count) {
+void PrefixHandle::New(ART &art, NodePtrHandle &node, const ARTKey &key, const idx_t depth, idx_t count) {
 	idx_t offset = 0;
 
 	while (count) {
 		auto min = MinValue(UnsafeNumericCast<idx_t>(art.PrefixCount()), count);
 		auto this_count = UnsafeNumericCast<uint8_t>(min);
-		auto prefix = NewInternal(art, slot, key.data, this_count, offset + depth);
+		auto prefix = NewInternal(art, node, key.data, this_count, offset + depth);
 
 		auto &child = prefix.Child(art);
-		auto pin = std::move(prefix).TakeHandle();
-		slot.Rebind(child, std::move(pin));
+		auto handle = std::move(prefix).TakeHandle();
+		node.Rebind(child, std::move(handle));
 
 		offset += this_count;
 		count -= this_count;

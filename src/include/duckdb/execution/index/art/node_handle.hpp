@@ -53,46 +53,43 @@ private:
 	NType type;
 };
 
-//! SlotHandle wraps a mutable reference to a NodePtr slot.
-//! Ref() is valid for the lifetime of this object.
-//! If constructed with a pin, SlotHandle owns the NodeHandle keeping the slot valid.
-//! If constructed without a pin, the caller must guarantee the slot remains valid
-class SlotHandle {
+//! NodePtrHandle provides mutable access to a NodePtr storage location.
+//! If the NodePtr is stored in a node, the handle owns the NodeHandle that keeps that node pinned.
+class NodePtrHandle {
 public:
-	//! Create a slot handle for memory that is valid without this object owning a pin.
-	explicit SlotHandle(NodePtr &slot_p) : slot(slot_p) {
-	}
-
-	//! Create a slot handle that owns the pin keeping slot_p valid.
-	explicit SlotHandle(NodePtr &slot_p, NodeHandle &&pin_p) : slot(slot_p), pin(std::move(pin_p)) {
-	}
-
-	SlotHandle(const SlotHandle &) = delete;
-	SlotHandle &operator=(const SlotHandle &) = delete;
-	SlotHandle(SlotHandle &&) = delete;
-	SlotHandle &operator=(SlotHandle &&) = delete;
+	//! Identifies NodePtr storage that remains valid without a NodeHandle.
+	struct ExternalStorage {
+	};
 
 public:
-	//! Returns the mutable slot.
-	NodePtr &Ref() {
-		return slot.get();
+	//! Start at externally managed NodePtr storage.
+	NodePtrHandle(NodePtr &node_ptr_p, ExternalStorage) : node_ptr(node_ptr_p) {
 	}
 
-	//! Rebind without a pin; the caller must keep slot_p valid until the next Rebind or destruction.
-	void Rebind(NodePtr &slot_p) {
-		slot = slot_p;
-		pin.reset();
+	//! Start at a NodePtr stored in the node pinned by handle_p.
+	NodePtrHandle(NodePtr &node_ptr_p, NodeHandle &&handle_p) : node_ptr(node_ptr_p), handle(std::move(handle_p)) {
 	}
 
-	//! Rebind and own pin_p, which keeps slot_p valid until the next Rebind or destruction.
-	void Rebind(NodePtr &slot_p, NodeHandle &&pin_p) {
-		slot = slot_p;
-		pin.emplace(std::move(pin_p));
+	NodePtrHandle(const NodePtrHandle &) = delete;
+	NodePtrHandle &operator=(const NodePtrHandle &) = delete;
+	NodePtrHandle(NodePtrHandle &&) = delete;
+	NodePtrHandle &operator=(NodePtrHandle &&) = delete;
+
+public:
+	//! Return the NodePtr at the current location.
+	NodePtr &Get() {
+		return node_ptr.get();
+	}
+
+	//! Move to a NodePtr stored in the node pinned by handle_p.
+	void Rebind(NodePtr &node_ptr_p, NodeHandle &&handle_p) {
+		node_ptr = node_ptr_p;
+		handle.emplace(std::move(handle_p));
 	}
 
 private:
-	reference<NodePtr> slot;
-	optional<NodeHandle> pin;
+	reference<NodePtr> node_ptr;
+	optional<NodeHandle> handle;
 };
 
 //! ConstNodeHandle is a read-only wrapper to access a node.
