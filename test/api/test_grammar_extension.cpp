@@ -130,7 +130,7 @@ TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_exten
 	Connection con(db);
 	ActivateGrammarExtensionTestSyntax(con);
 	CheckGrammarExtensionTestSyntax(con);
-	REQUIRE_NO_FAIL(*con.Query("SET debug_heap_based_parser = true"));
+	REQUIRE_NO_FAIL(*con.Query("SET heap_based_parser = true"));
 	CheckGrammarExtensionTestSyntax(con);
 }
 
