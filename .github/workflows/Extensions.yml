@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-slim
     outputs:
       # NOTE: on PRs we exclude some archs to speed things up
-      reduced_ci_mode: disabled
+      reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
       main_extensions_core_config: ${{ steps.set-main-extensions.outputs.core_config }}
       main_extensions_cloud_config: ${{ steps.set-main-extensions.outputs.cloud_config }}
       main_extensions_search_config: ${{ steps.set-main-extensions.outputs.search_config }}
@@ -197,7 +197,7 @@ jobs:
       allow_failure_archs: ${{ inputs.allow_failure_archs }}
       extra_toolchains: ${{ matrix.extra_toolchains }}
       use_merged_vcpkg_manifest: '1'
-      vcpkg_commit: 9e593bb18ea69cc5095e012465dcd675a822ed0d # Release 2026.07.29
+      vcpkg_commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
       duckdb_tag: ${{ inputs.duckdb_version }}
       skip_tests: ${{ inputs.skip_tests }}
       save_cache: ${{ (github.event_name == 'workflow_call' && inputs.save_cache) || (github.event_name != 'workflow_call' && (github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name))) }}

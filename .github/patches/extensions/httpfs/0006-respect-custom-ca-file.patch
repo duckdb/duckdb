@@ -1,0 +1,17 @@
+diff --git a/src/http/httpfs_curl_client.cpp b/src/http/httpfs_curl_client.cpp
+index a7c1209..217228f 100644
+--- a/src/http/httpfs_curl_client.cpp
++++ b/src/http/httpfs_curl_client.cpp
+@@ -96,7 +96,11 @@ CURLHandle::CURLHandle(const string &token, const string &cert_path) {
+ 	if (!cert_path.empty()) {
+ 		curl_easy_setopt(curl, CURLOPT_CAINFO, cert_path.c_str());
+ 	}
+-	curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_AUTO_CLIENT_CERT | CURLSSLOPT_NATIVE_CA);
++	auto ssl_options = CURLSSLOPT_AUTO_CLIENT_CERT;
++	if (cert_path.empty()) {
++		ssl_options |= CURLSSLOPT_NATIVE_CA;
++	}
++	curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, ssl_options);
+ }
+ 
+ CURLHandle::~CURLHandle() {
