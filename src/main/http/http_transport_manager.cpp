@@ -34,27 +34,26 @@ public:
 };
 
 class HTTPTransportCapacityGuard;
-static thread_local optional_ptr<HTTPTransportCapacityGuard> current_http_transport_guard;
 
 class HTTPTransportCapacityGuard {
 public:
 	explicit HTTPTransportCapacityGuard(HTTPTransportManager &manager_p)
-	    : manager(manager_p), previous(current_http_transport_guard) {
-		current_http_transport_guard = this;
+	    : manager(manager_p), previous(CurrentThreadGuard()) {
+		CurrentThreadGuard() = this;
 	}
 
 	~HTTPTransportCapacityGuard() {
-		D_ASSERT(current_http_transport_guard.get() == this);
-		current_http_transport_guard = previous;
+		D_ASSERT(CurrentThreadGuard().get() == this);
+		CurrentThreadGuard() = previous;
 	}
 
 	void MarkCapacityOwned() {
-		D_ASSERT(current_http_transport_guard.get() == this);
+		D_ASSERT(CurrentThreadGuard().get() == this);
 		owns_capacity = true;
 	}
 
 	static bool CurrentThreadOwnsCapacity(HTTPTransportManager &manager) {
-		for (auto entry = current_http_transport_guard; entry; entry = entry->previous) {
+		for (auto entry = CurrentThreadGuard(); entry; entry = entry->previous) {
 			if (entry->manager.get() == &manager && entry->owns_capacity) {
 				return true;
 			}
@@ -63,12 +62,17 @@ public:
 	}
 
 	static void MarkCurrentCapacityOwned(HTTPTransportManager &manager) {
-		D_ASSERT(current_http_transport_guard);
-		D_ASSERT(current_http_transport_guard->manager.get() == &manager);
-		current_http_transport_guard->MarkCapacityOwned();
+		D_ASSERT(CurrentThreadGuard());
+		D_ASSERT(CurrentThreadGuard()->manager.get() == &manager);
+		CurrentThreadGuard()->MarkCapacityOwned();
 	}
 
 private:
+	static optional_ptr<HTTPTransportCapacityGuard> &CurrentThreadGuard() {
+		static thread_local optional_ptr<HTTPTransportCapacityGuard> current_guard;
+		return current_guard;
+	}
+
 	//! Manager whose capacity can be held by this call stack.
 	optional_ptr<HTTPTransportManager> manager;
 	//! Previous guard on the current thread.
@@ -578,7 +582,7 @@ HTTPTransportManager::Lease HTTPTransportManager::Acquire(Session &session, HTTP
 	Reservation reservation;
 	{
 		annotated_unique_lock<annotated_mutex> guard(lock);
-		reservation = ReserveClientLocked(state, std::move(key), origin, guard);
+		reservation = ReserveClientLocked(state, key, origin, guard);
 	}
 	try {
 		PrepareBucket(reservation, origin);
