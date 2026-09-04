@@ -70,14 +70,18 @@ StringDictionaryEntry StringSegmentLayout::CreateDictionaryEntry(int32_t current
 		ThrowDecreasingStringOffset(current_dictionary_offset, previous_dictionary_offset);
 	}
 
-	// The dictionary offset must advance by a string's size or BIG_STRING_MARKER_SIZE.
+	// Offsets store the cumulative number of dictionary bytes used.
 	auto string_length = current_dictionary_offset - previous_dictionary_offset;
+
+	// If the offset is negative, the entry is either NULL or an overflow string.
 	if (current_offset < 0) {
-		if (string_length == 0) {
-			if (current_offset != previous_offset) {
-				ThrowInvalidOverflowStringMarker();
-			}
-		} else if (string_length != UncompressedStringStorage::BIG_STRING_MARKER_SIZE) {
+		// If it is NULL, the current offset must be inherited unchanged from the previous entry.
+		if (string_length == 0 && current_offset != previous_offset) {
+			ThrowInvalidOverflowStringMarker();
+		}
+
+		// If it is an overflow string, the entry's length must match the marker's length.
+		if (string_length > 0 && string_length != UncompressedStringStorage::BIG_STRING_MARKER_SIZE) {
 			ThrowInvalidOverflowStringMarker();
 		}
 	}
