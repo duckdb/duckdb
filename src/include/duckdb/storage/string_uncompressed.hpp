@@ -34,6 +34,13 @@ struct StringDictionaryContainer {
 
 struct StringScanState : public SegmentScanState {
 public:
+	struct DictionaryCursor;
+
+	struct DictionaryEntry {
+		unsafe_array_ptr<const uint8_t> data;
+		bool is_overflow;
+	};
+
 	struct SegmentLayout {
 		//! Dictionary size and end read from the first eight segment bytes and validated within the segment.
 		StringDictionaryContainer dictionary;
@@ -42,8 +49,26 @@ public:
 		//! Dictionary offsets read from the segment after validating the array's byte range.
 		unsafe_array_ptr<const int32_t> offsets;
 
-		uint32_t GetStringLength(int32_t current_offset, int32_t previous_offset) const;
-		unsafe_array_ptr<const uint8_t> GetDictionaryEntry(int32_t dict_offset, uint32_t entry_size) const;
+		DictionaryEntry GetDictionaryEntry(idx_t row_index) const;
+		DictionaryCursor GetCursor(idx_t row_index) const;
+
+	private:
+		friend struct DictionaryCursor;
+		uint32_t GetDictionaryOffsetMagnitude(int32_t offset) const;
+		DictionaryEntry CreateDictionaryEntry(int32_t current_offset, int32_t previous_offset,
+		                                      uint32_t previous_magnitude) const;
+	};
+
+	struct DictionaryCursor {
+		DictionaryCursor(const SegmentLayout &layout, idx_t row_index);
+
+		DictionaryEntry Next();
+
+	private:
+		const SegmentLayout &layout;
+		idx_t row_index;
+		int32_t previous_offset;
+		uint32_t previous_magnitude;
 	};
 
 	static SegmentLayout ReadSegmentLayout(const BufferHandle &handle, const ColumnSegment &segment);
@@ -261,26 +286,9 @@ public:
 			// regular string - fetch from dictionary
 			auto dict_end = base_ptr + dict_end_offset;
 			auto dict_pos = dict_end - dict_offset;
-			auto entry = unsafe_array_ptr<const uint8_t>(dict_pos, string_length);
-			return FetchStringFromEntry(context, segment, result, entry, dict_offset);
+			auto str_ptr = char_ptr_cast(dict_pos);
+			return string_t(str_ptr, string_length);
 		} else if (string_length == 0) {
-			auto entry = unsafe_array_ptr<const uint8_t>(base_ptr, 0);
-			return FetchStringFromEntry(context, segment, result, entry, dict_offset);
-		} else {
-			// read overflow string
-			auto marker = base_ptr + dict_end_offset - AbsValue<int32_t>(dict_offset);
-			auto entry = unsafe_array_ptr<const uint8_t>(marker, BIG_STRING_MARKER_SIZE);
-			return FetchStringFromEntry(context, segment, result, entry, dict_offset);
-		}
-	}
-
-	inline static string_t FetchStringFromEntry(const QueryContext &context, ColumnSegment &segment, Vector &result,
-	                                            unsafe_array_ptr<const uint8_t> entry, int32_t dict_offset) {
-		if (DUCKDB_LIKELY(dict_offset >= 0)) {
-			// regular string - fetch from dictionary
-			auto str_ptr = const_char_ptr_cast(entry.data());
-			return string_t(str_ptr, NumericCast<uint32_t>(entry.size()));
-		} else if (entry.empty()) {
 			// NULL values are stored as a copy of the previous entry's dictionary offset (see
 			// StringAppendBase). When the previous entry is a big (overflow) string, its offset is
 			// negative, so the NULL inherits that negative offset even though it references no
@@ -288,11 +296,28 @@ public:
 			// following the marker into ReadOverflowString - otherwise every NULL that trails a big
 			// string re-reads and re-allocates the entire overflow string (O(num_nulls * big_size)
 			// memory, tagged OVERFLOW_STRINGS). The value is masked NULL by the caller regardless.
-			return string_t(const_char_ptr_cast(entry.data()), 0);
+			return string_t(char_ptr_cast(base_ptr), 0);
 		} else {
 			// read overflow string
-			auto block_id = Load<block_id_t>(entry.data());
-			auto offset = Load<int32_t>(entry.data() + sizeof(block_id_t));
+			auto marker = base_ptr + dict_end_offset - AbsValue<int32_t>(dict_offset);
+			block_id_t block_id = Load<block_id_t>(marker);
+			int32_t offset = Load<int32_t>(marker + sizeof(block_id_t));
+
+			return ReadOverflowString(context, segment, result, block_id, offset);
+		}
+	}
+
+	inline static string_t FetchStringFromEntry(const QueryContext &context, ColumnSegment &segment, Vector &result,
+	                                            const StringScanState::DictionaryEntry &entry) {
+		if (DUCKDB_LIKELY(!entry.is_overflow)) {
+			// regular string - fetch from dictionary
+			auto str_ptr = const_char_ptr_cast(entry.data.data());
+			return string_t(str_ptr, NumericCast<uint32_t>(entry.data.size()));
+		} else {
+			// read overflow string
+			D_ASSERT(entry.data.size() == BIG_STRING_MARKER_SIZE);
+			auto block_id = Load<block_id_t>(entry.data.data());
+			auto offset = Load<int32_t>(entry.data.data() + sizeof(block_id_t));
 
 			return ReadOverflowString(context, segment, result, block_id, offset);
 		}
