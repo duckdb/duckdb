@@ -3844,6 +3844,11 @@ public:
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeQuantifierPlusTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeQuantifierOptionalTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierOptionalTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
 	static void InitializeQuantifierRangeTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -7934,6 +7939,9 @@ public:
 	static unique_ptr<TransformResultValue> TransformQuantifierPlusInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static MatchRecognizeQuantifier TransformQuantifierPlus(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformQuantifierOptionalInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static MatchRecognizeQuantifier TransformQuantifierOptional(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformQuantifierRangeInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformQuantifierBoundsInternal(PEGTransformer &transformer,

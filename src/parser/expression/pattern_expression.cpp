@@ -84,6 +84,9 @@ string QuantifiedExpression::QuantifierString(optional_idx min_count, optional_i
 	if (min_count.IsValid() && min_count.GetIndex() == 1 && !max_count.IsValid()) {
 		return "+";
 	}
+	if (min_count.IsValid() && min_count.GetIndex() == 0 && max_count.IsValid() && max_count.GetIndex() == 1) {
+		return "?";
+	}
 	return StringUtil::Format("{%s,%s}", min_count.IsValid() ? to_string(min_count.GetIndex()) : "",
 	                          max_count.IsValid() ? to_string(max_count.GetIndex()) : "");
 }

@@ -8287,6 +8287,12 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierPlusI
 	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierOptionalInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto result = TransformQuantifierOptional(transformer);
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuantifierRangeInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -12188,6 +12194,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"RowPatternQuantifier", &PEGTransformerFactory::TransformRowPatternQuantifierInternal},
 	    {"QuantifierStar", &PEGTransformerFactory::TransformQuantifierStarInternal},
 	    {"QuantifierPlus", &PEGTransformerFactory::TransformQuantifierPlusInternal},
+	    {"QuantifierOptional", &PEGTransformerFactory::TransformQuantifierOptionalInternal},
 	    {"QuantifierRange", &PEGTransformerFactory::TransformQuantifierRangeInternal},
 	    {"QuantifierBounds", &PEGTransformerFactory::TransformQuantifierBoundsInternal},
 	    {"QuantifierMinMax", &PEGTransformerFactory::TransformQuantifierMinMaxInternal},

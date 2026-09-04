@@ -344,6 +344,13 @@ MatchRecognizeQuantifier PEGTransformerFactory::TransformQuantifierPlus(PEGTrans
 	return result;
 }
 
+MatchRecognizeQuantifier PEGTransformerFactory::TransformQuantifierOptional(PEGTransformer &transformer) {
+	MatchRecognizeQuantifier result;
+	result.min_count = 0;
+	result.max_count = 1;
+	return result;
+}
+
 MatchRecognizeQuantifier
 PEGTransformerFactory::TransformQuantifierMinMax(PEGTransformer &transformer,
                                                  unique_ptr<ParsedExpression> number_literal,

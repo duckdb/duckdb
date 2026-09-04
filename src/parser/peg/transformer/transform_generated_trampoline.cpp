@@ -2252,6 +2252,9 @@ static const TransformFrameOps QUANTIFIER_STAR_OPS = {"QuantifierStar",
 static const TransformFrameOps QUANTIFIER_PLUS_OPS = {"QuantifierPlus",
                                                       &PEGTransformerFactory::InitializeQuantifierPlusTrampoline,
                                                       &PEGTransformerFactory::FinalizeQuantifierPlusTrampoline};
+static const TransformFrameOps QUANTIFIER_OPTIONAL_OPS = {
+    "QuantifierOptional", &PEGTransformerFactory::InitializeQuantifierOptionalTrampoline,
+    &PEGTransformerFactory::FinalizeQuantifierOptionalTrampoline};
 static const TransformFrameOps QUANTIFIER_RANGE_OPS = {"QuantifierRange",
                                                        &PEGTransformerFactory::InitializeQuantifierRangeTrampoline,
                                                        &PEGTransformerFactory::FinalizeQuantifierRangeTrampoline};
@@ -3857,6 +3860,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"RowPatternQuantifier", &ROW_PATTERN_QUANTIFIER_OPS},
 	    {"QuantifierStar", &QUANTIFIER_STAR_OPS},
 	    {"QuantifierPlus", &QUANTIFIER_PLUS_OPS},
+	    {"QuantifierOptional", &QUANTIFIER_OPTIONAL_OPS},
 	    {"QuantifierRange", &QUANTIFIER_RANGE_OPS},
 	    {"QuantifierBounds", &QUANTIFIER_BOUNDS_OPS},
 	    {"QuantifierMinMax", &QUANTIFIER_MIN_MAX_OPS},
@@ -20405,6 +20409,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeQuantifierPlusTr
                                                                                          TransformStack &stack,
                                                                                          TransformStackFrame &frame) {
 	auto result = TransformQuantifierPlus(transformer);
+	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeQuantifierOptionalTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeQuantifierOptionalTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto result = TransformQuantifierOptional(transformer);
 	return make_uniq<TypedTransformResult<MatchRecognizeQuantifier>>(result);
 }
 

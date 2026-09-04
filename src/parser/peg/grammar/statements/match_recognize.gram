@@ -40,9 +40,10 @@ RowPatternGroup <- Parens(RowPattern)
 RowPatternExclusion <- '{' '-' RowPattern '-' '}'
 RowPatternLabel <- ColLabelOrString
 
-RowPatternQuantifier <- QuantifierStar / QuantifierPlus / QuantifierRange
+RowPatternQuantifier <- QuantifierStar / QuantifierPlus / QuantifierOptional / QuantifierRange
 QuantifierStar <- '*'
 QuantifierPlus <- '+'
+QuantifierOptional <- '?'
 QuantifierRange <- '{' QuantifierBounds '}'
 QuantifierBounds <- QuantifierMinMax / QuantifierMin / QuantifierMax / QuantifierExact
 QuantifierMinMax <- NumberLiteral ',' NumberLiteral

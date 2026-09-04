@@ -1929,6 +1929,7 @@ MatchRecognizeQuantifier:
     - RowPatternQuantifier
     - QuantifierStar
     - QuantifierPlus
+    - QuantifierOptional
     - QuantifierRange
     - QuantifierBounds
     - QuantifierMinMax

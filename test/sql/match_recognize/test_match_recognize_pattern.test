@@ -98,6 +98,67 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 5
 6
 
+# ? takes the symbol or leaves it out, so like A* it still matches nothing at the B row
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A?) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+2
+3
+4
+5
+6
+
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A{0,1}) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+2
+3
+4
+5
+6
+
+# an optional tail is taken where it fits and skipped where it does not: only the match starting at
+# offset 1 is followed by a B row
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A B?) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+3
+4
+5
+6
+
+query II
+SELECT i, __pattern_window.classifier FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B?) DEFINE A as v=1, B as v=0
+) ORDER BY i
+----
+1	A
+2	A
+3	B
+4	A
+5	A
+6	A
+
+# a group takes the quantifier as a whole, so the B A pair is matched or skipped together
+query I
+SELECT x FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x PATTERN (A (B A)?) DEFINE A as v=1, B as v=0
+) ORDER BY x
+----
+1
+4
+5
+6
+
 # concatenation
 query III
 SELECT i, __pattern_window.match_start, __pattern_window.match_end FROM seq MATCH_RECOGNIZE(
