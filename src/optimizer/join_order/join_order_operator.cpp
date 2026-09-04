@@ -268,10 +268,12 @@ void JoinOrderConflictDetector::Build(vector<unique_ptr<JoinOrderOperator>> &ope
 		                             (op->type != JoinOrderOperatorType::INNER || !op->conflict_rules.empty());
 		SimplifyConflictRules(*op, set_manager);
 		D_ASSERT(ContainedInUnion(op->total_set, op->left_relations, op->right_relations));
+#ifdef D_ASSERT_IS_ENABLED
 		for (auto &rule : op->conflict_rules) {
 			D_ASSERT(ContainedInUnion(rule.trigger, op->left_relations, op->right_relations));
 			D_ASSERT(ContainedInUnion(rule.requirement, op->left_relations, op->right_relations));
 		}
+#endif
 		if (op->type != JoinOrderOperatorType::CROSS_PRODUCT) {
 			D_ASSERT(!op->left_total_set.get().Empty());
 			D_ASSERT(!op->right_total_set.get().Empty());

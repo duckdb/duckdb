@@ -512,11 +512,9 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 }
 
 unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 	// the list column and the name of the aggregate function
-	D_ASSERT(bound_function.GetArguments().size() >= 2);
-	D_ASSERT(arguments.size() >= 2);
+	D_ASSERT(input.GetBoundFunction().GetArguments().size() >= 2);
+	D_ASSERT(input.GetArguments().size() >= 2);
 
 	return ListAggregatesBind<true>(input);
 }

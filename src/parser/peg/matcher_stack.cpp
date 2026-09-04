@@ -194,10 +194,14 @@ MatcherResult MatchStack::ExecuteInternal(const Matcher &matcher, MatchState &st
 	PushFrame(matcher, state);
 	while (!frames.empty()) {
 		auto &frame = *frames.back();
+#ifdef D_ASSERT_IS_ENABLED
 		auto frame_count = frames.size();
+#endif
 		ExecuteFrame(frame);
 		if (!frame.HasResult()) {
+#ifdef D_ASSERT_IS_ENABLED
 			D_ASSERT(frames.size() > frame_count || frame.HasChildResult());
+#endif
 			continue;
 		}
 		auto result = FinalizeFrame(frame);

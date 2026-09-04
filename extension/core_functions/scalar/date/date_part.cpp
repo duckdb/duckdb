@@ -2047,6 +2047,7 @@ static scalar_function_t DatePartUnaryCallback(DatePartSpecifier part_code, Logi
 	case DatePartSpecifier::INVALID:
 		throw NotImplementedException("Specifier type not implemented for DATEPART");
 	}
+	throw InternalException("Unrecognized DatePartSpecifier in DatePartUnaryCallback");
 }
 
 template <typename OP>
@@ -2126,6 +2127,7 @@ static function_statistics_t DatePartUnaryStatistics(DatePartSpecifier part_code
 	case DatePartSpecifier::INVALID:
 		throw NotImplementedException("Specifier type not implemented for DATEPART");
 	}
+	throw InternalException("Unrecognized DatePartSpecifier in DatePartUnaryStatistics");
 }
 
 unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
