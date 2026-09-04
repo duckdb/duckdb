@@ -80,7 +80,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 	    {"show_behavior", {EnumUtil::ToString(ShowBehaviorType::TABLE)}},
 	    {"default_io_mode", {EnumUtil::ToString(FileIOMode::MMAP)}},
-		{"parallelize_sequential_sources", {Value(false)}},
+	    {"parallelize_sequential_sources", {Value(false)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
 #else
