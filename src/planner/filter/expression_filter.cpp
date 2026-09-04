@@ -435,6 +435,22 @@ static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContex
 	auto comparison_type = comp_expr.GetExpressionType();
 	auto &left = BoundComparisonExpression::Left(comp_expr);
 	auto &right = BoundComparisonExpression::Right(comp_expr);
+	if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	    right.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	    left.Cast<BoundReferenceExpression>().Index() == right.Cast<BoundReferenceExpression>().Index()) {
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHAN:
+			return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		default:
+			break;
+		}
+	}
 	if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		filter_stats = TryGetFilterStats(context_p, left, input_stats, owned_stats);
 		constant_expr = &right.Cast<BoundConstantExpression>();
