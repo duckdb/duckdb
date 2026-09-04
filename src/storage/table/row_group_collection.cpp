@@ -782,6 +782,7 @@ void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, 
 }
 
 void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
+	auto row_group_revert_lock = info->GetExclusiveRowGroupRevertLock();
 	auto row_groups = GetRowGroups();
 
 	auto l = row_groups->Lock();

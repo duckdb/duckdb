@@ -1,9 +1,10 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
-#include <thread>
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+
+#include <thread>
 
 using namespace duckdb;
 
@@ -112,6 +113,122 @@ TEST_CASE("Test Pending Query API", "[api][.]") {
 		REQUIRE(pending_query->HasError());
 		REQUIRE(duckdb::StringUtil::Contains(pending_query->GetError(), "SYNTAX_ERROR"));
 	}
+}
+
+TEST_CASE("ART position scans keep planned RowGroups across checkpoint vacuum", "[api]") {
+	DuckDB db;
+	Connection query_con(db);
+	Connection checkpoint_con(db);
+	auto database_path = TestCreatePath("art_position_scan_checkpoint.db");
+
+	// Keep row IDs stable while allowing checkpoint to replace the RowGroup tree.
+	REQUIRE_NO_FAIL(query_con.Query("ATTACH '" + database_path +
+	                                "' AS position_checkpoint (ROW_GROUP_SIZE 32768, "
+	                                "STORAGE_VERSION 'v1.5.0', vacuum_rebuild_indexes 0)"));
+	REQUIRE_NO_FAIL(query_con.Query("SET index_scan_percentage = 1.0"));
+	REQUIRE_NO_FAIL(query_con.Query("SET index_scan_max_count = 0"));
+	REQUIRE_NO_FAIL(query_con.Query("SET threads = 1"));
+	REQUIRE_NO_FAIL(query_con.Query("CREATE TABLE position_checkpoint.t("
+	                                "id BIGINT, bucket INTEGER, payload BIGINT USING COMPRESSION UNCOMPRESSED)"));
+	REQUIRE_NO_FAIL(query_con.Query("INSERT INTO position_checkpoint.t SELECT i, 8, i FROM range(18449) r(i)"));
+	REQUIRE_NO_FAIL(query_con.Query("CHECKPOINT position_checkpoint"));
+	REQUIRE_NO_FAIL(query_con.Query("INSERT INTO position_checkpoint.t "
+	                                "SELECT i, CASE WHEN i < 20497 THEN 7 ELSE 8 END, i "
+	                                "FROM range(18449, 32768) r(i)"));
+	REQUIRE_NO_FAIL(query_con.Query("CREATE INDEX t_bucket ON position_checkpoint.t USING ART(bucket)"));
+
+	auto row_groups = query_con.Query("SELECT count(DISTINCT row_group_id) "
+	                                  "FROM pragma_storage_info('position_checkpoint.t') "
+	                                  "WHERE column_name = 'id' AND segment_type = 'BIGINT'");
+	REQUIRE(CHECK_COLUMN(row_groups, 0, {2}));
+
+	auto plan = query_con.Query("EXPLAIN ANALYZE SELECT id, payload FROM position_checkpoint.t WHERE bucket = 7");
+	REQUIRE_NO_FAIL(*plan);
+	REQUIRE(StringUtil::Contains(plan->ToString(), "Type: Index Scan"));
+
+	auto pending = query_con.PendingQuery("SELECT count(*), min(id), max(id), sum(payload)::BIGINT, "
+	                                      "bool_and(id = payload) FROM position_checkpoint.t WHERE bucket = 7");
+	REQUIRE(!pending->HasError());
+	// Initializing this single pipeline creates its global scan state without executing its data task.
+	REQUIRE(pending->ExecuteTask() == PendingExecutionResult::RESULT_NOT_READY);
+
+	REQUIRE_NO_FAIL(checkpoint_con.Query("CHECKPOINT position_checkpoint"));
+	row_groups = checkpoint_con.Query("SELECT count(DISTINCT row_group_id) "
+	                                  "FROM pragma_storage_info('position_checkpoint.t') "
+	                                  "WHERE column_name = 'id' AND segment_type = 'BIGINT'");
+	const auto row_groups_merged = CHECK_COLUMN(row_groups, 0, {1});
+
+	auto result = pending->Execute();
+	REQUIRE(row_groups_merged);
+	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(2048)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(18449)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(20496)}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(39879680)}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value::BOOLEAN(true)}));
+}
+
+TEST_CASE("ART position scans release the rollback lock between output batches", "[api]") {
+	auto database_path = TestCreatePath("art_position_scan_append_rollback.db");
+	DuckDB db(database_path);
+	Connection query_con(db);
+	Connection commit_con(db);
+
+	REQUIRE_NO_FAIL(query_con.Query("SET index_scan_percentage = 1.0"));
+	REQUIRE_NO_FAIL(query_con.Query("SET index_scan_max_count = 0"));
+	REQUIRE_NO_FAIL(query_con.Query("SET threads = 1"));
+	REQUIRE_NO_FAIL(query_con.Query("SET streaming_buffer_size = '16KB'"));
+	REQUIRE_NO_FAIL(query_con.Query("CREATE TABLE position_rollback("
+	                                "id BIGINT, bucket INTEGER, payload BIGINT USING COMPRESSION UNCOMPRESSED)"));
+	REQUIRE_NO_FAIL(query_con.Query("INSERT INTO position_rollback "
+	                                "SELECT CASE WHEN i = 10000 THEN 100000 ELSE i END, "
+	                                "CASE WHEN i < 10000 THEN 7 ELSE 8 END, "
+	                                "CASE WHEN i = 10000 THEN 300000 ELSE i * 3 END "
+	                                "FROM range(10001) r(i)"));
+	REQUIRE_NO_FAIL(query_con.Query("CREATE INDEX position_rollback_bucket ON position_rollback USING ART(bucket)"));
+	auto plan = query_con.Query("EXPLAIN ANALYZE SELECT id, payload FROM position_rollback WHERE bucket = 7");
+	REQUIRE_NO_FAIL(*plan);
+	REQUIRE(StringUtil::Contains(plan->ToString(), "Type: Index Scan"));
+
+	REQUIRE_NO_FAIL(query_con.Query("SET debug_force_commit_failure = true"));
+	REQUIRE_NO_FAIL(commit_con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(commit_con.Query("INSERT INTO position_rollback "
+	                                 "SELECT i, 7, i * 3 FROM range(10001, 10101) r(i)"));
+
+	auto stream = query_con.SendQuery("SELECT id, payload FROM position_rollback WHERE bucket = 7");
+	REQUIRE(!stream->HasError());
+	REQUIRE(stream->GetResultType() == QueryResultType::STREAM_RESULT);
+	auto chunk = stream->Fetch();
+	REQUIRE(chunk);
+	REQUIRE(chunk->size() > 0);
+	REQUIRE(chunk->size() < 8192);
+
+	// The failed commit appends to and truncates the tail RowGroup between position-scan output batches.
+	auto commit_result = commit_con.Query("COMMIT");
+	REQUIRE_FAIL(commit_result);
+	REQUIRE(StringUtil::Contains(commit_result->GetError(), "Forced commit failure"));
+
+	idx_t result_count = 0;
+	int64_t payload_sum = 0;
+	bool values_match = true;
+	do {
+		for (idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
+			const auto id = chunk->GetValue(0, row_idx).GetValue<int64_t>();
+			const auto payload = chunk->GetValue(1, row_idx).GetValue<int64_t>();
+			payload_sum += payload;
+			values_match = values_match && payload == id * 3;
+		}
+		result_count += chunk->size();
+		chunk = stream->Fetch();
+	} while (chunk);
+	REQUIRE(result_count == 10000);
+	REQUIRE(payload_sum == 149985000);
+	REQUIRE(values_match);
+	REQUIRE_NO_FAIL(query_con.Query("SET debug_force_commit_failure = false"));
+
+	auto result = query_con.Query("SELECT count(*), count(*) FILTER (WHERE id = 10000) FROM position_rollback");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(10001)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(0)}));
 }
 
 TEST_CASE("Abandoned pending query must release the active query", "[api]") {
