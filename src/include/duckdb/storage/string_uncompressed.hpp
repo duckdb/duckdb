@@ -249,7 +249,6 @@ public:
 	                              int32_t &result_offset);
 	static string_t ReadOverflowString(const QueryContext &context, ColumnSegment &segment, Vector &result,
 	                                   block_id_t block, int32_t offset);
-	static string_t ReadString(data_ptr_t target, int32_t offset, uint32_t string_length);
 	static string_t ReadStringWithLength(CompressionSegmentReader &reader, int32_t offset);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 
