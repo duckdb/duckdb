@@ -62,3 +62,25 @@ query I
 SELECT round(1.0::DOUBLE, (-2147483648)::INT);
 ----
 0
+
+# round half away from zero
+query IIIII
+SELECT round(0.5, 0), round(1.5, 0), round(2.5, 0), round(-0.5, 0), round(-2.5, 0)
+----
+1	2	3	-1	-3
+
+query III
+SELECT round(0.125, 2), round(0.135, 2), round(-0.125, 2)
+----
+0.13	0.14	-0.13
+
+query III
+SELECT round(0.5::DOUBLE, 0), round(2.5::DOUBLE, 0), round(0.125::DOUBLE, 2)
+----
+1.0	3.0	0.13
+
+# hugeint-backed DECIMAL
+query II
+SELECT round(12345678901234567890123456789012344.5::DECIMAL(38,1), 0), round(-12345678901234567890123456789012344.5::DECIMAL(38,1), 0)
+----
+12345678901234567890123456789012345	-12345678901234567890123456789012345

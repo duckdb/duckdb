@@ -1,5 +1,6 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/bit.hpp"
@@ -897,19 +898,69 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 // round
 //===--------------------------------------------------------------------===//
 namespace {
+
+template <class T, class ROUND_POLICY>
+inline T RoundDivide(T input, T power_of_ten) {
+	// power_of_ten is ten raised to the digits being dropped and is at least ten because the binder replaces round
+	// with ScalarFunction::NopFunction if the round would not drop digits
+	D_ASSERT(power_of_ten >= 10);
+	T quotient;
+	T remainder;
+	if constexpr (std::is_same<T, hugeint_t>::value) {
+		// hugeint division and modulo both run a full DivMod and discard half of the result
+		quotient = Hugeint::DivMod(input, power_of_ten, remainder);
+	} else {
+		quotient = UnsafeNumericCast<T>(input / power_of_ten);
+		remainder = UnsafeNumericCast<T>(input % power_of_ten);
+	}
+	if (remainder < 0) {
+		remainder = UnsafeNumericCast<T>(-remainder);
+	}
+	T half = UnsafeNumericCast<T>(power_of_ten / 2);
+	if (remainder > half || (remainder == half && ROUND_POLICY::RoundsAway(quotient))) {
+		quotient = UnsafeNumericCast<T>(input < 0 ? quotient - 1 : quotient + 1);
+	}
+	return quotient;
+}
+
+struct RoundHalfAwayFromZero {
+	static constexpr const char *Name = "ROUND";
+
+	static double Nearest(double value) {
+		return std::round(value);
+	}
+	template <class T>
+	static bool RoundsAway(T) {
+		return true;
+	}
+};
+
+struct RoundHalfToEven {
+	static constexpr const char *Name = "ROUND_EVEN";
+
+	static double Nearest(double value) {
+		return RoundToNearestEven(value);
+	}
+	template <class T>
+	static bool RoundsAway(T quotient) {
+		return quotient % 2 != 0;
+	}
+};
+
+template <class ROUND_POLICY>
 struct RoundOperatorPrecision {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB precision) {
 		double rounded_value;
 		if (precision < 0) {
 			double modifier = std::pow(10, -TA(precision));
-			rounded_value = (std::round(input / modifier)) * modifier;
+			rounded_value = ROUND_POLICY::Nearest(input / modifier) * modifier;
 			if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
 				return 0;
 			}
 		} else {
 			double modifier = std::pow(10, TA(precision));
-			rounded_value = (std::round(input * modifier)) / modifier;
+			rounded_value = ROUND_POLICY::Nearest(input * modifier) / modifier;
 			if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
 				return input;
 			}
@@ -952,6 +1003,7 @@ struct RoundDecimalOperator {
 	}
 };
 
+template <class ROUND_POLICY>
 struct RoundIntegerOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB precision) {
@@ -972,9 +1024,9 @@ struct RoundIntegerOperator {
 		}
 		auto rounded = wide_input / power_of_ten;
 		const auto remainder = wide_input % power_of_ten;
-		if (remainder >= half) {
+		if (remainder > half || (remainder == half && ROUND_POLICY::RoundsAway(rounded))) {
 			rounded = Hugeint::Add(rounded, 1);
-		} else if (remainder <= -half) {
+		} else if (remainder < -half || (remainder == -half && ROUND_POLICY::RoundsAway(rounded))) {
 			rounded = Hugeint::Subtract(rounded, 1);
 		}
 		if (rounded == 0) {
@@ -982,11 +1034,11 @@ struct RoundIntegerOperator {
 		}
 		hugeint_t rounded_value = 0;
 		if (!Hugeint::TryMultiply(rounded, power_of_ten, rounded_value)) {
-			throw OutOfRangeException("Overflow in ROUND of integer");
+			throw OutOfRangeException("Overflow in %s of integer", ROUND_POLICY::Name);
 		}
 		TR result;
 		if (!TryCast::Operation(rounded_value, result)) {
-			throw OutOfRangeException("Overflow in ROUND of integer");
+			throw OutOfRangeException("Overflow in %s of integer", ROUND_POLICY::Name);
 		}
 		return result;
 	}
@@ -994,6 +1046,7 @@ struct RoundIntegerOperator {
 
 } // namespace
 
+template <class ROUND_POLICY>
 struct DecimalRoundNegativePrecisionOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -1009,19 +1062,14 @@ struct DecimalRoundNegativePrecisionOperator {
 		T divide_power_of_ten =
 		    UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale]);
 		T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
-		T addition = divide_power_of_ten / 2;
 
 		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
-			if (input < 0) {
-				input -= addition;
-			} else {
-				input += addition;
-			}
-			auto rounded = UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
+			auto rounded =
+			    UnsafeNumericCast<T>(RoundDivide<T, ROUND_POLICY>(input, divide_power_of_ten) * multiply_power_of_ten);
 			if constexpr (std::is_same_v<T, hugeint_t>) {
 				if (info.check_overflow && (rounded <= -Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL] ||
 				                            rounded >= Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL])) {
-					throw OutOfRangeException("Overflow in ROUND of DECIMAL(38)");
+					throw OutOfRangeException("Overflow in %s of DECIMAL(38)", ROUND_POLICY::Name);
 				}
 			}
 			return rounded;
@@ -1029,6 +1077,7 @@ struct DecimalRoundNegativePrecisionOperator {
 	}
 };
 
+template <class ROUND_POLICY>
 struct DecimalRoundPositivePrecisionOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -1036,15 +1085,8 @@ struct DecimalRoundPositivePrecisionOperator {
 		auto &info = func_expr.BindInfo()->Cast<RoundPrecisionFunctionData>();
 		auto source_scale = DecimalType::GetScale(func_expr.GetChildren()[0]->GetReturnType());
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
-		T addition = power_of_ten / 2;
-		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
-			if (input < 0) {
-				input -= addition;
-			} else {
-				input += addition;
-			}
-			return UnsafeNumericCast<T>(input / power_of_ten);
-		});
+		UnaryExecutor::Execute<T, T>(input.data[0], result,
+		                             [&](T input) { return RoundDivide<T, ROUND_POLICY>(input, power_of_ten); });
 	}
 };
 
@@ -1058,36 +1100,44 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 		switch (type.id()) {
 		case LogicalTypeId::FLOAT:
 			round_func = ScalarFunction::UnaryFunction<float, float, RoundOperator>;
-			round_prec_func = ScalarFunction::BinaryFunction<float, int32_t, float, RoundOperatorPrecision>;
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<float, int32_t, float, RoundOperatorPrecision<RoundHalfAwayFromZero>>;
 			break;
 		case LogicalTypeId::DOUBLE:
 			round_func = ScalarFunction::UnaryFunction<double, double, RoundOperator>;
-			round_prec_func = ScalarFunction::BinaryFunction<double, int32_t, double, RoundOperatorPrecision>;
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<double, int32_t, double, RoundOperatorPrecision<RoundHalfAwayFromZero>>;
 			break;
 		case LogicalTypeId::DECIMAL:
 			bind_func = BindGenericRoundFunctionDecimal<RoundDecimalOperator>;
-			bind_prec_func = BindDecimalRoundPrecision<DecimalRoundNegativePrecisionOperator,
-			                                           DecimalRoundPositivePrecisionOperator, true>;
+			bind_prec_func =
+			    BindDecimalRoundPrecision<DecimalRoundNegativePrecisionOperator<RoundHalfAwayFromZero>,
+			                              DecimalRoundPositivePrecisionOperator<RoundHalfAwayFromZero>, true>;
 			break;
 		case LogicalTypeId::TINYINT:
 			round_func = ScalarFunction::NopFunction;
-			round_prec_func = ScalarFunction::BinaryFunction<int8_t, int32_t, int8_t, RoundIntegerOperator>;
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<int8_t, int32_t, int8_t, RoundIntegerOperator<RoundHalfAwayFromZero>>;
 			break;
 		case LogicalTypeId::SMALLINT:
 			round_func = ScalarFunction::NopFunction;
-			round_prec_func = ScalarFunction::BinaryFunction<int16_t, int32_t, int16_t, RoundIntegerOperator>;
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<int16_t, int32_t, int16_t, RoundIntegerOperator<RoundHalfAwayFromZero>>;
 			break;
 		case LogicalTypeId::INTEGER:
 			round_func = ScalarFunction::NopFunction;
-			round_prec_func = ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, RoundIntegerOperator>;
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, RoundIntegerOperator<RoundHalfAwayFromZero>>;
 			break;
 		case LogicalTypeId::BIGINT:
 			round_func = ScalarFunction::NopFunction;
-			round_prec_func = ScalarFunction::BinaryFunction<int64_t, int32_t, int64_t, RoundIntegerOperator>;
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<int64_t, int32_t, int64_t, RoundIntegerOperator<RoundHalfAwayFromZero>>;
 			break;
 		case LogicalTypeId::HUGEINT:
 			round_func = ScalarFunction::NopFunction;
-			round_prec_func = ScalarFunction::BinaryFunction<hugeint_t, int32_t, hugeint_t, RoundIntegerOperator>;
+			round_prec_func = ScalarFunction::BinaryFunction<hugeint_t, int32_t, hugeint_t,
+			                                                 RoundIntegerOperator<RoundHalfAwayFromZero>>;
 			break;
 		default:
 			if (type.IsIntegral()) {
@@ -1112,6 +1162,68 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 	}
 	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round;
+}
+
+//===--------------------------------------------------------------------===//
+// round_even
+//===--------------------------------------------------------------------===//
+ScalarFunctionSet RoundEvenFun::GetFunctions() {
+	ScalarFunctionSet round_even;
+	for (auto &type : LogicalType::Numeric()) {
+		scalar_function_t round_prec_func = nullptr;
+		bind_scalar_function_t bind_prec_func = nullptr;
+		switch (type.id()) {
+		case LogicalTypeId::FLOAT:
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<float, int32_t, float, RoundOperatorPrecision<RoundHalfToEven>>;
+			break;
+		case LogicalTypeId::DOUBLE:
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<double, int32_t, double, RoundOperatorPrecision<RoundHalfToEven>>;
+			break;
+		case LogicalTypeId::DECIMAL:
+			bind_prec_func = BindDecimalRoundPrecision<DecimalRoundNegativePrecisionOperator<RoundHalfToEven>,
+			                                           DecimalRoundPositivePrecisionOperator<RoundHalfToEven>, true>;
+			break;
+		case LogicalTypeId::TINYINT:
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<int8_t, int32_t, int8_t, RoundIntegerOperator<RoundHalfToEven>>;
+			break;
+		case LogicalTypeId::SMALLINT:
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<int16_t, int32_t, int16_t, RoundIntegerOperator<RoundHalfToEven>>;
+			break;
+		case LogicalTypeId::INTEGER:
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, RoundIntegerOperator<RoundHalfToEven>>;
+			break;
+		case LogicalTypeId::BIGINT:
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<int64_t, int32_t, int64_t, RoundIntegerOperator<RoundHalfToEven>>;
+			break;
+		case LogicalTypeId::HUGEINT:
+			round_prec_func =
+			    ScalarFunction::BinaryFunction<hugeint_t, int32_t, hugeint_t, RoundIntegerOperator<RoundHalfToEven>>;
+			break;
+		default:
+			if (type.IsIntegral()) {
+				// no round for integral numbers
+				continue;
+			}
+			throw InternalException("Unimplemented numeric type for function \"round_even\"");
+		}
+		ScalarFunction round_even_function({{"x", type}, {"precision", LogicalType::INTEGER}}, type, round_prec_func,
+		                                   bind_prec_func);
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			// rounding a DECIMAL can overflow
+			round_even_function.SetFallible();
+		} else if (type.IsIntegral()) {
+			// rounding an integer to a negative precision can overflow
+			round_even_function.SetFallible();
+		}
+		round_even.AddFunction(std::move(round_even_function));
+	}
+	return round_even;
 }
 
 //===--------------------------------------------------------------------===//
