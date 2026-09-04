@@ -160,9 +160,16 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	}
 
 	// Unbound alias whose AttachedDatabase this transaction still holds.
-	if (!GetDatabase(info.name) && MetaTransaction::Get(context).GetReferencedDatabaseOwning(info.name)) {
-		throw TransactionException("Cannot re-attach database %s in the same transaction that already used it",
-		                           info.name);
+	// Hidden readers (read_duckdb) DETACH after a scan and re-ATTACH the same file
+	// in one query or transaction; fall through so InsertDatabasePath reuses it.
+	if (!GetDatabase(info.name)) {
+		if (auto existing_db = MetaTransaction::Get(context).GetReferencedDatabaseOwning(info.name)) {
+			if (existing_db->GetVisibility() != AttachVisibility::HIDDEN ||
+			    options.visibility != AttachVisibility::HIDDEN) {
+				throw TransactionException(
+				    "Cannot re-attach database %s in the same transaction that already used it", info.name);
+			}
+		}
 	}
 
 	if (requires_tracking_attaches) {
