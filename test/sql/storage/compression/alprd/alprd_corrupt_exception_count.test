@@ -1,0 +1,28 @@
+# name: test/sql/storage/compression/alprd/alprd_corrupt_exception_count.test
+# description: An ALPRD vector claiming more exceptions than it has values must be rejected
+# group: [alprd]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alprd_corrupt_exception_count.db.gz {TEST_DIR}/alprd_corrupt_exception_count.db
+
+load {TEST_DIR}/alprd_corrupt_exception_count.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+----
+
+statement error
+SELECT * FROM t LIMIT 1;
+----
+Data Corruption Error: Corrupted ALPRD segment: exception count 4100 exceeds vector size 1024
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT * FROM t LIMIT 1;
+----
+Data Corruption Error: Corrupted ALPRD segment: exception count 4100 exceeds vector size 1024

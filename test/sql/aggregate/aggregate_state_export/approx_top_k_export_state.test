@@ -107,3 +107,16 @@ statement error
 SELECT finalize(combine(approx_top_k(x, 2) EXPORT_STATE, (SELECT approx_top_k(y, 3) EXPORT_STATE FROM (VALUES ('a')) s(y)))) FROM (VALUES ('a')) t(x);
 ----
 <REGEX>:.*cannot combine approx_top_K with different k values.*
+
+# importing a state with duplicate values is an error
+statement error
+SELECT finalize(to_aggregate_state({
+	'k': 2::UBIGINT,
+	'values': [
+		{'value': 'a'::VARCHAR, 'count': 5::UBIGINT},
+		{'value': 'a'::VARCHAR, 'count': 3::UBIGINT}
+	]::STRUCT("value" VARCHAR, "count" UBIGINT)[],
+	'filter': list_transform(range(64), lambda x: 0::UBIGINT)
+}, 'approx_top_k', ['VARCHAR', 'BIGINT']));
+----
+<REGEX>:Invalid Input Error: Invalid approx_top_k state.*
