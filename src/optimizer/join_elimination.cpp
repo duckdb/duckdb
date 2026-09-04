@@ -1,362 +1,257 @@
 #include "duckdb/optimizer/join_elimination.hpp"
-#include "duckdb/common/assert.hpp"
+
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
-#include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/optimizer/constraint_propagator.hpp"
-#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_distinct.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
-#include <utility>
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
-void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<LogicalOperator> parent, idx_t idx) {
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		if (!parent) {
-			return;
+
+static void CollectExprReferences(Expression &expr, unordered_set<TableIndex> &ref_table_ids) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		ref_table_ids.insert(expr.Cast<BoundColumnRefExpression>().Binding().table_index);
+	}
+	ExpressionIterator::EnumerateChildren(expr,
+	                                      [&](Expression &child) { CollectExprReferences(child, ref_table_ids); });
+}
+
+static void CollectReferences(LogicalOperator &op, unordered_set<TableIndex> &ref_table_ids) {
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expr_ptr) {
+		if (expr_ptr && *expr_ptr) {
+			CollectExprReferences(**expr_ptr, ref_table_ids);
 		}
-		D_ASSERT(!pipe_info.join_parent);
-		pipe_info.join_parent = parent;
-		pipe_info.join_index = idx;
-		left_child = CreateChildren();
-		right_child = CreateChildren();
-		left_child->OptimizeInternal(std::move(op.children[0]));
-		right_child->OptimizeInternal(std::move(op.children[1]));
-		return;
+	});
+}
+
+//! Elimination for a specific side of the join
+static bool TryEliminateSide(LogicalComparisonJoin &join, const unordered_set<TableIndex> &ref_table_ids,
+                             bool outer_is_distinct, ConstraintPropagator &propagator, idx_t try_inner_idx,
+                             idx_t try_outer_idx, idx_t &out_inner_idx, idx_t &out_outer_idx) {
+	bool is_inner_semi_anti =
+	    join.join_type == JoinType::INNER || join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI;
+
+	auto try_inner_bindings = join.children[try_inner_idx]->GetColumnBindings();
+	// Ensure join output columns only contain outer table columns
+	for (auto &binding : try_inner_bindings) {
+		if (ref_table_ids.find(binding.table_index) != ref_table_ids.end()) {
+			return false;
+		}
 	}
 
-	VisitOperatorExpressions(op);
+	vector<ColumnBinding> inner_keys;
+	vector<ColumnBinding> outer_keys;
 
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		auto &distinct = op.Cast<LogicalDistinct>();
-		if (distinct.distinct_type != DistinctType::DISTINCT) {
-			break;
-		}
-		column_binding_set_t distinct_group;
-		if (distinct.distinct_targets[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-			break;
-		}
-		auto table_idx = distinct.distinct_targets[0]->Cast<BoundColumnRefExpression>().Binding().table_index;
-		bool can_add = true;
-		for (auto &target : distinct.distinct_targets) {
-			if (target->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-				can_add = false;
-				break;
+	for (auto &cond : join.conditions) {
+		if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+			if (is_inner_semi_anti) {
+				return false;
 			}
-			auto &col_ref = target->Cast<BoundColumnRefExpression>();
-			distinct_group.insert(col_ref.Binding());
-			D_ASSERT(table_idx == col_ref.Binding().table_index);
+			continue;
 		}
-		if (can_add) {
-			pipe_info.distinct_groups[table_idx] = std::move(distinct_group);
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggr = op.Cast<LogicalAggregate>();
-		if (aggr.grouping_sets.size() > 1) {
-			break;
-		}
-		// only resolve group by columns for now
-		column_binding_set_t distinct_group;
-		TableIndex table_idx = aggr.group_index;
-		for (idx_t i = 0; i < aggr.groups.size(); i++) {
-			distinct_group.insert(ColumnBinding(aggr.group_index, ProjectionIndex(i)));
-		}
-		if (!distinct_group.empty()) {
-			pipe_info.distinct_groups[table_idx] = std::move(distinct_group);
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto &projection = op.Cast<LogicalProjection>();
-		unordered_map<idx_t, vector<idx_t>> reference_records;
-		// for select distinct * from table, first projection then distinct. distinct_groups has record projection table
-		// id for select * from table group by col, first aggregate then projection. projection has aggregate table id.
 
-		// before traverse children, first check whether any distinct group ref this projection
-		auto it = pipe_info.distinct_groups.find(projection.table_index);
-		if (it != pipe_info.distinct_groups.end()) {
-			column_binding_set_t new_distinct_group;
-			auto &start_expr = projection.GetExpression(*it->second.begin());
-			if (start_expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-				// if the expression is not a column ref, we cannot eliminate the join
-				break;
+		auto &inner_expr = (try_inner_idx == 0) ? cond.LeftReference() : cond.RightReference();
+		auto &outer_expr = (try_inner_idx == 0) ? cond.RightReference() : cond.LeftReference();
+
+		bool inner_is_col = inner_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
+		bool outer_is_col = outer_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
+
+		if (!inner_is_col || !outer_is_col) {
+			if (is_inner_semi_anti) {
+				return false;
 			}
-			bool could_add = true;
-			auto ref_id = start_expr.Cast<BoundColumnRefExpression>().Binding().table_index;
-			for (auto &col : it->second) {
-				auto &expression = projection.GetExpression(col);
-				if (expression.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-					// if the expression is not a column ref, we cannot eliminate the join
-					could_add = false;
-					break;
+			continue;
+		}
+
+		inner_keys.push_back(inner_expr->Cast<BoundColumnRefExpression>().Binding());
+		outer_keys.push_back(outer_expr->Cast<BoundColumnRefExpression>().Binding());
+	}
+
+	// Bail out if the inner child has a filter
+	if (is_inner_semi_anti) {
+		if (!inner_keys.empty()) {
+			auto inner_props_it = propagator.properties_map.find(inner_keys[0].table_index);
+			if (inner_props_it != propagator.properties_map.end() && inner_props_it->second.has_filter) {
+				return false;
+			}
+		}
+	}
+
+	if (outer_is_distinct && (join.join_type == JoinType::LEFT || join.join_type == JoinType::RIGHT)) {
+		out_inner_idx = try_inner_idx;
+		out_outer_idx = try_outer_idx;
+		return true;
+	}
+
+	if (!inner_keys.empty() && inner_keys.size() == outer_keys.size()) {
+		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+			auto inner_props_it = propagator.properties_map.find(inner_keys[0].table_index);
+			if (inner_props_it != propagator.properties_map.end() && inner_props_it->second.base_table) {
+				auto inner_table_ptr = inner_props_it->second.base_table;
+				Identifier inner_schema(inner_table_ptr->schema.name);
+				Identifier inner_table_name = inner_table_ptr->name;
+				if (propagator.IsForeignKey(outer_keys, inner_schema, inner_table_name) &&
+				    propagator.IsNotNull(outer_keys)) {
+					out_inner_idx = try_inner_idx;
+					out_outer_idx = try_outer_idx;
+					return true;
 				}
-				auto &col_ref = expression.Cast<BoundColumnRefExpression>();
-				if (ref_id != col_ref.Binding().table_index) {
-					could_add = false;
-					break;
-				}
-				new_distinct_group.insert(col_ref.Binding());
 			}
-			if (could_add) {
-				pipe_info.distinct_groups[ref_id] = std::move(new_distinct_group);
-			}
+			return false;
 		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_GET: {
-		auto &get = op.Cast<LogicalGet>();
-		if (get.table_filters.HasFilters()) {
-			pipe_info.has_filter = true;
-		}
-		break;
-	}
-	default:
-		break;
-	}
 
-	if (op.children.size() == 1) {
-		OptimizeChildren(*op.children[0], op, idx);
-	} else {
-		children_root = op;
-		for (auto &child : op.children) {
-			auto child_optimizer = CreateChildren();
-			child_optimizer->OptimizeInternal(std::move(child));
-			children.emplace_back(std::move(child_optimizer));
-		}
-		return;
-	}
+		if (propagator.IsKeyUnique(inner_keys)) {
+			if (join.join_type == JoinType::INNER) {
+				auto inner_props_it = propagator.properties_map.find(inner_keys[0].table_index);
+				if (inner_props_it != propagator.properties_map.end() && inner_props_it->second.base_table) {
+					auto inner_table_ptr = inner_props_it->second.base_table;
+					Identifier inner_schema(inner_table_ptr->schema.name);
+					Identifier inner_table_name(inner_table_ptr->name);
 
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto &projection = op.Cast<LogicalProjection>();
-		// after traversed children, here check whether any distinct group added in children
-		unordered_map<TableIndex, DistinctGroupRef> ref_table_columns;
-		for (idx_t proj_idx = 0; proj_idx < projection.expressions.size(); proj_idx++) {
-			auto &expression = projection.expressions.get(proj_idx);
-			if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				auto &col_ref = expression->Cast<BoundColumnRefExpression>();
-				auto distinct_group_it = pipe_info.distinct_groups.find(col_ref.Binding().table_index);
-				if (distinct_group_it == pipe_info.distinct_groups.end()) {
-					continue;
-				}
-				if (ref_table_columns.find(col_ref.Binding().table_index) == ref_table_columns.end()) {
-					auto ref = DistinctGroupRef();
-					for (auto &col : distinct_group_it->second) {
-						ref.ref_column_ids.insert(col.column_index);
+					bool is_fk = propagator.IsForeignKey(outer_keys, inner_schema, inner_table_name) &&
+					             propagator.IsNotNull(outer_keys);
+
+					bool is_self_join = false;
+					if (!is_fk) {
+						auto outer_props_it = propagator.properties_map.find(outer_keys[0].table_index);
+						if (outer_props_it != propagator.properties_map.end() && outer_props_it->second.base_table) {
+							if (inner_table_ptr == outer_props_it->second.base_table) {
+								is_self_join = true;
+							}
+						}
 					}
-					ref_table_columns[col_ref.Binding().table_index] = ref;
+
+					if (is_fk || is_self_join) {
+						out_inner_idx = try_inner_idx;
+						out_outer_idx = try_outer_idx;
+						return true;
+					}
 				}
-				ref_table_columns[col_ref.Binding().table_index].distinct_group.insert(
-				    ColumnBinding(projection.table_index, ProjectionIndex(proj_idx)));
-				ref_table_columns[col_ref.Binding().table_index].ref_column_ids.erase(col_ref.Binding().column_index);
+			} else {
+				out_inner_idx = try_inner_idx;
+				out_outer_idx = try_outer_idx;
+				return true;
 			}
 		}
-		for (auto &refs : ref_table_columns) {
-			if (refs.second.ref_column_ids.empty()) {
-				pipe_info.distinct_groups[projection.table_index] = std::move(refs.second.distinct_group);
-			}
-		}
-		break;
 	}
-	default:
-		D_ASSERT(op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
-		break;
-	}
+	return false;
 }
 
 unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator> op) {
-	OptimizeInternal(std::move(op));
-	if (pipe_info.join_parent || !children.empty()) {
-		pipe_info.root = TryEliminateJoin();
+	bool changed = true;
+	// Keep running until no more joins can be eliminated
+	while (changed) {
+		changed = false;
+
+		ConstraintPropagator propagator;
+		propagator.VisitOperator(*op);
+
+		unordered_set<TableIndex> ref_table_ids;
+		op = OptimizeInternal(std::move(op), std::move(ref_table_ids), false, propagator, changed);
 	}
-	return std::move(pipe_info.root);
+	return op;
 }
 
-void JoinElimination::OptimizeInternal(unique_ptr<LogicalOperator> op) {
-	pipe_info.root = std::move(op);
-	OptimizeChildren(*pipe_info.root, nullptr, 0);
-}
+unique_ptr<LogicalOperator> JoinElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
+                                                              unordered_set<TableIndex> ref_table_ids,
+                                                              bool outer_is_distinct, ConstraintPropagator &propagator,
+                                                              bool &changed) {
+	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		CollectReferences(*op, ref_table_ids);
+	}
 
-unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
-	D_ASSERT(pipe_info.root);
-	if (!children.empty()) {
-		D_ASSERT(!pipe_info.join_parent);
-		D_ASSERT(children_root);
-		D_ASSERT(children.size() == children_root->children.size());
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		unordered_set<TableIndex> child_ref_table_ids = ref_table_ids;
+		CollectReferences(*op, child_ref_table_ids);
 
-		for (idx_t idx = 0; idx < children.size(); idx++) {
-			children_root->children[idx] = children[idx]->TryEliminateJoin();
+		op->children[0] =
+		    OptimizeInternal(std::move(op->children[0]), child_ref_table_ids, outer_is_distinct, propagator, changed);
+		op->children[1] = OptimizeInternal(std::move(op->children[1]), child_ref_table_ids, false, propagator, changed);
+
+		auto original_op_ptr = op.get();
+		auto new_op = TryEliminateJoin(std::move(op), ref_table_ids, outer_is_distinct, propagator);
+		if (new_op.get() != original_op_ptr) {
+			changed = true;
 		}
-		return std::move(pipe_info.root);
-	}
-	if (!pipe_info.join_parent) {
-		return std::move(pipe_info.root);
+		return new_op;
 	}
 
-	auto join_parent = pipe_info.join_parent;
+	// Top-down distinct context
+	bool child_is_distinct = outer_is_distinct;
+	if (op->type == LogicalOperatorType::LOGICAL_DISTINCT) {
+		child_is_distinct = true;
+	} else if (op->type != LogicalOperatorType::LOGICAL_PROJECTION && op->type != LogicalOperatorType::LOGICAL_FILTER) {
+		child_is_distinct = false;
+	}
 
-	auto &join_op = pipe_info.join_parent->children[pipe_info.join_index];
-	join_op->children[0] = left_child->TryEliminateJoin();
-	join_op->children[1] = right_child->TryEliminateJoin();
+	for (auto &child : op->children) {
+		child = OptimizeInternal(std::move(child), ref_table_ids, child_is_distinct, propagator, changed);
+	}
 
-	auto &join = join_op->Cast<LogicalComparisonJoin>();
+	return op;
+}
+
+unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin(unique_ptr<LogicalOperator> op,
+                                                              const unordered_set<TableIndex> &ref_table_ids,
+                                                              bool outer_is_distinct,
+                                                              ConstraintPropagator &propagator) {
+	auto &join = op->Cast<LogicalComparisonJoin>();
+
 	bool is_output_unique = false;
 	idx_t inner_idx = 1;
 	idx_t outer_idx = 0;
+
 	switch (join.join_type) {
+	case JoinType::INNER:
+	case JoinType::SEMI:
+	case JoinType::ANTI:
 	case JoinType::LEFT:
 		break;
-	case JoinType::SINGLE: {
+	case JoinType::SINGLE:
 		is_output_unique = true;
 		break;
 	case JoinType::RIGHT:
 		inner_idx = 0;
 		outer_idx = 1;
 		break;
-	case JoinType::INNER:
-		break;
-	}
 	default:
-		return std::move(pipe_info.root);
+		return op;
 	}
-	auto &inner_child = inner_idx == 0 ? left_child : right_child;
-	if (inner_child->pipe_info.has_filter) {
-		return std::move(pipe_info.root);
-	}
+
 	if (join.filter_pushdown) {
-		return std::move(pipe_info.root);
-	}
-	auto inner_bindings = join.children[inner_idx]->GetColumnBindings();
-	// ensure join output columns only contains outer table columns
-	for (auto &binding : inner_bindings) {
-		if (pipe_info.ref_table_ids.find(binding.table_index) != pipe_info.ref_table_ids.end()) {
-			return std::move(pipe_info.root);
-		}
+		return op;
 	}
 
-	if (inner_idx == 1) {
-		for (auto &distinct : right_child->pipe_info.distinct_groups) {
-			pipe_info.distinct_groups[distinct.first] = distinct.second;
-		}
-	} else {
-		for (auto &distinct : left_child->pipe_info.distinct_groups) {
-			pipe_info.distinct_groups[distinct.first] = distinct.second;
-		}
-	}
-
-	// 1. guarantee output uniqueness via constraints
-	if (!is_output_unique) {
-		vector<ColumnBinding> inner_keys;
-		vector<ColumnBinding> outer_keys;
-
-		for (auto &cond : join.conditions) {
-			if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
-				continue;
-			}
-
-			auto &inner_expr = (inner_idx == 0) ? cond.LeftReference() : cond.RightReference();
-			auto &outer_expr = (inner_idx == 0) ? cond.RightReference() : cond.LeftReference();
-
-			if (inner_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				inner_keys.push_back(inner_expr->Cast<BoundColumnRefExpression>().Binding());
-			}
-			if (outer_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				outer_keys.push_back(outer_expr->Cast<BoundColumnRefExpression>().Binding());
-			}
-		}
-
-		if (!inner_keys.empty()) {
-			ConstraintPropagator inner_prop;
-			inner_prop.VisitOperator(*join.children[inner_idx]);
-
-			if (inner_prop.IsJoinKeyUnique(inner_keys)) {
-				if (join.join_type == JoinType::INNER) {
-					ConstraintPropagator outer_prop;
-					outer_prop.VisitOperator(*join.children[outer_idx]);
-
-					auto inner_props_it = inner_prop.properties_map.find(inner_keys[0].table_index);
-					if (inner_props_it != inner_prop.properties_map.end() && inner_props_it->second.base_table) {
-						Identifier inner_table_name = inner_props_it->second.base_table->name;
-
-						// Check if outer keys form an FK pointing to the inner table
-						if (outer_prop.IsForeignKey(outer_keys, inner_table_name)) {
-							is_output_unique = true;
-						}
-					}
-				} else {
-					// For LEFT/RIGHT JOIN, uniqueness is enough!
-					is_output_unique = true;
-				}
-			}
-		}
-	}
-
-	if (!is_output_unique) {
+	// Try to eliminate the default inner side
+	if (TryEliminateSide(join, ref_table_ids, outer_is_distinct, propagator, inner_idx, outer_idx, inner_idx,
+	                     outer_idx)) {
 		is_output_unique = true;
-		// 2. inner table join condition columns contains a whole distinct group
-		vector<ColumnBinding> col_bindings;
-		for (auto &condition : join.conditions) {
-			if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
-			    condition.GetLHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
-			    condition.GetRHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-				is_output_unique = false;
-				break;
-			}
-			auto inner_binding = inner_idx == 0 ? condition.GetLHS().Cast<BoundColumnRefExpression>().Binding()
-			                                    : condition.GetRHS().Cast<BoundColumnRefExpression>().Binding();
-			col_bindings.push_back(inner_binding);
-		}
-		if (is_output_unique && !ContainDistinctGroup(col_bindings)) {
-			is_output_unique = false;
-		}
-	}
-	if (!is_output_unique) {
-		// 3. join result columns in join condition contains a whole distinct group
-		auto outer_bindings = join.children[outer_idx]->GetColumnBindings();
-		if (ContainDistinctGroup(outer_bindings)) {
+	} else if (join.join_type == JoinType::INNER) {
+		// If it's an INNER join and the first attempt failed, try the other side
+		idx_t swapped_inner = (inner_idx == 1) ? 0 : 1;
+		idx_t swapped_outer = (outer_idx == 1) ? 0 : 1;
+		if (TryEliminateSide(join, ref_table_ids, outer_is_distinct, propagator, swapped_inner, swapped_outer,
+		                     inner_idx, outer_idx)) {
 			is_output_unique = true;
 		}
 	}
 
 	if (is_output_unique) {
-		join_parent->children[pipe_info.join_index] = std::move(join_op->children[outer_idx]);
-	}
-	return std::move(pipe_info.root);
-}
-
-bool JoinElimination::ContainDistinctGroup(vector<ColumnBinding> &column_bindings) {
-	D_ASSERT(!column_bindings.empty());
-	auto &column_binding = column_bindings[0];
-	auto it = pipe_info.distinct_groups.find(column_binding.table_index);
-	if (it == pipe_info.distinct_groups.end()) {
-		return false;
-	}
-	unordered_set<ProjectionIndex> used_column_ids;
-	for (auto &binding : column_bindings) {
-		if (it->second.find(binding) == it->second.end()) {
-			continue;
+		// ANTI join returns an empty result if eliminated
+		if (join.join_type == JoinType::ANTI) {
+			auto false_filter = make_uniq<LogicalFilter>();
+			false_filter->expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(false)));
+			false_filter->children.push_back(std::move(op->children[outer_idx]));
+			return std::move(false_filter);
 		}
-		used_column_ids.emplace(binding.column_index);
+		return std::move(op->children[outer_idx]);
 	}
-	return used_column_ids.size() == it->second.size();
-}
 
-unique_ptr<Expression> JoinElimination::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	pipe_info.ref_table_ids.insert(expr.Binding().table_index);
-	return nullptr;
+	return op;
 }
 
 } // namespace duckdb
