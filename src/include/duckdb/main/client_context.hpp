@@ -131,6 +131,9 @@ public:
 	//! directly to disambiguate "never connected" from "was connected, target was detached elsewhere").
 	DUCKDB_API shared_ptr<AttachedDatabase> TryGetConnectedCatalog() const;
 
+	bool HasActiveTransaction() const {
+		return transaction.HasActiveTransaction();
+	}
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}

@@ -299,7 +299,7 @@ unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
 		ValidChecker::Invalidate(db_instance, error.RawMessage());
 	}
-	if (invalidates_transaction) {
+	if (invalidates_transaction && HasActiveTransaction()) {
 		ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
 	}
 
