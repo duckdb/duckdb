@@ -274,11 +274,27 @@ static void ReplaceMatchNumber(unique_ptr<ParsedExpression> &expr) {
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMatchNumber(child); });
 }
 
-static unique_ptr<ParsedExpression> CreateStructExtract(const string &column_name, const string &child_name) {
+static unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> value, const string &child_name) {
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ColumnRefExpression>(Identifier(column_name)));
+	children.push_back(std::move(value));
 	children.push_back(make_uniq<ConstantExpression>(child_name));
 	return make_uniq<FunctionExpression>("struct_extract", std::move(children));
+}
+
+static unique_ptr<ParsedExpression> CreateStructExtract(const string &column_name, const string &child_name) {
+	return CreateStructExtract(make_uniq<ColumnRefExpression>(Identifier(column_name)), child_name);
+}
+
+//! The field a value travels in while it is carried to the row that reports it
+constexpr const char *MATCH_RECOGNIZE_VALUE_FIELD = "v";
+
+//! struct_pack(v := <value>) is never NULL, so a NULL the value itself holds stays apart from the NULL
+//! that masks a row the variable did not match - which is the NULL that MatchScopedValue walks back over
+static unique_ptr<ParsedExpression> PackValue(unique_ptr<ParsedExpression> value) {
+	value->SetAlias(Identifier(MATCH_RECOGNIZE_VALUE_FIELD));
+	vector<unique_ptr<ParsedExpression>> fields;
+	fields.push_back(std::move(value));
+	return make_uniq<FunctionExpression>("struct_pack", std::move(fields));
 }
 
 //! CASE WHEN <classifier> IN (symbols) THEN <column> END - NULL on every row none of them matched.
@@ -317,15 +333,17 @@ static void ScopeToMatch(WindowExpression &window, const MatchRecognizeConfig &c
 	}
 }
 
+//! Takes a value packed by PackValue and reports it from the first or last row of the match that carries
+//! one. IGNORE NULLS is what makes it that row rather than the first or last row of the match.
 static unique_ptr<ParsedExpression> MatchScopedValue(const MatchRecognizeConfig &config,
-                                                     unique_ptr<ParsedExpression> value, bool running,
+                                                     unique_ptr<ParsedExpression> packed, bool running,
                                                      bool first = false) {
 	auto window = make_uniq<WindowExpression>("", "", first ? "first_value" : "last_value");
-	window->GetArgumentsMutable().emplace_back(std::move(value));
+	window->GetArgumentsMutable().emplace_back(std::move(packed));
 	window->HasIgnoreNullsMutable() = true;
 	window->IgnoreNullsMutable() = true;
 	ScopeToMatch(*window, config, running);
-	return std::move(window);
+	return CreateStructExtract(std::move(window), MATCH_RECOGNIZE_VALUE_FIELD);
 }
 
 //! Rewrite a MEASURES expression into something evaluable next to the pattern window
@@ -367,7 +385,8 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 				}
 			}
 			RewriteMeasure(binder, inner, config, symbols, running, one_row, inside_aggregate);
-			auto masked = symbol.empty() ? std::move(inner) : ClassifiedValue(symbol, std::move(inner));
+			auto packed = PackValue(std::move(inner));
+			auto masked = symbol.empty() ? std::move(packed) : ClassifiedValue(symbol, std::move(packed));
 			expr = MatchScopedValue(config, std::move(masked), running, function_name == "FIRST");
 			return;
 		}
@@ -407,8 +426,13 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 		if (entry != symbols.end()) {
 			// a known pattern variable scopes the column to the rows it matched
 			auto column = make_uniq<ColumnRefExpression>(colref.GetColumnName());
-			auto masked = ClassifiedValue(entry->second, std::move(column));
-			expr = inside_aggregate ? std::move(masked) : MatchScopedValue(config, std::move(masked), running);
+			if (inside_aggregate) {
+				// the aggregate spans the match and skips the rows the variable did not match, which is
+				// exactly what the masking NULL means there
+				expr = ClassifiedValue(entry->second, std::move(column));
+				return;
+			}
+			expr = MatchScopedValue(config, ClassifiedValue(entry->second, PackValue(std::move(column))), running);
 			return;
 		}
 		if (colref.IsQualified()) {
