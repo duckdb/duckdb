@@ -32,51 +32,49 @@ struct StringDictionaryContainer {
 	}
 };
 
+struct StringDictionaryCursor;
+
+struct StringDictionaryEntry {
+	unsafe_array_ptr<const uint8_t> data;
+	bool is_overflow;
+};
+
+struct StringSegmentLayout {
+	//! Dictionary size and end read from the first eight segment bytes and validated within the segment.
+	StringDictionaryContainer dictionary;
+	//! Dictionary bytes [dictionary.end - dictionary.size, dictionary.end)
+	unsafe_array_ptr<const uint8_t> dictionary_data;
+	//! Dictionary offsets read from the segment after validating the array's byte range.
+	unsafe_array_ptr<const int32_t> offsets;
+
+	static StringSegmentLayout Read(const BufferHandle &handle, const ColumnSegment &segment);
+	StringDictionaryEntry GetDictionaryEntry(idx_t row_index) const;
+	StringDictionaryCursor GetCursor(idx_t row_index) const;
+
+private:
+	friend struct StringDictionaryCursor;
+	uint32_t ValidateAndGetDictionaryOffset(int32_t encoded_offset) const;
+	StringDictionaryEntry CreateDictionaryEntry(int32_t current_offset, int32_t previous_offset,
+	                                            uint32_t previous_dictionary_offset) const;
+};
+
+struct StringDictionaryCursor {
+	StringDictionaryCursor(const StringSegmentLayout &layout, idx_t row_index);
+
+	StringDictionaryEntry Next();
+
+private:
+	const StringSegmentLayout &layout;
+	idx_t row_index;
+	int32_t previous_offset;
+	uint32_t previous_dictionary_offset;
+};
+
 struct StringScanState : public SegmentScanState {
 public:
-	struct DictionaryCursor;
-
-	struct DictionaryEntry {
-		unsafe_array_ptr<const uint8_t> data;
-		bool is_overflow;
-	};
-
-	struct SegmentLayout {
-		//! Dictionary size and end read from the first eight segment bytes and validated within the segment.
-		StringDictionaryContainer dictionary;
-		//! Dictionary bytes [dictionary.end - dictionary.size, dictionary.end)
-		unsafe_array_ptr<const uint8_t> dictionary_data;
-		//! Dictionary offsets read from the segment after validating the array's byte range.
-		unsafe_array_ptr<const int32_t> offsets;
-
-		DictionaryEntry GetDictionaryEntry(idx_t row_index) const;
-		DictionaryCursor GetCursor(idx_t row_index) const;
-
-	private:
-		friend struct DictionaryCursor;
-		uint32_t ValidateAndGetDictionaryOffset(int32_t encoded_offset) const;
-		DictionaryEntry CreateDictionaryEntry(int32_t current_offset, int32_t previous_offset,
-		                                      uint32_t previous_dictionary_offset) const;
-	};
-
-	struct DictionaryCursor {
-		DictionaryCursor(const SegmentLayout &layout, idx_t row_index);
-
-		DictionaryEntry Next();
-
-	private:
-		const SegmentLayout &layout;
-		idx_t row_index;
-		int32_t previous_offset;
-		uint32_t previous_dictionary_offset;
-	};
-
-	static SegmentLayout ReadSegmentLayout(const BufferHandle &handle, const ColumnSegment &segment);
-
-	StringScanState(BufferHandle handle, const ColumnSegment &segment);
+	explicit StringScanState(BufferHandle handle);
 
 	BufferHandle handle;
-	SegmentLayout layout;
 };
 
 //===--------------------------------------------------------------------===//
@@ -308,7 +306,7 @@ public:
 	}
 
 	inline static string_t FetchStringFromEntry(const QueryContext &context, ColumnSegment &segment, Vector &result,
-	                                            const StringScanState::DictionaryEntry &entry) {
+	                                            const StringDictionaryEntry &entry) {
 		if (DUCKDB_LIKELY(!entry.is_overflow)) {
 			// regular string - fetch from dictionary
 			auto str_ptr = const_char_ptr_cast(entry.data.data());

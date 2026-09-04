@@ -46,7 +46,7 @@ namespace duckdb {
 	throw DataCorruptionException("Corrupted uncompressed string segment: overflow string offset is outside its block");
 }
 
-uint32_t StringScanState::SegmentLayout::ValidateAndGetDictionaryOffset(int32_t encoded_offset) const {
+uint32_t StringSegmentLayout::ValidateAndGetDictionaryOffset(int32_t encoded_offset) const {
 	if (encoded_offset == NumericLimits<int32_t>::Minimum()) {
 		ThrowStringOffsetMinimumValue();
 	}
@@ -63,9 +63,8 @@ uint32_t StringScanState::SegmentLayout::ValidateAndGetDictionaryOffset(int32_t 
 	return dictionary_offset;
 }
 
-StringScanState::DictionaryEntry
-StringScanState::SegmentLayout::CreateDictionaryEntry(int32_t current_offset, int32_t previous_offset,
-                                                      uint32_t previous_dictionary_offset) const {
+StringDictionaryEntry StringSegmentLayout::CreateDictionaryEntry(int32_t current_offset, int32_t previous_offset,
+                                                                 uint32_t previous_dictionary_offset) const {
 	auto current_dictionary_offset = ValidateAndGetDictionaryOffset(current_offset);
 	if (current_dictionary_offset < previous_dictionary_offset) {
 		ThrowDecreasingStringOffset(current_dictionary_offset, previous_dictionary_offset);
@@ -87,7 +86,7 @@ StringScanState::SegmentLayout::CreateDictionaryEntry(int32_t current_offset, in
 	return {dictionary_data.SubArray(dictionary.size - current_dictionary_offset, string_length), is_overflow};
 }
 
-StringScanState::DictionaryEntry StringScanState::SegmentLayout::GetDictionaryEntry(idx_t row_index) const {
+StringDictionaryEntry StringSegmentLayout::GetDictionaryEntry(idx_t row_index) const {
 	D_ASSERT(row_index < offsets.size());
 	auto current_offset = offsets[row_index];
 	auto previous_offset = row_index > 0 ? offsets[row_index - 1] : 0;
@@ -95,11 +94,11 @@ StringScanState::DictionaryEntry StringScanState::SegmentLayout::GetDictionaryEn
 	return CreateDictionaryEntry(current_offset, previous_offset, previous_dictionary_offset);
 }
 
-StringScanState::DictionaryCursor StringScanState::SegmentLayout::GetCursor(idx_t row_index) const {
-	return DictionaryCursor(*this, row_index);
+StringDictionaryCursor StringSegmentLayout::GetCursor(idx_t row_index) const {
+	return StringDictionaryCursor(*this, row_index);
 }
 
-StringScanState::DictionaryCursor::DictionaryCursor(const SegmentLayout &layout_p, idx_t row_index_p)
+StringDictionaryCursor::StringDictionaryCursor(const StringSegmentLayout &layout_p, idx_t row_index_p)
     : layout(layout_p), row_index(row_index_p), previous_offset(0), previous_dictionary_offset(0) {
 	D_ASSERT(row_index <= layout.offsets.size());
 	if (row_index > 0) {
@@ -108,7 +107,7 @@ StringScanState::DictionaryCursor::DictionaryCursor(const SegmentLayout &layout_
 	}
 }
 
-StringScanState::DictionaryEntry StringScanState::DictionaryCursor::Next() {
+StringDictionaryEntry StringDictionaryCursor::Next() {
 	D_ASSERT(row_index < layout.offsets.size());
 	auto current_offset = layout.offsets[row_index];
 	auto entry = layout.CreateDictionaryEntry(current_offset, previous_offset, previous_dictionary_offset);
@@ -118,8 +117,7 @@ StringScanState::DictionaryEntry StringScanState::DictionaryCursor::Next() {
 	return entry;
 }
 
-StringScanState::SegmentLayout StringScanState::ReadSegmentLayout(const BufferHandle &handle,
-                                                                  const ColumnSegment &segment) {
+StringSegmentLayout StringSegmentLayout::Read(const BufferHandle &handle, const ColumnSegment &segment) {
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "uncompressed string segment");
 	StringDictionaryContainer dictionary {reader.Read<uint32_t>(), reader.Read<uint32_t>()};
 	if (dictionary.end > reader.Size() || dictionary.size > dictionary.end) {
@@ -136,8 +134,7 @@ StringScanState::SegmentLayout StringScanState::ReadSegmentLayout(const BufferHa
 	return {dictionary, dictionary_data, offsets};
 }
 
-StringScanState::StringScanState(BufferHandle handle_p, const ColumnSegment &segment)
-    : handle(std::move(handle_p)), layout(ReadSegmentLayout(handle, segment)) {
+StringScanState::StringScanState(BufferHandle handle_p) : handle(std::move(handle_p)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -213,7 +210,7 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(const Que
                                                                        ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-	return make_uniq<StringScanState>(std::move(handle), segment);
+	return make_uniq<StringScanState>(std::move(handle));
 }
 
 //===--------------------------------------------------------------------===//
@@ -223,12 +220,13 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
                                                   Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
+	auto layout = StringSegmentLayout::Read(scan_state.handle, segment);
 	auto start = state.GetPositionInSegment();
 	D_ASSERT(start <= segment.count.load());
 	D_ASSERT(scan_count <= segment.count.load() - start);
 
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
-	auto cursor = scan_state.layout.GetCursor(start);
+	auto cursor = layout.GetCursor(start);
 
 	for (idx_t i = 0; i < scan_count; i++) {
 		auto entry = cursor.Next();
@@ -248,6 +246,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
                                        Vector &result, const SelectionVector &sel, idx_t sel_count) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
+	auto layout = StringSegmentLayout::Read(scan_state.handle, segment);
 	auto start = state.GetPositionInSegment();
 	D_ASSERT(start <= segment.count.load());
 	D_ASSERT(vector_count <= segment.count.load() - start);
@@ -259,7 +258,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 		auto selection_index = sel.get_index(i);
 		D_ASSERT(selection_index < vector_count);
 		idx_t index = start + selection_index;
-		auto entry = scan_state.layout.GetDictionaryEntry(index);
+		auto entry = layout.GetDictionaryEntry(index);
 		result_data[i] = FetchStringFromEntry(state.context, segment, result, entry);
 	}
 }
@@ -292,7 +291,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	// fetch a single row from the string segment
 	// first pin the main buffer if it is not already pinned
 	auto &handle = state.GetOrInsertHandle(segment);
-	auto layout = StringScanState::ReadSegmentLayout(handle, segment);
+	auto layout = StringSegmentLayout::Read(handle, segment);
 
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
