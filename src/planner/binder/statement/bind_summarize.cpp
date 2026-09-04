@@ -22,28 +22,11 @@ static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<Parsed
 	return std::move(unnest_function);
 }
 
-static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, Identifier column_name) {
+static unique_ptr<ParsedExpression> SummarizeCreateUnaryFunction(const string &function,
+                                                                 unique_ptr<ParsedExpression> child) {
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ColumnRefExpression>(std::move(column_name)));
-	auto aggregate_function = make_uniq<FunctionExpression>(Identifier(aggregate), std::move(children));
-	auto cast_function = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));
-	return std::move(cast_function);
-}
-
-static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, Identifier column_name,
-                                                             const Value &modifier) {
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ColumnRefExpression>(std::move(column_name)));
-	children.push_back(make_uniq<ConstantExpression>(modifier));
-	auto aggregate_function = make_uniq<FunctionExpression>(Identifier(aggregate), std::move(children));
-	auto cast_function = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));
-	return std::move(cast_function);
-}
-
-static unique_ptr<ParsedExpression> SummarizeCreateCountStar() {
-	vector<unique_ptr<ParsedExpression>> children;
-	auto aggregate_function = make_uniq<FunctionExpression>("count_star", std::move(children));
-	return std::move(aggregate_function);
+	children.push_back(std::move(child));
+	return make_uniq<FunctionExpression>(Identifier(function), std::move(children));
 }
 
 static unique_ptr<ParsedExpression> SummarizeCreateBinaryFunction(const string &op, unique_ptr<ParsedExpression> left,
@@ -53,6 +36,59 @@ static unique_ptr<ParsedExpression> SummarizeCreateBinaryFunction(const string &
 	children.push_back(std::move(right));
 	auto binary_function = make_uniq<FunctionExpression>(Identifier(op), std::move(children));
 	return std::move(binary_function);
+}
+
+// Rounds to a minimum of 3 (unless trailing zeros) and max of 10 significant digits via printf's shortest
+// representation %g. Builds: printf('%.*g', LEAST(GREATEST(FLOOR(LOG10(ABS(value::DOUBLE))) + 1, 3), 10)::INTEGER,
+// value::DOUBLE)
+static unique_ptr<ParsedExpression> SummarizeCreateRoundedValue(unique_ptr<ParsedExpression> value) {
+	auto double_value = make_uniq<CastExpression>(LogicalType::DOUBLE, std::move(value));
+	auto order_of_magnitude = SummarizeCreateUnaryFunction(
+	    "floor", SummarizeCreateUnaryFunction("log10", SummarizeCreateUnaryFunction("abs", double_value->Copy())));
+	auto full_precision =
+	    SummarizeCreateBinaryFunction("greatest",
+	                                  SummarizeCreateBinaryFunction("+", std::move(order_of_magnitude),
+	                                                                make_uniq<ConstantExpression>(Value::DOUBLE(1))),
+	                                  make_uniq<ConstantExpression>(Value::DOUBLE(3)));
+	auto capped_precision = SummarizeCreateBinaryFunction("least", std::move(full_precision),
+	                                                      make_uniq<ConstantExpression>(Value::DOUBLE(10)));
+
+	vector<unique_ptr<ParsedExpression>> printf_children;
+	printf_children.push_back(make_uniq<ConstantExpression>(Value("%.*g")));
+	printf_children.push_back(make_uniq<CastExpression>(LogicalType::INTEGER, std::move(capped_precision)));
+	printf_children.push_back(std::move(double_value));
+	return make_uniq<FunctionExpression>("printf", std::move(printf_children));
+}
+
+static unique_ptr<ParsedExpression>
+SummarizeWrapAggregate(const string &aggregate, vector<unique_ptr<ParsedExpression>> children, bool round_result) {
+	unique_ptr<ParsedExpression> aggregate_function =
+	    make_uniq<FunctionExpression>(Identifier(aggregate), std::move(children));
+	if (round_result) {
+		return SummarizeCreateRoundedValue(std::move(aggregate_function));
+	}
+	return make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));
+}
+
+static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, Identifier column_name,
+                                                             const bool round_result = false) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ColumnRefExpression>(std::move(column_name)));
+	return SummarizeWrapAggregate(aggregate, std::move(children), round_result);
+}
+
+static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, Identifier column_name,
+                                                             const Value &modifier, const bool round_result = false) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ColumnRefExpression>(std::move(column_name)));
+	children.push_back(make_uniq<ConstantExpression>(modifier));
+	return SummarizeWrapAggregate(aggregate, std::move(children), round_result);
+}
+
+static unique_ptr<ParsedExpression> SummarizeCreateCountStar() {
+	vector<unique_ptr<ParsedExpression>> children;
+	auto aggregate_function = make_uniq<FunctionExpression>("count_star", std::move(children));
+	return std::move(aggregate_function);
 }
 
 static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(Identifier column_name) {
@@ -117,20 +153,26 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 		max_children.push_back(SummarizeCreateAggregate("max", plan.names[i]));
 		unique_children.push_back(make_uniq<CastExpression>(
 		    LogicalType::BIGINT, SummarizeCreateAggregate("approx_count_distinct", plan.names[i])));
-		if (plan.types[i].IsNumeric() || plan.types[i].IsTemporal()) {
+		if (plan.types[i].IsNumeric()) {
+			avg_children.push_back(SummarizeCreateAggregate("avg", plan.names[i], true));
+		} else if (plan.types[i].IsTemporal()) {
 			avg_children.push_back(SummarizeCreateAggregate("avg", plan.names[i]));
 		} else {
 			avg_children.push_back(make_uniq<ConstantExpression>(Value()));
 		}
 		if (plan.types[i].IsNumeric()) {
-			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i]));
+			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i], true));
 		} else {
 			std_children.push_back(make_uniq<ConstantExpression>(Value()));
 		}
 		if (plan.types[i].IsNumeric() || plan.types[i].IsTemporal()) {
-			q25_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.25)));
-			q50_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.50)));
-			q75_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.75)));
+			auto round_quantile = plan.types[i].IsNumeric();
+			q25_children.push_back(
+			    SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.25), round_quantile));
+			q50_children.push_back(
+			    SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.50), round_quantile));
+			q75_children.push_back(
+			    SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.75), round_quantile));
 		} else {
 			q25_children.push_back(make_uniq<ConstantExpression>(Value()));
 			q50_children.push_back(make_uniq<ConstantExpression>(Value()));
