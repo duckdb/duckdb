@@ -5,6 +5,7 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
+#include "duckdb/execution/index/art/const_prefix_handle.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/prefix_handle.hpp"
@@ -34,8 +35,8 @@ Prefix::Prefix(FixedSizeAllocator &allocator, const NodePtr node, const idx_t co
 
 uint8_t Prefix::GetByte(const ART &art, const NodePtr &node, const uint8_t pos) {
 	D_ASSERT(node.GetType() == PREFIX);
-	Prefix prefix(art, node);
-	return prefix.data[pos];
+	ConstPrefixHandle prefix(art, node);
+	return prefix.GetByte(pos);
 }
 
 Prefix Prefix::NewInternal(ART &art, NodePtr &node, const data_ptr_t data, const uint8_t count, const idx_t offset) {
@@ -61,6 +62,38 @@ void Prefix::New(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, cons
 		auto prefix = NewInternal(art, node_ref, key.data, this_count, offset + depth);
 
 		node_ref = *prefix.child_slot;
+		offset += this_count;
+		count -= this_count;
+	}
+}
+
+PrefixHandle PrefixHandle::NewInternal(ART &art, NodePtrHandle &node, const_data_ptr_t data, const uint8_t count,
+                                       const idx_t offset) {
+	node.Get() = NodePtr::GetAllocator(art, PREFIX).New();
+	node.Get().SetMetadata(static_cast<uint8_t>(PREFIX));
+
+	PrefixHandle prefix(NodeHandle(art, node.Get()));
+	prefix.SetCount(art, count);
+	if (data) {
+		D_ASSERT(count);
+		memcpy(prefix.Data(), data + offset, count);
+	}
+	prefix.Child(art).Clear();
+	return prefix;
+}
+
+void PrefixHandle::New(ART &art, NodePtrHandle &node, const ARTKey &key, const idx_t depth, idx_t count) {
+	idx_t offset = 0;
+
+	while (count) {
+		auto min = MinValue(UnsafeNumericCast<idx_t>(art.PrefixCount()), count);
+		auto this_count = UnsafeNumericCast<uint8_t>(min);
+		auto prefix = NewInternal(art, node, key.data, this_count, offset + depth);
+
+		auto &child = prefix.Child(art);
+		auto handle = std::move(prefix).TakeHandle();
+		node.Rebind(child, std::move(handle));
+
 		offset += this_count;
 		count -= this_count;
 	}

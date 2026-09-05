@@ -11,7 +11,9 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/const_prefix_handle.hpp"
+#include "duckdb/execution/index/art/node_handle.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/prefix_handle.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 
@@ -384,15 +386,15 @@ private:
 		}
 
 		NodePtr leaf;
-		reference<NodePtr> leaf_ref(leaf);
+		NodePtrHandle leaf_handle(leaf, EXTERNAL_NODE_PTR_STORAGE);
 		if (depth + 1 < key.len) {
 			// Outside of gates, we create a prefix for the inlined leaf.
 			auto count = key.len - depth - 1;
-			Prefix::New(art, leaf_ref, key, depth + 1, count);
+			PrefixHandle::New(art, leaf_handle, key, depth + 1, count);
 		}
 
 		// Create and insert the inlined leaf.
-		Leaf::New(leaf_ref, row_id.GetRowId());
+		Leaf::New(leaf_handle.Get(), row_id.GetRowId());
 		NodePtr::InsertChild(art, node, key[depth], leaf);
 	}
 

@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
@@ -48,6 +51,46 @@ public:
 private:
 	SegmentHandle handle;
 	NType type;
+};
+
+//! Indicates that a NodePtr storage location remains valid without a NodeHandle.
+struct ExternalNodePtrStorageTag {
+};
+
+static constexpr ExternalNodePtrStorageTag EXTERNAL_NODE_PTR_STORAGE {};
+
+//! NodePtrHandle provides mutable access to a NodePtr storage location.
+//! If the NodePtr is stored in a node, the handle owns the NodeHandle that keeps that node pinned.
+class NodePtrHandle {
+public:
+	//! Start at externally managed NodePtr storage.
+	NodePtrHandle(NodePtr &node_ptr_p, ExternalNodePtrStorageTag) : node_ptr(node_ptr_p) {
+	}
+
+	//! Start at a NodePtr stored in the node pinned by handle_p.
+	NodePtrHandle(NodePtr &node_ptr_p, NodeHandle &&handle_p) : node_ptr(node_ptr_p), handle(std::move(handle_p)) {
+	}
+
+	NodePtrHandle(const NodePtrHandle &) = delete;
+	NodePtrHandle &operator=(const NodePtrHandle &) = delete;
+	NodePtrHandle(NodePtrHandle &&) = delete;
+	NodePtrHandle &operator=(NodePtrHandle &&) = delete;
+
+public:
+	//! Return the NodePtr at the current location.
+	NodePtr &Get() {
+		return node_ptr.get();
+	}
+
+	//! Move to a NodePtr stored in the node pinned by handle_p.
+	void Rebind(NodePtr &node_ptr_p, NodeHandle &&handle_p) {
+		node_ptr = node_ptr_p;
+		handle.emplace(std::move(handle_p));
+	}
+
+private:
+	reference<NodePtr> node_ptr;
+	optional<NodeHandle> handle;
 };
 
 //! ConstNodeHandle is a read-only wrapper to access a node.
