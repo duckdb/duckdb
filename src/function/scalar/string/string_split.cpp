@@ -41,7 +41,13 @@ struct ConstantRegexpStringSplit {
 struct RegexpStringSplit {
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
-		duckdb_re2::RE2 regex(duckdb_re2::StringPiece(delim_data, delim_size));
+		D_ASSERT(data);
+		auto &info = *reinterpret_cast<const RegexpBaseBindData *>(data);
+		string pattern(delim_data, delim_size);
+		if (info.multiline) {
+			pattern = "(?m)" + pattern;
+		}
+		duckdb_re2::RE2 regex(pattern, info.options);
 		if (!regex.ok()) {
 			throw InvalidInputException(regex.error());
 		}
@@ -131,7 +137,7 @@ void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &r
 		StringSplitExecutor<ConstantRegexpStringSplit>(args, state, result, &lstate.constant_pattern);
 	} else {
 		// slow path: have to re-compile regex for every row
-		StringSplitExecutor<RegexpStringSplit>(args, state, result);
+		StringSplitExecutor<RegexpStringSplit>(args, state, result, &info);
 	}
 }
 

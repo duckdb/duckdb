@@ -87,6 +87,37 @@ static LikeString GetLikeStringEscaped(duckdb_re2::Regexp *regexp, bool contains
 	return ret;
 }
 
+static bool RegexpIsAnchor(duckdb_re2::Regexp *regexp) {
+	switch (regexp->op()) {
+	case duckdb_re2::kRegexpBeginText:
+	case duckdb_re2::kRegexpEndText:
+	case duckdb_re2::kRegexpBeginLine:
+	case duckdb_re2::kRegexpEndLine:
+		return true;
+	default:
+		return false;
+	}
+}
+
+// True when the pattern anchors at a text or line boundary at the top level. Anchors nested deeper
+// (inside an alternation, a repeat, ...) are already refused by LikeMatchFromRegex.
+static bool RegexpHasTopLevelAnchor(duckdb_re2::Regexp *regexp) {
+	if (RegexpIsAnchor(regexp)) {
+		return true;
+	}
+	if (regexp->op() != duckdb_re2::kRegexpConcat) {
+		return false;
+	}
+	auto subs = regexp->sub();
+	auto num_subs = regexp->nsub();
+	for (auto i = 0; i < num_subs; i++) {
+		if (RegexpIsAnchor(subs[i])) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static LikeString LikeMatchFromRegex(duckdb_re2::RE2 &pattern) {
 	LikeString ret = LikeString();
 	auto num_subs = pattern.Regexp()->nsub();
@@ -180,6 +211,12 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	duckdb_re2::RE2 pattern(patt_str, parsed_options);
 	if (!pattern.ok()) {
 		return nullptr; // this should fail somewhere else
+	}
+
+	// Under multiline, ^/$ match at line boundaries, so an anchored pattern cannot be rewritten into a
+	// whole-string prefix/contains. Anchor-free patterns mean the same thing with or without multiline.
+	if (regexp_bind_data.multiline && RegexpHasTopLevelAnchor(pattern.Regexp())) {
+		return nullptr;
 	}
 
 	LikeString like_string;
