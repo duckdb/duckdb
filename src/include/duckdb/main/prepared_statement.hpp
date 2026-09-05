@@ -146,6 +146,7 @@ public:
 	                                     const identifier_map_t<PAYLOAD> &values, ClientContext *context = nullptr) {
 		// Missing values
 		identifier_set_t missing_set;
+		map<idx_t, Identifier> missing_idx_values;
 		for (auto &pair : parameters) {
 			auto &name = pair.first;
 			if (!values.count(name)) {
@@ -154,12 +155,16 @@ public:
 				    ClientConfig::GetConfig(*context).GetUserVariable(name, variable_value)) {
 					continue;
 				}
-				missing_set.insert(name);
+				if (!missing_set.count(name)) {
+					missing_set.insert(name);
+					missing_idx_values.try_emplace(pair.second, name);
+				}
 			}
 		}
+
 		vector<Identifier> missing_values;
-		for (auto &val : missing_set) {
-			missing_values.push_back(val);
+		for (auto &pair : missing_idx_values) {
+			missing_values.push_back(pair.second);
 		}
 		return StringUtil::Format("Values were not provided for the following parameters: %s",
 		                          StringUtil::Join(missing_values, ", "));
