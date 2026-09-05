@@ -134,6 +134,8 @@ public:
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
 	//! Adds the top level query information to the global profiler.
 	DUCKDB_API void SetBlockedTime(const double &blocked_thread_time);
+	//! Record the peak bytes a streaming result buffered. Called just before the query ends
+	DUCKDB_API void SetStreamingPeakBufferSize(idx_t peak_bytes);
 
 	DUCKDB_API void Initialize(const PhysicalOperator &root);
 

@@ -1,0 +1,36 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_peak_streaming_buffer_size.test
+# description: Test the system.peak_streaming_buffer_size metric wiring
+# group: [profiling]
+
+# The value is only non-zero for streaming results, which this harness cannot run.
+# The value is pinned in test/api/test_stream_result_buffer.cpp.
+
+require json
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['system.peak_streaming_buffer_size'];
+
+statement ok
+SELECT COUNT(*) FROM range(10000);
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT unnest(current_setting('tracked_metrics')) ORDER BY ALL
+----
+system.peak_streaming_buffer_size
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+query I
+SELECT COUNT(system.peak_streaming_buffer_size) FROM metrics_output;
+----
+1

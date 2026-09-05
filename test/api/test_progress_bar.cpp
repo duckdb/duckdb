@@ -135,6 +135,9 @@ TEST_CASE("Test Progress Bar Fast", "[progress-bar]") {
 	// Stream result
 	test_progress.Start();
 	auto result = con.SendQuery("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)");
+	// The query only completes once the stream is consumed
+	while (result->Fetch()) {
+	}
 	test_progress.End();
 	REQUIRE_NO_FAIL(*result);
 
@@ -164,6 +167,8 @@ TEST_CASE("Test Progress Bar Fast", "[progress-bar]") {
 	// Stream result
 	test_progress.Start();
 	result = con.SendQuery("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)");
+	while (result->Fetch()) {
+	}
 	test_progress.End();
 	REQUIRE_NO_FAIL(*result);
 }
@@ -199,6 +204,9 @@ TEST_CASE("Test Progress Bar", "[progress-bar][.]") {
 	// Stream result
 	test_progress.Start();
 	auto result = con.SendQuery("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)");
+	// The query only completes once the stream is consumed
+	while (result->Fetch()) {
+	}
 	test_progress.End();
 	REQUIRE_NO_FAIL(*result);
 
@@ -228,6 +236,8 @@ TEST_CASE("Test Progress Bar", "[progress-bar][.]") {
 	// Stream result
 	test_progress.Start();
 	result = con.SendQuery("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)");
+	while (result->Fetch()) {
+	}
 	test_progress.End();
 	REQUIRE_NO_FAIL(*result);
 }

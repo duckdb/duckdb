@@ -31,12 +31,12 @@ void ClientConfig::ResetUserVariable(const String &name) {
 
 void ClientConfig::SetDefaultStreamingBufferSize() {
 	auto memory = FileSystem::GetAvailableMemory();
-	auto default_size = ClientConfig().streaming_buffer_size;
+	auto default_size = ClientConfig().max_streaming_buffer_size;
 	if (!memory.IsValid()) {
-		streaming_buffer_size = default_size;
+		max_streaming_buffer_size = default_size;
 		return;
 	}
-	streaming_buffer_size = MinValue(memory.GetIndex(), default_size);
+	max_streaming_buffer_size = MinValue(memory.GetIndex(), default_size);
 }
 
 } // namespace duckdb

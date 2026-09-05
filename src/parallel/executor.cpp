@@ -407,19 +407,6 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 	}
 }
 
-bool Executor::ResultCollectorIsBlocked() {
-	if (!HasStreamingResultCollector()) {
-		return false;
-	}
-	for (auto &kv : to_be_rescheduled_tasks) {
-		auto &task = kv.second;
-		if (task->TaskBlockedOnResult()) {
-			return true;
-		}
-	}
-	return false;
-}
-
 void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	lock_guard<mutex> l(executor_lock);
 	if (cancelled) {
@@ -431,6 +418,10 @@ void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	// Save the reference before move — evaluation order of operator[] key and assignment value is unspecified pre-C++17
 	auto &task_ref = *task_p;
 	to_be_rescheduled_tasks[task_ref] = std::move(task_p);
+	// Only a result-sink park needs the consumer, so only a streaming plan wakes the waiting consumer
+	if (HasStreamingResultCollector()) {
+		task_reschedule.notify_all();
+	}
 }
 
 bool Executor::ExecutionIsFinished() {
@@ -620,6 +611,22 @@ bool Executor::HasStreamingResultCollector() {
 	}
 	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
 	return result_collector.IsStreaming();
+}
+
+bool Executor::ResultCollectorIsBlocked() {
+	// A sink retained by the plan never parks, so the materialized hot path skips the lock
+	if (!HasStreamingResultCollector()) {
+		return false;
+	}
+	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
+	// The sink state is published by a pipeline initialize task on a worker, under the
+	// operator lock. Read it under the same lock, or the client can observe the pointer
+	// before the pointee is visible
+	lock_guard<mutex> guard(result_collector.lock);
+	if (!result_collector.sink_state) {
+		return false;
+	}
+	return result_collector.HasBlockedResultProducer(*result_collector.sink_state);
 }
 
 unique_ptr<QueryResult> Executor::GetResult() {

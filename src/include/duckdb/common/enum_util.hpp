@@ -472,7 +472,11 @@ enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
 
+enum class ResultLifetime : uint8_t;
+
 enum class ResultModifierType : uint8_t;
+
+enum class ResultOrdering : uint8_t;
 
 enum class RowGroupAppendMode : uint8_t;
 
@@ -1304,7 +1308,13 @@ template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
 
 template<>
+const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value);
+
+template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
+
+template<>
+const char* EnumUtil::ToChars<ResultOrdering>(ResultOrdering value);
 
 template<>
 const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
@@ -2220,7 +2230,13 @@ template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
 
 template<>
+ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value);
+
+template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
+
+template<>
+ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value);
 
 template<>
 RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);

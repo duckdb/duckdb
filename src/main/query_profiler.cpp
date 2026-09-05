@@ -578,6 +578,14 @@ void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
 	query_metrics.blocked_thread_time = blocked_thread_time;
 }
 
+void QueryProfiler::SetStreamingPeakBufferSize(idx_t peak_bytes) {
+	lock_guard<std::mutex> guard(lock);
+	if (!IsEnabled() || !running) {
+		return;
+	}
+	query_metrics.system_peak_streaming_buffer_size = peak_bytes;
+}
+
 string QueryProfiler::DrawPadded(const string &str, idx_t width) {
 	if (str.size() > width) {
 		return str.substr(0, width);
@@ -875,6 +883,7 @@ static LegacyCumulative LegacyOperatorToResultTree(const GatheredMetrics &info, 
 		result.AddValue("extra_info", it_extra->second);
 	}
 	result.AddValue("system_peak_buffer_memory", Value::UBIGINT(0));
+	result.AddValue("system_peak_streaming_buffer_size", Value::UBIGINT(0));
 	result.AddValue("system_peak_temp_dir_size", Value::UBIGINT(0));
 
 	LegacyCumulative cumulative;
@@ -929,6 +938,7 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToLegacyResultTree() const {
 	emit("total_bytes_read", "io.total_bytes_read");
 	emit("system_peak_temp_dir_size", "system.peak_temp_dir_size");
 	emit("system_peak_buffer_memory", "system.peak_buffer_memory");
+	emit("system_peak_streaming_buffer_size", "system.peak_streaming_buffer_size");
 
 	// rows_returned = root operator's elements_returned (rows sent to client)
 	{
