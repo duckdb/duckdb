@@ -11,6 +11,7 @@
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/checked_integer.hpp"
 
 namespace duckdb {
 namespace variant {
@@ -30,6 +31,10 @@ public:
 	}
 	static uint32_t *GetBlob(DataChunk &offsets) {
 		return FlatVector::GetDataMutable<uint32_t>(offsets.data[3]);
+	}
+	//! Adds len to offset, throwing if the running total would exceed what a uint32_t blob offset can represent.
+	static void AddBlobOffset(uint32_t &offset, uint32_t len) {
+		offset = uinteger_t(offset) += len;
 	}
 };
 

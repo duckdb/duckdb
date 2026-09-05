@@ -1,0 +1,41 @@
+# name: test/sql/function/variant/blob_offset_overflow.test_slow
+# description: test for uint32_t blob_offset overflow when casting oversized rows to VARIANT
+# group: [variant]
+
+require no_alternative_verify
+
+query I
+SELECT CAST({'a': repeat('a', 2), 'b': repeat('b', 2), 'c': repeat('c', 2)} AS VARIANT);
+----
+{'a': aa, 'b': bb, 'c': cc}
+
+# table-sourced (not a literal) so that the row is actually materialized through query execution,
+# rather than DuckDBs constant-folding optimizer (which discards non-InternalException errors
+# raised while trial-evaluating a constant expression, and is unrelated to this fix)
+statement ok
+CREATE TABLE boundary AS SELECT repeat('a', 2000000000) a, repeat('b', 2000000000) b, repeat('c', 294967278) c;
+
+# (2-byte OBJECT header + 5-byte varint length-prefix per VARCHAR field)
+# 2 (header) + (5 + 2000000000) * 2 + (5 + 294967278) = UINT32_MAX
+query I
+SELECT CAST({'a': a, 'b': b, 'c': c} AS VARIANT) IS NOT NULL FROM boundary;
+----
+true
+
+statement ok
+CREATE TABLE overflow_boundary AS SELECT repeat('a', 2000000000) a, repeat('b', 2000000000) b, repeat('c', 294967279) c;
+
+# same as above but 1 byte over = UINT32_MAX + 1
+statement error
+SELECT CAST({'a': a, 'b': b, 'c': c} AS VARIANT) IS NOT NULL FROM overflow_boundary;
+----
+exceeds the maximum
+
+statement ok
+CREATE TABLE overflow_report AS SELECT repeat('a', 1600000000) a, repeat('b', 1600000000) b, repeat('c', 1600000000) c;
+
+# https://github.com/duckdb/duckdb/issues/25078#issue-5276576528 equivalent: 1600000000 * 3 > UINT32_MAX
+statement error
+SELECT CAST({'a': a, 'b': b, 'c': c} AS VARIANT) IS NOT NULL FROM overflow_report;
+----
+exceeds the maximum
