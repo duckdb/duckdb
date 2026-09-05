@@ -23,7 +23,8 @@ public:
 	static unique_ptr<SortStrategy> Factory(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
 	                                        const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                                        const vector<unique_ptr<BaseStatistics>> &partitions_stats,
-	                                        idx_t estimated_cardinality, bool require_payload = false);
+	                                        const OperatorPartitionInfo &partition_info, idx_t estimated_cardinality,
+	                                        bool require_payload = false);
 
 	explicit SortStrategy(const Types &input_types);
 	virtual ~SortStrategy() = default;

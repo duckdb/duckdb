@@ -130,24 +130,25 @@ AsOfGlobalSinkState::AsOfGlobalSinkState(ClientContext &client, const PhysicalAs
 	unique_ptr<SortStrategy> sort_strategy;
 	vector<unique_ptr<Expression>> unpartitioned;
 	vector<unique_ptr<BaseStatistics>> unpartitioned_stats;
+	OperatorPartitionInfo unpartitioned_info; // TODO: Pass the real one to the factory and remove the Value maps
 	if (op.partition_infos.empty()) {
 		sort_strategy = SortStrategy::Factory(client, op.lhs_partitions, op.lhs_orders, lhs.GetTypes(),
-		                                      partitions_stats, lhs.estimated_cardinality, true);
+		                                      partitions_stats, unpartitioned_info, lhs.estimated_cardinality, true);
 	} else {
 		//	Pipeline does the partitioning for us, so leave them out
 		sort_strategy = SortStrategy::Factory(client, unpartitioned, op.lhs_orders, lhs.GetTypes(), unpartitioned_stats,
-		                                      lhs.estimated_cardinality, true);
+		                                      unpartitioned_info, lhs.estimated_cardinality, true);
 	}
 	sort_strategies[0] = std::move(sort_strategy);
 
 	auto &rhs = op.children[1].get();
 	if (op.partition_infos.empty()) {
 		sort_strategy = SortStrategy::Factory(client, op.rhs_partitions, op.rhs_orders, rhs.GetTypes(),
-		                                      partitions_stats, rhs.estimated_cardinality, true);
+		                                      partitions_stats, unpartitioned_info, rhs.estimated_cardinality, true);
 	} else {
 		//	Pipeline does the partitioning for us, so leave them out
 		sort_strategy = SortStrategy::Factory(client, unpartitioned, op.rhs_orders, rhs.GetTypes(), unpartitioned_stats,
-		                                      rhs.estimated_cardinality, true);
+		                                      unpartitioned_info, rhs.estimated_cardinality, true);
 	}
 	sort_strategies[1] = std::move(sort_strategy);
 

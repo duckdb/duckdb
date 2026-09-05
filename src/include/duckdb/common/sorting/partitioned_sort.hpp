@@ -15,7 +15,7 @@ namespace duckdb {
 class PartitionedSort : public SortStrategy {
 public:
 	PartitionedSort(ClientContext &client, const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
-	                OperatorPartitionInfo &partition_info, bool require_payload = false);
+	                const OperatorPartitionInfo &partition_info, bool require_payload = false);
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -52,7 +52,7 @@ public:
 
 private:
 	//! The partitions over which this is grouped (if any)
-	OperatorPartitionInfo &partition_info;
+	const OperatorPartitionInfo &partition_info;
 	//! The inner sort strategy
 	unique_ptr<SortStrategy> child_strategy;
 };

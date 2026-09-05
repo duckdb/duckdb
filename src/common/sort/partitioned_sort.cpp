@@ -79,13 +79,18 @@ public:
 // PartitionedSort
 //===--------------------------------------------------------------------===//
 PartitionedSort::PartitionedSort(ClientContext &client, const vector<BoundOrderByNode> &order_bys,
-                                 const Types &payload_types, OperatorPartitionInfo &partition_info,
+                                 const Types &payload_types, const OperatorPartitionInfo &partition_info,
                                  bool require_payload)
     : SortStrategy(payload_types), partition_info(partition_info) {
 	//	Pipeline does the partitioning for us, so leave them out
 	vector<unique_ptr<Expression>> unpartitioned;
-	vector<unique_ptr<BaseStatistics>> partitions_stats;
-	child_strategy = SortStrategy::Factory(client, unpartitioned, order_bys, payload_types, partitions_stats, 0);
+	vector<unique_ptr<BaseStatistics>> unpartitioned_stats;
+	OperatorPartitionInfo unpartitioned_info;
+	child_strategy = SortStrategy::Factory(client, unpartitioned, order_bys, payload_types, unpartitioned_stats,
+	                                       unpartitioned_info, 0, require_payload);
+
+	scan_ids = child_strategy->scan_ids;
+	sort_ids = child_strategy->sort_ids;
 }
 
 //===--------------------------------------------------------------------===//
@@ -229,9 +234,9 @@ PartitionedSortGlobalSourceState::PartitionedSortGlobalSourceState(ClientContext
 
 	for (auto &strategy_sink : gsink.strategy_sinks) {
 		auto child_source = child_strategy.GetGlobalSourceState(client, *strategy_sink.second);
-		child_sources.emplace_back(std::move(child_source));
 		const auto &child_chunks = child_strategy.GetHashGroups(*child_source);
 		chunk_rows.insert(chunk_rows.end(), child_chunks.begin(), child_chunks.end());
+		child_sources.emplace_back(std::move(child_source));
 	}
 }
 
