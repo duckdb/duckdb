@@ -9,7 +9,6 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/bitpacking.hpp"
 
 /*

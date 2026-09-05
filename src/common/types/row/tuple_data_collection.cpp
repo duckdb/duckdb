@@ -6,7 +6,6 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
-#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -426,11 +425,11 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 	if (append_sel.IsSet()) {
 		for (idx_t i = 0; i < append_count; i++) {
 			const auto idx = append_sel[i];
-			FastMemcpy(target_locations[i], source_locations[idx], row_width);
+			memcpy(target_locations[i], source_locations[idx], row_width);
 		}
 	} else {
 		for (idx_t i = 0; i < append_count; i++) {
-			FastMemcpy(target_locations[i], source_locations[i], row_width);
+			memcpy(target_locations[i], source_locations[i], row_width);
 		}
 	}
 
@@ -462,12 +461,16 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 		if (!append_sel.IsSet()) {
 			// Fast path
 			for (idx_t i = 0; i < append_count; i++) {
-				FastMemcpy(target_heap_locations[i], source_heap_locations[i], heap_sizes[i]);
+				if (heap_sizes[i] > 0) {
+					memcpy(target_heap_locations[i], source_heap_locations[i], heap_sizes[i]);
+				}
 			}
 		} else {
 			for (idx_t i = 0; i < append_count; i++) {
 				auto idx = append_sel.get_index(i);
-				FastMemcpy(target_heap_locations[i], source_heap_locations[idx], heap_sizes[idx]);
+				if (heap_sizes[idx] > 0) {
+					memcpy(target_heap_locations[i], source_heap_locations[idx], heap_sizes[idx]);
+				}
 			}
 		}
 
