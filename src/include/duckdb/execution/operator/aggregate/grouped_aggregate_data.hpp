@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+class ClientContext;
+
 class GroupedAggregateData {
 public:
 	GroupedAggregateData() {
@@ -35,6 +37,8 @@ public:
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
 	idx_t filter_count;
+	//! Output columns for hidden first(value) aggregates that preserve original DISTINCT values
+	vector<idx_t> distinct_representative_indices;
 
 public:
 	idx_t GroupCount() const;
@@ -45,7 +49,10 @@ public:
 	                       vector<unsafe_vector<ProjectionIndex>> grouping_functions);
 
 	//! Initialize a GroupedAggregateData object for use with distinct aggregates
-	void InitializeDistinct(const unique_ptr<Expression> &aggregate, const vector<unique_ptr<Expression>> *groups_p);
+	void InitializeDistinct(ClientContext &context, const unique_ptr<Expression> &aggregate,
+	                        const vector<unique_ptr<Expression>> *groups_p,
+	                        const vector<unique_ptr<Expression>> &key_normalizers,
+	                        const vector<bool> &key_requires_normalization);
 
 private:
 	void InitializeDistinctGroups(const vector<unique_ptr<Expression>> *groups);
