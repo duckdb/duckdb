@@ -461,12 +461,16 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 		if (!append_sel.IsSet()) {
 			// Fast path
 			for (idx_t i = 0; i < append_count; i++) {
-				memcpy(target_heap_locations[i], source_heap_locations[i], heap_sizes[i]);
+				if (heap_sizes[i] > 0) {
+					memcpy(target_heap_locations[i], source_heap_locations[i], heap_sizes[i]);
+				}
 			}
 		} else {
 			for (idx_t i = 0; i < append_count; i++) {
 				auto idx = append_sel.get_index(i);
-				memcpy(target_heap_locations[i], source_heap_locations[idx], heap_sizes[idx]);
+				if (heap_sizes[idx] > 0) {
+					memcpy(target_heap_locations[i], source_heap_locations[idx], heap_sizes[idx]);
+				}
 			}
 		}
 
