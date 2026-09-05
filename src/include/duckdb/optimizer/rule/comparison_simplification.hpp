@@ -30,4 +30,13 @@ public:
 	                             bool is_root) override;
 };
 
+//! Rewrites expr = expr into constant_or_null(true, expr).
+class SelfComparisonSimplificationRule : public Rule {
+public:
+	explicit SelfComparisonSimplificationRule(ExpressionRewriter &rewriter);
+
+	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
+	                             bool is_root) override;
+};
+
 } // namespace duckdb
