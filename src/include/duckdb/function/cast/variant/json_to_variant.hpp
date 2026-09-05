@@ -4,6 +4,7 @@
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "yyjson.hpp"
+#include "yyjson_memory.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -20,22 +21,6 @@ namespace variant {
 using namespace duckdb_yyjson; // NOLINT
 
 namespace {
-
-struct ReadJSONHolder {
-public:
-	~ReadJSONHolder() {
-		if (doc) {
-			yyjson_doc_free(doc);
-		}
-	}
-	void Reset() {
-		yyjson_doc_free(doc);
-		doc = nullptr;
-	}
-
-public:
-	yyjson_doc *doc = nullptr;
-};
 
 static inline string_t GetString(yyjson_val *val) {
 	return string_t(unsafe_yyjson_get_str(val), NumericCast<uint32_t>(unsafe_yyjson_get_len(val)));
@@ -271,7 +256,7 @@ bool ConvertJSONToVariant(ToVariantSourceData &source, ToVariantGlobalResultData
 	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
 
 	auto &variant = result.variant;
-	ReadJSONHolder json_holder;
+	JSONAllocator json_allocator(result.allocator);
 	for (idx_t i = 0; i < count; i++) {
 		auto source_index = source[i];
 		auto result_index = selvec ? selvec->get_index(i) : i;
@@ -290,22 +275,24 @@ bool ConvertJSONToVariant(ToVariantSourceData &source, ToVariantGlobalResultData
 		}
 
 		auto &val = source_data[source_index];
-		json_holder.doc =
-		    yyjson_read(val.GetData(), val.GetSize(),
-		                YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS | YYJSON_READ_BIGNUM_AS_RAW);
-		if (!json_holder.doc) {
+		auto doc = yyjson_read_opts(val.GetDataWriteable(), val.GetSize(),
+		                            YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS |
+		                                YYJSON_READ_BIGNUM_AS_RAW,
+		                            json_allocator.GetYYAlc(), nullptr);
+		if (!doc) {
+			json_allocator.Reset();
 			if (!IGNORE_NULLS) {
 				HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index],
 				                              values_index_selvec, i, is_root);
 			}
 			continue;
 		}
-		auto *root = yyjson_doc_get_root(json_holder.doc);
+		auto *root = yyjson_doc_get_root(doc);
 
 		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(root, result, result_index, is_root)) {
 			return false;
 		}
-		json_holder.Reset();
+		json_allocator.Reset();
 	}
 	return true;
 }
