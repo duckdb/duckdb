@@ -414,6 +414,7 @@ void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", hive_types_schema);
 	serializer.WritePropertyWithDefault<string>(106, "filename_column", filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
 	serializer.WritePropertyWithDefault<bool>(107, "allow_empty", allow_empty);
+	serializer.WritePropertyWithDefault<optional_idx>(108, "hive_sample_size", hive_sample_size, optional_idx());
 }
 
 MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
@@ -426,6 +427,7 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", result.hive_types_schema);
 	deserializer.ReadPropertyWithExplicitDefault<string>(106, "filename_column", result.filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
 	deserializer.ReadPropertyWithDefault<bool>(107, "allow_empty", result.allow_empty);
+	deserializer.ReadPropertyWithExplicitDefault<optional_idx>(108, "hive_sample_size", result.hive_sample_size, optional_idx());
 	return result;
 }
 
