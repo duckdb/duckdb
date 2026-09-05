@@ -174,18 +174,22 @@ bool GroupingSetCanIntroduceNull(const LogicalAggregate &aggr, idx_t group_idx) 
 	return false;
 }
 
-// Try to resolve the column referenced by a byte-length function expression, e.g. strlen(col)
+// Try to resolve the column referenced by strlen(VARCHAR) or octet_length(BLOB)
 bool TryGetLengthColumnRef(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}
 	auto &fun = expr.Cast<BoundFunctionExpression>();
-	const auto &fun_name = fun.Function().GetName();
-	if (fun_name != "strlen" && fun_name != "octet_length") {
-		return false;
-	}
 	if (fun.GetChildren().size() != 1 ||
 	    fun.GetChildren()[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return false;
+	}
+	const auto &fun_name = fun.Function().GetName();
+	const auto arg_type = fun.GetChildren()[0]->GetReturnType().id();
+	// octet_length(BIT) is GetSize()-1; string stats store GetSize()
+	const bool is_byte_length = (fun_name == "strlen" && arg_type == LogicalTypeId::VARCHAR) ||
+	                            (fun_name == "octet_length" && arg_type == LogicalTypeId::BLOB);
+	if (!is_byte_length) {
 		return false;
 	}
 	binding = fun.GetChildren()[0]->Cast<BoundColumnRefExpression>().Binding();
