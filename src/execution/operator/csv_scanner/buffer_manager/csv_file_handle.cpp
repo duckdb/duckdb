@@ -61,6 +61,7 @@ bool CSVFileHandle::OnDiskFile() const {
 
 void CSVFileHandle::Reset() {
 	file_handle->Reset();
+	encoder.Reset();
 	finished = false;
 	requested_bytes = 0;
 }

@@ -1,4 +1,5 @@
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -28,10 +29,10 @@
 namespace duckdb {
 
 TransactionData::TransactionData(DuckTransaction &transaction_p) // NOLINT
-    : transaction(&transaction_p), transaction_id(transaction_p.transaction_id), start_time(transaction_p.start_time) {
+    : transaction(&transaction_p), view(transaction_p.GetSnapshotView()) {
 }
-TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t start_time_p)
-    : transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
+TransactionData::TransactionData(transaction_t transaction_id_p, VisibilityBound visibility_bound_p)
+    : transaction(nullptr), view(transaction_id_p, visibility_bound_p) {
 }
 
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
@@ -39,6 +40,11 @@ DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext 
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
       catalog_version(catalog_version_p), awaiting_cleanup(false), undo_buffer(*this, context_p),
       storage(make_uniq<LocalStorage>(context_p, *this)) {
+	D_ASSERT(IsCommitted(start_time) && !IsCommitted(transaction_id));
+}
+
+SnapshotView DuckTransaction::GetSnapshotView() const {
+	return SnapshotView(transaction_id, VisibilityBound::Before(start_time));
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -334,8 +340,8 @@ ErrorData DuckTransaction::Rollback() {
 	}
 }
 
-void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
-	undo_buffer.Cleanup(lowest_active_transaction);
+void DuckTransaction::Cleanup(VisibilityBound lowest_visibility_bound) {
+	undo_buffer.Cleanup(lowest_visibility_bound);
 }
 
 void DuckTransaction::SetModifications(DatabaseModificationType type) {

@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/common/query_location.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
@@ -19,7 +20,7 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
                                                                    ParseResult &parse_result) {
-	if (transformer.options.debug_transformer_trampoline_style) {
+	if (transformer.options.heap_based_parser && !transformer.grammar.HasGrammarChanges()) {
 		return TransformStatementTrampoline(transformer, parse_result);
 	}
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -82,7 +83,7 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
-                                                                           const Matcher &root_matcher) {
+                                                                           const CompiledGrammar &grammar) {
 	if (!token_iterator.Current()) {
 		return nullptr;
 	}
@@ -90,9 +91,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	ParseResultAllocator parse_result_allocator;
 	ParserPackratCache packrat_cache;
 	idx_t max_token_index = token_iterator.Position();
+	const bool use_heap_based_parser = options.heap_based_parser && !grammar.HasGrammarChanges();
 	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index,
-	                 MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
-	auto match_result = root_matcher.MatchParseResult(state);
+	                 MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, use_heap_based_parser,
+	                 &packrat_cache);
+	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
 	if (!match_result.IsSuccess()) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
 		auto token_stream = token_iterator.ToString();
@@ -136,7 +139,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	}
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
-	PEGTransformer transformer(transformer_allocator, token_iterator, options);
+	PEGTransformer transformer(transformer_allocator, token_iterator, options, grammar);
 
 	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
 }

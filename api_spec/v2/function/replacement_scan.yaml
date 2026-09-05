@@ -1,0 +1,455 @@
+module: replacement scan
+#
+# A replacement scan is a callback the binder consults when a table name cannot
+# be resolved in the catalog; it is what makes `SELECT * FROM 'file.parquet'`
+# work. The callback inspects the unresolved (possibly qualified) name and
+# either claims it, by naming what to read instead, or declines it by claiming
+# nothing, which lets the next registered scan try. When no scan claims the
+# name, the usual "table does not exist" error is raised.
+#
+# A claim names one of three things: a table function and its arguments, a
+# `[[column_data_collection]]` the caller holds, or a SQL query.
+#
+# Scope follows the constructor. A scan created with
+# `[[replacement_scan_create_with_connection]]` is visible only to that
+# connection, is released when it closes, and is consulted before every
+# database-wide scan, including the built-in file scans. A scan created with
+# `[[replacement_scan_create_with_database]]` or
+# `[[replacement_scan_create_with_extension]]` is visible to every connection
+# to that database and lives until the database closes. A registered scan
+# cannot be unregistered.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  replacement_scan:
+    description: |
+      An owned opaque handle to a replacement scan being built. Created with
+      `[[replacement_scan_create_with_connection]]`, `[[replacement_scan_create_with_database]]` or
+      `[[replacement_scan_create_with_extension]]`, configured with `[[replacement_scan_set_callback]]` and
+      `[[replacement_scan_set_user_data]]`, made available with `[[replacement_scan_register]]`, and destroyed with
+      `[[replacement_scan_destroy]]`.
+
+  replacement_scan_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a replacement scan when the binder consults it. The
+      callback receives this handle and can use it to inspect the unresolved name and to claim it by naming what to
+      read instead. Valid only for the duration of the callback; the name it hands out is owned separately and
+      outlives it.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Callbacks
+#-----------------------------------------------------------------------------------------------------------------------
+callbacks:
+  replacement_scan_callback:
+    parameters:
+      info:
+        type: replacement_scan_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  replacement_scan_create_with_connection:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Creates a new replacement scan that will be registered on the connection.
+
+      The scan is visible only to queries on this connection and is released when the connection closes. It is
+      consulted before every database-wide scan, so it can claim a name that a built-in scan would otherwise take.
+      The scan starts out empty: configure it with `[[replacement_scan_set_callback]]` and optionally
+      `[[replacement_scan_set_user_data]]`, then make it available with `[[replacement_scan_register]]`. The caller
+      owns the returned handle and must destroy it with `[[replacement_scan_destroy]]`, also after registration.
+    parameters:
+      connection:
+        type: connection
+        description: The connection to create the scan on.
+      scan:
+        type: replacement_scan
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created replacement scan. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  replacement_scan_create_with_database:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Creates a new replacement scan that will be registered on the database.
+
+      The scan is visible to every connection to the database and lives until the database closes. The scan starts
+      out empty: configure it with `[[replacement_scan_set_callback]]` and optionally
+      `[[replacement_scan_set_user_data]]`, then make it available with `[[replacement_scan_register]]`. The caller
+      owns the returned handle and must destroy it with `[[replacement_scan_destroy]]`, also after registration.
+    parameters:
+      database:
+        type: database
+        description: The database to create the scan on.
+      scan:
+        type: replacement_scan
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created replacement scan. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  replacement_scan_create_with_extension:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Creates a new replacement scan that will be registered on the loading extension's database.
+
+      Use this from an extension load callback, where an extension handle is available. The scan is visible to every
+      connection to that database and lives until the database closes. The scan starts out empty: configure it with
+      `[[replacement_scan_set_callback]]` and optionally `[[replacement_scan_set_user_data]]`, then make it available
+      with `[[replacement_scan_register]]`. The caller owns the returned handle and must destroy it with
+      `[[replacement_scan_destroy]]`, also after registration.
+    parameters:
+      extension:
+        type: extension
+        description: The extension to create the scan on.
+      scan:
+        type: replacement_scan
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created replacement scan. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Properties
+  #---------------------------------------------------------------------------------------------------------------------
+  replacement_scan_set_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Sets the callback of the replacement scan.
+
+      The callback is invoked during query planning for each table reference the catalog could not resolve. It can
+      inspect the unresolved name via `[[replacement_scan_get_name]]`, and claim the
+      reference via `[[replacement_scan_set_function_name]]`, `[[replacement_scan_set_collection]]` or
+      `[[replacement_scan_set_subquery]]`; returning without claiming declines it. The context passed to the callback
+      may be used to read settings, but not to run queries. A callback must be set before registration.
+    parameters:
+      scan:
+        type: replacement_scan
+        description: The scan to set the callback of.
+      callback:
+        type: replacement_scan_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  replacement_scan_set_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Sets arbitrary user data on the replacement scan.
+
+      Associates an opaque pointer with the scan, retrievable from the callback via
+      `[[replacement_scan_get_user_data]]`. The opaque handle bundles the pointer with an optional destructor,
+      invoked when the data is no longer needed, at the latest when the scan's scope ends. The callback may be
+      invoked from several connections at once, so the data must be safe to read concurrently.
+    parameters:
+      scan:
+        type: replacement_scan
+        description: The scan to set the user data of.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the user data pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Callback Functions: Inspecting the Reference
+  #---------------------------------------------------------------------------------------------------------------------
+  replacement_scan_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: Retrieves the user data set via `[[replacement_scan_set_user_data]]`.
+    parameters:
+      info:
+        type: replacement_scan_info
+        description: The info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  replacement_scan_get_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Retrieves the name the catalog could not resolve.
+
+      The name as written in the query, as a path: an unqualified reference has a single part, and a qualified one
+      carries its catalog and schema before it -- see `[[qname_get_part]]`. For a file-backed reference the single
+      part is the path with the quotes stripped. The returned name is owned by the caller and must be destroyed via
+      `[[qname_destroy]]`; being owned, it may outlive the callback.
+    parameters:
+      info:
+        type: replacement_scan_info
+        description: The info handle.
+      name:
+        type: qname
+        indirection: 1
+        kind: OUT
+        description: Receives the unresolved name. Owned by the caller; destroy via `[[qname_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Callback Functions: Claiming the Reference
+  #---------------------------------------------------------------------------------------------------------------------
+  replacement_scan_set_function_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Claims the reference by naming a table function to read instead.
+
+      Arguments to the function are added with `[[replacement_scan_add_argument]]` and
+      `[[replacement_scan_add_named_argument]]`. The name is borrowed and copied, and its parts are matched
+      case-insensitively. A qualified name targets a function in a particular schema or catalog, exactly as writing
+      it out in SQL would. The name is not resolved here: an unknown function fails later, when the replacement is
+      bound. Calling this again replaces the previous name and keeps the arguments added so far.
+
+      The three claim forms, `[[replacement_scan_set_function_name]]`, `[[replacement_scan_set_collection]]` and
+      `[[replacement_scan_set_subquery]]`, are mutually exclusive: claiming the reference through a second, different
+      form results in an error.
+    parameters:
+      info:
+        type: replacement_scan_info
+        description: The info handle.
+      name:
+        type: qname
+        description: The table function to read instead. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  replacement_scan_add_argument:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Appends a positional argument to the claimed table function.
+
+      Positional arguments are passed in the order they are added, before any named ones. The value is borrowed and
+      copied, so the caller may destroy it after the call. Requires `[[replacement_scan_set_function_name]]` to have
+      been called first; otherwise the call results in an error.
+    parameters:
+      info:
+        type: replacement_scan_info
+        description: The info handle.
+      value:
+        type: value
+        description: The argument value. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  replacement_scan_add_named_argument:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Appends a named argument to the claimed table function.
+
+      Equivalent to writing `name := value` at the call site. The name and the value are borrowed and copied, so the
+      caller may destroy the value after the call. Requires `[[replacement_scan_set_function_name]]` to have been
+      called first; otherwise the call results in an error.
+    parameters:
+      info:
+        type: replacement_scan_info
+        description: The info handle.
+      name:
+        type: identifier
+        description: The name of the parameter to bind the value to. Borrowed and copied.
+      value:
+        type: value
+        description: The argument value. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  replacement_scan_set_collection:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Claims the reference by naming a column data collection to read instead.
+
+      The collection is borrowed, not copied: the caller keeps ownership and must keep it alive, and must not clear,
+      reset or destroy it, for as long as any result reading it is live, since the result scans its buffers directly.
+
+      A prepared statement extends that lifetime well beyond its own results. Preparing a statement over a claimed
+      name captures the borrow in the plan, and since a collection claim reads no database there is nothing to
+      invalidate that plan: `[[prepared_statement_reuses_plan]]` reports true, and every later execution reuses the
+      captured borrow without consulting the callback again. So dropping the name from whatever the callback resolves
+      against does not release the collection, and releasing it while such a statement is live leaves the next
+      execution reading freed memory. Destroy every prepared statement over a claimed name before clearing,
+      resetting or destroying the collection behind it.
+
+      By default the collection's columns are named col1..colN. Pass `column_names` to name them instead. When
+      supplied, `column_count` must equal the collection's column count and no name may be empty; pass NULL and 0
+      for the default names.
+
+      The three claim forms, `[[replacement_scan_set_function_name]]`, `[[replacement_scan_set_collection]]` and
+      `[[replacement_scan_set_subquery]]`, are mutually exclusive: claiming the reference through a second, different
+      form results in an error.
+    parameters:
+      info:
+        type: replacement_scan_info
+        description: The info handle.
+      collection:
+        type: column_data_collection
+        description: The collection to read instead. Borrowed; the caller keeps ownership and must keep it alive.
+      column_names:
+        type: identifier
+        indirection: 1
+        const: true
+        description: Optional. An array of `column_count` column names, in order. Pass NULL for the default names col1..colN.
+      column_count:
+        type: idx
+        description: The number of names in `column_names`. Must equal the collection's column count, or 0 for the default names.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  replacement_scan_set_subquery:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Claims the reference by naming a query to read instead.
+
+      The text is parsed at the call and must contain exactly one SELECT statement: a syntax error, several
+      statements or a statement of another kind results in an error. The text is borrowed for the call only. Prefer
+      `[[replacement_scan_set_function_name]]` when a single table function call suffices, as it avoids the parse
+      and keeps the plan flatter.
+
+      The three claim forms, `[[replacement_scan_set_function_name]]`, `[[replacement_scan_set_collection]]` and
+      `[[replacement_scan_set_subquery]]`, are mutually exclusive: claiming the reference through a second, different
+      form results in an error.
+    parameters:
+      info:
+        type: replacement_scan_info
+        description: The info handle.
+      sql:
+        type: str
+        description: The SELECT statement to read instead. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  replacement_scan_set_alias:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Sets the alias the claimed replacement is bound under.
+
+      Optional, and independent of the claim form. An alias written in the query takes precedence over this one;
+      without either, the table name of the reference is used, which for a file-backed reference is the path. The
+      alias is borrowed and copied.
+    parameters:
+      info:
+        type: replacement_scan_info
+        description: The info handle.
+      alias:
+        type: identifier
+        description: The alias to bind the replacement under. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Register
+  #---------------------------------------------------------------------------------------------------------------------
+  replacement_scan_register:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Registers the replacement scan, making it consulted for names the catalog cannot resolve.
+
+      The scan is registered on the target given at creation: the connection, the database or the loading
+      extension's database. Registration requires a callback. Scans are consulted in registration order within their
+      scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan cannot be
+      registered twice, and a registered scan cannot be unregistered: it lives until its scope ends. Registering a
+      database-wide scan while queries are binding on other connections is not thread-safe; register from an
+      extension load callback or before issuing queries. The caller still owns the handle after registration and
+      must destroy it with `[[replacement_scan_destroy]]`, which does not affect the registered scan.
+    parameters:
+      scan:
+        type: replacement_scan
+        description: The scan to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy
+  #---------------------------------------------------------------------------------------------------------------------
+  replacement_scan_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Destroys the replacement scan, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+      double-destruction. Destroying the handle after registration does not affect the registered scan.
+    parameters:
+      scan:
+        type: replacement_scan
+        description: The scan to destroy.
+        indirection: 1
+    return_type: ERROR

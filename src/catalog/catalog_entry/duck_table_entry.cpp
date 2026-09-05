@@ -1355,9 +1355,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		return;
 	}
 
-	// Rolls back any physical index creation.
-	// FIXME: Currently only works for PKs.
-	// FIXME: Should be changed to work for any index-based constraint.
+	// Rolls back any physical index creation for index-based constraints.
 
 	auto &table = Cast<DuckTableEntry>();
 	auto &prev_table = prev_entry.Cast<DuckTableEntry>();
@@ -1373,10 +1371,8 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 			continue;
 		}
 		const auto &unique = constraint->Cast<UniqueConstraint>();
-		if (unique.is_primary_key) {
-			auto index_name = unique.GetName(prev_table.name);
-			names.insert(index_name);
-		}
+		auto index_name = unique.GetName(prev_table.name);
+		names.insert(index_name);
 	}
 
 	for (const auto &constraint : GetConstraints()) {
@@ -1384,9 +1380,6 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 			continue;
 		}
 		const auto &unique = constraint->Cast<UniqueConstraint>();
-		if (!unique.IsPrimaryKey()) {
-			continue;
-		}
 		auto index_name = unique.GetName(table.name);
 		if (names.find(index_name) == names.end()) {
 			prev_indexes.RemoveIndex(index_name);

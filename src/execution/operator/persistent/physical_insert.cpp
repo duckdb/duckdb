@@ -668,13 +668,19 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	const idx_t row_group_size = storage.GetRowGroupSize();
 
 	// parallel append: finalize the append
-	TransactionData tdata(0, 0);
+	auto tdata = TransactionData::Unversioned();
 	auto &data_table = gstate.table.GetStorage();
 	auto &optimistic_collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
 	auto &collection = *optimistic_collection.collection;
 	collection.FinalizeAppend(tdata, lstate.local_append_state);
 
 	const auto append_count = collection.GetTotalRows();
+
+	if (append_count >= row_group_size) {
+		// flush thread-local optimistic data
+		lstate.optimistic_writer->WriteUnflushedRowGroups(optimistic_collection);
+		lstate.optimistic_writer->FinalFlush();
+	}
 
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;

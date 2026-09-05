@@ -65,6 +65,10 @@ public:
 	virtual bool IsDuckTransaction() const {
 		return false;
 	}
+	//! What this transaction sees. A transaction without MVCC state of its own sees everything.
+	virtual SnapshotView GetSnapshotView() const {
+		return SnapshotView(transaction_t(-1), VisibilityBound::IncludingUncommitted());
+	}
 
 public:
 	template <class TARGET>

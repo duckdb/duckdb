@@ -127,6 +127,9 @@ void InsertQueryNode::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", table_ref);
 	serializer.WritePropertyWithDefault<bool>(208, "default_values", default_values, false);
 	serializer.WritePropertyWithDefault<InsertColumnOrder>(209, "column_order", column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
+		serializer.WriteProperty<QualifiedName>(210, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
@@ -141,7 +144,11 @@ unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", result->table_ref);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(208, "default_values", result->default_values, false);
 	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(209, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(210, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog), std::move(schema), std::move(table));
+	if (!qualified_name.Path().empty()) {
+		result->qualified_name = std::move(qualified_name);
+	}
 	return std::move(result);
 }
 

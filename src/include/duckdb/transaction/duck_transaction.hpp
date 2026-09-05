@@ -77,7 +77,7 @@ public:
 	//! Rollback
 	ErrorData Rollback();
 	//! Cleanup the undo buffer
-	void Cleanup(transaction_t lowest_active_transaction);
+	void Cleanup(VisibilityBound lowest_visibility_bound);
 
 	bool ChangesMade();
 	UndoBufferProperties GetUndoProperties();
@@ -93,6 +93,7 @@ public:
 	bool IsDuckTransaction() const override {
 		return true;
 	}
+	SnapshotView GetSnapshotView() const override;
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
 

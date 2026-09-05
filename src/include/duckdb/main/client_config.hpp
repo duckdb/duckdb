@@ -24,6 +24,7 @@ class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
 struct CompiledGrammar;
+struct ReplacementScan;
 
 typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
@@ -58,6 +59,9 @@ struct ClientConfig {
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;
+	//! Replacement scans visible only to this connection, consulted before the database-wide ones in DBConfig.
+	//! Held by pointer so that copying a ClientConfig stays possible; a ReplacementScan owns its data uniquely.
+	vector<shared_ptr<ReplacementScan>> replacement_scans;
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;
@@ -82,6 +86,8 @@ struct ClientConfig {
 	//! Function that is used to create the result collector for a materialized result.
 	get_result_collector_t get_result_collector = nullptr;
 
+	//! The (ordered) list of grammar extensions currently used by the parser
+	case_insensitive_set_t active_grammar_extensions;
 	//! The compiled grammar active for the connection
 	shared_ptr<CompiledGrammar> cached_grammar;
 
