@@ -37,6 +37,8 @@ public:
 	// pushdown filter condition(ex in table scan operator),
 	// if have outer table columns then cannot elimination
 	bool has_filter = false;
+	// whether an operator above can duplicate bindings from this subtree
+	bool has_duplicate_child_bindings = false;
 
 	optional_ptr<LogicalOperator> join_parent = nullptr;
 	idx_t join_index = 0;
@@ -75,6 +77,7 @@ public:
 
 private:
 	unique_ptr<LogicalOperator> TryEliminateJoin();
+	void AddDistinctGroup(TableIndex table_index, column_binding_set_t distinct_group);
 	// void ExtractDistinctReferences(vector<Expression> &expressions, idx_t target_table_index);
 	bool ContainDistinctGroup(vector<ColumnBinding> &exprs);
 
