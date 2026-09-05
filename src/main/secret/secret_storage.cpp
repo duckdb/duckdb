@@ -333,8 +333,6 @@ void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound 
 //===--------------------------------------------------------------------===//
 namespace {
 
-constexpr const char *CONNECTION_SECRET_STATE_KEY = "connection_secret_storage";
-
 //! Per-connection secret container. Lives on the ClientContext's RegisteredStateManager, so it is destroyed exactly
 //! when the connection (its ClientContext) goes away - giving automatic, crash-robust cleanup with no cooperation.
 //! Rollback is implemented here rather than by storing the secrets in a CatalogSet: the container is private to a
@@ -388,15 +386,16 @@ private:
 
 //! Fetch the calling connection's secret container. With create=false returns nullptr when there is no context or no
 //! container yet; with create=true it allocates the container on the context (used by StoreSecret).
-optional_ptr<ConnectionSecretState> GetConnectionState(optional_ptr<CatalogTransaction> transaction, bool create) {
+optional_ptr<ConnectionSecretState> GetConnectionState(optional_ptr<CatalogTransaction> transaction, bool create,
+                                                       const string &state_key) {
 	if (!transaction || !transaction->HasContext()) {
 		return nullptr;
 	}
 	auto &context = transaction->GetContext();
 	if (create) {
-		return context.registered_state->GetOrCreate<ConnectionSecretState>(CONNECTION_SECRET_STATE_KEY).get();
+		return context.registered_state->GetOrCreate<ConnectionSecretState>(state_key).get();
 	}
-	return context.registered_state->Get<ConnectionSecretState>(CONNECTION_SECRET_STATE_KEY).get();
+	return context.registered_state->Get<ConnectionSecretState>(state_key).get();
 }
 
 } // namespace
@@ -404,7 +403,7 @@ optional_ptr<ConnectionSecretState> GetConnectionState(optional_ptr<CatalogTrans
 unique_ptr<SecretEntry> ConnectionSecretStorage::StoreSecret(unique_ptr<const BaseSecret> secret,
                                                              OnCreateConflict on_conflict,
                                                              optional_ptr<CatalogTransaction> transaction) {
-	auto state = GetConnectionState(transaction, true);
+	auto state = GetConnectionState(transaction, true, state_key);
 	if (!state) {
 		throw InvalidInputException("Cannot create a connection-scoped secret without an active client context");
 	}
@@ -436,7 +435,7 @@ unique_ptr<SecretEntry> ConnectionSecretStorage::StoreSecret(unique_ptr<const Ba
 
 SecretMatch ConnectionSecretStorage::LookupSecret(const string &path, const string &type,
                                                   optional_ptr<CatalogTransaction> transaction) {
-	auto state = GetConnectionState(transaction, false);
+	auto state = GetConnectionState(transaction, false, state_key);
 	if (!state) {
 		// No connection context (or nothing stored yet) - decline, so the global storages serve this lookup.
 		return SecretMatch();
@@ -453,7 +452,7 @@ SecretMatch ConnectionSecretStorage::LookupSecret(const string &path, const stri
 
 unique_ptr<SecretEntry> ConnectionSecretStorage::GetSecretByName(const string &name,
                                                                  optional_ptr<CatalogTransaction> transaction) {
-	auto state = GetConnectionState(transaction, false);
+	auto state = GetConnectionState(transaction, false, state_key);
 	if (!state) {
 		return nullptr;
 	}
@@ -467,7 +466,7 @@ unique_ptr<SecretEntry> ConnectionSecretStorage::GetSecretByName(const string &n
 
 void ConnectionSecretStorage::DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
                                                optional_ptr<CatalogTransaction> transaction) {
-	auto state = GetConnectionState(transaction, false);
+	auto state = GetConnectionState(transaction, false, state_key);
 	idx_t erased = 0;
 	if (state) {
 		lock_guard<mutex> guard(state->lock);
@@ -483,7 +482,7 @@ void ConnectionSecretStorage::DropSecretByName(const Identifier &name, OnEntryNo
 
 vector<SecretEntry> ConnectionSecretStorage::AllSecrets(optional_ptr<CatalogTransaction> transaction) {
 	vector<SecretEntry> result;
-	auto state = GetConnectionState(transaction, false);
+	auto state = GetConnectionState(transaction, false, state_key);
 	if (!state) {
 		return result;
 	}
