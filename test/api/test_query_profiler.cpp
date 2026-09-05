@@ -58,6 +58,23 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 	REQUIRE(query_not_found_in_output);
 }
 
+TEST_CASE("Disabling profiling resets the active query profiler", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableProfiling();
+	con.context->config.profiler_print_format = "no_output";
+
+	REQUIRE_NO_FAIL(con.Query("CALL disable_profiling()"));
+	auto &profiler = QueryProfiler::Get(*con.context);
+	CHECK(profiler.GetQuerySQL().empty());
+	CHECK(profiler.GetQueryMetrics().GetStringMetricInSeconds("query.total_time") == 0);
+
+	REQUIRE_NO_FAIL(con.Query("PRAGMA enable_profiling='no_output'"));
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+	auto output = con.GetProfilingInformation(ProfilerPrintFormat::JSON());
+	REQUIRE(output.find("SELECT 42") != string::npos);
+}
+
 TEST_CASE("Test parser timing is reported per statement", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
