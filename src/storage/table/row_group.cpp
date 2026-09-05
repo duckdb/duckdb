@@ -1072,15 +1072,13 @@ void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType
 	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
 
 	VisibilityBound visibility_bound;
-	transaction_t transaction_id;
 	if (type == TableScanType::TABLE_SCAN_COMMITTED_ROWS) {
 		visibility_bound = VisibilityBound::Through(transaction_manager.GetLastCommit());
-		transaction_id = MAX_TRANSACTION_ID;
 	} else {
 		visibility_bound = transaction_manager.LowestVisibilityBound();
-		transaction_id = transaction_manager.LowestActiveId();
 	}
-	TransactionData transaction(transaction_id, visibility_bound);
+	// a scan on behalf of no transaction: there are no writes of its own to see
+	TransactionData transaction(MAX_TRANSACTION_ID, visibility_bound);
 
 	ScanOptions options(transaction);
 	options.insert_type = InsertedScanType::ALL_ROWS;

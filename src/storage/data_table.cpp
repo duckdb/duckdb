@@ -211,7 +211,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	try {
 		// read at the commits seen so far, not at this transaction's older snapshot
 		auto &transaction_manager = DuckTransactionManager::Get(db);
-		TransactionData rewrite_visibility(transaction.transaction_id,
+		TransactionData rewrite_visibility(transaction.GetTransactionId(),
 		                                   VisibilityBound::Through(transaction_manager.GetLastCommit()));
 		row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr,
 		                                          rewrite_visibility);

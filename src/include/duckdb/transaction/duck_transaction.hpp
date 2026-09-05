@@ -36,13 +36,13 @@ struct CommitInfo {
 class DuckTransaction : public Transaction {
 public:
 	DuckTransaction(DuckTransactionManager &manager, ClientContext &context, transaction_t start_time,
-	                transaction_t transaction_id, idx_t catalog_version);
+	                SnapshotView view, idx_t catalog_version);
 	~DuckTransaction() override;
 
 	//! The start timestamp of this transaction
 	transaction_t start_time;
-	//! The transaction id of this transaction
-	transaction_t transaction_id;
+	//! What this transaction sees: its own writes, and everything before its visibility bound
+	SnapshotView view;
 	//! The commit id of this transaction, if it has successfully been committed
 	transaction_t commit_id;
 
@@ -94,6 +94,9 @@ public:
 		return true;
 	}
 	SnapshotView GetSnapshotView() const override;
+	transaction_t GetTransactionId() const {
+		return view.transaction_id;
+	}
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
 
