@@ -1,5 +1,5 @@
-# To link extensions into DuckDB and auto-load them on startup, we generated an
-# include file and a loader function based on the `DUCKDB_EXTENSION_NAMES`
+# To link extensions into DuckDB and auto-load them on startup, we generate an
+# include file and a registrar object based on the `DUCKDB_EXTENSION_NAMES`
 # parameter.
 
 # generated_extension_headers.hpp we first write into a 'candidate' file and
@@ -120,14 +120,19 @@ endif()
 set(GENERATED_CPP_FILE
     ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
 configure_file(generated_extension_loader.cpp.in "${GENERATED_CPP_FILE}")
-add_library(duckdb_generated_extension_loader STATIC ${GENERATED_CPP_FILE})
-
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_generated_extension_loader>
-    PARENT_SCOPE)
+add_library(duckdb_generated_extension_loader_object OBJECT
+            ${GENERATED_CPP_FILE})
+add_library(duckdb_generated_extension_loader STATIC
+            $<TARGET_OBJECTS:duckdb_generated_extension_loader_object>)
+# Keep the archive while forcing its registrar object into CMake consumers.
+target_sources(
+  duckdb_generated_extension_loader
+  INTERFACE $<TARGET_OBJECTS:duckdb_generated_extension_loader_object>)
 
 install(
   TARGETS duckdb_generated_extension_loader
+          duckdb_generated_extension_loader_object
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
-  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
+  OBJECTS DESTINATION "${INSTALL_LIB_DIR}")

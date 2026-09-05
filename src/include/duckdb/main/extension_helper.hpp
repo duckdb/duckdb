@@ -99,12 +99,17 @@ struct ExtensionInstallOptions {
 
 class ExtensionHelper {
 public:
+	typedef void (*register_linked_extensions_t)(DBConfig &config);
+	typedef vector<string> (*loaded_extension_test_paths_t)();
+
 	static void LoadAllExtensions(DuckDB &db);
 	static vector<string> LoadedExtensionTestPaths();
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
-	//! Publishes the extensions linked into this binary onto the config. Generated at build time;
-	//! a build that links none (or an extension carrying its own DuckDB) registers nothing.
+	//! Publishes the extensions linked into this binary onto the config.
 	static void RegisterLinkedExtensions(DBConfig &config);
+	//! Installs the build-generated linked extension hooks.
+	static void SetLinkedExtensionHooks(register_linked_extensions_t register_extensions,
+	                                    loaded_extension_test_paths_t loaded_test_paths);
 
 	//! Install an extension
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,

@@ -55,6 +55,17 @@ TEST_CASE("Test DB config configuration", "[api]") {
 	}
 }
 
+TEST_CASE("Linked extension registry preserves inherited config", "[api][extension]") {
+	DBConfig config;
+	config.linked_extensions.push_back({"inherited", [](DuckDB &) {
+	                                    }});
+
+	DuckDB db(nullptr, &config);
+	auto &db_config = DBConfig::GetConfig(*db.instance);
+	REQUIRE(db_config.linked_extensions.size() == 1);
+	REQUIRE(db_config.linked_extensions[0].name == "inherited");
+}
+
 TEST_CASE("Test allowed options", "[api]") {
 	identifier_map_t<Value> config_dict;
 	string option;

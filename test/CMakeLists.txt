@@ -51,6 +51,10 @@ endif()
 
 add_executable(unittest unittest.cpp ${UNITTEST_OBJECT_FILES})
 
+add_executable(duckdb_static_library_test api/test_static_library.cpp)
+target_link_libraries(duckdb_static_library_test duckdb_static)
+add_dependencies(unittest duckdb_static_library_test)
+
 set(RUN_WRAPPER_UNITTEST_NAME "unittest")
 if(WIN32)
   set(RUN_WRAPPER_UNITTEST_NAME "unittest.exe")
