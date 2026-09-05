@@ -28,7 +28,7 @@ GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &f
 
 	auto &column_map = filter_info.column_map;
 	if (filter_info.filename_enabled) {
-		auto lookup_column_id = column_map.find("filename");
+		auto lookup_column_id = column_map.find(filter_info.filename_column);
 		if (lookup_column_id != column_map.end()) {
 			result.insert(make_pair(lookup_column_id->second, PartitioningColumnValue(filename)));
 		}
