@@ -127,6 +127,21 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEG
 	return std::move(child);
 }
 
+unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformNestedSchemaTableColumnName(
+    PEGTransformer &transformer, const Identifier &catalog_qualification,
+    const Identifier &reserved_schema_qualification, const Identifier &reserved_schema_qualification_1,
+    const vector<Identifier> &reserved_schema_qualification_2, const Identifier &reserved_column_name) {
+	vector<Identifier> column_names;
+	column_names.push_back(catalog_qualification);
+	column_names.push_back(reserved_schema_qualification);
+	column_names.push_back(reserved_schema_qualification_1);
+	for (auto &qualification : reserved_schema_qualification_2) {
+		column_names.push_back(qualification);
+	}
+	column_names.push_back(reserved_column_name);
+	return make_uniq<ColumnRefExpression>(std::move(column_names));
+}
+
 unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformCatalogReservedSchemaTableColumnName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_table_qualification,
@@ -193,7 +208,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		transformer.in_window_definition = true;
 		auto expr = std::move(*over_clause);
-		expr->SetQualifiedName(QualifiedName(qualified_function.Catalog(), qualified_function.Schema(), Identifier()));
+		expr->SetQualifiedName(qualified_function.WithName(Identifier()));
 		expr->SetFunctionName(lowercase_name);
 
 		for (auto &arg : function_children) {
@@ -326,10 +341,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			throw ParserException("Unknown ordered aggregate %s.", qualified_function.Name());
 		}
 	}
-	auto result = make_uniq<FunctionExpression>(
-	    QualifiedName(qualified_function.Catalog(), qualified_function.Schema(), Identifier(lowercase_name)),
-	    std::move(function_children), std::move(filter_expr), std::move(order_modifier), distinct, false,
-	    export_clause);
+	auto result = make_uniq<FunctionExpression>(qualified_function.WithName(Identifier(lowercase_name)),
+	                                            std::move(function_children), std::move(filter_expr),
+	                                            std::move(order_modifier), distinct, false, export_clause);
 
 	return std::move(result);
 }
@@ -394,12 +408,15 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTran
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaFunctionName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const optional<Identifier> &reserved_schema_qualification, const Identifier &reserved_function_name) {
+    const optional<vector<Identifier>> &reserved_schema_qualification, const Identifier &reserved_function_name) {
+	vector<Identifier> qualification;
+	qualification.push_back(catalog_qualification);
 	if (reserved_schema_qualification) {
-		return QualifiedName(catalog_qualification, *reserved_schema_qualification, reserved_function_name);
-	} else {
-		return QualifiedName({catalog_qualification}, reserved_function_name);
+		for (auto &schema : *reserved_schema_qualification) {
+			qualification.push_back(schema);
+		}
 	}
+	return QualifiedName(std::move(qualification), reserved_function_name);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayBoundedListExpression(

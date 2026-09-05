@@ -541,7 +541,7 @@ TEST_CONFIGS_QUERY_VERIFICATION := \
 	test/configs/disable_optimizer.json \
 	test/configs/verification_projection.json \
 	test/configs/verify_column_bindings.json \
-	test/configs/transformer_trampoline_style.json
+	test/configs/heap_based_parser.json
 
 TEST_CONFIGS_EXECUTION := \
 	test/configs/internal_vector_serialization.json \

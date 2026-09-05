@@ -378,6 +378,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_heap_based_parser",
+        "description": "DEBUG SETTING: use the experimental heap-based PEG parser",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "debug_order_verification",
         "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
         "type": "ENUM<DebugOrderVerification>",
@@ -395,13 +402,6 @@
         "description": "DEBUG SETTING: skip checkpointing on commit",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
-    },
-    {
-        "name": "debug_transformer_trampoline_style",
-        "description": "Use the experimental trampoline-style parser transformer",
-        "type": "BOOLEAN",
-        "default_scope": "local",
         "default_value": "false"
     },
     {

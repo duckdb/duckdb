@@ -112,14 +112,7 @@ LogicalType BindTypeByNameV2(ClientContext &context, const string &name, const v
 		}
 	}
 	auto &type_entry = entry->Cast<TypeCatalogEntry>();
-	if (!type_entry.bind_function) {
-		if (!args.empty()) {
-			throw BinderException("Type '%s' does not take any type parameters", name);
-		}
-		return type_entry.user_type;
-	}
-	BindLogicalTypeInput input {context, type_entry.user_type, args};
-	return type_entry.bind_function(input);
+	return type_entry.constructors.Bind(context, type_entry.user_type, args);
 }
 
 // The value-parameter view of a bound type: the exact dual of
