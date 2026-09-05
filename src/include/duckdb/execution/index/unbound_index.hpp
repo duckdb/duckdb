@@ -75,9 +75,14 @@ private:
 	//! Derived from this index's column IDs at construction, deduplicated and sorted.
 	vector<StorageIndex> mapped_column_ids;
 
+	//! Whether persistent blocks referenced by `storage_info` have been reclaimed
+	//! or handed off to a bound index.
+	bool storage_reclaimed = false;
+
 public:
 	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
 	             AttachedDatabase &db);
+	~UnboundIndex() override;
 
 public:
 	void ResetStorage() override;
