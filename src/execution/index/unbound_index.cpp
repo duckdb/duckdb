@@ -33,7 +33,17 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo 
 	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
 }
 
+UnboundIndex::~UnboundIndex() {
+	if (!storage_reclaimed) {
+		ResetStorage();
+	}
+}
+
 void UnboundIndex::ResetStorage() {
+	if (storage_reclaimed) {
+		return;
+	}
+	storage_reclaimed = true;
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	for (auto &info : storage_info.allocator_infos) {
 		for (auto &block : info.block_pointers) {
@@ -59,6 +69,7 @@ unique_ptr<BoundIndex> UnboundIndex::Bind(IndexBinder &binder, const vector<Logi
 	if (HasBufferedReplays()) {
 		bound_index->ApplyBufferedReplays(physical_column_types, buffered_replays, mapped_column_ids);
 	}
+	storage_reclaimed = true;
 	return bound_index;
 }
 
