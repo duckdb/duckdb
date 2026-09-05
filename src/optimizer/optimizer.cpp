@@ -446,14 +446,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	// DML CTEs can invalidate the table statistics captured during planning.
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	bool propagated_statistics = false;
-	bool removed_aggregate_children = false;
+	bool removed_expressions = false;
 	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
 			propagated_statistics = true;
-			removed_aggregate_children = propagator.HasRemovedAggregateChildren();
+			removed_expressions = propagator.HasRemovedExpressions();
 		});
 	}
 	if (propagated_statistics) {
@@ -463,7 +463,7 @@ void Optimizer::RunBuiltInOptimizers() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
-			removed_aggregate_children |= propagator.HasRemovedAggregateChildren();
+			removed_expressions |= propagator.HasRemovedExpressions();
 		}
 	}
 
@@ -479,8 +479,9 @@ void Optimizer::RunBuiltInOptimizers() {
 		common_aggregate.VisitOperator(*plan);
 	});
 
-	// COUNT(x) becomes COUNT(*) during statistics propagation, leaving unreferenced columns in the scan
-	if (removed_aggregate_children) {
+	// statistics propagation removes filters, join conditions and aggregate children that it proves redundant.
+	// this can leave columns in a scan that nothing references any more - prune them again
+	if (removed_expressions) {
 		RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
 			ClearProjectionMaps(*plan);
 			RemoveUnusedColumns unused(*this);
