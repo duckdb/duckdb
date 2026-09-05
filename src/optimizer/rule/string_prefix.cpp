@@ -21,6 +21,45 @@ static unique_ptr<BoundConstantExpression> RewriteAsNull(const BoundFunctionExpr
 	return make_uniq<BoundConstantExpression>(Value(comparison.GetReturnType()));
 }
 
+static bool IsNonNullConstant(Expression &child) {
+	return child.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+	       !child.Cast<BoundConstantExpression>().GetValue().IsNull();
+}
+
+static bool TryGetConstantInt(Expression &child, int64_t &result) {
+	if (!IsNonNullConstant(child)) {
+		return false;
+	}
+	result = child.Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>();
+	return true;
+}
+
+static unique_ptr<Expression> RewriteZeroLength(BoundFunctionExpression &func) {
+	auto &children = func.GetChildrenMutable();
+	auto &function_name = func.Function().GetName();
+
+	int64_t length;
+	if (function_name == "left") {
+		// left(s, n) -> n is children[1]
+		if (children.size() != 2 || !TryGetConstantInt(*children[1], length)) {
+			return nullptr;
+		}
+	} else if (function_name == "substring" || function_name == "substr") {
+		// substring(s, start, n) -> n is children[2]; start must be a non-NULL constant so the
+		// NULL-ness of the result matches constant_or_null(s, '')
+		if (children.size() != 3 || !IsNonNullConstant(*children[1]) || !TryGetConstantInt(*children[2], length)) {
+			return nullptr;
+		}
+	} else {
+		return nullptr;
+	}
+
+	if (length != 0) {
+		return nullptr;
+	}
+	return ExpressionRewriter::ConstantOrNull(std::move(children[0]), Value(string()));
+}
+
 StringPrefixRule::StringPrefixRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto op = make_uniq<ComparisonExpressionMatcher>();
 	op->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
@@ -42,6 +81,14 @@ StringPrefixRule::StringPrefixRule(ExpressionRewriter &rewriter) : Rule(rewriter
 	constant->type = make_uniq<TypeMatcherId>(LogicalTypeId::VARCHAR);
 	op->matchers.push_back(std::move(constant));
 
+	root = std::move(op);
+}
+
+StringPrefixZeroLengthRule::StringPrefixZeroLengthRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto op = make_uniq<FunctionExpressionMatcher>();
+	op->function = make_uniq<ManyFunctionMatcher>(identifier_set_t {"left", "substring", "substr"});
+	op->matchers.push_back(make_uniq<ExpressionMatcher>());
+	op->policy = SetMatcher::Policy::SOME_ORDERED;
 	root = std::move(op);
 }
 
@@ -165,6 +212,12 @@ unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<refer
 	prefix_children.emplace_back(make_uniq<BoundConstantExpression>(constant.GetValue()));
 	auto prefix_expr = PrefixFun::GetFunction().Bind(GetContext(), std::move(prefix_children));
 	return std::move(prefix_expr);
+}
+
+unique_ptr<Expression> StringPrefixZeroLengthRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                                         bool &changes_made, bool is_root) {
+	auto &func = bindings[0].get().Cast<BoundFunctionExpression>();
+	return RewriteZeroLength(func);
 }
 
 unique_ptr<Expression> InstrPrefixRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,

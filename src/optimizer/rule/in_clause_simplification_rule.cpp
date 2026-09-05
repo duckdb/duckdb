@@ -3,6 +3,7 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/optimizer/matcher/type_matcher_id.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/string_map_set.hpp"
@@ -19,6 +20,11 @@ InClauseSimplificationRule::InClauseSimplificationRule(ExpressionRewriter &rewri
 unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                          bool &changes_made, bool is_root) {
 	auto &expr = bindings[0].get().Cast<BoundOperatorExpression>();
+	auto &children = expr.GetChildrenMutable();
+	if (expr.GetExpressionType() == ExpressionType::COMPARE_IN && children.size() == 2) {
+		return BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, std::move(children[0]),
+		                                         std::move(children[1]));
+	}
 	if (!BoundCastExpression::IsCast(*expr.GetChildrenMutable()[0])) {
 		return nullptr;
 	}
