@@ -92,6 +92,7 @@ jobs:
       ci_tools_version: main
       exclude_archs: ${{ inputs.extra_exclude_archs }}
       allow_failure_archs: ${{ inputs.allow_failure_archs }}
+      vcpkg_commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
       reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
       skip_tests: ${{ inputs.skip_tests }}
       save_cache: ${{ inputs.save_cache }}

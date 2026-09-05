@@ -299,7 +299,7 @@ jobs:
       with:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
-        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         test: make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"
         bundle: make relassert-artifact
         upload-name: linux-relassert-build
@@ -512,9 +512,9 @@ jobs:
         test: ${{ !fromJson(needs.prepare.outputs.skip_tests) && matrix.config.run_smoke && 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' || 'true' }}
         bundle: make release-artifact
         upload-name: ${{ matrix.config.build_artifact }}
-        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: ${{ matrix.config.vcpkg_cache_suffix }}
-        save-cache: ${{ matrix.config.save_vcpkg_cache && fromJson(needs.prepare.outputs.save_cache) }}
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
@@ -677,7 +677,7 @@ jobs:
       with:
         build-type: codecov
         build: python3 scripts/ci/retry.py -- make codecov
-        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: codecov
         save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
@@ -781,7 +781,7 @@ jobs:
         FORCE_WARN_UNUSED: 1
       with:
         build: make
-        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: linux-cli-${{ matrix.config.cache_suffix }}
         save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
@@ -956,7 +956,7 @@ jobs:
         with:
           build-type: relassert
           build: python3 scripts/ci/retry.py -- make relassert
-          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           cache-suffix: no_string_inline
           save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
@@ -998,7 +998,7 @@ jobs:
         with:
           build-type: release
           build: python3 scripts/ci/retry.py -- make release
-          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           cache-suffix: no_rtti
           save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
@@ -1080,7 +1080,7 @@ jobs:
       with:
         build-type: reldebug
         build: python3 scripts/ci/retry.py -- make reldebug
-        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: threadsan
         save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 

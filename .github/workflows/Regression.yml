@@ -79,7 +79,7 @@ jobs:
           build: python3 scripts/ci/retry.py -- make release
           bundle: make release-artifact
           upload-name: linux-release-build
-          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           save-cache: ${{ inputs.save_cache }}
 
       - name: Select base ref
@@ -124,7 +124,7 @@ jobs:
           build: python3 scripts/ci/retry.py -- make release
           bundle: make release-artifact
           upload-name: linux-base-build
-          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           save-cache: ${{ inputs.save_cache }}
 
   regression-bench:
