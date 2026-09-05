@@ -1,26 +1,33 @@
 # name: test/fuzzer/duckfuzz/duckdb_fuzzer_4430.test
-# description: Regression test for DETACH while the current transaction has outstanding work on the database
+# description: DETACH is allowed with outstanding work; re-ATTACH of the same alias in this transaction is not
 # group: [duckfuzz]
 
 statement ok
 ATTACH '{TEST_DIR}/duckdb_fuzzer_4430.db' AS db1
 
-# Write case: forbid DETACH after a write to db1 in the same transaction
+# Write case: DETACH after a write succeeds; re-ATTACH of db1 in the same transaction fails
 statement ok
 BEGIN
 
 statement ok
 CREATE TABLE db1.tbl(i INTEGER)
 
-statement error
+statement ok
 DETACH db1
+
+statement error
+ATTACH '{TEST_DIR}/duckdb_fuzzer_4430.db' AS db1
 ----
-Cannot detach database "db1"
+Cannot re-attach database "db1"
 
 statement ok
 ROLLBACK
 
-# Read case: forbid DETACH after a read from db1 in the same transaction
+# DETACH is not transactional, so re-attach after the rollback
+statement ok
+ATTACH '{TEST_DIR}/duckdb_fuzzer_4430.db' AS db1
+
+# Read case: same rule after a read
 statement ok
 CREATE TABLE db1.tbl(i INTEGER)
 
@@ -31,10 +38,13 @@ query I
 SELECT * FROM db1.tbl
 ----
 
-statement error
+statement ok
 DETACH db1
+
+statement error
+ATTACH '{TEST_DIR}/duckdb_fuzzer_4430.db' AS db1
 ----
-Cannot detach database "db1"
+Cannot re-attach database "db1"
 
 statement ok
 ROLLBACK

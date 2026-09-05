@@ -15,6 +15,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 
 namespace duckdb {
 
@@ -158,6 +159,19 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		}
 	}
 
+	// Unbound alias whose AttachedDatabase this transaction still holds.
+	// Hidden readers (read_duckdb) DETACH after a scan and re-ATTACH the same file
+	// in one query or transaction; fall through so InsertDatabasePath reuses it.
+	if (!GetDatabase(info.name)) {
+		if (auto existing_db = MetaTransaction::Get(context).GetReferencedDatabaseOwning(info.name)) {
+			if (existing_db->GetVisibility() != AttachVisibility::HIDDEN ||
+			    options.visibility != AttachVisibility::HIDDEN) {
+				throw TransactionException("Cannot re-attach database %s in the same transaction that already used it",
+				                           info.name);
+			}
+		}
+	}
+
 	if (requires_tracking_attaches) {
 		// Start timing the ATTACH-delay step.
 		auto timer = context.client_data->profiler->StartTimer<MetricStorageWaitingToAttachLatency>();
@@ -272,6 +286,9 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &n
 		}
 		return;
 	}
+
+	// Drop the catalog name; keep the AttachedDatabase in referenced_databases until commit.
+	MetaTransaction::Get(context).DetachDatabase(*attached_db);
 
 	attached_db->OnDetach(context);
 
