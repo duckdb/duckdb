@@ -21,6 +21,15 @@ shared_ptr<BlockHandle> UncompressedStringSegmentState::GetHandle(BlockManager &
 		return entry->second;
 	}
 	auto &manager = block_manager ? *block_manager : manager_p;
+	// NOTE: manager.TotalBlocks reports the number of blocks, including free ones.
+	if (block_id < 0 || NumericCast<idx_t>(block_id) >= manager.TotalBlocks()) {
+		throw DataCorruptionException(
+		    "Corrupted uncompressed string segment: overflow string block ID is outside the database block range");
+	}
+	if (std::find(on_disk_blocks.begin(), on_disk_blocks.end(), block_id) == on_disk_blocks.end()) {
+		throw DataCorruptionException(
+		    "Corrupted uncompressed string segment: overflow string block is not owned by the segment");
+	}
 	auto result = manager.RegisterBlock(block_id);
 	handles.insert(make_pair(block_id, result));
 	return result;
@@ -56,7 +65,10 @@ void UncompressedStringSegmentState::InsertOverflowBlock(block_id_t block_id, re
 reference<StringBlock> UncompressedStringSegmentState::FindOverflowBlock(block_id_t block_id) {
 	auto read_lock = overflow_blocks_lock.GetSharedLock();
 	auto entry = overflow_blocks.find(block_id);
-	D_ASSERT(entry != overflow_blocks.end());
+	if (entry == overflow_blocks.end()) {
+		throw DataCorruptionException(
+		    "Corrupted uncompressed string segment: overflow string block is not owned by the segment");
+	}
 	return entry->second;
 }
 
