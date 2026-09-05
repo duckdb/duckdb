@@ -1,0 +1,215 @@
+# name: test/sql/function/string/regex_multiline_option.test
+# description: the 'm'/'n'/'p' regex option enables newline-sensitive (multiline) matching (issue #17056)
+# group: [string]
+
+# With the 'm' option, ^ and $ match at line boundaries.
+query I
+SELECT regexp_extract('Line 1' || chr(10) || 'text' || chr(10) || 'Line 2', '^Line.*$', 0, 'm');
+----
+Line 1
+
+# Without 'm', ^ matches only the start of the whole text.
+query I
+SELECT regexp_extract('a' || chr(10) || 'Line 2', '^Line.*$', 0, 'm') = 'Line 2';
+----
+true
+
+query I
+SELECT regexp_extract('a' || chr(10) || 'Line 2', '^Line.*$', 0);
+----
+(empty)
+
+# regexp_matches honors 'm'
+query I
+SELECT regexp_matches('a' || chr(10) || 'Line 2', '^Line', 'm');
+----
+true
+
+query I
+SELECT regexp_matches('a' || chr(10) || 'Line 2', '^Line');
+----
+false
+
+# regexp_replace honors 'm' (compared as a whole to avoid a multi-line result cell)
+query I
+SELECT regexp_replace('x1' || chr(10) || 'x2', '^x', 'Y', 'gm') = ('Y1' || chr(10) || 'Y2');
+----
+true
+
+# regexp_extract_all honors 'm'
+query I
+SELECT regexp_extract_all('Line 1' || chr(10) || 'Line 2', '^Line \d', 0, 'm');
+----
+[Line 1, Line 2]
+
+# non-constant pattern (from a column) honors 'm'
+statement ok
+CREATE TABLE pat(p VARCHAR);
+
+statement ok
+INSERT INTO pat VALUES ('^Line.*$');
+
+query I
+SELECT regexp_extract('a' || chr(10) || 'Line 2', p, 0, 'm') FROM pat;
+----
+Line 2
+
+# #17056 gate follow-up (duckdb-9am.12): optimizer bail-out + literal guard + non-constant extract_all
+
+statement ok
+CREATE TABLE rc(s VARCHAR);
+
+statement ok
+INSERT INTO rc VALUES ('Line 1'), ('a' || chr(10) || 'Line 2');
+
+# C1: the regex optimizer must not rewrite a multiline '^Line' to a whole-string prefix.
+query I
+SELECT count(*) FROM rc WHERE regexp_matches(s, '^Line', 'm');
+----
+2
+
+# C2: literal ('l') wins over multiline ('m'); the (?m) prefix must not be added.
+query I
+SELECT regexp_matches('^Line', '^Line', 'lm');
+----
+true
+
+# C3: a non-constant pattern in regexp_extract_all honors 'm'.
+statement ok
+CREATE TABLE pat2(p VARCHAR);
+
+statement ok
+INSERT INTO pat2 VALUES ('^Line.*$');
+
+query I
+SELECT regexp_extract_all('a' || chr(10) || 'Line 2', p, 0, 'm') FROM pat2;
+----
+[Line 2]
+
+# The three-argument form regexp_extract(string, pattern, options) also honors 'm'.
+
+query I
+SELECT regexp_extract('a' || chr(10) || 'Line 2', '^Line.*$', 'm');
+----
+Line 2
+
+query I
+SELECT regexp_extract('a' || chr(10) || 'Line 2', '^Line.*$', '');
+----
+(empty)
+
+# 'm' combines with 'k' (keep the input on no match) in the same options string.
+
+query I
+SELECT regexp_extract('a' || chr(10) || 'Line 2', '^Line.*$', 'km');
+----
+Line 2
+
+query I
+SELECT regexp_extract('nomatch', '^Line.*$', 'km');
+----
+nomatch
+
+# ... and with a non-constant pattern.
+
+query I
+SELECT regexp_extract('a' || chr(10) || 'Line 2', p, 'm') FROM pat;
+----
+Line 2
+
+# The LIST-of-group-names form takes its options from the fourth argument.
+
+query I
+SELECT regexp_extract('a' || chr(10) || 'Line 2', '^(Line) (\d)$', ['w', 'd'], 'm');
+----
+{'w': Line, 'd': 2}
+
+# Semantics lock-down: 's' (dot matches newline) and 'm' (line anchors) are independent
+# and both apply when combined.
+
+query I
+SELECT regexp_matches('x' || chr(10) || 'a' || chr(10) || 'b', '^a.b$', 'sm');
+----
+true
+
+query I
+SELECT regexp_matches('x' || chr(10) || 'a' || chr(10) || 'b', '^a.b$', 'm');
+----
+false
+
+query I
+SELECT regexp_matches('x' || chr(10) || 'a' || chr(10) || 'b', '^a.b$', 's');
+----
+false
+
+query I
+SELECT regexp_matches('x' || chr(10) || 'a' || chr(10) || 'b', '^a.b$');
+----
+false
+
+# Semantics lock-down: 'n' and 'p' are accepted as aliases of 'm'.
+
+query I
+SELECT regexp_matches('a' || chr(10) || 'Line 2', '^Line', 'n');
+----
+true
+
+query I
+SELECT regexp_matches('a' || chr(10) || 'Line 2', '^Line', 'p');
+----
+true
+
+# Semantics lock-down: with 'm', '$' matches before an embedded newline.
+
+query I
+SELECT regexp_extract('Line 1' || chr(10) || 'Line 2', 'Line \d$', 0, 'm');
+----
+Line 1
+
+# string_split_regex takes its options from the bind data on both the constant-pattern
+# fast path and the per-row recompilation slow path.
+
+statement ok
+CREATE TABLE sep(p VARCHAR);
+
+statement ok
+INSERT INTO sep VALUES (chr(10) || '^-$' || chr(10));
+
+query I
+SELECT string_split_regex('a' || chr(10) || '-' || chr(10) || 'b', chr(10) || '^-$' || chr(10), 'm');
+----
+[a, b]
+
+query I
+SELECT string_split_regex('a' || chr(10) || '-' || chr(10) || 'b', p, 'm') FROM sep;
+----
+[a, b]
+
+# without 'm' the delimiter does not match, so the input is returned unsplit
+query I
+SELECT string_split_regex('a' || chr(10) || '-' || chr(10) || 'b', p) = ['a' || chr(10) || '-' || chr(10) || 'b'] FROM sep;
+----
+true
+
+# the slow path honors the other options too, e.g. case-insensitive matching
+
+statement ok
+CREATE TABLE sep2(p VARCHAR);
+
+statement ok
+INSERT INTO sep2 VALUES ('x');
+
+query I
+SELECT string_split_regex('aXbxc', 'x', 'i');
+----
+[a, b, c]
+
+query I
+SELECT string_split_regex('aXbxc', p, 'i') FROM sep2;
+----
+[a, b, c]
+
+query I
+SELECT string_split_regex('aXbxc', p) FROM sep2;
+----
+[aXb, c]
