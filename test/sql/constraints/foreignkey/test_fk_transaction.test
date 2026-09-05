@@ -61,8 +61,10 @@ BEGIN TRANSACTION
 statement ok
 DELETE FROM pkt WHERE i = 1
 
-statement ok
+statement error
 INSERT INTO fkt VALUES (1)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
 ROLLBACK
@@ -108,8 +110,10 @@ BEGIN TRANSACTION
 statement ok
 DELETE FROM pkt WHERE i = 3
 
-statement ok
+statement error
 INSERT INTO fkt VALUES (3)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
 ROLLBACK
