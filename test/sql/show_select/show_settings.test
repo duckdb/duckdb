@@ -30,11 +30,11 @@ SHOW THREADS
 42
 
 # A name that is a table describes the table (deprecated - emits a warning)
-query TTTTTT
+query TTTTTTTT
 SHOW my_table
 ----
-i	INTEGER	YES	NULL	NULL	NULL
-j	INTEGER	YES	NULL	NULL	NULL
+i	INTEGER	YES	NULL	NULL	NULL	NULL	{}
+j	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 # A name that is neither a table nor a setting is a table-not-found error (auto is table-first)
 statement error
@@ -65,18 +65,18 @@ SHOW main.threads
 <REGEX>:.*Table with name threads does not exist.*
 
 # A qualified name that exists is described as a table
-query TTTTTT
+query TTTTTTTT
 SHOW main.my_table
 ----
-i	INTEGER	YES	NULL	NULL	NULL
-j	INTEGER	YES	NULL	NULL	NULL
+i	INTEGER	YES	NULL	NULL	NULL	NULL	{}
+j	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 # "SHOW (SELECT ...)" describes the columns of the query, like DESCRIBE (deprecated) - not affected by show_behavior
-query TTTTTT
+query TTTTTTTT
 SHOW (SELECT * FROM my_table)
 ----
-i	INTEGER	YES	NULL	NULL	NULL
-j	INTEGER	YES	NULL	NULL	NULL
+i	INTEGER	YES	NULL	NULL	NULL	NULL	{}
+j	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 # ==============================================================================
 # show_behavior = 'setting': "SHOW name" only ever resolves a setting
@@ -115,11 +115,11 @@ statement ok
 SET show_behavior='table'
 
 # A table name describes the table (no deprecation warning in this explicit mode)
-query TTTTTT
+query TTTTTTTT
 SHOW my_table
 ----
-i	INTEGER	YES	NULL	NULL	NULL
-j	INTEGER	YES	NULL	NULL	NULL
+i	INTEGER	YES	NULL	NULL	NULL	NULL	{}
+j	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 # A setting name is not resolved - it errors as a missing table
 statement error
@@ -148,10 +148,10 @@ statement ok
 CREATE TABLE threads(x INTEGER)
 
 # 'auto': the table wins over the same-named setting
-query TTTTTT
+query TTTTTTTT
 SHOW threads
 ----
-x	INTEGER	YES	NULL	NULL	NULL
+x	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 # 'setting': the setting still wins (tables are never resolved)
 statement ok

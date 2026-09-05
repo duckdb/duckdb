@@ -21,7 +21,7 @@ FROM duckdb_logs_parsed('FileSystem');
 statement ok
 CALL disable_logging();
 
-query IIIIII nosort describe_duckdb_logs
+query IIIIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs;
 ----
 
@@ -52,7 +52,7 @@ FROM duckdb_logs
 statement ok
 CALL disable_logging();
 
-query IIIIII nosort describe_duckdb_logs
+query IIIIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs
 ----
 
@@ -74,7 +74,7 @@ SELECT 1 as c
 statement ok
 CALL disable_logging();
 
-query IIIIII nosort describe_duckdb_logs
+query IIIIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs
 ----
 
@@ -97,7 +97,7 @@ SELECT 1 as d
 statement ok
 CALL disable_logging();
 
-query IIIIII nosort describe_duckdb_logs
+query IIIIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs
 ----
 

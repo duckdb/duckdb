@@ -317,6 +317,11 @@ public:
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types, vector<Identifier> &names);
+//! Extended bind callback for returning optional column comments and tags alongside names and types.
+//! Either metadata vector can be left empty to return default metadata for every column.
+typedef unique_ptr<FunctionData> (*table_function_bind_extended_t)(
+    ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types, vector<Identifier> &names,
+    vector<Value> &column_comments, vector<InsertionOrderPreservingMap<string>> &column_tags);
 typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
 typedef unique_ptr<LogicalOperator> (*table_function_bind_operator_t)(ClientContext &context,
                                                                       TableFunctionBindInput &input,
@@ -414,9 +419,18 @@ public:
 	bool HasBindCallback() const {
 		return bind != nullptr;
 	}
+	bool HasAnyBindCallback() const {
+		return bind != nullptr || bind_extended != nullptr;
+	}
 	table_function_bind_t GetBindCallback() const {
 		return bind;
 	}
+	//! Calls bind_extended if set, and bind otherwise. Requires HasAnyBindCallback().
+	//! The metadata vectors are left empty when the function returns no column metadata.
+	DUCKDB_API unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
+	                                         vector<LogicalType> &return_types, vector<Identifier> &names,
+	                                         vector<Value> &column_comments,
+	                                         vector<InsertionOrderPreservingMap<string>> &column_tags) const;
 	bool HasSerializationCallbacks() const {
 		return serialize != nullptr && deserialize != nullptr;
 	}
@@ -437,6 +451,9 @@ public:
 	//! This function is used for determining the return type of a table producing function and returning bind data
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
+	//! (Optional) Bind function that also returns column comments and tags
+	//! If both bind callbacks are set, the extended callback is used.
+	table_function_bind_extended_t bind_extended = nullptr;
 	//! (Optional) Bind replace function
 	//! This function is called before the regular bind function. It allows returning a TableRef that will be used to
 	//! to generate a logical plan that replaces the LogicalGet of a regularly bound TableFunction. The BindReplace can

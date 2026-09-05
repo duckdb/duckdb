@@ -27,3 +27,35 @@ SELECT column_name, tags['ext:name'], tags['ext:column_type'] FROM duckdb_column
 ----
 a	loadable_extension_demo	primary
 b	loadable_extension_demo	dimension
+
+query III
+SELECT column_name, comment, tags['ext:column_type'] FROM (DESCRIBE tagged_table) ORDER BY column_name;
+----
+a	Primary tagged column	primary
+b	Dimension tagged column	dimension
+
+# DESCRIBE binds a table function without executing its scan and exposes bind-time column metadata
+query III
+SELECT column_name, comment, tags['ext:column_type'] FROM (DESCRIBE FROM quack(999));
+----
+quack	A single duck utterance	sound
+
+statement error
+FROM quack(999);
+----
+quack scan must not execute
+
+# Metadata follows simple column references and is dropped for computed expressions
+query III
+SELECT column_name, comment, tags['ext:column_type']
+FROM (DESCRIBE SELECT quack AS utterance, quack || '!' AS expression FROM quack(1));
+----
+utterance	A single duck utterance	sound
+expression	NULL	NULL
+
+query III
+SELECT column_name, comment, tags['ext:column_type']
+FROM (DESCRIBE FROM quack(1) WITH ORDINALITY);
+----
+quack	A single duck utterance	sound
+ordinality	NULL	NULL

@@ -1,0 +1,28 @@
+diff --git a/test/sql/storage/attach_describe.test b/test/sql/storage/attach_describe.test
+index 6f0657f..5afb894 100644
+--- a/test/sql/storage/attach_describe.test
++++ b/test/sql/storage/attach_describe.test
+@@ -10,17 +10,17 @@ ATTACH '{TEST_DIR}/attach_describe.db' AS s1 (TYPE SQLITE)
+ statement ok
+ CREATE TABLE s1.test(i BIGINT PRIMARY KEY, j BIGINT DEFAULT 42);
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE s1.test
+ ----
+-i	BIGINT	YES	PRI	NULL	NULL
+-j	BIGINT	YES	NULL	42	NULL
++i	BIGINT	YES	PRI	NULL	NULL	NULL	{}
++j	BIGINT	YES	NULL	42	NULL	NULL	{}
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE TABLE s1.test
+ ----
+-i	BIGINT	YES	PRI	NULL	NULL
+-j	BIGINT	YES	NULL	42	NULL
++i	BIGINT	YES	PRI	NULL	NULL	NULL	{}
++j	BIGINT	YES	NULL	42	NULL	NULL	{}
+ 
+ query ITTTTT
+ PRAGMA table_info('s1.test');

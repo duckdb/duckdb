@@ -42,18 +42,18 @@ SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only.csv', types = {'abs_fi
 statement ok
 CREATE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only.csv',types = ['INTEGER'])
 
-query IIIIII
+query IIIIIIII
 DESCRIBE T
 ----
-abs_file_name	INTEGER	YES	NULL	NULL	NULL
+abs_file_name	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 statement ok
 CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only.csv', types = {'abs_file_name':'INTEGER'})
 
-query IIIIII
+query IIIIIIII
 DESCRIBE T
 ----
-abs_file_name	INTEGER	YES	NULL	NULL	NULL
+abs_file_name	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 # Now with two columns
 query I
@@ -75,26 +75,26 @@ SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'bar'
 statement ok
 CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only_2.csv', types = ['INTEGER'])
 
-query IIIIII
+query IIIIIIII
 DESCRIBE T
 ----
-foo	INTEGER	YES	NULL	NULL	NULL
-bar	VARCHAR	YES	NULL	NULL	NULL
+foo	INTEGER	YES	NULL	NULL	NULL	NULL	{}
+bar	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
 
 statement ok
 CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'foo':'INTEGER'})
 
-query IIIIII
+query IIIIIIII
 DESCRIBE T
 ----
-foo	INTEGER	YES	NULL	NULL	NULL
-bar	VARCHAR	YES	NULL	NULL	NULL
+foo	INTEGER	YES	NULL	NULL	NULL	NULL	{}
+bar	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
 
 statement ok
 CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'bar':'INTEGER'})
 
-query IIIIII
+query IIIIIIII
 DESCRIBE T
 ----
-foo	VARCHAR	YES	NULL	NULL	NULL
-bar	INTEGER	YES	NULL	NULL	NULL
+foo	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+bar	INTEGER	YES	NULL	NULL	NULL	NULL	{}

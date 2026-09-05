@@ -1,0 +1,67 @@
+diff --git a/test/sql/test_inet_storage.test b/test/sql/test_inet_storage.test
+index 7cab6c2..88c1fca 100644
+--- a/test/sql/test_inet_storage.test
++++ b/test/sql/test_inet_storage.test
+@@ -16,22 +16,22 @@ PRAGMA enable_verification
+ statement ok
+ CREATE TABLE tbl(id INTEGER, i INET);
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE tbl
+ ----
+-id	INTEGER	YES	NULL	NULL	NULL
+-i	INET	YES	NULL	NULL	NULL
++id	INTEGER	YES	NULL	NULL	NULL	NULL	{}
++i	INET	YES	NULL	NULL	NULL	NULL	{}
+ 
+ statement ok
+ CREATE VIEW iview AS SELECT INET '127.0.0000.1'
+ 
+ restart
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE tbl
+ ----
+-id	INTEGER	YES	NULL	NULL	NULL
+-i	INET	YES	NULL	NULL	NULL
++id	INTEGER	YES	NULL	NULL	NULL	NULL	{}
++i	INET	YES	NULL	NULL	NULL	NULL	{}
+ 
+ statement ok
+ INSERT INTO tbl VALUES (1, '127.0.0.1'), (2, NULL), (3, '255.255.255.255/31'), (4, '0.0.0.0/0')
+diff --git a/test/sql/test_ipv6_inet_storage.test b/test/sql/test_ipv6_inet_storage.test
+index c49c259..ffea743 100644
+--- a/test/sql/test_ipv6_inet_storage.test
++++ b/test/sql/test_ipv6_inet_storage.test
+@@ -12,11 +12,11 @@ PRAGMA enable_verification
+ statement ok
+ CREATE TABLE tbl(id INTEGER, i INET);
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE tbl
+ ----
+-id	INTEGER	YES	NULL	NULL	NULL
+-i	INET	YES	NULL	NULL	NULL
++id	INTEGER	YES	NULL	NULL	NULL	NULL	{}
++i	INET	YES	NULL	NULL	NULL	NULL	{}
+ 
+ statement ok
+ CREATE VIEW iview AS SELECT INET '::1'
+@@ -26,11 +26,11 @@ restart
+ #FIXME: INET needs to be explicitly autoloaded on restart
+ require no_extension_autoloading "FIXME: INET needs to be explicitly autoloaded on restart"
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE tbl
+ ----
+-id	INTEGER	YES	NULL	NULL	NULL
+-i	INET	YES	NULL	NULL	NULL
++id	INTEGER	YES	NULL	NULL	NULL	NULL	{}
++i	INET	YES	NULL	NULL	NULL	NULL	{}
+ 
+ statement ok
+ INSERT INTO tbl VALUES (1, '::1'), (2, NULL), (3, '2266:25::12:0:ad12/96'), (4, '::/0')

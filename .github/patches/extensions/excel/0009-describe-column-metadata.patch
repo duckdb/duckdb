@@ -1,0 +1,75 @@
+diff --git a/test/sql/excel/xlsx/column_letter.test b/test/sql/excel/xlsx/column_letter.test
+index cbe097d..9a3dd3d 100644
+--- a/test/sql/excel/xlsx/column_letter.test
++++ b/test/sql/excel/xlsx/column_letter.test
+@@ -1,8 +1,8 @@
+ require excel
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE FROM read_xlsx('test/data/xlsx/columns_letter.xlsx', range='Z:AB', header=false, all_varchar=true);
+ ----
+-Z	VARCHAR	YES	NULL	NULL	NULL
+-AA	VARCHAR	YES	NULL	NULL	NULL
+-AB	VARCHAR	YES	NULL	NULL	NULL
++Z	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
++AA	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
++AB	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+diff --git a/test/sql/excel/xlsx/header_only.test b/test/sql/excel/xlsx/header_only.test
+index 6f02244..bdc4dac 100644
+--- a/test/sql/excel/xlsx/header_only.test
++++ b/test/sql/excel/xlsx/header_only.test
+@@ -4,10 +4,10 @@ query IIII
+ select * from read_xlsx('test/data/xlsx/header_only.xlsx')
+ ----
+ 
+-query IIIIII rowsort
++query IIIIIIII rowsort
+ DESCRIBE SELECT * FROM read_xlsx('test/data/xlsx/header_only.xlsx');
+ ----
+-Header1	DOUBLE	YES	NULL	NULL	NULL
+-Header2	DOUBLE	YES	NULL	NULL	NULL
+-Header3	DOUBLE	YES	NULL	NULL	NULL
+-Header4	DOUBLE	YES	NULL	NULL	NULL
++Header1	DOUBLE	YES	NULL	NULL	NULL	NULL	{}
++Header2	DOUBLE	YES	NULL	NULL	NULL	NULL	{}
++Header3	DOUBLE	YES	NULL	NULL	NULL	NULL	{}
++Header4	DOUBLE	YES	NULL	NULL	NULL	NULL	{}
+diff --git a/test/sql/excel/xlsx/read_basic.test b/test/sql/excel/xlsx/read_basic.test
+index bb540c7..ea6dd08 100644
+--- a/test/sql/excel/xlsx/read_basic.test
++++ b/test/sql/excel/xlsx/read_basic.test
+@@ -7,12 +7,12 @@ SELECT * FROM 'test/data/xlsx/google_sheets.xlsx'
+ 123	500,60	ABC
+ 456	300,40	some text
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE FROM 'test/data/xlsx/google_sheets.xlsx'
+ ----
+-ABC	DOUBLE	YES	NULL	NULL	NULL
+-HELLO	VARCHAR	YES	NULL	NULL	NULL
+-WORLD	VARCHAR	YES	NULL	NULL	NULL
++ABC	DOUBLE	YES	NULL	NULL	NULL	NULL	{}
++HELLO	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
++WORLD	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+ 
+ # The first row is now part of the data
+ query III
+@@ -23,12 +23,12 @@ ABC	HELLO	WORLD
+ 456.0	300,40	some text
+ 
+ # Since the first row now contains all varchars, we infer the type of the columns as varchar too
+-query IIIIII
++query IIIIIIII
+ DESCRIBE FROM read_xlsx('test/data/xlsx/google_sheets.xlsx', header = false)
+ ----
+-A1	VARCHAR	YES	NULL	NULL	NULL
+-B1	VARCHAR	YES	NULL	NULL	NULL
+-C1	VARCHAR	YES	NULL	NULL	NULL
++A1	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
++B1	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
++C1	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+ 
+ # We can also skip a couple of rows by providing a range explicitly
+ query III

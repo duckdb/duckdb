@@ -120,6 +120,12 @@ struct PragmaShowHelper {
 
 		names.emplace_back("extra");
 		return_types.emplace_back(LogicalType::VARCHAR);
+
+		names.emplace_back("comment");
+		return_types.emplace_back(LogicalType::VARCHAR);
+
+		names.emplace_back("tags");
+		return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
 	}
 
 	static void GetTableColumns(const ColumnDefinition &column, ColumnConstraintInfo constraint_info,
@@ -140,9 +146,14 @@ struct PragmaShowHelper {
 		output.data[4].Append(DefaultValue(column));
 		// "extra", VARCHAR
 		output.data[5].Append(Value());
+		// "comment", VARCHAR
+		output.data[6].Append(column.Comment());
+		// "tags", MAP(VARCHAR, VARCHAR)
+		output.data[7].Append(Value::MAP(column.Tags()));
 	}
 
-	static void GetViewColumns(idx_t i, const Identifier &name, const LogicalType &type, DataChunk &output) {
+	static void GetViewColumns(const Identifier &name, const LogicalType &type, const Value &comment,
+	                           const InsertionOrderPreservingMap<string> &tags, DataChunk &output) {
 		// "column_name", VARCHAR
 		output.data[0].Append(Value(name));
 		// "column_type", VARCHAR
@@ -155,6 +166,10 @@ struct PragmaShowHelper {
 		output.data[4].Append(Value());
 		// "extra", VARCHAR
 		output.data[5].Append(Value());
+		// "comment", VARCHAR
+		output.data[6].Append(comment);
+		// "tags", MAP(VARCHAR, VARCHAR)
+		output.data[7].Append(Value::MAP(tags));
 	}
 };
 
@@ -215,9 +230,18 @@ static ColumnConstraintInfo CheckConstraints(TableCatalogEntry &table, const Col
 	return result;
 }
 
+void PragmaTableInfo::GetShowSchema(vector<LogicalType> &return_types, vector<Identifier> &names) {
+	PragmaShowHelper::GetSchema(return_types, names);
+}
+
 void PragmaTableInfo::GetColumnInfo(TableCatalogEntry &table, const ColumnDefinition &column, DataChunk &output) {
 	auto constraint_info = CheckConstraints(table, column);
 	PragmaShowHelper::GetTableColumns(column, constraint_info, output);
+}
+
+void PragmaTableInfo::GetColumnInfo(const Identifier &name, const LogicalType &type, const Value &comment,
+                                    const InsertionOrderPreservingMap<string> &tags, DataChunk &output) {
+	PragmaShowHelper::GetViewColumns(name, type, comment, tags, output);
 }
 
 static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output,
@@ -266,7 +290,8 @@ static void PragmaTableInfoView(ClientContext &context, PragmaTableOperatorData 
 		if (is_table_info) {
 			PragmaTableInfoHelper::GetViewColumns(i, name, type, output);
 		} else {
-			PragmaShowHelper::GetViewColumns(i, name, type, output);
+			PragmaShowHelper::GetViewColumns(name, type, view.GetColumnComment(i),
+			                                 InsertionOrderPreservingMap<string>(), output);
 		}
 	}
 	data.offset = next;

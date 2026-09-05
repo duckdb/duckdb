@@ -92,26 +92,26 @@ FROM read_parquet('{TEMP_DIR}/integers.parquet', schema=map {
 ----
 Binder Error: Unable to cast Parquet schema default_value "bla" to UTINYINT
 
-query IIIIII
+query IIIIIIII
 DESCRIBE SELECT *
 FROM read_parquet('{TEMP_DIR}/integers.parquet', schema=map {
                     0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
                     1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
                   })
 ----
-renamed_i	BIGINT	YES	NULL	NULL	NULL
-new_column	UTINYINT	YES	NULL	NULL	NULL
+renamed_i	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+new_column	UTINYINT	YES	NULL	NULL	NULL	NULL	{}
 
-query IIIIII
+query IIIIIIII
 DESCRIBE SELECT *
 FROM read_parquet('{TEMP_DIR}/integers.parquet', schema=map {
                     0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
                     1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
                   }, filename=true)
 ----
-renamed_i	BIGINT	YES	NULL	NULL	NULL
-new_column	UTINYINT	YES	NULL	NULL	NULL
-filename	VARCHAR	YES	NULL	NULL	NULL
+renamed_i	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+new_column	UTINYINT	YES	NULL	NULL	NULL	NULL	{}
+filename	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
 
 # we'll test if filename works on a persistent file otherwise {TEMP_DIR} will be different every time
 query II

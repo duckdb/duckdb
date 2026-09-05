@@ -15,19 +15,19 @@ CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '{TE
 statement ok
 FROM "{DATA_DIR}/csv/big_number.csv"
 
-query IIIIII
+query IIIIIIII
 DESCRIBE FROM '{TEMP_DIR}/logging_csv_log.csv';
 ----
-context_id	BIGINT	YES	NULL	NULL	NULL
-scope	VARCHAR	YES	NULL	NULL	NULL
-connection_id	BIGINT	YES	NULL	NULL	NULL
-transaction_id	BIGINT	YES	NULL	NULL	NULL
-query_id	BIGINT	YES	NULL	NULL	NULL
-thread_id	VARCHAR	YES	NULL	NULL	NULL
-timestamp	TIMESTAMP WITH TIME ZONE	YES	NULL	NULL	NULL
-type	VARCHAR	YES	NULL	NULL	NULL
-log_level	VARCHAR	YES	NULL	NULL	NULL
-message	VARCHAR	YES	NULL	NULL	NULL
+context_id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+scope	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+connection_id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+transaction_id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+query_id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+thread_id	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+timestamp	TIMESTAMP WITH TIME ZONE	YES	NULL	NULL	NULL	NULL	{}
+type	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+log_level	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+message	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
 
 # Ensure we can reparse the structured log message from the csv
 query III
@@ -85,25 +85,25 @@ CONNECTION
 CONNECTION
 
 # Check schema
-query IIIIII
+query IIIIIIII
 DESCRIBE FROM '{TEMP_DIR}/logging_csv_logs_normalized/duckdb_log_entries.csv';
 ----
-context_id	BIGINT	YES	NULL	NULL	NULL
-timestamp	TIMESTAMP WITH TIME ZONE	YES	NULL	NULL	NULL
-type	VARCHAR	YES	NULL	NULL	NULL
-log_level	VARCHAR	YES	NULL	NULL	NULL
-message	VARCHAR	YES	NULL	NULL	NULL
+context_id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+timestamp	TIMESTAMP WITH TIME ZONE	YES	NULL	NULL	NULL	NULL	{}
+type	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+log_level	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+message	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
 
 # Check schema
-query IIIIII
+query IIIIIIII
 DESCRIBE FROM '{TEMP_DIR}/logging_csv_logs_normalized/duckdb_log_contexts.csv';
 ----
-context_id	BIGINT	YES	NULL	NULL	NULL
-scope	VARCHAR	YES	NULL	NULL	NULL
-connection_id	BIGINT	YES	NULL	NULL	NULL
-transaction_id	BIGINT	YES	NULL	NULL	NULL
-query_id	BIGINT	YES	NULL	NULL	NULL
-thread_id	VARCHAR	YES	NULL	NULL	NULL
+context_id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+scope	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+connection_id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+transaction_id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+query_id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+thread_id	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
 
 statement ok
 CALL disable_logging();

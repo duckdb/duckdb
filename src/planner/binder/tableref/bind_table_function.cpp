@@ -213,10 +213,12 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
 	vector<Identifier> return_names;
+	vector<Value> column_comments;
+	vector<InsertionOrderPreservingMap<string>> column_tags;
 	auto constexpr ordinality_name = "ordinality";
 	string ordinality_column_name = ordinality_name;
 	optional_idx ordinality_column_id;
-	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
+	if (table_function.HasAnyBindCallback() || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref, input_plan);
 		if (table_function.bind_operator) {
@@ -256,11 +258,11 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 				return Bind(*new_plan);
 			}
 		}
-		if (!table_function.bind) {
+		if (!table_function.HasAnyBindCallback()) {
 			throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
 			                      table_function.name);
 		}
-		bind_data = table_function.bind(context, bind_input, return_types, return_names);
+		bind_data = table_function.Bind(context, bind_input, return_types, return_names, column_comments, column_tags);
 		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY) {
 			// check if column name 'ordinality' already exists and if so, replace it iteratively until free name is
 			// found
@@ -278,6 +280,12 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 			if (!correlated_columns.empty()) {
 				return_types.emplace_back(LogicalType::BIGINT);
 				return_names.emplace_back(ordinality_column_name);
+				if (!column_comments.empty()) {
+					column_comments.emplace_back();
+				}
+				if (!column_tags.empty()) {
+					column_tags.emplace_back();
+				}
 				D_ASSERT(return_names.size() == return_types.size());
 				ordinality_column_id = return_types.size() - 1;
 			}
@@ -288,13 +296,6 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	}
 	if (bind_data && !bind_data->SupportStatementCache()) {
 		SetAlwaysRequireRebind();
-	}
-	if (return_types.size() != return_names.size()) {
-		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.name);
-	}
-	if (return_types.empty()) {
-		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
-		                        table_function.name);
 	}
 	auto setof_column_name = ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 	// overwrite the names with any supplied aliases
@@ -312,7 +313,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	}
 
 	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names,
-	                                 virtual_columns);
+	                                 virtual_columns, std::move(column_comments), std::move(column_tags));
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
