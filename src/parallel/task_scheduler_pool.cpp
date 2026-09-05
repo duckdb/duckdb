@@ -152,7 +152,7 @@ static vector<int> GetAvailableCPUsForPinning(TaskSchedulerType pool_type, Threa
 
 #ifndef DUCKDB_NO_THREADS
 static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker, const TaskSchedulerType pool_type) {
-	scheduler->ExecuteForever(marker, pool_type);
+	scheduler->ExecuteForeverOnInternalThread(marker, pool_type);
 }
 #endif
 
@@ -183,7 +183,10 @@ void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) 
 		Signal(threads.size());
 		// now join the threads to ensure they are fully stopped before erasing them
 		for (idx_t i = 0; i < threads.size(); i++) {
-			threads[i]->internal_thread->join();
+			// A prior join failure can leave already-joined threads in the vector.
+			if (threads[i]->internal_thread->joinable()) {
+				threads[i]->internal_thread->join();
+			}
 		}
 		// erase the threads/markers
 		threads.clear();
