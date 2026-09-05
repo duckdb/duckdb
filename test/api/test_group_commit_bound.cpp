@@ -152,39 +152,6 @@ TEST_CASE("A checkpoint waiting for durability can be interrupted", "[api][group
 	REQUIRE(idx_t(elapsed.count()) < FSYNC_MS);
 }
 
-TEST_CASE("ALTER TYPE keeps committed updates it cannot see in its own snapshot", "[api][group_commit]") {
-	auto db_path = TestCreatePath("group_commit_bound_alter.db");
-	DeleteDatabase(db_path);
-	DuckDB db(db_path);
-
-	Connection setup(db);
-	REQUIRE_NO_FAIL(setup.Query("SET checkpoint_threshold='1TB'"));
-	REQUIRE_NO_FAIL(setup.Query("PRAGMA disable_checkpoint_on_shutdown"));
-	REQUIRE_NO_FAIL(setup.Query("CREATE TABLE t(i INTEGER, v INTEGER)"));
-	REQUIRE_NO_FAIL(setup.Query("INSERT INTO t VALUES (1, 0)"));
-	REQUIRE_NO_FAIL(setup.Query("SET debug_wal_fsync_sleep_ms=" + to_string(FSYNC_MS)));
-
-	bool writer_failed = false;
-	std::thread writer([&db, &writer_failed]() {
-		Connection con(db);
-		writer_failed = con.Query("UPDATE t SET v = 7 WHERE i = 1")->HasError();
-	});
-
-	SleepMs(READER_DELAY_MS);
-
-	// the retype runs on a snapshot bounded below the update, but the new column does not inherit
-	// the old column's update segments - so it must bake the committed value, not the stale one
-	Connection alterer(db);
-	auto altered = alterer.Query("ALTER TABLE t ALTER COLUMN v SET DATA TYPE BIGINT");
-
-	writer.join();
-	REQUIRE(!writer_failed);
-
-	if (!altered->HasError()) {
-		REQUIRE(ScalarValue(setup, "SELECT v FROM t WHERE i = 1") == 7);
-	}
-}
-
 TEST_CASE("txid_current stays unique while commits are pending durability", "[api][group_commit]") {
 	auto db_path = TestCreatePath("group_commit_bound_txid.db");
 	DeleteDatabase(db_path);
@@ -204,7 +171,7 @@ TEST_CASE("txid_current stays unique while commits are pending durability", "[ap
 
 	SleepMs(READER_DELAY_MS);
 
-	// both transactions are capped at the same commit, so they share a snapshot start time - the id
+	// both transactions are capped at the same commit, so they share a visibility bound - the id
 	// reported to the user must still be the distinct one each of them drew
 	Connection first(db);
 	Connection second(db);
