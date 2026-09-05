@@ -57,8 +57,9 @@ uint32_t StringSegmentLayout::ValidateAndGetDictionaryOffset(int32_t encoded_off
 	} else {
 		dictionary_offset = NumericCast<uint32_t>(encoded_offset);
 	}
-	if (dictionary_offset > dictionary.size) {
-		ThrowStringOffsetOutsideDictionary(dictionary_offset, dictionary.size);
+	auto dictionary_size = NumericCast<uint32_t>(dictionary_data.size());
+	if (dictionary_offset > dictionary_size) {
+		ThrowStringOffsetOutsideDictionary(dictionary_offset, dictionary_size);
 	}
 	return dictionary_offset;
 }
@@ -87,7 +88,7 @@ StringDictionaryEntry StringSegmentLayout::CreateDictionaryEntry(int32_t current
 	}
 
 	auto is_overflow = current_offset < 0 && string_length > 0;
-	return {dictionary_data.SubArray(dictionary.size - current_dictionary_offset, string_length), is_overflow};
+	return {dictionary_data.SubArray(dictionary_data.size() - current_dictionary_offset, string_length), is_overflow};
 }
 
 StringDictionaryEntry StringSegmentLayout::GetDictionaryEntry(idx_t row_index) const {
@@ -100,19 +101,22 @@ StringDictionaryEntry StringSegmentLayout::GetDictionaryEntry(idx_t row_index) c
 
 StringSegmentLayout StringSegmentLayout::Read(const BufferHandle &handle, const ColumnSegment &segment) {
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "uncompressed string segment");
-	StringDictionaryContainer dictionary {reader.Read<uint32_t>(), reader.Read<uint32_t>()};
-	if (dictionary.end > reader.Size() || dictionary.size > dictionary.end) {
+	// Only the dictionary end is read here. Appends update the dictionary size in the same header while
+	// scans run, so reading it from a scan is a data race. The end is fixed at the segment size.
+	auto dictionary_end = NumericCast<idx_t>(reader.Get<uint32_t>(sizeof(uint32_t)));
+	if (dictionary_end > reader.Size()) {
 		ThrowInvalidStringDictionary();
 	}
-	auto dictionary_start = NumericCast<idx_t>(dictionary.end - dictionary.size);
 	auto offset_count = segment.count.load();
-	if (dictionary_start < UncompressedStringStorage::DICTIONARY_HEADER_SIZE ||
-	    offset_count > (dictionary_start - UncompressedStringStorage::DICTIONARY_HEADER_SIZE) / sizeof(int32_t)) {
+	if (dictionary_end < UncompressedStringStorage::DICTIONARY_HEADER_SIZE ||
+	    offset_count > (dictionary_end - UncompressedStringStorage::DICTIONARY_HEADER_SIZE) / sizeof(int32_t)) {
 		ThrowStringOffsetTableOutOfBounds();
 	}
-	auto dictionary_data = reader.GetBytes(dictionary_start, dictionary.size);
+	// The dictionary grows backwards from its end, down to the last byte of the offsets table.
+	auto dictionary_start = UncompressedStringStorage::DICTIONARY_HEADER_SIZE + offset_count * sizeof(int32_t);
+	auto dictionary_data = reader.GetBytes(dictionary_start, dictionary_end - dictionary_start);
 	auto offsets = reader.GetArray<int32_t>(UncompressedStringStorage::DICTIONARY_HEADER_SIZE, offset_count);
-	return {dictionary, dictionary_data, offsets};
+	return {dictionary_data, offsets};
 }
 
 StringScanState::StringScanState(BufferHandle handle_p) : handle(std::move(handle_p)) {
