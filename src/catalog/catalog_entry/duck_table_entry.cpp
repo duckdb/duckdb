@@ -307,10 +307,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	}
 	case AlterTableType::RENAME_TABLE: {
 		auto &rename_info = table_info.Cast<RenameTableInfo>();
-		auto copied_table = Copy(context);
-		copied_table->name = rename_info.new_table_name;
-		storage->SetTableName(rename_info.new_table_name);
-		return copied_table;
+		return RenameTable(context, rename_info);
 	}
 	case AlterTableType::ADD_COLUMN: {
 		auto &add_info = table_info.Cast<AddColumnInfo>();
@@ -413,6 +410,27 @@ static const Value &GetRemapStructMapping(ChangeColumnTypeInfo &info) {
 	auto &mapping = arguments[2].GetExpression();
 	D_ASSERT(mapping.GetExpressionClass() == ExpressionClass::CONSTANT);
 	return mapping.Cast<ConstantExpression>().GetValue();
+}
+
+unique_ptr<CatalogEntry> DuckTableEntry::RenameTable(ClientContext &context, RenameTableInfo &info) {
+	auto create_info = GetInfo();
+	// a self-referencing foreign key stores the name of this table, so it has to be rewritten
+	for (auto &constraint : create_info->Cast<CreateTableInfo>().constraints) {
+		if (constraint->type != ConstraintType::FOREIGN_KEY) {
+			continue;
+		}
+		auto &fk = constraint->Cast<ForeignKeyConstraint>();
+		if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+			fk.info.table = info.new_table_name;
+		}
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableCheckpoint(std::move(create_info), schema);
+	auto renamed_table = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+	renamed_table->name = info.new_table_name;
+	storage->SetTableName(info.new_table_name);
+	return std::move(renamed_table);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
