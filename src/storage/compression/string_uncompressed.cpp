@@ -541,7 +541,7 @@ string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &conte
 	auto handle = buffer_manager.Pin(context, string_block.get().block);
 	auto final_buffer = handle.Ptr();
 	StringVector::AddHandle(result, std::move(handle));
-	CompressionSegmentReader reader(final_buffer, string_block.get().offset, "in-memory overflow string block");
+	CompressionSegmentReader reader(final_buffer, string_block.get().size, "in-memory overflow string block");
 	return ReadStringWithLength(reader, offset);
 }
 
