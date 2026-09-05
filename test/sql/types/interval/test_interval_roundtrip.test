@@ -1,0 +1,13 @@
+# name: test/sql/types/interval/test_interval_roundtrip.test
+# description: INTERVAL text round-trip must work across the full int64-micros range (10-digit hours)
+# group: [interval]
+
+query T
+SELECT to_microseconds(9223372036854775807)::VARCHAR
+----
+2562047788:00:54.775807
+
+query I
+SELECT (to_microseconds(9223372036854775807)::VARCHAR)::INTERVAL = to_microseconds(9223372036854775807)
+----
+true
