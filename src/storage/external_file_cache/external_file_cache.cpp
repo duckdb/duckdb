@@ -19,7 +19,7 @@ bool CacheValidationInfo::IsCacheReuseProhibited() const {
 }
 
 bool CacheValidationInfo::IsExpired() const {
-	return cache_valid_until && Timestamp::GetCurrentTimestamp() > *cache_valid_until;
+	return cache_valid_until && Timestamp::GetCurrentTimestamp() >= *cache_valid_until;
 }
 
 class ExternalFileCache::ExternalFileCacheObjectCacheEntry : public ObjectCacheEntry {
@@ -289,7 +289,7 @@ bool ExternalFileCache::IsValid(bool validate, const CacheValidationInfo &cached
 	if (!cached.cache_valid_until) {
 		return false; // The backend does not provide expiry information, so we cannot validate at all
 	}
-	return Timestamp::GetCurrentTimestamp() <= *cached.cache_valid_until;
+	return Timestamp::GetCurrentTimestamp() < *cached.cache_valid_until;
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
