@@ -141,8 +141,9 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			if (!pattern_entry.IsValid()) {
 				pattern_valid = false;
 			} else {
-				auto pattern_strpiece = CreateStringPiece(pattern_entry.GetValue());
-				stored_re = make_uniq<duckdb_re2::RE2>(pattern_strpiece, info.options);
+				auto pattern_string = pattern_entry.GetValue().GetString();
+				stored_re =
+				    make_uniq<duckdb_re2::RE2>(info.multiline ? "(?m)" + pattern_string : pattern_string, info.options);
 				auto group_count_p = stored_re->NumberOfCapturingGroups();
 				if (group_count_p == -1) {
 					throw InvalidInputException("Pattern failed to parse, error: '%s'", stored_re->error());
@@ -297,10 +298,14 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(BindScalarFunctionInput &i
 	if (!constant_pattern) {
 		throw BinderException("%s with LIST requires a constant pattern", function.GetName());
 	}
+	bool multiline = false;
 	if (arguments.size() >= 4) {
-		ParseRegexOptions(input.GetConstant(3), options);
+		ParseRegexOptions(input.GetConstant(3), options, nullptr, nullptr, &multiline);
 	}
 	options.set_log_errors(false);
+	if (multiline) {
+		constant_string = "(?m)" + constant_string;
+	}
 	vector<string> group_names;
 	child_list_t<LogicalType> struct_children;
 	regexp_util::ParseGroupNameList(function.GetName().GetIdentifierName(), input.GetConstant(2), constant_string,
@@ -320,11 +325,17 @@ unique_ptr<FunctionData> RegexpExtractAll::Bind(BindScalarFunctionInput &input) 
 	string constant_string;
 	bool constant_pattern = TryParseConstantPattern(input.TryGetConstant(1), constant_string);
 
+	bool multiline = false;
 	if (arguments.size() >= 4) {
-		ParseRegexOptions(input.GetConstant(3), options);
+		ParseRegexOptions(input.GetConstant(3), options, nullptr, nullptr, &multiline);
 	}
-	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
-	                                        static_cast<int8_t>(0));
+	if (multiline && constant_pattern) {
+		constant_string = "(?m)" + constant_string;
+	}
+	auto result =
+	    make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, static_cast<int8_t>(0));
+	result->multiline = multiline;
+	return std::move(result);
 }
 
 } // namespace duckdb
