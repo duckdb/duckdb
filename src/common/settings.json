@@ -1081,6 +1081,16 @@
         ]
     },
     {
+        "name": "max_streaming_buffer_size",
+        "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Buffered bytes stay under this cap plus at most one chunk: an oversized chunk is only admitted into an empty queue",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "streaming_buffer_size"
+        ]
+    },
+    {
         "name": "max_temp_directory_size",
         "description": "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)",
         "type": "VARCHAR",
@@ -1358,13 +1368,6 @@
         "description": "Serialize on checkpoint with compatibility for a given duckdb version",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true
-    },
-    {
-        "name": "streaming_buffer_size",
-        "description": "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)",
-        "type": "VARCHAR",
-        "scope": "local",
         "custom_implementation": true
     },
     {

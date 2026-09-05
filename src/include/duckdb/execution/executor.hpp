@@ -124,7 +124,8 @@ public:
 	}
 
 private:
-	//! Check if the streaming query result is waiting to be fetched from, must hold the 'executor_lock'
+	//! Whether a producer is parked on the result sink's buffer. A parked producer
+	//! implies a poppable chunk, and only consumption restarts it
 	bool ResultCollectorIsBlocked();
 	void InitializeInternal(PhysicalOperator &physical_plan);
 

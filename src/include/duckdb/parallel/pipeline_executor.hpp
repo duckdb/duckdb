@@ -81,8 +81,6 @@ public:
 	//! This should only be called once per PipelineExecutor.
 	PipelineExecuteResult PushFinalize();
 
-	bool RemainingSinkChunk() const;
-
 	//! Initializes a chunk with the types that will flow out of the chunk
 	void InitializeChunk(DataChunk &chunk);
 	//! Execute a pipeline without a sink, and retrieve a single DataChunk
