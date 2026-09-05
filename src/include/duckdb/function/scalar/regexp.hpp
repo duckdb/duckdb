@@ -19,9 +19,9 @@ namespace regexp_util {
 
 bool TryParseConstantPattern(optional<Value> pattern_value, string &constant_string);
 void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr,
-                       bool *no_match_returns_input = nullptr);
+                       bool *no_match_returns_input = nullptr, bool *multiline = nullptr);
 void ParseRegexOptions(const Value &options_str, RE2::Options &target, bool *global_replace = nullptr,
-                       bool *no_match_returns_input = nullptr);
+                       bool *no_match_returns_input = nullptr, bool *multiline = nullptr);
 void ParseGroupNameList(const string &function_name, const Value &list_val, const string &pattern_string,
                         RE2::Options &options, bool require_constant_pattern, vector<string> &out_names,
                         child_list_t<LogicalType> &out_struct_children);
@@ -49,6 +49,8 @@ struct RegexpBaseBindData : public FunctionData {
 	duckdb_re2::RE2::Options options;
 	string constant_string;
 	bool constant_pattern;
+	//! Whether newline-sensitive matching ('m'/'n'/'p' option) was requested; applied via a (?m) pattern prefix
+	bool multiline = false;
 
 	bool Equals(const FunctionData &other_p) const override;
 };
