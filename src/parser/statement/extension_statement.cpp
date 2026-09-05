@@ -7,8 +7,12 @@ ExtensionStatement::ExtensionStatement(ParserExtension extension_p, unique_ptr<P
       parse_data(std::move(parse_data_p)) {
 }
 
+ExtensionStatement::ExtensionStatement(const ExtensionStatement &other)
+    : SQLStatement(other), extension(other.extension), parse_data(other.parse_data->Copy()) {
+}
+
 unique_ptr<SQLStatement> ExtensionStatement::Copy() const {
-	return make_uniq<ExtensionStatement>(extension, parse_data->Copy());
+	return unique_ptr<ExtensionStatement>(new ExtensionStatement(*this));
 }
 
 string ExtensionStatement::ToString() const {

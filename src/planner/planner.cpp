@@ -10,6 +10,8 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
@@ -228,8 +230,9 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	// instead of falling back to user variables (user variables serve as defaults at EXECUTE time)
 	binder->SetBindingMode(BindingMode::PREPARE);
 	CreatePlan(std::move(statement));
+	copied_statement->named_param_map = named_param_map;
 	// now create the logical prepare
-	auto prepared_data = make_shared_ptr<PreparedStatementData>(copied_statement->type);
+	auto prepared_data = make_shared_ptr<PreparedStatementData>(statement_type);
 	prepared_data->unbound_statement = std::move(copied_statement);
 	prepared_data->names = names;
 	prepared_data->types = types;
@@ -238,10 +241,83 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	return prepared_data;
 }
 
+static void ValidateExtensionRewriteResult(SQLStatement &statement) {
+	if (statement.type == StatementType::MULTI_STATEMENT) {
+		throw InvalidInputException("Parser extension rewrite functions cannot generate multi statements");
+	}
+	if (statement.type == StatementType::PRAGMA_STATEMENT) {
+		throw InvalidInputException("Parser extension rewrite functions cannot generate pragma statements");
+	}
+	if (statement.type == StatementType::TRANSACTION_STATEMENT) {
+		throw InvalidInputException("Parser extension rewrite functions cannot generate transaction statements");
+	}
+	if (statement.type == StatementType::PREPARE_STATEMENT) {
+		throw InvalidInputException("Parser extension rewrite functions cannot generate prepare statements");
+	}
+	if (statement.type == StatementType::EXECUTE_STATEMENT) {
+		throw InvalidInputException("Parser extension rewrite functions cannot generate execute statements");
+	}
+	if (statement.type == StatementType::EXPLAIN_STATEMENT) {
+		ValidateExtensionRewriteResult(*statement.Cast<ExplainStatement>().stmt);
+		return;
+	}
+	if (statement.type != StatementType::EXTENSION_STATEMENT) {
+		return;
+	}
+	auto &extension = statement.Cast<ExtensionStatement>().extension;
+	if (extension.rewrite_function) {
+		throw InvalidInputException(
+		    "Parser extension rewrite functions cannot generate recursively rewritten statements");
+	}
+	if (!extension.plan_function) {
+		throw InvalidInputException("Parser extension rewrite functions must generate a plannable extension statement");
+	}
+}
+
+unique_ptr<SQLStatement> Planner::RewriteExtensionStatement(unique_ptr<SQLStatement> statement) {
+	if (statement->type == StatementType::EXPLAIN_STATEMENT) {
+		auto &explain = statement->Cast<ExplainStatement>();
+		explain.stmt = RewriteExtensionStatement(std::move(explain.stmt));
+		statement->named_param_map = explain.stmt->named_param_map;
+		return statement;
+	}
+	if (statement->type != StatementType::EXTENSION_STATEMENT) {
+		return statement;
+	}
+	auto &extension_statement = statement->Cast<ExtensionStatement>();
+	if (!extension_statement.extension.rewrite_function) {
+		return statement;
+	}
+
+	auto source_query = statement->query;
+	auto source_location = statement->stmt_location;
+	auto result = extension_statement.extension.rewrite_function(extension_statement.extension.parser_info.get(),
+	                                                             context, std::move(extension_statement.parse_data));
+	requires_parameter_revalidation = true;
+	if (!result.statement) {
+		throw InvalidInputException("Parser extension rewrite functions must generate a statement");
+	}
+	ValidateExtensionRewriteResult(*result.statement);
+	if (!source_query.empty()) {
+		result.statement->query = std::move(source_query);
+	}
+	if (source_location.IsValid()) {
+		result.statement->stmt_location = source_location;
+	}
+	if (result.always_require_rebind) {
+		binder->SetAlwaysRequireRebind();
+	}
+	return std::move(result.statement);
+}
+
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement);
+	requires_parameter_revalidation = false;
+	statement = RewriteExtensionStatement(std::move(statement));
 	Optimizer optimizer(*binder, context);
 	optimizer.OptimizeStatement(statement);
+	statement_type = statement->type;
+	named_param_map = statement->named_param_map;
 
 	switch (statement->type) {
 	case StatementType::SELECT_STATEMENT:
@@ -278,6 +354,18 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	default:
 		throw NotImplementedException("Cannot plan statement of type %s!", StatementTypeToString(statement->type));
 	}
+}
+
+const identifier_map_t<idx_t> &Planner::GetNamedParameterMap() const {
+	return named_param_map;
+}
+
+bool Planner::RequiresParameterRevalidation() const {
+	return requires_parameter_revalidation;
+}
+
+StatementType Planner::GetStatementType() const {
+	return statement_type;
 }
 
 static bool OperatorSupportsSerialization(LogicalOperator &op) {

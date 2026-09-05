@@ -263,6 +263,8 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		ScopedConfigSetting suppress_profiling(
 		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
 		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
+		// The verification result is internal and must finish before the original statement can start.
+		query_parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters);
 		if (explain_result->HasError()) {
 			explain_result->ThrowError();
