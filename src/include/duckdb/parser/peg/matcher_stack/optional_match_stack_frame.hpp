@@ -16,6 +16,10 @@ public:
 
 	void Execute(MatchStack &stack) override {
 		if (!HasChildResult()) {
+			if (!optional_matcher.GetChildMatcher().CanStartAt(child_state)) {
+				SetResult(match_state.AllocateParseResult<OptionalParseResult>());
+				return;
+			}
 			stack.PushChildFrame(*this, optional_matcher.GetChildMatcher(), child_state);
 			return;
 		}

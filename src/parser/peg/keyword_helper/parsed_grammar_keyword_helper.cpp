@@ -58,6 +58,7 @@ ParsedGrammarKeywordHelper::ParsedGrammarKeywordHelper(const ParsedGrammar &gram
 		case_insensitive_set_t active_rules;
 		PopulateKeywordMap(grammar, entry.first, entry.first, entry.second.get(), active_rules);
 	}
+	keyword_maps.Finalize();
 }
 
 bool ParsedGrammarKeywordHelper::KeywordCategoryType(const string &text, PEGKeywordCategory category) const {
@@ -66,6 +67,10 @@ bool ParsedGrammarKeywordHelper::KeywordCategoryType(const string &text, PEGKeyw
 
 bool ParsedGrammarKeywordHelper::IsKeyword(const string &text) const {
 	return keyword_maps.IsKeyword(text);
+}
+
+uint8_t ParsedGrammarKeywordHelper::KeywordCategories(const string &text) const {
+	return keyword_maps.KeywordCategories(text);
 }
 
 vector<ParserKeyword> ParsedGrammarKeywordHelper::KeywordList() const {

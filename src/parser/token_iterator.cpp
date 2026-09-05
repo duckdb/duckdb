@@ -2,6 +2,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/keyword_table.hpp"
 
 namespace duckdb {
 
@@ -13,9 +15,6 @@ TokenIterator::TokenIterator(unique_ptr<vector<MatcherToken>> owned_tokens_p)
 }
 
 TokenIterator::TokenIterator(vector<MatcherToken> &tokens_p) : tokens(tokens_p) {
-}
-
-TokenIterator::TokenIterator(TokenIterator &other) : tokens(other.tokens), position(other.position) {
 }
 
 TokenIterator::TokenIterator(TokenIterator &&other) noexcept
@@ -40,10 +39,6 @@ bool TokenIterator::HasMoreStatements() const {
 	return false;
 }
 
-idx_t TokenIterator::Position() const {
-	return position;
-}
-
 idx_t TokenIterator::Size() const {
 	return tokens.size();
 }
@@ -54,13 +49,6 @@ idx_t TokenIterator::EndOffset() const {
 	}
 	auto &last_token = tokens.back();
 	return last_token.offset + last_token.length;
-}
-
-optional_ptr<const MatcherToken> TokenIterator::Current() const {
-	if (position >= tokens.size()) {
-		return nullptr;
-	}
-	return tokens[position];
 }
 
 const MatcherToken &TokenIterator::Previous() const {
@@ -77,26 +65,27 @@ const MatcherToken &TokenIterator::GetToken(idx_t index) const {
 	return tokens[index];
 }
 
-void TokenIterator::Advance(idx_t count) {
-	if (count > tokens.size() - position) {
-		throw InternalException("Cannot advance TokenIterator by %llu tokens from position %llu (size %llu)", count,
-		                        position, tokens.size());
-	}
-	position += count;
+void TokenIterator::ResolveKeyword(MatcherToken &token, const KeywordTable &table) {
+	token.keyword_id = table.Lookup(token.text);
+	token.keyword_table = table;
 }
 
-void TokenIterator::SetPosition(idx_t position_p) {
-	if (position_p > tokens.size()) {
-		throw InternalException("Token position %llu is out of range (size %llu)", position_p, tokens.size());
-	}
-	position = position_p;
+void TokenIterator::ResolveKeywordCategories(MatcherToken &token, const PEGKeywordHelper &helper) {
+	token.keyword_categories = helper.KeywordCategories(token.text);
+	token.keyword_helper = helper;
 }
 
-void TokenIterator::SetPosition(const TokenIterator &other) {
-	if (&tokens != &other.tokens) {
-		throw InternalException("Cannot set TokenIterator position from a different token collection");
-	}
-	SetPosition(other.position);
+void TokenIterator::ThrowDifferentTokens() const {
+	throw InternalException("Cannot set TokenIterator position from a different token collection");
+}
+
+void TokenIterator::ThrowAdvanceOutOfRange(idx_t count) const {
+	throw InternalException("Cannot advance TokenIterator by %llu tokens from position %llu (size %llu)", count,
+	                        position, tokens.size());
+}
+
+void TokenIterator::ThrowPositionOutOfRange(idx_t position_p) const {
+	throw InternalException("Token position %llu is out of range (size %llu)", position_p, tokens.size());
 }
 
 void TokenIterator::SetPreviousTokenType(TokenType type) {

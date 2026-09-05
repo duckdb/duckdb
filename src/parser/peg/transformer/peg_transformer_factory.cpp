@@ -89,7 +89,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	}
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
-	ParserPackratCache packrat_cache;
+	ParserPackratCache packrat_cache(token_iterator.Position(), grammar.PackratSlotCount());
 	idx_t max_token_index = token_iterator.Position();
 	const bool use_heap_based_parser = options.heap_based_parser && !grammar.HasGrammarChanges();
 	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index,

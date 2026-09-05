@@ -31,6 +31,10 @@ public:
 			child_index++;
 			child_state.reset();
 		}
+		while (child_index < choice_matcher.matchers.size() &&
+		       !choice_matcher.matchers[child_index].get().CanStartAt(match_state)) {
+			child_index++;
+		}
 		if (child_index >= choice_matcher.matchers.size()) {
 			SetResult(MatcherResult::Failure());
 			return;

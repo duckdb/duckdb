@@ -231,20 +231,20 @@ struct ListParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::LIST;
 
 public:
-	explicit ListParseResult(vector<reference<ParseResult>> results_p, string name_p, optional_idx offset)
-	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
-		name = std::move(name_p);
-		for (auto &child : children) {
-			EncloseChild(child.get());
+	//! `children_p` lives in the parse arena and stays valid for as long as this result does
+	ListParseResult(reference<ParseResult> *children_p, idx_t child_count_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), children(children_p), child_count(child_count_p) {
+		for (idx_t i = 0; i < child_count; i++) {
+			EncloseChild(children[i].get());
 		}
 	}
 
 	vector<reference<ParseResult>> GetChildren() const {
-		return children;
+		return vector<reference<ParseResult>>(children, children + child_count);
 	}
 
 	ParseResult &GetChild(idx_t index) {
-		if (index >= children.size()) {
+		if (index >= child_count) {
 			throw InternalException("Child index out of bounds");
 		}
 		return children[index].get();
@@ -269,35 +269,37 @@ public:
 		if (!name.empty()) {
 			ss << " (" << name << ")";
 		}
-		ss << " [" << children.size() << " children]\n";
+		ss << " [" << child_count << " children]\n";
 
 		std::string child_indent = indent + (is_last ? "   " : "│  ");
-		for (size_t i = 0; i < children.size(); ++i) {
-			children[i].get().ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
+		for (idx_t i = 0; i < child_count; ++i) {
+			children[i].get().ToStringInternal(ss, visited, child_indent, i == child_count - 1);
 		}
 	}
 
 private:
-	vector<reference<ParseResult>> children;
+	reference<ParseResult> *children;
+	idx_t child_count;
 };
 
 struct RepeatParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::REPEAT;
 
-	explicit RepeatParseResult(vector<reference<ParseResult>> results_p, optional_idx offset)
-	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
-		for (auto &child : children) {
-			EncloseChild(child.get());
+	//! `children_p` lives in the parse arena and stays valid for as long as this result does
+	RepeatParseResult(reference<ParseResult> *children_p, idx_t child_count_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), children(children_p), child_count(child_count_p) {
+		for (idx_t i = 0; i < child_count; i++) {
+			EncloseChild(children[i].get());
 		}
 	}
 
 	vector<reference<ParseResult>> GetChildren() const {
-		return children;
+		return vector<reference<ParseResult>>(children, children + child_count);
 	}
 
 	template <class T>
 	T &Child(idx_t index) {
-		if (index >= children.size()) {
+		if (index >= child_count) {
 			throw InternalException("Child index out of bounds");
 		}
 		return children[index].get().Cast<T>();
@@ -317,16 +319,17 @@ struct RepeatParseResult : ParseResult {
 		if (!name.empty()) {
 			ss << " (" << name << ")";
 		}
-		ss << " [" << children.size() << " children]\n";
+		ss << " [" << child_count << " children]\n";
 
 		std::string child_indent = indent + (is_last ? "   " : "│  ");
-		for (size_t i = 0; i < children.size(); ++i) {
-			children[i].get().ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
+		for (idx_t i = 0; i < child_count; ++i) {
+			children[i].get().ToStringInternal(ss, visited, child_indent, i == child_count - 1);
 		}
 	}
 
 private:
-	vector<reference<ParseResult>> children;
+	reference<ParseResult> *children;
+	idx_t child_count;
 };
 
 struct OptionalParseResult : ParseResult {

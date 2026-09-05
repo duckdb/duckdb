@@ -20,6 +20,10 @@
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
+#include "duckdb/parser/peg/keyword_table.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
+
+#include <new>
 
 namespace duckdb {
 class ClientContext;
@@ -161,7 +165,8 @@ struct MatchState {
 
 	TokenIterator token_iterator;
 	vector<MatcherSuggestion> &suggestions;
-	reference_set_t<const Matcher> added_suggestions;
+	//! The matchers that already contributed a suggestion through this state, created on first use
+	unique_ptr<reference_set_t<const Matcher>> added_suggestions;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
 	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
@@ -204,6 +209,51 @@ struct MatchState {
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
+//! Describes which tokens can begin a successful match of a matcher. Computed once per compiled grammar by the
+//! MatcherFactory and used to skip matchers that cannot possibly match the current token (see Matcher::CanStartAt).
+struct MatcherFirstSet {
+	//! Whether the matcher can succeed without consuming any token
+	bool nullable = false;
+	//! Whether the matcher can begin with a token that is not a grammar literal (identifier, string, number, ...)
+	bool any_token = false;
+	//! Bitmap over KeywordTable ids of the literals the matcher can begin with
+	unsafe_vector<uint64_t> keywords;
+	//! Whether the set is restrictive, i.e. a match must begin with one of the literals in `keywords`
+	bool prunable = false;
+
+	void AddKeyword(idx_t keyword_id) {
+		auto word = keyword_id / 64;
+		if (word >= keywords.size()) {
+			keywords.resize(word + 1, 0);
+		}
+		keywords[word] |= uint64_t(1) << (keyword_id % 64);
+	}
+	bool HasKeyword(idx_t keyword_id) const {
+		auto word = keyword_id / 64;
+		return word < keywords.size() && (keywords[word] >> (keyword_id % 64)) & 1;
+	}
+	//! Merge the tokens another matcher can begin with (does not touch nullable)
+	void MergeStart(const MatcherFirstSet &other) {
+		any_token = any_token || other.any_token;
+		if (other.keywords.size() > keywords.size()) {
+			keywords.resize(other.keywords.size(), 0);
+		}
+		for (idx_t i = 0; i < other.keywords.size(); i++) {
+			keywords[i] |= other.keywords[i];
+		}
+	}
+	bool operator==(const MatcherFirstSet &other) const {
+		return nullable == other.nullable && any_token == other.any_token && keywords == other.keywords;
+	}
+	//! Called once the set is complete: only a restrictive set needs to keep its bitmap
+	void Finalize() {
+		prunable = !nullable && !any_token;
+		if (!prunable) {
+			keywords.clear();
+		}
+	}
+};
+
 enum class MatcherType {
 	KEYWORD,
 	LIST,
@@ -223,8 +273,35 @@ public:
 	}
 	virtual ~Matcher() = default;
 
+	//! Whether a match can begin at the current token according to the first set. A matcher that cannot start here
+	//! would fail without consuming input, so skipping it changes neither the outcome, the error position nor the
+	//! suggestions; at the autocomplete cursor every matcher runs.
+	bool CanStartAt(MatchState &state) const {
+		if (!first_set.prunable) {
+			return true;
+		}
+		auto token = state.token_iterator.Current();
+		if (!token || token->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			return true;
+		}
+		auto keyword_id = state.token_iterator.CurrentKeywordId(*keyword_table);
+		return keyword_id != DConstants::INVALID_INDEX && first_set.HasKeyword(keyword_id);
+	}
+
 	//! Match and construct the parse result
-	MatcherResult MatchParseResult(MatchState &state) const;
+	MatcherResult MatchParseResult(MatchState &state) const {
+		if (!CanStartAt(state)) {
+			return MatcherResult::Failure();
+		}
+		state.rule = rule;
+		if (state.use_heap_based_parser) {
+			return MatchHeapBased(state);
+		}
+		if (packrat_memoized && state.packrat_cache) {
+			return MatchMemoized(state);
+		}
+		return MatchParseResultInternal(state);
+	}
 	virtual MatcherResult MatchParseResultInternal(MatchState &state) const = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
@@ -251,11 +328,19 @@ public:
 	optional_idx GetPackratId() const {
 		return packrat_id;
 	}
-	void SetPackratMemoized() {
+	//! Marks the matcher as packrat-memoized; `slot` is its column in the ParserPackratCache
+	void SetPackratMemoized(idx_t slot) {
 		packrat_memoized = true;
+		packrat_slot = slot;
 	}
 	bool IsPackratMemoized() const {
 		return packrat_memoized;
+	}
+	void SetFirstSet(MatcherFirstSet first_set_p) {
+		first_set = std::move(first_set_p);
+	}
+	idx_t GetPackratSlot() const {
+		return packrat_slot;
 	}
 
 public:
@@ -275,13 +360,24 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
+private:
+	//! Runs the matcher on the heap-based matcher stack instead of the native stack
+	MatcherResult MatchHeapBased(MatchState &state) const;
+	//! Runs the matcher through the packrat cache, memoizing the result per token position
+	MatcherResult MatchMemoized(MatchState &state) const;
+
 protected:
 	friend class MatcherAllocator;
 	MatcherType type;
 	string name;
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
+	idx_t packrat_slot = 0;
 	optional_ptr<const CompiledGrammarRule> rule;
+	//! The tokens a match can begin with, computed once the grammar is fully constructed
+	MatcherFirstSet first_set;
+	//! The literals of the grammar this matcher belongs to, set by the MatcherAllocator
+	optional_ptr<const KeywordTable> keyword_table;
 };
 
 class KeywordInfo {
@@ -301,16 +397,50 @@ class MatcherAllocator {
 public:
 	Matcher &Allocate(unique_ptr<Matcher> matcher);
 
+	//! All matchers allocated so far, indexed by their packrat id
+	const vector<unique_ptr<Matcher>> &GetMatchers() const {
+		return matchers;
+	}
+
 private:
 	vector<unique_ptr<Matcher>> matchers;
+	//! The literals of the grammar; owned here because the matchers reference it
+	KeywordTable keyword_table;
 };
 
+//! Owns the parse results of a single parse; they are placed in an arena and released together
 class ParseResultAllocator {
 public:
-	optional_ptr<ParseResult> Allocate(unique_ptr<ParseResult> parse_result);
+	ParseResultAllocator();
+	~ParseResultAllocator();
+
+	template <class RESULT, class... ARGS>
+	RESULT &Allocate(ARGS &&... args) {
+		auto result = arena.Make<RESULT>(std::forward<ARGS>(args)...);
+		parse_results.push_back(*result);
+		return *result;
+	}
+
+	//! The children of a sequence or repetition are gathered on a scratch stack while it matches. Matchers nest, so
+	//! the stack is strictly LIFO; once the composite succeeds its children are copied into the arena.
+	idx_t ChildrenBegin() const {
+		return child_scratch.size();
+	}
+	void PushChild(ParseResult &child) {
+		child_scratch.push_back(child);
+	}
+	void DiscardChildren(idx_t begin) {
+		while (child_scratch.size() > begin) {
+			child_scratch.pop_back();
+		}
+	}
+	//! Moves the children pushed since `begin` into the arena and returns them (nullptr if there are none)
+	reference<ParseResult> *TakeChildren(idx_t begin, idx_t &count);
 
 private:
-	vector<unique_ptr<ParseResult>> parse_results;
+	ArenaAllocator arena;
+	unsafe_vector<reference<ParseResult>> parse_results;
+	unsafe_vector<reference<ParseResult>> child_scratch;
 };
 
 template <class RESULT, class... ARGS>
@@ -318,10 +448,10 @@ MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}
-	auto result = allocator.Allocate(make_uniq<RESULT>(std::forward<ARGS>(args)...));
+	auto &result = allocator.Allocate<RESULT>(std::forward<ARGS>(args)...);
 	if (rule) {
-		result->SetRule(*rule);
-		result->name = rule->name;
+		result.SetRule(*rule);
+		result.name = rule->name;
 	}
 	return MatcherResult::Success(result);
 }

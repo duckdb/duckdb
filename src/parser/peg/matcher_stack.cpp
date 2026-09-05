@@ -159,6 +159,10 @@ void MatchStack::PushChildFrame(MatchStackFrame &parent, const Matcher &matcher,
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 	auto &matcher = frame.matcher;
 	auto &state = frame.match_state;
+	if (!matcher.CanStartAt(state)) {
+		frame.SetResult(MatcherResult::Failure());
+		return;
+	}
 	if (!PackratMatchState::IsEnabled(matcher, state)) {
 		return;
 	}

@@ -14,6 +14,9 @@ public:
 	}
 
 	MatcherResult MatchParseResultInternal(MatchState &state) const override {
+		if (!matcher.CanStartAt(state)) {
+			return state.AllocateParseResult<OptionalParseResult>();
+		}
 		MatchState child_state(state);
 		optional_idx start_offset;
 		if (auto current = child_state.token_iterator.Current()) {

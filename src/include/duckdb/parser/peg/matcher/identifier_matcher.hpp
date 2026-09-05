@@ -159,14 +159,16 @@ public:
 	}
 
 private:
-	bool IsAllowedKeyword(const string &token_text) const {
-		if (!keyword_helper.IsKeyword(token_text)) {
+	//! Whether the current token is not a keyword, or a keyword that may be used as this kind of identifier
+	bool IsAllowedKeyword(MatchState &state) const {
+		auto categories = state.token_iterator.CurrentKeywordCategories(keyword_helper);
+		if (categories == 0) {
 			return true;
 		}
-		if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
+		if (categories & PEGKeywordHelper::CategoryBit(PEGKeywordCategory::KEYWORD_UNRESERVED)) {
 			return true;
 		}
-		return keyword_helper.KeywordCategoryType(token_text, GetAllowedCategory());
+		return (categories & PEGKeywordHelper::CategoryBit(GetAllowedCategory())) != 0;
 	}
 
 	bool MatchIdentifier(MatchState &state) const {
@@ -175,7 +177,7 @@ private:
 			return false;
 		}
 		auto &token_text = token->text;
-		if (!IsAllowedKeyword(token_text) || !IsIdentifier(token_text)) {
+		if (!IsAllowedKeyword(state) || !IsIdentifier(token_text)) {
 			return false;
 		}
 		state.token_iterator.Advance();

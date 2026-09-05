@@ -4,6 +4,7 @@ namespace duckdb {
 
 DuckDBKeywordHelper::DuckDBKeywordHelper() : initialized(false) {
 	InitializeKeywordMaps();
+	keyword_maps.Finalize();
 }
 
 const DuckDBKeywordHelper &DuckDBKeywordHelper::Instance() {
@@ -18,6 +19,10 @@ bool DuckDBKeywordHelper::KeywordCategoryType(const std::string &text, const PEG
 bool DuckDBKeywordHelper::IsKeyword(const string &text) const {
 	return keyword_maps.IsKeyword(text);
 };
+
+uint8_t DuckDBKeywordHelper::KeywordCategories(const string &text) const {
+	return keyword_maps.KeywordCategories(text);
+}
 
 vector<ParserKeyword> DuckDBKeywordHelper::KeywordList() const {
 	return keyword_maps.ToList();

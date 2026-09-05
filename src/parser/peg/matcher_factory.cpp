@@ -140,8 +140,9 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	auto &compiled_rule = *rule_p;
 
 	matcher.SetRule(compiled_rule);
-	if (packrat_memoized_rules.count(rule_name)) {
-		matcher.SetPackratMemoized();
+	auto memoized_entry = packrat_memoized_rules.find(rule_name);
+	if (memoized_entry != packrat_memoized_rules.end()) {
+		matcher.SetPackratMemoized(memoized_entry->second);
 	}
 	if (no_suggestion_rules.count(rule_name)) {
 		matcher.Cast<ListMatcher>().suppress_suggestions = true;
@@ -155,8 +156,9 @@ void MatcherFactory::AddKeywordOverride(const char *name, KeywordInfo info) {
 
 void MatcherFactory::AddRuleOverride(const char *name, unique_ptr<Matcher> &&matcher_p) {
 	auto &matcher = allocator.Allocate(std::move(matcher_p));
-	if (packrat_memoized_rules.count(name)) {
-		matcher.SetPackratMemoized();
+	auto memoized_entry = packrat_memoized_rules.find(name);
+	if (memoized_entry != packrat_memoized_rules.end()) {
+		matcher.SetPackratMemoized(memoized_entry->second);
 	}
 	if (grammar.GetRule(name)) {
 		auto rule_p = compiled.GetRule(name);
@@ -170,7 +172,7 @@ void MatcherFactory::AddRuleOverride(const char *name, unique_ptr<Matcher> &&mat
 }
 
 void MatcherFactory::AddPackratMemoizedRule(const char *name) {
-	packrat_memoized_rules.insert(name);
+	packrat_memoized_rules.emplace(name, packrat_memoized_rules.size());
 }
 
 void MatcherFactory::SuppressSuggestions(const char *name) {
@@ -253,7 +255,74 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	while (construction_state.HasScheduled()) {
 		CreateMatcher(construction_state.TakeNext());
 	}
+	ComputeFirstSets();
 	return GetMatcher(root_rule);
+}
+
+void MatcherFactory::ComputeFirstSets() {
+	auto &matchers = allocator.GetMatchers();
+	// the first sets are computed as a fixpoint: every matcher's set is derived from its children's sets, which
+	// only ever grow, so iterating until nothing changes handles the recursion in the grammar
+	vector<MatcherFirstSet> first_sets(matchers.size());
+	auto first_set_of = [&](const Matcher &matcher) -> const MatcherFirstSet & {
+		return first_sets[matcher.GetPackratId().GetIndex()];
+	};
+	bool changed = true;
+	while (changed) {
+		changed = false;
+		for (idx_t i = 0; i < matchers.size(); i++) {
+			auto &matcher = *matchers[i];
+			MatcherFirstSet updated;
+			switch (matcher.Type()) {
+			case MatcherType::KEYWORD:
+				updated.AddKeyword(matcher.Cast<KeywordMatcher>().GetKeywordId());
+				break;
+			case MatcherType::LIST: {
+				// a sequence can start with anything its leading nullable children can start with, plus the first
+				// child that must consume a token
+				updated.nullable = true;
+				for (auto &child : matcher.Cast<ListMatcher>().matchers) {
+					auto &child_set = first_set_of(child.get());
+					updated.MergeStart(child_set);
+					if (!child_set.nullable) {
+						updated.nullable = false;
+						break;
+					}
+				}
+				break;
+			}
+			case MatcherType::CHOICE:
+				for (auto &child : matcher.Cast<ChoiceMatcher>().matchers) {
+					auto &child_set = first_set_of(child.get());
+					updated.MergeStart(child_set);
+					updated.nullable = updated.nullable || child_set.nullable;
+				}
+				break;
+			case MatcherType::OPTIONAL:
+				updated.MergeStart(first_set_of(matcher.Cast<OptionalMatcher>().GetChildMatcher()));
+				updated.nullable = true;
+				break;
+			case MatcherType::REPEAT: {
+				auto &child_set = first_set_of(matcher.Cast<RepeatMatcher>().GetChildMatcher());
+				updated.MergeStart(child_set);
+				updated.nullable = child_set.nullable;
+				break;
+			}
+			default:
+				// identifiers, literals, operators and end-of-input are not described by grammar literals
+				updated.any_token = true;
+				break;
+			}
+			if (!(updated == first_sets[i])) {
+				first_sets[i] = std::move(updated);
+				changed = true;
+			}
+		}
+	}
+	for (idx_t i = 0; i < matchers.size(); i++) {
+		first_sets[i].Finalize();
+		matchers[i]->SetFirstSet(std::move(first_sets[i]));
+	}
 }
 
 unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, const KeywordInfo &info) const {

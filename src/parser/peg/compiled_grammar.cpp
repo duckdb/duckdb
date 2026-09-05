@@ -142,6 +142,7 @@ CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>
 	auto terminal_rule_overrides = grammar.BuildTerminalRuleOverrides(new_matcher->GetKeywordHelper());
 	MatcherFactory factory(new_matcher->allocator, grammar, *new_matcher, std::move(terminal_rule_overrides));
 	new_matcher->program_matcher = factory.CreateRootMatcher("Program");
+	new_matcher->packrat_slot_count = factory.PackratSlotCount();
 	new_matcher->top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");
 	return new_matcher;
 }
