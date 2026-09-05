@@ -16,7 +16,7 @@ bool TryParseConstantPattern(optional<Value> pattern_value, string &constant_str
 }
 
 void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace,
-                       bool *no_match_returns_input) {
+                       bool *no_match_returns_input, bool *multiline) {
 	for (idx_t i = 0; i < options.size(); i++) {
 		switch (options[i]) {
 		case 'c':
@@ -34,8 +34,11 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
 		case 'm':
 		case 'n':
 		case 'p':
-			// newline-sensitive matching
-			result.set_dot_nl(false);
+			// newline-sensitive matching: ^ and $ match at line boundaries.
+			// RE2 has no such option in non-POSIX mode, so this is applied via a (?m) pattern prefix.
+			if (multiline) {
+				*multiline = true;
+			}
 			break;
 		case 's':
 			// non-newline-sensitive matching
@@ -66,17 +69,21 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
 			throw InvalidInputException("Unrecognized Regex option %c", options[i]);
 		}
 	}
+	// Literal matching has no ^/$ anchors, so a (?m) prefix would be searched as literal text.
+	if (multiline && result.literal()) {
+		*multiline = false;
+	}
 }
 
 void ParseRegexOptions(const Value &options_str, RE2::Options &target, bool *global_replace,
-                       bool *no_match_returns_input) {
+                       bool *no_match_returns_input, bool *multiline) {
 	if (options_str.IsNull()) {
 		throw InvalidInputException("Regex options field must not be NULL");
 	}
 	if (options_str.type().id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("Regex options field must be a string");
 	}
-	ParseRegexOptions(StringValue::Get(options_str), target, global_replace, no_match_returns_input);
+	ParseRegexOptions(StringValue::Get(options_str), target, global_replace, no_match_returns_input, multiline);
 }
 
 void ParseGroupNameList(const string &function_name, const Value &list_val, const string &pattern_string,
