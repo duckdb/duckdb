@@ -36,6 +36,49 @@ jobs:
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
+  clang-tidy:
+    name: Clang-Tidy (${{ matrix.shard }}/4)
+    needs: check-draft
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      CC: gcc
+      CXX: g++
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        timeout-minutes: 10
+        run: |
+          python3 scripts/ci/retry.py -- make toolsci
+          python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
+          python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy-20
+
+      - name: Clang-Tidy
+        shell: bash
+        run: |
+          set -o pipefail
+          make tidy-check \
+            TIDY_BINARY=clang-tidy-20 \
+            TIDY_SHARD_COUNT=4 \
+            TIDY_SHARD_INDEX=$((${{ matrix.shard }} - 1)) \
+            2>&1 | tee clang-tidy-shard-${{ matrix.shard }}.log
+
+      - name: Upload clang-tidy log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: clang-tidy-log-${{ matrix.shard }}
+          path: clang-tidy-shard-${{ matrix.shard }}.log
+          if-no-files-found: error
+
   codeql-analyze:
     name: Analyze (${{ matrix.language }})
     needs: check-draft
