@@ -27,6 +27,7 @@ add_library_unity(
   bind_select.cpp
   bind_set.cpp
   bind_summarize.cpp
+  bind_statement_helper.cpp
   bind_transaction.cpp
   bind_update.cpp
   bind_update_extensions.cpp

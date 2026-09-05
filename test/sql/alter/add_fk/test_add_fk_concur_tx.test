@@ -1,0 +1,822 @@
+# name: test/sql/alter/add_fk/test_add_fk_concur_tx.test
+# description: Concurrent transaction tests for ALTER TABLE ADD FOREIGN KEY
+# group: [add_fk]
+
+#---------------------------------------------------------------------------
+# Scenario 1: Update AFTER alter. con1 alters first (uncommitted); con2 then
+# attempts DML on the altered entry and must fail because the catalog entry
+# has been altered.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk1 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk1 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk1 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk1 VALUES (1, 1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+ALTER TABLE fk1 ADD CONSTRAINT fk1_fk FOREIGN KEY (val) REFERENCES pk1(id)
+
+statement error con2
+INSERT INTO fk1 VALUES (2, 2)
+----
+
+statement ok con1
+COMMIT
+
+statement ok con2
+ROLLBACK
+
+query I con1
+SELECT COUNT(*) FROM fk1
+----
+1
+
+statement ok con1
+DROP TABLE fk1
+
+statement ok con1
+DROP TABLE pk1
+
+#---------------------------------------------------------------------------
+# All subsequent scenarios: alter AFTER update. For each con2 DML, both
+# commit orderings are exercised (con1 commits first, then con2 commits first).
+#---------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------
+# Scenario 2: con2 INSERT valid FK row, con1 commits first.
+# con2's commit fails because the catalog entry was altered under it.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk2 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk2 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk2 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk2 VALUES (1, 1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO fk2 VALUES (2, 2)
+
+statement ok con1
+ALTER TABLE fk2 ADD FOREIGN KEY (val) REFERENCES pk2(id)
+
+statement ok con1
+COMMIT
+
+statement error con2
+COMMIT
+----
+
+query I con1
+SELECT COUNT(*) FROM fk2
+----
+1
+
+statement ok con1
+DROP TABLE fk2
+
+statement ok con1
+DROP TABLE pk2
+
+#---------------------------------------------------------------------------
+# Scenario 3: con2 INSERT valid FK row, con2 commits first.
+# Both transactions succeed; row count reflects both inserts.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk3 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk3 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk3 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk3 VALUES (1, 1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO fk3 VALUES (2, 2)
+
+statement ok con2
+COMMIT
+
+statement ok con1
+ALTER TABLE fk3 ADD FOREIGN KEY (val) REFERENCES pk3(id)
+
+statement ok con1
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM fk3
+----
+2
+
+statement ok con1
+DROP TABLE fk3
+
+statement ok con1
+DROP TABLE pk3
+
+#---------------------------------------------------------------------------
+# Scenario 4: con2 INSERT invalid FK row, con1 commits first.
+# con2's commit fails because the entry was altered.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk4 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk4 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk4 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk4 VALUES (1, 1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO fk4 VALUES (2, 999)
+
+statement ok con1
+ALTER TABLE fk4 ADD FOREIGN KEY (val) REFERENCES pk4(id)
+
+statement ok con1
+COMMIT
+
+statement error con2
+COMMIT
+----
+
+query I con1
+SELECT COUNT(*) FROM fk4
+----
+1
+
+statement ok con1
+DROP TABLE fk4
+
+statement ok con1
+DROP TABLE pk4
+
+#---------------------------------------------------------------------------
+# Scenario 5: con2 INSERT invalid FK row, con2 commits first.
+# con2's commit must fail as entry has been altered.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk5 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk5 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk5 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk5 VALUES (1, 1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO fk5 VALUES (2, 999)
+
+statement ok con1
+ALTER TABLE fk5 ADD FOREIGN KEY (val) REFERENCES pk5(id)
+
+statement error con2
+COMMIT
+----
+
+statement ok con1
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM fk5
+----
+1
+
+statement ok con1
+DROP TABLE fk5
+
+statement ok con1
+DROP TABLE pk5
+
+#---------------------------------------------------------------------------
+# Scenario 6: con2 UPDATE FK column to a valid value
+# con1's alter failed due to outstanding updates
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk6 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk6 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk6 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk6 VALUES (1, 1), (2, 2)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+UPDATE fk6 SET val = 3 WHERE id = 2
+
+statement error con1
+ALTER TABLE fk6 ADD FOREIGN KEY (val) REFERENCES pk6(id)
+----
+<REGEX>:TransactionContext Error.*outstanding updates.*
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM fk6
+----
+2
+
+statement ok con1
+DROP TABLE fk6
+
+statement ok con1
+DROP TABLE pk6
+
+#---------------------------------------------------------------------------
+# Scenario 7: con2 UPDATE FK column to a valid value, con2 commits first.
+# con1's ALTER fails due to outstanding updates
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk7 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk7 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk7 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk7 VALUES (1, 1), (2, 2)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+UPDATE fk7 SET val = 3 WHERE id = 2
+
+statement error con1
+ALTER TABLE fk7 ADD FOREIGN KEY (val) REFERENCES pk7(id)
+----
+<REGEX>:TransactionContext Error.*outstanding updates.*
+
+statement ok con2
+COMMIT
+
+statement ok con1
+ROLLBACK
+
+query II con1
+SELECT id, val FROM fk7 ORDER BY id
+----
+1	1
+2	3
+
+statement ok con1
+DROP TABLE fk7
+
+statement ok con1
+DROP TABLE pk7
+
+#---------------------------------------------------------------------------
+# Scenario 9: con2 UPDATE FK column to an invalid value, con2 commits first.
+# con1's ALTER must fail due to outstanding update
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk9 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk9 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk9 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk9 VALUES (1, 1), (2, 2)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+UPDATE fk9 SET val = 999 WHERE id = 2
+
+statement error con1
+ALTER TABLE fk9 ADD FOREIGN KEY (val) REFERENCES pk9(id)
+----
+<REGEX>:TransactionContext Error.*outstanding updates.*
+
+statement ok con2
+COMMIT
+
+statement ok con1
+ROLLBACK
+
+query II con1
+SELECT id, val FROM fk9 ORDER BY id
+----
+1	1
+2	999
+
+statement ok con1
+DROP TABLE fk9
+
+statement ok con1
+DROP TABLE pk9
+
+#---------------------------------------------------------------------------
+# Scenario 10: con2 DELETE FK row, con1 commits first.
+# con2's commit fails because the entry was altered.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk10 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk10 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk10 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk10 VALUES (1, 1), (2, 2)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+DELETE FROM fk10 WHERE id = 2
+
+statement ok con1
+ALTER TABLE fk10 ADD FOREIGN KEY (val) REFERENCES pk10(id)
+
+statement ok con1
+COMMIT
+
+statement error con2
+COMMIT
+----
+
+query I con1
+SELECT COUNT(*) FROM fk10
+----
+2
+
+statement ok con1
+DROP TABLE fk10
+
+statement ok con1
+DROP TABLE pk10
+
+#---------------------------------------------------------------------------
+# Scenario 11: con2 DELETE FK row, con2 commits first.
+# con2's commit fail due to table has been altered. 
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk11 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk11 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk11 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk11 VALUES (1, 1), (2, 2)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+DELETE FROM fk11 WHERE id = 2
+
+statement ok con1
+ALTER TABLE fk11 ADD FOREIGN KEY (val) REFERENCES pk11(id)
+
+statement error con2
+COMMIT
+----
+
+statement ok con1
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM fk11
+----
+2
+
+statement ok con1
+DROP TABLE fk11
+
+statement ok con1
+DROP TABLE pk11
+
+#---------------------------------------------------------------------------
+# Scenario 12: con2 INSERT PK row, con1 commits first.
+# con2 failed due to table has been altered.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk12 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk12 VALUES (1), (2)
+
+statement ok con1
+CREATE TABLE fk12 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk12 VALUES (1, 1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO pk12 VALUES (10)
+
+statement ok con1
+ALTER TABLE fk12 ADD FOREIGN KEY (val) REFERENCES pk12(id)
+
+statement ok con1
+COMMIT
+
+statement error con2
+COMMIT
+----
+
+query I con1
+SELECT COUNT(*) FROM pk12
+----
+2
+
+statement ok con1
+DROP TABLE fk12
+
+statement ok con1
+DROP TABLE pk12
+
+#---------------------------------------------------------------------------
+# Scenario 13: con2 INSERT PK row, con2 commits first.
+# NOTE: This time con1 alter after con2 commit, Both transactions commit successfully.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk13 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk13 VALUES (1), (2)
+
+statement ok con1
+CREATE TABLE fk13 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk13 VALUES (1, 1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO pk13 VALUES (10)
+
+statement ok con2
+COMMIT
+
+statement ok con1
+ALTER TABLE fk13 ADD FOREIGN KEY (val) REFERENCES pk13(id)
+
+statement ok con1
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM pk13
+----
+3
+
+statement ok con1
+DROP TABLE fk13
+
+statement ok con1
+DROP TABLE pk13
+
+#---------------------------------------------------------------------------
+# Scenario 14: con2 DELETE a PK row that a committed FK row references,
+# con1 commits first. con1's ALTER succeeds on its snapshot; con2's commit
+# must fail because it would create a dangling FK reference.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk14 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk14 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk14 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk14 VALUES (1, 1), (2, 2)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+DELETE FROM pk14 WHERE id = 3
+
+statement ok con1
+ALTER TABLE fk14 ADD FOREIGN KEY (val) REFERENCES pk14(id)
+
+statement ok con1
+COMMIT
+
+statement error con2
+COMMIT
+----
+<REGEX>:TransactionContext Error.*
+
+query I con1
+SELECT COUNT(*) FROM pk14
+----
+3
+
+statement ok con1
+DROP TABLE fk14
+
+statement ok con1
+DROP TABLE pk14
+
+#---------------------------------------------------------------------------
+# Scenario 15: con2 DELETE an unreferenced PK row, con2 commits first.
+# Safe: the deleted PK row is not referenced by any FK row. Both commit.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk15 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk15 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk15 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk15 VALUES (1, 1), (2, 2)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+DELETE FROM pk15 WHERE id = 3
+
+statement ok con1
+ALTER TABLE fk15 ADD FOREIGN KEY (val) REFERENCES pk15(id)
+
+statement error con2
+COMMIT
+----
+<REGEX>:TransactionContext Error.*another transaction has no changes this table.*
+
+statement ok con1
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM pk15
+----
+3
+
+statement ok con1
+DROP TABLE fk15
+
+statement ok con1
+DROP TABLE pk15
+
+#---------------------------------------------------------------------------
+# Scenario 16: con2 DELETE a PK row that a committed FK row references,
+# con2 commits first. con1's ALTER must fail because the FK table has a
+# dangling reference in the new snapshot.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk16 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk16 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk16 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk16 VALUES (1, 1), (2, 2), (3, 3)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+DELETE FROM pk16 WHERE id = 3
+
+statement ok con2
+COMMIT
+
+statement error con1
+ALTER TABLE fk16 ADD FOREIGN KEY (val) REFERENCES pk16(id)
+----
+<REGEX>:Constraint Error.*
+
+statement ok con1
+ROLLBACK
+
+query I con1
+SELECT COUNT(*) FROM pk16
+----
+2
+
+query I con1
+SELECT COUNT(*) FROM fk16
+----
+3
+
+statement ok con1
+DROP TABLE fk16
+
+statement ok con1
+DROP TABLE pk16
+
+#---------------------------------------------------------------------------
+# Scenario 17: con2 UPDATE a PK key that a committed FK row references,
+# con1 commits first. con2 failed to commit due to table altered.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk17 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk17 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk17 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk17 VALUES (1, 1), (2, 2), (3, 3)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+UPDATE pk17 SET id = 33 WHERE id = 3
+
+statement ok con1
+ALTER TABLE fk17 ADD FOREIGN KEY (val) REFERENCES pk17(id)
+
+statement ok con1
+COMMIT
+
+statement error con2
+COMMIT
+----
+
+query I con1
+SELECT COUNT(*) FROM pk17
+----
+3
+
+statement ok con1
+DROP TABLE fk17
+
+statement ok con1
+DROP TABLE pk17
+
+#---------------------------------------------------------------------------
+# Scenario 18: con2 UPDATE a PK key that a committed FK row references,
+# con2 commits first. Con2 failed to commit due to table altered.
+#---------------------------------------------------------------------------
+
+statement ok con1
+CREATE TABLE pk18 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk18 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk18 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk18 VALUES (1, 1), (2, 2), (3, 3)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+UPDATE pk18 SET id = 33 WHERE id = 3
+
+statement ok con1
+ALTER TABLE fk18 ADD FOREIGN KEY (val) REFERENCES pk18(id)
+
+statement error con2
+COMMIT
+----
+<REGEX>:TransactionContext Error.*
+
+statement ok con1
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM pk18
+----
+3
+
+statement ok con1
+DROP TABLE fk18
+
+statement ok con1
+DROP TABLE pk18

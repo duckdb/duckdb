@@ -96,7 +96,7 @@ public:
 
 	AlterEntryData GetAlterEntryData() const;
 	bool IsAddPrimaryKey() const;
-
+	bool IsAddForeignKey() const;
 protected:
 	explicit AlterInfo(AlterType type);
 

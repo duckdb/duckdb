@@ -1,0 +1,304 @@
+# name: test/sql/alter/add_fk/test_add_fk.test
+# description: Test adding a FOREIGN KEY to a table.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification
+
+# Scenario 1. 
+# Basic: add FK to existing table with valid data
+statement ok
+CREATE TABLE pk_basic (id INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO pk_basic VALUES (1), (2), (3), (999), (9999);
+
+statement ok
+CREATE TABLE fk_basic (id INTEGER, fk_col INTEGER);
+
+statement ok
+INSERT INTO fk_basic VALUES (1, 1), (2, 2), (3, 3);
+
+statement ok
+ALTER TABLE fk_basic ADD CONSTRAINT fk_basic_fk FOREIGN KEY (fk_col) REFERENCES pk_basic(id);
+
+# After adding FK, inserts with invalid reference must fail
+statement error
+INSERT INTO fk_basic VALUES (4, 99);
+----
+Constraint Error
+
+# Valid insert still works
+statement ok
+INSERT INTO fk_basic VALUES (4, 1);
+
+# After adding FK, deletes that break referential integrity must fail
+statement error
+DELETE FROM pk_basic WHERE id = 1;
+----
+Constraint Error
+
+# Delete of unreferenced PK row works
+statement ok
+DELETE FROM pk_basic WHERE id = 999;
+
+# BTW: drop constraint not supported
+statement error
+ALTER TABLE fk_basic DROP CONSTRAINT fk_basic_fk
+----
+
+
+# Scenario 2. 
+# Alter without specify PK columns should OK.
+statement ok
+CREATE TABLE fk_basic_no_col (id INTEGER, fk_col INTEGER);
+
+statement ok
+INSERT INTO fk_basic_no_col VALUES (1, 1), (2, 2), (3, 3);
+
+#
+statement ok
+ALTER TABLE fk_basic_no_col ADD CONSTRAINT fk_basic_fk_no_col FOREIGN KEY (fk_col) REFERENCES pk_basic;
+
+# After adding FK, inserts with invalid reference must fail
+statement error
+INSERT INTO fk_basic_no_col VALUES (4, 99);
+----
+Constraint Error
+
+# Valid insert still works
+statement ok
+INSERT INTO fk_basic_no_col VALUES (4, 1);
+
+# PK should not be dropped
+statement error
+drop table pk_basic
+----
+<REGEX>:Catalog Error.*
+
+# Scenario 3. 
+# Violation: add FK when FK table contains a value not present in PK table
+statement ok
+CREATE TABLE pk_violation (id INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO pk_violation VALUES (10), (20);
+
+statement ok
+CREATE TABLE fk_violation (val INTEGER);
+
+statement ok
+INSERT INTO fk_violation VALUES (10), (99);
+
+# Must fail as 99 has no ref 
+statement error
+ALTER TABLE fk_violation ADD CONSTRAINT fk_violation_fk FOREIGN KEY (val) REFERENCES pk_violation(id);
+----
+Constraint Error
+
+# Scenario 4.
+# Error: FK references non-existent table
+statement ok
+CREATE TABLE fk_no_pk_table (col INTEGER);
+
+statement error
+ALTER TABLE fk_no_pk_table ADD CONSTRAINT bad_fk FOREIGN KEY (col) REFERENCES no_such_table(id);
+----
+
+# Scenario 5.
+# Error: FK references column with no UNIQUE/PRIMARY KEY constraint
+statement ok
+CREATE TABLE pk_no_index (id INTEGER);
+
+statement ok
+CREATE TABLE fk_no_index (col INTEGER);
+
+statement error
+ALTER TABLE fk_no_index ADD CONSTRAINT bad_fk2 FOREIGN KEY (col) REFERENCES pk_no_index(id);
+----
+
+# Scenario 6.
+# NULL values in FK column are allowed (NULLs do not violate FK constraint)
+statement ok
+CREATE TABLE pk_nulls (id INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO pk_nulls VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE fk_nulls (val INTEGER);
+
+statement ok
+INSERT INTO fk_nulls VALUES (1), (NULL), (2), (NULL);
+
+# Null is OK
+statement ok
+ALTER TABLE fk_nulls ADD CONSTRAINT fk_nulls_fk FOREIGN KEY (val) REFERENCES pk_nulls(id);
+
+
+# FK column is not the first column, with NULL values
+# NULL FK values should be excluded from the index (SQL standard)
+
+statement ok
+CREATE TABLE fk_nulls2 (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO fk_nulls2 VALUES (1, 1), (2, NULL), (3, 2)
+
+# NULL in FK column should not cause a violation
+statement ok
+ALTER TABLE fk_nulls2 ADD CONSTRAINT fk_nulls_fk2 FOREIGN KEY (val) REFERENCES pk_nulls(id)
+
+# Valid FK value works
+statement ok
+INSERT INTO fk_nulls2 VALUES (4, 3)
+
+# NULL FK value works (SQL standard: NULL is exempt from FK check)
+statement ok
+INSERT INTO fk_nulls2 VALUES (5, NULL)
+
+# Invalid FK value fails
+statement error
+INSERT INTO fk_nulls2 VALUES (6, 999)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+DROP TABLE fk_nulls
+
+statement ok
+DROP TABLE fk_nulls2
+
+statement ok
+DROP TABLE pk_nulls
+
+
+# Scenario 7.
+# Multi-column FK
+statement ok
+CREATE TABLE pk_multi (a INTEGER, b INTEGER, UNIQUE (a, b));
+
+statement ok
+INSERT INTO pk_multi VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TABLE fk_multi (x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO fk_multi VALUES (1, 10), (2, 20);
+
+statement ok
+ALTER TABLE fk_multi ADD CONSTRAINT fk_multi_fk FOREIGN KEY (x, y) REFERENCES pk_multi(a, b);
+
+# Multi-column FK violation during ALTER
+statement ok
+CREATE TABLE fk_multi_bad (x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO fk_multi_bad VALUES (1, 10), (2, 99);
+
+statement error
+ALTER TABLE fk_multi_bad ADD CONSTRAINT fk_multi_bad_fk FOREIGN KEY (x, y) REFERENCES pk_multi(a, b);
+----
+Constraint Error
+
+# Scenario 8.
+# Self-referencing FK via ALTER TABLE
+statement ok
+CREATE TABLE self_ref (id INTEGER PRIMARY KEY, parent_id INTEGER);
+
+statement ok
+INSERT INTO self_ref VALUES (1, NULL), (2, 1), (3, 1);
+
+statement ok
+ALTER TABLE self_ref ADD CONSTRAINT self_ref_fk FOREIGN KEY (parent_id) REFERENCES self_ref(id);
+
+# Self-ref violation during ALTER
+statement ok
+CREATE TABLE self_ref_bad (id INTEGER PRIMARY KEY, parent_id INTEGER);
+
+statement ok
+INSERT INTO self_ref_bad VALUES (1, NULL), (2, 99);
+
+statement error
+ALTER TABLE self_ref_bad ADD CONSTRAINT self_ref_bad_fk FOREIGN KEY (parent_id) REFERENCES self_ref_bad(id);
+----
+Constraint Error
+
+# Scenario 9.
+# FK on empty table always succeeds
+statement ok
+CREATE TABLE pk_empty (id INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO pk_empty VALUES (1);
+
+statement ok
+CREATE TABLE fk_empty (col INTEGER);
+
+statement ok
+ALTER TABLE fk_empty ADD CONSTRAINT fk_empty_fk FOREIGN KEY (col) REFERENCES pk_empty(id);
+
+# Scenario 10.
+# Rollback: failed ALTER TABLE ADD FK leaves table unchanged
+statement ok
+CREATE TABLE pk_rollback (id INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO pk_rollback VALUES (1), (2);
+
+statement ok
+CREATE TABLE fk_rollback (col INTEGER);
+
+statement ok
+INSERT INTO fk_rollback VALUES (1), (999);
+
+statement error
+ALTER TABLE fk_rollback ADD CONSTRAINT fk_rollback_fk FOREIGN KEY (col) REFERENCES pk_rollback(id);
+----
+Constraint Error
+
+# Table is still usable after failed ALTER
+statement ok
+INSERT INTO fk_rollback VALUES (3);
+
+query I
+SELECT COUNT(*) FROM fk_rollback;
+----
+3
+
+# Scenario 11.
+# With large number of value (>16k to cross rowgroup boundary)
+statement ok
+CREATE TABLE pk_large (id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE fk_large (val INTEGER);
+
+statement ok
+INSERT INTO pk_large SELECT * from RANGE(65536) tbl(ii);
+
+statement ok
+INSERT INTO fk_large SELECT * from RANGE(65536) tbl(ii);
+
+statement ok
+ALTER TABLE fk_large ADD CONSTRAINT fk_large_fkc FOREIGN KEY (val) REFERENCES pk_large(id);
+
+statement error
+INSERT INTO fk_large values (65537);
+----
+
+statement ok
+CREATE TABLE fk_large_err (val INTEGER);
+
+statement ok
+INSERT INTO fk_large_err SELECT * from RANGE(65537) tbl(ii);
+
+# Failed due to invalid data
+statement error
+ALTER TABLE fk_large_err ADD CONSTRAINT fk_large_fkc FOREIGN KEY (val) REFERENCES pk_large(id);
+----
+
+# still insertable
+statement ok
+INSERT INTO fk_large_err values (65538);

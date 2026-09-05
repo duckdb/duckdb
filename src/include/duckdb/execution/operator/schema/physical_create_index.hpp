@@ -45,6 +45,9 @@ public:
 	//! Alter table information for adding indexes.
 	unique_ptr<AlterTableInfo> alter_table_info;
 
+	// ZZZ TODO: do we need it now? we've got the column list and types.
+	//! Bound FK constraint for ALTER TABLE ADD FOREIGN KEY verification, derived from alter_table_info.
+	unique_ptr<BoundForeignKeyConstraint> bound_fk;
 	//! Types of the indexed columns.
 	vector<LogicalType> indexed_column_types;
 	vector<column_t> indexed_columns;

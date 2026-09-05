@@ -11,6 +11,11 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/execution/index/index_type.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
@@ -38,6 +43,15 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 
 	// Row id is always last
 	rowid_column.push_back(unbound_expressions.size());
+
+	// Pre-build the BoundForeignKeyConstraint and full column type list for FK verification.
+	if (this->alter_table_info && this->alter_table_info->IsAddForeignKey()) {
+		auto &constraint_info = this->alter_table_info->Cast<AddConstraintInfo>();
+		auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
+		physical_index_set_t pk_key_set(fk.info.pk_keys.begin(), fk.info.pk_keys.end());
+		physical_index_set_t fk_key_set(fk.info.fk_keys.begin(), fk.info.fk_keys.end());
+		bound_fk = make_uniq<BoundForeignKeyConstraint>(fk.info, std::move(pk_key_set), std::move(fk_key_set));
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -91,11 +105,56 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 
 	// Check for NULLs, if we are creating a PRIMARY KEY.
 	// FIXME: Later, we want to ensure that we skip the NULL check for any non-PK alter.
-	if (alter_table_info) {
+	if (alter_table_info && !bound_fk) {
 		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
 			if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
 				throw ConstraintException("NOT NULL constraint failed: %s", info->GetIndexName());
 			}
+		}
+	}
+
+		// Verify FK referential integrity for ALTER TABLE ADD FOREIGN KEY.
+	// TODO: Does it verify local data? Add test to check this!
+	if (bound_fk) {
+		// CreateIndexScan uses TABLE_SCAN_OMIT_PERMANENTLY_DELETED, which still surfaces
+		// rows that the current transaction has locally deleted. Skip them here so FK
+		// verification only sees rows that will exist post-commit. The deleted rows must
+		// still enter the index build below so commit-time DELETE can remove them.
+		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
+		auto &data_storage = table.GetStorage();
+		auto row_ids = FlatVector::GetData<row_t>(lstate.row_chunk.data[0]);
+		SelectionVector visible_sel(STANDARD_VECTOR_SIZE);
+		idx_t visible_count = 0;
+		for (idx_t i = 0; i < lstate.row_chunk.size(); i++) {
+			if (data_storage.CanFetch(transaction, row_ids[i])) {
+				visible_sel.set_index(visible_count++, i);
+			}
+		}
+
+		if (visible_count > 0) {
+			// key_chunk has FK columns at indices 0..N-1 (projected), but VerifyForeignKeyConstraint
+			// uses fk_keys physical indices to address the chunk. Build a correctly-indexed chunk.
+			vector<LogicalType> fk_table_types;
+			for (auto &col : table.GetColumns().Physical()) {
+				fk_table_types.emplace_back(col.Type());
+			}
+			DataChunk full_chunk;
+			full_chunk.InitializeEmpty(fk_table_types);
+			DataChunk verify_keys;
+			verify_keys.InitializeEmpty(indexed_column_types);
+			if (visible_count == lstate.key_chunk.size()) {
+				for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
+					full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(lstate.key_chunk.data[i]);
+				}
+				full_chunk.SetCardinality(visible_count);
+			} else {
+				for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
+					verify_keys.data[i].Slice(lstate.key_chunk.data[i], visible_sel, visible_count);
+					full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(verify_keys.data[i]);
+				}
+				full_chunk.SetCardinality(visible_count);
+			}
+			table.GetStorage().VerifyFKReferentialIntegrity(*bound_fk, context.client, full_chunk);
 		}
 	}
 
@@ -119,6 +178,37 @@ SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, Op
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
+
+	// For ALTER TABLE ADD FOREIGN KEY: the upstream scan uses is_create_index and only
+	// sees committed rows. Verify any locally-appended FK rows against the referenced
+	// PK table here, while the transaction is still active.
+	if (bound_fk) {
+		auto &storage = table.GetStorage();
+		auto &local_storage = LocalStorage::Get(context, table.catalog);
+		auto local = local_storage.GetStorage(storage);
+		if (local) {
+			vector<LogicalType> fk_table_types;
+			for (auto &col : table.GetColumns().Physical()) {
+				fk_table_types.emplace_back(col.Type());
+			}
+			vector<StorageIndex> fk_key_columns;
+			for (auto &fk_key : bound_fk->info.fk_keys) {
+				fk_key_columns.emplace_back(fk_key.index);
+			}
+			auto &transaction = DuckTransaction::Get(context, table.catalog);
+			auto &collection = local->GetCollection();
+			DataChunk full_chunk;
+			full_chunk.InitializeEmpty(fk_table_types);
+			for (auto &local_chunk : collection.Chunks(transaction, fk_key_columns)) {
+				full_chunk.Reset();
+				for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
+					full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(local_chunk.data[i]);
+				}
+				full_chunk.SetCardinality(local_chunk.size());
+				storage.VerifyFKReferentialIntegrity(*bound_fk, context, full_chunk);
+			}
+		}
+	}
 
 	// Finalize the index
 	IndexBuildFinalizeInput finalize_input {*gstate.gstate};

@@ -22,6 +22,7 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
@@ -349,6 +350,37 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 		if (!set.AlterEntry(transaction, name, info)) {
 			throw CatalogException::MissingEntry(type, name, string());
 		}
+	}
+		// When adding a FK constraint via ALTER TABLE, notify the PK-side table and register the dependency,
+	// mirroring the same logic in CreateTable.
+	// Fast return.
+	if (info.type != AlterType::ALTER_TABLE) {
+		return;
+	}
+	auto &table_info = info.Cast<AlterTableInfo>();
+	if (table_info.alter_table_type != AlterTableType::ADD_CONSTRAINT) {
+		return;
+	}
+	auto &add_constraint_info = table_info.Cast<AddConstraintInfo>();
+	if (add_constraint_info.constraint->type != ConstraintType::FOREIGN_KEY) {
+		return;
+	}
+
+	// Fetch the updated FK table entry to extract FK information.
+	auto updated_entry = set.GetEntry(transaction, info.GetQualifiedName().Name());
+	D_ASSERT(updated_entry);
+	auto &fk_table_entry = updated_entry->Cast<TableCatalogEntry>();
+
+	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
+	FindForeignKeyInformation(fk_table_entry, AlterForeignKeyType::AFT_ADD, fk_arrays);
+	for (auto &fk_info : fk_arrays) {
+		// Alter the primary key table to record that it is now referenced.
+		Alter(transaction, *fk_info);
+
+		// Register the dependency between the FK table and the PK table.
+		auto pk_entry = set.GetEntry(transaction, fk_info->GetQualifiedName().Name());
+		D_ASSERT(pk_entry);
+		catalog.GetDependencyManager()->AddDependency(transaction, *updated_entry, *pk_entry);
 	}
 }
 

@@ -268,8 +268,10 @@ public:
 	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
 	                                                 const ColumnList &columns);
 
+	BoundStatement BindAlterAddForeignKey(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
 
+	void BindParsedForeignKeyConstraint(ForeignKeyConstraint& constraint, SchemaCatalogEntry &schema, TableCatalogEntry &table);
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
 	static void BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
