@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/async_io_callback.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/file_opener.hpp"
@@ -65,6 +66,12 @@ public:
 	//! Read [nr_bytes] bytes at the requested [location].
 	//! Returns a buffer handle group that keeps the data pinned in memory.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
+	//! Try to start an asynchronous read of [nr_bytes] bytes at [location], releasing the calling thread while the
+	//! read is in flight. On success [out_group] is set to the destination buffer - its contents are only valid once
+	//! [callback] has fired. Returns false when this read cannot be served asynchronously (the external file cache
+	//! block path, or a file system without asynchronous reads), in which case the caller must use Read().
+	DUCKDB_API bool TryStartRead(idx_t nr_bytes, idx_t location, FileBufferHandleGroup &out_group,
+	                             AsyncIOCallback callback);
 	//! Read [nr_bytes] bytes and sets [nr_bytes] to the actually read bytes.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Read and record time
@@ -85,6 +92,8 @@ public:
 	DUCKDB_API void Seek(idx_t location);
 
 private:
+	//! Whether reads on this handle bypass the external file cache and go straight to the file system
+	bool UsesUncachedReadPath();
 	//! Remove the 'force_full_download' option from the file handle if present, and return whether it was present
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.

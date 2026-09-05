@@ -24,6 +24,8 @@ public:
 	~VirtualFileSystem() override;
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+	bool TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
+	                  AsyncIOCallback callback) override;
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;

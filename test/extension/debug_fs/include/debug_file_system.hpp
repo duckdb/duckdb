@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
@@ -19,6 +20,7 @@ class DatabaseInstance;
 
 // Forwards declaration.
 class DebugFileSystem;
+class DebugAsyncReadQueue;
 
 struct DebugFileHandle : public FileHandle {
 	DebugFileHandle(DebugFileSystem &fs, unique_ptr<FileHandle> inner_p);
@@ -33,13 +35,25 @@ struct DebugFileHandle : public FileHandle {
 class DebugFileSystem : public FileSystem {
 public:
 	DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstance &db);
+	~DebugFileSystem() override;
 
 	void SetDelayMeanMs(double v);
 	void SetDelayStddevMs(double v);
 	void SetRandomSeed(optional_idx seed);
 	bool RandomEngineInitialized();
 
+	//! Whether reads are served asynchronously, i.e. off a completion thread instead of blocking the caller.
+	//! This stands in for a platform that has genuinely asynchronous I/O (e.g. a browser's fetch callback).
+	void SetAsyncReads(bool async_reads);
+	//! Highest number of reads that were in flight at the same time, this is 1 for a purely synchronous file system
+	idx_t GetMaxConcurrentReads() const;
+	//! Number of reads that were served asynchronously
+	idx_t GetAsyncReadCount() const;
+	void ResetReadStats();
+
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+	bool TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
+	                  AsyncIOCallback callback) override;
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
@@ -114,6 +128,11 @@ private:
 	// Random engine is initialized lazily on first IO operation, so users could set the random seed for reproduction.
 	void ApplyDelay();
 	void EnsureRandomEngineInitialized();
+	//! Sample the configured latency, in milliseconds
+	double SampleDelayMs();
+	//! Record that one more read went in flight, and update the concurrency high-water mark
+	void ReadStarted();
+	void ReadFinished();
 
 	unique_ptr<FileSystem> inner_fs;
 	DatabaseInstance &db;
@@ -122,6 +141,12 @@ private:
 	optional_idx random_seed DUCKDB_GUARDED_BY(random_engine_lock);
 	double delay_mean_ms DUCKDB_GUARDED_BY(random_engine_lock) = 0.0;
 	double delay_stddev_ms DUCKDB_GUARDED_BY(random_engine_lock) = 0.0;
+	atomic<bool> async_reads {false};
+	atomic<idx_t> reads_in_flight {0};
+	atomic<idx_t> max_concurrent_reads {0};
+	atomic<idx_t> async_read_count {0};
+	//! Completions for asynchronously started reads, drained by [completion_thread]
+	unique_ptr<DebugAsyncReadQueue> async_queue;
 };
 
 } // namespace duckdb
