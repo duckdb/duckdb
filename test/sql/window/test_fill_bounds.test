@@ -1,0 +1,73 @@
+# name: test/sql/window/test_fill_bounds.test
+# description: Test FILL interpolation at the bounds of the value type - interpolation must not overflow when converting back from floating point
+# group: [window]
+
+require 64bit
+
+# Interpolating BIGINT values near INT64_MAX: the midpoint is INT64_MAX itself.
+# The double representation of INT64_MAX rounds up to 2^63, which is out of range
+# for int64 - the cast back must clamp/exactly convert, not overflow.
+# (Overflow here is UB: x86 cvttsd2si yields INT64_MIN, ARM fcvtzs saturates.)
+query II
+SELECT x, fill(y ORDER BY x) OVER () FROM
+	(VALUES (0::BIGINT, 9223372036854775807::BIGINT), (1::BIGINT, NULL::BIGINT), (2::BIGINT, 9223372036854775807::BIGINT)) t(x,y)
+ORDER BY x;
+----
+0	9223372036854775807
+1	9223372036854775807
+2	9223372036854775807
+
+# Same at the lower bound - INT64_MIN is exactly representable in double
+query II
+SELECT x, fill(y ORDER BY x) OVER () FROM
+	(VALUES (0::BIGINT, (-9223372036854775807 - 1)::BIGINT), (1::BIGINT, NULL::BIGINT), (2::BIGINT, (-9223372036854775807 - 1)::BIGINT)) t(x,y)
+ORDER BY x;
+----
+0	-9223372036854775808
+1	-9223372036854775808
+2	-9223372036854775808
+
+# UBIGINT near UINT64_MAX - the double representation of UINT64_MAX rounds up to 2^64
+query II
+SELECT x, fill(y ORDER BY x) OVER () FROM
+	(VALUES (0::UBIGINT, 18446744073709551615::UBIGINT), (1::UBIGINT, NULL::UBIGINT), (2::UBIGINT, 18446744073709551615::UBIGINT)) t(x,y)
+ORDER BY x;
+----
+0	18446744073709551615
+1	18446744073709551615
+2	18446744073709551615
+
+# TIMESTAMP near the maximum finite value - fill binds TIMESTAMP as its INT64 physical type,
+# and the double midpoint of two near-max values rounds up to 2^63. The cast back must clamp
+# (to the +infinity sentinel) instead of overflowing: x86 cvttsd2si would produce INT64_MIN
+# (-infinity), ARM fcvtzs saturates to INT64_MAX (infinity) - after the fix both agree.
+query II
+SELECT x, fill(y ORDER BY x) OVER () FROM
+	(VALUES (0::BIGINT, make_timestamp(9223372036854775806::BIGINT)), (1::BIGINT, NULL::TIMESTAMP), (2::BIGINT, make_timestamp(9223372036854775806::BIGINT))) t(x,y)
+ORDER BY x;
+----
+0	294247-01-10 04:00:54.775806
+1	infinity
+2	294247-01-10 04:00:54.775806
+
+# Interpolation between two distinct large timestamps: both round to 2^63 in double,
+# so the interpolated value clamps to the +infinity sentinel on every platform
+query II
+SELECT x, fill(y ORDER BY x) OVER () FROM
+	(VALUES (0::BIGINT, make_timestamp(9223372036854775800::BIGINT)), (1::BIGINT, NULL::TIMESTAMP), (2::BIGINT, make_timestamp(9223372036854775806::BIGINT))) t(x,y)
+ORDER BY x;
+----
+0	294247-01-10 04:00:54.7758
+1	infinity
+2	294247-01-10 04:00:54.775806
+
+# Ordinary interpolation is unaffected
+query II
+SELECT x, fill(y ORDER BY x) OVER () FROM
+	(VALUES (0::BIGINT, 10::BIGINT), (1::BIGINT, NULL::BIGINT), (2::BIGINT, NULL::BIGINT), (3::BIGINT, 40::BIGINT)) t(x,y)
+ORDER BY x;
+----
+0	10
+1	20
+2	30
+3	40

@@ -225,3 +225,15 @@ SELECT CAST(CAST('0' AS UHUGEINT) AS BOOLEAN)
 ----
 0
 
+
+# non-ASCII input bytes go through case folding - must be handled as unsigned char
+# (UB on signed-char platforms otherwise)
+statement error
+SELECT CAST('é' AS BOOLEAN)
+----
+Could not convert string
+
+query I
+SELECT TRY_CAST('trué' AS BOOLEAN)
+----
+NULL
