@@ -90,7 +90,11 @@ struct DBConfigOptions {
 	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether extensions should be loaded on start-up
+#ifdef DUCKDB_LOAD_EXTENSIONS_DEFAULT
+	bool load_extensions = DUCKDB_LOAD_EXTENSIONS_DEFAULT;
+#else
 	bool load_extensions = true;
+#endif
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = DConstants::INVALID_INDEX;
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
