@@ -214,7 +214,7 @@ bool TryGetLengthValueFromStats(const PartitionStatistics &stats, const StorageI
 		return false;
 	}
 	if (!column_stats->CanHaveNoNull()) {
-		// the partition might be entirely NULL - MIN/MAX would return NULL, so we cannot extract a value
+		// the partition is entirely NULL - MIN/MAX returns NULL, so we cannot extract a value
 		return false;
 	}
 	if (is_min) {
@@ -309,6 +309,11 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		auto &proj = child_ref.get().Cast<LogicalProjection>();
 		for (auto &column_info : length_columns) {
 			auto &expr = proj.GetExpression(column_info.binding);
+			if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+				// pass-through projection - keep chasing the binding one level down
+				column_info.binding = expr.Cast<BoundColumnRefExpression>().Binding();
+				continue;
+			}
 			if (!TryGetLengthColumnRef(expr, column_info.binding)) {
 				return;
 			}
