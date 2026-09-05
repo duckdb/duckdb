@@ -1,0 +1,168 @@
+# name: test/sql/constraints/foreignkey/fk_19002.test
+# description: Deleting a referenced key must be visible to foreign key checks in the same transaction
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE primary_table (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE secondary_table (primary_id INTEGER, FOREIGN KEY (primary_id) REFERENCES primary_table(id))
+
+statement ok
+INSERT INTO primary_table VALUES (42)
+
+# Committing the delete and the reference together used to leave a dangling foreign key.
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM primary_table WHERE id = 42
+
+statement error
+INSERT INTO secondary_table VALUES (42)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+ROLLBACK
+
+query II
+SELECT (SELECT count(*) FROM primary_table), (SELECT count(*) FROM secondary_table)
+----
+1	0
+
+# A read in the same transaction before the delete must not change the outcome.
+
+statement ok
+BEGIN
+
+statement ok
+SELECT id FROM primary_table LIMIT 1
+
+statement ok
+DELETE FROM primary_table WHERE id = 42
+
+statement error
+INSERT INTO secondary_table VALUES (42)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+ROLLBACK
+
+# The referenced key can still be re-inserted within the transaction.
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM primary_table WHERE id = 42
+
+statement ok
+INSERT INTO primary_table VALUES (42)
+
+statement ok
+INSERT INTO secondary_table VALUES (42)
+
+statement ok
+COMMIT
+
+query II
+SELECT (SELECT count(*) FROM primary_table), (SELECT count(*) FROM secondary_table)
+----
+1	1
+
+# UUID keys, as in the original report.
+
+statement ok
+CREATE TABLE pk_uuid (id UUID PRIMARY KEY)
+
+statement ok
+CREATE TABLE fk_uuid (pk_id UUID, FOREIGN KEY (pk_id) REFERENCES pk_uuid(id))
+
+statement ok
+INSERT INTO pk_uuid VALUES ('11111111-1111-1111-1111-111111111111')
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM pk_uuid WHERE id = '11111111-1111-1111-1111-111111111111'
+
+statement error
+INSERT INTO fk_uuid VALUES ('11111111-1111-1111-1111-111111111111')
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+ROLLBACK
+
+# Self-referencing foreign keys resolve against the same table's deletes.
+
+statement ok
+CREATE TABLE node (id INTEGER PRIMARY KEY, parent INTEGER, FOREIGN KEY (parent) REFERENCES node(id))
+
+statement ok
+INSERT INTO node VALUES (1, NULL)
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM node WHERE id = 1
+
+statement error
+INSERT INTO node VALUES (2, 1)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO node VALUES (3, 1)
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM node
+----
+2
+
+# Deleting only some of the referenced keys still rejects the missing one.
+
+statement ok
+CREATE TABLE pk_multi (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE fk_multi (pk_id INTEGER, FOREIGN KEY (pk_id) REFERENCES pk_multi(id))
+
+statement ok
+INSERT INTO pk_multi VALUES (1), (2), (3)
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM pk_multi WHERE id = 2
+
+statement ok
+INSERT INTO fk_multi VALUES (1), (3)
+
+statement error
+INSERT INTO fk_multi VALUES (1), (2)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+COMMIT
+
+query II
+SELECT (SELECT count(*) FROM pk_multi), (SELECT count(*) FROM fk_multi)
+----
+3	0

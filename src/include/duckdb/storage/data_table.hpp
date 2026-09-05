@@ -312,14 +312,11 @@ private:
 	//! Rebuild all indexes after vacuuming changed rowid's (used with vacuum_rebuild_indexes setting).
 	void RebuildIndexes();
 
-	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
-	                                const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
+	void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
 	                                DataChunk &chunk, VerifyExistenceType type);
-	void VerifyAppendForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
-	                                      const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
+	void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
 	                                      DataChunk &chunk);
-	void VerifyDeleteForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
-	                                      const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
+	void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
 	                                      DataChunk &chunk);
 
 private:
