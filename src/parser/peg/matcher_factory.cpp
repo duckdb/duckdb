@@ -216,6 +216,11 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	AddPackratMemoizedRule("ColId");
 	AddPackratMemoizedRule("ColumnReference");
 	AddPackratMemoizedRule("FunctionExpression");
+	AddPackratMemoizedRule("CatalogQualification");
+	AddPackratMemoizedRule("SchemaQualification");
+	AddPackratMemoizedRule("ReservedSchemaQualification");
+	AddPackratMemoizedRule("TableQualification");
+	AddPackratMemoizedRule("ReservedTableQualification");
 	//===--------------------------------------------------------------------===//
 	// END GENERATED PACKRAT MEMOIZED RULES
 	//===--------------------------------------------------------------------===//
