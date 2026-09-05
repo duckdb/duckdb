@@ -47,44 +47,59 @@ struct GroupCommitState : public DuckDBBenchmarkState {
 };
 
 // NUM_THREADS connections each commit COMMITS_PER_THREAD single-row INSERTs. Every auto-commit
-// INSERT is its own transaction, so concurrent committers batch their WAL fsyncs
+// INSERT is its own transaction, so concurrent committers share their WAL fsyncs
+struct GroupCommit {
+	static void Load(DuckDBBenchmarkState *state_p) {
+		auto state = (GroupCommitState *)state_p;
+		Connection con(*state->gc_db);
+		con.Query("CREATE TABLE integers(i INTEGER, t INTEGER)");
+	}
+	static void Run(DuckDBBenchmarkState *state_p, int64_t num_threads, int64_t commits_per_thread) {
+		auto state = (GroupCommitState *)state_p;
+		std::vector<std::thread> threads;
+		for (int64_t t = 0; t < num_threads; t++) {
+			threads.emplace_back([state, t, commits_per_thread]() {
+				Connection con(*state->gc_db);
+				for (int64_t i = 0; i < commits_per_thread; i++) {
+					con.Query("INSERT INTO integers VALUES (" + std::to_string(i) + ", " + std::to_string(t) + ")");
+				}
+			});
+		}
+		for (auto &thread : threads) {
+			thread.join();
+		}
+	}
+	static void Cleanup(DuckDBBenchmarkState *state_p) {
+		auto state = (GroupCommitState *)state_p;
+		Connection con(*state->gc_db);
+		con.Query("DROP TABLE integers");
+		con.Query("CREATE TABLE integers(i INTEGER, t INTEGER)");
+	}
+	static string Info(int64_t num_threads, int64_t commits_per_thread, int64_t delay_us) {
+		return std::to_string(num_threads) + " threads commit " + std::to_string(num_threads * commits_per_thread) +
+		       " INSERT transactions, " + std::to_string(delay_us) + "us simulated WAL fsync latency (group commit)";
+	}
+};
+
+// The per-benchmark body only forwards its three parameters
 #define GROUP_COMMIT_BENCHMARK(NUM_THREADS, COMMITS_PER_THREAD, DELAY_US)                                              \
 	duckdb::unique_ptr<DuckDBBenchmarkState> CreateBenchmarkState() override {                                         \
 		return make_uniq<GroupCommitState>(DELAY_US);                                                                  \
 	}                                                                                                                  \
-	void Load(DuckDBBenchmarkState *state_p) override {                                                                \
-		auto state = (GroupCommitState *)state_p;                                                                      \
-		Connection con(*state->gc_db);                                                                                 \
-		con.Query("CREATE TABLE integers(i INTEGER, t INTEGER)");                                                      \
+	void Load(DuckDBBenchmarkState *state) override {                                                                  \
+		GroupCommit::Load(state);                                                                                      \
 	}                                                                                                                  \
-	void RunBenchmark(DuckDBBenchmarkState *state_p) override {                                                        \
-		auto state = (GroupCommitState *)state_p;                                                                      \
-		std::vector<std::thread> threads;                                                                              \
-		for (int64_t t = 0; t < NUM_THREADS; t++) {                                                                    \
-			threads.emplace_back([state, t]() {                                                                        \
-				Connection con(*state->gc_db);                                                                         \
-				for (int64_t i = 0; i < COMMITS_PER_THREAD; i++) {                                                     \
-					con.Query("INSERT INTO integers VALUES (" + std::to_string(i) + ", " + std::to_string(t) + ")");   \
-				}                                                                                                      \
-			});                                                                                                        \
-		}                                                                                                              \
-		for (auto &thread : threads) {                                                                                 \
-			thread.join();                                                                                             \
-		}                                                                                                              \
+	void RunBenchmark(DuckDBBenchmarkState *state) override {                                                          \
+		GroupCommit::Run(state, NUM_THREADS, COMMITS_PER_THREAD);                                                      \
 	}                                                                                                                  \
-	void Cleanup(DuckDBBenchmarkState *state_p) override {                                                             \
-		auto state = (GroupCommitState *)state_p;                                                                      \
-		Connection con(*state->gc_db);                                                                                 \
-		con.Query("DROP TABLE integers");                                                                              \
-		con.Query("CREATE TABLE integers(i INTEGER, t INTEGER)");                                                      \
+	void Cleanup(DuckDBBenchmarkState *state) override {                                                               \
+		GroupCommit::Cleanup(state);                                                                                   \
 	}                                                                                                                  \
 	string VerifyResult(QueryResult *result) override {                                                                \
 		return string();                                                                                               \
 	}                                                                                                                  \
 	string BenchmarkInfo() override {                                                                                  \
-		return std::to_string((int64_t)NUM_THREADS) + " threads commit " +                                             \
-		       std::to_string((int64_t)(NUM_THREADS * COMMITS_PER_THREAD)) + " INSERT transactions, " +                \
-		       std::to_string((int64_t)DELAY_US) + "us simulated WAL fsync latency (group commit)";                    \
+		return GroupCommit::Info(NUM_THREADS, COMMITS_PER_THREAD, DELAY_US);                                           \
 	}
 
 // real local fsync (fixed 16000 total commits)
