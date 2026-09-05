@@ -66,10 +66,10 @@ IndexStorageInfo UnboundIndex::CopyStorageInfo() const {
 
 unique_ptr<BoundIndex> UnboundIndex::Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types) {
 	auto bound_index = binder.BindIndex(*this);
+	storage_reclaimed = true;
 	if (HasBufferedReplays()) {
 		bound_index->ApplyBufferedReplays(physical_column_types, buffered_replays, mapped_column_ids);
 	}
-	storage_reclaimed = true;
 	return bound_index;
 }
 
