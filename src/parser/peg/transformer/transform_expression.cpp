@@ -2082,8 +2082,7 @@ qualified_column_set_t PEGTransformerFactory::TransformExcludeNameSingle(PEGTran
 
 QualifiedColumnName PEGTransformerFactory::TransformExcludeDottedName(PEGTransformer &transformer,
                                                                       const vector<string> &dotted_identifier) {
-	auto result_string = StringUtil::Join(dotted_identifier, ".");
-	return QualifiedColumnName::Parse(result_string);
+	return StringToQualifiedColumnName(dotted_identifier);
 }
 
 QualifiedColumnName PEGTransformerFactory::TransformExcludeColumnName(PEGTransformer &transformer,
