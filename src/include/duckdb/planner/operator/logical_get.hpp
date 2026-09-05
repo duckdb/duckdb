@@ -24,9 +24,12 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
 
 public:
-	LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-	           vector<LogicalType> returned_types, vector<Identifier> returned_names,
-	           virtual_column_map_t virtual_columns = virtual_column_map_t());
+	LogicalGet(
+	    TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+	    vector<LogicalType> returned_types, vector<Identifier> returned_names,
+	    virtual_column_map_t virtual_columns = virtual_column_map_t(),
+	    vector<Value> returned_comments = vector<Value>(),
+	    vector<InsertionOrderPreservingMap<string>> returned_tags = vector<InsertionOrderPreservingMap<string>>());
 
 	//! The table index in the current bind context
 	TableIndex table_index;
@@ -38,6 +41,10 @@ public:
 	vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function
 	vector<Identifier> names;
+	//! The comments of ALL columns that can be returned by the table function (empty if none were provided)
+	vector<Value> returned_comments;
+	//! The tags of ALL columns that can be returned by the table function (empty if none were provided)
+	vector<InsertionOrderPreservingMap<string>> returned_tags;
 	//! A mapping of column index -> type/name for all virtual columns
 	virtual_column_map_t virtual_columns;
 	//! Columns that are used outside the scan
@@ -71,6 +78,10 @@ public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	//! Returns the underlying table that is being scanned, or nullptr if there is none
 	optional_ptr<TableCatalogEntry> GetTable() const;
+	//! Returns the comment of the column at the given index, or NULL if the column has no comment
+	Value GetColumnComment(idx_t column_index) const;
+	//! Returns the tags of the column at the given index, or an empty map if the column has no tags
+	InsertionOrderPreservingMap<string> GetColumnTags(idx_t column_index) const;
 	//! Returns any column to query - preferably the cheapest column
 	//! This is used when we are running e.g. a COUNT(*) and don't care about the contents of any columns in the table
 	column_t GetAnyColumn() const;
@@ -100,7 +111,7 @@ public:
 		if (function.HasSerializationCallbacks()) {
 			return true;
 		}
-		return function.bind && (!bind_data || bind_data->SupportStatementCache());
+		return function.HasAnyBindCallback() && (!bind_data || bind_data->SupportStatementCache());
 	}
 
 	void Serialize(Serializer &serializer) const override;

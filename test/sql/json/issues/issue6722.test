@@ -11,10 +11,10 @@ FROM '{DATA_DIR}/json/duplicate_column_names.json'
 42	43	44	45
 
 # due to case-insensitivity these column names would cause an error, but we add a number to de-duplicate them
-query IIIIII
+query IIIIIIII
 DESCRIBE FROM '{DATA_DIR}/json/duplicate_column_names.json'
 ----
-id	BIGINT	YES	NULL	NULL	NULL
-Id_1	BIGINT	YES	NULL	NULL	NULL
-iD_2	BIGINT	YES	NULL	NULL	NULL
-ID_3	BIGINT	YES	NULL	NULL	NULL
+id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+Id_1	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+iD_2	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+ID_3	BIGINT	YES	NULL	NULL	NULL	NULL	{}

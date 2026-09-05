@@ -12,11 +12,11 @@ statement ok
 INSERT INTO integers VALUES (84, 84, 84, 84, 84)
 
 # show on the table directly vs show is identical
-query IIIIII nosort describe_result
+query IIIIIIII nosort describe_result
 DESCRIBE SELECT * FROM integers
 ----
 
-query IIIIII nosort describe_result
+query IIIIIIII nosort describe_result
 DESCRIBE integers
 ----
 
@@ -85,36 +85,36 @@ statement ok
 CREATE TABLE base_table(base_name int);
 
 # base without alias
-# column_name | column_type | null | key | default | extra
-query TTTITI
+# column_name | column_type | null | key | default | extra | comment | tags
+query TTTITITT
 DESCRIBE base_table
 ----
-base_name	INTEGER	YES	NULL	NULL	NULL
+base_name	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 # With Alias
-# column_name | column_type | null | key | default | extra
-query TTTITI
+# column_name | column_type | null | key | default | extra | comment | tags
+query TTTITITT
 DESCRIBE SELECT base_name AS alias_name FROM base_table
 ----
-alias_name	INTEGER	YES	NULL	NULL	NULL
+alias_name	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 # With Alias 2 Deep
-# column_name | column_type | null | key | default | extra
-query TTTITI
+# column_name | column_type | null | key | default | extra | comment | tags
+query TTTITITT
 DESCRIBE SELECT alias_name as alias_alias_name FROM (SELECT base_name AS alias_name FROM base_table)
 ----
-alias_alias_name	INTEGER	YES	NULL	NULL	NULL
+alias_alias_name	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 # Alias inline
-# column_name | column_type | null | key | default | extra
-query TTTITI
+# column_name | column_type | null | key | default | extra | comment | tags
+query TTTITITT
 DESCRIBE SELECT base_name AS alias_name FROM VALUES (1) AS base_table(base_name)
 ----
-alias_name	INTEGER	YES	NULL	NULL	NULL
+alias_name	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 # Alias CTE
-# column_name | column_type | null | key | default | extra
-query TTTITI
+# column_name | column_type | null | key | default | extra | comment | tags
+query TTTITITT
 DESCRIBE WITH cte_rel AS (SELECT 1 as base_name) SELECT base_name as alias_name FROM cte_rel;
 ----
-alias_name	INTEGER	YES	NULL	NULL	NULL
+alias_name	INTEGER	YES	NULL	NULL	NULL	NULL	{}

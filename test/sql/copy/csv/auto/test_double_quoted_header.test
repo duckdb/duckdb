@@ -1,11 +1,11 @@
 # name: test/sql/copy/csv/auto/test_double_quoted_header.test
 # group: [auto]
 
-query IIIIII
+query IIIIIIII
 describe from '{DATA_DIR}/csv/double_quoted_header.csv';
 ----
-foo "bar	BIGINT	YES	NULL	NULL	NULL
-name	VARCHAR	YES	NULL	NULL	NULL
+foo "bar	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+name	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
 
 query II
 from '{DATA_DIR}/csv/double_quoted_header.csv';

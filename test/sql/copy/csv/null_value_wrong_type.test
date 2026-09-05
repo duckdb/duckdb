@@ -2,11 +2,11 @@
 # description: Issue of not properly detecting a type in combination of null values
 # group: [csv]
 
-query IIIIII
+query IIIIIIII
 describe from '{DATA_DIR}/csv/null_mismatch.csv'
 ----
-id	BIGINT	YES	NULL	NULL	NULL
-name	VARCHAR	YES	NULL	NULL	NULL
-url	VARCHAR	YES	NULL	NULL	NULL
-type	VARCHAR	YES	NULL	NULL	NULL
-PartOfPlaceId	BIGINT	YES	NULL	NULL	NULL
+id	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+name	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+url	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+type	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+PartOfPlaceId	BIGINT	YES	NULL	NULL	NULL	NULL	{}

@@ -115,10 +115,10 @@ SELECT a[3:99] FROM arrays
 NULL
 [2]
 
-query IIIIII
+query IIIIIIII
 DESCRIBE SELECT * FROM arrays
 ----
-a	INTEGER[3]	YES	NULL	NULL	NULL
+a	INTEGER[3]	YES	NULL	NULL	NULL	NULL	{}
 
 query I
 SELECT a.filter(lambda x: x > 0) FROM arrays

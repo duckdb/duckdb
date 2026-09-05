@@ -35,6 +35,8 @@ null
 key
 default
 extra
+comment
+tags
 
 statement ok
 (DESCRIBE (values(42))) UNION ALL (DESCRIBE (values(42)));

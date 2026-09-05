@@ -253,11 +253,22 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 		vector<LogicalType> return_types;
 		vector<Identifier> return_names;
+		vector<Value> return_comments;
+		vector<InsertionOrderPreservingMap<string>> return_tags;
+		bool has_column_metadata = false;
 		for (auto &col : table.GetColumns().Logical()) {
 			table_types.push_back(col.Type());
 			table_names.emplace_back(col.Name());
 			return_types.push_back(col.Type());
 			return_names.emplace_back(col.Name());
+			return_comments.push_back(col.Comment());
+			return_tags.push_back(col.Tags());
+			has_column_metadata = has_column_metadata || !col.Comment().IsNull() || !col.Tags().empty();
+		}
+		if (!has_column_metadata) {
+			// only carry column metadata on the scan when the table actually has some
+			return_comments.clear();
+			return_tags.clear();
 		}
 		table_names = BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);
 
@@ -267,9 +278,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		} else {
 			virtual_columns = table.GetVirtualColumns();
 		}
-		auto logical_get =
-		    make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
-		                          std::move(return_names), std::move(virtual_columns));
+		auto logical_get = make_uniq<LogicalGet>(
+		    table_index, scan_function, std::move(bind_data), std::move(return_types), std::move(return_names),
+		    std::move(virtual_columns), std::move(return_comments), std::move(return_tags));
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {

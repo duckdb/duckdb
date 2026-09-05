@@ -40,9 +40,11 @@ LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 
 LogicalGet::LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<Identifier> returned_names,
-                       virtual_column_map_t virtual_columns_p)
+                       virtual_column_map_t virtual_columns_p, vector<Value> returned_comments_p,
+                       vector<InsertionOrderPreservingMap<string>> returned_tags_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
       bind_data(std::move(bind_data)), returned_types(std::move(returned_types)), names(std::move(returned_names)),
+      returned_comments(std::move(returned_comments_p)), returned_tags(std::move(returned_tags_p)),
       virtual_columns(std::move(virtual_columns_p)), extra_info() {
 }
 
@@ -328,6 +330,9 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options",
 	                                                                      row_group_order_options);
 	serializer.WritePropertyWithDefault(215, "scan_partition_indices", scan_partition_indices, vector<idx_t>());
+	serializer.WritePropertyWithDefault(216, "returned_comments", returned_comments, vector<Value>());
+	serializer.WritePropertyWithDefault(217, "returned_tags", returned_tags,
+	                                    vector<InsertionOrderPreservingMap<string>>());
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -362,6 +367,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	    deserializer.ReadPropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options");
 	auto scan_partition_indices =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<idx_t>>(215, "scan_partition_indices", vector<idx_t>());
+	deserializer.ReadPropertyWithDefault(216, "returned_comments", result->returned_comments);
+	deserializer.ReadPropertyWithDefault(217, "returned_tags", result->returned_tags);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -381,13 +388,21 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 
 		vector<LogicalType> bind_return_types;
 		vector<Identifier> bind_names;
-		if (!function.bind) {
+		vector<Value> bind_comments;
+		vector<InsertionOrderPreservingMap<string>> bind_tags;
+		if (!function.HasAnyBindCallback()) {
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
-		bind_data = function.bind(context, input, bind_return_types, bind_names);
+		bind_data = function.Bind(context, input, bind_return_types, bind_names, bind_comments, bind_tags);
 		if (result->ordinality_idx.IsValid()) {
-			auto ordinality_pos = bind_return_types.begin() + NumericCast<int64_t>(result->ordinality_idx.GetIndex());
-			bind_return_types.emplace(ordinality_pos, LogicalType::BIGINT);
+			auto ordinality_offset = NumericCast<int64_t>(result->ordinality_idx.GetIndex());
+			bind_return_types.emplace(bind_return_types.begin() + ordinality_offset, LogicalType::BIGINT);
+			if (!bind_comments.empty()) {
+				bind_comments.emplace(bind_comments.begin() + ordinality_offset);
+			}
+			if (!bind_tags.empty()) {
+				bind_tags.emplace(bind_tags.begin() + ordinality_offset);
+			}
 		}
 		if (function.get_virtual_columns) {
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
@@ -412,6 +427,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			}
 		}
 		result->returned_types = std::move(bind_return_types);
+		result->returned_comments = std::move(bind_comments);
+		result->returned_tags = std::move(bind_tags);
 	} else if (function.get_virtual_columns) {
 		virtual_columns = function.get_virtual_columns(context, bind_data.get());
 	}
@@ -425,6 +442,22 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		result->SetPartitionsToScan(std::move(scan_partition_indices));
 	}
 	return std::move(result);
+}
+
+Value LogicalGet::GetColumnComment(idx_t column_index) const {
+	D_ASSERT(returned_comments.empty() || returned_comments.size() == returned_types.size());
+	if (column_index >= returned_comments.size()) {
+		return Value();
+	}
+	return returned_comments[column_index];
+}
+
+InsertionOrderPreservingMap<string> LogicalGet::GetColumnTags(idx_t column_index) const {
+	D_ASSERT(returned_tags.empty() || returned_tags.size() == returned_types.size());
+	if (column_index >= returned_tags.size()) {
+		return InsertionOrderPreservingMap<string>();
+	}
+	return returned_tags[column_index];
 }
 
 vector<TableIndex> LogicalGet::GetTableIndex() const {

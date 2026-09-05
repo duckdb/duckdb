@@ -1,0 +1,78 @@
+# name: test/sql/show_select/describe_metadata.test
+# description: Test comments and tags returned by DESCRIBE
+# group: [show_select]
+
+statement ok
+CREATE TABLE described_table(i INTEGER, j INTEGER);
+
+statement ok
+COMMENT ON COLUMN described_table.i IS 'identifier column';
+
+query TTI
+SELECT column_name, comment, cardinality(tags) = 0 FROM (DESCRIBE described_table) ORDER BY column_name;
+----
+i	identifier column	true
+j	NULL	true
+
+statement ok
+CREATE VIEW described_view AS SELECT i FROM described_table;
+
+statement ok
+COMMENT ON COLUMN described_view.i IS 'view identifier column';
+
+query TTI
+SELECT column_name, comment, cardinality(tags) = 0 FROM pragma_show('described_view');
+----
+i	view identifier column	true
+
+# Metadata follows column references through aliases, but not computed expressions
+query TTI
+SELECT column_name, comment, cardinality(tags) = 0
+FROM (DESCRIBE SELECT i AS aliased_i, i + 1 AS expression FROM described_table);
+----
+aliased_i	identifier column	true
+expression	NULL	true
+
+# Legacy table functions receive empty column metadata
+query TTI
+SELECT column_name, comment, cardinality(tags) = 0 FROM (DESCRIBE FROM range(1));
+----
+range	NULL	true
+
+# DESCRIBE reports the view's own column comment, not the comment of the underlying table column
+query TTI
+SELECT column_name, comment, cardinality(tags) = 0 FROM (DESCRIBE described_view);
+----
+i	view identifier column	true
+
+statement ok
+CREATE VIEW uncommented_view AS SELECT i AS x, j FROM described_table;
+
+query TT
+SELECT column_name, comment FROM (DESCRIBE uncommented_view);
+----
+x	NULL
+j	NULL
+
+query TT
+SELECT column_name, comment FROM (DESCRIBE SELECT i AS aliased_i FROM described_view);
+----
+aliased_i	view identifier column
+
+# Metadata passes through operators that only forward the columns of their children
+query TT
+SELECT column_name, comment FROM (DESCRIBE SELECT i FROM described_table ORDER BY i LIMIT 1);
+----
+i	identifier column
+
+query TT
+SELECT column_name, comment FROM (DESCRIBE SELECT i, row_number() OVER () AS rn FROM described_table);
+----
+i	identifier column
+rn	NULL
+
+query TT
+SELECT column_name, comment FROM (DESCRIBE SELECT i, u FROM described_table, UNNEST([1]) t(u));
+----
+i	identifier column
+u	NULL

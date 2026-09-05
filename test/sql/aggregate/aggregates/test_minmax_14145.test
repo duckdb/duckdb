@@ -4,8 +4,8 @@
 
 require json
 
-query IIIIII
+query IIIIIIII
 DESCRIBE SELECT max(l) from (select unnest( [{'a':1}::JSON, [2]::JSON ]) as l);
 ----
-max(l)	JSON	YES	NULL	NULL	NULL
+max(l)	JSON	YES	NULL	NULL	NULL	NULL	{}
 

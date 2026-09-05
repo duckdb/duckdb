@@ -63,8 +63,9 @@ TableFunction::TableFunction() : TableFunction("", {}, nullptr, nullptr, nullptr
 
 bool TableFunction::operator==(const TableFunction &rhs) const {
 	return name == rhs.name && arguments == rhs.GetArguments() && varargs == rhs.GetVarArgs() && bind == rhs.bind &&
-	       bind_replace == rhs.bind_replace && bind_operator == rhs.bind_operator && init_global == rhs.init_global &&
-	       init_local == rhs.init_local && function == rhs.function && in_out_function == rhs.in_out_function &&
+	       bind_extended == rhs.bind_extended && bind_replace == rhs.bind_replace &&
+	       bind_operator == rhs.bind_operator && init_global == rhs.init_global && init_local == rhs.init_local &&
+	       function == rhs.function && in_out_function == rhs.in_out_function &&
 	       in_out_function_final == rhs.in_out_function_final && statistics == rhs.statistics &&
 	       dependency == rhs.dependency && cardinality == rhs.cardinality &&
 	       pushdown_complex_filter == rhs.pushdown_complex_filter && pushdown_expression == rhs.pushdown_expression &&
@@ -80,6 +81,39 @@ bool TableFunction::operator==(const TableFunction &rhs) const {
 	       filter_prune == rhs.filter_prune && sampling_pushdown == rhs.sampling_pushdown &&
 	       late_materialization == rhs.late_materialization && return_type == rhs.return_type &&
 	       global_initialization == rhs.global_initialization;
+}
+
+unique_ptr<FunctionData> TableFunction::Bind(ClientContext &context, TableFunctionBindInput &input,
+                                             vector<LogicalType> &return_types, vector<Identifier> &names,
+                                             vector<Value> &column_comments,
+                                             vector<InsertionOrderPreservingMap<string>> &column_tags) const {
+	D_ASSERT(HasAnyBindCallback());
+	unique_ptr<FunctionData> result;
+	if (bind_extended) {
+		result = bind_extended(context, input, return_types, names, column_comments, column_tags);
+	} else {
+		result = bind(context, input, return_types, names);
+	}
+	if (return_types.size() != names.size()) {
+		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", name);
+	}
+	if (return_types.empty()) {
+		throw InternalException("Failed to bind \"%s\": Table function must return at least one column", name);
+	}
+	if (!column_comments.empty() && column_comments.size() != return_types.size()) {
+		throw InternalException(
+		    "Failed to bind \"%s\": column comments must be empty or have the same size as return_types", name);
+	}
+	if (!column_tags.empty() && column_tags.size() != return_types.size()) {
+		throw InternalException(
+		    "Failed to bind \"%s\": column tags must be empty or have the same size as return_types", name);
+	}
+	for (auto &comment : column_comments) {
+		if (!comment.IsNull() && comment.type() != LogicalType::VARCHAR) {
+			throw InternalException("Failed to bind \"%s\": column comments must be VARCHAR values", name);
+		}
+	}
+	return result;
 }
 
 bool TableFunction::operator!=(const TableFunction &rhs) const {

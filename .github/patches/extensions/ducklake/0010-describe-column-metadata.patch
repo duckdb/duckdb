@@ -1,0 +1,75 @@
+diff --git a/test/sql/alter/add_column.test b/test/sql/alter/add_column.test
+index bd1c0f80..917ce474 100644
+--- a/test/sql/alter/add_column.test
++++ b/test/sql/alter/add_column.test
+@@ -40,12 +40,12 @@ NULL	3
+ statement ok
+ ALTER TABLE ducklake.test ADD COLUMN new_col3 VARCHAR
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE ducklake.test
+ ----
+-col1	INTEGER	YES	NULL	NULL	NULL
+-new_col2	INTEGER	YES	NULL	NULL	NULL
+-new_col3	VARCHAR	YES	NULL	NULL	NULL
++col1	INTEGER	YES	NULL	NULL	NULL	NULL	{}
++new_col2	INTEGER	YES	NULL	NULL	NULL	NULL	{}
++new_col3	VARCHAR	YES	NULL	NULL	NULL	NULL	{}
+ 
+ statement ok
+ INSERT INTO ducklake.test VALUES (1, 2, 'hello'), (NULL, 3, 'world');
+diff --git a/test/sql/alter/issue_1141.test b/test/sql/alter/issue_1141.test
+index 85ce7737..6d4ff215 100644
+--- a/test/sql/alter/issue_1141.test
++++ b/test/sql/alter/issue_1141.test
+@@ -31,8 +31,8 @@ ALTER TABLE ducklake.test ALTER c SET DATA TYPE BIGINT;
+ statement ok
+ COMMIT
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE ducklake.test;
+ ----
+-a	TINYINT	YES	NULL	NULL	NULL
+-c	BIGINT	YES	NULL	NULL	NULL
++a	TINYINT	YES	NULL	NULL	NULL	NULL	{}
++c	BIGINT	YES	NULL	NULL	NULL	NULL	{}
+diff --git a/test/sql/alter/rename_column.test b/test/sql/alter/rename_column.test
+index 14a91294..ee4b6130 100644
+--- a/test/sql/alter/rename_column.test
++++ b/test/sql/alter/rename_column.test
+@@ -32,11 +32,11 @@ NULL	3
+ statement ok
+ ALTER TABLE ducklake.test RENAME COLUMN col2 TO new_col2
+ 
+-query IIIIII
++query IIIIIIII
+ DESCRIBE ducklake.test
+ ----
+-new_col1	INTEGER	YES	NULL	NULL	NULL
+-new_col2	INTEGER	YES	NULL	NULL	NULL
++new_col1	INTEGER	YES	NULL	NULL	NULL	NULL	{}
++new_col2	INTEGER	YES	NULL	NULL	NULL	NULL	{}
+ 
+ query II
+ SELECT new_col1, new_col2 FROM ducklake.test
+diff --git a/test/sql/constraints/not_null.test b/test/sql/constraints/not_null.test
+index c2e177f1..ecd67256 100644
+--- a/test/sql/constraints/not_null.test
++++ b/test/sql/constraints/not_null.test
+@@ -26,11 +26,11 @@ INSERT INTO ducklake.test VALUES (NULL, 84)
+ NOT NULL constraint
+ 
+ # check that NOT NULL shows up in DESCRIBE
+-query IIIIII
++query IIIIIIII
+ DESCRIBE ducklake.test
+ ----
+-i	INTEGER	NO	NULL	NULL	NULL
+-j	INTEGER	YES	NULL	NULL	NULL
++i	INTEGER	NO	NULL	NULL	NULL	NULL	{}
++j	INTEGER	YES	NULL	NULL	NULL	NULL	{}
+ 
+ # we cannot add a null constraint to a column that already has it
+ statement error

@@ -5,10 +5,10 @@
 statement ok
 create table "a.b.c" (x int);
 
-query IIIIII
+query IIIIIIII
 describe "a.b.c";
 ----
-x	INTEGER	YES	NULL	NULL	NULL
+x	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 statement ok
 create schema defg;
@@ -20,10 +20,10 @@ statement ok
 create table defg."a.b.c" (x int);
 
 # Non-quoted schema name, quoted table name
-query IIIIII
+query IIIIIIII
 describe defg."a.b.c";
 ----
-x	INTEGER	YES	NULL	NULL	NULL
+x	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 statement ok
 drop table defg."a.b.c";
@@ -32,10 +32,10 @@ statement ok
 create table defg.abc (x int);
 
 # Non-quoted schema name, non-quoted table name
-query IIIIII
+query IIIIIIII
 describe defg.abc;
 ----
-x	INTEGER	YES	NULL	NULL	NULL
+x	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 statement ok
 drop table defg.abc;
@@ -50,10 +50,10 @@ statement ok
 create table "d.e.f.g"."a.b.c" (x int);
 
 # Quoted schema name, quoted table name
-query IIIIII
+query IIIIIIII
 describe "d.e.f.g"."a.b.c";
 ----
-x	INTEGER	YES	NULL	NULL	NULL
+x	INTEGER	YES	NULL	NULL	NULL	NULL	{}
 
 statement ok
 drop table "d.e.f.g"."a.b.c"
@@ -62,7 +62,7 @@ statement ok
 create table "d.e.f.g".abc (x int);
 
 # Quoted schema name, non-quoted table name
-query IIIIII
+query IIIIIIII
 describe "d.e.f.g".abc;
 ----
-x	INTEGER	YES	NULL	NULL	NULL
+x	INTEGER	YES	NULL	NULL	NULL	NULL	{}
