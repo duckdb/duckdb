@@ -81,7 +81,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 			// we add dependencies if order matters: union_pipeline comes after all pipelines created by building
 			// current
 			auto dependency_type =
-			    order_matters ? MetaPipelineDependencyType::REQUIRED : MetaPipelineDependencyType::OPTIONAL_DEPENDENCY;
+			    order_matters ? PipelineDependencyType::REQUIRED : PipelineDependencyType::OPTIONAL_DEPENDENCY;
 			dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false, dependency_type);
 			// we also add dependencies if the LHS child can saturate all available threads
 			// in that case, we recursively make all RHS children depend on the LHS.

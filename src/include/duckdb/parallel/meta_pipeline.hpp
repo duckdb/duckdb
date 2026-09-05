@@ -10,6 +10,7 @@
 
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 
@@ -21,18 +22,6 @@ enum class MetaPipelineType : uint8_t {
 enum class MetaPipelineDependencyMode : uint8_t { ADD_DEPENDENCY, NO_DEPENDENCY };
 enum class RecursiveDependencyMode : uint8_t { RESPECT_PARALLELISM, FORCE };
 enum class DataflowDependencyMode : uint8_t { INCLUDE, SKIP_CONFLICTING };
-enum class MetaPipelineDependencyType : uint8_t { REQUIRED, OPTIONAL_DEPENDENCY };
-
-struct MetaPipelineDependency {
-	MetaPipelineDependency(Pipeline &pipeline_p, MetaPipelineDependencyType type_p)
-	    : pipeline(pipeline_p), type(type_p) {
-	}
-
-	reference<Pipeline> pipeline;
-	MetaPipelineDependencyType type;
-};
-
-using meta_pipeline_dependency_map_t = reference_map_t<Pipeline, vector<MetaPipelineDependency>>;
 
 //! MetaPipeline represents a set of pipelines that all have the same sink
 class MetaPipeline : public enable_shared_from_this<MetaPipeline> {
@@ -68,10 +57,10 @@ public:
 	void GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip);
 	//! Recursively gets the last child added
 	MetaPipeline &GetLastChild();
-	//! Get the dependencies of the Pipelines of this MetaPipeline
-	const meta_pipeline_dependency_map_t &GetDependencies() const;
-	bool RemoveOptionalDependency(Pipeline &pipeline, Pipeline &dependency);
-	void AddOptionalDependency(Pipeline &pipeline, Pipeline &dependency);
+	//! Remove the optional dependency of 'pipeline' on 'dependency', returns whether one was removed
+	static bool RemoveOptionalDependency(Pipeline &pipeline, Pipeline &dependency);
+	//! Register an optional dependency of 'pipeline' on 'dependency'
+	static void AddOptionalDependency(Pipeline &pipeline, Pipeline &dependency);
 	//! Whether the sink of this pipeline is a join build
 	MetaPipelineType Type() const;
 	//! Whether this MetaPipeline has a recursive CTE
@@ -84,7 +73,7 @@ public:
 	//! where 'including' determines whether 'start' is added to the dependencies
 	vector<shared_ptr<Pipeline>>
 	AddDependenciesFrom(Pipeline &dependant, const Pipeline &start, bool including,
-	                    MetaPipelineDependencyType dependency_type = MetaPipelineDependencyType::REQUIRED);
+	                    PipelineDependencyType dependency_type = PipelineDependencyType::REQUIRED);
 	//! Recursively makes all children of this MetaPipeline depend on the given Pipeline.
 	//! Force dependencies when ordering is mandatory, rather than using the pipeline/thread-count heuristic.
 	void
@@ -119,6 +108,12 @@ public:
 	                        MetaPipelineDependencyMode dependency_mode = MetaPipelineDependencyMode::ADD_DEPENDENCY);
 
 private:
+	//! Register that 'dependency' must have run before 'dependant' can start.
+	//! Both pipelines belong to this MetaPipeline, or to one of its descendants
+	static void AddPipelineDependency(Pipeline &dependant, Pipeline &dependency,
+	                                  PipelineDependencyType type = PipelineDependencyType::REQUIRED);
+
+private:
 	//! The executor for all MetaPipelines in the query plan
 	Executor &executor;
 	//! The PipelineBuildState for all MetaPipelines in the query plan
@@ -133,8 +128,6 @@ private:
 	bool recursive_cte;
 	//! All pipelines with a different source, but the same sink
 	vector<shared_ptr<Pipeline>> pipelines;
-	//! Dependencies of Pipelines of this MetaPipeline
-	meta_pipeline_dependency_map_t pipeline_dependencies;
 	//! Other MetaPipelines that this MetaPipeline depends on
 	vector<shared_ptr<MetaPipeline>> children;
 	//! Next batch index
