@@ -27,6 +27,11 @@ public:
 		auto &other = other_p.Cast<BetweenFunctionData>();
 		return lower_inclusive == other.lower_inclusive && upper_inclusive == other.upper_inclusive;
 	}
+
+private:
+	FunctionDataKind GetKind() const override {
+		return FunctionDataKind::BOUND_BETWEEN;
+	}
 };
 
 void BetweenFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -236,6 +241,10 @@ bool BoundBetweenExpression::LowerInclusive(const BoundFunctionExpression &betwe
 bool BoundBetweenExpression::UpperInclusive(const BoundFunctionExpression &between_expr) {
 	auto &data = between_expr.BindInfo()->Cast<BetweenFunctionData>();
 	return data.upper_inclusive;
+}
+
+bool BoundBetweenExpression::HasValidBindData(const BoundFunctionExpression &between_expr) {
+	return between_expr.BindInfo() && between_expr.BindInfo()->GetKind() == FunctionDataKind::BOUND_BETWEEN;
 }
 
 const Expression &BoundBetweenExpression::Input(const BoundFunctionExpression &between_expr) {

@@ -13,6 +13,7 @@
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
+#include "duckdb/function/function_sql_export.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
 
@@ -607,6 +608,16 @@ public:
 
 	unique_ptr<BoundAggregateExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments) const;
 
+	bool HasSQLExportCallback() const {
+		return sql_export != nullptr;
+	}
+	aggregate_function_sql_export_t GetSQLExportCallback() const {
+		return sql_export;
+	}
+	void SetSQLExportCallback(aggregate_function_sql_export_t callback) {
+		sql_export = callback;
+	}
+
 	//! Statistics callback for aggregates whose result always lies within the range of their first
 	//! argument (e.g. min, max, first, median): the output inherits the input column statistics
 	static unique_ptr<BaseStatistics> PropagateInputValueStats(ClientContext &context, BoundAggregateExpression &expr,
@@ -832,6 +843,9 @@ public:
 	static void StateDestroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
 		AggregateExecutor::Destroy<STATE, OP>(states, aggr_input_data, count);
 	}
+
+private:
+	aggregate_function_sql_export_t sql_export = nullptr;
 };
 
 class BoundAggregateFunction : public BaseAggregateFunction, public BoundSimpleFunction {

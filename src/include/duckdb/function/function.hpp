@@ -40,6 +40,10 @@ class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
 
+struct BoundBetweenExpression;
+struct BoundCastExpression;
+struct BetweenFunctionData;
+struct CastFunctionData;
 struct PragmaInfo;
 
 //! The default null handling is NULL in, NULL out
@@ -61,7 +65,10 @@ enum class FunctionCollationHandling : uint8_t {
 	IGNORE_COLLATIONS = 2
 };
 
+enum class FunctionDataKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN };
+
 struct FunctionData {
+public:
 	DUCKDB_API virtual ~FunctionData();
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
@@ -84,6 +91,14 @@ struct FunctionData {
 	TARGET &CastNoConst() const {
 		return const_cast<TARGET &>(Cast<TARGET>()); // NOLINT: FIXME
 	}
+
+private:
+	virtual FunctionDataKind GetKind() const {
+		return FunctionDataKind::GENERIC;
+	}
+
+	friend struct BoundBetweenExpression;
+	friend struct BoundCastExpression;
 };
 
 struct TableFunctionData : public FunctionData {

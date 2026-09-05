@@ -16,6 +16,7 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/function/function_sql_export.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
@@ -439,6 +440,16 @@ public:
 
 	DUCKDB_API bool Equal(const ScalarFunction &rhs) const;
 
+	bool HasSQLExportCallback() const {
+		return sql_export != nullptr;
+	}
+	scalar_function_sql_export_t GetSQLExportCallback() const {
+		return sql_export;
+	}
+	void SetSQLExportCallback(scalar_function_sql_export_t callback) {
+		sql_export = callback;
+	}
+
 public:
 	unique_ptr<BoundFunctionExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments,
 	                                         optional_ptr<Binder> binder = nullptr) const;
@@ -556,6 +567,9 @@ public:
 		}
 		return function;
 	}
+
+private:
+	scalar_function_sql_export_t sql_export = nullptr;
 };
 
 class BoundScalarFunction : public BaseScalarFunction<BoundScalarFunction>, public BoundSimpleFunction {

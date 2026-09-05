@@ -73,6 +73,11 @@ public:
 		return source_type == other.source_type && target_type == other.target_type && try_cast == other.try_cast &&
 		       is_default_cast == other.is_default_cast && bound_cast.Equals(other.bound_cast);
 	}
+
+private:
+	FunctionDataKind GetKind() const override {
+		return FunctionDataKind::BOUND_CAST;
+	}
 };
 
 void CastFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -230,6 +235,20 @@ LogicalType BoundCastExpression::SourceType(const BoundFunctionExpression &cast_
 
 bool BoundCastExpression::IsTryCast(const BoundFunctionExpression &cast_expr) {
 	return cast_expr.BindInfo()->Cast<CastFunctionData>().try_cast;
+}
+
+bool BoundCastExpression::HasValidBindData(const BoundFunctionExpression &cast_expr) {
+	if (cast_expr.GetChildren().size() != 1 || !cast_expr.GetChildren()[0] || !cast_expr.BindInfo() ||
+	    cast_expr.BindInfo()->GetKind() != FunctionDataKind::BOUND_CAST) {
+		return false;
+	}
+	auto &data = cast_expr.BindInfo()->Cast<CastFunctionData>();
+	return data.source_type == cast_expr.GetChildren()[0]->GetReturnType() &&
+	       data.target_type == cast_expr.GetReturnType();
+}
+
+bool BoundCastExpression::IsDefaultCast(const BoundFunctionExpression &cast_expr) {
+	return cast_expr.BindInfo()->Cast<CastFunctionData>().is_default_cast;
 }
 
 const BoundCastInfo &BoundCastExpression::GetBoundCast(const BoundFunctionExpression &cast_expr) {
