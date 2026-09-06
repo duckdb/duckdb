@@ -918,6 +918,17 @@ struct DisabledOptimizersSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DoubleStarJoinOrderSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "double_star_join_order";
+	static constexpr const char *Description =
+	    "Reorder double star (bowtie) join graphs with a shape-specific solver instead of dynamic programming";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DuckDBAPISetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "duckdb_api";
@@ -1312,6 +1323,28 @@ struct HeapBasedParserSetting {
 	static constexpr const char *Description = "Use the heap-based PEG parser";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct HelixJoinOrderSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "helix_join_order";
+	static constexpr const char *Description =
+	    "Reorder helix (chain of diamonds) join graphs with a shape-specific solver instead of dynamic programming";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct HelixJoinOrderMaxRelationsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "helix_join_order_max_relations";
+	static constexpr const char *Description =
+	    "The maximum number of relations the helix join order solver will search, which costs 3^n time";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "13";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };

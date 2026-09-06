@@ -1,0 +1,128 @@
+# name: test/sql/optimizer/join_order/double_star.test
+# description: Test the double star (bowtie) join order solver
+# group: [join_order]
+
+# A bowtie: two fact tables bridged by a link table, each carrying its own dimension.
+#
+#   dim_a          dim_b
+#     |              |
+#   fact_a -- link -- fact_b
+#
+# Column counts differ per table on purpose: with uniform widths a mistaken offset can land on a
+# valid column of the wrong table and still produce well-formed output.
+
+statement ok
+CREATE TABLE dim_a(id INTEGER, label VARCHAR);
+
+statement ok
+CREATE TABLE fact_a(id INTEGER, dim_id INTEGER, a_val INTEGER);
+
+statement ok
+CREATE TABLE link(a_id INTEGER, b_id INTEGER);
+
+statement ok
+CREATE TABLE fact_b(id INTEGER, dim_id INTEGER, b_val INTEGER, extra INTEGER);
+
+statement ok
+CREATE TABLE dim_b(id INTEGER, label VARCHAR);
+
+statement ok
+INSERT INTO dim_a SELECT i, 'a'||i FROM range(50) t(i);
+
+statement ok
+INSERT INTO fact_a SELECT i, i%50, i FROM range(20000) t(i);
+
+statement ok
+INSERT INTO link SELECT i, i FROM range(300) t(i);
+
+statement ok
+INSERT INTO fact_b SELECT i, i%40, i, i FROM range(50000) t(i);
+
+statement ok
+INSERT INTO dim_b SELECT i, 'b'||i FROM range(40) t(i);
+
+# ---------- the rule is off by default ----------
+
+query IIII rowsort bowtie_rows
+SELECT fact_a.id, dim_a.label, fact_b.b_val, dim_b.label
+FROM fact_a, dim_a, link, fact_b, dim_b
+WHERE fact_a.dim_id = dim_a.id AND fact_a.id = link.a_id
+  AND link.b_id = fact_b.id AND fact_b.dim_id = dim_b.id
+ORDER BY fact_a.id LIMIT 5
+----
+
+query II nosort chain_plan
+EXPLAIN SELECT count(*) FROM fact_a, link, fact_b
+WHERE fact_a.id = link.a_id AND link.b_id = fact_b.id
+----
+
+query II nosort outer_plan
+EXPLAIN SELECT count(*) FROM fact_a LEFT JOIN dim_a ON fact_a.dim_id = dim_a.id
+----
+
+statement ok
+SET double_star_join_order=true
+
+# ---------- reordering must not change the answer ----------
+
+query IIII rowsort bowtie_rows
+SELECT fact_a.id, dim_a.label, fact_b.b_val, dim_b.label
+FROM fact_a, dim_a, link, fact_b, dim_b
+WHERE fact_a.dim_id = dim_a.id AND fact_a.id = link.a_id
+  AND link.b_id = fact_b.id AND fact_b.dim_id = dim_b.id
+ORDER BY fact_a.id LIMIT 5
+----
+
+# ---------- the solver joins along edges only ----------
+
+query II
+EXPLAIN SELECT count(*) FROM fact_a, dim_a, link, fact_b, dim_b
+WHERE fact_a.dim_id = dim_a.id AND fact_a.id = link.a_id
+  AND link.b_id = fact_b.id AND fact_b.dim_id = dim_b.id
+----
+physical_plan	<!REGEX>:.*CROSS_PRODUCT.*
+
+# ---------- graphs the solver declines, which must plan exactly as they did with it off ----------
+
+# A chain is not a bowtie.
+query II nosort chain_plan
+EXPLAIN SELECT count(*) FROM fact_a, link, fact_b
+WHERE fact_a.id = link.a_id AND link.b_id = fact_b.id
+----
+
+# An outer join is not freely reorderable.
+query II nosort outer_plan
+EXPLAIN SELECT count(*) FROM fact_a LEFT JOIN dim_a ON fact_a.dim_id = dim_a.id
+----
+
+# ---------- the same query twice gives the same plan ----------
+
+query II nosort bowtie_plan
+EXPLAIN SELECT count(*) FROM fact_a, dim_a, link, fact_b, dim_b
+WHERE fact_a.dim_id = dim_a.id AND fact_a.id = link.a_id
+  AND link.b_id = fact_b.id AND fact_b.dim_id = dim_b.id
+----
+
+query II nosort bowtie_plan
+EXPLAIN SELECT count(*) FROM fact_a, dim_a, link, fact_b, dim_b
+WHERE fact_a.dim_id = dim_a.id AND fact_a.id = link.a_id
+  AND link.b_id = fact_b.id AND fact_b.dim_id = dim_b.id
+----
+
+# ---------- turning it back off restores the default search ----------
+
+statement ok
+SET double_star_join_order=false
+
+query IIII rowsort bowtie_rows
+SELECT fact_a.id, dim_a.label, fact_b.b_val, dim_b.label
+FROM fact_a, dim_a, link, fact_b, dim_b
+WHERE fact_a.dim_id = dim_a.id AND fact_a.id = link.a_id
+  AND link.b_id = fact_b.id AND fact_b.dim_id = dim_b.id
+ORDER BY fact_a.id LIMIT 5
+----
+
+query II nosort chain_plan
+EXPLAIN SELECT count(*) FROM fact_a, link, fact_b
+WHERE fact_a.id = link.a_id AND link.b_id = fact_b.id
+----

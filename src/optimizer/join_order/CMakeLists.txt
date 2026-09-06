@@ -10,6 +10,9 @@ add_library_unity(
   join_order_optimizer.cpp
   cardinality_estimator.cpp
   cost_model.cpp
+  shape_solver.cpp
+  double_star_solver.cpp
+  helix_solver.cpp
   plan_enumerator.cpp
   relation_manager.cpp
   query_graph_manager.cpp)

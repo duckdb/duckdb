@@ -15,6 +15,7 @@
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/cost_model.hpp"
+#include "duckdb/optimizer/join_order/shape_solver.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -65,6 +66,12 @@ private:
 	bool SolveJoinOrderExactly();
 	//! Solve the join order approximately using a greedy algorithm
 	bool SolveJoinOrderApproximately();
+	//! Solve the join order with a shape-specific solver, when one is enabled and the graph matches
+	bool SolveJoinOrderWithShape();
+	//! Price the join graph from the cardinality estimator, so every solver sees the same numbers
+	unique_ptr<ShapeGraph> BuildShapeGraph();
+	//! Write the order a shape solver chose into the DP table
+	bool MaterializeShapeTree(const ShapeTree &tree, optional_ptr<JoinRelationSet> &result);
 	bool PlanUsesCrossProduct(const DPJoinNode &node) const;
 	bool HasCompletePlan() const;
 	bool ActivateRequiredCrossProducts();

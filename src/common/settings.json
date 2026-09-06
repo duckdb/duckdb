@@ -588,6 +588,13 @@
         "custom_implementation": true
     },
     {
+        "name": "double_star_join_order",
+        "description": "Reorder double star (bowtie) join graphs with a shape-specific solver instead of dynamic programming",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "duckdb_api",
         "description": "DuckDB API surface",
         "type": "VARCHAR",
@@ -888,6 +895,20 @@
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
+    },
+    {
+        "name": "helix_join_order",
+        "description": "Reorder helix (chain of diamonds) join graphs with a shape-specific solver instead of dynamic programming",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "helix_join_order_max_relations",
+        "description": "The maximum number of relations the helix join order solver will search, which costs 3^n time",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "13"
     },
     {
         "name": "home_directory",

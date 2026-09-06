@@ -1,0 +1,216 @@
+# name: test/sql/optimizer/join_order/helix.test
+# description: Test the helix (chain of diamonds) join order solver
+# group: [join_order]
+
+# A single diamond: p0 and p1 linked by both a0 and b0.
+#
+#        a0
+#       /  \
+#     p0    p1
+#       \  /
+#        b0
+#
+# The two paths between p0 and p1 make this a cycle, which is what separates it from every
+# tree-shaped join graph. Column counts differ per table on purpose.
+
+statement ok
+CREATE TABLE p0(ka INTEGER, kb INTEGER, tag VARCHAR);
+
+statement ok
+CREATE TABLE a0(from_p0 INTEGER, to_p1 INTEGER);
+
+statement ok
+CREATE TABLE b0(from_p0 INTEGER, to_p1 INTEGER, note VARCHAR);
+
+statement ok
+CREATE TABLE p1(ka INTEGER, kb INTEGER, ka2 INTEGER, kb2 INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE a1(from_p1 INTEGER, to_p2 INTEGER);
+
+statement ok
+CREATE TABLE b1(from_p1 INTEGER, to_p2 INTEGER, note VARCHAR);
+
+statement ok
+CREATE TABLE p2(ka INTEGER, kb INTEGER, val INTEGER, extra INTEGER);
+
+statement ok
+INSERT INTO p0 SELECT i, i, 't'||i FROM range(100) t(i);
+
+statement ok
+INSERT INTO a0 SELECT i, i FROM range(5000) t(i);
+
+statement ok
+INSERT INTO b0 SELECT i, i, 'n'||i FROM range(3000) t(i);
+
+statement ok
+INSERT INTO p1 SELECT i, i, i, i, i FROM range(80000) t(i);
+
+statement ok
+INSERT INTO a1 SELECT i, i FROM range(4000) t(i);
+
+statement ok
+INSERT INTO b1 SELECT i, i, 'm'||i FROM range(2000) t(i);
+
+statement ok
+INSERT INTO p2 SELECT i, i, i, i FROM range(60000) t(i);
+
+# A bowtie, to check the helix solver declines a tree.
+statement ok
+CREATE TABLE hub_a(id INTEGER, ck INTEGER, sk INTEGER);
+
+statement ok
+CREATE TABLE hub_b(id INTEGER, ck INTEGER, sk INTEGER);
+
+statement ok
+CREATE TABLE bridge(ka INTEGER, kb INTEGER);
+
+statement ok
+CREATE TABLE spoke_a(id INTEGER);
+
+statement ok
+CREATE TABLE spoke_b(id INTEGER);
+
+statement ok
+INSERT INTO hub_a SELECT i, i%40, i%30 FROM range(9000) t(i);
+
+statement ok
+INSERT INTO hub_b SELECT i, i%40, i%20 FROM range(7000) t(i);
+
+statement ok
+INSERT INTO bridge SELECT i%40, i%40 FROM range(200) t(i);
+
+statement ok
+INSERT INTO spoke_a SELECT i FROM range(30) t(i);
+
+statement ok
+INSERT INTO spoke_b SELECT i FROM range(20) t(i);
+
+# ---------- the rule is off by default ----------
+
+query III rowsort diamond_rows
+SELECT p0.tag, b0.note, p1.val
+FROM p0, a0, b0, p1
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+ORDER BY p0.ka LIMIT 5
+----
+
+query IIII rowsort helix_rows
+SELECT p0.tag, b0.note, b1.note, p2.val
+FROM p0, a0, b0, p1, a1, b1, p2
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+  AND p1.ka2 = a1.from_p1 AND p1.kb2 = b1.from_p1 AND a1.to_p2 = p2.ka AND b1.to_p2 = p2.kb
+ORDER BY p0.ka LIMIT 5
+----
+
+query II nosort chain_plan
+EXPLAIN SELECT count(*) FROM p0, a0 WHERE p0.ka = a0.from_p0
+----
+
+query II nosort bowtie_plan
+EXPLAIN SELECT count(*) FROM hub_a, hub_b, bridge, spoke_a, spoke_b
+WHERE hub_a.ck = bridge.ka AND hub_b.ck = bridge.kb
+  AND hub_a.sk = spoke_a.id AND hub_b.sk = spoke_b.id
+----
+
+query II nosort outer_plan
+EXPLAIN SELECT count(*) FROM p0 LEFT JOIN a0 ON p0.ka = a0.from_p0
+----
+
+statement ok
+SET helix_join_order=true
+
+# ---------- reordering must not change the answer ----------
+# Both predicates between p0 and p1 still apply exactly once, however the search splits them.
+
+query III rowsort diamond_rows
+SELECT p0.tag, b0.note, p1.val
+FROM p0, a0, b0, p1
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+ORDER BY p0.ka LIMIT 5
+----
+
+query IIII rowsort helix_rows
+SELECT p0.tag, b0.note, b1.note, p2.val
+FROM p0, a0, b0, p1, a1, b1, p2
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+  AND p1.ka2 = a1.from_p1 AND p1.kb2 = b1.from_p1 AND a1.to_p2 = p2.ka AND b1.to_p2 = p2.kb
+ORDER BY p0.ka LIMIT 5
+----
+
+# ---------- the solver joins along edges only ----------
+
+query II
+EXPLAIN SELECT count(*) FROM p0, a0, b0, p1
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+----
+physical_plan	<!REGEX>:.*CROSS_PRODUCT.*
+
+query II
+EXPLAIN SELECT count(*) FROM p0, a0, b0, p1, a1, b1, p2
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+  AND p1.ka2 = a1.from_p1 AND p1.kb2 = b1.from_p1 AND a1.to_p2 = p2.ka AND b1.to_p2 = p2.kb
+----
+physical_plan	<!REGEX>:.*CROSS_PRODUCT.*
+
+# ---------- graphs the solver declines, which must plan exactly as they did with it off ----------
+
+# A chain is not a helix.
+query II nosort chain_plan
+EXPLAIN SELECT count(*) FROM p0, a0 WHERE p0.ka = a0.from_p0
+----
+
+# A bowtie is a tree, not a chain of diamonds.
+query II nosort bowtie_plan
+EXPLAIN SELECT count(*) FROM hub_a, hub_b, bridge, spoke_a, spoke_b
+WHERE hub_a.ck = bridge.ka AND hub_b.ck = bridge.kb
+  AND hub_a.sk = spoke_a.id AND hub_b.sk = spoke_b.id
+----
+
+# An outer join is not freely reorderable.
+query II nosort outer_plan
+EXPLAIN SELECT count(*) FROM p0 LEFT JOIN a0 ON p0.ka = a0.from_p0
+----
+
+# ---------- the same query twice gives the same plan ----------
+
+query II nosort diamond_plan
+EXPLAIN SELECT count(*) FROM p0, a0, b0, p1
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+----
+
+query II nosort diamond_plan
+EXPLAIN SELECT count(*) FROM p0, a0, b0, p1
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+----
+
+# ---------- below the relation cap the solver declines ----------
+
+statement ok
+SET helix_join_order_max_relations=3
+
+query II nosort diamond_off_plan
+EXPLAIN SELECT count(*) FROM p0, a0, b0, p1
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+----
+
+statement ok
+RESET helix_join_order_max_relations
+
+# ---------- turning it back off restores the default search ----------
+
+statement ok
+SET helix_join_order=false
+
+query II nosort diamond_off_plan
+EXPLAIN SELECT count(*) FROM p0, a0, b0, p1
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+----
+
+query IIII rowsort helix_rows
+SELECT p0.tag, b0.note, b1.note, p2.val
+FROM p0, a0, b0, p1, a1, b1, p2
+WHERE p0.ka = a0.from_p0 AND p0.kb = b0.from_p0 AND a0.to_p1 = p1.ka AND b0.to_p1 = p1.kb
+  AND p1.ka2 = a1.from_p1 AND p1.kb2 = b1.from_p1 AND a1.to_p2 = p2.ka AND b1.to_p2 = p2.kb
+ORDER BY p0.ka LIMIT 5
+----

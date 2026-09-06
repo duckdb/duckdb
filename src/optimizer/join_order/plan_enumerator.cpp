@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
@@ -506,6 +507,116 @@ bool PlanEnumerator::SolveJoinOrderApproximately() {
 	return true;
 }
 
+unique_ptr<ShapeGraph> PlanEnumerator::BuildShapeGraph() {
+	auto &estimator = cost_model.GetCardinalityEstimator();
+	auto &set_manager = query_graph_manager.set_manager;
+	const auto count = query_graph_manager.relation_manager.NumRelations();
+
+	vector<reference<JoinRelationSet>> singles;
+	vector<double> weights;
+	for (idx_t relation = 0; relation < count; relation++) {
+		auto &set = set_manager.GetJoinRelation(RelationIndex(relation));
+		singles.push_back(set);
+		weights.push_back(estimator.EstimateCardinalityWithSet<double>(set));
+	}
+
+	// Selectivity is derived from the estimator too, so a shape solver prices the same graph the
+	// dynamic programming does and a comparison between them isolates the search.
+	vector<ShapeEdge> edges;
+	for (idx_t left = 0; left < count; left++) {
+		for (idx_t right = left + 1; right < count; right++) {
+			bool has_predicate = false;
+			for (auto &connection : GetConnections(singles[left].get(), singles[right].get())) {
+				// A connection without predicates carries no selectivity to reason about.
+				if (!connection.get().predicates.empty() && !connection.get().generated_cross_product) {
+					has_predicate = true;
+					break;
+				}
+			}
+			if (!has_predicate) {
+				continue;
+			}
+			const auto product = weights[left] * weights[right];
+			if (product <= 0) {
+				return nullptr;
+			}
+			auto &pair_set = set_manager.Union(singles[left].get(), singles[right].get());
+			const auto pair_cardinality = estimator.EstimateCardinalityWithSet<double>(pair_set);
+			edges.push_back(ShapeEdge {left, right, pair_cardinality / product});
+		}
+	}
+
+	auto graph = make_uniq<ShapeGraph>(std::move(weights), std::move(edges));
+	if (!graph->IsUsable()) {
+		return nullptr;
+	}
+	return graph;
+}
+
+bool PlanEnumerator::MaterializeShapeTree(const ShapeTree &tree, optional_ptr<JoinRelationSet> &result) {
+	if (tree.is_leaf) {
+		result = query_graph_manager.set_manager.GetJoinRelation(RelationIndex(tree.relation));
+		return true;
+	}
+	optional_ptr<JoinRelationSet> left;
+	optional_ptr<JoinRelationSet> right;
+	if (!MaterializeShapeTree(*tree.left, left) || !MaterializeShapeTree(*tree.right, right)) {
+		return false;
+	}
+	auto &connections = GetConnections(*left, *right);
+	if (connections.empty()) {
+		return false;
+	}
+	// Reuses the normal emit path, so the node is priced by the cost model like any other.
+	if (!EmitPair(*left, *right, connections)) {
+		return false;
+	}
+	result = query_graph_manager.set_manager.Union(*left, *right);
+	return true;
+}
+
+bool PlanEnumerator::SolveJoinOrderWithShape() {
+	auto &context = query_graph_manager.context;
+	const auto use_double_star = Settings::Get<DoubleStarJoinOrderSetting>(context);
+	const auto use_helix = Settings::Get<HelixJoinOrderSetting>(context);
+	if (!use_double_star && !use_helix) {
+		return false;
+	}
+
+	auto graph = BuildShapeGraph();
+	if (!graph) {
+		return false;
+	}
+
+	string solver;
+	unique_ptr<ShapePlan> chosen;
+	if (use_double_star) {
+		// One graph can decompose several ways, so each is priced and the cheapest kept.
+		for (auto &shape : DetectDoubleStars(graph->RelationCount(), graph->Edges())) {
+			auto candidate = SolveDoubleStar(*graph, shape);
+			if (candidate && (!chosen || candidate->cost < chosen->cost)) {
+				chosen = std::move(candidate);
+				solver = "double star";
+			}
+		}
+	}
+	if (use_helix && !chosen && DetectHelix(graph->RelationCount(), graph->Edges())) {
+		chosen = SolveHelix(*graph, Settings::Get<HelixJoinOrderMaxRelationsSetting>(context));
+		solver = "helix";
+	}
+	if (!chosen) {
+		return false;
+	}
+
+	optional_ptr<JoinRelationSet> root;
+	if (!MaterializeShapeTree(*chosen->tree, root) || !HasCompletePlan()) {
+		return false;
+	}
+	DUCKDB_LOG_DEBUG(context, "join order: %s solver ordered %llu relations, estimated cost %f", solver,
+	                 static_cast<uint64_t>(graph->RelationCount()), chosen->cost);
+	return true;
+}
+
 bool PlanEnumerator::HasCompletePlan() const {
 	unordered_set<RelationIndex> bindings;
 	for (idx_t relation_idx = 0; relation_idx < query_graph_manager.relation_manager.NumRelations(); relation_idx++) {
@@ -570,20 +681,23 @@ bool PlanEnumerator::SolveJoinOrder() {
 	auto swap_to_approximate_threshold =
 	    Settings::Get<ApproximateJoinOrderThresholdSetting>(query_graph_manager.context);
 
-	// first try to solve the join order exactly
-	bool solved;
-	if (query_graph_manager.relation_manager.NumRelations() >= swap_to_approximate_threshold) {
-		solved = SolveJoinOrderApproximately();
-	} else {
-		auto completed_exactly = SolveJoinOrderExactly();
-		if (completed_exactly && !HasCompletePlan() && ActivateRequiredCrossProducts()) {
-			completed_exactly = SolveJoinOrderExactly();
-		}
-		if (!completed_exactly || !HasCompletePlan()) {
-			// Exact enumeration either reached its pair budget or could not connect the graph.
+	// a shape-specific solver replaces the search when one is enabled and recognizes the graph
+	bool solved = SolveJoinOrderWithShape();
+	if (!solved) {
+		// first try to solve the join order exactly
+		if (query_graph_manager.relation_manager.NumRelations() >= swap_to_approximate_threshold) {
 			solved = SolveJoinOrderApproximately();
 		} else {
-			solved = true;
+			auto completed_exactly = SolveJoinOrderExactly();
+			if (completed_exactly && !HasCompletePlan() && ActivateRequiredCrossProducts()) {
+				completed_exactly = SolveJoinOrderExactly();
+			}
+			if (!completed_exactly || !HasCompletePlan()) {
+				// Exact enumeration either reached its pair budget or could not connect the graph.
+				solved = SolveJoinOrderApproximately();
+			} else {
+				solved = true;
+			}
 		}
 	}
 

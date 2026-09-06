@@ -139,6 +139,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DisabledFilesystemsSetting),
     DUCKDB_GLOBAL(DisabledLogTypes),
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
+    DUCKDB_SETTING(DoubleStarJoinOrderSetting),
     DUCKDB_SETTING_CALLBACK(DuckDBAPISetting),
     DUCKDB_SETTING(DynamicOrFilterThresholdSetting),
     DUCKDB_SETTING(EnableCachingOperatorsSetting),
@@ -175,6 +176,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ForceVariantShredding),
     DUCKDB_SETTING(GeometryMinimumShreddingSize),
     DUCKDB_SETTING(HeapBasedParserSetting),
+    DUCKDB_SETTING(HelixJoinOrderSetting),
+    DUCKDB_SETTING(HelixJoinOrderMaxRelationsSetting),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
     DUCKDB_GLOBAL(HTTPProxySetting),
     DUCKDB_SETTING(HTTPProxyPasswordSetting),
@@ -251,12 +254,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 131),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 134),
                                                      DUCKDB_SETTING_ALIAS("null_order", 61),
-                                                     DUCKDB_SETTING_ALIAS("profile_output", 154),
-                                                     DUCKDB_SETTING_ALIAS("user", 174),
+                                                     DUCKDB_SETTING_ALIAS("profile_output", 157),
+                                                     DUCKDB_SETTING_ALIAS("user", 177),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 31),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 172),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 175),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
