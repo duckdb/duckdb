@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
 
 namespace duckdb {
 
@@ -13,7 +14,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 WindowNaiveAggregator::WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared)
     : WindowAggregator(executor.wexpr, shared), executor(executor) {
-	for (const auto &order : wexpr.arg_orders) {
+	for (const auto &order : wexpr.ArgOrders()) {
 		arg_order_idx.emplace_back(shared.RegisterCollection(order.expression, false));
 	}
 }
@@ -73,7 +74,7 @@ protected:
 	Vector statep;
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
-	//! The rows beging updated.
+	//! The rows beginning updated.
 	SelectionVector update_sel;
 	//! Count of buffered values
 	idx_t flush_count;
@@ -107,8 +108,8 @@ WindowNaiveLocalState::WindowNaiveLocalState(ExecutionContext &context, const Wi
 	data_ptr_t state_ptr = state.data();
 	D_ASSERT(statef.GetVectorType() == VectorType::FLAT_VECTOR);
 	statef.SetVectorType(VectorType::CONSTANT_VECTOR);
-	statef.Flatten(STANDARD_VECTOR_SIZE);
-	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
+	statef.Flatten();
+	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
 		fdata[i] = state_ptr;
 		state_ptr += aggregator.state_size;
@@ -133,9 +134,9 @@ void WindowNaiveLocalState::Finalize(ExecutionContext &context, WindowAggregator
 
 		//	The sort expressions have already been computed, so we just need to reference them
 		vector<BoundOrderByNode> orders;
-		for (const auto &order_by : aggregator.wexpr.arg_orders) {
+		for (const auto &order_by : aggregator.wexpr.ArgOrders()) {
 			auto order = order_by.Copy();
-			const auto &type = order.expression->return_type;
+			const auto &type = order.expression->GetReturnType();
 			order.expression = make_uniq<BoundReferenceExpression>(type, orders.size());
 			orders.emplace_back(std::move(order));
 		}
@@ -164,7 +165,7 @@ void WindowNaiveLocalState::FlushStates(const WindowAggregatorGlobalState &gsink
 	leaves.Slice(scanned, update_sel, flush_count);
 
 	const auto &aggr = gsink.aggr;
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateUpdateCallback()(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), statep,
 	                                       flush_count);
 
@@ -175,7 +176,7 @@ size_t WindowNaiveLocalState::Hash(idx_t rid) {
 	D_ASSERT(cursor->RowIsVisible(rid));
 	auto s = cursor->RowOffset(rid);
 	auto &scanned = cursor->chunk;
-	SelectionVector sel(&s);
+	SelectionVector sel(&s, 1);
 	leaves.Slice(scanned, sel, 1);
 	leaves.Hash(hashes);
 
@@ -193,7 +194,7 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 
 	auto &scanned = cursor->chunk;
 	auto l = cursor->RowOffset(lhs);
-	SelectionVector lsel(&l);
+	SelectionVector lsel(&l, 1);
 
 	auto rreader = cursor.get();
 	if (!cursor->RowIsVisible(rhs)) {
@@ -203,10 +204,10 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 	}
 	auto rscanned = &rreader->chunk;
 	auto r = rreader->RowOffset(rhs);
-	SelectionVector rsel(&r);
+	SelectionVector rsel(&r, 1);
 
 	sel_t f = 0;
-	SelectionVector fsel(&f);
+	SelectionVector fsel(&f, 1);
 
 	for (column_t c = 0; c < scanned.ColumnCount(); ++c) {
 		Vector left(scanned.data[c], lsel, 1);
@@ -226,16 +227,17 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	auto &filter_mask = gsink.filter_mask;
 	const auto types = cursor->chunk.GetTypes();
 
-	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
-	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
+	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
+	auto pdata = FlatVector::GetDataMutable<data_ptr_t>(statep);
 
 	HashRow hash_row(*this);
 	EqualRow equal_row(*this);
 	RowSet row_set(STANDARD_VECTOR_SIZE, hash_row, equal_row);
 
+	AggregateStateInput state_input(aggr.function, aggr.GetFunctionData());
 	WindowAggregator::EvaluateSubFrames(bounds, aggregator.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
-		auto agg_state = fdata[rid];
-		aggr.function.GetStateInitCallback()(aggr.function, agg_state);
+		data_ptr_t agg_state = fdata[rid];
+		aggr.function.GetStateInitCallback()(state_input, &agg_state, 1);
 
 		//	Reset the DISTINCT hash table
 		row_set.clear();
@@ -247,7 +249,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 			OperatorSinkInput sink {*global_sink, *local_sink, interrupt};
 
 			idx_t orderby_count = 0;
-			auto orderby_row = FlatVector::GetData<idx_t>(orderby_sink.data.back());
+			auto orderby_row = FlatVector::GetDataMutable<idx_t>(orderby_sink.data.back());
 			for (const auto &frame : frames) {
 				for (auto f = frame.start; f < frame.end; ++f) {
 					//	FILTER before the ORDER BY
@@ -294,7 +296,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 			OperatorSourceInput source {*global_source, *local_source, interrupt};
 			orderby_scan.Reset();
 			for (; SourceResultType::FINISHED != sort->GetData(context, orderby_scan, source); orderby_scan.Reset()) {
-				orderby_row = FlatVector::GetData<idx_t>(orderby_scan.data[0]);
+				orderby_row = FlatVector::GetDataMutable<idx_t>(orderby_scan.data[0]);
 				for (idx_t i = 0; i < orderby_scan.size(); ++i) {
 					const auto f = orderby_row[i];
 					//	Seek to the current position
@@ -351,7 +353,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	FlushStates(gsink);
 
 	//	Finalise the result aggregates and write to the result
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateFinalizeCallback()(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates
@@ -373,7 +375,7 @@ void WindowNaiveAggregator::Evaluate(ExecutionContext &context, const DataChunk 
 }
 
 bool WindowNaiveAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
-	if (!wexpr.aggregate || !wexpr.aggregate->CanAggregate()) {
+	if (!wexpr.AggregateFunction() || !wexpr.AggregateFunction()->CanAggregate()) {
 		return false;
 	}
 	return true;

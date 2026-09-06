@@ -2,9 +2,6 @@
 # description: Test As-Of join with missing matches
 # group: [asof]
 
-statement ok
-PRAGMA enable_verification
-
 # These test stress several aspects of the matching:
 # * Probe inequality less than the minimum (no match)
 # * Probe equality missing (no match)
@@ -20,7 +17,7 @@ PRAGMA asof_loop_join_threshold=0;
 foreach debug False True
 
 statement ok 
-PRAGMA debug_asof_iejoin=${debug}
+PRAGMA debug_asof_iejoin={debug}
 
 # 10 dates, 5 keys
 query I

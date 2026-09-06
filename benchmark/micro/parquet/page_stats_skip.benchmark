@@ -1,0 +1,18 @@
+# name: benchmark/micro/parquet/page_stats_skip.benchmark
+# description: Page-level statistics filter: skip pages page statistics
+# group: [parquet]
+
+name Page Stats Skip
+group micro
+subgroup parquet
+
+require parquet
+
+load
+CREATE VIEW page_stats_skip AS SELECT * FROM 'data/parquet-testing/page_stats_skip.parquet';
+
+run
+SELECT COUNT(*), MIN(v), MAX(v) FROM page_stats_skip WHERE v >= 1800000
+
+result III
+10000	1800000	1809999

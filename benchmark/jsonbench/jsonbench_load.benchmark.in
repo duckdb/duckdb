@@ -1,0 +1,11 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [jsonbench]
+
+require json load_only
+
+require httpfs load_only
+
+cache jsonbench.db
+
+load benchmark/jsonbench/queries/load.sql

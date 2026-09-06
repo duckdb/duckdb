@@ -9,10 +9,4 @@ string DefaultExpression::ToString() const {
 	return "DEFAULT";
 }
 
-unique_ptr<ParsedExpression> DefaultExpression::Copy() const {
-	auto copy = make_uniq<DefaultExpression>();
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 } // namespace duckdb

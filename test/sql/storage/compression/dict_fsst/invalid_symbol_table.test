@@ -1,0 +1,22 @@
+# name: test/sql/storage/compression/dict_fsst/invalid_symbol_table.test
+# group: [dict_fsst]
+
+require vector_size 2048
+
+unzip data/storage/dict_fsst_invalid_symbol_table.db.gz {TEST_DIR}/dict_fsst_invalid_symbol_table.db
+
+statement ok
+ATTACH '{TEST_DIR}/dict_fsst_invalid_symbol_table.db' AS db2
+
+statement ok
+USE db2;
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE compression='DICT_FSST' LIMIT 1;
+----
+DICT_FSST
+
+statement error
+SELECT sum(length(s)) FROM t;
+----
+IO Error: Failed to scan DICT_FSST string segment: invalid FSST symbol table. Database file appears to be corrupted.

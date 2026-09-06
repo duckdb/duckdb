@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -26,18 +25,23 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
-#include "duckdb/logging/log_manager.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/logging/logging.hpp"
 #include "duckdb/main/user_settings.hpp"
-#include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/types/type_manager.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
+#include "duckdb/common/enums/debug_order_verification.hpp"
 
 namespace duckdb {
+class ArrowTypeExtension;
+struct ArrowExtensionMetadata;
+struct ArrowTypeExtensionSet;
 
 class BlockAllocator;
 class BufferManager;
@@ -45,6 +49,13 @@ class BufferPool;
 class CastFunctionSet;
 class CollationBinding;
 class ClientContext;
+class DuckDB;
+
+//! An extension linked into the binary, and how to load it into a database.
+struct LinkedExtension {
+	string name;
+	std::function<void(DuckDB &)> load;
+};
 class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
@@ -64,29 +75,6 @@ struct DatabaseCacheEntry;
 struct DBConfig;
 struct SettingLookupResult;
 
-class SerializationCompatibility {
-public:
-	static SerializationCompatibility FromDatabase(AttachedDatabase &db);
-	static SerializationCompatibility FromIndex(idx_t serialization_version);
-	static SerializationCompatibility FromString(const string &input);
-	static SerializationCompatibility Default();
-	static SerializationCompatibility Latest();
-
-public:
-	bool Compare(idx_t property_version) const;
-
-public:
-	//! The user provided version
-	string duckdb_version;
-	//! The max version that should be serialized
-	idx_t serialization_version;
-	//! Whether this was set by a manual SET/PRAGMA or default
-	bool manually_set;
-
-protected:
-	SerializationCompatibility() = default;
-};
-
 //! NOTE: DBConfigOptions is mostly deprecated.
 //! If you want to add a setting that can be set by the user, add it as a generic setting to `settings.json`.
 //! See e.g. "http_proxy" (HTTPProxySetting) as an example
@@ -97,10 +85,10 @@ struct DBConfigOptions {
 	string database_type;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
+	//! ATTACH-style options applied to the main database, e.g. IO_MODE. Same keys ATTACH accepts
+	unordered_map<string, Value> main_database_options;
 	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
-	//! Whether or not to use Direct IO, bypassing operating system buffers
-	bool use_direct_io = false;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
@@ -109,6 +97,8 @@ struct DBConfigOptions {
 	idx_t maximum_swap_space = DConstants::INVALID_INDEX;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
 	idx_t maximum_threads = DConstants::INVALID_INDEX;
+	//! The maximum amount of async threads used by the database system. Default: all available.
+	idx_t async_threads = DConstants::INVALID_INDEX;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
@@ -123,7 +113,7 @@ struct DBConfigOptions {
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
 	bool checkpoint_on_shutdown = true;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
-	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
+	StorageCompatibility storage_compatibility = StorageCompatibility::Default();
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;
@@ -139,14 +129,12 @@ struct DBConfigOptions {
 	vector<string> extension_directories;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
+	//! Debug setting - how to verify ORDER BY results (e.g. by rewriting ORDER BY into create_sort_key)
+	DebugOrderVerification debug_order_verification = DebugOrderVerification::NONE;
 	//! The set of user-provided options
-	case_insensitive_map_t<Value> user_options;
+	identifier_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
-	case_insensitive_map_t<Value> unrecognized_options;
-	//! Whether to print bindings when printing the plan (debug mode only)
-	static bool debug_print_bindings; // NOLINT: debug setting
-	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
-	idx_t allocator_flush_threshold = 134217728ULL;
+	identifier_map_t<Value> unrecognized_options;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
 	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
 	//! Delta Only! - Fall back to recognizing Variant columns structurally
@@ -164,14 +152,17 @@ struct DBConfigOptions {
 	//! Directories that are explicitly allowed, even if enable_external_access is false
 	set<string> allowed_directories;
 	//! Additional configuration options that are allowed to be changed even when the configuration is locked
-	case_insensitive_set_t allowed_configs;
+	identifier_set_t allowed_configs;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
-	//! The maximum data to buffer in row groups (in bytes) to buffer prior to flushing.
-	//! When inserting large chunks of data we
+	//! Memory limit for the write buffer per row group (optional)
 	optional_idx write_buffer_row_group_memory_limit;
+	//! Whether to print bindings when printing the plan (debug mode only)
+	static bool debug_print_bindings; // NOLINT: debug setting
+	//! The global verification mode
+	static DebugVerificationMode global_verification_mode; // NOLINT: debug setting
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -183,7 +174,7 @@ struct DBConfig {
 public:
 	DUCKDB_API DBConfig();
 	explicit DUCKDB_API DBConfig(bool read_only);
-	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
+	DUCKDB_API DBConfig(const identifier_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
@@ -227,35 +218,35 @@ public:
 	DUCKDB_API static vector<ConfigurationAlias> GetAliases();
 	DUCKDB_API static idx_t GetOptionCount();
 	DUCKDB_API static idx_t GetAliasCount();
-	DUCKDB_API static vector<string> GetOptionNames();
+	DUCKDB_API static vector<Identifier> GetOptionNames();
 	DUCKDB_API static bool IsInMemoryDatabase(const char *database_path);
 
-	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
+	DUCKDB_API void AddExtensionOption(const Identifier &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
 	                                   SetScope default_scope = SetScope::SESSION);
-	DUCKDB_API bool HasExtensionOption(const string &name) const;
-	DUCKDB_API case_insensitive_map_t<ExtensionOption> GetExtensionSettings() const;
-	DUCKDB_API bool TryGetExtensionOption(const String &name, ExtensionOption &result) const;
+	DUCKDB_API bool HasExtensionOption(const Identifier &name) const;
+	DUCKDB_API identifier_map_t<ExtensionOption> GetExtensionSettings() const;
+	DUCKDB_API bool TryGetExtensionOption(const Identifier &name, ExtensionOption &result) const;
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
 	//! Fetcha n alias by index, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationAlias> GetAliasByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
-	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const String &name);
+	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const Identifier &name);
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value);
-	DUCKDB_API void SetOption(const string &name, Value value);
+	DUCKDB_API void SetOption(const Identifier &name, Value value);
 	DUCKDB_API void SetOption(idx_t setting_index, Value value);
-	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
-	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
+	DUCKDB_API void SetOptionByName(const Identifier &name, const Value &value);
+	DUCKDB_API void SetOptionsByName(const identifier_map_t<Value> &values);
 	DUCKDB_API void ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option);
 	DUCKDB_API void ResetOption(const ExtensionOption &extension_option);
 	DUCKDB_API void ResetGenericOption(idx_t setting_index);
-	DUCKDB_API optional_idx TryGetSettingIndex(const String &name,
+	DUCKDB_API optional_idx TryGetSettingIndex(const Identifier &name,
 	                                           optional_ptr<const ConfigurationOption> &option) const;
 	static LogicalType ParseLogicalType(const string &type);
 
-	DUCKDB_API void CheckLock(const String &name);
+	DUCKDB_API void CheckLock(const Identifier &name);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
@@ -285,6 +276,14 @@ public:
 	DUCKDB_API bool HasArrowExtension(ArrowExtensionMetadata info) const;
 	DUCKDB_API void RegisterArrowExtension(const ArrowTypeExtension &extension) const;
 
+	//! Extensions compiled into the binary that produced this config, published as callables rather
+	//! than as generated code. Code carrying its own copy of DuckDB - a statically built extension -
+	//! cannot see the generated loader, but it can read this; and copying it into a child config
+	//! hands a database the same capability set as the one that created it.
+	//! A vector, not a map: extensions load in registration order, and that order has to be stable
+	//! across runs and platforms.
+	vector<LinkedExtension> linked_extensions;
+
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
 
@@ -293,6 +292,7 @@ public:
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
+	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs);
 	static idx_t GetSystemAvailableMemory(FileSystem &fs);
 	static optional_idx ParseMemoryLimitSlurm(const string &arg);
 	void SetDefaultMaxMemory();
@@ -303,19 +303,20 @@ public:
 	const string UserAgent() const;
 
 	//! Returns the value of a setting currently. If the setting is not set by the user, returns the default value.
-	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
+	SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) const;
 	//! Returns the value of a setting set by the user currently
 	SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 	//! Returns the default value of an option
 	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
 
 	bool CanAccessFile(const string &path, FileType type);
-	void AddAllowedConfig(const string &config_name);
+	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
 	string SanitizeAllowedPath(const string &path) const;
 	ExtensionCallbackManager &GetCallbackManager();
 	const ExtensionCallbackManager &GetCallbackManager() const;
+
 	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
 	HTTPUtil &GetHTTPUtil() const;
 

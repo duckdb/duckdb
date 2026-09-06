@@ -2,9 +2,6 @@
 # description: Test handling of integer overflows in table
 # group: [overflow]
 
-# statement ok
-# PRAGMA enable_verification
-
 # tinyint
 statement ok
 CREATE TABLE tinyints(i TINYINT);

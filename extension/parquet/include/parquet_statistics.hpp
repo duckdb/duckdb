@@ -8,12 +8,38 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
+namespace duckdb_parquet {
+class ColumnChunk;
+class ColumnMetaData;
+class FileMetaData;
+class SchemaElement;
+class Statistics;
+} // namespace duckdb_parquet
 
 namespace duckdb {
+class Allocator;
+class TableFilter;
+enum class LogicalTypeId : uint8_t;
 
 using duckdb_parquet::ColumnChunk;
 using duckdb_parquet::SchemaElement;
@@ -22,16 +48,34 @@ struct LogicalType;
 struct ParquetColumnSchema;
 class ResizeableBuffer;
 
+enum class ParquetIntervalBloomFilterVersion : uint8_t { NONE, NORMALIZED_V1 };
+
+enum class ParquetBloomFilterHashStrategy : uint8_t { STANDARD, NORMALIZED_INTERVAL_V1 };
+
 struct ParquetStatisticsUtils {
+	static constexpr const char *INTERVAL_BLOOM_FILTER_KEY = "duckdb.interval_bloom_filter";
+	static constexpr const char *INTERVAL_BLOOM_FILTER_VALUE = "normalized-v1";
+
 	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ParquetColumnSchema &reader,
 	                                                            const vector<ColumnChunk> &columns, bool can_have_nan);
 
+	static unique_ptr<BaseStatistics>
+	TransformParquetStatistics(const LogicalType &type, const ParquetColumnSchema &schema,
+	                           const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan,
+	                           optional_ptr<const ColumnChunk> column_chunk = nullptr);
+
 	static Value ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele, const std::string &stats);
 
-	static bool BloomFilterSupported(const LogicalTypeId &type_id);
+	static ParquetIntervalBloomFilterVersion
+	GetIntervalBloomFilterVersion(const duckdb_parquet::FileMetaData &file_meta_data);
+
+	static optional<ParquetBloomFilterHashStrategy>
+	GetBloomFilterHashStrategy(const ParquetColumnSchema &schema,
+	                           ParquetIntervalBloomFilterVersion interval_bloom_filter_version);
 
 	static bool BloomFilterExcludes(const TableFilter &filter, const duckdb_parquet::ColumnMetaData &column_meta_data,
-	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator);
+	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator,
+	                                const ParquetColumnSchema &schema, ParquetBloomFilterHashStrategy hash_strategy);
 
 	static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type, const ParquetColumnSchema &schema_ele,
 	                                                     const duckdb_parquet::Statistics &parquet_stats);

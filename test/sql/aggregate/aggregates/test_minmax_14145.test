@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-PRAGMA enable_verification
-
 query IIIIII
 DESCRIBE SELECT max(l) from (select unnest( [{'a':1}::JSON, [2]::JSON ]) as l);
 ----

@@ -1,0 +1,144 @@
+# name: test/sql/aggregate/aggregate_state_export/test_state_export_string_agg.test
+# description: Test the state export functionality for string_agg
+# group: [aggregate_state_export]
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+# ungrouped aggr
+query I nosort res0
+SELECT string_agg(d, '|') FROM dummy;
+----
+
+query I nosort res0
+SELECT finalize(string_agg(d, '|') EXPORT_STATE) FROM dummy;
+----
+
+# unary variant (default comma separator)
+query I nosort res1
+SELECT string_agg(d) FROM dummy;
+----
+
+query I nosort res1
+SELECT finalize(string_agg(d) EXPORT_STATE) FROM dummy;
+----
+
+# grouped aggr
+query II nosort res2
+SELECT g, string_agg(d, '-') FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res2
+SELECT g, finalize(string_agg(d, '-') EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# empty group
+query I nosort res3
+SELECT string_agg(d, '|') FROM dummy WHERE FALSE;
+----
+
+query I nosort res3
+SELECT finalize(string_agg(d, '|') EXPORT_STATE) FROM dummy WHERE FALSE;
+----
+
+# combining a state with an empty state keeps the value
+query I
+SELECT finalize(combine(
+	(SELECT string_agg(d, '|') EXPORT_STATE FROM dummy WHERE d < 3),
+	(SELECT string_agg(d, '|') EXPORT_STATE FROM dummy WHERE FALSE)))
+----
+0|1|2
+
+# combining two states with the same separator
+query I
+SELECT finalize(combine(
+	(SELECT string_agg(d, '|') EXPORT_STATE FROM dummy WHERE d < 3),
+	(SELECT string_agg(d, '|') EXPORT_STATE FROM dummy WHERE d >= 3 AND d < 6)))
+----
+3|4|5|0|1|2
+
+# combining two states with different separators is an error
+statement error
+SELECT finalize(combine(
+	(SELECT string_agg(d, '|') EXPORT_STATE FROM dummy WHERE d < 3),
+	(SELECT string_agg(d, '-') EXPORT_STATE FROM dummy WHERE d >= 3 AND d < 6)))
+----
+different parameters
+
+# separator with special characters, supplied as a foldable expression rather than a literal
+query I nosort res4
+SELECT string_agg(d, '''' || chr(10) || '🦆') FROM dummy;
+----
+
+query I nosort res4
+SELECT finalize(string_agg(d, '''' || chr(10) || '🦆') EXPORT_STATE) FROM dummy;
+----
+
+# NULL separator
+query I
+SELECT finalize(string_agg(d, NULL) EXPORT_STATE) IS NULL FROM dummy;
+----
+true
+
+# to_aggregate_state can reconstruct a string_agg state - the signature lists all argument types, and the separator
+# is a constant parameter supplied in the optional fourth argument (a list with one entry per argument, NULL for
+# arguments that are not bound to a constant)
+query II nosort res2
+SELECT g, finalize(to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], [NULL, '-'])) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# the types can also be passed as TYPE values via make_type
+query II nosort res2
+SELECT g, finalize(to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', [make_type('VARCHAR'), make_type('VARCHAR')], [NULL, '-'])) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# the unary form (default comma separator) needs neither a separator nor the constant parameters argument
+query I nosort res1
+SELECT finalize(to_aggregate_state(string_agg(d) EXPORT_STATE, 'string_agg', ['VARCHAR'])) FROM dummy;
+----
+
+# a reconstructed state can be combined with a live exported state that uses the same separator
+query II nosort res_combine
+SELECT g, string_agg(d, '-') || '-' || string_agg(d, '-') FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res_combine
+SELECT g, finalize(combine(string_agg(d, '-') EXPORT_STATE,
+                           to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], [NULL, '-'])))
+FROM dummy GROUP BY g ORDER BY g;
+----
+
+# combining states reconstructed with different separators is an error
+statement error
+SELECT finalize(combine(
+	to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], [NULL, '-']),
+	string_agg(d, '|') EXPORT_STATE)) FROM dummy;
+----
+different parameters
+
+# a constant parameters list of the wrong length is an error
+statement error
+SELECT to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], [NULL, NULL, '-']) FROM dummy;
+----
+exactly one entry per argument
+
+# the constant parameters must be a list
+statement error
+SELECT to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], {'1': '-'}) FROM dummy;
+----
+must be a list
+
+# the state (including the separator) can be persisted - finalize re-binds from the stored type
+load {TEST_DIR}/test_string_agg_state.db readwrite latest
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+statement ok
+CREATE TABLE state_tbl AS SELECT g, string_agg(d, '-') EXPORT_STATE s FROM dummy GROUP BY g;
+
+restart
+
+query II nosort res2
+SELECT g, finalize(s) FROM state_tbl ORDER BY g;
+----

@@ -30,7 +30,10 @@ statement ok
 CREATE SEQUENCE seq START 1;
 
 statement ok
-CREATE TABLE tbl2 (a INTEGER DEFAULT nextval('seq'), b INTEGER DEFAULT nextval('seq'));
+CREATE TABLE tbl2 (
+	a INTEGER DEFAULT nextval('seq'),
+	b INTEGER DEFAULT nextval('seq')
+);
 
 statement ok
 INSERT INTO tbl2 DEFAULT VALUES;

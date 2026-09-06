@@ -33,6 +33,9 @@ public:
 	bool ParallelOperator() const override {
 		return true;
 	}
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
+	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 

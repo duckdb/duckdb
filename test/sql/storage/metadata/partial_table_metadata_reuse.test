@@ -2,7 +2,7 @@
 # description: Test partial table metadata reuse
 # group: [metadata]
 
-load __TEST_DIR__/partial_table_metadata_reuse.test.db
+load {TEST_DIR}/partial_table_metadata_reuse.test.db
 
 statement ok
 BEGIN
@@ -23,7 +23,7 @@ statement ok
 INSERT INTO bigtbl VALUES (NULL)
 
 query II
-SELECT COUNT(*) - ${i}, SUM(i) FROM bigtbl
+SELECT COUNT(*) - {i}, SUM(i) FROM bigtbl
 ----
 1000000	499999500000
 

@@ -5,7 +5,7 @@
 # The HEP benckmarks repository: https://github.com/iris-hep/adl-benchmarks-index/?tab=readme-ov-file
 # The paper: https://www.vldb.org/pvldb/vol15/p154-muller.pdf
 
-require httpfs
+require httpfs load_only
 
 cache hep_singleMu.duckdb
 

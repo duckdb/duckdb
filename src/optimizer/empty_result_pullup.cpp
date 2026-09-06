@@ -91,6 +91,9 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 		D_ASSERT(op->children.size() == 2);
 		if (op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			if (op->children[0]->HasSideEffects()) {
+				return op;
+			}
 			op = make_uniq<LogicalEmptyResult>(std::move(op));
 			break;
 		}

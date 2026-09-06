@@ -2,9 +2,6 @@
 # description: Test unsigned auto cast
 # group: [unsigned]
 
-statement ok
-PRAGMA enable_verification
-
 ## test auto cast of unsigned
 #query I
 #SELECT 100000000::INTEGER + 100::UTINYINT

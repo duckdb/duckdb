@@ -14,7 +14,7 @@
       {
         "id": 101,
         "name": "alias",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 102,
@@ -26,6 +26,16 @@
         "name": "query_location",
         "type": "optional_idx",
         "default": "optional_idx()"
+      },
+      {
+        "id": 104,
+        "name": "query_location_length",
+        "type": "uint32_t",
+        "property": "query_location.length",
+        "default": "0",
+        "version": "v2.0.0",
+        "equals_skip": true,
+        "hash_skip": true
       }
     ]
   },
@@ -37,29 +47,55 @@
       {
         "id": 200,
         "name": "schema_name",
-        "type": "string"
+        "serialize_property": "qualified_name.Schema()",
+        "type": "Identifier"
       },
       {
         "id": 201,
         "name": "table_name",
-        "type": "string"
+        "serialize_property": "qualified_name.Name()",
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "column_name_alias",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 203,
         "name": "catalog_name",
-        "type": "string"
+        "serialize_property": "qualified_name.Catalog()",
+        "type": "Identifier"
       },
       {
         "id": 204,
         "name": "at_clause",
         "type": "AtClause*"
+      },
+      {
+        "id": 205,
+        "name": "qualified_name",
+        "serialize_property": "qualified_name",
+        "deserialize_property": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_condition": "qualified_name.Path().size() > 3",
+        "deserialize_default": "QualifiedName()",
+        "deserialize_skip_assign": true
       }
-    ]
+    ],
+    "finalize_deserialization": [
+      "if (!qualified_name.Path().empty()) {",
+      "\tresult->SetQualifiedName(std::move(qualified_name));",
+      "}"
+    ],
+    "methods": {
+      "SetQualifiedName": [
+        "catalog_name",
+        "schema_name",
+        "table_name"
+      ]
+    }
   },
   {
     "class": "JoinRef",
@@ -90,12 +126,13 @@
       {
         "id": 204,
         "name": "ref_type",
-        "type": "JoinRefType"
+        "type": "JoinRefType",
+        "serialize_property": "SerializedRefType(serializer)"
       },
       {
         "id": 205,
         "name": "using_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 206,
@@ -113,6 +150,33 @@
         "type": "bool",
         "default": "true",
         "version": "v1.4.0"
+      },
+      {
+        "id": 209,
+        "name": "ranking_expression",
+        "type": "ParsedExpression*",
+        "version": "v2.0.0"
+      },
+      {
+        "id": 210,
+        "name": "nearest_count",
+        "type": "idx_t",
+        "default": "1",
+        "version": "v2.0.0"
+      },
+      {
+        "id": 211,
+        "name": "nearest_order_type",
+        "type": "OrderType",
+        "default": "OrderType::ASCENDING",
+        "version": "v2.0.0"
+      },
+      {
+        "id": 212,
+        "name": "nearest_approx",
+        "type": "bool",
+        "default": "false",
+        "version": "v2.0.0"
       }
     ]
   },
@@ -129,7 +193,7 @@
       {
         "id": 201,
         "name": "column_name_alias",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ]
   },
@@ -146,7 +210,7 @@
       {
         "id": 201,
         "name": "column_name_alias",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 202,
@@ -160,8 +224,7 @@
     "class": "EmptyTableRef",
     "base": "TableRef",
     "enum": "EMPTY_FROM",
-    "members": [
-    ]
+    "members": []
   },
   {
     "class": "ExpressionListRef",
@@ -171,7 +234,7 @@
       {
         "id": 200,
         "name": "expected_names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 201,
@@ -193,7 +256,7 @@
       {
         "id": 200,
         "name": "expected_names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 202,
@@ -201,7 +264,10 @@
         "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
-    "constructor": ["collection", "expected_names"]
+    "constructor": [
+      "collection",
+      "expected_names"
+    ]
   },
   {
     "class": "PivotRef",
@@ -221,7 +287,7 @@
       {
         "id": 202,
         "name": "unpivot_names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 203,
@@ -231,12 +297,12 @@
       {
         "id": 204,
         "name": "groups",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 205,
         "name": "column_name_alias",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 206,
@@ -253,7 +319,8 @@
       {
         "id": 200,
         "name": "table_name",
-        "type": "string"
+        "serialize_property": "qualified_name.Name()",
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -268,14 +335,39 @@
       {
         "id": 203,
         "name": "catalog_name",
-        "type": "string"
+        "serialize_property": "qualified_name.Catalog()",
+        "type": "Identifier"
       },
       {
         "id": 204,
         "name": "schema_name",
-        "type": "string"
+        "serialize_property": "qualified_name.Schema()",
+        "type": "Identifier"
+      },
+      {
+        "id": 205,
+        "name": "qualified_name",
+        "serialize_property": "qualified_name",
+        "deserialize_property": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_condition": "qualified_name.Path().size() > 3",
+        "deserialize_default": "QualifiedName()",
+        "deserialize_skip_assign": true
       }
-    ]
+    ],
+    "finalize_deserialization": [
+      "if (!qualified_name.Path().empty()) {",
+      "\tresult->qualified_name = std::move(qualified_name);",
+      "}"
+    ],
+    "methods": {
+      "SetQualifiedName": [
+        "catalog_name",
+        "schema_name",
+        "table_name"
+      ]
+    }
   },
   {
     "class": "AtClause",
@@ -286,7 +378,7 @@
       {
         "id": 1,
         "name": "unit",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 2,
@@ -294,6 +386,9 @@
         "type": "ParsedExpression*"
       }
     ],
-    "constructor": ["unit", "expr"]
+    "constructor": [
+      "unit",
+      "expr"
+    ]
   }
 ]

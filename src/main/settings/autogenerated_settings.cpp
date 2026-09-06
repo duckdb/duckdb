@@ -55,6 +55,16 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 }
 
 //===----------------------------------------------------------------------===//
+// Checkpoint On Detach
+//===----------------------------------------------------------------------===//
+void CheckpointOnDetachSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("checkpoint_on_detach setting cannot be NULL");
+	}
+	EnumUtil::FromString<CheckpointOnDetach>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -80,20 +90,20 @@ void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parame
 }
 
 //===----------------------------------------------------------------------===//
-// Debug Force External
+// Debug Order Verification
 //===----------------------------------------------------------------------===//
-void DebugForceExternalSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.force_external = input.GetValue<bool>();
+void DebugOrderVerificationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.debug_order_verification = EnumUtil::FromString<DebugOrderVerification>(str_input);
 }
 
-void DebugForceExternalSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_external = ClientConfig().force_external;
+void DebugOrderVerificationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.debug_order_verification = DBConfigOptions().debug_order_verification;
 }
 
-Value DebugForceExternalSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.force_external);
+Value DebugOrderVerificationSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.debug_order_verification)));
 }
 
 //===----------------------------------------------------------------------===//
@@ -104,6 +114,16 @@ void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &
 		throw InvalidInputException("debug_physical_table_scan_execution_strategy setting cannot be NULL");
 	}
 	EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Verify Statement
+//===----------------------------------------------------------------------===//
+void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_verify_statement setting cannot be NULL");
+	}
+	EnumUtil::FromString<DebugStatementVerification>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -127,30 +147,23 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
-// Deprecated Using Key Syntax
+// Default Transaction Invalidation Policy
 //===----------------------------------------------------------------------===//
-void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	if (parameter.IsNull()) {
-		throw InvalidInputException("deprecated_using_key_syntax setting cannot be NULL");
+		throw InvalidInputException("default_transaction_invalidation_policy setting cannot be NULL");
 	}
-	EnumUtil::FromString<DeprecatedUsingKeySyntax>(StringValue::Get(parameter));
+	EnumUtil::FromString<TransactionInvalidationPolicy>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
-// Enable Caching Operators
+// Dialect Compatibility Mode
 //===----------------------------------------------------------------------===//
-void EnableCachingOperatorsSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.enable_caching_operators = input.GetValue<bool>();
-}
-
-void EnableCachingOperatorsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).enable_caching_operators = ClientConfig().enable_caching_operators;
-}
-
-Value EnableCachingOperatorsSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.enable_caching_operators);
+void DialectCompatibilityModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("dialect_compatibility_mode setting cannot be NULL");
+	}
+	EnumUtil::FromString<DialectCompatibilityMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -222,6 +235,16 @@ void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 		throw InvalidInputException("pin_threads setting cannot be NULL");
 	}
 	EnumUtil::FromString<ThreadPinMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Show Behavior
+//===----------------------------------------------------------------------===//
+void ShowBehaviorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("show_behavior setting cannot be NULL");
+	}
+	EnumUtil::FromString<ShowBehaviorType>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

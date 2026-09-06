@@ -2,9 +2,6 @@
 # description: Test strptime function
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT strptime('21 June, 2018', '%d %B, %Y')
 ----
@@ -484,6 +481,12 @@ SELECT strptime('2000-10-01 23:59:59.1000000000000000000000000000', '%Y-%m-%d %H
 statement error
 SELECT strptime('', '%Y-%m-%d %H:%M:%S.%f')
 ----
+
+# all-whitespace input, issue #25082
+statement error
+SELECT strptime('            ', '%d')
+----
+<REGEX>:Invalid Input Error:.*Could not parse string.*
 
 # empty string with am/pm
 statement error

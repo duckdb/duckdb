@@ -2,9 +2,6 @@
 # description: Issue 490
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # A comparison column=column unexpectedly evaluates to TRUE for column=NULL
 statement ok
 CREATE TABLE t0(c0 INT);

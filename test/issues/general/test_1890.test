@@ -2,9 +2,6 @@
 # description: Issue 1890: INTERVAL not working as expected across day boundry
 # group: [general]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT TIMESTAMP '2000-01-01 00:00:00' - INTERVAL 1 MINUTE
 ----

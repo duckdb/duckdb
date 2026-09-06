@@ -23,12 +23,13 @@ vector<LogicalType> LogicalCopyToFile::GetTypesWithoutPartitions(const vector<Lo
 	return types;
 }
 
-vector<string> LogicalCopyToFile::GetNamesWithoutPartitions(const vector<string> &col_names,
-                                                            const vector<column_t> &part_cols, bool write_part_cols) {
+vector<Identifier> LogicalCopyToFile::GetNamesWithoutPartitions(const vector<Identifier> &col_names,
+                                                                const vector<column_t> &part_cols,
+                                                                bool write_part_cols) {
 	if (write_part_cols || part_cols.empty()) {
 		return col_names;
 	}
-	vector<string> names;
+	vector<Identifier> names;
 	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
 	for (idx_t col_idx = 0; col_idx < col_names.size(); col_idx++) {
 		if (part_col_set.find(col_idx) == part_col_set.end()) {
@@ -70,6 +71,11 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(218, "preserve_order", preserve_order, PreserveOrderType::AUTOMATIC);
 	serializer.WritePropertyWithDefault(219, "hive_file_pattern", hive_file_pattern, true);
 	serializer.WritePropertyWithDefault(220, "file_size_bytes", file_size_bytes, optional_idx());
+	serializer.WritePropertyWithDefault(221, "batch_size", batch_size, optional_idx());
+	serializer.WritePropertyWithDefault(222, "batch_size_bytes", batch_size_bytes, optional_idx());
+	serializer.WritePropertyWithDefault(223, "batches_per_file", batches_per_file, optional_idx());
+	serializer.WritePropertyWithDefault(224, "order_columns", order_columns);
+	serializer.WritePropertyWithDefault(225, "table_index", table_index, TableIndex(0));
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -80,7 +86,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto per_thread_output = deserializer.ReadProperty<bool>(204, "per_thread_output");
 	auto partition_output = deserializer.ReadProperty<bool>(205, "partition_output");
 	auto partition_columns = deserializer.ReadProperty<vector<idx_t>>(206, "partition_columns");
-	auto names = deserializer.ReadProperty<vector<string>>(207, "names");
+	auto names = deserializer.ReadProperty<vector<Identifier>>(207, "names");
 	auto expected_types = deserializer.ReadProperty<vector<LogicalType>>(208, "expected_types");
 	auto copy_info =
 	    unique_ptr_cast<ParseInfo, CopyInfo>(deserializer.ReadProperty<unique_ptr<ParseInfo>>(209, "copy_info"));
@@ -89,8 +95,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto &context = deserializer.Get<ClientContext &>();
 	auto name = deserializer.ReadProperty<string>(210, "function_name");
 
-	auto &func_catalog_entry =
-	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
+	auto &func_catalog_entry = Catalog::GetEntry<CopyFunctionCatalogEntry>(
+	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(name)));
 	if (func_catalog_entry.type != CatalogType::COPY_FUNCTION_ENTRY) {
 		throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 	}
@@ -119,6 +125,11 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	    deserializer.ReadPropertyWithExplicitDefault(218, "preserve_order", PreserveOrderType::AUTOMATIC);
 	auto hive_file_pattern = deserializer.ReadPropertyWithExplicitDefault(219, "hive_file_pattern", true);
 	auto file_size_bytes = deserializer.ReadPropertyWithExplicitDefault(220, "file_size_bytes", optional_idx());
+	auto batch_size = deserializer.ReadPropertyWithExplicitDefault(221, "batch_size", optional_idx());
+	auto batch_size_bytes = deserializer.ReadPropertyWithExplicitDefault(222, "batch_size_bytes", optional_idx());
+	auto batches_per_file = deserializer.ReadPropertyWithExplicitDefault(223, "batches_per_file", optional_idx());
+	auto order_columns = deserializer.ReadPropertyWithExplicitDefault(224, "order_columns", vector<BoundOrderByNode>());
+	auto table_index = deserializer.ReadPropertyWithExplicitDefault(225, "table_index", TableIndex(0));
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
@@ -132,7 +143,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 		bind_data = function.copy_to_bind(context, function_bind_input, names_to_write, types_to_write);
 	}
 
-	auto result = make_uniq<LogicalCopyToFile>(function, std::move(bind_data), std::move(copy_info));
+	auto result = make_uniq<LogicalCopyToFile>(function, std::move(bind_data), std::move(copy_info), table_index);
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
 	result->filename_pattern = filename_pattern;
@@ -150,6 +161,10 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->preserve_order = preserve_order;
 	result->hive_file_pattern = hive_file_pattern;
 	result->file_size_bytes = file_size_bytes;
+	result->batch_size = batch_size;
+	result->batch_size_bytes = batch_size_bytes;
+	result->batches_per_file = batches_per_file;
+	result->order_columns = std::move(order_columns);
 
 	return std::move(result);
 }
@@ -157,10 +172,14 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 vector<ColumnBinding> LogicalCopyToFile::GetColumnBindings() {
 	idx_t return_column_count = GetCopyFunctionReturnLogicalTypes(return_type).size();
 	vector<ColumnBinding> result;
-	for (idx_t i = 0; i < return_column_count; i++) {
-		result.emplace_back(0, i);
+	for (auto return_col_idx : ProjectionIndex::GetIndexes(return_column_count)) {
+		result.emplace_back(table_index, return_col_idx);
 	}
 	return result;
+}
+
+vector<TableIndex> LogicalCopyToFile::GetTableIndex() const {
+	return {table_index};
 }
 
 idx_t LogicalCopyToFile::EstimateCardinality(ClientContext &context) {

@@ -51,6 +51,7 @@ public:
 	ofstream out_file;
 	ofstream log_file;
 	uint32_t threads = MaxValue<uint32_t>(std::thread::hardware_concurrency(), 1u);
+	uint32_t timed_runs = 5;
 	string memory_limit;
 	unordered_map<string, string> custom_arguments;
 };

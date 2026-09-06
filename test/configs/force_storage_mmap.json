@@ -1,0 +1,12 @@
+{
+  "description": "Run on persistent databases attached with IO_MODE 'MMAP' so the storage layer goes through the memory-mapped block path.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__force_storage_mmap.db",
+  "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/force_storage.json",
+  "attach_options": [
+    {
+      "name": "io_mode",
+      "value": "MMAP"
+    }
+  ]
+}

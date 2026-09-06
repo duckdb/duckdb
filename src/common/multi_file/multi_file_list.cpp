@@ -5,10 +5,12 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 #include <algorithm>
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -20,9 +22,12 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(LogicalGet &get)
 	}
 }
 
-MultiFilePushdownInfo::MultiFilePushdownInfo(idx_t table_index, const vector<string> &column_names,
-                                             const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info)
-    : table_index(table_index), column_names(column_names), column_ids(column_ids), extra_info(extra_info) {
+MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vector<Identifier> &column_names,
+                                             const vector<ColumnIndex> &column_indexes, ExtraOperatorInfo &extra_info)
+    : table_index(table_index), column_names(column_names), column_indexes(column_indexes), extra_info(extra_info) {
+	for (auto &col_id : column_indexes) {
+		column_ids.push_back(col_id.GetPrimaryIndex());
+	}
 }
 
 // Helper method to do Filter Pushdown into a MultiFileList
@@ -33,7 +38,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 		if (IsVirtualColumn(info.column_ids[i])) {
 			continue;
 		}
-		filter_info.column_map.insert({info.column_names[info.column_ids[i]], i});
+		filter_info.column_map.insert({info.column_names[info.column_ids[i]].GetIdentifierName(), i});
 	}
 	filter_info.hive_enabled = options.hive_partitioning;
 	filter_info.filename_enabled = options.filename;
@@ -48,26 +53,28 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 	return false;
 }
 
-bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<string> &names,
-                      const vector<LogicalType> &types, const vector<column_t> &column_ids,
+bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<Identifier> &names,
+                      const vector<LogicalType> &types, const vector<ColumnIndex> &column_indexes,
                       const TableFilterSet &filters, vector<OpenFileInfo> &expanded_files) {
-	idx_t table_index = 0;
+	TableIndex table_index(0);
 	ExtraOperatorInfo extra_info;
 
 	// construct the pushdown info
-	MultiFilePushdownInfo info(table_index, names, column_ids, extra_info);
+	MultiFilePushdownInfo info(table_index, names, column_indexes, extra_info);
 
 	// construct the set of expressions from the table filters
 	vector<unique_ptr<Expression>> filter_expressions;
-	for (auto &entry : filters.filters) {
-		idx_t local_index = entry.first;
-		idx_t column_idx = column_ids[local_index];
-		if (IsVirtualColumn(column_idx)) {
+	for (auto &entry : filters) {
+		auto filter_idx = entry.GetIndex();
+		auto &column_idx = column_indexes[filter_idx];
+		auto primary_index = column_idx.GetPrimaryIndex();
+		if (IsVirtualColumn(primary_index)) {
 			continue;
 		}
 		auto column_ref =
-		    make_uniq<BoundColumnRefExpression>(types[column_idx], ColumnBinding(table_index, entry.first));
-		auto filter_expr = entry.second->ToExpression(*column_ref);
+		    make_uniq<BoundColumnRefExpression>(types[primary_index], ColumnBinding(table_index, entry.GetIndex()));
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "MultiFilePushdownInfo::Pushdown");
+		auto filter_expr = expr_filter.ToExpression(*column_ref);
 		filter_expressions.push_back(std::move(filter_expr));
 	}
 
@@ -199,18 +206,22 @@ unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &co
 	return nullptr;
 }
 
-unique_ptr<MultiFileList> MultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
-                                                               const vector<string> &names,
-                                                               const vector<LogicalType> &types,
-                                                               const vector<column_t> &column_ids,
-                                                               TableFilterSet &filters) const {
+unique_ptr<MultiFileList>
+MultiFileList::DynamicFilterPushdown(MultiFileDynamicPushdownInfo &dynamic_pushdown_info) const {
+	auto &options = dynamic_pushdown_info.options;
+	auto &names = dynamic_pushdown_info.column_names;
+	auto &types = dynamic_pushdown_info.column_types;
+	auto &column_indexes = dynamic_pushdown_info.column_indexes;
+	auto &context = dynamic_pushdown_info.context;
+	auto &filters = dynamic_pushdown_info.filters;
+
 	if (!options.hive_partitioning && !options.filename) {
 		return nullptr;
 	}
 
 	// FIXME: don't copy list until first file is filtered
 	auto file_copy = GetAllFiles();
-	auto res = PushdownInternal(context, options, names, types, column_ids, filters, file_copy);
+	auto res = PushdownInternal(context, options, names, types, column_indexes, filters, file_copy);
 	if (res) {
 		return make_uniq<SimpleMultiFileList>(std::move(file_copy));
 	}
@@ -332,7 +343,7 @@ bool LazyMultiFileList::ExpandNextPathInternal() const {
 	if (all_files_expanded) {
 		return false;
 	}
-	if (context && context->interrupted) {
+	if (context && context->IsInterrupted()) {
 		throw InterruptException();
 	}
 	if (!ExpandNextPath()) {

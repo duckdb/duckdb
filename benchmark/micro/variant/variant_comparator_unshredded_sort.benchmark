@@ -1,0 +1,22 @@
+# name: benchmark/micro/variant/variant_comparator_unshredded_sort.benchmark
+# description: Top-N over a fully-shredded VARIANT object column - stresses variant_comparator's per-object key ordering (cached for fully-shredded objects). Boolean fields keep per-field encoding cheap so the object key ordering dominates.
+# group: [variant]
+
+name variant_comparator_unshredded_sort
+group variant
+storage persistent v2.0.0
+
+cache variant_comparator_object_sort_unshredded.duckdb
+
+load
+SET variant_minimum_shredding_size = 30000000;
+CREATE TABLE tbl AS SELECT {
+	'f28': (i % 2 = 0), 'f09': (i % 2 = 0), 'f19': (i % 2 = 0), 'f10': (i % 2 = 0), 'f29': (i % 2 = 0), 'f05': (i % 2 = 0), 'f07': (i % 2 = 0), 'f22': (i % 2 = 0), 'f00': (i % 2 = 0), 'f14': (i % 2 = 0), 'f08': (i % 2 = 0), 'f15': (i % 2 = 0), 'f23': (i % 2 = 0), 'f24': (i % 2 = 0), 'f21': (i % 2 = 0), 'f13': (i % 2 = 0), 'f25': (i % 2 = 0), 'f27': (i % 2 = 0), 'f06': (i % 2 = 0), 'f16': (i % 2 = 0), 'f26': (i % 2 = 0), 'f18': (i % 2 = 0), 'f11': (i % 2 = 0), 'f03': (i % 2 = 0), 'f17': (i % 2 = 0), 'f02': (i % 2 = 0), 'f01': (i % 2 = 0), 'f31': (i % 2 = 0), 'f12': (i % 2 = 0), 'f04': (i % 2 = 0), 'f30': (i % 2 = 0), 'f20': (i % 2 = 0)
+}::VARIANT v FROM range(3000000) t(i);
+CHECKPOINT;
+
+run
+SELECT v FROM tbl ORDER BY v LIMIT 1;
+
+result I
+{'f00': false, 'f01': false, 'f02': false, 'f03': false, 'f04': false, 'f05': false, 'f06': false, 'f07': false, 'f08': false, 'f09': false, 'f10': false, 'f11': false, 'f12': false, 'f13': false, 'f14': false, 'f15': false, 'f16': false, 'f17': false, 'f18': false, 'f19': false, 'f20': false, 'f21': false, 'f22': false, 'f23': false, 'f24': false, 'f25': false, 'f26': false, 'f27': false, 'f28': false, 'f29': false, 'f30': false, 'f31': false}

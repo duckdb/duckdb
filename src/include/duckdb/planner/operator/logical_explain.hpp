@@ -21,14 +21,10 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXPLAIN;
 
 public:
-	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type, ExplainFormat explain_format)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type),
-	      explain_format(explain_format) {
-		children.push_back(std::move(plan));
-	}
+	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type, const ProfilerPrintFormat &format);
 
 	ExplainType explain_type;
-	ExplainFormat explain_format;
+	ProfilerPrintFormat format;
 	string physical_plan;
 	string logical_plan_unopt;
 	string logical_plan_opt;
@@ -37,20 +33,11 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
-	idx_t EstimateCardinality(ClientContext &context) override {
-		return 3;
-	}
-	//! Skips the serialization check in VerifyPlan
-	bool SupportSerialization() const override {
-		return false;
-	}
+	idx_t EstimateCardinality(ClientContext &context) override;
+	bool SupportSerialization() const override;
 
 protected:
-	void ResolveTypes() override {
-		types = {LogicalType::VARCHAR, LogicalType::VARCHAR};
-	}
-	vector<ColumnBinding> GetColumnBindings() override {
-		return {ColumnBinding(0, 0), ColumnBinding(0, 1)};
-	}
+	void ResolveTypes() override;
+	vector<ColumnBinding> GetColumnBindings() override;
 };
 } // namespace duckdb

@@ -300,13 +300,13 @@ foreach type <integral> varchar
 
 # list tests
 statement ok
-CREATE TABLE test0 (i ${type}[])
+CREATE TABLE test0 (i {type}[])
 
 statement ok
 INSERT INTO test0 VALUES ([2]), ([1]), ([1, 2]), ([]), ([2, 2]), ([NULL]), ([2, 3])
 
 query T
-SELECT list_position(i,1::${type}) from test0
+SELECT list_position(i,1::{type}) from test0
 ----
 NULL
 1
@@ -449,7 +449,7 @@ foreach type float double
 
 # test floats and doubles
 statement ok
-CREATE TABLE test0 (i ${type}[])
+CREATE TABLE test0 (i {type}[])
 
 statement ok
 INSERT INTO test0 VALUES ([2.0]), ([1.0]), ([1.0, 2.0]), ([]), ([2.0, 2.0]), ([NULL]), ([2.0, 3.0])
@@ -470,7 +470,7 @@ DROP TABLE test0
 
 # with nulls and non-const element
 statement ok
-CREATE TABLE test0 (i ${type}[], j ${type})
+CREATE TABLE test0 (i {type}[], j {type})
 
 statement ok
 INSERT INTO test0 VALUES ([2.0,1.0,3.0], 2.0), ([2.0,3.0,4.0], 5.0), ([1.0], NULL), ([1.0, NULL, 2.0], NULL);

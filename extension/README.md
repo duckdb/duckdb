@@ -148,6 +148,36 @@ results in:
 ...
 ```
 
+# Reporting an extension version
+
+An extension can report its version through the `EXT_VERSION_<NAME_UPPERCASE>` macro, which DuckDB defines to
+the extension version configured at build time:
+```cpp
+std::string ParquetExtension::Version() const {
+#ifdef EXT_VERSION_PARQUET
+	return EXT_VERSION_PARQUET;
+#else
+	return "";
+#endif
+}
+```
+By default the macro is defined for every source file of the extension, including any third party code it
+vendors. Since the version defaults to a git commit hash - DuckDB's for in-tree extensions, the extension's own
+otherwise - that puts a value which changes on every commit on all of their compiler command lines, forcing a
+recompile of the whole extension for a string that a single file reads.
+
+An extension avoids that by declaring which of its sources actually read the macro, in its own `CMakeLists.txt`:
+```cmake
+project(ParquetExtension)
+
+# Before any subdirectory or target, which would otherwise inherit the directory-wide definition
+set_extension_version_sources(parquet parquet_extension.cpp)
+```
+Only the listed sources then get `EXT_VERSION_<NAME>`, and a version change recompiles those rather than
+everything. It has to be called before the extension declares any targets or adds any subdirectories, because
+those inherit the directory-wide definition at the point they are created. Out-of-tree extensions can use it
+too; their version is their own commit hash, so it changes on every commit in their repository.
+
 # VCPKG dependency management
 DuckDB extensions can use [VCPKG](https://vcpkg.io/en/) to manage their dependencies. Check out the [Extension Template](https://github.com/duckdb/extension-template) for an example
 on how to set up vcpkg in extensions. 

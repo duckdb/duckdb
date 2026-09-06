@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/main/valid_checker.hpp"
@@ -37,14 +39,17 @@ enum class AttachVisibility { SHOWN, HIDDEN };
 //! Use this mode with caution, as it disables recovery from crashes for the file.
 enum class RecoveryMode : uint8_t { DEFAULT = 0, NO_WAL_WRITES = 1 };
 
-//! CHECKPOINT: Throws, if the checkpoint fails. Always cleans up.
-//! TRY_CHECKPOINT: Does not throw when failing a checkpoint. Always cleans up.
-enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT };
+//! CHECKPOINT: Throws if the checkpoint fails.
+//! TRY_CHECKPOINT: Does not throw when failing a checkpoint.
+//! SKIP_CHECKPOINT: Skips checkpointing entirely.
+//! All actions always clean up.
+enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT, SKIP_CHECKPOINT };
 
 class DatabaseFilePathManager;
 
 struct StoredDatabasePath {
-	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path, const string &name);
+	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path,
+	                   const Identifier &name);
 	~StoredDatabasePath();
 
 	DatabaseManager &db_manager;
@@ -68,6 +73,8 @@ struct AttachOptions {
 	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	//! The file format type. The default type is a duckdb database file, but other file formats are possible.
 	string db_type;
+	//! The verbatim path before extension-prefix stripping. Unset if not from an ATTACH statement.
+	optional<string> original_path;
 	//! Set of remaining (key, value) options
 	unordered_map<string, Value> options;
 	//! (optionally) a catalog can be provided with a default table
@@ -76,10 +83,15 @@ struct AttachOptions {
 	bool is_main_database = false;
 	//! The visibility of the attached database
 	AttachVisibility visibility = AttachVisibility::SHOWN;
+	//! Whether this attachment is ephemeral: created implicitly by `CONNECT '<uri>'` and detached
+	//! again on DISCONNECT. Not settable via SQL; only the connection-string CONNECT path sets it.
+	bool ephemeral = false;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
 	optional_idx vacuum_rebuild_indexes_threshold;
+	//! Header prefetched during file-type detection, reused when opening the file. Empty for non-DuckDB files.
+	PrefetchedFileData prefetched;
 };
 
 //! The AttachedDatabase represents an attached database instance.
@@ -88,10 +100,10 @@ public:
 	//! Create the built-in system database (without storage).
 	explicit AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type = AttachedDatabaseType::SYSTEM_DATABASE);
 	//! Create an attached database instance with the specified name and storage.
-	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path, AttachOptions &options);
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, Identifier name, string file_path, AttachOptions &options);
 	//! Create an attached database instance with the specified storage extension.
-	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, ClientContext &context, string name,
-	                 AttachInfo &info, AttachOptions &options);
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, ClientContext &context,
+	                 Identifier name, AttachInfo &info, AttachOptions &options);
 	~AttachedDatabase() override;
 
 	//! Initializes the catalog and storage of the attached database.
@@ -119,10 +131,10 @@ public:
 		return storage_extension;
 	}
 
-	const string &GetName() const {
+	const Identifier &GetName() const {
 		return name;
 	}
-	void SetName(const string &new_name) {
+	void SetName(const Identifier &new_name) {
 		name = new_name;
 	}
 	bool IsSystem() const;
@@ -138,6 +150,10 @@ public:
 	AttachVisibility GetVisibility() const {
 		return visibility;
 	}
+	//! True for attachments created implicitly by `CONNECT '<uri>'`; DISCONNECT detaches them.
+	bool IsEphemeral() const {
+		return ephemeral;
+	}
 	//! vacuum_rebuild_indexes threshold for this attached database.
 	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
 	idx_t GetVacuumRebuildIndexThreshold() const;
@@ -145,12 +161,17 @@ public:
 		return attach_options;
 	}
 	string StoredPath() const;
-
-	static bool NameIsReserved(const string &name);
-	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
+	//! The verbatim ATTACH path before extension-prefix stripping. Unset if not from an ATTACH statement.
+	const optional<string> &GetOriginalPath() const {
+		return original_path;
+	}
+	static bool NameIsReserved(const Identifier &name);
+	static Identifier ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
-	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database);
+	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database, ClientContext &context);
+	//! Obtain a reference unless closing the database has already started.
+	static shared_ptr<AttachedDatabase> TryGetReference(const weak_ptr<AttachedDatabase> &attached_database);
 
 private:
 	DatabaseInstance &db;
@@ -164,11 +185,14 @@ private:
 	optional_ptr<StorageExtension> storage_extension;
 	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	AttachVisibility visibility = AttachVisibility::SHOWN;
+	bool ephemeral = false;
 	bool is_initial_database = false;
 	bool is_closed = false;
+	bool is_closing = false;
 	shared_ptr<mutex> close_lock;
 	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;
+	optional<string> original_path;
 
 private:
 	//! Clean any (shared) resources held by the database.

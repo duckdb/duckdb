@@ -10,8 +10,10 @@
 
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
+
+#include "duckdb/storage/table/row_group_order_options.hpp"
 
 namespace duckdb {
 class DynamicTableFilterSet;
@@ -22,12 +24,12 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
 
 public:
-	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-	           vector<LogicalType> returned_types, vector<string> returned_names,
+	LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+	           vector<LogicalType> returned_types, vector<Identifier> returned_names,
 	           virtual_column_map_t virtual_columns = virtual_column_map_t());
 
 	//! The table index in the current bind context
-	idx_t table_index;
+	TableIndex table_index;
 	//! The function that is called
 	TableFunction function;
 	//! The bind data of the function
@@ -35,11 +37,11 @@ public:
 	//! The types of ALL columns that can be returned by the table function
 	vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function
-	vector<string> names;
+	vector<Identifier> names;
 	//! A mapping of column index -> type/name for all virtual columns
 	virtual_column_map_t virtual_columns;
 	//! Columns that are used outside the scan
-	vector<idx_t> projection_ids;
+	vector<ProjectionIndex> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
 	//! The set of input parameters for the table function
@@ -49,7 +51,7 @@ public:
 	//! The set of named input table types for the table-in table-out function
 	vector<LogicalType> input_table_types;
 	//! The set of named input table names for the table-in table-out function
-	vector<string> input_table_names;
+	vector<Identifier> input_table_names;
 	//! For a table-in-out function, the set of projected input columns
 	vector<column_t> projected_input;
 	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown and sample rate
@@ -62,6 +64,8 @@ public:
 	optional_idx ordinality_idx;
 	//! Row group order options (if set)
 	unique_ptr<RowGroupOrderOptions> row_group_order_options;
+	//! Partition indices to scan, empty means scan all
+	vector<idx_t> scan_partition_indices;
 
 	string GetName() const override;
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
@@ -72,27 +76,38 @@ public:
 	column_t GetAnyColumn() const;
 
 	const LogicalType &GetColumnType(const ColumnIndex &column_index) const;
-	const string &GetColumnName(const ColumnIndex &column_index) const;
+	const Identifier &GetColumnName(const ColumnIndex &column_index) const;
 
 public:
 	void SetColumnIds(vector<ColumnIndex> &&column_ids);
-	void AddColumnId(column_t column_id);
+	ProjectionIndex AddColumnId(column_t column_id);
 	void ClearColumnIds();
+	ProjectionIndex TryGetProjectionIndex(idx_t col_idx) const;
 	const vector<ColumnIndex> &GetColumnIds() const;
 	vector<ColumnIndex> &GetMutableColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 	bool TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const;
 	void SetScanOrder(unique_ptr<RowGroupOrderOptions> options);
+	void SetPartitionsToScan(vector<idx_t> partition_indices);
 
-	vector<idx_t> GetTableIndex() const override;
+	vector<TableIndex> GetTableIndex() const override;
 	//! Skips the serialization check in VerifyPlan
 	bool SupportSerialization() const override {
-		return function.verify_serialization;
+		if (!function.verify_serialization) {
+			return false;
+		}
+		if (function.HasSerializationCallbacks()) {
+			return true;
+		}
+		return function.bind && (!bind_data || bind_data->SupportStatementCache());
 	}
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+
+	const ColumnIndex &GetColumnIndex(ColumnBinding binding) const;
+	const ColumnIndex &GetColumnIndex(ProjectionIndex proj_index) const;
 
 protected:
 	void ResolveTypes() override;

@@ -1,0 +1,6 @@
+# name: test/sql/peg_parser/fuzzer/diverge_0009.test
+# description: PEG should accept (currently rejects): Parser Error: Enum transform failed: could not find mapping for 'SeqMinOrMax'
+# group: [fuzzer]
+
+statement ok
+CREATE OR REPLACE SEQUENCE t1 NO MINVALUE

@@ -5,7 +5,7 @@
 foreach compression rle dictionary bitpacking fsst
 
 statement ok
-PRAGMA disabled_compression_methods='${compression}'
+PRAGMA disabled_compression_methods='{compression}'
 
 endloop
 

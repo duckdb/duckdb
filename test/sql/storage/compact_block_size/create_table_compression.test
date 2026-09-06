@@ -7,9 +7,6 @@
 require block_size 16384
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE T (a INTEGER USING COMPRESSION RLE)
 
 statement ok
@@ -45,7 +42,7 @@ CREATE TABLE T (a INTEGER USING COMPRESSION RLE, b VARCHAR )
 statement ok
 DROP TABLE T
 
-load __TEST_DIR__/test_compression_hint.db
+load {TEST_DIR}/test_compression_hint.db
 
 statement ok
 CREATE TABLE T (a INTEGER USING COMPRESSION RLE, b INTEGER USING COMPRESSION BITPACKING, C INTEGER USING COMPRESSION UNCOMPRESSED)

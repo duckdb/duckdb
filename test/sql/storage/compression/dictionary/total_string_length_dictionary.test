@@ -1,0 +1,32 @@
+# name: test/sql/storage/compression/dictionary/total_string_length_dictionary.test
+# description: Test that total_string_length counts repeated strings when checkpointing with dictionary compression
+# group: [dictionary]
+
+require no_latest_storage
+
+require vector_size 2048
+
+load {TEST_DIR}/total_string_length_dictionary.db readwrite v1.0.0
+
+statement ok
+PRAGMA force_compression='dictionary'
+
+statement ok
+CREATE TABLE t (s VARCHAR);
+
+statement ok
+INSERT INTO t SELECT 'hello' FROM range(10000);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+Dictionary
+
+# total_string_length must count every row, not just the unique dictionary entries
+query I
+select s.total_string_length from (select stats(s) s from t limit 1)
+----
+50000

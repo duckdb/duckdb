@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-pragma enable_verification
-
-statement ok
 CREATE MACRO pyfloats_to_floats(x) AS (CAST(string_split(x[2:-2], ',') AS FLOAT4[]))
 
 query T

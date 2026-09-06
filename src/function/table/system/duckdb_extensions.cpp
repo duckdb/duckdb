@@ -24,6 +24,7 @@ struct ExtensionInformation {
 	string description;
 	vector<Value> aliases;
 	string extension_version;
+	string signature_key_fingerprint;
 };
 
 struct DuckDBExtensionsData : public GlobalTableFunctionState {
@@ -35,7 +36,7 @@ struct DuckDBExtensionsData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
+                                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("extension_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -63,6 +64,9 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 	names.emplace_back("installed_from");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("signature_key_fingerprint");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	return nullptr;
 }
 
@@ -87,7 +91,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		    extension.statically_loaded ? ExtensionInstallMode::STATICALLY_LINKED : ExtensionInstallMode::NOT_INSTALLED;
 		info.description = extension.description;
 		for (idx_t k = 0; k < alias_count; k++) {
-			auto alias = ExtensionHelper::GetExtensionAlias(k);
+			auto alias = ExtensionHelper::GetInternalExtensionAlias(k);
 			if (info.name == alias.extension) {
 				info.aliases.emplace_back(alias.alias);
 			}
@@ -116,6 +120,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 			auto extension_install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_path, info.name);
 			info.install_mode = extension_install_info->mode;
 			info.extension_version = extension_install_info->version;
+			info.signature_key_fingerprint = extension_install_info->signature_key_fingerprint;
 			if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
 				info.installed_from = ExtensionRepository::GetRepository(extension_install_info->repository_url);
 			} else {
@@ -132,6 +137,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 					entry->second.installed_from = info.installed_from;
 					entry->second.install_mode = info.install_mode;
 					entry->second.extension_version = info.extension_version;
+					entry->second.signature_key_fingerprint = info.signature_key_fingerprint;
 				}
 				entry->second.installed = true;
 			}
@@ -194,33 +200,48 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// extension_name LogicalType::VARCHAR
+	auto &extension_name = output.data[0];
+	// loaded LogicalType::BOOLEAN
+	auto &loaded = output.data[1];
+	// installed LogicalType::BOOLEAN
+	auto &installed = output.data[2];
+	// install_path LogicalType::VARCHAR
+	auto &install_path = output.data[3];
+	// description LogicalType::VARCHAR
+	auto &description = output.data[4];
+	// aliases     LogicalType::LIST(LogicalType::VARCHAR)
+	auto &aliases = output.data[5];
+	// extension_version LogicalType::VARCHAR
+	auto &extension_version = output.data[6];
+	// install_mode LogicalType::VARCHAR
+	auto &install_mode = output.data[7];
+	// installed_from LogicalType::VARCHAR
+	auto &installed_from = output.data[8];
+	// signature_key_fingerprint LogicalType::VARCHAR
+	auto &signature_key_fingerprint = output.data[9];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset];
 
-		// return values:
-		// extension_name LogicalType::VARCHAR
-		output.SetValue(0, count, Value(entry.name));
-		// loaded LogicalType::BOOLEAN
-		output.SetValue(1, count, Value::BOOLEAN(entry.loaded));
-		// installed LogicalType::BOOLEAN
-		output.SetValue(2, count, Value::BOOLEAN(entry.installed));
-		// install_path LogicalType::VARCHAR
-		output.SetValue(3, count, Value(entry.file_path));
-		// description LogicalType::VARCHAR
-		output.SetValue(4, count, Value(entry.description));
-		// aliases     LogicalType::LIST(LogicalType::VARCHAR)
-		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
-		// extension version     LogicalType::LIST(LogicalType::VARCHAR)
-		output.SetValue(6, count, Value(entry.extension_version));
-		// installed_mode LogicalType::VARCHAR
-		output.SetValue(7, count, EnumUtil::ToString(entry.install_mode));
-		// installed_source LogicalType::VARCHAR
-		output.SetValue(8, count, Value(entry.installed_from));
+		extension_name.Append(Value(entry.name));
+		loaded.Append(Value::BOOLEAN(entry.loaded));
+		installed.Append(Value::BOOLEAN(entry.installed));
+		install_path.Append(Value(entry.file_path));
+		description.Append(Value(entry.description));
+		aliases.Append(Value::LIST(LogicalType::VARCHAR, entry.aliases));
+		extension_version.Append(Value(entry.extension_version));
+		install_mode.Append(EnumUtil::ToString(entry.install_mode));
+		installed_from.Append(Value(entry.installed_from));
+		// unsigned or built-in extensions have no signing key: report NULL rather than an empty string
+		signature_key_fingerprint.Append(entry.signature_key_fingerprint.empty()
+		                                     ? Value(LogicalType::VARCHAR)
+		                                     : Value(entry.signature_key_fingerprint));
 
 		data.offset++;
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBExtensionsFun::RegisterFunction(BuiltinFunctions &set) {

@@ -18,12 +18,12 @@ public:
 	static constexpr const ConstraintType TYPE = ConstraintType::FOREIGN_KEY;
 
 public:
-	DUCKDB_API ForeignKeyConstraint(vector<string> pk_columns, vector<string> fk_columns, ForeignKeyInfo info);
+	DUCKDB_API ForeignKeyConstraint(vector<Identifier> pk_columns, vector<Identifier> fk_columns, ForeignKeyInfo info);
 
 	//! The set of main key table's columns
-	vector<string> pk_columns;
+	vector<Identifier> pk_columns;
 	//! The set of foreign key table's columns
-	vector<string> fk_columns;
+	vector<Identifier> fk_columns;
 	ForeignKeyInfo info;
 
 public:

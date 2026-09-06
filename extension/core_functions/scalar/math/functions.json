@@ -55,6 +55,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "binom",
+        "parameters": "n,k",
+        "description": "Returns binom(n,k)",
+        "example": "binom(5,2)",
+        "type": "scalar_function"
+    },
+    {
         "name": "bit_count",
         "parameters": "x",
         "description": "Returns the number of bits that are set",
@@ -228,6 +235,14 @@
         "description": "Rounds x to s decimal places",
         "example": "round(42.4332, 2)",
         "type": "scalar_function_set"
+    },
+    {
+        "name": "round_even",
+        "parameters": "x,precision",
+        "description": "Rounds x to s decimal places, rounding halfway cases to the nearest even digit",
+        "example": "round_even(24.5, 0)",
+        "type": "scalar_function_set",
+        "aliases": ["roundbankers"]
     },
     {
         "name": "sign",

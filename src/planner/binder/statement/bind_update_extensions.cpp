@@ -1,7 +1,7 @@
 #include "duckdb/parser/statement/load_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/update_extensions_statement.hpp"
-#include "duckdb/planner/operator/logical_simple.hpp"
+#include "duckdb/planner/operator/logical_update_extensions.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -20,7 +20,7 @@ BoundStatement Binder::Bind(UpdateExtensionsStatement &stmt) {
 	result.names.emplace_back("current_version");
 	result.types.emplace_back(LogicalType::VARCHAR);
 
-	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS, std::move(stmt.info));
+	result.plan = make_uniq<LogicalUpdateExtensions>(std::move(stmt.info));
 
 	return result;
 }

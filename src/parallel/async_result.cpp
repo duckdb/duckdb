@@ -1,9 +1,12 @@
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 #include "duckdb/parallel/sleep_async_task.hpp"
@@ -11,31 +14,43 @@
 
 namespace duckdb {
 
-struct Counter {
-	explicit Counter(idx_t size) : counter(size) {
+struct AsyncBatchCompletion {
+	explicit AsyncBatchCompletion(idx_t size) : counter(size), callback_sent(false) {
 	}
+
 	bool IterateAndCheckCounter() {
 		D_ASSERT(counter.load() > 0);
 		idx_t post_decreast = --counter;
 		return (post_decreast == 0);
 	}
 
+	bool MarkCallbackSent() {
+		bool expected = false;
+		return callback_sent.compare_exchange_strong(expected, true);
+	}
+
 private:
 	atomic<idx_t> counter;
+	atomic<bool> callback_sent;
 };
 
 class AsyncExecutionTask : public ExecutorTask {
+	enum class CompletionSignal { BATCH_FINISHED, BATCH_ERRORED };
+
 public:
 	AsyncExecutionTask(Executor &executor, unique_ptr<AsyncTask> &&async_task, InterruptState &interrupt_state,
-	                   shared_ptr<Counter> counter)
+	                   shared_ptr<AsyncBatchCompletion> completion)
 	    : ExecutorTask(executor, nullptr), async_task(std::move(async_task)), interrupt_state(interrupt_state),
-	      counter(std::move(counter)) {
+	      completion(std::move(completion)) {
 	}
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		async_task->Execute();
-		if (counter->IterateAndCheckCounter()) {
-			interrupt_state.Callback();
+		try {
+			async_task->Execute();
+		} catch (...) {
+			SignalCompletion(CompletionSignal::BATCH_ERRORED);
+			throw;
 		}
+		SignalCompletion(CompletionSignal::BATCH_FINISHED);
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
@@ -44,9 +59,22 @@ public:
 	}
 
 private:
+	void SignalCompletion(CompletionSignal signal) {
+		auto finished = completion->IterateAndCheckCounter();
+		if ((signal == CompletionSignal::BATCH_ERRORED || finished)) {
+			SendCallback();
+		}
+	}
+
+	void SendCallback() {
+		if (completion->MarkCallbackSent()) {
+			interrupt_state.Callback();
+		}
+	}
+
 	unique_ptr<AsyncTask> async_task;
 	InterruptState interrupt_state;
-	shared_ptr<Counter> counter;
+	shared_ptr<AsyncBatchCompletion> completion;
 };
 
 AsyncResult::AsyncResult(SourceResultType t) : AsyncResult(GetAsyncResultType(t)) {
@@ -58,8 +86,8 @@ AsyncResult::AsyncResult(AsyncResultType t) : result_type(t) {
 	}
 }
 
-AsyncResult::AsyncResult(vector<unique_ptr<AsyncTask>> &&tasks)
-    : result_type(AsyncResultType::BLOCKED), async_tasks(std::move(tasks)) {
+AsyncResult::AsyncResult(vector<unique_ptr<AsyncTask>> &&tasks, TaskSchedulerType pool_type_p)
+    : result_type(AsyncResultType::BLOCKED), async_tasks(std::move(tasks)), pool_type(pool_type_p) {
 	if (async_tasks.empty()) {
 		throw InternalException("AsyncResult constructed from empty vector of tasks");
 	}
@@ -80,6 +108,7 @@ AsyncResult &AsyncResult::operator=(duckdb::AsyncResultType t) {
 AsyncResult &AsyncResult::operator=(AsyncResult &&other) noexcept {
 	result_type = other.result_type;
 	async_tasks = std::move(other.async_tasks);
+	pool_type = other.pool_type;
 	return *this;
 }
 
@@ -92,12 +121,17 @@ void AsyncResult::ScheduleTasks(InterruptState &interrupt_state, Executor &execu
 		throw InternalException("AsyncResult::ScheduleTasks called with no available tasks");
 	}
 
-	shared_ptr<Counter> counter = make_shared_ptr<Counter>(async_tasks.size());
+	DUCKDB_LOG(executor.context, AsyncTaskScheduleLogType, EnumUtil::ToString(pool_type), async_tasks.size());
+
+	shared_ptr<AsyncBatchCompletion> completion = make_shared_ptr<AsyncBatchCompletion>(async_tasks.size());
 
 	for (auto &async_task : async_tasks) {
-		auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_task), interrupt_state, counter);
-		TaskScheduler::GetScheduler(executor.context).ScheduleTask(executor.GetToken(), std::move(task));
+		auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_task), interrupt_state, completion);
+		TaskScheduler::GetScheduler(executor.context).ScheduleTask(executor.GetToken(), std::move(task), pool_type);
 	}
+
+	async_tasks.clear();
+	result_type = AsyncResultType::INVALID;
 }
 
 void AsyncResult::ExecuteTasksSynchronously() {
@@ -118,6 +152,30 @@ void AsyncResult::ExecuteTasksSynchronously() {
 	result_type = AsyncResultType::HAVE_MORE_OUTPUT;
 }
 
+AsyncResult AsyncResult::FromTasks(vector<unique_ptr<AsyncTask>> &&tasks, TaskSchedulerType pool_type) {
+	if (tasks.empty()) {
+		return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
+	}
+	return AsyncResult(std::move(tasks), pool_type);
+}
+
+AsyncResult AsyncResult::FromChunk(const DataChunk &chunk) {
+	return AsyncResult(chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT);
+}
+
+SourceResultType AsyncResult::GetSourceResultType(AsyncResultType type, idx_t chunk_size) {
+	switch (type) {
+	case AsyncResultType::IMPLICIT:
+		return chunk_size > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+	case AsyncResultType::HAVE_MORE_OUTPUT:
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	case AsyncResultType::FINISHED:
+		return SourceResultType::FINISHED;
+	default:
+		throw InternalException("Unexpected AsyncResultType %s in GetSourceResultType", EnumUtil::ToChars(type));
+	}
+}
+
 AsyncResultType AsyncResult::GetAsyncResultType(SourceResultType s) {
 	switch (s) {
 	case SourceResultType::HAVE_MORE_OUTPUT:
@@ -132,21 +190,16 @@ AsyncResultType AsyncResult::GetAsyncResultType(SourceResultType s) {
 
 bool AsyncResult::HasTasks() const {
 	D_ASSERT(result_type != AsyncResultType::INVALID);
+	// a BLOCKED result without tasks is a parked function: it registered its own wake-up
 	if (async_tasks.empty()) {
-		D_ASSERT(result_type != AsyncResultType::BLOCKED);
 		return false;
-	} else {
-		D_ASSERT(result_type == AsyncResultType::BLOCKED);
-		return true;
 	}
+	D_ASSERT(result_type == AsyncResultType::BLOCKED);
+	return true;
 }
 AsyncResultType AsyncResult::GetResultType() const {
 	D_ASSERT(result_type != AsyncResultType::INVALID);
-	if (async_tasks.empty()) {
-		D_ASSERT(result_type != AsyncResultType::BLOCKED);
-	} else {
-		D_ASSERT(result_type == AsyncResultType::BLOCKED);
-	}
+	D_ASSERT(async_tasks.empty() || result_type == AsyncResultType::BLOCKED);
 	return result_type;
 }
 vector<unique_ptr<AsyncTask>> &&AsyncResult::ExtractAsyncTasks() {
@@ -156,7 +209,7 @@ vector<unique_ptr<AsyncTask>> &&AsyncResult::ExtractAsyncTasks() {
 }
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-vector<unique_ptr<AsyncTask>> AsyncResult::GenerateTestTasks() {
+bool AsyncResult::TryGenerateTestResult(AsyncResult &result) {
 	vector<unique_ptr<AsyncTask>> tasks;
 	auto random_number = rand() % 16;
 	switch (random_number) {
@@ -176,7 +229,11 @@ vector<unique_ptr<AsyncTask>> AsyncResult::GenerateTestTasks() {
 	default:
 		break;
 	}
-	return tasks;
+	if (tasks.empty()) {
+		return false;
+	}
+	result = AsyncResult(std::move(tasks));
+	return true;
 }
 #endif
 

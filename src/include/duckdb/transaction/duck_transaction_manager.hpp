@@ -21,21 +21,12 @@ struct UndoBufferProperties;
 //! CleanupInfo collects transactions awaiting cleanup.
 //! This ensures we can clean up after releasing the transaction lock.
 struct DuckCleanupInfo {
-	//! All transactions in a cleanup info share the same lowest_start_time.
-	transaction_t lowest_start_time;
+	//! All transactions in a cleanup info share the same lowest_visibility_bound.
+	VisibilityBound lowest_visibility_bound;
 	vector<unique_ptr<DuckTransaction>> transactions;
 
 	void Cleanup();
 	bool ScheduleCleanup() noexcept;
-};
-
-struct ActiveCheckpointWrapper {
-	explicit ActiveCheckpointWrapper(DuckTransactionManager &manager);
-
-	void Clear();
-
-	DuckTransactionManager &manager;
-	bool is_cleared;
 };
 
 //! The Transaction Manager is responsible for creating and managing
@@ -60,17 +51,21 @@ public:
 	transaction_t LowestActiveId() const {
 		return lowest_active_id;
 	}
-	transaction_t LowestActiveStart() const {
-		return lowest_active_start;
+	VisibilityBound LowestVisibilityBound() const {
+		return lowest_visibility_bound;
 	}
 	transaction_t GetLastCommit() const {
 		return last_commit;
 	}
-	transaction_t GetActiveCheckpoint() const {
-		return active_checkpoint;
+	optional_idx GetActiveCheckpoint() const {
+		auto id = active_checkpoint.load();
+		return id == 0 ? optional_idx() : optional_idx(id);
 	}
-	transaction_t GetNewCheckpointId();
-	void ResetCheckpointId();
+	idx_t NextCheckpointId() {
+		return ++next_checkpoint_id;
+	}
+	void SetActiveCheckpoint(idx_t checkpoint_id);
+	void ResetActiveCheckpoint();
 
 	bool IsDuckTransactionManager() override {
 		return true;
@@ -105,10 +100,17 @@ protected:
 private:
 	//! Generates a new commit timestamp
 	transaction_t GetCommitTimestamp();
+	//! Allocates the cleanup info, and reserves the space RemoveTransaction needs to re-home a transaction.
+	//! RemoveTransaction is noexcept, so it cannot do this itself: it must not allocate at all. Call this with
+	//! transaction_lock held, immediately before RemoveTransaction, so that a failure to allocate is reported
+	//! while the transaction lists are still untouched.
+	unique_ptr<DuckCleanupInfo> CreateCleanupInfo();
 	//! Remove the given transaction from the list of active transactions
-	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction) noexcept;
+	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction,
+	                                              unique_ptr<DuckCleanupInfo> cleanup_info) noexcept;
 	//! Remove the given transaction from the list of active transactions
-	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
+	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction, bool store_transaction,
+	                                              unique_ptr<DuckCleanupInfo> cleanup_info) noexcept;
 
 	//! Whether or not we can checkpoint
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
@@ -126,12 +128,15 @@ private:
 	transaction_t current_transaction_id;
 	//! The lowest active transaction id
 	atomic<transaction_t> lowest_active_id;
-	//! The lowest active transaction timestamp
-	atomic<transaction_t> lowest_active_start;
+	//! The lowest bound any active transaction reads at. A version preceding it is visible to
+	//! every active transaction, so whatever it supersedes can be cleaned up or compacted
+	atomic<VisibilityBound> lowest_visibility_bound;
 	//! The last commit timestamp
 	atomic<transaction_t> last_commit;
-	//! The currently active checkpoint
-	atomic<transaction_t> active_checkpoint;
+	//! The currently active checkpoint, zero when none is running
+	atomic<idx_t> active_checkpoint;
+	//! Source of checkpoint identities
+	atomic<idx_t> next_checkpoint_id = {0};
 	//! Set of currently running transactions
 	vector<unique_ptr<DuckTransaction>> active_transactions;
 	//! Set of recently committed transactions

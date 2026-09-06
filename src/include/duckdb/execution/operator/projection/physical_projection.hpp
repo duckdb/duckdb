@@ -28,8 +28,9 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
-	bool ParallelOperator() const override {
-		return true;
+	bool ParallelOperator() const override;
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
 	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

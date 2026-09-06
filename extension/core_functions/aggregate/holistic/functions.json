@@ -55,5 +55,12 @@
         "description": "Finds the k approximately most occurring values in the data set",
         "example": "approx_top_k(x, 5)",
         "type": "aggregate_function"
+    },
+    {
+        "name": "lttb",
+        "parameters": "x,y,n",
+        "description": "Downsamples the (x, y) points to (at most) n representative points using the Largest Triangle Three Buckets algorithm. Returns a LIST of STRUCT(x, y); the points must be ordered by x (use lttb(x, y, n ORDER BY x)).",
+        "example": "lttb(x, y, 500 ORDER BY x)",
+        "type": "aggregate_function_set"
     }
 ]

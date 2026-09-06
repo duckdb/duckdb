@@ -13,11 +13,14 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/common/enums/copy_option_mode.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
 struct BoundStatement;
 struct CopyFunctionFileStatistics;
+class BaseStatistics;
 class Binder;
 class ColumnDataCollection;
 class ExecutionContext;
@@ -103,7 +106,7 @@ struct CopyFromFunctionBindInput {
 
 struct CopyToSelectInput {
 	ClientContext &context;
-	case_insensitive_map_t<vector<Value>> &options;
+	identifier_map_t<vector<Value>> &options;
 	vector<unique_ptr<Expression>> select_list;
 	CopyToType copy_to_type;
 };
@@ -117,10 +120,16 @@ struct CopyOption {
 };
 
 struct CopyOptionsInput {
-	explicit CopyOptionsInput(case_insensitive_map_t<CopyOption> &options) : options(options) {
+	explicit CopyOptionsInput(identifier_map_t<CopyOption> &options) : options(options) {
 	}
 
-	case_insensitive_map_t<CopyOption> &options;
+	identifier_map_t<CopyOption> &options;
+};
+
+struct CopyToPropagateStatsInput {
+	ClientContext &context;
+	FunctionData &bind_data;
+	const vector<optional_ptr<BaseStatistics>> &column_stats;
 };
 
 enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FILE, BATCH_COPY_TO_FILE };
@@ -128,7 +137,8 @@ enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FI
 typedef BoundStatement (*copy_to_plan_t)(Binder &binder, CopyStatement &stmt);
 typedef void (*copy_options_t)(ClientContext &context, CopyOptionsInput &input);
 typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, CopyFunctionBindInput &input,
-                                                   const vector<string> &names, const vector<LogicalType> &sql_types);
+                                                   const vector<Identifier> &names,
+                                                   const vector<LogicalType> &sql_types);
 typedef unique_ptr<LocalFunctionData> (*copy_to_initialize_local_t)(ExecutionContext &context, FunctionData &bind_data);
 typedef unique_ptr<GlobalFunctionData> (*copy_to_initialize_global_t)(ClientContext &context, FunctionData &bind_data,
                                                                       const string &file_path);
@@ -144,7 +154,7 @@ typedef void (*copy_to_serialize_t)(Serializer &serializer, const FunctionData &
 typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(Deserializer &deserializer, CopyFunction &function);
 
 typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyFromFunctionBindInput &info,
-                                                     vector<string> &expected_names,
+                                                     vector<Identifier> &expected_names,
                                                      vector<LogicalType> &expected_types);
 typedef CopyFunctionExecutionMode (*copy_to_execution_mode_t)(bool preserve_insertion_order, bool supports_batch_index);
 
@@ -153,12 +163,12 @@ typedef unique_ptr<PreparedBatchData> (*copy_prepare_batch_t)(ClientContext &con
                                                               unique_ptr<ColumnDataCollection> collection);
 typedef void (*copy_flush_batch_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                                    PreparedBatchData &batch);
+
+typedef optional_idx (*copy_default_batch_size_t)();
+typedef optional_idx (*copy_default_batch_size_bytes_t)();
+typedef idx_t (*copy_file_size_bytes_t)(GlobalFunctionData &gstate);
+
 typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
-
-typedef bool (*copy_rotate_files_t)(FunctionData &bind_data, const optional_idx &file_size_bytes);
-
-typedef bool (*copy_rotate_next_file_t)(GlobalFunctionData &gstate, FunctionData &bind_data,
-                                        const optional_idx &file_size_bytes);
 
 typedef void (*copy_to_get_written_statistics_t)(ClientContext &context, FunctionData &bind_data,
                                                  GlobalFunctionData &gstate, CopyFunctionFileStatistics &statistics);
@@ -167,25 +177,66 @@ typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(CopyToSelectInput &in
 
 typedef void (*copy_to_initialize_operator_t)(GlobalFunctionData &gstate, const PhysicalOperator &op);
 
+typedef void (*copy_to_propagate_statistics_t)(CopyToPropagateStatsInput &input);
+
 enum class CopyFunctionReturnType : uint8_t {
 	CHANGED_ROWS = 0,
 	CHANGED_ROWS_AND_FILE_LIST = 1,
 	WRITTEN_FILE_STATISTICS = 2
 };
-vector<string> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
+vector<Identifier> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
 vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type);
 
 struct CopyFunctionFileStatistics {
 	idx_t row_count = 0;
 	idx_t file_size_bytes = 0;
 	Value footer_size_bytes;
-	// map of column name -> statistics name -> statistics value
+	//! Format-specific statistics (e.g. row_group_count for Parquet)
+	InsertionOrderPreservingMap<Value> extra_info;
+	//! map of column name -> statistics name -> statistics value
 	case_insensitive_map_t<case_insensitive_map_t<Value>> column_statistics;
+};
+
+enum class CopyFunctionFlushBatchReason : uint8_t {
+	//! Flush because of current batch size
+	BATCH_SIZE,
+	//! Flush because of current batch size in bytes
+	BATCH_SIZE_BYTES,
+	//! Flush because it's the last batch
+	FORCED_FLUSH
+};
+
+struct CopyFunctionBatchAnalyzer {
+public:
+	CopyFunctionBatchAnalyzer(const idx_t &current_batch_size, const idx_t &current_batch_size_bytes,
+	                          const optional_idx &batch_size, const optional_idx &batch_size_bytes);
+	CopyFunctionBatchAnalyzer(const ColumnDataCollection &batch, const optional_idx &batch_size,
+	                          const optional_idx &batch_size_bytes);
+
+public:
+	bool MeetsFlushCriteria() const;
+	CopyFunctionFlushBatchReason ToReason() const;
+	bool IsAcceptable() const;
+
+private:
+	bool AnyBatchQualifies() const;
+	bool ExceedsBatchSize() const;
+	bool ExceedsBatchSizeBytes() const;
+
+	int64_t BatchSizeVectorDiff() const;
+	int64_t BatchSizeBytesVectorDiff() const;
+
+public:
+	const idx_t current_batch_size;
+	const idx_t current_batch_size_bytes;
+
+	const optional_idx batch_size;
+	const optional_idx batch_size_bytes;
 };
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
-	explicit CopyFunction(const string &name);
+	explicit CopyFunction(const Identifier &name);
 
 	//! Plan rewrite copy function
 	copy_to_plan_t plan;
@@ -200,13 +251,12 @@ public:
 	copy_to_finalize_t copy_to_finalize;
 	copy_to_execution_mode_t execution_mode;
 	copy_to_initialize_operator_t initialize_operator;
+	copy_to_propagate_statistics_t copy_to_propagate_statistics = nullptr;
 
 	copy_prepare_batch_t prepare_batch;
 	copy_flush_batch_t flush_batch;
+	copy_file_size_bytes_t file_size_bytes;
 	copy_desired_batch_size_t desired_batch_size;
-
-	copy_rotate_files_t rotate_files;
-	copy_rotate_next_file_t rotate_next_file;
 
 	copy_to_serialize_t serialize;
 	copy_to_deserialize_t deserialize;

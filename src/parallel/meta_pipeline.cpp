@@ -62,6 +62,29 @@ MetaPipeline &MetaPipeline::GetLastChild() {
 	return *current_children.get().back();
 }
 
+const meta_pipeline_dependency_map_t &MetaPipeline::GetDependencies() const {
+	return pipeline_dependencies;
+}
+
+bool MetaPipeline::RemoveOptionalDependency(Pipeline &pipeline, Pipeline &dependency) {
+	auto entry = pipeline_dependencies.find(pipeline);
+	if (entry == pipeline_dependencies.end()) {
+		return false;
+	}
+	for (auto dependency_entry = entry->second.begin(); dependency_entry != entry->second.end(); dependency_entry++) {
+		if (dependency_entry->type == MetaPipelineDependencyType::OPTIONAL_DEPENDENCY &&
+		    RefersToSameObject(dependency_entry->pipeline.get(), dependency)) {
+			entry->second.erase(dependency_entry);
+			return true;
+		}
+	}
+	return false;
+}
+
+void MetaPipeline::AddOptionalDependency(Pipeline &pipeline, Pipeline &dependency) {
+	pipeline_dependencies[pipeline].emplace_back(dependency, MetaPipelineDependencyType::OPTIONAL_DEPENDENCY);
+}
+
 MetaPipelineType MetaPipeline::Type() const {
 	return type;
 }
@@ -93,13 +116,16 @@ void MetaPipeline::Ready() const {
 	}
 }
 
-MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type) {
+MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type,
+                                                    MetaPipelineDependencyMode dependency_mode) {
 	children.push_back(make_shared_ptr<MetaPipeline>(executor, state, &op, type));
 	auto &child_meta_pipeline = *children.back().get();
 	// store the parent
 	child_meta_pipeline.parent = &current;
-	// child MetaPipeline must finish completely before this MetaPipeline can start
-	current.AddDependency(child_meta_pipeline.GetBasePipeline());
+	if (dependency_mode == MetaPipelineDependencyMode::ADD_DEPENDENCY) {
+		// child MetaPipeline must finish completely before this MetaPipeline can start
+		current.AddDependency(child_meta_pipeline.GetBasePipeline());
+	}
 	// child meta pipeline is part of the recursive CTE too
 	child_meta_pipeline.recursive_cte = recursive_cte;
 	return child_meta_pipeline;
@@ -111,12 +137,9 @@ Pipeline &MetaPipeline::CreatePipeline() {
 	return *pipelines.back();
 }
 
-void MetaPipeline::AddPipelineDependency(Pipeline &dependant, Pipeline &dependency) {
-	dependant.AddIntraDependency(dependency);
-}
-
 vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependant, const Pipeline &start,
-                                                               const bool including) {
+                                                               const bool including,
+                                                               MetaPipelineDependencyType dependency_type) {
 	// find 'start'
 	auto it = pipelines.begin();
 	for (; !RefersToSameObject(**it, start); it++) {
@@ -137,8 +160,9 @@ vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependa
 	}
 
 	// add them to the dependencies
+	auto &explicit_deps = pipeline_dependencies[dependant];
 	for (auto &created_pipeline : created_pipelines) {
-		AddPipelineDependency(dependant, *created_pipeline);
+		explicit_deps.emplace_back(*created_pipeline, dependency_type);
 	}
 
 	return created_pipelines;
@@ -154,7 +178,8 @@ static bool PipelineExceedsThreadCount(Pipeline &pipeline, const idx_t thread_co
 }
 
 void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies,
-                                            const MetaPipeline &last_child) {
+                                            const MetaPipeline &last_child, RecursiveDependencyMode dependency_mode,
+                                            DataflowDependencyMode dataflow_mode) {
 	if (recursive_cte) {
 		return; // let's not burn our fingers on this for now
 	}
@@ -172,18 +197,40 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 	it++;
 
 	// we try to limit the performance impact of these dependencies on smaller workloads,
-	// by only adding the dependencies if the source operator can likely keep all threads busy
-	const auto thread_count = NumericCast<idx_t>(TaskScheduler::GetScheduler(executor.context).NumberOfThreads());
+	// by only adding the dependencies if the source operator can likely keep all threads busy.
+	// when dependencies are forced (e.g. for DML CTEs), we always add them regardless,
+	// because the ordering is required for correctness, not just performance.
+	const auto thread_count = TaskScheduler::GetScheduler(executor.context).NumberOfThreads();
 	for (; it != child_meta_pipelines.end(); it++) {
 		for (auto &pipeline : it->get()->pipelines) {
-			if (!PipelineExceedsThreadCount(*pipeline, thread_count)) {
+			if (dependency_mode == RecursiveDependencyMode::RESPECT_PARALLELISM &&
+			    !PipelineExceedsThreadCount(*pipeline, thread_count)) {
 				continue;
 			}
+			auto dependency_type = dependency_mode == RecursiveDependencyMode::FORCE
+			                           ? MetaPipelineDependencyType::REQUIRED
+			                           : MetaPipelineDependencyType::OPTIONAL_DEPENDENCY;
+			auto &pipeline_deps = pipeline_dependencies[*pipeline];
 			for (auto &new_dependency : new_dependencies) {
-				if (!PipelineExceedsThreadCount(*new_dependency, thread_count)) {
+				if (dataflow_mode == DataflowDependencyMode::SKIP_CONFLICTING) {
+					bool conflicts_with_dataflow = pipeline->HasExternalInputProducer(*new_dependency);
+					for (auto &dataflow_dependency : pipeline->GetDataflowDependencies()) {
+						auto dependency = dataflow_dependency.lock();
+						D_ASSERT(dependency);
+						if (RefersToSameObject(*dependency, *new_dependency)) {
+							conflicts_with_dataflow = true;
+							break;
+						}
+					}
+					if (conflicts_with_dataflow) {
+						continue;
+					}
+				}
+				if (dependency_mode == RecursiveDependencyMode::RESPECT_PARALLELISM &&
+				    !PipelineExceedsThreadCount(*new_dependency, thread_count)) {
 					continue;
 				}
-				AddPipelineDependency(*pipeline, *new_dependency);
+				pipeline_deps.emplace_back(*new_dependency, dependency_type);
 			}
 		}
 	}
@@ -212,6 +259,10 @@ optional_ptr<Pipeline> MetaPipeline::GetFinishGroup(Pipeline &pipeline) const {
 	return it == finish_map.end() ? nullptr : &it->second;
 }
 
+const vector<shared_ptr<MetaPipeline>> &MetaPipeline::GetChildren() const {
+	return children;
+}
+
 Pipeline &MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matters) {
 	// create the union pipeline (batch index 0, should be set correctly afterwards)
 	auto &union_pipeline = CreatePipeline();
@@ -219,11 +270,17 @@ Pipeline &MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 	state.SetPipelineSink(union_pipeline, sink, 0);
 
 	// 'union_pipeline' inherits ALL dependencies of 'current' (within this MetaPipeline, and across MetaPipelines)
-	union_pipeline.InheritDependencies(current);
-
+	union_pipeline.dependencies = current.dependencies;
+	union_pipeline.dataflow_dependencies = current.dataflow_dependencies;
+	union_pipeline.input_mode = current.input_mode;
+	union_pipeline.external_input_producers = current.external_input_producers;
+	auto it = pipeline_dependencies.find(current);
+	if (it != pipeline_dependencies.end()) {
+		pipeline_dependencies[union_pipeline] = it->second;
+	}
 	if (order_matters) {
 		// if we need to preserve order, or if the sink is not parallel, we set a dependency
-		AddPipelineDependency(union_pipeline, current);
+		pipeline_dependencies[union_pipeline].emplace_back(current, MetaPipelineDependencyType::REQUIRED);
 	}
 
 	return union_pipeline;
@@ -240,9 +297,9 @@ void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator &op, 
 
 	// child pipeline has a dependency (within this MetaPipeline on all pipelines that were scheduled
 	// between 'current' and now (including 'current') - set them up
-	AddPipelineDependency(child_pipeline, current);
+	pipeline_dependencies[child_pipeline].emplace_back(current, MetaPipelineDependencyType::REQUIRED);
 	AddDependenciesFrom(child_pipeline, last_pipeline, false);
-	D_ASSERT(!child_pipeline.intra_dependencies.empty());
+	D_ASSERT(pipeline_dependencies.find(child_pipeline) != pipeline_dependencies.end());
 }
 
 } // namespace duckdb

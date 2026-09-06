@@ -1,0 +1,198 @@
+# name: test/sql/catalog/nested_schema/drop_nested_schema.test
+# description: Test dropping of nested schemas (DROP SCHEMA parent.child, CASCADE)
+# group: [nested_schema]
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.child;
+
+statement ok
+CREATE SCHEMA s1.child.grandchild;
+
+statement ok
+CREATE SCHEMA s1.sibling;
+
+# dropping a leaf nested schema works (RESTRICT)
+statement ok
+DROP SCHEMA s1.child.grandchild;
+
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas()
+WHERE database_name = 'memory' AND schema_name IN ('s1','child','grandchild','sibling')
+ORDER BY schema_name;
+----
+child	s1
+s1	NULL
+sibling	s1
+
+# dropping a nested schema with explicit catalog qualification (catalog.parent.child)
+statement ok
+CREATE SCHEMA s1.child.grandchild;
+
+statement ok
+CREATE SCHEMA s2;
+
+statement ok
+CREATE SCHEMA s2.child;
+
+statement ok
+DROP SCHEMA memory.s2.child;
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE database_name = 'memory' AND schema_name = 's2' AND parent_schema IS NULL;
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE database_name = 'memory' AND schema_name = 'child' AND parent_schema = 's2';
+----
+0
+
+# RESTRICT drop of a schema that still has nested schemas fails (s1.child.grandchild already exists)
+statement error
+DROP SCHEMA s1.child;
+----
+<REGEX>:.*Cannot drop entry "child" because there are entries that depend on it.*
+
+# the schema and its children are untouched after the failed RESTRICT drop
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas()
+WHERE database_name = 'memory' AND schema_name IN ('child','grandchild')
+ORDER BY schema_name;
+----
+child	s1
+grandchild	child
+
+# CASCADE drops the schema together with all of its descendants
+statement ok
+DROP SCHEMA s1.child CASCADE;
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE database_name = 'memory' AND schema_name IN ('child','grandchild');
+----
+0
+
+# the sibling (and parent) are unaffected
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas()
+WHERE database_name = 'memory' AND schema_name IN ('s1','sibling')
+ORDER BY schema_name;
+----
+s1	NULL
+sibling	s1
+
+# CASCADE on a top-level schema removes the whole nested subtree
+statement ok
+CREATE SCHEMA s1.child;
+
+statement ok
+CREATE SCHEMA s1.child.grandchild;
+
+statement error
+DROP SCHEMA s1;
+----
+<REGEX>:.*Cannot drop entry "s1" because there are entries that depend on it.*
+
+statement ok
+DROP SCHEMA s1 CASCADE;
+
+query I
+SELECT count(*) FROM duckdb_schemas()
+WHERE database_name = 'memory' AND schema_name IN ('s1','child','grandchild','sibling');
+----
+0
+
+# nested drops work the same way in an attached catalog
+statement ok
+CREATE SCHEMA db2.a;
+
+statement ok
+CREATE SCHEMA db2.a.b;
+
+# RESTRICT is blocked, CASCADE drops the nested subtree
+statement error
+DROP SCHEMA db2.a;
+----
+<REGEX>:.*Cannot drop entry "a" because there are entries that depend on it.*
+
+statement ok
+DROP SCHEMA db2.a CASCADE;
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE database_name = 'db2' AND schema_name IN ('a','b');
+----
+0
+
+# DROP SCHEMA IF EXISTS does not error on a missing nested schema
+statement ok
+DROP SCHEMA IF EXISTS s1.child;
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+DROP SCHEMA IF EXISTS s1.does_not_exist;
+
+# without IF EXISTS, dropping a missing nested schema errors
+statement error
+DROP SCHEMA s1.does_not_exist;
+----
+<REGEX>:.*does not exist.*
+
+# a nested drop whose parent schema does not exist
+statement error
+DROP SCHEMA s1.missing.child;
+----
+<REGEX>:.*parent schema "missing" does not exist.*
+
+# CREATE OR REPLACE on a nested schema that has nested children fails (REPLACE does not cascade)
+statement ok
+CREATE SCHEMA s1.child;
+
+statement ok
+CREATE SCHEMA s1.child.grandchild;
+
+statement error
+CREATE OR REPLACE SCHEMA s1.child;
+----
+<REGEX>:.*Cannot drop entry "child" because there are entries that depend on it.*
+
+# CREATE OR REPLACE on a nested schema without children replaces it in place
+statement ok
+DROP SCHEMA s1.child.grandchild;
+
+statement ok
+CREATE OR REPLACE SCHEMA s1.child;
+
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas()
+WHERE database_name = 'memory' AND schema_name = 'child';
+----
+child	s1
+
+# nested schemas with the same name under different parents are dropped independently
+statement ok
+CREATE SCHEMA n1;
+
+statement ok
+CREATE SCHEMA n2;
+
+statement ok
+CREATE SCHEMA n1.dup;
+
+statement ok
+CREATE SCHEMA n2.dup;
+
+statement ok
+DROP SCHEMA n1.dup;
+
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas()
+WHERE database_name = 'memory' AND schema_name = 'dup';
+----
+dup	n2

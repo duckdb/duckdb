@@ -4,18 +4,29 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cte.hpp"
+#include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
+
+struct JoinFilterBuildSideHeuristics {
+	static constexpr idx_t MIN_FILTER_TARGET_CARDINALITY = 1000000;
+	static constexpr idx_t MAX_BUILD_TO_TARGET_RATIO = 64;
+	static constexpr idx_t SEMI_JOIN_FILTER_TARGET_RATIO = 3;
+};
 
 static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &bindings) {
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
@@ -59,9 +70,15 @@ static void FlipChildren(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		join.join_type = InverseJoinType(join.join_type);
-		for (auto &cond : join.conditions) {
-			std::swap(cond.left, cond.right);
-			cond.comparison = FlipComparisonExpression(cond.comparison);
+		for (idx_t i = 0; i < join.conditions.size(); i++) {
+			auto &cond = join.conditions[i];
+			if (cond.IsComparison()) {
+				auto left_expr = cond.RightReference()->Copy();
+				auto right_expr = cond.LeftReference()->Copy();
+				auto flipped_comparison = FlipComparisonExpression(cond.GetComparisonType());
+
+				join.conditions[i] = JoinCondition(std::move(left_expr), std::move(right_expr), flipped_comparison);
+			}
 		}
 		std::swap(join.left_projection_map, join.right_projection_map);
 		return;
@@ -90,6 +107,64 @@ static inline idx_t ComputeOverlappingBindings(const vector<ColumnBinding> &hays
 		}
 	}
 	return result;
+}
+
+static idx_t MaxDynamicFilterTargetCardinality(LogicalOperator &op, const Expression &expr) {
+	JoinFilterPushdownColumn column;
+	if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(expr, column)) {
+		return 0;
+	}
+
+	vector<JoinFilterPushdownColumn> columns {std::move(column)};
+	vector<PushdownFilterTarget> targets;
+	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(op, std::move(columns), targets);
+
+	// Dynamic filters are applied at the scan target found here. Estimate the work that the
+	// filter can avoid at that point, even if later filters reduce the cardinality at the join.
+	idx_t result = 0;
+	for (auto &target : targets) {
+		auto &get = target.get;
+		result = MaxValue(result, get.has_estimated_cardinality ? get.estimated_cardinality : idx_t(0));
+	}
+	return result;
+}
+
+static double DynamicFilterBuildBonus(LogicalComparisonJoin &join, const idx_t probe_idx, const idx_t build_idx,
+                                      const idx_t build_cardinality) {
+	if (!JoinFilterPushdownOptimizer::IsFiltering(join.children[build_idx])) {
+		return 1;
+	}
+
+	idx_t max_target_cardinality = 0;
+	for (auto &cond : join.conditions) {
+		if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+			continue;
+		}
+		auto &probe_expr = probe_idx == 0 ? cond.GetLHS() : cond.GetRHS();
+		max_target_cardinality =
+		    MaxValue(max_target_cardinality, MaxDynamicFilterTargetCardinality(*join.children[probe_idx], probe_expr));
+	}
+	if (max_target_cardinality < JoinFilterBuildSideHeuristics::MIN_FILTER_TARGET_CARDINALITY) {
+		return 1;
+	}
+	if (build_cardinality > 0 &&
+	    build_cardinality > max_target_cardinality / JoinFilterBuildSideHeuristics::MAX_BUILD_TO_TARGET_RATIO) {
+		return 1;
+	}
+	return static_cast<double>(max_target_cardinality) / static_cast<double>(MaxValue<idx_t>(build_cardinality, 1));
+}
+
+static idx_t MaxDynamicFilterTargetCardinality(LogicalComparisonJoin &join, const idx_t probe_idx) {
+	idx_t max_target_cardinality = 0;
+	for (auto &cond : join.conditions) {
+		if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+			continue;
+		}
+		auto &probe_expr = probe_idx == 0 ? cond.GetLHS() : cond.GetRHS();
+		max_target_cardinality =
+		    MaxValue(max_target_cardinality, MaxDynamicFilterTargetCardinality(*join.children[probe_idx], probe_expr));
+	}
+	return max_target_cardinality;
 }
 
 BuildSize BuildProbeSideOptimizer::GetBuildSizes(const LogicalOperator &op, const idx_t lhs_cardinality,
@@ -158,6 +233,15 @@ idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
 }
 
 bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
+	auto recursive_preference = GetRecursiveProbeSidePreference(op);
+	if (recursive_preference != RecursiveProbeSidePreference::NONE) {
+		if (recursive_preference == RecursiveProbeSidePreference::SWAP) {
+			FlipChildren(op);
+			return true;
+		}
+		return false;
+	}
+
 	auto &left_child = *op.children[0];
 	auto &right_child = *op.children[1];
 	const auto lhs_cardinality = left_child.has_estimated_cardinality ? left_child.estimated_cardinality
@@ -170,6 +254,27 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	auto &right_side_build_cost = build_sizes.right_side;
 
 	bool swap = false;
+
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (JoinFilterPushdownUtil::JoinTypeIsSupported(join.join_type)) {
+			right_side_build_cost /= DynamicFilterBuildBonus(join, 0, 1, rhs_cardinality);
+		}
+		if (HasInverseJoinType(join.join_type) &&
+		    JoinFilterPushdownUtil::JoinTypeIsSupported(InverseJoinType(join.join_type))) {
+			left_side_build_cost /= DynamicFilterBuildBonus(join, 1, 0, lhs_cardinality);
+		}
+		if (join.join_type == JoinType::SEMI && JoinFilterPushdownOptimizer::IsFiltering(join.children[0])) {
+			// SEMI joins often have a filtered domain on the LHS and a larger RHS with residual filters. If flipping
+			// lets that domain generate a runtime filter for a much larger RHS scan, prefer the domain build side.
+			auto right_filter_target = MaxDynamicFilterTargetCardinality(join, 1);
+			if (right_filter_target >= JoinFilterBuildSideHeuristics::MIN_FILTER_TARGET_CARDINALITY &&
+			    right_filter_target / JoinFilterBuildSideHeuristics::SEMI_JOIN_FILTER_TARGET_RATIO > lhs_cardinality &&
+			    right_filter_target / JoinFilterBuildSideHeuristics::SEMI_JOIN_FILTER_TARGET_RATIO > rhs_cardinality) {
+				swap = true;
+			}
+		}
+	}
 
 	idx_t left_child_joins = ChildHasJoins(*op.children[0]);
 	idx_t right_child_joins = ChildHasJoins(*op.children[1]);
@@ -212,7 +317,150 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	return swap;
 }
 
+bool BuildProbeSideOptimizer::ContainsActiveRecursiveReference(const LogicalOperator &op) const {
+	if (active_recursive_cte_indexes.empty()) {
+		return false;
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &cte_ref = op.Cast<LogicalCTERef>();
+		for (auto &active_cte_index : active_recursive_cte_indexes) {
+			if (cte_ref.cte_index == active_cte_index) {
+				return true;
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		if (ContainsActiveRecursiveReference(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool BuildProbeSideOptimizer::ContainsCorrelationSensitiveOperators(const LogicalOperator &op) const {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DELIM_GET:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+		return true;
+	default:
+		break;
+	}
+	for (auto &child : op.children) {
+		if (ContainsCorrelationSensitiveOperators(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+RecursiveProbeSidePreference BuildProbeSideOptimizer::GetRecursiveProbeSidePreference(const LogicalOperator &op) const {
+	if (active_recursive_cte_indexes.empty() || op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return RecursiveProbeSidePreference::NONE;
+	}
+
+	auto &join = op.Cast<LogicalComparisonJoin>();
+	idx_t has_range = 0;
+	bool prefer_range_joins = Settings::Get<PreferRangeJoinsSetting>(context);
+	if (!join.HasEquality(has_range) || prefer_range_joins) {
+		return RecursiveProbeSidePreference::NONE;
+	}
+
+	auto left_depends_on_recursive_cte = ContainsActiveRecursiveReference(*op.children[0]);
+	auto right_depends_on_recursive_cte = ContainsActiveRecursiveReference(*op.children[1]);
+	if (left_depends_on_recursive_cte == right_depends_on_recursive_cte) {
+		return RecursiveProbeSidePreference::NONE;
+	}
+
+	const auto &current_build_side = *op.children[1];
+	auto current_orientation_can_reuse = left_depends_on_recursive_cte && !PropagatesBuildSide(join.join_type) &&
+	                                     !ContainsCorrelationSensitiveOperators(current_build_side);
+	if (current_orientation_can_reuse) {
+		return RecursiveProbeSidePreference::KEEP;
+	}
+
+	if (!HasInverseJoinType(join.join_type)) {
+		return RecursiveProbeSidePreference::NONE;
+	}
+
+	const auto &swapped_build_side = *op.children[0];
+	auto swapped_orientation_can_reuse = right_depends_on_recursive_cte &&
+	                                     !PropagatesBuildSide(InverseJoinType(join.join_type)) &&
+	                                     !ContainsCorrelationSensitiveOperators(swapped_build_side);
+	if (swapped_orientation_can_reuse) {
+		return RecursiveProbeSidePreference::SWAP;
+	}
+
+	return RecursiveProbeSidePreference::NONE;
+}
+
+static optional_ptr<LogicalOperator> FindCorrelatedDomainAttachment(LogicalCTE &cte) {
+	if (cte.correlated_columns.empty()) {
+		return nullptr;
+	}
+
+	auto correlated_column_count = cte.correlated_columns.size();
+	auto anchor_bindings = cte.children[0]->GetColumnBindings();
+	if (anchor_bindings.size() != cte.column_count || anchor_bindings.size() < correlated_column_count) {
+		return nullptr;
+	}
+
+	vector<ColumnBinding> correlated_bindings(
+	    anchor_bindings.end() - NumericCast<vector<ColumnBinding>::difference_type>(correlated_column_count),
+	    anchor_bindings.end());
+	auto current = cte.children[0].get();
+	while (current->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto &projection = current->Cast<LogicalProjection>();
+		for (auto &binding : correlated_bindings) {
+			if (binding.table_index != projection.table_index ||
+			    binding.column_index.GetIndexUnsafe() >= projection.expressions.size()) {
+				return nullptr;
+			}
+			auto &expression = projection.GetExpression(binding);
+			if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				return nullptr;
+			}
+			auto &column_ref = expression.Cast<BoundColumnRefExpression>();
+			if (column_ref.Depth() != 0) {
+				return nullptr;
+			}
+			binding = column_ref.Binding();
+		}
+		if (projection.children.size() != 1) {
+			return nullptr;
+		}
+		current = projection.children[0].get();
+	}
+
+	if (current->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		return nullptr;
+	}
+	auto domain_bindings = current->children[1]->GetColumnBindings();
+	if (domain_bindings != correlated_bindings) {
+		return nullptr;
+	}
+	return current;
+}
+
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		auto &cte = op.Cast<LogicalCTE>();
+		auto domain_attachment = FindCorrelatedDomainAttachment(cte);
+		if (domain_attachment) {
+			// FlattenDependentJoins appends the correlation domain to the recursive anchor. Optimize both inputs while
+			// preserving the orientation of this generated attachment.
+			VisitOperatorChildren(*domain_attachment);
+		} else {
+			VisitOperator(*op.children[0]);
+		}
+		active_recursive_cte_indexes.push_back(cte.table_index);
+		VisitOperator(*op.children[1]);
+		active_recursive_cte_indexes.pop_back();
+		return;
+	}
+
+	VisitOperatorChildren(op);
+
 	// then the currentoperator
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
@@ -267,8 +515,6 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	default:
 		break;
 	}
-
-	VisitOperatorChildren(op);
 }
 
 } // namespace duckdb

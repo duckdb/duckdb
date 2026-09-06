@@ -3,7 +3,7 @@
 # group: [wal]
 
 # load the DB from disk
-load __TEST_DIR__/dict_fsst_wal_replay.db readwrite v1.5.0
+load {TEST_DIR}/dict_fsst_wal_replay.db readwrite v1.5.0
 
 statement ok
 SET force_compression='dict_fsst';

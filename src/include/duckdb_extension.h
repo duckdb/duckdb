@@ -725,6 +725,8 @@ typedef struct {
 	                               idx_t src_offset, idx_t dst_offset);
 	void (*duckdb_unsafe_vector_assign_string_element_len)(duckdb_vector vector, idx_t index, const char *str,
 	                                                       idx_t str_len);
+	duckdb_value (*duckdb_create_timestamp_tz_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v1;
@@ -732,7 +734,9 @@ typedef struct {
 //===--------------------------------------------------------------------===//
 // Typedefs mapping functions to struct entries
 //===--------------------------------------------------------------------===//
-
+// When building as a static extension, DuckDB symbols are resolved directly at link time.
+// The vtable (duckdb_ext_api) is not used -- skip these macro redirections.
+#ifndef DUCKDB_BUILD_STATIC_EXTENSION
 // capigen:begin appended
 #define duckdb_open duckdb_ext_api.duckdb_open
 #if DUCKDB_API_VERSION_AT_LEAST(0, 2, 8)
@@ -2344,10 +2348,23 @@ typedef struct {
 #if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 #define duckdb_unsafe_vector_assign_string_element_len duckdb_ext_api.duckdb_unsafe_vector_assign_string_element_len
 #endif
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
+#define duckdb_create_timestamp_tz_ns duckdb_ext_api.duckdb_create_timestamp_tz_ns
+#endif
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
+#define duckdb_get_timestamp_tz_ns duckdb_ext_api.duckdb_get_timestamp_tz_ns
+#endif
 // capigen:end appended
+#endif // DUCKDB_BUILD_STATIC_EXTENSION
+
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
 //===--------------------------------------------------------------------===//
+#ifdef DUCKDB_BUILD_STATIC_EXTENSION
+// No vtable global needed for static builds -- DuckDB symbols are resolved directly at link time
+#define DUCKDB_EXTENSION_GLOBAL
+#define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)
+#else
 // This goes in the c/c++ file containing the entrypoint (handle
 #define DUCKDB_EXTENSION_GLOBAL duckdb_ext_api_v1 duckdb_ext_api = {0};
 // Initializes the C Extension API: First thing to call in the extension entrypoint
@@ -2357,6 +2374,7 @@ typedef struct {
 		return false;                                                                                                  \
 	};                                                                                                                 \
 	duckdb_ext_api = *res;
+#endif // DUCKDB_BUILD_STATIC_EXTENSION
 
 // Place in global scope of any C/C++ file that needs to access the extension API
 #define DUCKDB_EXTENSION_EXTERN extern duckdb_ext_api_v1 duckdb_ext_api;
@@ -2395,7 +2413,8 @@ typedef struct {
 	}                                                                                                                  \
 	DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)
 
-// Custom entrypoint: just forwards the info and access
+// Custom entrypoint: just forwards info and access. Both, and any database returned by access->get_database(info), are
+// borrowed for the duration of the entrypoint and must not be retained or destroyed.
 #define DUCKDB_EXTENSION_ENTRYPOINT_CUSTOM                                                                             \
 	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
 	    duckdb_extension_info info, struct duckdb_extension_access * access);                                          \

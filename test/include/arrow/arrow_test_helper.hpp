@@ -40,7 +40,7 @@ public:
 	                 bool big_result, ClientProperties options, ClientContext &context)
 	    : types(std::move(types_p)), names(std::move(names_p)), result(std::move(result_p)), big_result(big_result),
 	      options(std::move(options)), context(context) {
-		if (result->type == QueryResultType::ARROW_RESULT) {
+		if (result->GetResultType() == QueryResultType::ARROW_RESULT) {
 			auto &arrow_result = result->Cast<ArrowQueryResult>();
 			prefetched_chunks = arrow_result.ConsumeArrays();
 			chunk_iterator = prefetched_chunks.begin();
@@ -89,12 +89,11 @@ public:
 	static bool RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream);
 
 private:
-	static bool CompareResults(Connection &con, unique_ptr<QueryResult> arrow, unique_ptr<MaterializedQueryResult> duck,
-	                           const string &query);
+	static bool CompareResults(Connection &con, shared_ptr<Relation> arrow_tbl, const string &query);
 
 public:
-	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, vector<Value> &params);
 	static vector<Value> ConstructArrowScan(ArrowTestFactory &factory);
 	static vector<Value> ConstructArrowScan(ArrowArrayStream &stream);
+	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, vector<Value> &params);
 };
 } // namespace duckdb

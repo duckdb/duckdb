@@ -1,0 +1,92 @@
+# name: test/optimizer/statistics/statistics_least_greatest.test
+# description: Statistics propagation for least/greatest
+# group: [statistics]
+
+statement ok
+CREATE TABLE integers AS
+SELECT i::BIGINT AS id
+FROM range(0, 100000) tbl(i);
+
+query II
+EXPLAIN SELECT count(*) FROM integers WHERE greatest(id, 5) < 3;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT count(*) FROM integers WHERE least(id, 5) > 10;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# nullable input: the non-null constant still anchors the bound, so pruning applies
+statement ok
+CREATE TABLE nullable_integers AS
+SELECT (CASE WHEN i % 2 = 0 THEN NULL ELSE i END)::BIGINT AS id
+FROM range(0, 100000) tbl(i);
+
+query II
+EXPLAIN SELECT count(*) FROM nullable_integers WHERE greatest(id, 5) < 3;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT count(*) FROM nullable_integers WHERE least(id, 5) > 10;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# result range [5, 99999] overlaps the predicate: must NOT be pruned
+query II
+EXPLAIN SELECT count(*) FROM nullable_integers WHERE greatest(id, 5) < 100;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+# verify the actual results match the pruning decisions
+query I
+SELECT count(*) FROM nullable_integers WHERE greatest(id, 5) < 3;
+----
+0
+
+query I
+SELECT count(*) FROM nullable_integers WHERE least(id, 5) > 10;
+----
+0
+
+query I
+SELECT count(*) FROM nullable_integers WHERE greatest(id, 5) < 100;
+----
+50050
+
+# two nullable columns and no constant: exercises the all-nullable fallback bound
+statement ok
+CREATE TABLE nullable_pairs AS
+SELECT
+    (CASE WHEN i % 2 = 0 THEN NULL ELSE i END)::BIGINT AS a,
+    (CASE WHEN i % 3 = 0 THEN NULL ELSE i + 1000000 END)::BIGINT AS b
+FROM range(0, 100000) tbl(i);
+
+# greatest(a, b) ranges over [1, 1099998], so < 0 can never hold
+query II
+EXPLAIN SELECT count(*) FROM nullable_pairs WHERE greatest(a, b) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# least(a, b) ranges over [1, 1099998], so > 2000000 can never hold
+query II
+EXPLAIN SELECT count(*) FROM nullable_pairs WHERE least(a, b) > 2000000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# predicate falls inside the range: must NOT be pruned
+query II
+EXPLAIN SELECT count(*) FROM nullable_pairs WHERE greatest(a, b) < 1050000;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM nullable_pairs WHERE greatest(a, b) < 0;
+----
+0
+
+query I
+SELECT count(*) FROM nullable_pairs WHERE least(a, b) > 2000000;
+----
+0

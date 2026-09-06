@@ -2,9 +2,6 @@
 # group: [map]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 create macro input() as table
 	select *
 	from test_vector_types(NULL::INTEGER[]) t(i) where [x for x in i if x IS NOT NULL] != [] offset 3;

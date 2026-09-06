@@ -2,9 +2,6 @@
 # description: Test OFFSET keyword
 # group: [order]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT 3 OFFSET -1;
 ----

@@ -1,0 +1,138 @@
+# name: test/sql/optimizer/prefix_zonemap_pruning.test
+# description: Prune row groups for prefix scan function when the zonemap proves a shared prefix
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/prefix_zonemap_pruning.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# 6144 rows -> 3 row groups of 2048 rows. Every row starts with '00' and the
+# min/max of every row group share that prefix.
+statement ok
+CREATE TABLE prefix_pruning AS
+SELECT i::INTEGER AS i, lpad(i::VARCHAR, 6, '0') AS s
+FROM range(6144) r(i);
+
+# The positive form is rewritten into a range predicate on the column itself.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM prefix_pruning WHERE starts_with(s, '0040');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT count(*) FROM prefix_pruning WHERE starts_with(s, '0040');
+----
+100
+
+# When the table-level min and max both start with the needle, every string in the table does, fold into empty directly.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM prefix_pruning WHERE NOT prefix(s, '00');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM prefix_pruning WHERE NOT prefix(s, '00');
+----
+0
+
+# starts_with() and the ^@ operator share the same pruning callback as prefix().
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM prefix_pruning WHERE NOT starts_with(s, '00');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM prefix_pruning WHERE NOT starts_with(s, '00');
+----
+0
+
+# A needle matching only part of each row group cannot prune.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM prefix_pruning WHERE NOT starts_with(s, '0040');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM prefix_pruning WHERE NOT starts_with(s, '0040');
+----
+6044
+
+# When only some row groups share the prefix, pruning happens per row group:
+# the two '00' row groups are pruned and only the '99' row group is scanned.
+statement ok
+CREATE TABLE prefix_mixed AS
+SELECT i::INTEGER AS i, CASE WHEN i < 4096 THEN '00' ELSE '99' END || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM prefix_mixed WHERE NOT starts_with(s, '00');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM prefix_mixed WHERE NOT starts_with(s, '00');
+----
+2048
+
+# String zonemaps store a 12-byte prefix verbatim, so a needle that fits in the
+# stored bytes is provable while a longer needle is not.
+statement ok
+CREATE TABLE prefix_truncated AS
+SELECT i::INTEGER AS i, 'ppppppppppppp' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(6144) r(i);
+
+# 12-byte needle: fits in the stored prefix bytes.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM prefix_truncated WHERE NOT starts_with(s, 'pppppppppppp');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM prefix_truncated WHERE NOT starts_with(s, 'pppppppppppp');
+----
+0
+
+# 13-byte needle: longer than the stored prefix bytes, cannot be proven.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM prefix_truncated WHERE NOT starts_with(s, 'ppppppppppppp');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM prefix_truncated WHERE NOT starts_with(s, 'ppppppppppppp');
+----
+0
+
+# NULL rows produce NULL rather than false, so a nullable column is not pruned.
+statement ok
+CREATE TABLE prefix_nullable AS
+SELECT i::INTEGER AS i, CASE WHEN i % 100 = 50 THEN NULL ELSE lpad(i::VARCHAR, 6, '0') END AS s
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM prefix_nullable WHERE NOT starts_with(s, '00');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM prefix_nullable WHERE NOT starts_with(s, '00');
+----
+0
+
+# Multi-byte needles within the stored prefix bytes are provable.
+statement ok
+CREATE TABLE prefix_utf8 AS
+SELECT i::INTEGER AS i, '🦆' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM prefix_utf8 WHERE NOT starts_with(s, '🦆');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM prefix_utf8 WHERE NOT starts_with(s, '🦆');
+----
+0

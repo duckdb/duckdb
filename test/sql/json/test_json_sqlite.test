@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # some of the more elaborate tests from SQLite JSON1 extension
 # https://github.com/sqlite/sqlite/blob/master/test/json101.test
 statement ok

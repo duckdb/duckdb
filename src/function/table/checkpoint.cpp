@@ -25,7 +25,7 @@ public:
 };
 
 static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunctionBindInput &input,
-                                               vector<LogicalType> &return_types, vector<string> &names) {
+                                               vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 
@@ -36,7 +36,7 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 			throw BinderException("Database cannot be NULL");
 		}
 		auto &db_name = StringValue::Get(input.inputs[0]);
-		db = db_manager.GetDatabase(context, db_name);
+		db = db_manager.GetDatabase(context, Identifier(db_name));
 		if (!db) {
 			throw BinderException("Database \"%s\" not found", db_name);
 		}

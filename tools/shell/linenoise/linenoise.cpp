@@ -35,6 +35,7 @@
 namespace duckdb {
 
 static linenoiseCompletionCallback *completionCallback = NULL;
+static linenoiseFormatCallback *formatCallback = NULL;
 
 int linenoiseHistoryAdd(const char *line);
 
@@ -43,6 +44,40 @@ int linenoiseHistoryAdd(const char *line);
 /* Register a callback function to be called for tab-completion. */
 void Linenoise::SetCompletionCallback(linenoiseCompletionCallback *fn) {
 	completionCallback = fn;
+}
+
+/* Register a callback function to be called to format the input before returning it to the shell. */
+void Linenoise::SetFormatCallback(linenoiseFormatCallback *fn) {
+	formatCallback = fn;
+}
+
+void Linenoise::Format() {
+	if (!formatCallback) {
+		return;
+	}
+	buf[len] = '\0';
+	char *formatted = formatCallback(buf);
+	if (!formatted) {
+		return;
+	}
+	// The formatter returns \n line endings, but linenoise multiline mode uses \r\n
+	// internally. Convert \n -> \r\n so RefreshLine() renders correctly.
+	// The \r\n -> \n rewrite in Edit() will convert them back before returning.
+	string converted;
+	for (const char *p = formatted; *p; p++) {
+		if (*p == '\n' && (p == formatted || *(p - 1) != '\r')) {
+			converted += '\r';
+		}
+		converted += *p;
+	}
+	free(formatted);
+	if (converted.size() >= buflen) {
+		return;
+	}
+	memcpy(buf, converted.c_str(), converted.size() + 1);
+	len = converted.size();
+	pos = len;
+	RefreshLine();
 }
 
 CompletionType Linenoise::GetCompletionType(const char *type) {
@@ -132,6 +167,26 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 		if (has_ties) {
 			// if there are ties we don't auto-complete immediately
 			// instead we display the list of suggestions
+			// but first, complete up to the longest common prefix (like shell behavior)
+			auto &first = completions[0].completion;
+			idx_t common_len = first.size();
+			for (idx_t i = 1; i < completions.size(); i++) {
+				auto &other = completions[i].completion;
+				idx_t min_len = MinValue<idx_t>(common_len, other.size());
+				idx_t j;
+				for (j = 0; j < min_len; j++) {
+					if (first[j] != other[j]) {
+						break;
+					}
+				}
+				common_len = j;
+			}
+			if (common_len > (idx_t)len) {
+				// there is a common prefix longer than the current input - apply it
+				int nwritten = snprintf(buf, buflen, "%.*s", (int)common_len, first.c_str());
+				pos = nwritten;
+				len = nwritten;
+			}
 			completion_idx = optional_idx();
 			render_completion_suggestion = true;
 		} else {
@@ -291,7 +346,7 @@ size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
 		}
 
 		// --- 4. Handle UTF-8 grapheme clusters ---
-		int codepoint = duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz);
+		int codepoint = duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz, len - cpos);
 		if (codepoint < 0) {
 			// invalid byte, treat as width 1
 			cpos++;
@@ -352,7 +407,7 @@ void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &row
 	}
 	int sz;
 	int char_render_width;
-	if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz) < 0) {
+	if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz, len - cpos) < 0) {
 		char_render_width = 1;
 		cpos++;
 	} else {
@@ -1575,6 +1630,7 @@ int Linenoise::Edit() {
 			// final refresh before returning control to the shell
 			continuation_markers = false;
 			History::RemoveLastEntry();
+			Format();
 			if (Terminal::IsMultiline()) {
 				if (pos == len) {
 					// already at the end - only refresh

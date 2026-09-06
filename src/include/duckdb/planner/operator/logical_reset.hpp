@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -20,11 +21,11 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_RESET;
 
 public:
-	LogicalReset(std::string name_p, SetScope scope_p)
+	LogicalReset(Identifier name_p, SetScope scope_p)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_RESET), name(std::move(name_p)), scope(scope_p) {
 	}
 
-	std::string name;
+	Identifier name;
 	SetScope scope;
 
 public:

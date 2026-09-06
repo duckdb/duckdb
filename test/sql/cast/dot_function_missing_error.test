@@ -2,9 +2,6 @@
 # description: Test reporting of dot with missing identifier
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 # file does not exist
 statement error
 select file.replace('a', 'b') from (values ('xxxx')) t("filename");

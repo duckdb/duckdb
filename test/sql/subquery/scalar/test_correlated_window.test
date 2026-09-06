@@ -11,11 +11,14 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL);
 
-# FIXME - why not?
-statement error
+# a window keeps its own query level, so a correlated argument is simply a constant within it
+query II
 SELECT i, (SELECT SUM(i + 1) OVER ()) FROM integers ORDER BY i
 ----
-not supported
+NULL	NULL
+1	2
+2	3
+3	4
 
 query II
 SELECT i, (SELECT SUM((SELECT i + 1)) OVER ()) FROM integers ORDER BY i

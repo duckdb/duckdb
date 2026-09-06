@@ -17,6 +17,7 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
+#include "duckdb/storage/statistics/stats_merge_type.hpp"
 
 namespace duckdb {
 struct SelectionVector;
@@ -25,7 +26,6 @@ class Serializer;
 class Deserializer;
 
 class Vector;
-struct UnifiedVectorFormat;
 
 enum class StatsInfo : uint8_t {
 	CAN_HAVE_NULL_VALUES = 0,
@@ -44,6 +44,21 @@ enum class StatisticsType : uint8_t {
 	ARRAY_STATS,
 	GEOMETRY_STATS,
 	VARIANT_STATS
+};
+
+struct ExtraStatsData {
+	virtual ~ExtraStatsData() = default;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 class BaseStatistics {
@@ -105,9 +120,10 @@ public:
 	void SetHasNull();
 	void SetHasNoNull();
 
-	void Merge(const BaseStatistics &other);
+	void Merge(const BaseStatistics &other, StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 
 	void Copy(const BaseStatistics &other);
+	void ResetAdditiveStatistics();
 
 	unique_ptr<BaseStatistics> PushdownExtract(const StorageIndex &index) const;
 	BaseStatistics Copy() const;
@@ -118,9 +134,10 @@ public:
 	static BaseStatistics Deserialize(Deserializer &deserializer);
 
 	//! Verify that a vector does not violate the statistics
-	void Verify(Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null = false) const;
-	void Verify(Vector &vector, idx_t count) const;
+	void Verify(const Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null = false) const;
+	void Verify(const Vector &vector, idx_t count) const;
 
+	Value ToStruct() const;
 	string ToString() const;
 
 	idx_t GetDistinctCount();
@@ -165,13 +182,12 @@ private:
 		//! Variant stats data, for variant stats
 		VariantStatsData variant_data;
 	} stats_union;
+	//! Extra stats data, used for e.g. string data if required
+	unique_ptr<ExtraStatsData> extra_data;
 	//! Child stats (for LIST and STRUCT)
 	unsafe_unique_array<BaseStatistics> child_stats;
 };
 
-template <>
-inline void BaseStatistics::UpdateNumericStats<interval_t>(interval_t new_value) {
-}
 template <>
 inline void BaseStatistics::UpdateNumericStats<list_entry_t>(list_entry_t new_value) {
 }

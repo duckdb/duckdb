@@ -2,6 +2,9 @@
 # description: Test IEJoin
 # group: [iejoin]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # Otherwise, we run out of memory.
 require 64bit
 

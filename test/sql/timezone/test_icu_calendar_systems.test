@@ -1,0 +1,268 @@
+# name: test/sql/timezone/test_icu_calendar_systems.test
+# description: The calendar systems that are derived from the Gregorian calendar
+# group: [timezone]
+
+require icu
+
+statement ok
+SET TimeZone='America/New_York'
+
+# buddhist years
+statement ok
+SET Calendar='buddhist'
+
+query IIIII
+SELECT ts, year(ts), month(ts), day(ts), era(ts) FROM (VALUES
+  ('2024-01-15 12:00:00-05'::TIMESTAMPTZ), ('1970-01-01 00:00:00-05'), ('0001-01-01 12:00:00-05'),
+  ('0544-01-01 (BC) 12:00:00-04:56'), ('1582-10-04 12:00:00-04:56'), ('1582-10-15 12:00:00-04:56'),
+  ('1000-06-15 12:00:00-04:56'), ('9999-12-31 12:00:00-05')) t(ts)
+----
+2024-01-15 12:00:00-05	2567	1	15	0
+1970-01-01 00:00:00-05	2513	1	1	0
+0001-01-03 12:03:58-04:56	544	1	3	0
+0544-01-07 (BC) 11:59:58-04:56	0	1	7	0
+1582-09-24 11:59:58-04:56	2125	9	24	0
+1582-10-15 11:59:58-04:56	2125	10	15	0
+1000-06-09 11:59:58-04:56	1543	6	9	0
+9999-12-31 12:00:00-05	10542	12	31	0
+
+query I
+SELECT make_timestamptz(2567, 1, 15, 12, 0, 0.0, 'UTC')
+----
+2024-01-15 07:00:00-05
+
+query I
+SELECT make_timestamptz(1, 1, 1, 0, 0, 0.0, 'UTC')
+----
+0544-12-31 (BC) 19:03:58-04:56
+
+query I
+SELECT '2024-01-15 12:00:00-05'::TIMESTAMPTZ + INTERVAL 1 YEAR
+----
+2025-01-15 12:00:00-05
+
+query I
+SELECT '2024-01-15 12:00:00-05'::TIMESTAMPTZ + INTERVAL 13 MONTH
+----
+2025-02-15 12:00:00-05
+
+query I
+SELECT date_trunc('year', '2024-06-15 12:00:00-04'::TIMESTAMPTZ)
+----
+2024-01-01 00:00:00-05
+
+query I
+SELECT date_trunc('decade', '2024-06-15 12:00:00-04'::TIMESTAMPTZ)
+----
+2017-01-01 00:00:00-05
+
+query I
+SELECT date_trunc('century', '2024-06-15 12:00:00-04'::TIMESTAMPTZ)
+----
+1957-01-01 00:00:00-05
+
+query I
+SELECT date_diff('year', '0001-01-01 12:00:00-04:56'::TIMESTAMPTZ, '2024-01-01 12:00:00-05'::TIMESTAMPTZ)
+----
+2023
+
+query I
+SELECT last_day('2024-02-15 12:00:00-05'::TIMESTAMPTZ)
+----
+2024-02-29
+
+query I
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear'], '2024-06-15 12:00:00-04'::TIMESTAMPTZ)
+----
+{'year': 2567, 'month': 6, 'day': 15, 'era': 0, 'dayofyear': 167, 'week': 24, 'isoyear': 2024}
+
+# roc years and eras
+statement ok
+SET Calendar='roc'
+
+query IIIII
+SELECT ts, year(ts), month(ts), day(ts), era(ts) FROM (VALUES
+  ('2024-01-15 12:00:00-05'::TIMESTAMPTZ), ('1912-01-01 12:00:00-05'), ('1911-12-31 12:00:00-05'),
+  ('1911-01-01 12:00:00-05'), ('1800-01-01 12:00:00-04:56'), ('1582-10-04 12:00:00-04:56'),
+  ('1582-10-15 12:00:00-04:56'), ('0001-01-01 12:00:00-04:56')) t(ts)
+----
+2024-01-15 12:00:00-05	113	1	15	1
+1912-01-01 12:00:00-05	1	1	1	1
+1911-12-31 12:00:00-05	1	12	31	0
+1911-01-01 12:00:00-05	1	1	1	0
+1800-01-01 11:59:58-04:56	112	1	1	0
+1582-09-24 11:59:58-04:56	330	9	24	0
+1582-10-15 11:59:58-04:56	330	10	15	0
+0001-01-03 11:59:58-04:56	1911	1	3	0
+
+query I
+SELECT make_timestamptz(113, 1, 15, 12, 0, 0.0, 'UTC')
+----
+2024-01-15 07:00:00-05
+
+query I
+SELECT make_timestamptz(1, 1, 1, 0, 0, 0.0, 'UTC')
+----
+1911-12-31 19:00:00-05
+
+query I
+SELECT '1912-01-01 12:00:00-05'::TIMESTAMPTZ - INTERVAL 1 YEAR
+----
+1911-01-01 12:00:00-05
+
+query I
+SELECT date_trunc('year', '2024-06-15 12:00:00-04'::TIMESTAMPTZ)
+----
+2024-01-01 00:00:00-05
+
+query I
+SELECT date_trunc('century', '2024-06-15 12:00:00-04'::TIMESTAMPTZ)
+----
+2011-01-01 00:00:00-05
+
+query I
+SELECT date_diff('year', '1900-01-01 12:00:00-04:56'::TIMESTAMPTZ, '2024-01-01 12:00:00-05'::TIMESTAMPTZ)
+----
+124
+
+query I
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear'], '2024-06-15 12:00:00-04'::TIMESTAMPTZ)
+----
+{'year': 113, 'month': 6, 'day': 15, 'era': 1, 'dayofyear': 167, 'week': 24, 'isoyear': 2024}
+
+# iso8601 weeks
+statement ok
+SET Calendar='iso8601'
+
+query IIIII
+SELECT ts, year(ts), week(ts), isoyear(ts), dayofweek(ts) FROM (VALUES
+  ('2024-01-01 12:00:00-05'::TIMESTAMPTZ), ('2023-01-01 12:00:00-05'), ('2021-01-01 12:00:00-05'),
+  ('2020-12-31 12:00:00-05'), ('2019-12-30 12:00:00-05'), ('2016-01-03 12:00:00-05'),
+  ('2016-01-04 12:00:00-05'), ('1000-06-15 12:00:00-04:56')) t(ts)
+----
+2024-01-01 12:00:00-05	2024	1	2024	1
+2023-01-01 12:00:00-05	2023	52	2022	0
+2021-01-01 12:00:00-05	2021	53	2020	5
+2020-12-31 12:00:00-05	2020	53	2020	4
+2019-12-30 12:00:00-05	2019	1	2020	1
+2016-01-03 12:00:00-05	2016	53	2015	0
+2016-01-04 12:00:00-05	2016	1	2016	1
+1000-06-15 11:59:58-04:56	1000	24	1000	0
+
+query I
+SELECT date_trunc('week', '2024-06-15 12:00:00-04'::TIMESTAMPTZ)
+----
+2024-06-10 00:00:00-04
+
+query I
+SELECT date_trunc('isoyear', '2024-01-01 12:00:00-05'::TIMESTAMPTZ)
+----
+2024-01-01 00:00:00-05
+
+query I
+SELECT date_trunc('year', '2024-06-15 12:00:00-04'::TIMESTAMPTZ)
+----
+2024-01-01 00:00:00-05
+
+query I
+SELECT date_diff('week', '2024-01-01 12:00:00-05'::TIMESTAMPTZ, '2024-12-31 12:00:00-05'::TIMESTAMPTZ)
+----
+52
+
+query I
+SELECT make_timestamptz(2024, 6, 15, 12, 0, 0.0, 'UTC')
+----
+2024-06-15 08:00:00-04
+
+query I
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear','yearweek'], '2024-06-15 12:00:00-04'::TIMESTAMPTZ)
+----
+{'year': 2024, 'month': 6, 'day': 15, 'era': 1, 'dayofyear': 167, 'week': 24, 'isoyear': 2024, 'yearweek': 202424}
+
+query I
+SELECT * FROM generate_series('2024-01-01 12:00:00-05'::TIMESTAMPTZ, '2024-02-01 12:00:00-05'::TIMESTAMPTZ, INTERVAL 1 WEEK)
+----
+2024-01-01 12:00:00-05
+2024-01-08 12:00:00-05
+2024-01-15 12:00:00-05
+2024-01-22 12:00:00-05
+2024-01-29 12:00:00-05
+
+# the julian to gregorian cutover in the derived calendars
+statement ok
+SET TimeZone='UTC'
+
+statement ok
+SET Calendar='buddhist'
+
+query IIIII
+SELECT ts, year(ts), month(ts), day(ts), dayofyear(ts) FROM (VALUES
+  ('1582-10-01 12:00:00+00'::TIMESTAMPTZ), ('1582-10-04 12:00:00+00'), ('1582-10-05 12:00:00+00'),
+  ('1582-10-14 12:00:00+00'), ('1582-10-15 12:00:00+00'), ('1582-12-31 12:00:00+00'),
+  ('1500-02-28 12:00:00+00'), ('1700-02-28 12:00:00+00')) t(ts)
+----
+1582-09-21 12:00:00+00	2125	9	21	264
+1582-09-24 12:00:00+00	2125	9	24	267
+1582-09-25 12:00:00+00	2125	9	25	268
+1582-10-04 12:00:00+00	2125	10	4	277
+1582-10-15 12:00:00+00	2125	10	15	278
+1582-12-31 12:00:00+00	2125	12	31	355
+1500-02-19 12:00:00+00	2043	2	19	50
+1700-02-28 12:00:00+00	2243	2	28	59
+
+statement ok
+SET Calendar='roc'
+
+query IIIII
+SELECT ts, year(ts), month(ts), day(ts), dayofyear(ts) FROM (VALUES
+  ('1582-10-04 12:00:00+00'::TIMESTAMPTZ), ('1582-10-15 12:00:00+00'), ('1500-02-28 12:00:00+00')) t(ts)
+----
+1582-09-24 12:00:00+00	330	9	24	267
+1582-10-15 12:00:00+00	330	10	15	278
+1500-02-19 12:00:00+00	412	2	19	50
+
+statement ok
+SET Calendar='iso8601'
+
+query IIIII
+SELECT ts, year(ts), month(ts), day(ts), dayofyear(ts) FROM (VALUES
+  ('1582-10-04 12:00:00+00'::TIMESTAMPTZ), ('1582-10-15 12:00:00+00'), ('1500-02-28 12:00:00+00')) t(ts)
+----
+1582-10-04 12:00:00+00	1582	10	4	277
+1582-10-15 12:00:00+00	1582	10	15	288
+1500-02-28 12:00:00+00	1500	2	28	59
+
+statement ok
+SET Calendar='gregorian'
+
+query IIIII
+SELECT ts, year(ts), month(ts), day(ts), dayofyear(ts) FROM (VALUES
+  ('1582-10-04 12:00:00+00'::TIMESTAMPTZ), ('1582-10-15 12:00:00+00'), ('1500-02-28 12:00:00+00')) t(ts)
+----
+1582-10-04 12:00:00+00	1582	10	4	277
+1582-10-15 12:00:00+00	1582	10	15	288
+1500-02-28 12:00:00+00	1500	2	28	59
+
+# calendar names
+query I
+SELECT name FROM icu_calendar_names() ORDER BY 1
+----
+buddhist
+chinese
+coptic
+dangi
+ethiopic
+ethiopic-amete-alem
+gregorian
+hebrew
+indian
+islamic
+islamic-civil
+islamic-rgsa
+islamic-tbla
+islamic-umalqura
+iso8601
+japanese
+persian
+roc
+

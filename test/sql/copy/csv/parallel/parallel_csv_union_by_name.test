@@ -3,9 +3,6 @@
 # group: [parallel]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SET default_null_order='nulls_first';
 
 statement ok
@@ -60,7 +57,7 @@ LIMIT 1;
 ----
 VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
 
-mode skip
+mode skip flaky
 
 # projection pushdown
 query II

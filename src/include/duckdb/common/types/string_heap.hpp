@@ -23,20 +23,65 @@ public:
 	DUCKDB_API void Destroy();
 	DUCKDB_API void Move(StringHeap &other);
 
-	//! Add a string to the string heap, returns a pointer to the string
-	DUCKDB_API string_t AddString(const char *data, idx_t len);
-	//! Add a string to the string heap, returns a pointer to the string
-	DUCKDB_API string_t AddString(const char *data);
-	//! Add a string to the string heap, returns a pointer to the string
-	DUCKDB_API string_t AddString(const string &data);
-	//! Add a string to the string heap, returns a pointer to the string
-	DUCKDB_API string_t AddString(const string_t &data);
-	//! Add a blob to the string heap; blobs can be non-valid UTF8
-	DUCKDB_API string_t AddBlob(const string_t &data);
-	//! Add a blob to the string heap; blobs can be non-valid UTF8
-	DUCKDB_API string_t AddBlob(const char *data, idx_t len);
-	//! Allocates space for an empty string of size "len" on the heap
-	DUCKDB_API string_t EmptyString(idx_t len);
+	inline string_t AddString(const char *data, idx_t len) {
+		D_ASSERT(Value::StringIsValid(data, len));
+		return AddBlob(data, len);
+	}
+
+	inline string_t AddString(const char *data) {
+		return AddString(data, strlen(data));
+	}
+
+	inline string_t AddString(const string &data) {
+		return AddString(data.c_str(), data.size());
+	}
+
+	inline string_t AddString(const string_t &data) {
+		D_ASSERT(Value::StringIsValid(data.GetData(), data.GetSize()));
+		return AddBlob(data);
+	}
+
+	inline string_t AddBlob(const char *data, idx_t len) {
+		if (len <= string_t::INLINE_LENGTH) {
+			return string_t(data, UnsafeNumericCast<uint32_t>(len));
+		}
+		return AddBlobToHeap(data, len);
+	}
+
+	inline string_t AddBlob(const string_t &data) {
+		auto len = data.GetSize();
+		if (len <= string_t::INLINE_LENGTH) {
+			return data;
+		}
+		return AddBlobToHeap(data.GetData(), len);
+	}
+
+	inline string_t EmptyString(idx_t len) {
+		if (len <= string_t::INLINE_LENGTH) {
+			return string_t(UnsafeNumericCast<uint32_t>(len));
+		}
+		return CreateEmptyStringInHeap(len);
+	}
+
+	inline string_t CreateEmptyStringInHeap(idx_t len) {
+		D_ASSERT(len > string_t::INLINE_LENGTH);
+		if (len > string_t::MAX_STRING_SIZE) {
+			throw OutOfRangeException(
+			    "Cannot create a string of size: '%d', the maximum supported string size is: '%d'", len,
+			    string_t::MAX_STRING_SIZE);
+		}
+		auto insert_pos = const_char_ptr_cast(allocator.Allocate(len));
+		return string_t(insert_pos, UnsafeNumericCast<uint32_t>(len));
+	}
+
+	inline string_t AddBlobToHeap(const char *data, idx_t len) {
+		D_ASSERT(len > string_t::INLINE_LENGTH);
+		auto insert_string = CreateEmptyStringInHeap(len);
+		auto insert_pos = insert_string.GetDataWriteable();
+		memcpy(insert_pos, data, len);
+		insert_string.Finalize();
+		return insert_string;
+	}
 
 	//! Size of strings
 	DUCKDB_API idx_t SizeInBytes() const;
@@ -47,6 +92,7 @@ public:
 		return allocator;
 	}
 
+private:
 private:
 	ArenaAllocator allocator;
 };

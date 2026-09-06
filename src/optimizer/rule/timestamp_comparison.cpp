@@ -17,10 +17,9 @@
 namespace duckdb {
 
 TimeStampComparison::TimeStampComparison(ExpressionRewriter &rewriter) : Rule(rewriter), context(rewriter.context) {
-	// match on a ComparisonExpression that is an Equality and has a VARCHAR and ENUM as its children
+	// match on an equality comparison between a timestamp column cast to DATE and a foldable DATE constant
 	auto op = make_uniq<ComparisonExpressionMatcher>();
 	op->policy = SetMatcher::Policy::UNORDERED;
-	// Enum requires expression to be root
 	op->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
 
 	// one side is timestamp cast to date
@@ -31,34 +30,58 @@ TimeStampComparison::TimeStampComparison(ExpressionRewriter &rewriter) : Rule(re
 	left->matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::TIMESTAMP);
 	op->matchers.push_back(std::move(left));
 
-	// other side is varchar to date?
-	auto right = make_uniq<CastExpressionMatcher>();
+	// other side is any foldable DATE constant expression; bottom-up rewriting can fold CAST(VARCHAR AS DATE)
+	auto right = make_uniq<FoldableConstantMatcher>();
 	right->type = make_uniq<TypeMatcherId>(LogicalTypeId::DATE);
-	right->matcher = make_uniq<FoldableConstantMatcher>();
-	right->matcher->expr_class = ExpressionClass::BOUND_CONSTANT;
-	right->matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::VARCHAR);
 	op->matchers.push_back(std::move(right));
 
 	root = std::move(op);
 }
 
-static void ExpressionIsConstant(const Expression &root_expr, bool &is_constant) {
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    root_expr, [&](const BoundColumnRefExpression &column_ref) { is_constant = false; });
+static optional_ptr<BoundFunctionExpression> GetTimestampCast(Expression &expr) {
+	if (!BoundCastExpression::IsCast(expr)) {
+		return nullptr;
+	}
+	auto &cast_expr = expr.Cast<BoundFunctionExpression>();
+	if (cast_expr.GetReturnType().id() != LogicalTypeId::DATE) {
+		return nullptr;
+	}
+	if (BoundCastExpression::Child(cast_expr).GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+	    BoundCastExpression::Child(cast_expr).GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
+		return nullptr;
+	}
+	return &cast_expr;
+}
+
+static Value DateToTimestampValue(date_t date, dtime_t time) {
+	if (date == date_t::infinity()) {
+		return Value::TIMESTAMP(timestamp_t::infinity());
+	} else if (date == date_t::ninfinity()) {
+		return Value::TIMESTAMP(timestamp_t::ninfinity());
+	}
+	return Value::TIMESTAMP(date, time);
 }
 
 unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                   bool &changes_made, bool is_root) {
-	auto cast_constant = bindings[3].get().Copy();
-	auto cast_columnref = bindings[2].get().Copy();
-	auto is_constant = true;
-	ExpressionIsConstant(*cast_constant, is_constant);
-	if (!is_constant) {
-		// means the matchers are flipped, so we need to flip our bindings
-		// for some reason an extra binding is added in this case.
-		cast_constant = bindings[4].get().Copy();
-		cast_columnref = bindings[3].get().Copy();
+	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
+	D_ASSERT(comparison.GetChildren().size() == 2);
+
+	optional_ptr<BoundFunctionExpression> cast_expr;
+	Expression *constant_expr = nullptr;
+	for (auto &child : comparison.GetChildren()) {
+		if (auto timestamp_cast = GetTimestampCast(*child)) {
+			cast_expr = timestamp_cast;
+		} else if (child->IsFoldable() && child->GetReturnType().id() == LogicalTypeId::DATE) {
+			constant_expr = child.get();
+		}
 	}
+	if (!cast_expr || !constant_expr) {
+		return nullptr;
+	}
+
+	auto cast_constant = constant_expr->Copy();
+	auto cast_columnref = BoundCastExpression::Child(*cast_expr).Copy();
 	auto new_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 
 	Value result;
@@ -68,8 +91,16 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 		auto no_seconds = dtime_t(0);
 
 		// original date as timestamp with no seconds
-		auto original_val_ts = Value::TIMESTAMP(original_val, no_seconds);
+		auto original_val_ts = DateToTimestampValue(original_val, no_seconds);
 		auto original_val_for_comparison = make_uniq<BoundConstantExpression>(original_val_ts);
+
+		if (!original_val.IsFinite()) {
+			auto column_copy = cast_columnref->Copy();
+			auto eq_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, std::move(column_copy),
+			                                                 std::move(original_val_for_comparison));
+			new_expr->GetChildrenMutable().push_back(std::move(eq_expr));
+			return std::move(new_expr);
+		}
 
 		// add one day and validate the new date
 		// code is inspired by AddOperator::Operation(date_t left, int32_t right). The function wasn't used directly
@@ -90,12 +121,12 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 
 		auto left_copy = cast_columnref->Copy();
 		auto right_copy = cast_columnref->Copy();
-		auto lt_eq_expr = make_uniq_base<Expression, BoundComparisonExpression>(
-		    ExpressionType::COMPARE_LESSTHAN, std::move(right_copy), std::move(val_for_comparison));
-		auto gt_eq_expr = make_uniq_base<Expression, BoundComparisonExpression>(
+		auto lt_eq_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHAN, std::move(right_copy),
+		                                                    std::move(val_for_comparison));
+		auto gt_eq_expr = BoundComparisonExpression::Create(
 		    ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(left_copy), std::move(original_val_for_comparison));
-		new_expr->children.push_back(std::move(gt_eq_expr));
-		new_expr->children.push_back(std::move(lt_eq_expr));
+		new_expr->GetChildrenMutable().push_back(std::move(gt_eq_expr));
+		new_expr->GetChildrenMutable().push_back(std::move(lt_eq_expr));
 		return std::move(new_expr);
 	}
 	return nullptr;

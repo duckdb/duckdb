@@ -10,7 +10,7 @@ namespace duckdb {
 template <bool FROM_STRING>
 static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t n) {
+	    args.data[0], args.data[1], result, [&](string_t input, int32_t n) {
 		    if (n < 0) {
 			    throw InvalidInputException("The bitstring length cannot be negative");
 		    }
@@ -23,12 +23,8 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 		    if (idx_t(n) < input_length) {
 			    throw InvalidInputException("Length must be equal or larger than input string");
 		    }
-		    idx_t len;
-		    if (FROM_STRING) {
-			    Bit::TryGetBitStringSize(input, len, nullptr); // string verification
-		    }
 
-		    len = Bit::ComputeBitstringLen(UnsafeNumericCast<idx_t>(n));
+		    idx_t len = Bit::ComputeBitstringLen(UnsafeNumericCast<idx_t>(n));
 		    string_t target = StringVector::EmptyString(result, len);
 		    if (FROM_STRING) {
 			    Bit::BitString(input, UnsafeNumericCast<idx_t>(n), target);
@@ -46,10 +42,36 @@ ScalarFunctionSet BitStringFun::GetFunctions() {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<true>));
 	bitstring.AddFunction(
 	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<false>));
-	for (auto &func : bitstring.functions) {
-		func.SetFallible();
-	}
+	bitstring.SetFallible();
 	return bitstring;
+}
+
+namespace {
+
+// Keep the key bytes above the BLOB escape range while preserving 0 < 1.
+constexpr data_t BIT_SORT_KEY_ZERO = 2;
+constexpr data_t BIT_SORT_KEY_ONE = 3;
+
+string_t CreateBitStringSortKey(string_t input, Vector &result) {
+	const auto bit_length = Bit::BitLength(input);
+	auto target = StringVector::EmptyString(result, bit_length);
+	auto data = data_ptr_cast(target.GetDataWriteable());
+	for (idx_t bit_idx = 0; bit_idx < bit_length; bit_idx++) {
+		data[bit_idx] = Bit::GetBit(input, bit_idx) ? BIT_SORT_KEY_ONE : BIT_SORT_KEY_ZERO;
+	}
+	target.Finalize();
+	return target;
+}
+
+} // namespace
+
+static void BitStringSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result,
+	                                           [&](string_t input) { return CreateBitStringSortKey(input, result); });
+}
+
+ScalarFunction BitStringSortKeyFun::GetFunction() {
+	return ScalarFunction({LogicalType::BIT}, LogicalType::BLOB, BitStringSortKeyFunction);
 }
 
 //===--------------------------------------------------------------------===//
@@ -81,8 +103,7 @@ ScalarFunction GetBitFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
-	    args.data[0], args.data[1], args.data[2], result, args.size(),
-	    [&](string_t input, int32_t n, int32_t new_value) {
+	    args.data[0], args.data[1], args.data[2], result, [&](string_t input, int32_t n, int32_t new_value) {
 		    if (new_value != 0 && new_value != 1) {
 			    throw InvalidInputException("The new bit must be 1 or 0");
 		    }

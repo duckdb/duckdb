@@ -24,7 +24,7 @@ SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 100000
 query II
 EXPLAIN SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 1000000
 ----
-logical_opt	<REGEX>:.*WINDOW.*
+logical_opt	<REGEX>:.*Window.*
 
 # ROW_NUMBER() < 1000001 has the same effective limit and must also fall back.
 query II
@@ -46,7 +46,7 @@ SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 500000
 query II
 EXPLAIN SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 999999
 ----
-logical_opt	<!REGEX>:.*WINDOW.*
+logical_opt	<!REGEX>:.*Window.*
 
 # ROW_NUMBER() < 1000000 (effective limit 999999) also uses the fast path.
 query II
@@ -60,7 +60,7 @@ SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) < 1000000
 query II
 EXPLAIN SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 2
 ----
-logical_opt	<!REGEX>:.*WINDOW.*
+logical_opt	<!REGEX>:.*Window.*
 
 query II
 SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 2

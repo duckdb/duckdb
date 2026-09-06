@@ -96,3 +96,17 @@ nums	[NULL, 6]
 strs	NULL
 strs	[1]
 
+query ITT
+WITH t(id, l, r) AS (
+	VALUES
+		(0,
+			[union_value(num := 1)::UNION(num INT, str VARCHAR), union_value(num := 2)::UNION(num INT, str VARCHAR)]::UNION(num INT, str VARCHAR)[],
+			[union_value(num := 1)::UNION(num INT, str VARCHAR), union_value(num := 2)::UNION(num INT, str VARCHAR)]::UNION(num INT, str VARCHAR)[]),
+		(1,
+			[union_value(str := 'x')::UNION(num INT, str VARCHAR)]::UNION(num INT, str VARCHAR)[],
+			[union_value(str := 'x')::UNION(num INT, str VARCHAR)]::UNION(num INT, str VARCHAR)[])
+)
+SELECT id, l = r, l IS NOT DISTINCT FROM r FROM t ORDER BY id;
+----
+0	true	true
+1	true	true

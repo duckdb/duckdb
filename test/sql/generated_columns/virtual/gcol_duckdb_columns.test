@@ -11,3 +11,31 @@ select column_default from duckdb_columns;
 ----
 NULL
 CAST(1 AS INTEGER)
+
+# is_generated should be false for regular columns and true for generated columns
+query II
+select column_name, is_generated from duckdb_columns order by column_index;
+----
+i	false
+j	true
+
+# generation_expression should be NULL for regular columns and set for generated columns
+query II
+select column_name, generation_expression from duckdb_columns order by column_index;
+----
+i	NULL
+j	CAST(1 AS INTEGER)
+
+# information_schema.columns should reflect is_generated as 'ALWAYS'/'NEVER'
+query II
+select column_name, is_generated from information_schema.columns where table_name = 't' order by ordinal_position;
+----
+i	NEVER
+j	ALWAYS
+
+# information_schema.columns generation_expression should be set for generated columns
+query II
+select column_name, generation_expression from information_schema.columns where table_name = 't' order by ordinal_position;
+----
+i	NULL
+j	CAST(1 AS INTEGER)

@@ -8,11 +8,10 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/arena_linked_list.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
@@ -26,6 +25,7 @@
 
 namespace duckdb {
 
+class DictionaryEntry;
 class Event;
 class Executor;
 class PhysicalOperator;
@@ -34,7 +34,11 @@ class PipelineBuildState;
 class MetaPipeline;
 class PhysicalPlan;
 
+enum class TableFunctionParallelism : uint8_t;
 enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
+enum class PipelineExternalInputSupport : uint8_t { UNSUPPORTED, SUPPORTED };
+enum class PipelineExternalInputCost : uint8_t { PIPELINED, SERIALIZED_FANOUT };
+enum class PipelineSourceConsumption : uint8_t { ALL_INPUT, MAY_STOP_EARLY };
 
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
 class PhysicalOperator {
@@ -73,7 +77,8 @@ public:
 		return InsertionOrderPreservingMap<string>();
 	}
 	static void SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result, idx_t estimated_cardinality);
-	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	virtual string ToString(optional_ptr<ClientContext> context = nullptr,
+	                        const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 
@@ -96,6 +101,7 @@ public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
+	virtual bool ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
 	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk,
@@ -105,6 +111,17 @@ public:
 
 	virtual bool ParallelOperator() const {
 		return false;
+	}
+
+	virtual PipelineExternalInputSupport GetExternalInputSupport() const {
+		return PipelineExternalInputSupport::UNSUPPORTED;
+	}
+	virtual PipelineExternalInputCost GetExternalInputCost() const {
+		return PipelineExternalInputCost::PIPELINED;
+	}
+
+	virtual PipelineSourceConsumption GetSourceConsumption() const {
+		return PipelineSourceConsumption::ALL_INPUT;
 	}
 
 	virtual bool RequiresFinalExecute() const {
@@ -125,6 +142,8 @@ public:
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
+	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context,
+	                                                           const OperatorPartitionInfo &partition_info) const;
 
 protected:
 	virtual SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -145,6 +164,14 @@ public:
 		return false;
 	}
 
+	//! Whether this source creates partitioned work that is not bounded by its input chunks
+	virtual bool HasSourceTasks() const {
+		return false;
+	}
+
+	//! How this source manages parallelism
+	virtual TableFunctionParallelism SourceParallelism() const;
+
 	virtual bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
 		if (partition_info.AnyRequired()) {
 			return false;
@@ -159,16 +186,12 @@ public:
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
 	virtual ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
+	virtual void SourceFinished(ClientContext &context, GlobalSourceState &gstate) const;
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
 	virtual ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
 	                                     const ProgressData source_progress) const {
 		return source_progress;
-	}
-
-	virtual InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
-	                                                              LocalSourceState &lstate) const {
-		return InsertionOrderPreservingMap<string>();
 	}
 
 public:
@@ -193,6 +216,8 @@ public:
 	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
 	//! This allows flushing of the current batch (e.g. to disk)
 	virtual SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const;
+	//! Called after NextBatch when the pipeline minimum advances without subsequent input for this local sink state
+	virtual SinkNextBatchType UpdateMinBatchIndex(ExecutionContext &context, OperatorSinkNextBatchInput &input) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
@@ -246,6 +271,12 @@ public:
 	}
 };
 
+//! Accumulator that lets a dictionary column survive the cache: pinned entry + concatenated per-chunk sels
+struct CachedDictColumn {
+	buffer_ptr<DictionaryEntry> entry;
+	SelectionVector accumulated_sel;
+};
+
 //! Contains state for the CachingPhysicalOperator
 class CachingOperatorState : public OperatorState {
 public:
@@ -255,12 +286,32 @@ public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 	}
 
+	void ResetCachingState() {
+		cached_chunk.reset();
+		initialized = false;
+		can_cache_chunk = OperatorCachingMode::NONE;
+		must_return_continuation_chunk = false;
+		cached_result = OperatorResultType::NEED_MORE_INPUT;
+		ResetDictCache();
+	}
+
+	//! Drop the dictionary accumulators, returning the cache to plain flat caching
+	void ResetDictCache() {
+		dict_columns.clear();
+		dict_cache_active = false;
+	}
+
 	unique_ptr<DataChunk> cached_chunk;
 	bool initialized = false;
 	//! Whether or not the chunk can be cached
 	OperatorCachingMode can_cache_chunk = OperatorCachingMode::NONE;
 	bool must_return_continuation_chunk = false;
 	OperatorResultType cached_result;
+
+	//! One slot per cached column. Invariant: entry != null iff the column is accumulating a dictionary
+	//! (pinned by entry pointer identity); entry == null iff plain flat caching (the common case)
+	vector<CachedDictColumn> dict_columns;
+	bool dict_cache_active = false;
 };
 
 //! Base class that caches output from child Operator class. Note that Operators inheriting from this class should also

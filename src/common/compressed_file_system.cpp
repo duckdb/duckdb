@@ -1,4 +1,5 @@
 #include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -7,13 +8,38 @@ namespace duckdb {
 StreamWrapper::~StreamWrapper() {
 }
 
-CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path)
+void StreamWrapper::AbortWrite() {
+	Close();
+}
+
+bool CompressedFileSystem::CanHandleFile(const string &fpath) {
+	return false;
+}
+
+CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path) try
     : FileHandle(fs, path, child_handle_p->GetFlags()), compressed_fs(fs), child_handle(std::move(child_handle_p)) {
+	// The real on-disk I/O happens on the (compressed) child handle; attribute the bytes there instead of
+	// double-counting the uncompressed bytes that pass through this wrapper handle.
+	track_io = false;
+
+} catch (...) {
+	auto error = std::current_exception();
+	if (child_handle_p) {
+		try {
+			child_handle_p->AbortWrite();
+		} catch (...) { // NOLINT
+		}
+	}
+	std::rethrow_exception(error);
 }
 
 CompressedFile::~CompressedFile() {
 	try {
-		Close();
+		if (write && !initialized) {
+			AbortCompressedWrite();
+		} else {
+			Close();
+		}
 	} catch (std::exception &ex) {
 		if (child_handle) {
 			// FIXME: Make any log context available here.
@@ -32,7 +58,9 @@ CompressedFile::~CompressedFile() {
 
 void CompressedFile::Initialize(QueryContext context, bool write) {
 	Clear();
+	initialized = false;
 
+	this->context = context;
 	this->write = write;
 	stream_data.in_buf_size = compressed_fs.InBufferSize();
 	stream_data.out_buf_size = compressed_fs.OutBufferSize();
@@ -47,6 +75,7 @@ void CompressedFile::Initialize(QueryContext context, bool write) {
 
 	stream_wrapper = compressed_fs.CreateStream();
 	stream_wrapper->Initialize(context, *this, write);
+	initialized = true;
 }
 
 idx_t CompressedFile::GetProgress() {
@@ -90,7 +119,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			memmove(stream_data.in_buff.get(), stream_data.in_buff_start, UnsafeNumericCast<size_t>(bufrem));
 			stream_data.in_buff_start = stream_data.in_buff.get();
 			// refill the rest of input buffer
-			auto sz = child_handle->Read(QueryContext(), stream_data.in_buff_start + bufrem,
+			auto sz = child_handle->Read(context, stream_data.in_buff_start + bufrem,
 			                             stream_data.in_buf_size - UnsafeNumericCast<idx_t>(bufrem));
 			stream_data.in_buff_end = stream_data.in_buff_start + bufrem + sz;
 			if (sz <= 0) {
@@ -104,7 +133,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			// empty input buffer: refill from the start
 			stream_data.in_buff_start = stream_data.in_buff.get();
 			stream_data.in_buff_end = stream_data.in_buff_start;
-			auto sz = child_handle->Read(QueryContext(), stream_data.in_buff.get(), stream_data.in_buf_size);
+			auto sz = child_handle->Read(context, stream_data.in_buff.get(), stream_data.in_buf_size);
 			if (sz <= 0) {
 				stream_wrapper.reset();
 				break;
@@ -127,13 +156,16 @@ int64_t CompressedFile::WriteData(data_ptr_t buffer, int64_t nr_bytes) {
 
 // Clear does most of the heavy lifting of a close, but leaves the child_handle intact. Specifically it is separated out
 // to support upstream Reset() calls from the FileSystem, which should tear down / reset ephemeral state but leave
-// persisent state (child_handle) intact.
+// persistent state (child_handle) intact.
 void CompressedFile::Clear() {
 	if (stream_wrapper) {
 		stream_wrapper->Close();
 		stream_wrapper.reset();
 	}
+	ResetStreamData();
+}
 
+void CompressedFile::ResetStreamData() {
 	stream_data.in_buff.reset();
 	stream_data.out_buff.reset();
 	stream_data.out_buff_start = nullptr;
@@ -146,14 +178,47 @@ void CompressedFile::Clear() {
 }
 
 void CompressedFile::Close() {
-	// This can throw and halt close leaving child_handle dangling until destruction. Given the alternative of writing
-	// corrupted data that seems better than flushing data in an unknown state.
-	Clear();
+	try {
+		Clear();
+	} catch (...) {
+		auto error = std::current_exception();
+		try {
+			AbortCompressedWrite();
+		} catch (...) { // NOLINT
+		}
+		std::rethrow_exception(error);
+	}
 
-	// Then close out child_handle itself.
-	if (child_handle) {
-		child_handle->Close();
-		child_handle.reset();
+	auto child = std::move(child_handle);
+	if (child) {
+		child->Close();
+	}
+}
+
+void CompressedFile::AbortCompressedWrite() {
+	initialized = false;
+	std::exception_ptr error;
+	auto wrapper = std::move(stream_wrapper);
+	if (wrapper) {
+		try {
+			wrapper->AbortWrite();
+		} catch (...) {
+			error = std::current_exception();
+		}
+	}
+	ResetStreamData();
+	auto child = std::move(child_handle);
+	if (child) {
+		try {
+			child->AbortWrite();
+		} catch (...) {
+			if (!error) {
+				error = std::current_exception();
+			}
+		}
+	}
+	if (error) {
+		std::rethrow_exception(error);
 	}
 }
 
@@ -170,7 +235,8 @@ int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr
 void CompressedFileSystem::Reset(FileHandle &handle) {
 	auto &compressed_file = handle.Cast<CompressedFile>();
 	compressed_file.child_handle->Reset();
-	compressed_file.Initialize(QueryContext(), compressed_file.write);
+	// Preserve the query context across a reset so re-reads (e.g. the scan after the CSV sniffer) stay attributed.
+	compressed_file.Initialize(compressed_file.context, compressed_file.write);
 }
 
 int64_t CompressedFileSystem::GetFileSize(FileHandle &handle) {
@@ -185,6 +251,10 @@ bool CompressedFileSystem::OnDiskFile(FileHandle &handle) {
 
 bool CompressedFileSystem::CanSeek() {
 	return false;
+}
+
+void CompressedFileSystem::AbortFileWrite(FileHandle &handle) {
+	handle.Cast<CompressedFile>().AbortCompressedWrite();
 }
 
 } // namespace duckdb

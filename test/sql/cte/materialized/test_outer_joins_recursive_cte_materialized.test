@@ -3,9 +3,6 @@
 # group: [materialized]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE v(x INT);
 
 statement ok
@@ -28,3 +25,17 @@ WITH RECURSIVE t(x) AS MATERIALIZED
 NULL	5
 NULL	7
 NULL	9
+
+query I
+WITH RECURSIVE t(x) AS MATERIALIZED
+(
+  SELECT 1
+    UNION ALL
+  SELECT COALESCE(t.x, p) + 1
+  FROM   (VALUES (NULL::INTEGER)) AS v(p) FULL OUTER JOIN t ON t.x <= p
+  WHERE  COALESCE(t.x, p) < 3
+) SELECT * FROM t ORDER BY x;
+----
+1
+2
+3

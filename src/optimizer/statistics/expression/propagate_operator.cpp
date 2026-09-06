@@ -8,8 +8,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
                                                                      unique_ptr<Expression> &expr_ptr) {
 	bool all_have_stats = true;
 	vector<unique_ptr<BaseStatistics>> child_stats;
-	child_stats.reserve(expr.children.size());
-	for (auto &child : expr.children) {
+	child_stats.reserve(expr.GetChildrenMutable().size());
+	for (auto &child : expr.GetChildrenMutable()) {
 		auto stats = PropagateExpression(child);
 		if (!stats) {
 			all_have_stats = false;
@@ -22,13 +22,13 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::OPERATOR_COALESCE:
 		// COALESCE, merge stats of all children
-		for (idx_t i = 0; i < expr.children.size(); i++) {
+		for (idx_t i = 0; i < expr.GetChildrenMutable().size(); i++) {
 			D_ASSERT(child_stats[i]);
 			if (!child_stats[i]->CanHaveNoNull()) {
 				// this child is always NULL, we can remove it from the coalesce
 				// UNLESS there is only one node remaining
-				if (expr.children.size() > 1) {
-					expr.children.erase_at(i);
+				if (expr.GetChildrenMutable().size() > 1) {
+					expr.GetChildrenMutable().erase_at(i);
 					child_stats.erase_at(i);
 					i--;
 				}
@@ -36,22 +36,23 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 				// coalesce child cannot have NULL entries
 				// this is the last coalesce node that influences the result
 				// we can erase any children after this node
-				if (i + 1 < expr.children.size()) {
-					expr.children.erase(expr.children.begin() + NumericCast<int64_t>(i + 1), expr.children.end());
+				if (i + 1 < expr.GetChildrenMutable().size()) {
+					expr.GetChildrenMutable().erase(expr.GetChildrenMutable().begin() + NumericCast<int64_t>(i + 1),
+					                                expr.GetChildrenMutable().end());
 					child_stats.erase(child_stats.begin() + NumericCast<int64_t>(i + 1), child_stats.end());
 				}
 				break;
 			}
 		}
-		D_ASSERT(!expr.children.empty());
-		D_ASSERT(expr.children.size() == child_stats.size());
-		if (expr.children.size() == 1) {
+		D_ASSERT(!expr.GetChildrenMutable().empty());
+		D_ASSERT(expr.GetChildrenMutable().size() == child_stats.size());
+		if (expr.GetChildrenMutable().size() == 1) {
 			// coalesce of one entry: simply return that entry
-			expr_ptr = std::move(expr.children[0]);
+			expr_ptr = std::move(expr.GetChildrenMutable()[0]);
 		} else {
 			// coalesce of multiple entries
 			// merge the stats
-			for (idx_t i = 1; i < expr.children.size(); i++) {
+			for (idx_t i = 1; i < expr.GetChildrenMutable().size(); i++) {
 				child_stats[0]->Merge(*child_stats[i]);
 			}
 		}

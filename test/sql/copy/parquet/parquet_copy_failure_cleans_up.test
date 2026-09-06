@@ -4,19 +4,19 @@
 require parquet
 
 statement error
-copy (select 'hello'::INT) to '__TEST_DIR__/borked.parquet';
+copy (select 'hello'::INT) to '{TEST_DIR}/borked.parquet';
 ----
 Conversion Error: Could not convert string 'hello' to INT32
 
 statement error
-from read_parquet('__TEST_DIR__/borked.parquet');
+from read_parquet('{TEST_DIR}/borked.parquet');
 ----
-IO Error: No files found that match the pattern "__TEST_DIR__/borked.parquet"
+IO Error: No files found that match the pattern "{TEST_DIR}/borked.parquet"
 
 statement ok
-copy (select 123::INT) to '__TEST_DIR__/myfile.parquet';
+copy (select 123::INT) to '{TEST_DIR}/myfile.parquet';
 
 query I
-from read_parquet('__TEST_DIR__/myfile.parquet');
+from read_parquet('{TEST_DIR}/myfile.parquet');
 ----
 123

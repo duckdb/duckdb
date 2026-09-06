@@ -1,0 +1,16 @@
+# name: benchmark/micro/delete_returning/delete_returning_3col.benchmark
+# description: DELETE RETURNING with 3 columns (optimized scan pass-through path)
+# group: [delete_returning]
+
+load
+CREATE TABLE t3 (c1 INT, c2 VARCHAR, c3 DOUBLE);
+INSERT INTO t3 SELECT i, 'value_' || i::VARCHAR, i * 1.5 FROM range(1000000) t(i);
+
+run
+DELETE FROM t3 WHERE c1 % 2 = 0 RETURNING c1, c2, c3;
+
+cleanup
+DROP TABLE IF EXISTS t3;
+CREATE TABLE t3 (c1 INT, c2 VARCHAR, c3 DOUBLE);
+INSERT INTO t3 SELECT i, 'value_' || i::VARCHAR, i * 1.5 FROM range(1000000) t(i);
+

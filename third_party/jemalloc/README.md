@@ -189,6 +189,28 @@ malloc_write(const char *s) {
 }
 ```
 
+In the `JEMALLOC_PROF_LIBGCC` block in `prof_sys.c`, wrap the `#include <unwind.h>`
+so `_GNU_SOURCE` is defined just for that include (and restored afterwards). The
+musl extension build images install `libunwind-dev`, whose `/usr/include/unwind.h`
+shadows gcc's own header and only declares `_Unwind_Backtrace` under `_GNU_SOURCE`;
+without this, gcc 14 fails with an implicit-declaration error in C99-and-later
+modes. The `#undef _Unwind_Backtrace` and final `#define _Unwind_Backtrace`
+lines already exist upstream; the DuckDB-specific edit is the `_GNU_SOURCE`
+guard around `#include <unwind.h>`.
+```c++
+#undef _Unwind_Backtrace
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#define JE_DUCKDB_TMP_GNU_SOURCE
+#endif
+#include <unwind.h>
+#ifdef JE_DUCKDB_TMP_GNU_SOURCE
+#undef _GNU_SOURCE
+#undef JE_DUCKDB_TMP_GNU_SOURCE
+#endif
+#define _Unwind_Backtrace JEMALLOC_TEST_HOOK(_Unwind_Backtrace, test_hooks_libc_hook)
+```
+
 Almost no symbols are leaked due to `private_namespace.h`.
 The `exported_symbols_check.py` script still found a few, so these lines need to be added to `private_namespace.h`:
 ```c++

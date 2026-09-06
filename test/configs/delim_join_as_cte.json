@@ -1,0 +1,5 @@
+{
+  "description": "Run with SET delim_join_as_cte=true.",
+  "on_init": "SET delim_join_as_cte=true;",
+  "skip_compiled": "true"
+}

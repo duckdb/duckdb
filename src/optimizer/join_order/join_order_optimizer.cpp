@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/cost_model.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -10,6 +11,38 @@
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
+
+static optional<RelationStats> CombineReorderableStats(const vector<ColumnBinding> &bindings,
+                                                       const vector<RelationStats> &relation_stats) {
+	RelationStats result;
+	result.cardinality = 0;
+	result.stats_initialized = true;
+	for (auto &stats : relation_stats) {
+		if (!stats.stats_initialized) {
+			return {};
+		}
+		result.cardinality = MaxValue(result.cardinality, stats.cardinality);
+		if (!result.table_name.empty()) {
+			result.table_name = Identifier(result.table_name + " joined with ");
+		}
+		result.table_name = Identifier(result.table_name + stats.table_name);
+	}
+	for (auto &binding : bindings) {
+		optional_ptr<const RelationColumnStats> source;
+		for (auto &stats : relation_stats) {
+			source = stats.GetColumnStats(binding);
+			if (source) {
+				break;
+			}
+		}
+		if (!source) {
+			return {};
+		}
+		result.columns.emplace_back(binding, source->distinct_count, source->name);
+	}
+	result.Verify(bindings);
+	return result;
+}
 
 JoinOrderOptimizer::JoinOrderOptimizer(ClientContext &context)
     : context(context), query_graph_manager(context), depth(1) {
@@ -46,7 +79,9 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	if (reorderable) {
 		// query graph now has filters and relations
-		auto cost_model = CostModel(query_graph_manager);
+		auto cardinality_estimator =
+		    CardinalityEstimator(query_graph_manager.set_manager, query_graph_manager.GetPredicateModel());
+		auto cost_model = CostModel(query_graph_manager, cardinality_estimator);
 
 		// Initialize a plan enumerator.
 		auto plan_enumerator =
@@ -54,11 +89,15 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 		// Initialize the leaf/single node plans
 		plan_enumerator.InitLeafPlans();
-		plan_enumerator.SolveJoinOrder();
-		// now reconstruct a logical plan from the query graph plan
-		query_graph_manager.plans = &plan_enumerator.GetPlans();
-
-		new_logical_plan = query_graph_manager.Reconstruct(std::move(plan));
+		if (plan_enumerator.SolveJoinOrder()) {
+			// now reconstruct a logical plan from the query graph plan
+			query_graph_manager.plans = plan_enumerator.GetPlans();
+			new_logical_plan = query_graph_manager.Reconstruct(std::move(plan));
+		} else {
+			// Approximate enumeration can conservatively reject every remaining partition. The original tree is still
+			// intact and is always a valid fallback.
+			new_logical_plan = std::move(plan);
+		}
 	} else {
 		new_logical_plan = std::move(plan);
 		if (relation_stats.size() == 1) {
@@ -69,11 +108,15 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// Propagate up a stats object from the top of the new_logical_plan if stats exist.
 	if (stats) {
-		auto cardinality = new_logical_plan->EstimateCardinality(context);
-		auto bindings = new_logical_plan->GetColumnBindings();
-		auto new_stats = RelationStatisticsHelper::CombineStatsOfReorderableOperator(bindings, relation_stats);
-		new_stats.cardinality = cardinality;
-		RelationStatisticsHelper::CopyRelationStats(*stats, new_stats);
+		auto new_stats = query_graph_manager.relation_manager.HasCompleteStats()
+		                     ? CombineReorderableStats(new_logical_plan->GetColumnBindings(), relation_stats)
+		                     : optional<RelationStats>();
+		if (new_stats) {
+			new_stats->cardinality = new_logical_plan->EstimateCardinality(context);
+			*stats = std::move(*new_stats);
+		} else {
+			*stats = RelationStats();
+		}
 	} else {
 		// starts recursively setting cardinality
 		new_logical_plan->EstimateCardinality(context);
@@ -86,14 +129,14 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	return new_logical_plan;
 }
 
-void JoinOrderOptimizer::AddMaterializedCTEStats(idx_t index, RelationStats &&stats) {
+void JoinOrderOptimizer::AddMaterializedCTEStats(TableIndex index, RelationStats &&stats) {
 	materialized_cte_stats.emplace(index, std::move(stats));
 }
 
-RelationStats JoinOrderOptimizer::GetMaterializedCTEStats(idx_t index) {
+RelationStats JoinOrderOptimizer::GetMaterializedCTEStats(TableIndex index) {
 	auto it = materialized_cte_stats.find(index);
 	if (it == materialized_cte_stats.end()) {
-		throw InternalException("Unable to find materialized CTE stats with index %llu", index);
+		throw InternalException("Unable to find materialized CTE stats with index %llu", index.index);
 	}
 	return it->second;
 }

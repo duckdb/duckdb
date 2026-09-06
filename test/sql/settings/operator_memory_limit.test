@@ -1,0 +1,138 @@
+# name: test/sql/settings/operator_memory_limit.test
+# description: Test operator_memory_limit setting
+# group: [settings]
+
+# verify default is NULL (unset)
+query I
+SELECT current_setting('operator_memory_limit')
+----
+NULL
+
+# set and verify
+statement ok
+SET operator_memory_limit='256MB'
+
+query I
+SELECT current_setting('operator_memory_limit')
+----
+244.1 MiB
+
+# reset and verify
+statement ok
+RESET operator_memory_limit
+
+query I
+SELECT current_setting('operator_memory_limit')
+----
+NULL
+
+# NULL assignment resets
+statement ok
+SET operator_memory_limit='128MB'
+
+statement ok
+SET operator_memory_limit=NULL
+
+query I
+SELECT current_setting('operator_memory_limit')
+----
+NULL
+
+# appears in duckdb_settings()
+query III
+SELECT name, value, input_type FROM duckdb_settings() WHERE name = 'operator_memory_limit'
+----
+operator_memory_limit	NULL	VARCHAR
+
+# test that operator_memory_limit causes OOM for operators that check GetOperatorMemoryLimit()
+# while memory_limit (hard cap) is set high enough to not interfere
+statement ok
+PRAGMA memory_limit='100MB'
+
+statement ok
+PRAGMA temp_directory=''
+
+statement ok
+PRAGMA max_temp_directory_size='0B'
+
+statement ok
+SET operator_memory_limit='1MB'
+
+# ORDER BY - requires sort buffers that check memory budget
+statement error
+SELECT * FROM range(10000000) ORDER BY random();
+----
+Out of Memory
+
+# GROUP BY with many groups - builds hash table
+statement error
+SELECT i % 1000000 as g, COUNT(*) FROM range(10000000) t(i) GROUP BY 1;
+----
+Out of Memory
+
+# DISTINCT with many values - builds hash table
+statement error
+SELECT DISTINCT i FROM range(10000000) t(i);
+----
+Out of Memory
+
+# window function with PARTITION BY - builds hash table for partitions
+statement error
+SELECT i, SUM(i) OVER (PARTITION BY i % 100000 ORDER BY i) FROM range(5000000) t(i);
+----
+Out of Memory
+
+# streaming operations succeed - they dont check GetOperatorMemoryLimit()
+# this same query fails with memory_limit='1MB' but succeeds here
+statement ok
+CREATE TABLE t1 AS SELECT * FROM range(1000000)
+
+query I
+SELECT COUNT(*) FROM t1
+----
+1000000
+
+# simple aggregation without GROUP BY - just accumulator variables
+query I
+SELECT SUM(i) FROM range(1000000) t(i)
+----
+499999500000
+
+# small GROUP BY - hash table fits in budget
+query II
+SELECT i % 10 as g, COUNT(*) FROM range(1000000) t(i) GROUP BY 1 ORDER BY 1
+----
+0	100000
+1	100000
+2	100000
+3	100000
+4	100000
+5	100000
+6	100000
+7	100000
+8	100000
+9	100000
+
+# small ORDER BY - fits in budget
+query I
+SELECT COUNT(*) FROM (SELECT * FROM range(1000) ORDER BY random())
+----
+1000
+
+# string_agg bypasses operator_memory_limit - accumulates without budget check
+query I
+SELECT LENGTH(string_agg(i::VARCHAR, ',')) > 0 FROM range(100000) t(i)
+----
+true
+
+# list() bypasses operator_memory_limit
+query I
+SELECT LENGTH(list(i)::VARCHAR) > 0 FROM range(50000) t(i)
+----
+true
+
+# cross join bypasses operator_memory_limit - uses ColumnDataCollection
+query I
+SELECT COUNT(*) FROM range(100) a, range(100) b
+----
+10000

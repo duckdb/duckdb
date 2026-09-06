@@ -1,11 +1,14 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/parallel/async_result.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -16,15 +19,38 @@ TableScanState::~TableScanState() {
 }
 
 void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<ClientContext> context,
-                                optional_ptr<TableFilterSet> table_filters,
-                                optional_ptr<SampleOptions> table_sampling) {
+                                optional_ptr<TableFilterSet> table_filters, optional_ptr<SampleOptions> table_sampling,
+                                idx_t estimated_table_row_count) {
 	this->column_ids = std::move(column_ids_p);
 	if (table_filters) {
 		filters.Initialize(*context, *table_filters, column_ids);
 	}
 	if (table_sampling) {
 		sampling_info.do_system_sample = table_sampling->method == SampleMethod::SYSTEM_SAMPLE;
-		sampling_info.sample_rate = table_sampling->sample_size.GetValue<double>() / 100.0;
+		if (table_sampling->is_percentage) {
+			// Percentage-based system sampling
+			sampling_info.is_percentage = true;
+			sampling_info.sample_rate = table_sampling->sample_size.GetValue<double>() / 100.0;
+		} else {
+			// Row-count based system sampling: convert target row count to approximate rate.
+			// Prefer the pre-calculated sample_rate from the optimizer if available,
+			// otherwise derive from estimated_table_row_count.
+			sampling_info.is_percentage = false;
+			sampling_info.target_sample_rows = NumericCast<idx_t>(table_sampling->sample_size.GetValue<int64_t>());
+			if (table_sampling->sample_rate > 0) {
+				sampling_info.sample_rate = table_sampling->sample_rate;
+			} else if (estimated_table_row_count > 0) {
+				sampling_info.sample_rate = static_cast<double>(sampling_info.target_sample_rows) /
+				                            static_cast<double>(estimated_table_row_count);
+			} else {
+				// No estimate available, use a conservative rate
+				sampling_info.sample_rate = 1.0;
+			}
+			sampling_info.sample_rate = MinValue(1.0, MaxValue(0.0, sampling_info.sample_rate));
+			RandomEngine random(table_sampling->seed.IsValid() ? static_cast<int64_t>(table_sampling->seed.GetIndex())
+			                                                   : -1);
+			sampling_info.sample_phase = random.NextRandom();
+		}
 		if (table_sampling->seed.IsValid()) {
 			table_state.random.SetSeed(table_sampling->seed.GetIndex());
 		}
@@ -47,23 +73,28 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 	return sampling_info;
 }
 
-ScanFilter::ScanFilter(ClientContext &context, idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter)
+ScanFilter::ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids,
+                       TableFilter &filter)
     : scan_column_index(index), table_column_index(column_ids[index]), filter(filter), always_true(false) {
 	filter_state = TableFilterState::Initialize(context, filter);
 }
 
 void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
                                 const vector<StorageIndex> &column_ids) {
-	D_ASSERT(!filters.filters.empty());
+	D_ASSERT(filters.HasFilters() || filters.HasMultiColumnFilters());
 	table_filters = &filters;
-	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
-	filter_list.reserve(filters.filters.size());
-	for (auto &entry : filters.filters) {
-		filter_list.emplace_back(context, entry.first, column_ids, *entry.second);
+	this->column_ids = &column_ids;
+	if (filters.HasFilters()) {
+		adaptive_filter = make_uniq<AdaptiveFilter>(filters);
+		adaptive_filter->SetLogger(context.logger);
+	}
+	filter_list.reserve(filters.FilterCount());
+	for (auto &entry : filters) {
+		filter_list.emplace_back(context, entry.GetIndex(), column_ids, entry.Filter());
 	}
 	column_has_filter.reserve(column_ids.size());
-	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		bool has_filter = table_filters->filters.find(col_idx) != table_filters->filters.end();
+	for (auto col_idx : ProjectionIndex::GetIndexes(column_ids.size())) {
+		bool has_filter = table_filters->HasFilter(col_idx);
 		column_has_filter.push_back(has_filter);
 	}
 	base_column_has_filter = column_has_filter;
@@ -177,6 +208,13 @@ ParallelCollectionScanState::ParallelCollectionScanState()
     : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
 }
 
+void ParallelCollectionScanState::AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group) {
+	current_row_group = row_group;
+	while (current_row_group && !ShouldScanPartition(*current_row_group)) {
+		current_row_group = GetNextRowGroup(*row_groups, *current_row_group).get();
+	}
+}
+
 optional_ptr<SegmentNode<RowGroup>> ParallelCollectionScanState::GetRootSegment(RowGroupSegmentTree &row_groups) const {
 	if (reorderer) {
 		return reorderer->GetRootSegment(row_groups);
@@ -262,6 +300,41 @@ bool CollectionScanState::Scan(DataChunk &result, TableScanType type, optional_p
 		}
 	}
 	return false;
+}
+
+bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks) {
+	if (!row_group) {
+		return false;
+	}
+	auto &current_row_group = row_group->GetNode();
+	ScanOptions options {TransactionData(transaction)};
+	if (!current_row_group.PrepareScan(options, *this)) {
+		// the assignment is exhausted
+		D_ASSERT(max_row <= row_group->GetRowStart() + current_row_group.count);
+		row_group = nullptr;
+		return false;
+	}
+	if (prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED) {
+		// I/O for the prepared vector was already registered (e.g. we are resuming after BLOCKED)
+		return true;
+	}
+	prepared_vector.prepare_state = VectorPrepareState::IO_REGISTERED;
+	tasks = current_row_group.CollectScanIOTasks(*this, prepared_vector.max_count);
+	return true;
+}
+
+void CollectionScanState::ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result) {
+	D_ASSERT(row_group);
+	D_ASSERT(prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED);
+	ScanOptions options {TransactionData(transaction)};
+	row_group->GetNode().ProcessPreparedScan(options, *this, result);
+}
+
+PreparedScanVector::PreparedScanVector() : sample_sel(STANDARD_VECTOR_SIZE) {
+}
+
+void PreparedScanVector::Reset() {
+	prepare_state = VectorPrepareState::NONE;
 }
 
 PrefetchState::~PrefetchState() {

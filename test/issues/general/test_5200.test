@@ -2,9 +2,6 @@
 # description: Issue 5200: a CTE SQL cause INTERNAL Error: Recursive CTE detected WITHIN a recursive CTE node then FATAL Error: Failed: database has been invalidated!
 # group: [general]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 with recursive f(n,f) as (  ------- 构造阶乘表
 select 0,1::bigint

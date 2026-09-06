@@ -1,0 +1,88 @@
+# name: test/sql/json/scalar/test_json_extract_input_types.test
+# description: Extract results must not depend on the input being VARCHAR or JSON typed
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# VARCHAR and JSON typed inputs bind to different function overloads,
+# so comparing the two on adversarial documents must never show a difference.
+statement ok
+CREATE TABLE tricky (v VARCHAR);
+
+statement ok
+INSERT INTO tricky VALUES
+    ('{"a":1,"b":2}'),
+    ('{ "a" : 1 , "b" : [ 1 , 2 , 3 ] }'),
+    ('{"a":{"a":{"a":1}}}'),
+    ('{"x":"a\"b","a":"quoted \" inside"}'),
+    ('{"a\"b":1,"c":2}'),
+    ('{"a":"]}","b":"{["}'),
+    ('{"a":[[1,2],[3,[4,5]]],"b":{"c":[{"d":1}]}}'),
+    ('[1,"two",{"three":3},[4],null,true,false,1.5e2]'),
+    ('{"a":null,"b":false}'),
+    ('{"":1,"a":2}'),
+    ('{"a":1,"a":2}'),
+    ('{"日本":"語","a":"日本語"}'),
+    ('{"a":  {"b"  :  [  {"c" : "d,e]}"} ] } }'),
+    ('  {"a":1}  '),
+    ('{"tail":"' || repeat('x', 100) || '","a":9}'),
+    ('true'),
+    ('[]'),
+    ('{}'),
+    ('{"a":nan,"b":inf}'),
+    ('{"a":NaN,"b":-Infinity}'),
+    ('{"a":"true","b":"null"}');
+
+foreach path $.a $.b $.a.b $.b.c $[0] $[2] $[7] $.a[0] $.a[1] $.b.c[0].d $."a\"b" $.日本 $.missing $.a.a.a $.tail $[0][1] $
+
+query I
+SELECT count(*) FROM tricky WHERE json_extract(v, '${path}') IS DISTINCT FROM json_extract(v::JSON, '${path}')
+----
+0
+
+query I
+SELECT count(*) FROM tricky WHERE json_extract_string(v, '${path}') IS DISTINCT FROM json_extract_string(v::JSON, '${path}')
+----
+0
+
+endloop
+
+# The list form must also match
+query I
+SELECT count(*) FROM tricky WHERE json_extract(v, ['$.a', '$.b.c', '$[0]']) IS DISTINCT FROM json_extract(v::JSON, ['$.a', '$.b.c', '$[0]'])
+----
+0
+
+# Anchor a few absolute results on JSON typed inputs
+query T
+SELECT ('{ "user" : { "name" : "a\"b" } }'::JSON)->>'$.user.name'
+----
+a"b
+
+query T
+SELECT ('{"a":[10,20,30]}'::JSON)->'$.a[1]'
+----
+20
+
+query T
+SELECT ('[1,2]'::JSON)->1
+----
+2
+
+query T
+SELECT ('1'::JSON)->'$'
+----
+1
+
+query T
+SELECT ('{"a":{"b":"]}"}}'::JSON)->>'$.a.b'
+----
+]}
+
+query T
+SELECT ('{"a":[10,20,30]}'::JSON)->'$.a[#-1]'
+----
+30

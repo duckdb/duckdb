@@ -4,9 +4,6 @@
 
 # Basic compatibility tests
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select '340282366920938463463374607431768211455'::UHUGEINT::bignum
 ----

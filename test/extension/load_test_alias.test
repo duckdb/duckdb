@@ -9,10 +9,7 @@ require notmingw
 require allow_unsigned_extensions
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
-LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 query I
 SELECT test_alias_hello();

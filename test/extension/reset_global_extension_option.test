@@ -9,7 +9,7 @@ require skip_reload
 require allow_unsigned_extensions
 
 statement ok
-LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 # Both connections see the registered default
 query I con1

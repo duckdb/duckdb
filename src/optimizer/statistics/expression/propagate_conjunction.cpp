@@ -10,8 +10,8 @@ namespace duckdb {
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConjunctionExpression &expr,
                                                                      unique_ptr<Expression> &expr_ptr) {
 	auto is_and = expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
-	for (idx_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
-		auto &child = expr.children[expr_idx];
+	for (idx_t expr_idx = 0; expr_idx < expr.GetChildrenMutable().size(); expr_idx++) {
+		auto &child = expr.GetChildrenMutable()[expr_idx];
 		auto stats = PropagateExpression(child);
 		if (!child->IsFoldable()) {
 			continue;
@@ -46,20 +46,20 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConjun
 			}
 		}
 		if (prune_child) {
-			expr.children.erase_at(expr_idx);
+			expr.GetChildrenMutable().erase_at(expr_idx);
 			expr_idx--;
 			continue;
 		}
 		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(constant_value));
 		return PropagateExpression(expr_ptr);
 	}
-	if (expr.children.empty()) {
+	if (expr.GetChildrenMutable().empty()) {
 		// if there are no children left, replace the conjunction with TRUE (for AND) or FALSE (for OR)
 		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(is_and));
 		return PropagateExpression(expr_ptr);
-	} else if (expr.children.size() == 1) {
+	} else if (expr.GetChildrenMutable().size() == 1) {
 		// if there is one child left, replace the conjunction with that one child
-		expr_ptr = std::move(expr.children[0]);
+		expr_ptr = std::move(expr.GetChildrenMutable()[0]);
 	}
 	return nullptr;
 }

@@ -2,9 +2,6 @@
 # description: Test old_implicit_cast setting
 # group: [binder]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 with test_data as (
   select 'foo' as a

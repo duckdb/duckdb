@@ -8,39 +8,101 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
 
 namespace duckdb {
 
-static unique_ptr<Expression> TranslateAggregate(const BoundWindowExpression &w_expr) {
-	auto agg_func = *w_expr.aggregate;
+class VolatileExpressionCounter : public LogicalOperatorVisitor {
+public:
+	static idx_t HasVolatiles(LogicalOperator &op) {
+		VolatileExpressionCounter counter;
+		counter.VisitOperator(op);
+		return counter.volatiles;
+	}
+
+	VolatileExpressionCounter() {
+	}
+
+	void VisitExpression(unique_ptr<Expression> *expression) override {
+		volatiles += (*expression)->IsVolatile();
+		LogicalOperatorVisitor::VisitExpression(expression);
+	}
+
+	idx_t volatiles = 0;
+};
+
+static bool IsOrderableDistinctAggregate(const BoundWindowExpression &w_expr) {
+	//	If the aggregate is order-sensitive and distinct,
+	//	then the ORDER BYs need to be functional dependencies of the arguments.
+	auto agg_func = *w_expr.AggregateFunction();
+	if (agg_func.GetOrderDependent() != AggregateOrderDependent::ORDER_DEPENDENT || !w_expr.Distinct()) {
+		return true;
+	}
+
+	const auto &arguments = w_expr.GetChildren();
+	vector<reference<Expression>> arg_refs;
+	arg_refs.reserve(arguments.size());
+	for (auto &arg : arguments) {
+		arg_refs.emplace_back(*arg);
+	}
+	bool in_args = true;
+
+	if (!w_expr.ArgOrders().empty()) {
+		for (auto &order : w_expr.ArgOrders()) {
+			in_args &= BaseSelectBinder::IsFunctionallyDependent(order.expression, arg_refs);
+		}
+	} else if (!w_expr.OrderBy().empty()) {
+		for (auto &order : w_expr.OrderBy()) {
+			in_args &= BaseSelectBinder::IsFunctionallyDependent(order.expression, arg_refs);
+		}
+	}
+
+	return in_args;
+}
+
+static unique_ptr<Expression> TranslateAggregate(ClientContext &client, const BoundWindowExpression &w_expr) {
+	auto agg_func = *w_expr.AggregateFunction();
 	unique_ptr<FunctionData> bind_info;
-	if (w_expr.bind_info) {
-		bind_info = w_expr.bind_info->Copy();
+	if (w_expr.BindInfo()) {
+		bind_info = w_expr.BindInfo()->Copy();
 	} else {
 		bind_info = nullptr;
 	}
 
 	vector<unique_ptr<Expression>> children;
-	for (auto &child : w_expr.children) {
+	for (auto &child : w_expr.GetChildren()) {
 		auto child_copy = child->Copy();
 		children.push_back(std::move(child_copy));
 	}
 
 	unique_ptr<Expression> filter;
-	if (w_expr.filter_expr) {
-		filter = w_expr.filter_expr->Copy();
+	if (w_expr.Filter()) {
+		filter = w_expr.Filter()->Copy();
 	}
 
-	auto aggr_type = w_expr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
-
+	const auto aggr_type = w_expr.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
+	const auto aggr_ordered = (agg_func.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT);
 	auto result = make_uniq<BoundAggregateExpression>(std::move(agg_func), std::move(children), std::move(filter),
 	                                                  std::move(bind_info), aggr_type);
 
-	if (!w_expr.arg_orders.empty()) {
-		result->order_bys = make_uniq<BoundOrderModifier>();
-		auto &orders = result->order_bys->orders;
-		for (auto &order : w_expr.arg_orders) {
+	if (!aggr_ordered) {
+		//	ORDER BY is a NOP, so drop it.
+		return std::move(result);
+	}
+
+	if (!w_expr.ArgOrders().empty()) {
+		result->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
+		auto &orders = result->GetOrderBysMutable()->orders;
+		for (auto &order : w_expr.ArgOrders()) {
+			auto order_copy = order.Copy();
+			orders.emplace_back(std::move(order_copy));
+		}
+	} else if (!w_expr.OrderBy().empty()) {
+		//	If the frame was ordered, copy the frame ordering to the aggregate function
+		result->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
+		auto &orders = result->GetOrderBysMutable()->orders;
+		for (auto &order : w_expr.OrderBy()) {
 			auto order_copy = order.Copy();
 			orders.emplace_back(std::move(order_copy));
 		}
@@ -63,38 +125,48 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::Optimize(unique_ptr<Logical
 
 bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
                                           const BoundWindowExpression &w_expr0) const {
-	if (w_expr.type != ExpressionType::WINDOW_AGGREGATE) {
+	if (w_expr.GetExpressionType() != ExpressionType::WINDOW_AGGREGATE) {
 		return false;
 	}
-	if (!w_expr.orders.empty()) {
+	//	We can only accept ORDER BY clauses if the frame is the entire partition
+	//	In that case, we will have to move the ordering clauses into the aggregate.
+	//	ROWS framing is excluded because the frame depends on physical row position even without ORDER BY.
+	switch (w_expr.WindowStart()) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		if (!w_expr.OrderBy().empty()) {
+			return false;
+		}
+		break;
+	default:
 		return false;
 	}
-	if (w_expr.partitions.empty()) {
+
+	switch (w_expr.WindowEnd()) {
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		if (!w_expr.OrderBy().empty()) {
+			return false;
+		}
+		break;
+	default:
 		return false;
 	}
-	if (w_expr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+	if (w_expr.Partitions().empty()) {
+		return false;
+	}
+	if (w_expr.WindowExclude() != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}
 	if (!w_expr.PartitionsAreEquivalent(w_expr0)) {
 		return false;
 	}
 
-	//	Even with no ORDER BY, we can still have a non-degenerate frame if we have ROWS framing.
-	switch (w_expr.start) {
-	case WindowBoundary::UNBOUNDED_PRECEDING:
-	case WindowBoundary::CURRENT_ROW_RANGE:
-	case WindowBoundary::CURRENT_ROW_GROUPS:
-		break;
-	default:
-		return false;
-	}
-
-	switch (w_expr.end) {
-	case WindowBoundary::UNBOUNDED_FOLLOWING:
-	case WindowBoundary::CURRENT_ROW_RANGE:
-	case WindowBoundary::CURRENT_ROW_GROUPS:
-		break;
-	default:
+	if (!IsOrderableDistinctAggregate(w_expr)) {
 		return false;
 	}
 
@@ -127,6 +199,11 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		// Check recursively
 		window.children[0] = OptimizeInternal(std::move(window.children[0]), replacer);
 
+		//	We cannot perform self-join when there are volatile functions below us.
+		if (VolatileExpressionCounter::HasVolatiles(window)) {
+			return op;
+		}
+
 		if (!CanOptimize(*window.children[0])) {
 			return op;
 		}
@@ -138,7 +215,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 				return op;
 			}
 		}
-		auto &partitions = w_expr0.partitions;
+		auto &partitions = w_expr0.Partitions();
 
 		// --- Transformation ---
 		// try to copy the LHS
@@ -181,7 +258,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 
 		for (auto &expr : window.expressions) {
 			auto &w_expr = expr->Cast<BoundWindowExpression>();
-			aggregates.emplace_back(TranslateAggregate(w_expr));
+			aggregates.emplace_back(TranslateAggregate(optimizer.GetContext(), w_expr));
 		}
 
 		// args: group_index, aggregate_index, ...
@@ -198,13 +275,12 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 
 		// Inner Join on the partition keys
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-
 		for (size_t i = 0; i < partitions.size(); ++i) {
-			JoinCondition cond;
-			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-			cond.left = partitions[i]->Copy();
-			cond.right = make_uniq<BoundColumnRefExpression>(partitions[i]->return_type, ColumnBinding(group_index, i));
-			join->conditions.push_back(std::move(cond));
+			auto left_expr = partitions[i]->Copy();
+			auto right_expr = make_uniq<BoundColumnRefExpression>(partitions[i]->GetReturnType(),
+			                                                      ColumnBinding(group_index, ProjectionIndex(i)));
+			join->conditions.push_back(
+			    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_NOT_DISTINCT_FROM));
 		}
 
 		join->children.push_back(std::move(original_child));
@@ -215,8 +291,8 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		// Old window column: (window.window_index, x)
 		// New constant column: (aggregate_index, x)
 		for (idx_t column_index = 0; column_index < window.expressions.size(); ++column_index) {
-			ColumnBinding old_binding(window.window_index, column_index);
-			ColumnBinding new_binding(aggregate_index, column_index);
+			ColumnBinding old_binding(window.window_index, ProjectionIndex(column_index));
+			ColumnBinding new_binding(aggregate_index, ProjectionIndex(column_index));
 			replacer.replacement_bindings.emplace_back(old_binding, new_binding);
 		}
 

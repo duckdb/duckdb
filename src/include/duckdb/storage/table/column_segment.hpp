@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/scan_vector_type.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -39,10 +40,11 @@ enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
 	//! Construct a column segment.
-	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
-	              const ColumnSegmentType segment_type, const idx_t count, const CompressionFunction &function_p,
-	              BaseStatistics statistics, const block_id_t block_id_p, const idx_t offset,
-	              const idx_t segment_size_p, unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
+	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const ColumnSegmentType segment_type,
+	              const idx_t count, const CompressionFunction &function_p, BaseStatistics statistics,
+	              const block_id_t block_id_p, const idx_t offset, const idx_t segment_size_p,
+	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr,
+	              optional<uint32_t> data_size_in_bytes = optional<uint32_t>());
 	//! Construct a column segment from another column segment.
 	//! The other column segment becomes invalid (std::move).
 	ColumnSegment(ColumnSegment &other);
@@ -50,10 +52,7 @@ public:
 
 public:
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
-	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
-	                                                         idx_t count, CompressionType compression_type,
-	                                                         BaseStatistics statistics,
-	                                                         unique_ptr<ColumnSegmentState> segment_state);
+	                                                         DataPointer &data_pointer);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const CompressionFunction &function,
 	                                                        const LogicalType &type, const idx_t segment_size,
 	                                                        BlockManager &block_manager);
@@ -71,8 +70,10 @@ public:
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
-	static idx_t FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
-	                             const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
+	[[deprecated("UnifiedVectorFormat parameter is ignored")]] static idx_t
+	FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata, const TableFilter &filter,
+	                TableFilterState &filter_state, idx_t scan_count, idx_t &approved_tuple_count);
+	static idx_t FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state, idx_t scan_count,
 	                             idx_t &approved_tuple_count);
 
 	//! Skip a scan forward to the row_index specified in the scan state
@@ -105,9 +106,13 @@ public:
 	//! Gets a data pointer from a persistent column segment
 	DataPointer GetDataPointer(idx_t row_start);
 
-	block_id_t GetBlockId() {
+	block_id_t GetBlockId() const {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
 		return block_id;
+	}
+
+	const LogicalType &GetType() const {
+		return stats.statistics.GetType();
 	}
 
 	//! Returns the size of the underlying block of the segment. It is size is the size available for usage on a block.
@@ -115,36 +120,59 @@ public:
 		return block->GetBlockSize();
 	}
 
-	idx_t GetBlockOffset() {
-		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT || offset == 0);
+	idx_t GetBlockOffset() const {
 		return offset;
+	}
+
+	const optional<uint32_t> &GetDataSize() const {
+		return data_size_in_bytes;
+	}
+
+	void SetByteSize(uint32_t data_size_in_bytes_p) {
+		data_size_in_bytes = data_size_in_bytes_p;
 	}
 
 	optional_ptr<CompressedSegmentState> GetSegmentState() const {
 		return segment_state.get();
 	}
 
+	DatabaseInstance &GetDatabase() const {
+		return db;
+	}
+
+	ColumnSegmentType GetSegmentType() const {
+		return segment_type;
+	}
+
+	void SetSegmentType(ColumnSegmentType type) {
+		segment_type = type;
+	}
+
+	shared_ptr<BlockHandle> &GetBlockHandle() {
+		return block;
+	}
+
 	void VisitBlockIds(BlockIdVisitor &visitor) const;
+
+	const BaseStatistics &GetStats() const {
+		return stats.statistics;
+	}
+
+	BaseStatistics &GetStatsMutable() {
+		return stats.statistics;
+	}
 
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);
 	void ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
 
-public:
+private:
 	//! The database instance
 	DatabaseInstance &db;
-	//! The type stored in the column
-	LogicalType type;
-	//! The size of the type
-	idx_t type_size;
 	//! The column segment type (transient or persistent)
 	ColumnSegmentType segment_type;
-	//! The statistics for the segment
-	SegmentStatistics stats;
 	//! The block that this segment relates to
 	shared_ptr<BlockHandle> block;
-
-private:
 	//! The compression function
 	reference<const CompressionFunction> function;
 	//! The block id that this segment relates to (persistent segment only)
@@ -153,8 +181,12 @@ private:
 	idx_t offset;
 	//! The allocated segment size, which is bounded by Storage::BLOCK_SIZE
 	idx_t segment_size;
+	//! Number of bytes occupied by this segment within its block, if recorded
+	optional<uint32_t> data_size_in_bytes;
 	//! Storage associated with the compressed segment
 	unique_ptr<CompressedSegmentState> segment_state;
+	//! The statistics for the segment
+	SegmentStatistics stats;
 };
 
 } // namespace duckdb

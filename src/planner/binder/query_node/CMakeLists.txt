@@ -7,6 +7,7 @@ add_library_unity(
   bind_cte_node.cpp
   bind_statement_node.cpp
   bind_table_macro_node.cpp
+  bind_trigger_expansion.cpp
   plan_query_node.cpp
   plan_select_node.cpp
   plan_setop.cpp

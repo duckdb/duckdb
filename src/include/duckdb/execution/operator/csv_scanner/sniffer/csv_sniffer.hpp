@@ -102,6 +102,7 @@ public:
 	static bool CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
 	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator,
 	                         const char thousands_separator);
+	static bool CanYouCastBignum(const char *value_ptr, idx_t value_size);
 
 	idx_t LinesSniffed() const;
 
@@ -206,13 +207,13 @@ private:
 	void DetectHeader();
 	static bool DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row,
 	                                      const SetColumns &set_columns, CSVReaderOptions &options);
-	static vector<string>
+	static vector<Identifier>
 	DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
 	                     const SetColumns &set_columns,
 	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
 	                     CSVReaderOptions &options, const MultiFileOptions &file_options,
 	                     CSVErrorHandler &error_handler);
-	vector<string> names;
+	vector<Identifier> names;
 	//! If the file only has a header
 	bool single_row_file = false;
 

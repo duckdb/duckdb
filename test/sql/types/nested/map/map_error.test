@@ -22,6 +22,11 @@ SELECT MAP(NULL)
 ----
 Binder Error: No function matches the given name and argument types 'map("NULL")'
 
+statement error
+SELECT MAP 'a'
+----
+<REGEX>:Binder Error.*Type \"MAP\" requires type parameters.*
+
 statement ok
 CREATE TABLE tbl (a INTEGER[], b TEXT[])
 

@@ -9,11 +9,15 @@
 #pragma once
 
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/setting_info.hpp"
 #include "json_common.hpp"
+#include "yyjson_memory.hpp"
 
 namespace duckdb {
 
 class TableRef;
+class Expression;
+class ClientContext;
 struct ReplacementScanData;
 class CastFunctionSet;
 struct CastParameters;
@@ -28,8 +32,7 @@ public:
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
 	static JSONCommon::JSONPathType CheckPath(const Value &path_val, string &path, idx_t &len);
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input);
 
 public:
 	const bool constant;
@@ -37,6 +40,9 @@ public:
 	const JSONCommon::JSONPathType path_type;
 	const char *ptr;
 	const idx_t len;
+	//! Path elements parsed once at bind time (constant regular '$' paths only)
+	vector<JSONPathElement> elements;
+	bool use_elements = false;
 };
 
 struct JSONReadManyFunctionData : public FunctionData {
@@ -44,13 +50,15 @@ public:
 	JSONReadManyFunctionData(vector<string> paths_p, vector<idx_t> lens_p);
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input);
 
 public:
 	const vector<string> paths;
 	vector<const char *> ptrs;
 	const vector<idx_t> lens;
+	//! Per-path elements parsed once at bind time (regular '$' paths only)
+	vector<vector<JSONPathElement>> elements;
+	vector<bool> use_elements;
 };
 
 struct JSONFunctionLocalState : public FunctionLocalState {
@@ -75,6 +83,15 @@ public:
 	                                                optional_ptr<ReplacementScanData> data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
+	static ScalarFunction GetJSONCopyToJSONFunction();
+	static ScalarFunction GetJSONCopyToGeoJSONFunction();
+	static CopyFunction GetGeoJSONCopyFunction();
+	static unique_ptr<Expression> CreateJSONCopyToJSONExpression(ClientContext &context, unique_ptr<Expression> payload,
+	                                                             unique_ptr<Expression> date_format,
+	                                                             unique_ptr<Expression> timestamp_format);
+	//! Validation callback for the json_geometry_format setting, so an invalid value is rejected by SET rather
+	//! than by every subsequent conversion
+	static void ValidateGeometryFormat(ClientContext &context, SetScope scope, Value &parameter);
 	static void RegisterSimpleCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONCreateCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONTransformCastFunctions(ExtensionLoader &loader);
@@ -90,10 +107,15 @@ private:
 	static ScalarFunctionSet GetArrayToJSONFunction();
 	static ScalarFunctionSet GetRowToJSONFunction();
 	static ScalarFunctionSet GetMergePatchFunction();
+	static ScalarFunctionSet GetMergePatchDiffFunction();
+	static ScalarFunctionSet GetDeepMergeFunction();
 
 	static ScalarFunctionSet GetStructureFunction();
 	static ScalarFunctionSet GetTransformFunction();
 	static ScalarFunctionSet GetTransformStrictFunction();
+
+	static ScalarFunctionSet GetAsGeoJSONFunction();
+	static ScalarFunctionSet GetGeomFromGeoJSONFunction();
 
 	static ScalarFunctionSet GetArrayLengthFunction();
 	static ScalarFunctionSet GetContainsFunction();
@@ -107,13 +129,19 @@ private:
 	static ScalarFunctionSet GetSerializePlanFunction();
 
 	static ScalarFunctionSet GetPrettyPrintFunction();
+	static ScalarFunctionSet GetNormalizeFunction();
+	static ScalarFunctionSet GetStripNullsFunction();
+	static ScalarFunctionSet GetInsertFunction();
+	static ScalarFunctionSet GetRemoveFunction();
+	static ScalarFunctionSet GetReplaceFunction();
+	static ScalarFunctionSet GetSetFunction();
 
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 
 	template <class FUNCTION_INFO>
 	static void AddAliases(const vector<string> &names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {
 		for (auto &name : names) {
-			fun.name = name;
+			fun.name = Identifier(name);
 			functions.push_back(fun);
 		}
 	}

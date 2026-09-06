@@ -3,12 +3,14 @@
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/execution/index/index_type.hpp"
 
 namespace duckdb {
 
@@ -30,11 +32,11 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 
 	for (idx_t i = 0; i < unbound_expressions.size(); ++i) {
 		auto &expr = unbound_expressions[i];
-		indexed_column_types.push_back(expr->return_type);
+		indexed_column_types.push_back(expr->GetReturnType());
 		indexed_columns.push_back(i);
 	}
 
-	// Row id is alway last
+	// Row id is always last
 	rowid_column.push_back(unbound_expressions.size());
 }
 
@@ -87,13 +89,11 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	lstate.key_chunk.ReferenceColumns(chunk, indexed_columns);
 	lstate.row_chunk.ReferenceColumns(chunk, rowid_column);
 
-	// Check for NULLs, if we are creating a PRIMARY KEY.
-	// FIXME: Later, we want to ensure that we skip the NULL check for any non-PK alter.
-	if (alter_table_info) {
-		auto row_count = lstate.key_chunk.size();
+	// PRIMARY KEY columns cannot be NULL. UNIQUE allows NULLs.
+	if (alter_table_info && info->constraint_type == IndexConstraintType::PRIMARY) {
 		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
-			if (VectorOperations::HasNull(lstate.key_chunk.data[i], row_count)) {
-				throw ConstraintException("NOT NULL constraint failed: %s", info->index_name);
+			if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
+				throw ConstraintException("NOT NULL constraint failed: %s", info->GetIndexName());
 			}
 		}
 	}
@@ -143,10 +143,11 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	if (!alter_table_info) {
 		// Ensure that the index does not yet exist in the catalog.
-		auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->index_name);
+		auto entry =
+		    schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->GetIndexName());
 		if (entry) {
 			if (info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-				throw CatalogException("Index with name \"%s\" already exists!", info->index_name);
+				throw CatalogException("Index with name %s already exists!", info->GetIndexName());
 			}
 			// IF NOT EXISTS on existing index. We are done.
 			return SinkFinalizeType::READY;
@@ -159,14 +160,13 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	} else {
 		// Ensure that there are no other indexes with that name on this table.
-		auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-		for (auto &index : indexes.Indexes()) {
-			if (index.GetIndexName() == info->index_name) {
-				throw CatalogException("an index with that name already exists for this table: %s", info->index_name);
-			}
+		const auto &indexes = storage.GetDataTableInfo()->GetIndexes();
+		if (indexes.Contains(info->GetIndexName())) {
+			throw CatalogException("an index with that name already exists for this table: %s",
+			                       SQLIdentifier(info->GetIndexName()));
 		}
 
-		auto &catalog = Catalog::GetCatalog(context, info->catalog);
+		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
 		catalog.Alter(context, *alter_table_info);
 	}
 

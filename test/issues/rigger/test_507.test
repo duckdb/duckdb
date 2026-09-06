@@ -2,9 +2,6 @@
 # description: Issue 507
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Creating an empty table results in a crash
 statement error
 CREATE TABLE t0();

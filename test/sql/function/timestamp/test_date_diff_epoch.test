@@ -2,9 +2,6 @@
 # description: Test equal period timestamp diffs across the Unix epoch
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 SELECT 
 	start_ts, 

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
-
+#include "duckdb/common/sql_identifier.hpp"
 #include <ostream>
 
 namespace duckdb {
@@ -29,6 +29,9 @@ public:
 
 	//! Emits an optionally quoted identifier including required escapes (i.e. ident -> ident, table -> "table")
 	static string ToString(const string &identifier);
+	static string ToString(const Identifier &identifier);
+	//! Needed to disambiguate between the string and Identifier overloads, as string literals convert to both
+	static string ToString(const char *identifier);
 
 public:
 	string raw_string;
@@ -65,6 +68,9 @@ public:
 
 	//! Emits an optionally quoted identifier including required escapes (i.e. ident -> ident, table -> "table")
 	static string ToString(const string &identifier);
+	static string ToString(const Identifier &identifier);
+	//! Needed to disambiguate between the string and Identifier overloads, as string literals convert to both
+	static string ToString(const char *identifier);
 
 public:
 	string raw_string;

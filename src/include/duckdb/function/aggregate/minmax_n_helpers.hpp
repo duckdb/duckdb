@@ -2,11 +2,15 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -90,10 +94,14 @@ struct HeapEntry<string_t> {
 		// double allocation until value fits
 		if (capacity < new_val.GetSize()) {
 			auto old_size = capacity;
-			capacity *= 2;
-			while (capacity < new_val.GetSize()) {
-				capacity *= 2;
+			auto new_size = UnsafeNumericCast<uint32_t>(new_val.GetSize());
+			auto new_capacity = NextPowerOfTwo(new_size);
+			if (new_capacity > string_t::MAX_STRING_SIZE) {
+				throw InvalidInputException("Resulting string/blob too large!");
 			}
+			do {
+				capacity *= 2;
+			} while (capacity < new_val.GetSize());
 			allocated_data = allocator.Reallocate(allocated_data, old_size, capacity);
 		}
 		auto new_size = UnsafeNumericCast<uint32_t>(new_val.GetSize());
@@ -172,6 +180,12 @@ private:
 	idx_t size;
 };
 
+struct List {
+	uint32_t capacity;
+	uint32_t size;
+	List *next;
+};
+
 template <class K, class V, class K_COMPARATOR>
 class BinaryAggregateHeap {
 	using STORAGE_TYPE = pair<HeapEntry<K>, HeapEntry<V>>;
@@ -248,11 +262,16 @@ private:
 		} else if (allocated_capacity > capacity / 2) {
 			allocated_capacity = capacity;
 		} else {
-			allocated_capacity *= 2;
+			if (!TryMultiplyOperator::Operation(allocated_capacity, static_cast<idx_t>(2), allocated_capacity)) {
+				throw OutOfRangeException("Overflow of 'allocated_capacity' in BinaryAggregateHeap::Grow");
+			}
 		}
 
 		const auto old_size = old_allocated_capacity * sizeof(STORAGE_TYPE);
-		const auto new_size = allocated_capacity * sizeof(STORAGE_TYPE);
+		idx_t new_size;
+		if (!TryMultiplyOperator::Operation(allocated_capacity, static_cast<idx_t>(sizeof(STORAGE_TYPE)), new_size)) {
+			throw OutOfRangeException("Overflow of 'new_size' in BinaryAggregateHeap::Grow");
+		}
 		auto ptr = heap ? allocator.ReallocateAligned(reinterpret_cast<data_ptr_t>(heap), old_size, new_size)
 		                : allocator.AllocateAligned(new_size);
 		memset(ptr + old_size, 0, new_size - old_size);
@@ -306,17 +325,16 @@ struct MinMaxFixedValue {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::GetData<T>(vector)[idx] = value;
+		FlatVector::GetDataMutable<T>(vector)[idx] = value;
 	}
 
 	// Nothing to do here
-	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+	static EXTRA_STATE CreateExtraState() {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format,
-	                        const bool nulls_last) {
-		input.ToUnifiedFormat(count, format);
+	static void PrepareData(const Vector &input, EXTRA_STATE &, UnifiedVectorFormat &format, const bool nulls_last) {
+		input.ToUnifiedFormat(format);
 	}
 };
 
@@ -329,17 +347,16 @@ struct MinMaxStringValue {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::GetData<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
+		FlatVector::GetDataMutable<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
 	}
 
 	// Nothing to do here
-	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+	static EXTRA_STATE CreateExtraState() {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format,
-	                        const bool nulls_last) {
-		input.ToUnifiedFormat(count, format);
+	static void PrepareData(const Vector &input, EXTRA_STATE &, UnifiedVectorFormat &format, const bool nulls_last) {
+		input.ToUnifiedFormat(format);
 	}
 };
 
@@ -358,17 +375,17 @@ struct MinMaxFallbackValue {
 		CreateSortKeyHelpers::DecodeSortKey(value, vector, idx, modifiers);
 	}
 
-	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+	static EXTRA_STATE CreateExtraState() {
 		return Vector(LogicalTypeId::BLOB);
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
+	static void PrepareData(const Vector &input, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
 	                        const bool nulls_last) {
 		auto order_by_null_type = nulls_last ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
 		const OrderModifiers modifiers(OrderType::ASCENDING, order_by_null_type);
-		CreateSortKeyHelpers::CreateSortKeyWithValidity(input, extra_state, modifiers, count);
-		input.Flatten(count);
-		extra_state.ToUnifiedFormat(count, format);
+		CreateSortKeyHelpers::CreateSortKeyWithValidity(input, extra_state, modifiers);
+		input.Flatten();
+		extra_state.ToUnifiedFormat(format);
 	}
 };
 
@@ -403,17 +420,17 @@ struct MinMaxFixedValueOrNull {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::Validity(vector).Set(idx, value.is_valid);
-		FlatVector::GetData<T>(vector)[idx] = value.value;
+		FlatVector::ValidityMutable(vector).Set(idx, value.is_valid);
+		FlatVector::GetDataMutable<T>(vector)[idx] = value.value;
 	}
 
-	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+	static EXTRA_STATE CreateExtraState() {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
+	static void PrepareData(const Vector &input, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
 	                        const bool nulls_last) {
-		input.ToUnifiedFormat(count, format);
+		input.ToUnifiedFormat(format);
 	}
 };
 
@@ -421,11 +438,6 @@ struct MinMaxFixedValueOrNull {
 // MinMaxN Operation (common for both ArgMinMaxN and MinMaxN)
 //------------------------------------------------------------------------------
 struct MinMaxNOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		new (&state) STATE();
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input) {
 		if (!source.is_initialized) {
@@ -444,17 +456,16 @@ struct MinMaxNOperation {
 	}
 
 	template <class STATE>
-	static void Finalize(Vector &state_vector, AggregateInputData &input_data, Vector &result, idx_t count,
+	static void Finalize(Vector &state_vector, AggregateFinalizeInputData &input_data, Vector &result, idx_t count,
 	                     idx_t offset) {
 		// We only expect bind data from arg_max, otherwise nulls last is the default
 		const bool nulls_last =
 		    input_data.bind_data ? input_data.bind_data->Cast<ArgMinMaxFunctionData>().nulls_last : true;
 
 		UnifiedVectorFormat state_format;
-		state_vector.ToUnifiedFormat(count, state_format);
+		state_vector.ToUnifiedFormat(state_format);
 
 		const auto states = UnifiedVectorFormat::GetData<STATE *>(state_format);
-		auto &mask = FlatVector::Validity(result);
 
 		const auto old_len = ListVector::GetListSize(result);
 
@@ -469,24 +480,24 @@ struct MinMaxNOperation {
 		// Resize the list vector to fit the new entries
 		ListVector::Reserve(result, old_len + new_entries);
 
-		const auto list_entries = FlatVector::GetData<list_entry_t>(result);
-		auto &child_data = ListVector::GetEntry(result);
+		auto result_data = FlatVector::Writer<list_entry_t>(result, count, offset);
+		auto &child_data = ListVector::GetChildMutable(result);
 
 		idx_t current_offset = old_len;
 		for (idx_t i = 0; i < count; i++) {
-			const auto rid = i + offset;
 			const auto state_idx = state_format.sel->get_index(i);
 			auto &state = *states[state_idx];
 
 			if (!state.is_initialized || state.heap.IsEmpty()) {
-				mask.SetInvalid(rid);
+				result_data.WriteNull();
 				continue;
 			}
 
 			// Add the entries to the list vector
-			auto &list_entry = list_entries[rid];
+			list_entry_t list_entry;
 			list_entry.offset = current_offset;
 			list_entry.length = state.heap.Size();
+			result_data.WriteValue(list_entry);
 
 			// Turn the heap into a sorted list, invalidating the heap property
 			auto heap = state.heap.SortAndGetHeap();
@@ -498,7 +509,7 @@ struct MinMaxNOperation {
 
 		D_ASSERT(current_offset == old_len + new_entries);
 		ListVector::SetListSize(result, current_offset);
-		result.Verify(count);
+		result.Verify();
 	}
 
 	template <class STATE>

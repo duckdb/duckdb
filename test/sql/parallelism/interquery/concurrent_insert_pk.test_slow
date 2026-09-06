@@ -10,7 +10,7 @@ concurrentloop threadid 0 10
 loop x 0 1000
 
 statement maybe
-INSERT INTO integers VALUES (${x})
+INSERT INTO integers VALUES ({x})
 ----
 violat
 

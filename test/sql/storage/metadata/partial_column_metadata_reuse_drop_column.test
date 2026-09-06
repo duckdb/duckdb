@@ -10,7 +10,7 @@
 # small block size shrinks the metadata block size (block_size / 64), so per-row-group
 # column metadata easily spills past one metadata block and reused columns end up with extras
 statement ok
-ATTACH '__TEST_DIR__/partial_reuse_drop_column.db' AS db1 (BLOCK_SIZE 16384, STORAGE_VERSION 'latest')
+ATTACH '{TEST_DIR}/partial_reuse_drop_column.db' AS db1 (BLOCK_SIZE 16384, STORAGE_VERSION 'latest')
 
 statement ok
 SET debug_skip_checkpoint_on_commit=true
@@ -74,7 +74,7 @@ restart
 
 # re-attach and verify the persisted state deserializes correctly from disk
 statement ok
-ATTACH '__TEST_DIR__/partial_reuse_drop_column.db' AS db1
+ATTACH '{TEST_DIR}/partial_reuse_drop_column.db' AS db1
 
 query I
 SELECT count(*) FROM db1.wide_tbl

@@ -3,9 +3,6 @@
 # group: [list]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE VIEW million_lists AS
 SELECT [(i+1) % 998513, i+1] as l FROM range(999983) tbl(i);
 

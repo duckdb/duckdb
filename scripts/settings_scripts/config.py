@@ -24,8 +24,6 @@ SQL_TYPE_MAP = {
     "VARCHAR": "string",
 }
 
-setting_index = 0
-
 
 # global Setting structure
 @total_ordering
@@ -57,7 +55,6 @@ class Setting:
         self.scope = self._get_valid_scope(scope) if scope is not None else None
         self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)
         self.is_generic_setting = default_value is not None
-        self.setting_index = None
         if self.is_enum and self.is_generic_setting:
             self.on_set = True
         custom_callbacks = ['set', 'reset', 'get']
@@ -77,11 +74,6 @@ class Setting:
         self.default_scope = self._get_valid_default_scope(default_scope) if default_scope is not None else None
         self.default_value = default_value
         self.conditional_defaults = conditional_defaults
-        if self.default_value is not None:
-            global setting_index
-            self.setting_index = setting_index
-            setting_index += 1
-
         if self.default_scope is not None and self.scope is not None:
             raise ValueError("Only default_scope or scope can be specified")
 
@@ -122,6 +114,14 @@ class Setting:
             return 'LOCAL'
         raise Exception(f"Invalid default scope value {scope}")
 
+    # split a 'MAP(<key>, <value>)' type into its key and value types
+    @staticmethod
+    def _get_map_child_types(map_type) -> (str, str):
+        child_types = map_type[len('MAP(') : -1].split(',')
+        if len(child_types) != 2:
+            raise ValueError(f"Ill formatted map type: '{map_type}'")
+        return child_types[0].strip(), child_types[1].strip()
+
     # validate and return the correct type format
     def _get_sql_type(self, sql_type) -> str:
         if sql_type.startswith('ENUM'):
@@ -129,6 +129,12 @@ class Setting:
         if sql_type.endswith('[]'):
             # recurse into child-element
             sub_type = self._get_sql_type(sql_type[:-2])
+            return sql_type
+        if sql_type.startswith('MAP(') and sql_type.endswith(')'):
+            # recurse into the key/value types
+            key_type, value_type = self._get_map_child_types(sql_type)
+            self._get_sql_type(key_type)
+            self._get_sql_type(value_type)
             return sql_type
         if sql_type in SQL_TYPE_MAP:
             return sql_type
@@ -141,6 +147,9 @@ class Setting:
         if type.endswith('[]'):
             subtype = self._get_setting_type(type[:-2])
             return "vector<" + subtype + ">"
+        if type.startswith('MAP(') and type.endswith(')'):
+            key_type, value_type = self._get_map_child_types(type)
+            return "unordered_map<" + self._get_setting_type(key_type) + ", " + self._get_setting_type(value_type) + ">"
         return SQL_TYPE_MAP[type]
 
     # validate and return the correct type format
@@ -170,6 +179,25 @@ class Setting:
 
 # this global list (accessible across all files) stores all the settings definitions in the json file
 SettingsList: List[Setting] = []
+
+
+# strip git merge conflict markers, keeping the HEAD ("ours") version
+def strip_conflict_markers(source_code):
+    result = []
+    in_conflict = False
+    keep = True
+    for line in source_code.split('\n'):
+        if line.startswith('<<<<<<<'):
+            in_conflict = True
+            keep = True
+        elif in_conflict and line.startswith('======='):
+            keep = False
+        elif in_conflict and line.startswith('>>>>>>>'):
+            in_conflict = False
+            keep = True
+        elif keep:
+            result.append(line)
+    return '\n'.join(result)
 
 
 # global method that finds the indexes of a start and an end marker in a file

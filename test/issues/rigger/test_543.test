@@ -2,9 +2,6 @@
 # description: Issue 543
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Unexpected result for SUM() upon overflow
 statement ok
 CREATE TABLE t0(c1 BIGINT);

@@ -1,0 +1,15 @@
+# name: benchmark/micro/aggregate/sorted_string_agg_single_group.benchmark
+# description: STRING_AGG with ORDER BY over a single large group
+# group: [aggregate]
+
+name Sorted String Agg (Single Group)
+group aggregate
+
+load
+CREATE TABLE t AS SELECT range AS r, 'val' || (range % 97)::VARCHAR AS v FROM range(20000000);
+
+run
+SELECT strlen(STRING_AGG(v, ',' ORDER BY r DESC)) FROM t
+
+result I
+117938139

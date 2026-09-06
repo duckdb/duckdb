@@ -1,0 +1,21 @@
+# name: benchmark/micro/pushdown/prefix_range_filter_strings.benchmark
+# description: Prefix Range Filter Pushdown on VARCHAR Join Keys
+# group: [pushdown]
+
+name Prefix Range Filter Pushdown with VARCHAR Keys
+group join
+
+storage persistent
+
+load
+CREATE TABLE build AS
+SELECT lpad(i::VARCHAR, 8, '0') k, i NOT BETWEEN 100000 AND 4900000 p, CAST(random() AS VARCHAR) v
+FROM range(5000000) _(i);
+CREATE TABLE probe AS
+SELECT lpad((i // 20)::VARCHAR, 8, '0') k, CAST(random() AS VARCHAR) v
+FROM range(100000000) _(i);
+
+run
+SELECT any_value(probe.v), any_value(build.v)
+FROM build, probe
+WHERE build.k = probe.k AND p = TRUE;

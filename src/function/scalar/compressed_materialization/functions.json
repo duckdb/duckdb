@@ -70,6 +70,20 @@
         "type": "scalar_function"
     },
     {
+        "name": "__internal_compress_geometry_point",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
+        "name": "__internal_decompress_geometry_point",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
         "name": "__internal_decompress_integral_smallint",
         "parameters": "",
         "description": "",

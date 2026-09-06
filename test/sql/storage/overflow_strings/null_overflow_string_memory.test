@@ -22,11 +22,15 @@ FROM range(50000) tbl(i);
 statement ok
 CHECKPOINT
 
-# the column must be stored uncompressed; the 2MB value is far above the string block limit,
-# so it is stored out of line as an overflow string
+# the column must be stored uncompressed with an out-of-line overflow string
 query I
 SELECT compression FROM pragma_storage_info('t') WHERE segment_type='VARCHAR' AND compression != 'Uncompressed';
 ----
+
+query I
+SELECT EXISTS (SELECT * FROM pragma_storage_info('t', include_segment_info=true) WHERE contains(segment_info, 'Overflow String'));
+----
+true
 
 # reopen fresh so the scan reads the overflow block cold from disk
 restart

@@ -17,6 +17,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from os.path import abspath, dirname
+
+sys.path.insert(0, dirname(abspath(__file__)))
+from utils.version_list import list_supported_duckdb_versions
 
 parser = argparse.ArgumentParser(description='Update BWC test cache in test-utils from CI artifacts')
 parser.add_argument(
@@ -28,24 +32,6 @@ parser.add_argument('--repo', dest='repo', default='duckdb/duckdb', help='GitHub
 parser.add_argument('--commit', dest='commit', action='store_true', help='Commit the updated cache files in test-utils')
 
 args = parser.parse_args()
-
-SUPPORTED_VERSIONS = [
-    "v1.1.0",
-    "v1.1.1",
-    "v1.1.2",
-    "v1.1.3",
-    "v1.2.0",
-    "v1.2.1",
-    "v1.2.2",
-    "v1.3.0",
-    "v1.3.1",
-    "v1.3.2",
-    "v1.4.0",
-    "v1.4.1",
-    "v1.4.2",
-    "v1.4.3",
-    "v1.4.4",
-]
 
 
 def download_artifact(run_id, artifact_name, dest_dir, repo):
@@ -69,7 +55,7 @@ if __name__ == '__main__':
     if args.version:
         versions = [args.version]
     else:
-        versions = SUPPORTED_VERSIONS
+        versions = list_supported_duckdb_versions()
 
     print(f"Downloading cache artifacts from run {args.run_id} ({args.repo})")
     print(f"Updating {len(versions)} version(s) in {cache_dir}\n")

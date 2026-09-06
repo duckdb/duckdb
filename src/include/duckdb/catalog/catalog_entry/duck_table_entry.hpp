@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
@@ -17,13 +18,15 @@ namespace duckdb {
 class CommitDropState;
 
 struct AddConstraintInfo;
+struct CreateTriggerInfo;
 
 //! A table catalog entry
 class DuckTableEntry : public TableCatalogEntry {
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
 	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-	               shared_ptr<DataTable> inherited_storage = nullptr);
+	               shared_ptr<DataTable> inherited_storage = nullptr,
+	               shared_ptr<CatalogSet> inherited_triggers = nullptr);
 
 public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
@@ -50,13 +53,30 @@ public:
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context) override;
+	vector<ColumnSegmentInfo>
+	GetColumnSegmentInfo(const QueryContext &context,
+	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {}) override;
+	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) override;
+	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+	                           vector<ColumnSegmentInfo> &result) override;
 
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 
 	bool IsDuckTable() const override {
 		return true;
 	}
+
+	//! Returns the virtual columns for this table
+	virtual_column_map_t GetVirtualColumns() const override;
+
+	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) override;
+	optional_ptr<CatalogEntry> GetTrigger(CatalogTransaction transaction, const Identifier &name) const override;
+	void ScanTriggers(CatalogTransaction transaction,
+	                  const std::function<void(CatalogEntry &)> &callback) const override;
+	//! Scan all triggers without a transaction (used by checkpoint writer)
+	void ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback);
+	//! Drop a trigger by name
+	bool DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade);
 
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
@@ -66,7 +86,8 @@ private:
 	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);
 	unique_ptr<CatalogEntry> RemoveField(ClientContext &context, RemoveFieldInfo &info);
 	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo &info);
-	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
+	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info,
+	                                          AlterTableType alter_table_type);
 	unique_ptr<CatalogEntry> SetNotNull(ClientContext &context, SetNotNullInfo &info);
 	unique_ptr<CatalogEntry> DropNotNull(ClientContext &context, DropNotNullInfo &info);
 	unique_ptr<CatalogEntry> AddForeignKeyConstraint(AlterForeignKeyInfo &info);
@@ -81,6 +102,8 @@ private:
 private:
 	//! A reference to the underlying storage unit used for this table
 	shared_ptr<DataTable> storage;
+	//! The catalog set holding triggers for this table
+	shared_ptr<CatalogSet> triggers;
 	//! Manages dependencies of the individual columns of the table
 	ColumnDependencyManager column_dependency_manager;
 };

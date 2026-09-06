@@ -3,9 +3,6 @@
 # group: [sakila]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE actor (
     actor_id numeric NOT NULL,
     first_name VARCHAR(45) NOT NULL,

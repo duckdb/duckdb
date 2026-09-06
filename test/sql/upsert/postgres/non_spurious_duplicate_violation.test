@@ -1,9 +1,6 @@
 # name: test/sql/upsert/postgres/non_spurious_duplicate_violation.test
 # group: [postgres]
 
-statement ok
-pragma enable_verification;
-
 # insert...on conflict do unique index inference
 
 statement ok

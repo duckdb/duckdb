@@ -2,9 +2,6 @@
 # description: Test division operator precedence
 # group: [parser]
 
-statement ok
-PRAGMA enable_verification
-
 # division operator precedence
 query I
 SELECT 6 * 1 / 2

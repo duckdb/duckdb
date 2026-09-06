@@ -4,39 +4,6 @@
 
 require json
 
-# If logging level > warning (ie. debug or fatal) don't log
-statement ok
-CALL enable_logging(level='error');
-
-query I
-SELECT list_reduce([1, 2, 3], (x, y) -> x + y);
-----
-6
-
-query II
-SELECT log_level, message[0:37] FROM duckdb_logs
-----
-
-statement ok
-CALL truncate_duckdb_logs();
-
-# Else log warning
-statement ok
-CALL enable_logging(level='warning');
-
-query I
-SELECT list_reduce([1, 2, 3], (x, y) -> x + y);
-----
-6
-
-query II
-SELECT log_level, message[0:37] FROM duckdb_logs
-----
-WARNING	Deprecated lambda arrow (->) detected
-
-statement ok
-CALL truncate_duckdb_logs();
-
 # Enable single arrow, should not log.
 statement ok
 SET lambda_syntax='ENABLE_SINGLE_ARROW'

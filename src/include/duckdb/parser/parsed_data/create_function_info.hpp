@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct FunctionDescription {
@@ -26,36 +27,18 @@ struct FunctionDescription {
 };
 
 struct CreateFunctionInfo : public CreateInfo {
-	explicit CreateFunctionInfo(CatalogType type, string schema = DEFAULT_SCHEMA);
+	explicit CreateFunctionInfo(CatalogType type, Identifier schema = Identifier::DefaultSchema());
 
-	//! Function name
-	string name;
 	//! The function name of which this function is an alias
-	string alias_of;
+	Identifier alias_of;
 	//! Function description
 	vector<FunctionDescription> descriptions;
 
-	//! NOTE(backport): DuckDB 2.0 hoists these onto `CreateInfo`, which stores a single `QualifiedName` covering the
-	//! catalog, schema and name. On this branch `CreateInfo` still keeps `catalog`/`schema` as separate strings and
-	//! the name lives on the subclass, so the accessors live here instead. The spelling at the call site is the same
-	//! (`info.SetName(x)`), which is what matters for keeping the 2.0 diff small.
-	void SetName(string name_p) {
-		name = std::move(name_p);
+	const Identifier &GetFunctionName() const {
+		return qualified_name.Name();
 	}
-	const string &GetName() const {
-		return name;
-	}
-	const string &GetFunctionName() const {
-		return name;
-	}
-	void SetFunctionName(string name_p) {
-		name = std::move(name_p);
-	}
-	const string &GetEntryName() const override {
-		return name;
-	}
-	void SetEntryName(string name_p) override {
-		name = std::move(name_p);
+	void SetFunctionName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 
 	DUCKDB_API void CopyFunctionProperties(CreateFunctionInfo &other) const;

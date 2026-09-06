@@ -1,3 +1,5 @@
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -17,42 +19,51 @@ static bool IsValidTypeLookup(optional_ptr<CatalogEntry> entry) {
 
 BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t depth) {
 	auto &type_name = type_expr.GetTypeName();
-	auto type_schema = type_expr.GetSchema();
-	auto type_catalog = type_expr.GetCatalog();
 
 	QueryErrorContext error_context(type_expr);
-	EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, type_name, error_context);
+	EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, QualifiedName(type_name), error_context);
 
 	optional_ptr<CatalogEntry> entry = nullptr;
 
-	binder.BindSchemaOrCatalog(context, type_catalog, type_schema);
+	// Resolve the qualification the same way a table reference is resolved: a leading component is the catalog when
+	// it names an attached database, and otherwise the outermost schema of a (possibly nested) schema path.
+	auto bound_name = Binder::BindTableName(binder.EntryRetriever(), type_expr.GetQualifiedName());
+	auto &type_catalog = bound_name.Catalog();
+	bool is_qualified = bound_name.Path().size() > 1;
 
-	// Required for WAL lookup to work
-	if (type_catalog.empty() && !DatabaseManager::Get(context).HasDefaultDatabase()) {
+	if (type_catalog.empty() && !DatabaseManager::Get(context).HasAttachedDatabase()) {
 		// Look in the system catalog if no catalog was specified
-		entry = binder.entry_retriever.GetEntry(SYSTEM_CATALOG, type_schema, type_lookup);
+		entry = binder.entry_retriever.GetEntry(
+		    EntryLookupInfo(type_lookup, bound_name.WithCatalog(Identifier::SystemCatalog())));
 	} else {
 		// Try to search from most specific to least specific
 		// The search path should already have been set to the correct catalog/schema,
 		// in case we are looking for a type in the same schema as a table we are creating
 
-		entry = binder.entry_retriever.GetEntry(type_catalog, type_schema, type_lookup, OnEntryNotFound::RETURN_NULL);
+		entry = binder.entry_retriever.GetEntry(EntryLookupInfo(type_lookup, bound_name), OnEntryNotFound::RETURN_NULL);
 
 		if (!IsValidTypeLookup(entry)) {
-			if (!type_catalog.empty() || !type_schema.empty()) {
-				entry = binder.entry_retriever.GetEntry(type_catalog, type_schema, type_lookup,
+			if (is_qualified) {
+				// re-run the lookup to report the qualification that was given
+				entry = binder.entry_retriever.GetEntry(EntryLookupInfo(type_lookup, bound_name),
 				                                        OnEntryNotFound::THROW_EXCEPTION);
 			}
-			entry = binder.entry_retriever.GetEntry(type_catalog, INVALID_SCHEMA, type_lookup,
-			                                        OnEntryNotFound::RETURN_NULL);
+			entry = binder.entry_retriever.GetEntry(
+			    EntryLookupInfo(type_lookup, QualifiedName(type_catalog, Identifier::InvalidSchema(),
+			                                               type_lookup.GetEntryIdentifier())),
+			    OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidTypeLookup(entry)) {
-			entry = binder.entry_retriever.GetEntry(INVALID_CATALOG, INVALID_SCHEMA, type_lookup,
-			                                        OnEntryNotFound::RETURN_NULL);
+			entry = binder.entry_retriever.GetEntry(
+			    EntryLookupInfo(type_lookup, QualifiedName(Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
+			                                               type_lookup.GetEntryIdentifier())),
+			    OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidTypeLookup(entry)) {
-			entry = binder.entry_retriever.GetEntry(SYSTEM_CATALOG, DEFAULT_SCHEMA, type_lookup,
-			                                        OnEntryNotFound::THROW_EXCEPTION);
+			entry = binder.entry_retriever.GetEntry(
+			    EntryLookupInfo(type_lookup, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(),
+			                                               type_lookup.GetEntryIdentifier())),
+			    OnEntryNotFound::THROW_EXCEPTION);
 		}
 	}
 
@@ -62,18 +73,6 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 
 	// Now handle type parameters
 	auto &unbound_parameters = type_expr.GetChildren();
-
-	if (!type_entry.bind_function) {
-		if (!unbound_parameters.empty()) {
-			// This type does not support type parameters
-			throw BinderException(type_expr, "Type '%s' does not take any type parameters", type_name);
-		}
-
-		// Otherwise, return the user type directly!
-		auto result_expr = make_uniq<BoundConstantExpression>(Value::TYPE(type_entry.user_type));
-		result_expr->query_location = type_expr.GetQueryLocation();
-		return BindResult(std::move(result_expr));
-	}
 
 	// Bind value parameters
 	vector<TypeArgument> bound_parameters;
@@ -89,25 +88,29 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 			throw BinderException(type_expr, "Type parameter expression for type '%s' is not a constant", type_name);
 		}
 
+		// The location comes from the parsed parameter, not the bound one.
+		// Binding may have rewritten it into something with no corresponding source text.
+		auto location = param->GetQueryLocation();
+
 		// Shortcut for constant expressions
 		if (bound_expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 			auto &const_expr = bound_expr->Cast<BoundConstantExpression>();
-			bound_parameters.emplace_back(param->GetAlias(), const_expr.value);
+			bound_parameters.emplace_back(param->GetAlias().GetIdentifierName(), const_expr.GetValue(), location);
 			continue;
 		}
 
 		// Otherwise we need to evaluate the expression
 		auto bound_param = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
-		bound_parameters.emplace_back(param->GetAlias(), bound_param);
+		bound_parameters.emplace_back(param->GetAlias().GetIdentifierName(), bound_param, location);
 	};
 
-	// Call the bind function
-	BindLogicalTypeInput input {context, type_entry.user_type, bound_parameters};
-	auto result_type = type_entry.bind_function(input);
+	// Select the matching constructor and call it
+	auto result_type =
+	    type_entry.constructors.Bind(context, type_entry.user_type, bound_parameters, type_expr.GetQueryLocation());
 
 	// Return the resulting type!
 	auto result_expr = make_uniq<BoundConstantExpression>(Value::TYPE(result_type));
-	result_expr->query_location = type_expr.GetQueryLocation();
+	result_expr->SetQueryLocation(type_expr.GetQueryLocation());
 	return BindResult(std::move(result_expr));
 }
 

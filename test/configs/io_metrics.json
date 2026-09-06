@@ -1,0 +1,159 @@
+{
+	"comment": [
+		"Configuration for the I/O-metrics ground-truth test (run_io_metrics_test.py).",
+		"Each test runs a small workload under a syscall-interposition shim that measures",
+		"the REAL bytes read/written to the target file(s), then compares that ground truth",
+		"against DuckDB's reported io.total_bytes_read / io.total_bytes_written profiling",
+		"metrics. Any non-skipped mismatch fails the run (hard-fail, no tolerance).",
+		"",
+		"A test with a non-empty \"skip\" field is a KNOWN-WRONG metric: the string explains",
+		"why it is currently wrong (these are the QueryContext-not-passed bugs). When such a",
+		"bug is fixed the test starts matching, and the harness will report that the skip is",
+		"no longer needed so the entry can be removed.",
+		"",
+		"Placeholders: {dir} expands to the per-test scratch directory.",
+		"Fields: name, include (target path prefixes the shim attributes I/O to), prep",
+		"(statements run un-instrumented to create inputs), measure (instrumented statements),",
+		"check (which dimensions to compare: read and/or write), skip (FIXME reason or absent)."
+	],
+	"tests": [
+		{
+			"name": "parquet_write",
+			"include": ["{dir}/out.parquet"],
+			"measure": ["COPY (SELECT range i, range * 2 j FROM range(500000)) TO '{dir}/out.parquet' (FORMAT parquet)"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_write_zstd",
+			"include": ["{dir}/out.parquet"],
+			"measure": ["COPY (SELECT range i FROM range(1000000)) TO '{dir}/out.parquet' (FORMAT parquet, COMPRESSION zstd)"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_read",
+			"include": ["{dir}/in.parquet"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.parquet' (FORMAT parquet)"],
+			"measure": ["SELECT count(*), sum(i), sum(j) FROM read_parquet('{dir}/in.parquet')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_read_projection",
+			"include": ["{dir}/in.parquet"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.parquet' (FORMAT parquet)"],
+			"measure": ["SELECT sum(i) FROM read_parquet('{dir}/in.parquet')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_read_filter",
+			"include": ["{dir}/in.parquet"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.parquet' (FORMAT parquet)"],
+			"measure": ["SELECT count(*) FROM read_parquet('{dir}/in.parquet') WHERE i > 250000"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_read_zstd",
+			"include": ["{dir}/in.parquet"],
+			"prep": ["COPY (SELECT range i FROM range(1000000)) TO '{dir}/in.parquet' (FORMAT parquet, COMPRESSION zstd)"],
+			"measure": ["SELECT sum(i) FROM read_parquet('{dir}/in.parquet')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_read_no_prefetch",
+			"include": ["{dir}/in.parquet"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.parquet' (FORMAT parquet)"],
+			"settings": ["SET disable_parquet_prefetching=true"],
+			"measure": ["SELECT count(*), sum(i), sum(j) FROM read_parquet('{dir}/in.parquet')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "read_text",
+			"include": ["{dir}/in.txt"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.txt' (FORMAT csv)"],
+			"measure": ["SELECT sum(length(content)) FROM read_text('{dir}/in.txt')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "read_blob",
+			"include": ["{dir}/in.bin"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.bin' (FORMAT csv)"],
+			"measure": ["SELECT sum(octet_length(content)) FROM read_blob('{dir}/in.bin')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "csv_read",
+			"include": ["{dir}/in.csv"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.csv' (FORMAT csv)"],
+			"measure": ["SELECT count(*), sum(i) FROM read_csv('{dir}/in.csv')"],
+			"check": ["read", "write"]
+		},
+
+		{
+			"name": "csv_write",
+			"include": ["{dir}/out.csv"],
+			"measure": ["COPY (SELECT range i, range * 2 j FROM range(500000)) TO '{dir}/out.csv' (FORMAT csv)"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "csv_write_gzip",
+			"include": ["{dir}/out.csv.gz"],
+			"measure": ["COPY (SELECT range i FROM range(500000)) TO '{dir}/out.csv.gz' (FORMAT csv, COMPRESSION gzip)"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "json_write",
+			"include": ["{dir}/out.json"],
+			"measure": ["COPY (SELECT range i, range * 2 j FROM range(200000)) TO '{dir}/out.json' (FORMAT json)"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "csv_read_gzip",
+			"include": ["{dir}/in.csv.gz"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.csv.gz' (FORMAT csv, COMPRESSION gzip)"],
+			"measure": ["SELECT count(*), sum(i) FROM read_csv('{dir}/in.csv.gz')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "json_read",
+			"include": ["{dir}/in.json"],
+			"prep": ["COPY (SELECT range i, range * 2 j FROM range(200000)) TO '{dir}/in.json' (FORMAT json)"],
+			"measure": ["SELECT count(*) FROM read_json('{dir}/in.json')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "native_checkpoint_write",
+			"comment": "Verifies that checkpoint block writes to the main database file are attributed. The schema is created+checkpointed in the un-instrumented prep phase so that the file-header writes at database creation (attributed to the connection-open context, not a measured statement) are not counted. The measure phase inserts and checkpoints into the existing file. The .wal is excluded because the write-ahead log uses a single long-lived BufferedFileWriter whose per-commit QueryContext is not threaded (a separate known gap, ~1 KB here); the checkpoint/block-manager writes to the main file are fully attributed.",
+			"default_db": "{dir}/native.db",
+			"include": ["{dir}/native.db"],
+			"exclude": ["{dir}/native.db.wal"],
+			"prep": [
+				"ATTACH '{dir}/native.db' AS d",
+				"CREATE TABLE d.t(i INTEGER, j INTEGER)",
+				"CHECKPOINT d",
+				"DETACH d"
+			],
+			"measure": [
+				"INSERT INTO t SELECT range, range * 2 FROM range(300000)",
+				"CHECKPOINT"
+			],
+			"check": ["write"]
+		},
+		{
+			"name": "native_overflow_string_write",
+			"comment": "Exercises the overflow-string checkpoint write path (WriteOverflowStringsToDisk) with strings too large to inline.",
+			"default_db": "{dir}/native.db",
+			"include": ["{dir}/native.db"],
+			"exclude": ["{dir}/native.db.wal"],
+			"prep": [
+				"ATTACH '{dir}/native.db' AS d",
+				"CREATE TABLE d.t(i INTEGER, s VARCHAR)",
+				"CHECKPOINT d",
+				"DETACH d"
+			],
+			"measure": [
+				"INSERT INTO t SELECT i, repeat('x', 20000) FROM range(2000) tbl(i)",
+				"CHECKPOINT"
+			],
+			"check": ["write"]
+		}
+	]
+}

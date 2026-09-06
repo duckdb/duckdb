@@ -1,0 +1,20 @@
+# name: benchmark/micro/join/hashjoin_constant_probe.benchmark
+# description: Hash join probe over a numeric constant-compressed key (small build, 1M-row probe)
+# group: [join]
+
+name Hash Join Constant Probe
+group join
+storage persistent
+
+# fact.k is physically clustered so each row group holds a single value - the segment is
+# constant-compressed and scanned as a CONSTANT_VECTOR. Keys span a wide range to avoid a
+# perfect hash join, keeping the probe on the regular hash-join path.
+load
+CREATE TABLE dim AS SELECT i * 1000000 AS k FROM range(9) t(i);
+CREATE TABLE fact AS SELECT (i // 122880) * 1000000 AS k FROM range(1000000) t(i);
+
+run
+SELECT COUNT(*) FROM fact f JOIN dim d ON f.k = d.k
+
+result I
+1000000

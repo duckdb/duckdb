@@ -6,7 +6,7 @@
 namespace duckdb {
 
 struct DuckDBSettingValue {
-	string name;
+	Identifier name;
 	Value value;
 	string description;
 	string input_type;
@@ -27,7 +27,7 @@ struct DuckDBSettingsData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -45,6 +45,9 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("typed_value");
+	return_types.emplace_back(LogicalType::VARIANT());
 
 	return nullptr;
 }
@@ -85,7 +88,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		}
 		for (auto &alias : value.aliases) {
 			DuckDBSettingValue alias_value = value;
-			alias_value.name = StringValue::Get(alias);
+			alias_value.name = alias.GetValue<Identifier>();
 			alias_value.aliases.clear();
 			result->settings.push_back(std::move(alias_value));
 		}
@@ -120,25 +123,34 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// name, LogicalType::VARCHAR
+	auto &name = output.data[0];
+	// value, LogicalType::VARCHAR
+	auto &value = output.data[1];
+	// description, LogicalType::VARCHAR
+	auto &description = output.data[2];
+	// input_type, LogicalType::VARCHAR
+	auto &input_type = output.data[3];
+	// scope, LogicalType::VARCHAR
+	auto &scope = output.data[4];
+	// aliases, LogicalType::VARCHAR[]
+	auto &aliases = output.data[5];
+	// value, LogicalType::VARIANT
+	auto &typed_value = output.data[6];
+
 	while (data.offset < data.settings.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.settings[data.offset++];
 
-		// return values:
-		// name, LogicalType::VARCHAR
-		output.SetValue(0, count, Value(entry.name));
-		// value, LogicalType::VARCHAR
-		output.SetValue(1, count, entry.value.CastAs(context, LogicalType::VARCHAR));
-		// description, LogicalType::VARCHAR
-		output.SetValue(2, count, Value(entry.description));
-		// input_type, LogicalType::VARCHAR
-		output.SetValue(3, count, Value(entry.input_type));
-		// scope, LogicalType::VARCHAR
-		output.SetValue(4, count, Value(entry.scope));
-		// aliases, LogicalType::VARCHAR[]
-		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
+		name.Append(Value(entry.name));
+		value.Append(entry.value.CastAs(context, LogicalType::VARCHAR));
+		description.Append(Value(entry.description));
+		input_type.Append(Value(entry.input_type));
+		scope.Append(Value(entry.scope));
+		aliases.Append(Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
+		typed_value.Append(entry.value.CastAs(context, LogicalType::VARIANT()));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {

@@ -8,10 +8,12 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/query_location.hpp"
 
 namespace duckdb {
 
@@ -28,12 +30,12 @@ public:
 
 	//! The statement type
 	StatementType type;
-	//! The statement location within the query string
-	idx_t stmt_location = 0;
-	//! The statement length within the query string
-	idx_t stmt_length = 0;
+	//! The source location of the statement within the query string
+	QueryLocation stmt_location = QueryLocation(0, 0);
 	//! The map of named parameter to param index
-	case_insensitive_map_t<idx_t> named_param_map;
+	identifier_map_t<idx_t> named_param_map;
+	//! Whether the statement contains any anonymous (? or $N) parameters
+	bool has_anonymous_parameters = false;
 	//! The query text that corresponds to this SQL statement
 	string query;
 

@@ -1,0 +1,40 @@
+# name: test/sql/error/error_position_json_execute.test
+# description: Error position reported by json_execute_serialized_sql must reflect the location of the error within the inner SQL, not the call site (#19512)
+# group: [error]
+
+require json
+
+statement ok
+set errors_as_json=true;
+
+# In the outer query below, json_execute_serialized_sql starts at position 17:
+#   SELECT 1, 2 FROM json_execute_serialized_sql(...)
+#   0         1
+#   01234567890123456789
+#                   ^17
+#
+# Without the fix, both variants below would report position "17" (the call site).
+# With the fix, the position from inside the inner SQL is preserved instead.
+
+# Inner SQL: no_such_tbl is at position 14 within the inner SQL (different from call-site "17")
+#   SELECT * FROM no_such_tbl
+#   0         1
+#   01234567890123456789
+#                 ^14
+statement error
+SELECT 1, 2 FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM no_such_tbl'));
+----
+<REGEX>:.*"position".*:.*"14".*
+
+# Inner SQL: 
+#   no_such_tbl is at position 30 within the inner SQL.
+#   Without the fix, this would still incorrectly report "17" (unchanged call-site).
+#   With the fix, it correctly reports "30", showing the position tracks the inner SQL.
+#   SELECT 1,2,3,4,5,6,7,8,* FROM no_such_tbl
+#   0         1         2         3
+#   012345678901234567890123456789012
+#                                 ^30
+statement error
+SELECT 1, 2 FROM json_execute_serialized_sql(json_serialize_sql('SELECT 1,2,3,4,5,6,7,8,* FROM no_such_tbl'));
+----
+<REGEX>:.*"position".*:.*"30".*

@@ -41,18 +41,22 @@ struct OperatorPartitionInfo {
 	OperatorPartitionInfo() = default;
 	explicit OperatorPartitionInfo(bool batch_index) : batch_index(batch_index) {
 	}
+	OperatorPartitionInfo(bool batch_index, optional_idx preferred_batch_size)
+	    : batch_index(batch_index), preferred_batch_size(preferred_batch_size) {
+	}
 	explicit OperatorPartitionInfo(vector<column_t> partition_columns_p)
 	    : partition_columns(std::move(partition_columns_p)) {
 	}
 
 	bool batch_index = false;
+	optional_idx preferred_batch_size;
 	vector<column_t> partition_columns;
 
 	static OperatorPartitionInfo NoPartitionInfo() {
 		return OperatorPartitionInfo(false);
 	}
-	static OperatorPartitionInfo BatchIndex() {
-		return OperatorPartitionInfo(true);
+	static OperatorPartitionInfo BatchIndex(optional_idx preferred_batch_size = optional_idx()) {
+		return OperatorPartitionInfo(true, preferred_batch_size);
 	}
 	static OperatorPartitionInfo PartitionColumns(vector<column_t> columns) {
 		return OperatorPartitionInfo(std::move(columns));

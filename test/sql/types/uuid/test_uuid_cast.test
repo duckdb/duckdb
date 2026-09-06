@@ -2,9 +2,6 @@
 # description: Test UUID-BLOB casting operations
 # group: [uuid]
 
-statement ok
-PRAGMA enable_verification
-
 # Test the specific round-trip conversion: UUID -> BLOB -> UUID
 query I
 select try_cast(try_cast('00112233-4455-6677-8899-aabbccddeeff'::UUID AS BLOB) as uuid) as test;

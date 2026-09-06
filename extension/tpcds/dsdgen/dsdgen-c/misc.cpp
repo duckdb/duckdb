@@ -86,7 +86,7 @@ int file_num = -1;
  * value; otherwise return the default supplied
  */
 char *env_config(char *var, char *dflt) {
-	static char *evar;
+	static thread_local char *evar;
 
 	if ((evar = getenv(var)) != NULL)
 		return (evar);

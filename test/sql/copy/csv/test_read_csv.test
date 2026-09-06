@@ -2,9 +2,6 @@
 # description: Test read CSV function
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 select delimiter, quote FROM sniff_csv('{DATA_DIR}/csv/stats_3_muta_10_21.csv')
 ----

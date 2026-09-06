@@ -1,0 +1,189 @@
+# name: test/sql/types/decimal/decimal_average.test
+# description: Test decimal_average aggregate function
+# group: [decimal]
+
+statement ok
+CREATE TABLE prices (v DECIMAL(10,2));
+
+statement ok
+INSERT INTO prices VALUES (10.00), (20.00);
+
+# Basic average
+query I
+SELECT decimal_average(v) FROM prices;
+----
+15.00
+
+# Result type matches input type
+query I
+SELECT typeof(decimal_average(v)) FROM prices;
+----
+DECIMAL(10,2)
+
+# NULL handling: NULLs are ignored
+statement ok
+CREATE TABLE prices_with_null (v DECIMAL(10,2));
+
+statement ok
+INSERT INTO prices_with_null VALUES (10.00), (NULL), (20.00);
+
+query I
+SELECT decimal_average(v) FROM prices_with_null;
+----
+15.00
+
+statement ok
+CREATE TABLE all_null (v DECIMAL(10,2));
+
+statement ok
+INSERT INTO all_null VALUES (NULL);
+
+query I
+SELECT decimal_average(v) FROM all_null;
+----
+NULL
+
+# Empty group returns NULL
+query I
+SELECT decimal_average(v) FROM prices WHERE v > 1000.00;
+----
+NULL
+
+# Negative and mixed values
+statement ok
+CREATE TABLE mixed (v DECIMAL(10,2));
+
+statement ok
+INSERT INTO mixed VALUES (-10.00), (-20.00);
+
+query I
+SELECT decimal_average(v) FROM mixed;
+----
+-15.00
+
+statement ok
+CREATE TABLE zero_avg (v DECIMAL(10,2));
+
+statement ok
+INSERT INTO zero_avg VALUES (-5.00), (5.00);
+
+query I
+SELECT decimal_average(v) FROM zero_avg;
+----
+0.00
+
+statement ok
+CREATE TABLE odd_avg (v DECIMAL(5,0));
+
+statement ok
+INSERT INTO odd_avg VALUES (3), (4);
+
+query I
+SELECT decimal_average(v) FROM odd_avg;
+----
+4
+
+statement ok
+CREATE TABLE even_avg (v DECIMAL(5,0));
+
+statement ok
+INSERT INTO even_avg VALUES (2), (3);
+
+query I
+SELECT decimal_average(v) FROM even_avg;
+----
+2
+
+# Physical type coverage
+statement ok
+CREATE TABLE int16_dec (v DECIMAL(4,2));
+
+statement ok
+INSERT INTO int16_dec VALUES (1.23), (4.56);
+
+query I
+SELECT typeof(decimal_average(v)) FROM int16_dec;
+----
+DECIMAL(4,2)
+
+statement ok
+CREATE TABLE int32_dec (v DECIMAL(9,2));
+
+statement ok
+INSERT INTO int32_dec VALUES (1.23), (4.56);
+
+query I
+SELECT typeof(decimal_average(v)) FROM int32_dec;
+----
+DECIMAL(9,2)
+
+statement ok
+CREATE TABLE int128_dec (v DECIMAL(38,2));
+
+statement ok
+INSERT INTO int128_dec VALUES (1.23), (4.56);
+
+query I
+SELECT typeof(decimal_average(v)) FROM int128_dec;
+----
+DECIMAL(38,2)
+
+# High scale: INT64 inputs with scale 17
+statement ok
+CREATE TABLE high_scale_int64 (v DECIMAL(18,17));
+
+statement ok
+INSERT INTO high_scale_int64 VALUES (0.10000000000000000), (0.20000000000000000), (0.30000000000000000);
+
+query I
+SELECT typeof(decimal_average(v)) FROM high_scale_int64;
+----
+DECIMAL(18,17)
+
+query I
+SELECT decimal_average(v) FROM high_scale_int64;
+----
+0.20000000000000000
+
+# High scale: INT128 inputs with scale 20
+statement ok
+CREATE TABLE high_scale_int128 (v DECIMAL(38,20));
+
+statement ok
+INSERT INTO high_scale_int128 VALUES (1.00000000000000000001), (2.00000000000000000001), (3.00000000000000000001);
+
+query I
+SELECT typeof(decimal_average(v)) FROM high_scale_int128;
+----
+DECIMAL(38,20)
+
+query I
+SELECT decimal_average(v) FROM high_scale_int128;
+----
+2.00000000000000000001
+
+# Sum overflow: two max DECIMAL(38,0) values exceed HUGEINT range
+statement ok
+CREATE TABLE overflow_big (v DECIMAL(38,0));
+
+statement ok
+INSERT INTO overflow_big VALUES (99999999999999999999999999999999999999);
+
+statement ok
+INSERT INTO overflow_big VALUES (99999999999999999999999999999999999999);
+
+statement error
+SELECT decimal_average(v) FROM overflow_big;
+----
+<REGEX>:.*intermediate sum overflowed HUGEINT range.*
+
+# The accumulated sum can be the minimum HUGEINT value; negating it in finalize overflows.
+query I
+SELECT decimal_average(x)
+FROM (
+	VALUES
+		(-85070591730234615865843651857942052864::DECIMAL(38,0)),
+		(-85070591730234615865843651857942052864::DECIMAL(38,0))
+) t(x);
+----
+-85070591730234615865843651857942052864

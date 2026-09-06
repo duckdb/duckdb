@@ -2,9 +2,6 @@
 # description: Test glob **
 # group: [glob]
 
-statement ok
-PRAGMA enable_verification
-
 # tests without previous directories
 query I
 select count(*) > 0 from glob('**');

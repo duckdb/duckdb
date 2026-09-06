@@ -4,24 +4,21 @@
 
 require tpch
 
-statement ok
-PRAGMA enable_verification
-
 # write lineitem to lineitem.csv.gz
 statement ok
 CALL dbgen(sf=1);
 
 statement ok
-COPY lineitem TO '__TEST_DIR__/lineitem.csv.gz' (HEADER)
+COPY lineitem TO '{TEST_DIR}/lineitem.csv.gz' (HEADER)
 
-load __TEST_DIR__/store_tpch_auto_detect.db
+load {TEST_DIR}/store_tpch_auto_detect.db
 
 # now read the gzip compressed file with sample_size=-1
 statement ok
 SET memory_limit='750MB';
 
 statement ok
-CREATE OR REPLACE TABLE lineitem AS (SELECT * FROM read_csv_auto(['__TEST_DIR__/lineitem.csv.gz'], sample_size=-1));
+CREATE OR REPLACE TABLE lineitem AS (SELECT * FROM read_csv_auto(['{TEST_DIR}/lineitem.csv.gz'], sample_size=-1));
 
 # run Q01 to verify the file was loaded correctly
 query I

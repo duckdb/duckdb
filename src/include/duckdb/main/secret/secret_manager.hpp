@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/catalog/default/default_generator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/main/secret/secret.hpp"
@@ -32,7 +33,7 @@ public:
 	      secret((other.secret != nullptr) ? other.secret->Clone() : nullptr) {
 	}
 
-	//! Whether the secret is persistent
+	//! Lifetime of the secret
 	SecretPersistType persist_type;
 	//! The storage backend of the secret
 	string storage_mode;
@@ -86,7 +87,7 @@ struct SecretManagerConfig {
 	bool allow_persistent_secrets = DEFAULT_ALLOW_PERSISTENT_SECRETS;
 };
 
-//! The Secret Manager for DuckDB. Can handle both temporary and persistent secrets
+//! The Secret Manager for DuckDB. Handles transaction, temporary and persistent secrets
 class SecretManager {
 	friend struct SecretEntry;
 
@@ -97,6 +98,9 @@ public:
 	//! The default storage backends
 	static constexpr const char *TEMPORARY_STORAGE_NAME = "memory";
 	static constexpr const char *LOCAL_FILE_STORAGE_NAME = "local_file";
+	static constexpr const char *TRANSACTION_STORAGE_NAME = "transaction";
+	//! Connection-scoped storage: secrets live only for the creating connection and are reaped when it closes.
+	static constexpr const char *CONNECTION_STORAGE_NAME = "connection";
 
 	//! Static Helper Functions
 	DUCKDB_API static SecretManager &Get(ClientContext &context);
@@ -130,10 +134,10 @@ public:
 	DUCKDB_API unique_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name,
 	                                                   const string &storage = "");
 	//! Delete a secret by name, optionally by providing the storage to drop from
-	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name,
+	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const Identifier &name,
 	                                 OnEntryNotFound on_entry_not_found,
 	                                 SecretPersistType persist_type = SecretPersistType::DEFAULT,
-	                                 const string &storage = "");
+	                                 const Identifier &storage = "");
 	//! List all secrets from all secret storages
 	DUCKDB_API vector<SecretEntry> AllSecrets(CatalogTransaction transaction);
 
@@ -154,42 +158,45 @@ public:
 	DUCKDB_API virtual string PersistentSecretPath();
 
 	//! Utility functions
-	DUCKDB_API void DropSecretByName(ClientContext &context, const string &name, OnEntryNotFound on_entry_not_found,
+	DUCKDB_API void DropSecretByName(ClientContext &context, const Identifier &name, OnEntryNotFound on_entry_not_found,
 	                                 SecretPersistType persist_type = SecretPersistType::DEFAULT,
-	                                 const string &storage = "");
+	                                 const Identifier &storage = "");
 
 private:
 	//! Register a secret type
 	void RegisterSecretTypeInternal(SecretType &type);
 	//! Lookup a SecretType, throws if not found
-	SecretType LookupTypeInternal(const string &type);
+	SecretType LookupTypeInternal(const Identifier &type);
 	//! Try to lookup a SecretType
-	bool TryLookupTypeInternal(const string &type, SecretType &type_out);
+	bool TryLookupTypeInternal(const Identifier &type, SecretType &type_out);
 	//! Register a secret provider
 	void RegisterSecretFunctionInternal(CreateSecretFunction function, OnCreateConflict on_conflict);
 	//! Lookup a CreateSecretFunction
-	optional_ptr<CreateSecretFunction> LookupFunctionInternal(const string &type, const string &provider);
+	optional_ptr<CreateSecretFunction> LookupFunctionInternal(const Identifier &type, const Identifier &provider);
 	//! Register a new Secret
 	unique_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret,
 	                                               OnCreateConflict on_conflict, SecretPersistType persist_type,
-	                                               const string &storage = "");
+	                                               const Identifier &storage = Identifier());
 	//! Initialize the secret catalog_set and persistent secrets (lazily)
 	void InitializeSecrets(CatalogTransaction transaction);
 	//! Load a secret storage
 	void LoadSecretStorageInternal(unique_ptr<SecretStorage> storage);
 
 	//! Autoload extension for specific secret type
-	void AutoloadExtensionForType(const string &type);
+	void AutoloadExtensionForType(const Identifier &type);
 	//! Autoload extension for specific secret function
-	void AutoloadExtensionForFunction(const string &type, const string &provider);
+	void AutoloadExtensionForFunction(const Identifier &type, const Identifier &provider);
 
 	//! Will throw appropriate error message when type not found
-	[[noreturn]] void ThrowTypeNotFoundError(const string &type, const string &secret_path = "");
-	[[noreturn]] void ThrowProviderNotFoundError(const string &type, const string &provider, bool was_default = false);
+	[[noreturn]] void ThrowTypeNotFoundError(const Identifier &type, const string &secret_path = "");
+	[[noreturn]] void ThrowProviderNotFoundError(const Identifier &type, const Identifier &provider,
+	                                             bool was_default = false);
 
 	//! Thread-safe accessors for secret_storages
 	vector<reference<SecretStorage>> GetSecretStorages();
-	optional_ptr<SecretStorage> GetSecretStorage(const string &name);
+	optional_ptr<SecretStorage> GetSecretStorage(const Identifier &name);
+	optional_ptr<SecretStorage> GetTransactionSecretStorage(CatalogTransaction transaction);
+	SecretStorage &GetOrCreateTransactionSecretStorage(CatalogTransaction transaction);
 
 	//! Throw an exception if the secret manager is initialized
 	void ThrowOnSettingChangeIfInitialized();
@@ -197,11 +204,11 @@ private:
 	//! Lock for types, functions, settings and storages
 	mutex manager_lock;
 	//! Secret functions;
-	case_insensitive_map_t<CreateSecretFunctionSet> secret_functions;
+	identifier_map_t<CreateSecretFunctionSet> secret_functions;
 	//! Secret types;
-	case_insensitive_map_t<SecretType> secret_types;
+	identifier_map_t<SecretType> secret_types;
 	//! Map of all registered SecretStorages
-	case_insensitive_map_t<unique_ptr<SecretStorage>> secret_storages;
+	identifier_map_t<unique_ptr<SecretStorage>> secret_storages;
 	//! While false, secret manager settings can still be changed
 	atomic<bool> initialized {false};
 	//! Configuration for secret manager
@@ -213,22 +220,22 @@ private:
 //! The DefaultGenerator for persistent secrets. This is used to store lazy loaded secrets in the catalog
 class DefaultSecretGenerator : public DefaultGenerator {
 public:
-	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager, case_insensitive_set_t &persistent_secrets);
+	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager, identifier_set_t &persistent_secrets);
 
 public:
-	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &entry_name) override;
-	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
-	vector<string> GetDefaultEntries() override;
+	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const Identifier &entry_name) override;
+	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;
+	vector<Identifier> GetDefaultEntries() override;
 	bool LockDuringCreate() const override {
 		return true;
 	}
 
 protected:
-	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const string &entry_name);
+	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const Identifier &entry_name);
 
 	SecretManager &secret_manager;
 	mutex lock;
-	case_insensitive_set_t persistent_secrets;
+	identifier_set_t persistent_secrets;
 };
 
 } // namespace duckdb

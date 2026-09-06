@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 
 #include "duckdb/common/likely.hpp"
@@ -10,6 +14,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -19,13 +24,37 @@ BindCastInfo::~BindCastInfo() {
 BoundCastData::~BoundCastData() {
 }
 
+CastStatisticsInput::CastStatisticsInput(BoundCastInfo &bound_cast_p, const LogicalType &source_type_p,
+                                         const LogicalType &target_type_p, const BaseStatistics &child_stats_p,
+                                         optional_ptr<ClientContext> context_p)
+    : source_type(source_type_p), target_type(target_type_p), child_stats(child_stats_p), context(context_p),
+      bound_cast(bound_cast_p) {
+}
+
+void CastStatisticsInput::SetFunction(cast_function_t new_function) {
+	bound_cast.function = new_function;
+}
+
 BoundCastInfo::BoundCastInfo(cast_function_t function_p, unique_ptr<BoundCastData> cast_data_p,
                              init_cast_local_state_t init_local_state_p)
     : function(function_p), init_local_state(init_local_state_p), cast_data(std::move(cast_data_p)) {
 }
 
 BoundCastInfo BoundCastInfo::Copy() const {
-	return BoundCastInfo(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
+	auto result = BoundCastInfo(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
+	result.statistics = statistics;
+	return result;
+}
+
+unique_ptr<BaseStatistics> BoundCastInfo::PropagateStatistics(const LogicalType &source_type,
+                                                              const LogicalType &target_type,
+                                                              const BaseStatistics &child_stats,
+                                                              optional_ptr<ClientContext> context) {
+	if (!statistics) {
+		return nullptr;
+	}
+	CastStatisticsInput input(*this, source_type, target_type, child_stats, context);
+	return statistics(input);
 }
 
 bool DefaultCasts::NopCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -38,10 +67,10 @@ void HandleCastError::AssignError(const string &error_message, CastParameters &p
 }
 
 void HandleCastError::AssignError(const string &error_message, string *error_message_ptr,
-                                  optional_ptr<const Expression> cast_source, optional_idx error_location) {
+                                  optional_ptr<const Expression> cast_source, QueryLocation error_location) {
 	string column;
 	if (cast_source && cast_source->HasAlias()) {
-		column = " when casting from source column " + cast_source->alias;
+		column = " when casting from source column " + cast_source->GetAlias();
 	}
 	if (!error_message_ptr) {
 		throw ConversionException(error_location, error_message + column);
@@ -54,12 +83,11 @@ void HandleCastError::AssignError(const string &error_message, string *error_mes
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool success = true;
-	if (VectorOperations::HasNotNull(source, count)) {
+	if (VectorOperations::HasNotNull(source)) {
 		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(result, true);
+	ConstantVector::SetNull(result, count_t(count));
 	return success;
 }
 
@@ -68,19 +96,17 @@ bool DefaultCasts::ReinterpretCast(Vector &source, Vector &result, idx_t count, 
 	return true;
 }
 
-static bool AggregateStateToBlobCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	if (result.GetType().id() != LogicalTypeId::BLOB) {
-		throw TypeMismatchException(source.GetType(), result.GetType(),
-		                            "Cannot cast AGGREGATE_STATE to anything but BLOB");
-	}
-	result.Reinterpret(source);
-	return true;
+bool BoundCastInfo::IsNopCast() const {
+	return function == DefaultCasts::NopCast;
+}
+
+bool BoundCastInfo::IsNullCast() const {
+	return function == DefaultCasts::TryVectorNullCast;
 }
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	// cast a NULL to another type, just copy the properties and change the type
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(result, true);
+	ConstantVector::SetNull(result, count_t(count));
 	return true;
 }
 
@@ -132,6 +158,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return TimestampCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return TimestampTzCastSwitch(input, source, target);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return TimestampTzNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return TimestampNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -151,7 +179,11 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::MAP:
 		return MapCastSwitch(input, source, target);
 	case LogicalTypeId::STRUCT:
-		return StructCastSwitch(input, source, target);
+		// an unnamed STRUCT (e.g. from variant shredding with empty keys) is cast positionally, like a TUPLE
+		return StructType::IsUnnamed(source) ? TupleCastSwitch(input, source, target)
+		                                     : StructCastSwitch(input, source, target);
+	case LogicalTypeId::TUPLE:
+		return TupleCastSwitch(input, source, target);
 	case LogicalTypeId::LIST:
 		return ListCastSwitch(input, source, target);
 	case LogicalTypeId::UNION:
@@ -168,8 +200,6 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return TypeCastSwitch(input, source, target);
 	case LogicalTypeId::BIGNUM:
 		return BignumCastSwitch(input, source, target);
-	case LogicalTypeId::AGGREGATE_STATE:
-		return AggregateStateToBlobCast;
 	default:
 		return nullptr;
 	}

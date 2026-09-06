@@ -49,8 +49,8 @@
 #include "nulls.h"
 #include "tdefs.h"
 
-struct W_WEB_RETURNS_TBL g_w_web_returns;
-extern struct W_WEB_SALES_TBL g_w_web_sales;
+thread_local struct W_WEB_RETURNS_TBL g_w_web_returns;
+extern thread_local struct W_WEB_SALES_TBL g_w_web_sales;
 
 /*
  * Routine: mk_web_returns()
@@ -70,8 +70,8 @@ extern struct W_WEB_SALES_TBL g_w_web_sales;
 int mk_w_web_returns(void *row, ds_key_t index) {
 	int res = 0;
 
-	static decimal_t dMin, dMax;
-	static struct W_WEB_SALES_TBL *sale;
+	static thread_local decimal_t dMin, dMax;
+	static thread_local struct W_WEB_SALES_TBL *sale;
 	struct W_WEB_RETURNS_TBL *r;
 	tdef *pT = getSimpleTdefsByNumber(WEB_RETURNS);
 

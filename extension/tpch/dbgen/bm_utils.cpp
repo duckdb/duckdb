@@ -289,9 +289,11 @@ void read_dist(const char *path, const char *name, distribution *target) {
 			target->max = 0;
 			continue;
 		}
-		target->list[count].text = (char *)malloc((size_t)((int)strlen(token) + 1));
+		auto token_length = (int)strlen(token);
+		target->list[count].text = (char *)malloc((size_t)(token_length + 1));
 		MALLOC_CHECK(target->list[count].text);
 		strcpy(target->list[count].text, token);
+		target->list[count].length = token_length;
 		target->max += weight;
 		target->list[count].weight = target->max;
 

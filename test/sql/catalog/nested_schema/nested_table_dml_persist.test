@@ -1,0 +1,109 @@
+# name: test/sql/catalog/nested_schema/nested_table_dml_persist.test
+# description: Persisting data of tables in nested schemas (WAL replay + checkpoint) on storage v2.0.0
+# group: [nested_schema]
+
+load {TEST_DIR}/nested_table_dml_persist.db readwrite v2.0.0
+
+statement ok
+CREATE SCHEMA parent;
+
+statement ok
+CREATE SCHEMA parent.child;
+
+statement ok
+CREATE TABLE parent.child.t1(i INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO parent.child.t1 VALUES (1, 'a'), (2, 'b');
+
+# replay the inserts from the WAL
+restart
+
+query II
+SELECT * FROM parent.child.t1 ORDER BY i;
+----
+1	a
+2	b
+
+# updates and deletes are replayed from the WAL as well
+statement ok
+UPDATE parent.child.t1 SET s = 'updated' WHERE i = 1;
+
+statement ok
+DELETE FROM parent.child.t1 WHERE i = 2;
+
+statement ok
+INSERT INTO parent.child.t1 VALUES (3, 'c');
+
+restart
+
+query II
+SELECT * FROM parent.child.t1 ORDER BY i;
+----
+1	updated
+3	c
+
+# checkpoint the data, so it goes through storage serialization instead of the WAL
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+SELECT * FROM parent.child.t1 ORDER BY i;
+----
+1	updated
+3	c
+
+# a larger insert that triggers the optimistic (row group data) WAL write path
+statement ok
+CREATE TABLE parent.child.big(i INTEGER);
+
+statement ok
+INSERT INTO parent.child.big SELECT * FROM range(200000);
+
+restart
+
+query II
+SELECT count(*), sum(i) FROM parent.child.big;
+----
+200000	19999900000
+
+# inserting into two nested tables in a single transaction switches the WAL's current table back and forth
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO parent.child.t1 VALUES (4, 'd');
+
+statement ok
+INSERT INTO parent.child.big VALUES (999999);
+
+statement ok
+INSERT INTO parent.child.t1 VALUES (5, 'e');
+
+statement ok
+COMMIT;
+
+restart
+
+query I
+SELECT count(*) FROM parent.child.t1;
+----
+4
+
+query I
+SELECT count(*) FROM parent.child.big;
+----
+200001
+
+# dropping the nested schema with CASCADE removes the tables and their data
+statement ok
+DROP SCHEMA parent CASCADE;
+
+restart
+
+statement error
+SELECT * FROM parent.child.t1;
+----
+<REGEX>:.*does not exist.*

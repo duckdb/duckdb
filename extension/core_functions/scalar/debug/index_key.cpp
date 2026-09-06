@@ -1,0 +1,225 @@
+#include "core_functions/scalar/debug_functions.hpp"
+
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/table_description.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/data_table.hpp"
+
+namespace duckdb {
+
+namespace {
+
+static constexpr idx_t INDEX_KEY_FIXED_ARGS = 2;
+
+static TableDescription ExtractTableDescription(const child_list_t<LogicalType> &field_types,
+                                                const vector<Value> &field_values) {
+	unordered_map<string, string> fields;
+	fields["catalog"] = INVALID_CATALOG;
+	fields["schema"] = DEFAULT_SCHEMA;
+	fields["table"] = "";
+
+	for (idx_t i = 0; i < field_types.size(); i++) {
+		auto field_name = StringUtil::Lower(field_types[i].first.GetIdentifierName());
+
+		if (fields.find(field_name) == fields.end()) {
+			throw BinderException("index_key: unknown field %s in path", field_types[i].first);
+		}
+
+		auto &field_value = field_values[i];
+		if (field_value.IsNull()) {
+			throw BinderException("index_key: path field %s cannot be NULL", field_types[i].first);
+		}
+		if (field_value.type().id() != LogicalTypeId::VARCHAR) {
+			throw BinderException("index_key: path field %s must be VARCHAR", field_types[i].first);
+		}
+
+		auto value = StringValue::Get(field_value);
+		if (value.empty()) {
+			throw BinderException("index_key: path field %s cannot be empty", field_types[i].first);
+		}
+		fields[field_name] = value;
+	}
+
+	if (fields["table"].empty()) {
+		throw BinderException("index_key: path must contain a 'table' field");
+	}
+
+	return TableDescription(
+	    QualifiedName(Identifier(fields["catalog"]), Identifier(fields["schema"]), Identifier(fields["table"])));
+}
+
+static TableDescription EvaluateTableDescription(const Value &input_struct) {
+	if (input_struct.IsNull()) {
+		throw BinderException("index_key: path parameter cannot be NULL");
+	}
+
+	return ExtractTableDescription(StructType::GetChildTypes(input_struct.type()),
+	                               StructValue::GetChildren(input_struct));
+}
+
+static string GetStringArgument(const Value &value, const string &param_name) {
+	if (value.IsNull()) {
+		throw BinderException("index_key: parameter '%s' cannot be NULL", param_name);
+	}
+	return StringValue::Get(value);
+}
+
+static shared_ptr<IndexEntry> FindBoundIndexEntry(const TableIndexList &index_list, const Identifier &index_name,
+                                                  const TableDescription &path) {
+	auto found = index_list.FindEntry(index_name);
+	if (found) {
+		return found;
+	}
+
+	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	vector<Identifier> available;
+	for (auto entry : index_list.IndexEntries()) {
+		available.push_back(entry->GetName());
+	}
+
+	if (available.empty()) {
+		throw CatalogException("index_key: index %s was not found on table %s. No indexes found on this table.",
+		                       index_name, qualified_table);
+	}
+	auto available_list = StringUtil::Join(available, ", ");
+	throw CatalogException("index_key: index %s was not found on table %s. Available indexes: %s", index_name,
+	                       qualified_table, available_list);
+}
+
+struct IndexKeyBindData : public FunctionData {
+	IndexKeyBindData(shared_ptr<IndexEntry> index_entry, vector<LogicalType> key_types)
+	    : index_entry(std::move(index_entry)), key_types(std::move(key_types)) {
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<IndexKeyBindData>(index_entry, key_types);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<IndexKeyBindData>();
+		return index_entry.get() == other.index_entry.get() && key_types == other.key_types;
+	}
+
+	shared_ptr<IndexEntry> index_entry;
+	vector<LogicalType> key_types;
+};
+
+static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	if (arguments.size() < INDEX_KEY_FIXED_ARGS) {
+		throw BinderException("index_key: requires at least two arguments - path (STRUCT), index_name");
+	}
+
+	auto path = EvaluateTableDescription(input.GetConstant(0));
+	auto index_name = GetStringArgument(input.GetConstant(1), "index_name");
+
+	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, path.qualified_name);
+	if (!table_entry.IsDuckTable()) {
+		throw BinderException("index_key: table '%s' is not a DuckDB table", qualified_table);
+	}
+
+	// index_key resolves index metadata during binding.
+	// Register the owning catalog so cached prepared statements rebind after catalog changes.
+	if (input.HasBinder()) {
+		auto &binder = input.GetBinder();
+		binder.GetStatementProperties().RegisterDBRead(table_entry.ParentCatalog(), context);
+	}
+	auto &duck_table = table_entry.Cast<DuckTableEntry>();
+	auto &data_table = duck_table.GetStorage();
+	auto &data_table_info = *data_table.GetDataTableInfo();
+
+	// Note: It may come up in testing that we don't want to force binding here, e.g. if the test should explicitly
+	// exercise a code path that binds, not forcing a bind in testing code here. In that case we may want to add an
+	// option to this function to bind or not.
+	data_table_info.BindIndexes(context);
+
+	const auto &index_list = data_table_info.GetIndexes();
+	const auto index_entry = FindBoundIndexEntry(index_list, Identifier(index_name), path);
+	const auto index = index_entry->GetReadHandle<BoundIndex>();
+
+	const auto &index_type = index->GetIndexType();
+	if (index_type != ART::TYPE_NAME) {
+		throw NotImplementedException(
+		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index_type);
+	}
+
+	auto key_types = index->GetLogicalTypes();
+
+	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
+	if (num_key_args != key_types.size()) {
+		throw BinderException("index_key: index '%s' expects %llu key column(s), but %llu argument(s) provided",
+		                      index_name, key_types.size(), num_key_args);
+	}
+
+	// Set bound_function.GetArguments() to actual types for proper casting.
+	// Note: In case this is ever a bottleneck for testing purposes -- currently, we retain the first two arguments
+	// for execution even though they are only required for binding. This requires us to create a key_chunk
+	// that only references the key columns during execution. We could erase the first two arguments here, but
+	// that also requires some (de)serialization boilerplate, so for now we don't do it.
+	bound_function.GetArguments().clear();
+	bound_function.GetArguments().push_back(arguments[0]->GetReturnType());
+	bound_function.GetArguments().push_back(arguments[1]->GetReturnType());
+	for (auto &key_type : key_types) {
+		bound_function.GetArguments().push_back(key_type);
+	}
+
+	return make_uniq<IndexKeyBindData>(index_entry, std::move(key_types));
+}
+
+static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &bind_data = func_expr.BindInfo()->Cast<IndexKeyBindData>();
+
+	idx_t count = args.size();
+
+	// Create a DataChunk referencing only the key columns (skip path and index_name).
+	DataChunk key_chunk;
+	key_chunk.InitializeEmpty(bind_data.key_types);
+	for (idx_t i = 0; i < bind_data.key_types.size(); i++) {
+		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
+	}
+
+	const auto art = bind_data.index_entry->GetReadHandle<ART>();
+	unsafe_vector<ARTKey> keys(count);
+	ArenaAllocator allocator(Allocator::DefaultAllocator());
+	art->GenerateKeys(allocator, key_chunk, keys);
+
+	auto result_data = FlatVector::Writer<string_t>(result, count);
+	for (idx_t i = 0; i < count; i++) {
+		auto &key = keys[i];
+		if (key.Empty()) {
+			result_data.WriteNull();
+		} else {
+			result_data.WriteValue(string_t(const_char_ptr_cast(key.data), key.len));
+		}
+	}
+	if (count == 1) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+	result.Verify();
+}
+
+} // namespace
+
+ScalarFunction IndexKeyFun::GetFunction() {
+	ScalarFunction fun("index_key", {{"path", LogicalTypeId::STRUCT}, {"name", LogicalType::VARCHAR}},
+	                   LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
+	fun.SetVarArgs(LogicalTypeId::ANY);
+	return fun;
+}
+
+} // namespace duckdb

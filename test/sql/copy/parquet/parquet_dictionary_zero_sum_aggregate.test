@@ -1,0 +1,24 @@
+# name: test/sql/copy/parquet/parquet_dictionary_zero_sum_aggregate.test
+# description: Test clustered sum aggregate over a dictionary Parquet zero payload
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+COPY (
+    SELECT (i % 2)::INTEGER AS g, 0::BIGINT AS v
+    FROM range(4096) t(i)
+    ORDER BY g
+) TO '{TEST_DIR}/zero_sum_dict.parquet' (FORMAT PARQUET)
+
+query II
+SELECT sum(v), count(*)
+FROM read_parquet('{TEST_DIR}/zero_sum_dict.parquet')
+GROUP BY g
+ORDER BY g
+----
+0	2048
+0	2048

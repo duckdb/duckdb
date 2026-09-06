@@ -5,7 +5,7 @@
 require parquet
 
 statement ok
-COPY (SELECT '\x00\x01ABC'::BLOB::VARIANT AS v) TO '__TEST_DIR__/variant_blob.parquet' (FORMAT PARQUET);
+COPY (SELECT '\x00\x01ABC'::BLOB::VARIANT AS v) TO '{TEST_DIR}/variant_blob.parquet' (FORMAT PARQUET);
 
 query IIII
 SELECT
@@ -13,6 +13,6 @@ SELECT
     v::VARCHAR AS reread_text,
     hex(v::BLOB) AS reread_blob_hex,
     v = '\x00\x01ABC'::BLOB::VARIANT AS roundtrips
-FROM read_parquet('__TEST_DIR__/variant_blob.parquet');
+FROM read_parquet('{TEST_DIR}/variant_blob.parquet');
 ----
 BLOB	\x00\x01ABC	0001414243	true

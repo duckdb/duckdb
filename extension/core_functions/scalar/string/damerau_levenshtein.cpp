@@ -88,11 +88,11 @@ static int64_t DamerauLevenshteinScalarFunction(Vector &result, const string_t s
 }
 
 static void DamerauLevenshteinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &source_vec = args.data[0];
-	auto &target_vec = args.data[1];
+	const auto &source_vec = args.data[0];
+	const auto &target_vec = args.data[1];
 
 	BinaryExecutor::Execute<string_t, string_t, int64_t>(
-	    source_vec, target_vec, result, args.size(),
+	    source_vec, target_vec, result,
 	    [&](string_t source, string_t target) { return DamerauLevenshteinScalarFunction(result, source, target); });
 }
 

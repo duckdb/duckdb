@@ -2,9 +2,6 @@
 # description: Test basic DATE functionality
 # group: [date]
 
-statement ok
-PRAGMA enable_verification
-
 # create and insert into table
 statement ok
 CREATE TABLE dates(i DATE)

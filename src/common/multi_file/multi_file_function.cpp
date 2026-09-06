@@ -1,7 +1,17 @@
 #include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+
+MultiFileGlobalState::MultiFileGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {
+}
+
+MultiFileGlobalState::MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_list_p)
+    : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
+}
+
+MultiFileGlobalState::~MultiFileGlobalState() = default;
 
 MultiFileReaderInterface::~MultiFileReaderInterface() {
 }
@@ -11,7 +21,7 @@ void MultiFileReaderInterface::InitializeInterface(ClientContext &context, Multi
 }
 
 void MultiFileReaderInterface::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
-                                                const vector<string> &expected_names,
+                                                const vector<Identifier> &expected_names,
                                                 const vector<LogicalType> &expected_types) {
 }
 

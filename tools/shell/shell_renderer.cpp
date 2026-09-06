@@ -4,6 +4,7 @@
 #include "duckdb/common/box_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "duckdb/logging/log_storage.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include <stdexcept>
 #include <cstring>
 
@@ -49,6 +50,44 @@ void PrintStream::RenderAlignedValue(duckdb::string_t str, idx_t width, TextAlig
 void PrintStream::PrintDashes(idx_t N) {
 	Print(string(N, '-'));
 }
+
+void PrintStream::PrintSQL(const string &sql) {
+	if (!SupportsHighlight()) {
+		// the output stream does not support highlighting (e.g. width measuring / redirected output)
+		Print(sql);
+		return;
+	}
+	string highlighted = sql;
+	// HighlightSQL is a no-op when highlighting is disabled or output is not a console
+	state.HighlightSQL(highlighted);
+	Print(highlighted);
+}
+
+// A PrintStream that captures all output into a string instead of writing it out.
+// Used to build a complete SQL statement so it can be highlighted as a whole before printing.
+struct StringPrintStream : public PrintStream {
+	explicit StringPrintStream(ShellState &state) : PrintStream(state) {
+	}
+
+	void Print(const string &str) override {
+		result += str;
+	}
+	void Print(duckdb::string_t str) override {
+		result.append(str.GetData(), str.GetSize());
+	}
+	void Print(const char *str) override {
+		result += str;
+	}
+	void SetBinaryMode() override {
+	}
+	void SetTextMode() override {
+	}
+	bool SupportsHighlight() override {
+		return false;
+	}
+
+	string result;
+};
 
 void PrintStream::OutputQuotedIdentifier(const string &str) {
 	Print(StringUtil::Format("%s", SQLIdentifier(str)));
@@ -281,9 +320,9 @@ ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
 	column_names.reserve(nCol);
 	types.reserve(nCol);
 	for (idx_t c = 0; c < nCol; c++) {
-		column_names.push_back(result.names[c]);
-		types.push_back(result.types[c]);
-		type_names.push_back(GetTypeName(result.types[c]));
+		column_names.push_back(result.ColumnName(c).GetIdentifierName());
+		types.push_back(result.GetTypes()[c]);
+		type_names.push_back(GetTypeName(types.back()));
 	}
 }
 
@@ -305,7 +344,7 @@ unique_ptr<duckdb::DataChunk> ShellRenderer::ConvertChunk(duckdb::DataChunk &chu
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 		duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], varchar_chunk->data[c], chunk.size());
 	}
-	varchar_chunk->SetCardinality(chunk.size());
+	varchar_chunk->SetChildCardinality(chunk.size());
 	varchar_chunk->Flatten();
 	return varchar_chunk;
 }
@@ -323,7 +362,7 @@ bool RenderingQueryResult::TryConvertChunk() {
 	if (renderer.HasConvertValue()) {
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
 			auto &str_vec = varchar_chunk->data[c];
-			auto strings = duckdb::FlatVector::GetData<duckdb::string_t>(str_vec);
+			auto strings = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(str_vec);
 			for (idx_t r = 0; r < varchar_chunk->size(); r++) {
 				if (duckdb::FlatVector::IsNull(str_vec, r)) {
 					continue;
@@ -866,21 +905,18 @@ public:
 		if (data.size() != 2) {
 			return;
 		}
-		if (duckdb::StringUtil::Equals(data[0], "logical_plan") || duckdb::StringUtil::Equals(data[0], "logical_opt") ||
-		    duckdb::StringUtil::Equals(data[0], "physical_plan")) {
-			out.Print("\n┌─────────────────────────────┐\n");
-			out.Print("│┌───────────────────────────┐│\n");
-			if (duckdb::StringUtil::Equals(data[0], "logical_plan")) {
-				out.Print("││ Unoptimized Logical Plan  ││\n");
-			} else if (duckdb::StringUtil::Equals(data[0], "logical_opt")) {
-				out.Print("││  Optimized Logical Plan   ││\n");
-			} else if (duckdb::StringUtil::Equals(data[0], "physical_plan")) {
-				out.Print("││       Physical Plan       ││\n");
-			}
-			out.Print("│└───────────────────────────┘│\n");
-			out.Print("└─────────────────────────────┘\n");
-		}
 		out.Print(data[1]);
+		// after EXPLAIN ANALYZE (interactive), point users at the full (expanded) tree when the pretty tree folded
+		// low-impact operators, and always at the ".web" command which opens the profile in a browser.
+		// (skip it for EXPLAIN ANALYZE (FORMAT WEB), whose result value is empty and which already opened the profile)
+		if (out.SupportsHighlight() && state.stdin_is_interactive && state.stdout_is_console &&
+		    !data[1].GetString().empty() && data[0].GetString() == "analyzed_plan") {
+			string hint = state.last_explain_hid_content
+			                  ? "\ntype .last to show the full tree, .web to open it in a browser\n"
+			                  : "\ntype .web to open the query profile in a browser\n";
+			ShellHighlight highlight(state);
+			highlight.PrintText(hint, PrintOutput::STDOUT, HighlightElementType::FOOTER);
+		}
 	}
 
 	bool RequireMaterializedResult() const override {
@@ -889,6 +925,9 @@ public:
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
 		if (global_mode == PagerMode::PAGER_ON) {
 			return true;
+		}
+		// load the (materialized) result so we can measure the rendered tree height
+		while (result.TryConvertChunk()) {
 		}
 		idx_t row_count = 0;
 		for (auto &chunk : result.chunks) {
@@ -906,7 +945,8 @@ public:
 				}
 			}
 		}
-		return row_count >= state.pager_min_rows;
+		// page the tree when it does not fit on the screen (too tall, or too wide for the terminal)
+		return state.ShouldUsePagerForSize(row_count, state.last_explain_width);
 	}
 };
 
@@ -1321,7 +1361,7 @@ public:
 		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 			duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], json_chunk.data[c], chunk.size());
 		}
-		json_chunk.SetCardinality(chunk.size());
+		json_chunk.SetChildCardinality(chunk.size());
 		json_chunk.Flatten();
 		// now convert the JSON chunk to VARCHAR
 		return ShellRenderer::ConvertChunk(json_chunk);
@@ -1358,31 +1398,34 @@ public:
 		auto &col_names = result.column_names;
 		auto &is_null = row.is_null;
 
-		out.Print("INSERT INTO ");
-		out.Print(state.zDestTable);
+		// build the full INSERT statement into a buffer so it can be highlighted as a whole
+		StringPrintStream buffer(state);
+		buffer.Print("INSERT INTO ");
+		buffer.Print(state.zDestTable);
 		if (show_header) {
-			out.Print("(");
+			buffer.Print("(");
 			for (idx_t i = 0; i < col_names.size(); i++) {
 				if (i > 0) {
-					out.Print(",");
+					buffer.Print(",");
 				}
-				out.OutputQuotedIdentifier(col_names[i]);
+				buffer.OutputQuotedIdentifier(col_names[i]);
 			}
-			out.Print(")");
+			buffer.Print(")");
 		}
 		for (idx_t i = 0; i < data.size(); i++) {
-			out.Print(i > 0 ? "," : " VALUES(");
+			buffer.Print(i > 0 ? "," : " VALUES(");
 			if (is_null[i]) {
-				out.Print("NULL");
+				buffer.Print("NULL");
 			} else if (types[i].IsNumeric()) {
-				out.Print(data[i]);
+				buffer.Print(data[i]);
 			} else if (state.ShellHasFlag(ShellFlags::SHFLG_Newlines)) {
-				out.OutputQuotedString(data[i].GetString());
+				buffer.OutputQuotedString(data[i].GetString());
 			} else {
-				out.Print(EscapeNewlines(data[i].GetString()));
+				buffer.Print(EscapeNewlines(data[i].GetString()));
 			}
 		}
-		out.Print(");\n");
+		buffer.Print(");\n");
+		out.PrintSQL(buffer.result);
 	}
 
 	string EscapeNewlines(const string &str) {
@@ -1448,116 +1491,7 @@ public:
 
 	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		/* .schema and .fullschema output */
-		out.Print(state.GetSchemaLine(row.data[0].GetString(), "\n"));
-	}
-};
-
-class ModePrettyRenderer : public RowRenderer {
-public:
-	explicit ModePrettyRenderer(ShellState &state) : RowRenderer(state) {
-	}
-
-	static bool IsSpace(char c) {
-		return duckdb::StringUtil::CharacterIsSpace(c);
-	}
-
-	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
-		auto &data = row.data;
-		/* .schema and .fullschema with --indent */
-		if (data.size() != 1) {
-			throw std::runtime_error("row must have exactly one value for pretty rendering");
-		}
-		int j;
-		int nParen = 0;
-		char cEnd = 0;
-		char c;
-		int nLine = 0;
-		if (duckdb::StringUtil::StartsWith(data[0].GetString(), "CREATE VIEW") ||
-		    duckdb::StringUtil::StartsWith(data[0].GetString(), "CREATE TRIG")) {
-			out.Print(data[0]);
-			out.Print(";\n");
-			return;
-		}
-		auto zStr = unique_ptr<char[]>(new char[data[0].GetSize() + 1]);
-		memcpy(zStr.get(), data[0].GetData(), data[0].GetSize());
-		zStr[data[0].GetSize()] = '\0';
-		auto z = zStr.get();
-		j = 0;
-		idx_t i;
-		for (i = 0; IsSpace(z[i]); i++) {
-		}
-		for (; (c = z[i]) != 0; i++) {
-			if (IsSpace(c)) {
-				if (z[j - 1] == '\r') {
-					z[j - 1] = '\n';
-				}
-				if (IsSpace(z[j - 1]) || z[j - 1] == '(') {
-					continue;
-				}
-			} else if ((c == '(' || c == ')') && j > 0 && IsSpace(z[j - 1])) {
-				j--;
-			}
-			z[j++] = c;
-		}
-		while (j > 0 && IsSpace(z[j - 1])) {
-			j--;
-		}
-		z[j] = 0;
-		if (state.StringLength(z) >= 79) {
-			for (i = j = 0; (c = z[i]) != 0; i++) { /* Copy from z[i] back to z[j] */
-				if (c == cEnd) {
-					cEnd = 0;
-				} else if (c == '"' || c == '\'' || c == '`') {
-					cEnd = c;
-				} else if (c == '[') {
-					cEnd = ']';
-				} else if (c == '-' && z[i + 1] == '-') {
-					cEnd = '\n';
-				} else if (c == '(') {
-					nParen++;
-				} else if (c == ')') {
-					nParen--;
-					if (nLine > 0 && nParen == 0 && j > 0) {
-						out.Print(state.GetSchemaLineN(z, j, "\n"));
-						j = 0;
-					}
-				}
-				z[j++] = c;
-				if (nParen == 1 && cEnd == 0 && (c == '(' || c == '\n' || (c == ',' && !wsToEol(z + i + 1)))) {
-					if (c == '\n')
-						j--;
-					out.Print(state.GetSchemaLineN(z, j, "\n  "));
-					j = 0;
-					nLine++;
-					while (IsSpace(z[i + 1])) {
-						i++;
-					}
-				}
-			}
-			z[j] = 0;
-		}
-		out.Print(state.GetSchemaLine(z, ";\n"));
-	}
-
-	/*
-	** Return true if string z[] has nothing but whitespace and comments to the
-	** end of the first line.
-	*/
-	static bool wsToEol(const char *z) {
-		int i;
-		for (i = 0; z[i]; i++) {
-			if (z[i] == '\n') {
-				return true;
-			}
-			if (IsSpace(z[i])) {
-				continue;
-			}
-			if (z[i] == '-' && z[i + 1] == '-') {
-				return true;
-			}
-			return false;
-		}
-		return true;
+		out.PrintSQL(state.GetSchemaLine(row.data[0].GetString(), "\n"));
 	}
 };
 
@@ -1633,7 +1567,9 @@ public:
 
 private:
 	duckdb::BoxRendererConfig config;
+	unique_ptr<duckdb::ClientBoxRendererContext> render_context;
 	unique_ptr<duckdb::BoxRendererState> render_state;
+	unique_ptr<duckdb::ColumnDataCollectionWrapper> wrapper;
 	string error_str;
 };
 
@@ -1670,7 +1606,9 @@ ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(stat
 	config.decimal_separator = state.decimal_separator;
 	config.thousand_separator = state.thousand_separator;
 	config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
-	config.hidden_rows_hint = "use .last to show entire result";
+	if (state.pager_mode != PagerMode::PAGER_OFF) {
+		config.hidden_rows_hint = "use .last to show entire result";
+	}
 }
 
 void ModeDuckBoxRenderer::RemoveRenderLimits() {
@@ -1684,7 +1622,9 @@ void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	auto &materialized = query_result.Cast<duckdb::MaterializedQueryResult>();
 	auto &con = *state.conn;
 	try {
-		render_state = renderer.Prepare(*con.context, result.metadata.column_names, materialized.Collection());
+		wrapper = make_uniq<duckdb::ColumnDataCollectionWrapper>(materialized.Collection());
+		render_context = make_uniq<duckdb::ClientBoxRendererContext>(*con.context);
+		render_state = renderer.Prepare(*render_context, result.metadata.column_names, *wrapper);
 	} catch (std::exception &ex) {
 		// store the error - throw on render
 		error_str = ex.what();
@@ -1784,7 +1724,8 @@ public:
 		return SuccessState::SUCCESS;
 	}
 	bool RequireMaterializedResult() const override {
-		return true;
+		// mode trash discards the result
+		return false;
 	}
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
 		// mode trash never uses the pager
@@ -1825,8 +1766,6 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 		return make_uniq<ModeInsertRenderer>(*this);
 	case RenderMode::SEMI:
 		return make_uniq<ModeSemiRenderer>(*this);
-	case RenderMode::PRETTY:
-		return make_uniq<ModePrettyRenderer>(*this);
 	case RenderMode::COLUMN:
 		return make_uniq<ModeColumnRenderer>(*this);
 	case RenderMode::TABLE:
@@ -1852,9 +1791,99 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 // Shell Logging Storage
 //===--------------------------------------------------------------------===//
 
-void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
+namespace {
+
+//! Column the compact log line pads the left-aligned "LEVEL:type" prefix to, so the elapsed aligns
+constexpr duckdb::idx_t PRETTY_PREFIX_WIDTH = 20;
+
+//! Width of the right-aligned elapsed field (widest form is "59'59.99" / "01h02'12")
+constexpr duckdb::idx_t ELAPSED_WIDTH = 8;
+
+//! Formats an elapsed duration (micros since CLI launch) with scale-adaptive precision, right-aligned
+//! to ELAPSED_WIDTH so the message column lines up:
+//!   < 1 min:  "12.12"     (seconds, 2 decimals)
+//!   < 1 hour: "2'12.12"   (minutes'seconds, 2 decimals)
+//!   >= 1 hour:"01h02'12"  (hours h minutes' seconds)
+//! Rounds at the microsecond level BEFORE decomposing, so a carry rolls the unit over and we never
+//! render an impossible "60.00" / "1'60.00" at a unit boundary.
+string FormatElapsed(int64_t micros) {
+	if (micros < 0) {
+		micros = 0; // clock skew guard: never render a negative elapsed
+	}
+	static constexpr int64_t MICROS_PER_SEC = 1000000;
+	static constexpr int64_t MICROS_PER_MIN = 60 * MICROS_PER_SEC;
+	static constexpr int64_t MICROS_PER_HOUR = 60 * MICROS_PER_MIN;
+
+	// Round to the precision we will display (picked from the raw magnitude), then choose the branch
+	// from the ROUNDED value so a boundary carry promotes seconds->minutes / minutes->hours.
+	int64_t rounded;
+	if (micros < MICROS_PER_HOUR) {
+		rounded = (micros + 5000) / 10000 * 10000; // nearest 10 ms (2 decimals of a second)
+	} else {
+		rounded = (micros + MICROS_PER_SEC / 2) / MICROS_PER_SEC * MICROS_PER_SEC; // nearest second
+	}
+
+	string str;
+	if (rounded < MICROS_PER_MIN) {
+		str = duckdb::StringUtil::Format("%.2f", double(rounded) / double(MICROS_PER_SEC));
+	} else if (rounded < MICROS_PER_HOUR) {
+		auto minutes = static_cast<int32_t>(rounded / MICROS_PER_MIN);
+		auto seconds = double(rounded % MICROS_PER_MIN) / double(MICROS_PER_SEC);
+		str = duckdb::StringUtil::Format("%d'%05.2f", minutes, seconds);
+	} else {
+		auto total_seconds = rounded / MICROS_PER_SEC;
+		auto hours = static_cast<int32_t>(total_seconds / 3600);
+		auto minutes = static_cast<int32_t>((total_seconds % 3600) / 60);
+		auto seconds = static_cast<int32_t>(total_seconds % 60);
+		str = duckdb::StringUtil::Format("%02dh%02d'%02d", hours, minutes, seconds);
+	}
+	// Right-align within the fixed field so successive lines' elapsed values align on the right
+	if (str.size() < ELAPSED_WIDTH) {
+		str.insert(str.begin(), ELAPSED_WIDTH - str.size(), ' ');
+	}
+	return str;
+}
+
+//! Renders a log message on a single line: collapses every run of whitespace (newlines, tabs,
+//! spaces) to one space and drops other control chars. Keeps one entry on one line (QueryLog
+//! messages are raw, often multi-line SQL) and prevents a payload from injecting escape sequences.
+string SanitizeLogMessage(const string &message) {
+	string result;
+	result.reserve(message.size());
+	bool prev_space = false;
+	for (char c : message) {
+		auto uc = static_cast<unsigned char>(c);
+		const bool is_whitespace = uc < 0x20 || uc == 0x7f || c == ' ';
+		if (is_whitespace) {
+			if (!prev_space && !result.empty()) {
+				result += ' ';
+			}
+			prev_space = true;
+			continue;
+		}
+		result += c;
+		prev_space = false;
+	}
+	if (!result.empty() && result.back() == ' ') {
+		result.pop_back();
+	}
+	return result;
+}
+
+} // namespace
+
+ShellLogStorage::ShellLogStorage(ShellState &state) : shell_highlight(state), start_time(duckdb::TimePoint::Tick()) {
+	// Elapsed time on compact log lines is measured from here (CLI launch / db open)
+}
+
+void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t, duckdb::LogLevel level, const string &log_type,
                                     const string &log_message, const duckdb::RegisteredLoggingContext &context) {
 	duckdb::lock_guard<duckdb::mutex> l(lock);
+
+	// Warnings/errors keep the original loud, multi-line representation; lower-severity logs
+	// (INFO/DEBUG/TRACE) get a compact single-line form.
+	const bool loud = level == duckdb::LogLevel::LOG_WARNING || level == duckdb::LogLevel::LOG_ERROR ||
+	                  level == duckdb::LogLevel::LOG_FATAL;
 
 	HighlightElementType element_type;
 	switch (level) {
@@ -1878,16 +1907,40 @@ void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLe
 		throw std::runtime_error("Unsupported log level for WriteLogEntry");
 	}
 
-	// check if the log has already been printed
-	auto log_id = duckdb::StringUtil::CIHash(log_message);
-	if (printed_logs.find(log_id) != printed_logs.end()) {
+	const auto log_level = duckdb::EnumUtil::ToString(level);
+
+	if (loud) {
+		// De-duplicate repeated WARNINGS so they don't spam the shell; errors/fatals are always shown
+		if (level == duckdb::LogLevel::LOG_WARNING) {
+			auto log_id = duckdb::StringUtil::CIHash(log_message);
+			if (printed_logs.find(log_id) != printed_logs.end()) {
+				return;
+			}
+			printed_logs.emplace(log_id);
+		}
+
+		shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);
+		shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, element_type);
 		return;
 	}
-	printed_logs.emplace(log_id);
 
-	const auto log_level = duckdb::EnumUtil::ToString(level);
-	shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);
-	shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, element_type);
+	// Compact single-line form: "LEVEL:type   <elapsed>  <message>". Elapsed is measured from CLI
+	// launch. No de-duplication - every logged statement is shown.
+	// Colored prefix (the configurable LOG_* palette), then the rest plain
+	const string prefix = log_level + ":" + log_type;
+	shell_highlight.PrintText(prefix, PrintOutput::STDOUT, element_type);
+
+	string rest;
+	if (prefix.size() < PRETTY_PREFIX_WIDTH) {
+		rest.append(PRETTY_PREFIX_WIDTH - prefix.size(), ' ');
+	} else {
+		rest += "  ";
+	}
+	rest += FormatElapsed(start_time.ElapsedMicros());
+	rest += "  ";
+	rest += SanitizeLogMessage(log_message);
+	rest += "\n";
+	shell_highlight.PrintText(rest, PrintOutput::STDOUT, PrintColor::STANDARD, PrintIntensity::STANDARD);
 }
 
 } // namespace duckdb_shell

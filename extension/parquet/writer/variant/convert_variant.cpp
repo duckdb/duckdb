@@ -1,14 +1,56 @@
+#include <stdint.h>
+#include <string.h>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "writer/variant_column_writer.hpp"
 #include "duckdb/common/types/variant.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "reader/variant/variant_binary_decoder.hpp"
-#include "parquet_shredding.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "column_writer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
+class ClientContext;
+struct ExpressionState;
 
 static idx_t CalculateByteLength(idx_t value) {
 	if (value == 0) {
@@ -42,17 +84,13 @@ static uint8_t EncodeMetadataHeader(idx_t byte_length) {
 }
 
 static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, idx_t count) {
-	auto &keys = variant.keys;
-	auto keys_data = variant.keys_data;
-
 	//! NOTE: the parquet variant is limited to a max dictionary size of NumericLimits<uint32_t>::Maximum()
 	//! Whereas we can have NumericLimits<uint32_t>::Maximum() *per* string in DuckDB
-	auto metadata_data = FlatVector::GetData<string_t>(metadata);
+	auto metadata_data = FlatVector::GetDataMutable<string_t>(metadata);
 	for (idx_t row = 0; row < count; row++) {
 		uint64_t dictionary_count = 0;
 		if (variant.RowIsValid(row)) {
-			auto list_entry = keys_data[keys.sel->get_index(row)];
-			dictionary_count = list_entry.length;
+			dictionary_count = variant.GetKeysCount(row);
 		}
 		idx_t dictionary_size = 0;
 		for (idx_t i = 0; i < dictionary_count; i++) {
@@ -71,21 +109,23 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 		auto &metadata_blob = metadata_data[row];
 		auto metadata_blob_data = metadata_blob.GetDataWriteable();
 
-		metadata_blob_data[0] = EncodeMetadataHeader(byte_length);
-		memcpy(metadata_blob_data + 1, reinterpret_cast<data_ptr_t>(&dictionary_count), byte_length);
+		metadata_blob_data[0] = static_cast<char>(EncodeMetadataHeader(byte_length));
+		memcpy(metadata_blob_data + 1, const_data_ptr_cast(&dictionary_count), byte_length);
 
 		auto offset_ptr = metadata_blob_data + 1 + byte_length;
-		auto string_ptr = metadata_blob_data + 1 + byte_length + ((dictionary_count + 1) * byte_length);
+		auto string_ptr =
+		    metadata_blob_data + 1 + byte_length + (NumericCast<idx_t>(dictionary_count + 1) * byte_length);
 		idx_t total_offset = 0;
 		for (idx_t i = 0; i < dictionary_count; i++) {
-			memcpy(offset_ptr + (i * byte_length), reinterpret_cast<data_ptr_t>(&total_offset), byte_length);
+			memcpy(offset_ptr + (i * byte_length), const_data_ptr_cast(&total_offset), byte_length);
 			auto &key = variant.GetKey(row, i);
 
 			memcpy(string_ptr + total_offset, key.GetData(), key.GetSize());
 			total_offset += key.GetSize();
 		}
-		memcpy(offset_ptr + (dictionary_count * byte_length), reinterpret_cast<data_ptr_t>(&total_offset), byte_length);
-		D_ASSERT(offset_ptr + ((dictionary_count + 1) * byte_length) == string_ptr);
+		memcpy(offset_ptr + (NumericCast<idx_t>(dictionary_count) * byte_length), const_data_ptr_cast(&total_offset),
+		       byte_length);
+		D_ASSERT(offset_ptr + (NumericCast<idx_t>(dictionary_count + 1) * byte_length) == string_ptr);
 		D_ASSERT(string_ptr + total_offset == metadata_blob_data + total_length);
 		metadata_blob.SetSizeAndFinalize(total_length, total_length);
 
@@ -132,6 +172,8 @@ static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type)
 		return {VariantLogicalType::TIME_MICROS};
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return {VariantLogicalType::TIMESTAMP_NANOS_TZ};
 	case LogicalTypeId::TIMESTAMP:
 		return {VariantLogicalType::TIMESTAMP_MICROS};
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -188,14 +230,13 @@ vector<idx_t> GetChildIndices(const UnifiedVariantVectorData &variant, idx_t row
 		}
 		return child_indices;
 	}
-	//! FIXME: The variant spec says that field names should be case-sensitive, not insensitive
-	case_insensitive_string_set_t shredded_fields = shredding_state->ObjectFields();
+	auto shredded_fields = shredding_state->ObjectFields();
 
 	for (idx_t i = 0; i < nested_data.child_count; i++) {
 		auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
 		auto &key = variant.GetKey(row, keys_index);
 
-		if (shredded_fields.count(key)) {
+		if (shredded_fields.count(key.GetString())) {
 			//! This field is shredded on, omit it from the value
 			continue;
 		}
@@ -536,19 +577,19 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 			value_data += sizeof(int32_t);
 		} else if (decimal_data.width <= 9) {
 			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL4>(value_data);
-			Store<int8_t>(decimal_data.scale, value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
 			value_data++;
 			memcpy(value_data, decimal_data.value_ptr, sizeof(int32_t));
 			value_data += sizeof(int32_t);
 		} else if (decimal_data.width <= 18) {
 			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL8>(value_data);
-			Store<int8_t>(decimal_data.scale, value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
 			value_data++;
 			memcpy(value_data, decimal_data.value_ptr, sizeof(int64_t));
 			value_data += sizeof(int64_t);
 		} else if (decimal_data.width <= 38) {
 			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL16>(value_data);
-			Store<int8_t>(decimal_data.scale, value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
 			value_data++;
 			memcpy(value_data, decimal_data.value_ptr, sizeof(hugeint_t));
 			value_data += sizeof(hugeint_t);
@@ -745,8 +786,8 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
                          optional_ptr<const SelectionVector> value_index_sel,
                          optional_ptr<const SelectionVector> result_sel,
                          optional_ptr<ParquetVariantShreddingState> shredding_state, idx_t count) {
-	auto &validity = FlatVector::Validity(value);
-	auto value_data = FlatVector::GetData<string_t>(value);
+	auto &validity = FlatVector::ValidityMutable(value);
+	auto value_data = FlatVector::GetDataMutable<string_t>(value);
 
 	for (idx_t i = 0; i < count; i++) {
 		idx_t value_index = 0;
@@ -819,9 +860,9 @@ void ParquetVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varia
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto &name = child_types[i].first;
 		if (name == "value") {
-			value = child_vectors[i].get();
+			value = &child_vectors[i];
 		} else if (name == "typed_value") {
-			typed_value = child_vectors[i].get();
+			typed_value = &child_vectors[i];
 		}
 	}
 
@@ -866,23 +907,19 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	// - metadata = BLOB
 	// - value = BLOB
 
-	auto &variant_vec = input.data[0];
+	const auto &variant_vec = input.data[0];
 	auto count = input.size();
 
 	RecursiveUnifiedVectorFormat recursive_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, recursive_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
 
 	auto &result_vectors = StructVector::GetEntries(result);
-	auto &metadata = *result_vectors[0];
+	auto &metadata = result_vectors[0];
 	CreateMetadata(variant, metadata, count);
 
 	ParquetVariantShredding shredding;
 	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
-
-	if (input.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
@@ -898,7 +935,7 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	// variant group
 	duckdb_parquet::SchemaElement top_element;
 	top_element.repetition_type = repetition_type;
-	top_element.num_children = child_writers.size();
+	top_element.num_children = NumericCast<int32_t>(child_writers.size());
 	top_element.logicalType.__isset.VARIANT = true;
 	top_element.logicalType.VARIANT.__isset.specification_version = true;
 	top_element.logicalType.VARIANT.specification_version = 1;
@@ -908,7 +945,7 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	top_element.name = name;
 	if (field_id.IsValid()) {
 		top_element.__isset.field_id = true;
-		top_element.field_id = field_id.GetIndex();
+		top_element.field_id = NumericCast<int32_t>(field_id.GetIndex());
 	}
 	schemas.push_back(std::move(top_element));
 
@@ -961,13 +998,13 @@ static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = n
 	if (shredding && shredding->id() != LogicalTypeId::VARIANT) {
 		children.emplace_back("typed_value", VariantColumnWriter::TransformTypedValueRecursive(*shredding));
 	}
-	auto res = LogicalType::STRUCT(std::move(children));
-	res.SetAlias("PARQUET_VARIANT");
-	return res;
+	return LogicalType::STRUCT(std::move(children)).WithAlias("PARQUET_VARIANT");
 }
 
-static unique_ptr<FunctionData> BindTransform(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		return nullptr;
 	}
@@ -982,13 +1019,7 @@ static unique_ptr<FunctionData> BindTransform(ClientContext &context, ScalarFunc
 			                      "'STRUCT(my_field BOOLEAN)', found type: '%s' instead",
 			                      expr_return_type);
 		}
-		if (!shredding.IsFoldable()) {
-			throw BinderException("Optional second argument 'shredding' has to be a constant expression");
-		}
-		Value type_str = ExpressionExecutor::EvaluateScalar(context, shredding);
-		if (type_str.IsNull()) {
-			throw BinderException("Optional second argument 'shredding' can not be NULL");
-		}
+		auto type_str = input.GetNonNullConstant(1);
 		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>(), context);
 		bound_function.SetReturnType(GetParquetVariantType(shredded_type));
 	} else {
@@ -999,9 +1030,11 @@ static unique_ptr<FunctionData> BindTransform(ClientContext &context, ScalarFunc
 }
 
 ScalarFunction VariantColumnWriter::GetTransformFunction() {
-	ScalarFunction transform("variant_to_parquet_variant", {LogicalType::VARIANT()}, LogicalType::ANY, ToParquetVariant,
-	                         BindTransform);
+	ScalarFunction transform("variant_to_parquet_variant", {{"variant", LogicalType::VARIANT()}}, LogicalType::ANY,
+	                         ToParquetVariant, BindTransform);
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// throws for values that are out of range for the parquet variant encoding
+	transform.SetFallible();
 	return transform;
 }
 

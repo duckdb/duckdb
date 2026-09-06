@@ -1,0 +1,96 @@
+# name: test/sql/update/update_query_node.test
+# description: Tests for UpdateQueryNode (UpdateStatement as thin wrapper over UpdateQueryNode)
+# group: [update]
+
+statement ok
+CREATE TABLE t(a INT, b TEXT, c DOUBLE);
+
+statement ok
+INSERT INTO t VALUES (1, 'hello', 1.5), (2, 'world', 2.5), (3, 'foo', 3.5);
+
+# Basic UPDATE
+statement ok
+UPDATE t SET a = 10 WHERE a = 1;
+
+query III
+SELECT * FROM t ORDER BY a;
+----
+2	world	2.5
+3	foo	3.5
+10	hello	1.5
+
+# UPDATE multiple columns
+statement ok
+UPDATE t SET a = 0, b = 'changed' WHERE a = 2;
+
+query III
+SELECT * FROM t ORDER BY a;
+----
+0	changed	2.5
+3	foo	3.5
+10	hello	1.5
+
+# UPDATE with RETURNING
+query III
+UPDATE t SET a = a + 1 WHERE a = 0 RETURNING a, b, c;
+----
+1	changed	2.5
+
+# UPDATE with FROM clause
+statement ok
+CREATE TABLE src(id INT, val TEXT);
+
+statement ok
+INSERT INTO src VALUES (3, 'updated');
+
+statement ok
+UPDATE t SET b = src.val FROM src WHERE t.a = src.id;
+
+query III
+SELECT * FROM t ORDER BY a;
+----
+1	changed	2.5
+3	updated	3.5
+10	hello	1.5
+
+# UPDATE with CTE
+query I
+WITH new_vals AS (SELECT 100 AS new_a, 3 AS old_a)
+UPDATE t SET a = new_vals.new_a FROM new_vals WHERE t.a = new_vals.old_a RETURNING a;
+----
+100
+
+query III
+SELECT * FROM t ORDER BY a;
+----
+1	changed	2.5
+10	hello	1.5
+100	updated	3.5
+
+# UPDATE with schema-qualified table
+statement ok
+CREATE SCHEMA myschema;
+
+statement ok
+CREATE TABLE myschema.t2(x INT);
+
+statement ok
+INSERT INTO myschema.t2 VALUES (1), (2);
+
+statement ok
+UPDATE myschema.t2 SET x = x * 10;
+
+query I rowsort
+SELECT * FROM myschema.t2;
+----
+10
+20
+
+# UPDATE all rows (no WHERE)
+statement ok
+UPDATE t SET c = 0.0;
+
+query I rowsort
+SELECT DISTINCT c FROM t;
+----
+0.0

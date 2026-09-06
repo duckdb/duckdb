@@ -1,5 +1,14 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 
+#include "duckdb/common/bit_utils.hpp"
+#include "duckdb/common/bswap.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
@@ -13,35 +22,31 @@ namespace duckdb {
 namespace {
 struct SortKeyBindData : public FunctionData {
 	vector<OrderModifiers> modifiers;
+	bool all_constant = false;
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<SortKeyBindData>();
-		return modifiers == other.modifiers;
+		return modifiers == other.modifiers && all_constant == other.all_constant;
 	}
 	unique_ptr<FunctionData> Copy() const override {
 		auto result = make_uniq<SortKeyBindData>();
 		result->modifiers = modifiers;
+		result->all_constant = all_constant;
 		return std::move(result);
 	}
 };
 
-unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
+	auto &function = input.GetBoundFunction();
+
 	if (arguments.size() % 2 != 0) {
 		throw BinderException(
 		    "Arguments to create_sort_key must be [key1, sort_specifier1, key2, sort_specifier2, ...]");
 	}
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
-		if (!arguments[i]->IsFoldable()) {
-			throw BinderException("sort_specifier must be a constant value - but got %s", arguments[i]->ToString());
-		}
-
-		// Rebind to return a date if we are truncating that far
-		Value sort_specifier = ExpressionExecutor::EvaluateScalar(context, *arguments[i]);
-		if (sort_specifier.IsNull()) {
-			throw BinderException("sort_specifier cannot be NULL");
-		}
+		auto sort_specifier = input.GetNonNullConstant(i);
 		auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
@@ -49,7 +54,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 	bool all_constant = true;
 	idx_t constant_size = 0;
 	for (idx_t i = 0; i < arguments.size(); i += 2) {
-		auto physical_type = arguments[i]->return_type.InternalType();
+		auto physical_type = arguments[i]->GetReturnType().InternalType();
 		if (!TypeIsConstantSize(physical_type)) {
 			all_constant = false;
 		} else {
@@ -59,9 +64,10 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 	}
 	if (all_constant) {
 		if (constant_size <= sizeof(int64_t)) {
-			bound_function.SetReturnType(LogicalType::BIGINT);
+			function.SetReturnType(LogicalType::BIGINT);
 		}
 	}
+	result->all_constant = all_constant;
 	return std::move(result);
 }
 
@@ -75,9 +81,9 @@ struct SortKeyVectorData {
 	static constexpr data_t LIST_DELIMITER = 0;
 	static constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
 
-	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
+	SortKeyVectorData(const Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
 		if (size != 0) {
-			input.ToUnifiedFormat(size, format);
+			input.ToUnifiedFormat(format);
 		} else {
 			format.physical_type = input.GetType().InternalType();
 		}
@@ -99,18 +105,18 @@ struct SortKeyVectorData {
 		case PhysicalType::STRUCT: {
 			auto &children = StructVector::GetEntries(input);
 			for (auto &child : children) {
-				child_data.push_back(make_uniq<SortKeyVectorData>(*child, size, child_modifiers));
+				child_data.push_back(make_uniq<SortKeyVectorData>(child, size, child_modifiers));
 			}
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			auto &child_entry = ArrayVector::GetEntry(input);
+			const auto &child_entry = ArrayVector::GetChild(input);
 			auto array_size = ArrayType::GetSize(input.GetType());
 			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, size * array_size, child_modifiers));
 			break;
 		}
 		case PhysicalType::LIST: {
-			auto &child_entry = ListVector::GetEntry(input);
+			const auto &child_entry = ListVector::GetChild(input);
 			auto child_size = size == 0 ? 0 : ListVector::GetListSize(input);
 			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, child_size, child_modifiers));
 			break;
@@ -130,12 +136,66 @@ struct SortKeyVectorData {
 		return vec.GetType().InternalType();
 	}
 
-	Vector &vec;
+	const Vector &vec;
 	idx_t size;
 	UnifiedVectorFormat format;
 	vector<unique_ptr<SortKeyVectorData>> child_data;
 	data_t null_byte;
 	data_t valid_byte;
+};
+
+//! Word-at-a-time (SWAR) primitives used to encode string/blob payloads
+struct SortKeyWord {
+	static constexpr idx_t SIZE = sizeof(uint64_t);
+	static constexpr uint64_t LSB = 0x0101010101010101ULL;
+	static constexpr uint64_t MSB = 0x8080808080808080ULL;
+	static constexpr uint64_t LOW7 = 0x7F7F7F7F7F7F7F7FULL;
+
+	//! Sets the high bit of every byte of `word` that is zero
+	static inline uint64_t ZeroBytes(uint64_t word) {
+		return ~(((word & LOW7) + LOW7) | word) & MSB;
+	}
+
+	//! Sets the high bit of every byte of `word` that has to be escaped (\x00 or \x01)
+	static inline uint64_t EscapedBytes(uint64_t word) {
+		// clearing the lowest bit maps both \x00 and \x01 - and nothing else - onto \x00
+		return ZeroBytes(word & ~LSB);
+	}
+
+	//! Adds one to every byte of `word`, wrapping around within each byte
+	static inline uint64_t IncrementBytes(uint64_t word) {
+		return ((word & LOW7) + LSB) ^ (word & MSB);
+	}
+
+	//! Sums up the individual bytes of `word` - only valid if the sum does not exceed 255
+	static inline idx_t SumBytes(uint64_t word) {
+		return static_cast<idx_t>((word * LSB) >> 56);
+	}
+
+	//! The number of bytes flagged in a mask returned by ZeroBytes/EscapedBytes
+	static inline idx_t CountFlagged(uint64_t mask) {
+		// every flagged byte has its high bit set - shift it down so each byte is a zero or a one
+		return SumBytes(mask >> 7);
+	}
+
+	//! The index of the first byte flagged in a mask returned by ZeroBytes/EscapedBytes
+	static inline idx_t FirstFlagged(uint64_t mask) {
+#if DUCKDB_IS_BIG_ENDIAN
+		return CountZeros<uint64_t>::Leading(mask) / 8;
+#else
+		return CountZeros<uint64_t>::Trailing(mask) / 8;
+#endif
+	}
+
+	template <bool FLIP_BYTES>
+	static inline data_t FlipByte(data_t byte) {
+		return FLIP_BYTES ? static_cast<data_t>(~byte) : byte;
+	}
+
+	template <bool FLIP_BYTES>
+	static inline uint64_t FlipWord(uint64_t word) {
+		return FLIP_BYTES ? ~word : word;
+	}
 };
 
 template <class T>
@@ -146,17 +206,30 @@ struct SortKeyConstantOperator {
 		return sizeof(T);
 	}
 
+	template <bool FLIP_BYTES>
 	static idx_t Encode(data_ptr_t result, TYPE input) {
 		Radix::EncodeData<T>(result, input);
+		if (FLIP_BYTES) {
+			// flip word-at-a-time - the encoded size is a compile-time constant, so this fully unrolls
+			idx_t b = 0;
+			for (; b + SortKeyWord::SIZE <= sizeof(T); b += SortKeyWord::SIZE) {
+				Store<uint64_t>(~Load<uint64_t>(result + b), result + b);
+			}
+			for (; b < sizeof(T); b++) {
+				result[b] = static_cast<data_t>(~result[b]);
+			}
+		}
 		return sizeof(T);
 	}
 
-	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value, bool flip_bytes) {
-		if (flip_bytes) {
+	template <bool FLIP_BYTES>
+	static idx_t Decode(const_data_ptr_t input, idx_t input_size, Vector &result, TYPE &result_value) {
+		D_ASSERT(input_size >= sizeof(T));
+		if (FLIP_BYTES) {
 			// descending order - so flip bytes
 			data_t flipped_bytes[sizeof(T)];
 			for (idx_t b = 0; b < sizeof(T); b++) {
-				flipped_bytes[b] = ~input[b];
+				flipped_bytes[b] = static_cast<data_t>(~input[b]);
 			}
 			result_value = Radix::DecodeData<T>(flipped_bytes);
 		} else {
@@ -173,34 +246,44 @@ struct SortKeyVarcharOperator {
 		return input.GetSize() + 1;
 	}
 
+	//! Strings are encoded by incrementing every byte, so that no byte collides with the delimiter.
+	//! That is a pure per-byte mapping, so we can apply it word-at-a-time.
+	template <bool FLIP_BYTES>
 	static idx_t Encode(data_ptr_t result, TYPE input) {
 		auto input_data = const_data_ptr_cast(input.GetDataUnsafe());
 		auto input_size = input.GetSize();
-		for (idx_t r = 0; r < input_size; r++) {
-			result[r] = input_data[r] + 1;
+		idx_t pos = 0;
+		for (; pos + SortKeyWord::SIZE <= input_size; pos += SortKeyWord::SIZE) {
+			auto encoded = SortKeyWord::IncrementBytes(Load<uint64_t>(input_data + pos));
+			Store<uint64_t>(SortKeyWord::FlipWord<FLIP_BYTES>(encoded), result + pos);
 		}
-		result[input_size] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
+		for (; pos < input_size; pos++) {
+			result[pos] = SortKeyWord::FlipByte<FLIP_BYTES>(static_cast<data_t>(input_data[pos] + 1));
+		}
+		result[input_size] = SortKeyWord::FlipByte<FLIP_BYTES>(SortKeyVectorData::STRING_DELIMITER);
 		return input_size + 1;
 	}
 
-	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value, bool flip_bytes) {
+	template <bool FLIP_BYTES>
+	static idx_t Decode(const_data_ptr_t input, idx_t input_size, Vector &result, TYPE &result_value) {
 		// iterate until we encounter the string delimiter to figure out the string length
 		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
-		if (flip_bytes) {
-			string_delimiter = ~string_delimiter;
+		if (FLIP_BYTES) {
+			string_delimiter = static_cast<data_t>(~string_delimiter);
 		}
 		idx_t pos;
-		for (pos = 0; input[pos] != string_delimiter; pos++) {
+		for (pos = 0; pos < input_size && input[pos] != string_delimiter; pos++) {
 		}
+		D_ASSERT(pos < input_size);
 		idx_t str_len = pos;
 		// now allocate the string data and fill it with the decoded data
 		result_value = StringVector::EmptyString(result, str_len);
 		auto str_data = data_ptr_cast(result_value.GetDataWriteable());
 		for (pos = 0; pos < str_len; pos++) {
-			if (flip_bytes) {
-				str_data[pos] = (~input[pos]) - 1;
+			if (FLIP_BYTES) {
+				str_data[pos] = static_cast<data_t>((~input[pos]) - 1);
 			} else {
-				str_data[pos] = input[pos] - 1;
+				str_data[pos] = static_cast<data_t>(input[pos] - 1);
 			}
 		}
 		result_value.Finalize();
@@ -211,53 +294,112 @@ struct SortKeyVarcharOperator {
 struct SortKeyBlobOperator {
 	using TYPE = string_t;
 
+	//! Number of words processed per iteration of the bulk loops
+	static constexpr idx_t BLOCK = 4;
+	static constexpr idx_t BLOCK_SIZE = BLOCK * SortKeyWord::SIZE;
+
 	static idx_t GetEncodeLength(TYPE input) {
-		auto input_data = data_ptr_t(input.GetDataUnsafe());
+		auto input_data = const_data_ptr_cast(input.GetDataUnsafe());
 		auto input_size = input.GetSize();
 		idx_t escaped_characters = 0;
-		for (idx_t r = 0; r < input_size; r++) {
-			if (input_data[r] <= 1) {
-				// we escape both \x00 and \x01
-				escaped_characters++;
+		idx_t pos = 0;
+		for (; pos + BLOCK_SIZE <= input_size; pos += BLOCK_SIZE) {
+			// the per-byte counts of an entire block fit in a single word, so we only sum them up once
+			uint64_t flagged = 0;
+			for (idx_t w = 0; w < BLOCK; w++) {
+				flagged += SortKeyWord::EscapedBytes(Load<uint64_t>(input_data + pos + w * SortKeyWord::SIZE)) >> 7;
 			}
+			escaped_characters += SortKeyWord::SumBytes(flagged);
 		}
-		return input.GetSize() + escaped_characters + 1;
+		for (; pos + SortKeyWord::SIZE <= input_size; pos += SortKeyWord::SIZE) {
+			escaped_characters +=
+			    SortKeyWord::CountFlagged(SortKeyWord::EscapedBytes(Load<uint64_t>(input_data + pos)));
+		}
+		for (; pos < input_size; pos++) {
+			// we escape both \x00 and \x01
+			escaped_characters += input_data[pos] <= SortKeyVectorData::BLOB_ESCAPE_CHARACTER ? 1 : 0;
+		}
+		return input_size + escaped_characters + 1;
 	}
 
+	//! Blobs are copied verbatim, except for \x00 and \x01 which are prefixed with an escape character.
+	//! Escapes are rare, so we copy word-at-a-time and only fall back to per-byte handling at an escape.
+	template <bool FLIP_BYTES>
 	static idx_t Encode(data_ptr_t result, TYPE input) {
-		auto input_data = data_ptr_t(input.GetDataUnsafe());
+		auto input_data = const_data_ptr_cast(input.GetDataUnsafe());
 		auto input_size = input.GetSize();
 		idx_t result_offset = 0;
-		for (idx_t r = 0; r < input_size; r++) {
-			if (input_data[r] <= 1) {
-				// we escape both \x00 and \x01 with \x01
-				result[result_offset++] = SortKeyVectorData::BLOB_ESCAPE_CHARACTER;
-				result[result_offset++] = input_data[r];
-			} else {
-				result[result_offset++] = input_data[r];
+		idx_t pos = 0;
+		while (pos + SortKeyWord::SIZE <= input_size) {
+			// bulk-copy BLOCK words at a time for as long as none of them contain a byte to escape
+			while (pos + BLOCK_SIZE <= input_size) {
+				uint64_t words[BLOCK];
+				uint64_t escapes = 0;
+				for (idx_t w = 0; w < BLOCK; w++) {
+					words[w] = Load<uint64_t>(input_data + pos + w * SortKeyWord::SIZE);
+					escapes |= SortKeyWord::EscapedBytes(words[w]);
+				}
+				if (escapes) {
+					break;
+				}
+				for (idx_t w = 0; w < BLOCK; w++) {
+					Store<uint64_t>(SortKeyWord::FlipWord<FLIP_BYTES>(words[w]),
+					                result + result_offset + w * SortKeyWord::SIZE);
+				}
+				pos += BLOCK_SIZE;
+				result_offset += BLOCK_SIZE;
 			}
+			if (pos + SortKeyWord::SIZE > input_size) {
+				break;
+			}
+			// we have at least one full word of input left, and hence at least SIZE + 1 bytes of result space,
+			// so we can always write out a full word - overshooting bytes are overwritten below
+			const auto word = Load<uint64_t>(input_data + pos);
+			Store<uint64_t>(SortKeyWord::FlipWord<FLIP_BYTES>(word), result + result_offset);
+			const auto escapes = SortKeyWord::EscapedBytes(word);
+			if (!escapes) {
+				pos += SortKeyWord::SIZE;
+				result_offset += SortKeyWord::SIZE;
+				continue;
+			}
+			// escape the first flagged byte - the remainder of the word is re-processed in the next iteration
+			const auto escape_pos = SortKeyWord::FirstFlagged(escapes);
+			result_offset += escape_pos;
+			result[result_offset++] = SortKeyWord::FlipByte<FLIP_BYTES>(SortKeyVectorData::BLOB_ESCAPE_CHARACTER);
+			result[result_offset++] = SortKeyWord::FlipByte<FLIP_BYTES>(input_data[pos + escape_pos]);
+			pos += escape_pos + 1;
 		}
-		result[result_offset++] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
+		for (; pos < input_size; pos++) {
+			if (input_data[pos] <= SortKeyVectorData::BLOB_ESCAPE_CHARACTER) {
+				// we escape both \x00 and \x01 with \x01
+				result[result_offset++] = SortKeyWord::FlipByte<FLIP_BYTES>(SortKeyVectorData::BLOB_ESCAPE_CHARACTER);
+			}
+			result[result_offset++] = SortKeyWord::FlipByte<FLIP_BYTES>(input_data[pos]);
+		}
+		result[result_offset++] = SortKeyWord::FlipByte<FLIP_BYTES>(SortKeyVectorData::STRING_DELIMITER);
 		return result_offset;
 	}
 
-	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value, bool flip_bytes) {
+	template <bool FLIP_BYTES>
+	static idx_t Decode(const_data_ptr_t input, idx_t input_size, Vector &result, TYPE &result_value) {
 		// scan until we find the delimiter, keeping in mind escapes
 		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
 		data_t escape_character = SortKeyVectorData::BLOB_ESCAPE_CHARACTER;
-		if (flip_bytes) {
-			string_delimiter = ~string_delimiter;
-			escape_character = ~escape_character;
+		if (FLIP_BYTES) {
+			string_delimiter = static_cast<data_t>(~string_delimiter);
+			escape_character = static_cast<data_t>(~escape_character);
 		}
 		idx_t blob_len = 0;
 		idx_t pos;
-		for (pos = 0; input[pos] != string_delimiter; pos++) {
+		for (pos = 0; pos < input_size && input[pos] != string_delimiter; pos++) {
 			blob_len++;
 			if (input[pos] == escape_character) {
 				// escape character - skip the next byte
 				pos++;
+				D_ASSERT(pos < input_size);
 			}
 		}
+		D_ASSERT(pos < input_size);
 		// now allocate the blob data and fill it with the decoded data
 		result_value = StringVector::EmptyString(result, blob_len);
 		auto str_data = data_ptr_cast(result_value.GetDataWriteable());
@@ -266,8 +408,8 @@ struct SortKeyBlobOperator {
 				// if we encounter an escape character - copy the NEXT byte
 				input_pos++;
 			}
-			if (flip_bytes) {
-				str_data[result_pos++] = ~input[input_pos];
+			if (FLIP_BYTES) {
+				str_data[result_pos++] = static_cast<data_t>(~input[input_pos]);
 			} else {
 				str_data[result_pos++] = input[input_pos];
 			}
@@ -482,31 +624,37 @@ struct SortKeyConstructInfo {
 
 static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info);
 
-template <class OP, bool ALL_VALID, bool HAS_RESULT_INDEX_OR_SEL>
+template <class OP, bool ALL_VALID, bool NO_SELS, bool FLIP_BYTES>
 void TemplatedConstructSortKeyInternal(const SortKeyVectorData &vector_data, const SortKeyChunk chunk,
                                        const SortKeyConstructInfo &info) {
 	auto data = UnifiedVectorFormat::GetData<typename OP::TYPE>(vector_data.format);
 	auto &offsets = info.offsets;
 	for (idx_t r = chunk.start; r < chunk.end; r++) {
-		const auto result_index = HAS_RESULT_INDEX_OR_SEL ? chunk.GetResultIndex(r) : r;
-		const auto idx = HAS_RESULT_INDEX_OR_SEL ? vector_data.format.sel->get_index(r) : r;
-		auto &offset = offsets[result_index];
+		const auto result_index = NO_SELS ? r : chunk.GetResultIndex(r);
+		const auto idx = NO_SELS ? r : vector_data.format.sel->get_index(r);
+		auto offset = offsets[result_index];
 		auto result_ptr = info.result_data[result_index];
-		if (!ALL_VALID && !vector_data.format.validity.RowIsValid(idx)) {
+		if (!ALL_VALID && !vector_data.format.validity.RowIsValidUnsafe(idx)) {
 			// NULL value - write the null byte and skip
 			result_ptr[offset++] = vector_data.null_byte;
+			offsets[result_index] = offset;
 			continue;
 		}
 		// valid value - write the validity byte
 		result_ptr[offset++] = vector_data.valid_byte;
-		idx_t encode_len = OP::Encode(result_ptr + offset, data[idx]);
-		if (info.flip_bytes) {
-			// descending order - so flip bytes
-			for (idx_t b = offset; b < offset + encode_len; b++) {
-				result_ptr[b] = ~result_ptr[b];
-			}
-		}
+		idx_t encode_len = OP::template Encode<FLIP_BYTES>(result_ptr + offset, data[idx]);
 		offset += encode_len;
+		offsets[result_index] = offset;
+	}
+}
+
+template <class OP, bool ALL_VALID, bool NO_SELS>
+void TemplatedConstructSortKeyDispatchFlip(SortKeyVectorData &vector_data, SortKeyChunk chunk,
+                                           SortKeyConstructInfo &info) {
+	if (info.flip_bytes) {
+		TemplatedConstructSortKeyInternal<OP, ALL_VALID, NO_SELS, true>(vector_data, chunk, info);
+	} else {
+		TemplatedConstructSortKeyInternal<OP, ALL_VALID, NO_SELS, false>(vector_data, chunk, info);
 	}
 }
 
@@ -515,18 +663,16 @@ void TemplatedConstructSortKey(SortKeyVectorData &vector_data, SortKeyChunk chun
 	if (chunk.start == chunk.end) {
 		return;
 	}
-	if (vector_data.format.validity.AllValid()) {
-		if (!chunk.has_result_index && !vector_data.format.sel->IsSet()) {
-			TemplatedConstructSortKeyInternal<OP, true, false>(vector_data, chunk, info);
-		} else {
-			TemplatedConstructSortKeyInternal<OP, true, true>(vector_data, chunk, info);
-		}
+	const auto all_valid = vector_data.format.validity.CannotHaveNull();
+	const auto no_sels = !chunk.has_result_index && !vector_data.format.sel->IsSet();
+	if (all_valid && no_sels) {
+		TemplatedConstructSortKeyDispatchFlip<OP, true, true>(vector_data, chunk, info);
+	} else if (all_valid) {
+		TemplatedConstructSortKeyDispatchFlip<OP, true, false>(vector_data, chunk, info);
+	} else if (no_sels) {
+		TemplatedConstructSortKeyDispatchFlip<OP, false, true>(vector_data, chunk, info);
 	} else {
-		if (!chunk.has_result_index && !vector_data.format.sel->IsSet()) {
-			TemplatedConstructSortKeyInternal<OP, false, false>(vector_data, chunk, info);
-		} else {
-			TemplatedConstructSortKeyInternal<OP, false, true>(vector_data, chunk, info);
-		}
+		TemplatedConstructSortKeyDispatchFlip<OP, false, false>(vector_data, chunk, info);
 	}
 }
 
@@ -665,22 +811,35 @@ void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInfo &info
 	ConstructSortKeyRecursive(vector_data, SortKeyChunk(0, vector_data.size), info);
 }
 
-void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
+void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers,
+                     const bool &all_constant) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
-		auto result_data = FlatVector::GetData<string_t>(result);
-		for (idx_t r = 0; r < size; r++) {
-			auto blob_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
-			result_data[r] = StringVector::EmptyString(result, blob_size);
-			data_pointers[r] = data_ptr_cast(result_data[r].GetDataWriteable());
+		auto result_data = FlatVector::Writer<string_t>(result, size);
+		if (all_constant && key_lengths.constant_length <= string_t::INLINE_LENGTH) {
+			// Fast path
+			const auto length = key_lengths.constant_length;
+			for (idx_t r = 0; r < size; r++) {
+				auto &empty_string = result_data.WriteEmptyString(length);
+				data_pointers[r] = data_ptr_cast(empty_string.GetPrefixWriteable());
 #ifdef DEBUG
-			memset(data_pointers[r], 0xFF, blob_size);
+				memset(data_pointers[r], 0xFF, length);
 #endif
+			}
+		} else {
+			for (idx_t r = 0; r < size; r++) {
+				auto blob_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
+				auto &empty_string = result_data.WriteEmptyString(blob_size);
+				data_pointers[r] = data_ptr_cast(empty_string.GetDataWriteable());
+#ifdef DEBUG
+				memset(data_pointers[r], 0xFF, blob_size);
+#endif
+			}
 		}
 		break;
 	}
 	case LogicalTypeId::BIGINT: {
-		auto result_data = FlatVector::GetData<int64_t>(result);
+		auto result_data = FlatVector::GetDataMutable<int64_t>(result);
 		for (idx_t r = 0; r < size; r++) {
 			result_data[r] = 0;
 			data_pointers[r] = data_ptr_cast(&result_data[r]);
@@ -696,16 +855,16 @@ void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_l
                       const unsafe_vector<idx_t> &offsets) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
-		auto result_data = FlatVector::GetData<string_t>(result);
+		auto result_data = FlatVector::GetDataMutable<string_t>(result);
 		// call Finalize on the result
 		for (idx_t r = 0; r < size; r++) {
-			result_data[r].SetSizeAndFinalize(NumericCast<uint32_t>(offsets[r]),
+			result_data[r].SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(offsets[r]),
 			                                  key_lengths.variable_lengths[r] + key_lengths.constant_length);
 		}
 		break;
 	}
 	case LogicalTypeId::BIGINT: {
-		auto result_data = FlatVector::GetData<int64_t>(result);
+		auto result_data = FlatVector::GetDataMutable<int64_t>(result);
 		for (idx_t r = 0; r < size; r++) {
 			result_data[r] = BSwapIfLE(result_data[r]);
 		}
@@ -717,7 +876,8 @@ void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_l
 }
 
 void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
-                           const vector<OrderModifiers> &modifiers, Vector &result, idx_t row_count) {
+                           const vector<OrderModifiers> &modifiers, const bool &all_constant, Vector &result,
+                           idx_t row_count) {
 	// two phases
 	// a) get the length of the final sorted key
 	// b) allocate the sorted key and construct
@@ -728,7 +888,7 @@ void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
 	}
 	// allocate the empty sort keys
 	auto data_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[row_count]);
-	PrepareSortData(result, row_count, key_lengths, data_pointers.get());
+	PrepareSortData(result, row_count, key_lengths, data_pointers.get(), all_constant);
 
 	unsafe_vector<idx_t> offsets;
 	offsets.resize(row_count, 0);
@@ -740,16 +900,79 @@ void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
 	FinalizeSortData(result, row_count, key_lengths, offsets);
 }
 
+#ifdef DEBUG
+static void AssertSortKeyRoundTrip(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
+                                   const vector<OrderModifiers> &modifiers, const Vector &result, idx_t row_count) {
+	D_ASSERT(sort_key_data.size() == modifiers.size());
+	UnifiedVectorFormat result_format;
+	result.ToUnifiedFormat(result_format);
+	const auto result_is_blob = result.GetType() == LogicalType::BLOB;
+	const auto result_blob_data = result_is_blob ? UnifiedVectorFormat::GetData<string_t>(result_format) : nullptr;
+	const auto result_int_data = result_is_blob ? nullptr : UnifiedVectorFormat::GetData<int64_t>(result_format);
+	idx_t constant_encoded_size = 0;
+	if (!result_is_blob) {
+		for (auto &column : sort_key_data) {
+			constant_encoded_size += 1 + GetTypeIdSize(column->vec.GetType().InternalType());
+		}
+		D_ASSERT(constant_encoded_size <= sizeof(int64_t));
+	}
+
+	vector<Vector> decoded_columns;
+	decoded_columns.reserve(sort_key_data.size());
+	for (auto &column : sort_key_data) {
+		decoded_columns.emplace_back(column->vec.GetType());
+	}
+
+	for (idx_t r = 0; r < row_count; r++) {
+		auto key_idx = result_format.sel->get_index(r);
+		D_ASSERT(result_format.validity.RowIsValid(key_idx));
+
+		string_t full_key;
+		int64_t bswapped_key = 0;
+		if (result_is_blob) {
+			full_key = result_blob_data[key_idx];
+		} else {
+			bswapped_key = BSwapIfLE(result_int_data[key_idx]);
+			full_key = string_t(const_char_ptr_cast(reinterpret_cast<const char *>(&bswapped_key)), sizeof(int64_t));
+		}
+
+		const auto full_key_data = full_key.GetData();
+		const auto full_key_size = full_key.GetSize();
+		const auto expected_size = result_is_blob ? full_key_size : constant_encoded_size;
+		D_ASSERT(expected_size <= full_key_size);
+		idx_t offset = 0;
+		for (idx_t c = 0; c < sort_key_data.size(); c++) {
+			D_ASSERT(offset <= expected_size);
+			const auto sliced_data = full_key_data + offset;
+			const auto sliced_size = expected_size - offset;
+			auto sliced_key = string_t(sliced_data, UnsafeNumericCast<uint32_t>(sliced_size));
+			offset += CreateSortKeyHelpers::DecodeSortKey(sliced_key, decoded_columns[c], r, modifiers[c]);
+		}
+		D_ASSERT(offset <= expected_size);
+
+		for (idx_t c = 0; c < sort_key_data.size(); c++) {
+			auto &source_column = sort_key_data[c];
+			auto source_val = source_column->vec.GetValue(r);
+			auto decoded_val = decoded_columns[c].GetValue(r);
+			D_ASSERT(source_val.IsNull() == decoded_val.IsNull());
+			if (!source_val.IsNull()) {
+				D_ASSERT(source_val == decoded_val);
+			}
+		}
+	}
+}
+#endif
+
 } // namespace
 
-void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, OrderModifiers order_modifier,
-                                         Vector &result) {
+void CreateSortKeyHelpers::CreateSortKey(const Vector &input, OrderModifiers order_modifier, Vector &result) {
 	// prepare the sort key data
+	const auto input_count = input.size();
 	vector<OrderModifiers> modifiers {order_modifier};
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
 
-	CreateSortKeyInternal(sort_key_data, modifiers, result, input_count);
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count);
 }
 
 void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result) {
@@ -758,15 +981,39 @@ void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderMod
 	for (idx_t r = 0; r < modifiers.size(); r++) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(input.data[r], input.size(), modifiers[r]));
 	}
-	CreateSortKeyInternal(sort_key_data, modifiers, result, input.size());
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input.size());
 }
 
-void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &result, const OrderModifiers &modifiers,
-                                                     const idx_t count) {
+void CreateSortKeyHelpers::CreateSortKey(const Vector &input, idx_t input_count, OrderModifiers order_modifier,
+                                         Vector &result) {
+	vector<OrderModifiers> modifiers {order_modifier};
+	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
+	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count);
+}
+
+void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector &result,
+                                                     const OrderModifiers &modifiers) {
+	CreateSortKey(input, modifiers, result);
+	UnifiedVectorFormat format;
+	input.ToUnifiedFormat(format);
+	auto &validity = FlatVector::ValidityMutable(result);
+
+	const auto count = input.size();
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = format.sel->get_index(i);
+		if (!format.validity.RowIsValid(idx)) {
+			validity.SetInvalid(i);
+		}
+	}
+}
+
+void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector &result,
+                                                     const OrderModifiers &modifiers, idx_t count) {
 	CreateSortKey(input, count, modifiers, result);
 	UnifiedVectorFormat format;
-	input.ToUnifiedFormat(count, format);
-	auto &validity = FlatVector::Validity(result);
+	input.ToUnifiedFormat(format);
+	auto &validity = FlatVector::ValidityMutable(result);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = format.sel->get_index(i);
@@ -777,18 +1024,17 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &resu
 }
 
 static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<SortKeyBindData>();
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<SortKeyBindData>();
 
 	// prepare the sort key data
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	for (idx_t c = 0; c < args.ColumnCount(); c += 2) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
-	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, result, args.size());
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
+	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, bind_data.all_constant, result, args.size());
+#ifdef DEBUG
+	AssertSortKeyRoundTrip(sort_key_data, bind_data.modifiers, result, args.size());
+#endif
 }
 
 //===--------------------------------------------------------------------===//
@@ -796,8 +1042,11 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 //===--------------------------------------------------------------------===//
 namespace {
 
-unique_ptr<FunctionData> DecodeSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+	auto &function = input.GetBoundFunction();
+
 	if ((arguments.size() - 1) % 2 != 0) {
 		throw BinderException(
 		    "Arguments to decode_sort_key must be [sort_key, col1, sort_specifier1, col2, sort_specifier2, ...]");
@@ -808,11 +1057,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(ClientContext &context, ScalarFunctio
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		// Parse column definition
-		const auto &col_arg = *arguments[i];
-		if (!col_arg.IsFoldable()) {
-			throw BinderException("col must be a constant value - but got %s", col_arg.ToString());
-		}
-		Value col = ExpressionExecutor::EvaluateScalar(context, col_arg);
+		Value col = input.GetConstant(i);
 		const auto col_list = Parser::ParseColumnList(col.ToString());
 		if (col_list.LogicalColumnCount() != 1) {
 			throw BinderException("decode_sort_key col must contain exactly one column");
@@ -834,32 +1079,25 @@ unique_ptr<FunctionData> DecodeSortKeyBind(ClientContext &context, ScalarFunctio
 		children.emplace_back(col_name, col_type);
 
 		// Parse sort specifier
-		const auto &specifier_arg = *arguments[i + 1];
-		if (!specifier_arg.IsFoldable()) {
-			throw BinderException("sort_specifier must be a constant value - but got %s", specifier_arg.ToString());
-		}
-		Value sort_specifier = ExpressionExecutor::EvaluateScalar(context, specifier_arg);
-		if (sort_specifier.IsNull()) {
-			throw BinderException("sort_specifier cannot be NULL");
-		}
+		auto sort_specifier = input.GetNonNullConstant(i + 1);
 		const auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
 
 	const auto &sort_key_arg = *arguments[0];
-	if (sort_key_arg.return_type == LogicalType::BIGINT) {
+	if (sort_key_arg.GetReturnType() == LogicalType::BIGINT) {
 		if (!all_constant || constant_size > sizeof(int64_t)) {
 			throw BinderException("sort_key has type BIGINT but arguments require BLOB");
 		}
-	} else if (sort_key_arg.return_type == LogicalType::BLOB) {
+	} else if (sort_key_arg.GetReturnType() == LogicalType::BLOB) {
 		if (all_constant && constant_size <= sizeof(int64_t)) {
 			throw BinderException("sort_key has type BLOB but arguments require BIGINT");
 		}
 	} else {
 		throw BinderException("sort_key must be either BIGINT or BLOB, got %s instead",
-		                      sort_key_arg.return_type.ToString());
+		                      sort_key_arg.GetReturnType().ToString());
 	}
-	bound_function.SetReturnType(LogicalType::STRUCT(std::move(children)));
+	function.SetReturnType(LogicalType::STRUCT(std::move(children)));
 
 	return std::move(result);
 }
@@ -928,44 +1166,69 @@ struct DecodeSortKeyData {
 	const_data_ptr_t data;
 	idx_t size;
 	idx_t position;
+
+	inline void RequireRemaining(idx_t required, const char *context) const {
+		(void)context;
+		D_ASSERT(position <= size);
+		D_ASSERT(required <= size - position);
+	}
+
+	inline data_t ReadByte(const char *context) {
+		RequireRemaining(1, context);
+		if (position >= size) {
+			return 0;
+		}
+		return data[position++];
+	}
 };
 
 void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVectorData &vector_data, Vector &result,
                             idx_t result_offset, idx_t count);
 
-template <class OP>
-void TemplatedDecodeSortKey(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorData &vector_data, Vector &result,
-                            const idx_t result_offset, const idx_t count) {
+template <class OP, bool FLIP_BYTES>
+void TemplatedDecodeSortKeyInternal(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorData &vector_data,
+                                    Vector &result, const idx_t result_offset, const idx_t count) {
 	const auto is_const = result.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::Validity(result);
-	const auto result_data =
-	    is_const ? ConstantVector::GetData<typename OP::TYPE>(result) : FlatVector::GetData<typename OP::TYPE>(result);
+	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::ValidityMutable(result);
+	const auto result_data = is_const ? ConstantVector::GetData<typename OP::TYPE>(result)
+	                                  : FlatVector::GetDataMutable<typename OP::TYPE>(result);
+	const auto null_byte = vector_data.null_byte;
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
-		auto validity_byte = decode_data.data[decode_data.position];
-		decode_data.position++;
-		if (validity_byte == vector_data.null_byte) {
+		auto validity_byte = decode_data.ReadByte("reading validity byte");
+		if (validity_byte == null_byte) {
 			// NULL value
 			result_validity.SetInvalid(result_idx);
 			continue;
 		}
-		idx_t increment = OP::Decode(decode_data.data + decode_data.position, result, result_data[result_idx],
-		                             vector_data.flip_bytes);
+		auto remaining = decode_data.size - decode_data.position;
+		idx_t increment = OP::template Decode<FLIP_BYTES>(decode_data.data + decode_data.position, remaining, result,
+		                                                  result_data[result_idx]);
 		decode_data.position += increment;
+		D_ASSERT(decode_data.position <= decode_data.size);
+	}
+}
+
+template <class OP>
+void TemplatedDecodeSortKey(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorData &vector_data, Vector &result,
+                            const idx_t result_offset, const idx_t count) {
+	if (vector_data.flip_bytes) {
+		TemplatedDecodeSortKeyInternal<OP, true>(decode_data_arr, vector_data, result, result_offset, count);
+	} else {
+		TemplatedDecodeSortKeyInternal<OP, false>(decode_data_arr, vector_data, result, result_offset, count);
 	}
 }
 
 void DecodeSortKeyStruct(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorData &vector_data, Vector &result,
                          const idx_t result_offset, const idx_t count) {
 	const auto is_const = result.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::Validity(result);
+	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::ValidityMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
 		// check if the top-level is valid or not
-		auto validity_byte = decode_data.data[decode_data.position];
-		decode_data.position++;
+		auto validity_byte = decode_data.ReadByte("reading struct validity byte");
 		if (validity_byte == vector_data.null_byte) {
 			// entire struct is NULL
 			// note that we still deserialize the children
@@ -976,23 +1239,22 @@ void DecodeSortKeyStruct(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVecto
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t c = 0; c < child_entries.size(); c++) {
 		auto &child_entry = child_entries[c];
-		DecodeSortKeyRecursive(decode_data_arr, vector_data.child_data[c], *child_entry, result_offset, count);
+		DecodeSortKeyRecursive(decode_data_arr, vector_data.child_data[c], child_entry, result_offset, count);
 	}
 }
 
 void DecodeSortKeyList(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorData &vector_data, Vector &result,
                        const idx_t result_offset, const idx_t count) {
 	const auto is_const = result.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::Validity(result);
+	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::ValidityMutable(result);
 	const auto list_data =
-	    is_const ? ConstantVector::GetData<list_entry_t>(result) : FlatVector::GetData<list_entry_t>(result);
-	auto &child_vector = ListVector::GetEntry(result);
+	    is_const ? ConstantVector::GetData<list_entry_t>(result) : FlatVector::GetDataMutable<list_entry_t>(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
 		// check if the top-level is valid or not
-		auto validity_byte = decode_data.data[decode_data.position];
-		decode_data.position++;
+		auto validity_byte = decode_data.ReadByte("reading list validity byte");
 		if (validity_byte == vector_data.null_byte) {
 			// entire list is NULL
 			result_validity.SetInvalid(result_idx);
@@ -1001,16 +1263,20 @@ void DecodeSortKeyList(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorD
 		// list is valid - decode child elements
 		// we don't know how many there will be
 		// decode child elements until we encounter the list delimiter
-		auto list_delimiter = SortKeyVectorData::LIST_DELIMITER;
+		data_t list_delimiter = SortKeyVectorData::LIST_DELIMITER;
 		if (vector_data.flip_bytes) {
-			list_delimiter = ~list_delimiter;
+			list_delimiter = static_cast<data_t>(~list_delimiter);
 		}
 
 		// get the current list size
 		auto start_list_size = ListVector::GetListSize(result);
 		auto new_list_size = start_list_size;
 		// loop until we find the list delimiter
-		while (decode_data.data[decode_data.position] != list_delimiter) {
+		while (true) {
+			decode_data.RequireRemaining(1, "scanning list delimiter");
+			if (decode_data.data[decode_data.position] == list_delimiter) {
+				break;
+			}
 			// found a valid entry here - decode it
 			// first reserve space for it
 			new_list_size++;
@@ -1020,7 +1286,7 @@ void DecodeSortKeyList(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorD
 			DecodeSortKeyRecursive(&decode_data, vector_data.child_data[0], child_vector, new_list_size - 1, 1);
 		}
 		// skip the list delimiter
-		decode_data.position++;
+		decode_data.ReadByte("consuming list delimiter");
 		// set the list_entry_t information and update the list size
 		list_data[result_idx].length = new_list_size - start_list_size;
 		list_data[result_idx].offset = start_list_size;
@@ -1031,13 +1297,12 @@ void DecodeSortKeyList(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorD
 void DecodeSortKeyArray(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorData &vector_data, Vector &result,
                         const idx_t result_offset, const idx_t count) {
 	const auto is_const = result.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::Validity(result);
+	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::ValidityMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
 		// check if the top-level is valid or not
-		auto validity_byte = decode_data.data[decode_data.position];
-		decode_data.position++;
+		auto validity_byte = decode_data.ReadByte("reading array validity byte");
 		if (validity_byte == vector_data.null_byte) {
 			// entire array is NULL
 			// note that we still read the child elements
@@ -1047,17 +1312,21 @@ void DecodeSortKeyArray(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVector
 		// arrays need to encode exactly array_size child elements
 		// however the decoded data still contains a list delimiter
 		// we use this delimiter to verify we successfully decoded the entire array
-		auto list_delimiter = SortKeyVectorData::LIST_DELIMITER;
+		data_t list_delimiter = SortKeyVectorData::LIST_DELIMITER;
 		if (vector_data.flip_bytes) {
-			list_delimiter = ~list_delimiter;
+			list_delimiter = static_cast<data_t>(~list_delimiter);
 		}
-		auto &child_vector = ArrayVector::GetEntry(result);
+		auto &child_vector = ArrayVector::GetChildMutable(result);
 		auto array_size = ArrayType::GetSize(result.GetType());
 
 		idx_t found_elements = 0;
 		auto child_start = array_size * result_idx;
 		// loop until we find the list delimiter
-		while (decode_data.data[decode_data.position] != list_delimiter) {
+		while (true) {
+			decode_data.RequireRemaining(1, "scanning array delimiter");
+			if (decode_data.data[decode_data.position] == list_delimiter) {
+				break;
+			}
 			found_elements++;
 			if (found_elements > array_size) {
 				// error - found too many elements
@@ -1068,7 +1337,7 @@ void DecodeSortKeyArray(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVector
 			                       child_start + found_elements - 1, 1);
 		}
 		// skip the list delimiter
-		decode_data.position++;
+		decode_data.ReadByte("consuming array delimiter");
 		if (found_elements != array_size) {
 			throw InvalidInputException("Failed to decode array - found %d elements but expected %d", found_elements,
 			                            array_size);
@@ -1154,6 +1423,14 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 
 } // namespace
 
+bool CreateSortKeyHelpers::IsNullSortKey(const_data_ptr_t data, OrderByNullType null_order) {
+	auto null_byte = SortKeyVectorData::NULL_FIRST_BYTE;
+	if (null_order == OrderByNullType::NULLS_LAST) {
+		null_byte = SortKeyVectorData::NULL_LAST_BYTE;
+	}
+	return data[0] == null_byte;
+}
+
 idx_t CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
                                           OrderModifiers modifiers) {
 	DecodeSortKeyVectorData sort_key_data(result.GetType(), modifiers);
@@ -1175,19 +1452,19 @@ void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, i
 }
 
 static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<SortKeyBindData>();
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<SortKeyBindData>();
 
 	const auto count = args.size();
-	auto &sort_key_vec = args.data[0];
+	const auto &sort_key_vec = args.data[0];
 	UnifiedVectorFormat sort_key_vec_format;
-	sort_key_vec.ToUnifiedFormat(count, sort_key_vec_format);
+	sort_key_vec.ToUnifiedFormat(sort_key_vec_format);
 
-	// When doing aggressive vector verification, the "sort_key_vec_format.validity.AllValid()" is not always true
+	// When doing aggressive vector verification, the "sort_key_vec_format.validity.CannotHaveNull()" is not always true
 	// However, all the actual values should be valid, so we assert that
 
 	// Construct utility for all sort keys that we will decode
-	DecodeSortKeyData decode_data[STANDARD_VECTOR_SIZE];
-	int64_t bswapped_ints[STANDARD_VECTOR_SIZE];
+	vector<DecodeSortKeyData> decode_data(count);
+	vector<int64_t> bswapped_ints(count);
 	if (sort_key_vec.GetType() == LogicalType::BLOB) {
 		const auto sort_keys = UnifiedVectorFormat::GetData<string_t>(sort_key_vec_format);
 		if (sort_key_vec_format.sel->IsSet()) {
@@ -1223,15 +1500,11 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	// Loop through the columns
 	const auto &result_type = result.GetType();
-	const auto &child_vectors = StructVector::GetEntries(result);
+	auto &child_vectors = StructVector::GetEntries(result);
 	for (idx_t c = 0; c < StructType::GetChildCount(result_type); c++) {
-		auto &child_vector = *child_vectors[c];
+		auto &child_vector = child_vectors[c];
 		DecodeSortKeyVectorData sort_key_data(child_vector.GetType(), bind_data.modifiers[c]);
-		DecodeSortKeyRecursive(decode_data, sort_key_data, child_vector, 0, count);
-	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		DecodeSortKeyRecursive(decode_data.data(), sort_key_data, child_vector, 0, count);
 	}
 }
 
@@ -1241,16 +1514,17 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 ScalarFunction CreateSortKeyFun::GetFunction() {
 	ScalarFunction sort_key_function("create_sort_key", {LogicalType::ANY}, LogicalType::BLOB, CreateSortKeyFunction,
 	                                 CreateSortKeyBind);
-	sort_key_function.varargs = LogicalType::ANY;
+	sort_key_function.SetVarArgs(LogicalType::ANY);
 	sort_key_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return sort_key_function;
 }
 
 ScalarFunction DecodeSortKeyFun::GetFunction() {
-	ScalarFunction sort_key_function("decode_sort_key", {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                 LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction,
-	                                 DecodeSortKeyBind);
-	sort_key_function.varargs = LogicalType::VARCHAR;
+	ScalarFunction sort_key_function(
+	    "decode_sort_key",
+	    {{"sort_key", LogicalType::ANY}, {"col", LogicalType::VARCHAR}, {"sort_specifier", LogicalType::VARCHAR}},
+	    LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction, DecodeSortKeyBind);
+	sort_key_function.SetVarArgs(LogicalType::VARCHAR);
 	return sort_key_function;
 }
 

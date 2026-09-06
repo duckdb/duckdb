@@ -1,0 +1,11 @@
+# name: benchmark/recursive_cte/aoc2024_day20_using_key.benchmark
+# group: [recursive_cte]
+
+name AoC 2024 day20 recursive race-track flood USING KEY
+group Recursive CTE
+
+load benchmark/recursive_cte/aoc2024/load/day20.sql
+
+run benchmark/recursive_cte/queries/performance/aoc2024_day20_using_key.sql
+
+result benchmark/recursive_cte/answers/performance/aoc2024_day20.csv

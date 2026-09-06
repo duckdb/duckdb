@@ -6,7 +6,6 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
@@ -32,7 +31,7 @@ int64_t SubtractOperator::Operation(date_t left, date_t right) {
 
 template <>
 date_t SubtractOperator::Operation(date_t left, int32_t right) {
-	if (!Date::IsFinite(left)) {
+	if (!left.IsFinite()) {
 		return left;
 	}
 	int32_t days;
@@ -41,7 +40,7 @@ date_t SubtractOperator::Operation(date_t left, int32_t right) {
 	}
 
 	date_t result(days);
-	if (!Date::IsFinite(result)) {
+	if (!result.IsFinite()) {
 		throw OutOfRangeException("Date out of range");
 	}
 	return result;
@@ -75,6 +74,15 @@ timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right) {
 template <>
 interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t right) {
 	return Interval::GetDifference(left, right);
+}
+
+template <>
+int64_t SubtractOperator::Operation(timestamp_t left, timestamp_t right) {
+	int64_t result;
+	if (!TrySubtractOperator::Operation(left, right, result)) {
+		throw OutOfRangeException("Overflow in timestamp subtraction");
+	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -232,12 +240,18 @@ hugeint_t DecimalSubtractOverflowCheck::Operation(hugeint_t left, hugeint_t righ
 //===--------------------------------------------------------------------===//
 template <>
 dtime_t SubtractTimeOperator::Operation(dtime_t left, interval_t right) {
+	if (right.micros == NumericLimits<int64_t>::Minimum()) {
+		throw OutOfRangeException("Interval micros value out of range");
+	}
 	right.micros = -right.micros;
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(left, right);
 }
 
 template <>
 dtime_tz_t SubtractTimeOperator::Operation(dtime_tz_t left, interval_t right) {
+	if (right.micros == NumericLimits<int64_t>::Minimum()) {
+		throw OutOfRangeException("Interval micros value out of range");
+	}
 	right.micros = -right.micros;
 	return AddTimeOperator::Operation<dtime_tz_t, interval_t, dtime_tz_t>(left, right);
 }

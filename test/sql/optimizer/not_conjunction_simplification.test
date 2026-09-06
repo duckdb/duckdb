@@ -1,0 +1,109 @@
+# name: test/sql/optimizer/not_conjunction_simplification.test
+# description: Test simplification of NOT-wrapped conjunctions
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = 'OPTIMIZED_ONLY';
+
+statement ok
+CREATE TABLE t AS SELECT range AS i FROM range(1000000);
+
+statement ok
+CHECKPOINT;
+
+# NOT BETWEEN is bound to a NOT-wrapped conjunction
+query II
+EXPLAIN SELECT count() FROM t WHERE i NOT BETWEEN 10 AND 999989;
+----
+logical_opt	<REGEX>:.*OR.*
+
+query II
+EXPLAIN ANALYZE SELECT count() FROM t WHERE i NOT BETWEEN 10 AND 999989;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: [12] / 9.*
+
+query I
+SELECT count() FROM t WHERE i NOT BETWEEN 10 AND 999989;
+----
+20
+
+# Explicit NOT(AND)
+query II
+EXPLAIN ANALYZE SELECT count() FROM t WHERE NOT (i >= 10 AND i <= 999989);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: [12] / 9.*
+
+query I
+SELECT count() FROM t WHERE NOT (i >= 10 AND i <= 999989);
+----
+20
+
+# NOT(OR) becomes two prunable predicates
+query II
+EXPLAIN ANALYZE SELECT count() FROM t WHERE NOT (i < 400000 OR i > 600000);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: [1-8] / 9.*
+
+query I
+SELECT count() FROM t WHERE NOT (i < 400000 OR i > 600000);
+----
+200001
+
+# Preserve three-valued logic
+query II
+SELECT NOT (a AND b), (NOT a) OR (NOT b)
+FROM (VALUES (1, NULL::BOOLEAN, TRUE),
+             (2, NULL::BOOLEAN, FALSE),
+             (3, TRUE, NULL::BOOLEAN),
+             (4, FALSE, NULL::BOOLEAN)) v(id, a, b)
+ORDER BY id;
+----
+NULL	NULL
+true	true
+NULL	NULL
+true	true
+
+query II
+SELECT NOT (a OR b), (NOT a) AND (NOT b)
+FROM (VALUES (1, NULL::BOOLEAN, TRUE),
+             (2, NULL::BOOLEAN, FALSE),
+             (3, TRUE, NULL::BOOLEAN),
+             (4, FALSE, NULL::BOOLEAN)) v(id, a, b)
+ORDER BY id;
+----
+false	false
+NULL	NULL
+false	false
+NULL	NULL
+
+# Do not change the number of volatile function evaluations
+statement ok
+CREATE SEQUENCE s;
+
+statement ok
+CREATE TABLE volatile_t(a BOOLEAN);
+
+statement ok
+INSERT INTO volatile_t VALUES (false), (true);
+
+query I
+SELECT count(*) FROM volatile_t WHERE NOT (a AND nextval('s') > 0);
+----
+1
+
+query I
+SELECT currval('s');
+----
+2
+
+# Do not suppress errors by changing short-circuit behavior
+statement ok
+CREATE TABLE throwing_t(a BOOLEAN);
+
+statement ok
+INSERT INTO throwing_t VALUES (false);
+
+statement error
+SELECT count(*) FROM throwing_t WHERE NOT (a AND error('expected'));
+----
+expected

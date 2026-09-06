@@ -1,3 +1,0 @@
-%type <list> execute_param_clause
-%type <list> execute_param_list
-%type <node> execute_param_expr

@@ -1,0 +1,43 @@
+# name: test/sql/copy/parquet/read_ahead/readahead_io_errors.test
+# description: An OOM while jobs are prefetched ahead must not hang or crash the scan
+# group: [read_ahead]
+
+require parquet
+
+statement ok
+SET read_ahead_depth=8
+
+loop i 0 8
+
+statement ok
+COPY (SELECT range AS i, md5(range::VARCHAR) AS s FROM range(50000)) TO '{TEST_DIR}/err_io_{i}.parquet' (FORMAT parquet, ROW_GROUP_SIZE 100000)
+
+endloop
+
+# pinning 8 prefetched row groups exceeds the memory limit
+statement ok
+SET memory_limit='4MB'
+
+statement ok
+SET threads=2
+
+loop x 0 15
+
+statement maybe
+SELECT max(s) FROM '{TEST_DIR}/err_io_*.parquet'
+----
+Out of Memory Error
+
+endloop
+
+statement ok
+SET threads=4
+
+loop x 0 15
+
+statement maybe
+SELECT max(s) FROM '{TEST_DIR}/err_io_*.parquet'
+----
+Out of Memory Error
+
+endloop

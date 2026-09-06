@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
+#include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
 
@@ -23,30 +24,33 @@ class RowVersionManager {
 public:
 	explicit RowVersionManager(BufferManager &buffer_manager) noexcept;
 
-	idx_t GetCommittedDeletedCount(idx_t count);
+	//! Returns the number of non-deleted rows in this segment
+	idx_t GetRowCount(ScanOptions options, idx_t count);
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
-	bool Fetch(TransactionData transaction, idx_t row);
+	//! Bulk visibility check. Returns the number of visible rows.
+	idx_t GetVisibleRows(TransactionData transaction, const idx_t *offsets, idx_t count, SelectionVector &visible_sel);
 
 	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end);
 	void CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count);
 	void RevertAppend(idx_t new_count);
-	void CleanupAppend(transaction_t lowest_active_transaction, idx_t row_group_start, idx_t count);
+	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t row_group_start, idx_t count);
 
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
 
-	//! Attempts to compress the per-row insert/delete ids of each vector into constants
-	//! This is possible when the ids behave identically for all transactions with a start time of at least
-	//! lowest_active_start (i.e. all active and future transactions)
+	//! Attempts to compress the per-row insert/delete ids of each vector into constants. Ids that precede
+	//! lowest_visibility_bound look the same to every active and future transaction, so they can collapse.
 	//! Cheap when nothing can have changed: the pass only runs when version ids were modified since the
 	//! last pass, or when a previous pass left ids that can still compress once older transactions finish
-	void CompressVersionIds(transaction_t lowest_active_start);
+	void CompressVersionIds(VisibilityBound lowest_visibility_bound);
 
 	vector<MetaBlockPointer> Checkpoint(RowGroupWriter &writer);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 	bool HasUnserializedChanges();
+	bool HasDeletes();
+	bool HasUncommittedChanges();
 	vector<MetaBlockPointer> GetStoragePointers();
 
 private:

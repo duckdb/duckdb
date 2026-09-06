@@ -2,9 +2,6 @@
 # description: Test correlated limit
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT 1 FROM (SELECT 1) t0(c0) WHERE (SELECT c0);
 ----

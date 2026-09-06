@@ -1,0 +1,5 @@
+{
+  "description": "Run with debug_verify_statement set to serialize_statement - forcing supported statements to be (de)serialized prior to being used",
+  "on_init": "SET debug_verify_statement='serialize_statement';",
+  "skip_compiled": "true"
+}

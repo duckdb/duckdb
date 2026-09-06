@@ -7,8 +7,18 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb.hpp"
 #include "parquet_types.h"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -21,7 +31,7 @@ using duckdb_parquet::SchemaElement;
 using duckdb_parquet::FileMetaData;
 struct ParquetOptions;
 
-enum class ParquetColumnSchemaType { COLUMN, FILE_ROW_NUMBER, EXPRESSION, VARIANT, GEOMETRY };
+enum class ParquetColumnSchemaType { COLUMN, FILE_ROW_NUMBER, EXPRESSION, VARIANT, GEOMETRY, FILE_ROW_GROUP_NUMBER };
 
 enum class ParquetExtraTypeInfo {
 	NONE,
@@ -44,7 +54,7 @@ public:
 
 public:
 	//! Writer constructors
-	static ParquetColumnSchema FromLogicalType(const string &name, const LogicalType &type, idx_t max_define,
+	static ParquetColumnSchema FromLogicalType(const Identifier &name, const LogicalType &type, idx_t max_define,
 	                                           idx_t max_repeat, idx_t column_index,
 	                                           duckdb_parquet::FieldRepetitionType::type repetition_type,
 	                                           bool allow_geometry,
@@ -62,10 +72,17 @@ public:
 	                                            vector<ParquetColumnSchema> &&children,
 	                                            ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	static ParquetColumnSchema FileRowNumber();
+	static ParquetColumnSchema FileRowGroupNumber();
 
 public:
 	unique_ptr<BaseStatistics> Stats(const FileMetaData &file_meta_data, const ParquetOptions &parquet_options,
 	                                 idx_t row_group_idx_p, const vector<duckdb_parquet::ColumnChunk> &columns) const;
+	void ValidateColumnMetadata(const duckdb_parquet::ColumnChunk &column, int64_t row_group_num_rows,
+	                            bool validate_row_count, const char *file_name = nullptr) const;
+
+public:
+	optional_idx GetChildIndexByName(const string &name) const;
+	const ParquetColumnSchema &GetChildByIndex(idx_t index) const;
 
 public:
 	void SetSchemaIndex(idx_t schema_idx);

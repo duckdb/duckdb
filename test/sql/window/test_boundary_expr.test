@@ -3,9 +3,6 @@
 # group: [window]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tenk1 ( unique1 int4, unique2 int4, two int4, four int4, ten int4, twenty int4, hundred int4, thousand int4, twothousand int4, fivethous int4, tenthous int4, odd int4, even int4, stringu1 string, stringu2 string, string4 string )
 
 statement ok
@@ -146,3 +143,39 @@ ORDER BY id;
 ----
 1	2	2	2
 2	2	2	2
+
+# Issue #24632: dynamic ROWS frame start with NULL PRECEDING
+statement error
+SELECT COUNT(*) OVER (
+  ORDER BY id ROWS BETWEEN off PRECEDING AND CURRENT ROW
+)
+FROM (VALUES (1, NULL::INTEGER)) AS src(id, off);
+----
+Invalid Input Error: Window ROWS PRECEDING expression cannot be NULL
+
+# Issue #24632: dynamic ROWS frame start with NULL FOLLOWING
+statement error
+SELECT COUNT(*) OVER (
+  ORDER BY id ROWS BETWEEN off FOLLOWING AND UNBOUNDED FOLLOWING
+)
+FROM (VALUES (1, NULL::INTEGER)) AS src(id, off);
+----
+Invalid Input Error: Window ROWS FOLLOWING expression cannot be NULL
+
+# Issue #24632: dynamic ROWS frame end with NULL PRECEDING
+statement error
+SELECT COUNT(*) OVER (
+  ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND off PRECEDING
+)
+FROM (VALUES (1, NULL::INTEGER)) AS src(id, off);
+----
+Invalid Input Error: Window ROWS PRECEDING expression cannot be NULL
+
+# Issue #24632: dynamic ROWS frame end with NULL FOLLOWING
+statement error
+SELECT COUNT(*) OVER (
+  ORDER BY id ROWS BETWEEN CURRENT ROW AND off FOLLOWING
+)
+FROM (VALUES (1, NULL::INTEGER)) AS src(id, off);
+----
+Invalid Input Error: Window ROWS FOLLOWING expression cannot be NULL

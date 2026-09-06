@@ -9,12 +9,12 @@ SELECT list_inner_product([], []);
 foreach type FLOAT DOUBLE
 
 query I
-SELECT list_inner_product([1, 1, 1]::${type}[], [1, 1, 1]::${type}[]);
+SELECT list_inner_product([1, 1, 1]::{type}[], [1, 1, 1]::{type}[]);
 ----
 3.0
 
 statement ok
-CREATE OR REPLACE TABLE lists (l ${type}[]);
+CREATE OR REPLACE TABLE lists (l {type}[]);
 
 statement ok
 INSERT INTO lists VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
@@ -30,22 +30,22 @@ NULL
 
 
 statement error
-SELECT list_inner_product([1, NULL, 3]::${type}[], [1, 2, 3]::${type}[]);
+SELECT list_inner_product([1, NULL, 3]::{type}[], [1, 2, 3]::{type}[]);
 ----
 left argument can not contain NULL values
 
 statement error
-SELECT list_inner_product([1, 2, 3]::${type}[], [1, NULL, 3]::${type}[]);
+SELECT list_inner_product([1, 2, 3]::{type}[], [1, NULL, 3]::{type}[]);
 ----
 right argument can not contain NULL values
 
 statement error
-SELECT list_inner_product([1, 2, 3]::${type}[], [1, 2, 3, 4]::${type}[]);
+SELECT list_inner_product([1, 2, 3]::{type}[], [1, 2, 3, 4]::{type}[]);
 ----
 Invalid Input Error: list_inner_product: list dimensions must be equal, got left length '3' and right length '4'
 
 query I
-SELECT list_negative_inner_product([1,2,3]::${type}[], [1,2,3]::${type}[]) = -list_inner_product([1,2,3]::${type}[], [1,2,3]::${type}[]);
+SELECT list_negative_inner_product([1,2,3]::{type}[], [1,2,3]::{type}[]) = -list_inner_product([1,2,3]::{type}[], [1,2,3]::{type}[]);
 ----
 true
 

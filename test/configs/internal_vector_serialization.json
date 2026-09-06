@@ -1,0 +1,5 @@
+{
+  "description": "Run with debug_verification_mode set to verify_serialization - enabling the testing of data chunk / vector serialization",
+  "on_init": "SET debug_verification_mode='verify_serialization';",
+  "skip_compiled": "true"
+}

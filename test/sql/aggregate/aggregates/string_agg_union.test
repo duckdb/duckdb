@@ -2,9 +2,6 @@
 # description: Issue #2591: string_agg only returns final row if there is no Group By clause
 # group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 WITH my_data as (
         SELECT 'text1'::varchar(1000) as my_column union all

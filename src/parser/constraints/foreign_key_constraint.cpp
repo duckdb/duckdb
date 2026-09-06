@@ -8,7 +8,8 @@ namespace duckdb {
 ForeignKeyConstraint::ForeignKeyConstraint() : Constraint(ConstraintType::FOREIGN_KEY) {
 }
 
-ForeignKeyConstraint::ForeignKeyConstraint(vector<string> pk_columns, vector<string> fk_columns, ForeignKeyInfo info)
+ForeignKeyConstraint::ForeignKeyConstraint(vector<Identifier> pk_columns, vector<Identifier> fk_columns,
+                                           ForeignKeyInfo info)
     : Constraint(ConstraintType::FOREIGN_KEY), pk_columns(std::move(pk_columns)), fk_columns(std::move(fk_columns)),
       info(std::move(info)) {
 }
@@ -21,14 +22,14 @@ string ForeignKeyConstraint::ToString() const {
 			if (i > 0) {
 				base += ", ";
 			}
-			base += KeywordHelper::WriteOptionallyQuoted(fk_columns[i]);
+			base += SQLIdentifier(fk_columns[i]);
 		}
 		base += ") REFERENCES ";
 		if (!info.schema.empty() && info.schema != DEFAULT_SCHEMA) {
-			base += info.schema;
+			base += SQLIdentifier(info.schema);
 			base += ".";
 		}
-		base += info.table;
+		base += SQLIdentifier(info.table);
 		if (!pk_columns.empty()) {
 			base += "(";
 
@@ -36,7 +37,7 @@ string ForeignKeyConstraint::ToString() const {
 				if (i > 0) {
 					base += ", ";
 				}
-				base += KeywordHelper::WriteOptionallyQuoted(pk_columns[i]);
+				base += SQLIdentifier(pk_columns[i]);
 			}
 			base += ")";
 		}

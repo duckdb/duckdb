@@ -1,0 +1,3 @@
+AnalyzeStatement <- AnalyzeKeyword AnalyzeVerbose? AnalyzeTarget?
+AnalyzeTarget <- BaseTableName NameList?
+AnalyzeVerbose <- 'VERBOSE'

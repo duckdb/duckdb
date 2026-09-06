@@ -2,9 +2,6 @@
 # description: Test UNNEST of complex types
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 # varchars
 query III
 SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (3, ['hello', NULL, 'world'], [NULL])) tbl(id, i, j)

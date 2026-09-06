@@ -2,9 +2,6 @@
 # description: REPEAT test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # test repeat on NULLs
 query TTT
 select REPEAT(NULL, NULL), REPEAT(NULL, 3), REPEAT('MySQL', NULL)

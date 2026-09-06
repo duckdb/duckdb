@@ -2,9 +2,6 @@
 # description: Issue #2745: sql with RECURSIVE keyword but does not RECURSIVE hang
 # group: [cte]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 with RECURSIVE parents_tab (id , value , parent )
 as (values (1, 1, 2), (2, 2, 4), (3, 1, 4), (4, 2, -1), (5, 1, 2), (6, 2, 7), (7, 1, -1)

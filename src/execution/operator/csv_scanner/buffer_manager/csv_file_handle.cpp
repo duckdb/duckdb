@@ -20,7 +20,9 @@ CSVFileHandle::CSVFileHandle(ClientContext &context_p, unique_ptr<FileHandle> fi
 
 unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const OpenFileInfo &file,
                                                      FileCompressionType compression) {
-	auto file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | compression);
+	FileOpenFlags flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_PARALLEL_ACCESS | std::move(compression);
+	flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
+	auto file_handle = fs.OpenFile(file, flags);
 	if (file_handle->CanSeek()) {
 		file_handle->Reset();
 	}
@@ -59,6 +61,7 @@ bool CSVFileHandle::OnDiskFile() const {
 
 void CSVFileHandle::Reset() {
 	file_handle->Reset();
+	encoder.Reset();
 	finished = false;
 	requested_bytes = 0;
 }
@@ -69,6 +72,11 @@ bool CSVFileHandle::IsPipe() const {
 
 idx_t CSVFileHandle::FileSize() const {
 	return file_size;
+}
+
+bool CSVFileHandle::HasKnownBufferRanges() const {
+	return compression_type == FileCompressionType::UNCOMPRESSED && can_seek && !is_pipe &&
+	       encoder.encoding_name == "utf-8";
 }
 
 bool CSVFileHandle::FinishedReading() const {
@@ -97,6 +105,12 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	}
 	uncompressed_bytes_read += static_cast<idx_t>(bytes_read);
 	return UnsafeNumericCast<idx_t>(bytes_read);
+}
+
+void CSVFileHandle::ReadAt(void *buffer, idx_t nr_bytes, idx_t position) {
+	D_ASSERT(HasKnownBufferRanges());
+	D_ASSERT(position + nr_bytes <= file_size);
+	file_handle->Read(context, buffer, nr_bytes, position);
 }
 
 string CSVFileHandle::ReadLine() {

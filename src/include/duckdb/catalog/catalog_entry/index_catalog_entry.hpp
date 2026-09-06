@@ -46,8 +46,8 @@ public:
 	//! Returns the original CREATE INDEX SQL
 	string ToSQL() const override;
 
-	virtual string GetSchemaName() const = 0;
-	virtual string GetTableName() const = 0;
+	virtual Identifier GetSchemaName() const = 0;
+	virtual Identifier GetTableName() const = 0;
 
 	//! Returns true, if this index is UNIQUE
 	bool IsUnique() const;

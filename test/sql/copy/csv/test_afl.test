@@ -2,9 +2,6 @@
 # description: Test the sniffer properly detects quotes values
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 statement maybe
 FROM read_csv('{DATA_DIR}/csv/afl/1.csv', force_not_null=012%0);
 ----

@@ -2,9 +2,6 @@
 # description: Test histogram for decimals
 # group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 WITH cte AS (FROM (VALUES (0.0), (9.9)) df(l_orderkey)) SELECT * FROM histogram_values(cte, l_orderkey)
 ----

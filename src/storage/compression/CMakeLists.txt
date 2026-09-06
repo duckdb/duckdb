@@ -8,6 +8,7 @@ add_library_unity(
   duckdb_storage_compression
   OBJECT
   numeric_constant.cpp
+  compression_segment_reader.cpp
   fixed_size_uncompressed.cpp
   rle.cpp
   dictionary_compression.cpp
@@ -21,7 +22,8 @@ add_library_unity(
   alprd.cpp
   fsst.cpp
   dict_fsst.cpp
-  empty_validity.cpp)
+  empty_validity.cpp
+  standard_compression_state.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_compression>
     PARENT_SCOPE)

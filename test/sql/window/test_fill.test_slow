@@ -65,7 +65,7 @@ loop nulled 0 3
 query II
 select 
 	i,
-	fill(if(i = ${nulled}, NULL, i)::${filltype}) over(order by i::${ordertype}) as f
+	fill(if(i = {nulled}, NULL, i)::{filltype}) over(order by i::{ordertype}) as f
 from range(3) tbl(i)
 qualify i is distinct from f
 ----
@@ -76,7 +76,7 @@ endloop
 query II
 select 
 	i,
-	fill(if(i > 0, NULL, i)::${filltype}) over(order by i::${ordertype}) as f
+	fill(if(i > 0, NULL, i)::{filltype}) over(order by i::{ordertype}) as f
 from range(3) tbl(i)
 qualify f is distinct from 0
 ----
@@ -85,7 +85,7 @@ qualify f is distinct from 0
 query II
 select 
 	i,
-	fill(if(i < 4, NULL, i)::${filltype}) over(partition by i // 2 order by i::${ordertype}) f
+	fill(if(i < 4, NULL, i)::{filltype}) over(partition by i // 2 order by i::{ordertype}) f
 from range(8) tbl(i)
 order by i
 ----
@@ -102,7 +102,7 @@ order by i
 query II
 select 
 	i,
-	fill(if(i = 2, NULL, i)::${filltype}) over(order by if(i < 4, NULL, i)::${ordertype}) f
+	fill(if(i = 2, NULL, i)::{filltype}) over(order by if(i < 4, NULL, i)::{ordertype}) f
 from range(8) tbl(i)
 qualify i is distinct from f
 order by i
@@ -117,7 +117,7 @@ foreach nulls first last
 query II
 select 
 	i,
-	fill(i::${filltype}) over(order by i::${ordertype} ${sense} nulls ${nulls}) f
+	fill(i::{filltype}) over(order by i::{ordertype} {sense} nulls {nulls}) f
 from (
 	from range(3) r(i)
 	union all
@@ -143,7 +143,7 @@ foreach filltype smallint integer bigint hugeint float double usmallint uinteger
 query II
 select 
 	i,
-	fill(if(i = 2048, NULL, i)::${filltype}) over(order by i::${ordertype}) f
+	fill(if(i = 2048, NULL, i)::{filltype}) over(order by i::{ordertype}) f
 from range(2060) tbl(i)
 qualify i <> f
 ----
@@ -166,7 +166,7 @@ loop nulled 1 4
 query II
 select 
 	i,
-	fill(if(day(i) = ${nulled}, NULL, i)::${filltype}) over(order by i::${ordertype}) f
+	fill(if(day(i) = {nulled}, NULL, i)::{filltype}) over(order by i::{ordertype}) f
 from range('2025-01-01'::DATE, '2025-01-04'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify f <> i
 ----
@@ -181,7 +181,7 @@ foreach nulls first last
 query II
 select 
 	i,
-	fill(i::${filltype}) over(order by i::${ordertype} ${sense} nulls ${nulls}) f
+	fill(i::{filltype}) over(order by i::{ordertype} {sense} nulls {nulls}) f
 from (
 	from range('2025-01-01'::DATE, '2025-01-04'::DATE, INTERVAL 1 DAY) r(i)
 	union all
@@ -199,7 +199,7 @@ endloop
 query II
 select 
 	i,
-	fill(if(day(i) > 1, NULL, i)::${filltype}) over(order by i::${ordertype}) f
+	fill(if(day(i) > 1, NULL, i)::{filltype}) over(order by i::{ordertype}) f
 from range('2025-01-01'::DATE, '2025-01-04'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify f <> '2025-01-01'::DATE
 ----
@@ -208,7 +208,7 @@ qualify f <> '2025-01-01'::DATE
 query II
 select 
 	i,
-	fill(if(day(i) < 5, NULL, i)::${filltype}) over(partition by (day(i) - 1) // 2 order by i::${ordertype}) f
+	fill(if(day(i) < 5, NULL, i)::{filltype}) over(partition by (day(i) - 1) // 2 order by i::{ordertype}) f
 from range('2025-01-01'::DATE, '2025-01-09'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify f is NULL
 order by i
@@ -222,7 +222,7 @@ order by i
 query II
 select 
 	i,
-	fill(if(day(i) = 3, NULL, i)::${filltype}) over(order by if(day(i) < 5, NULL, i)::${ordertype}) f
+	fill(if(day(i) = 3, NULL, i)::{filltype}) over(order by if(day(i) < 5, NULL, i)::{ordertype}) f
 from range('2025-01-01'::DATE, '2025-01-09'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify i is distinct from f
 order by i
@@ -233,7 +233,7 @@ order by i
 query II
 select 
 	i,
-	fill(if(i = '2015-01-01'::DATE + 2048, NULL, i)::${filltype}) over(order by i::${ordertype}) f
+	fill(if(i = '2015-01-01'::DATE + 2048, NULL, i)::{filltype}) over(order by i::{ordertype}) f
 from range('2025-01-01'::DATE, '2020-08-22'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify i <> f
 ----
@@ -250,7 +250,7 @@ loop nulled 1 4
 query II
 select 
 	i::TIME t,
-	fill(if(minute(i) = ${nulled}, NULL, i)::TIME) over(order by i::TIME) f
+	fill(if(minute(i) = {nulled}, NULL, i)::TIME) over(order by i::TIME) f
 from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:03'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
 qualify f <> t
 ----
@@ -265,7 +265,7 @@ foreach nulls first last
 query II
 select 
 	i::TIME t,
-	fill(t) over(order by t ${sense} nulls ${nulls}) f
+	fill(t) over(order by t {sense} nulls {nulls}) f
 from (
 	from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:03'::TIMESTAMP, INTERVAL 1 MINUTE) r(i)
 	union all
@@ -405,11 +405,11 @@ loop nullable 0 5
 query II
 select 
 	i,
-	fill(if(i = ${nullable}, NULL, i)) over(order by i) f
+	fill(if(i = {nullable}, NULL, i)) over(order by i) f
 from (
 	from range(5) r(i)
 	union all
-	select ${unusable}::${ordertype} as i
+	select {unusable}::{ordertype} as i
 ) tbl(i)
 qualify i is distinct from f
 order by i
@@ -434,11 +434,11 @@ loop nulled 1 4
 query II
 select 
 	i,
-	fill(if(day(i) = ${nulled}, NULL, i)::${filltype}) over(order by i::${ordertype}) f
+	fill(if(day(i) = {nulled}, NULL, i)::{filltype}) over(order by i::{ordertype}) f
 from (
 	from range('2025-01-01'::DATE, '2025-01-05'::DATE, INTERVAL 1 DAY) r(i)
 	union all
-	select ${unusable}::${ordertype} as i
+	select {unusable}::{ordertype} as i
 ) tbl(i)
 qualify f is NULL
 order by i
