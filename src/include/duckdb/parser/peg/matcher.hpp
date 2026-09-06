@@ -156,7 +156,7 @@ struct MatchState {
 	      max_token_index(max_token_index), identifier_case_mode(identifier_case_mode_p),
 	      packrat_cache(packrat_cache_p), mode(mode_p), use_heap_based_parser(use_heap_based_parser_p) {
 	}
-	MatchState(MatchState &state)
+	MatchState(const MatchState &state)
 	    : token_iterator(state.token_iterator), suggestions(state.suggestions), allocator(state.allocator),
 	      max_token_index(state.max_token_index), identifier_case_mode(state.identifier_case_mode),
 	      packrat_cache(state.packrat_cache), mode(state.mode), use_heap_based_parser(state.use_heap_based_parser),
