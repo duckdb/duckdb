@@ -1888,6 +1888,18 @@ void NullOnDivisionByZeroSetting::OnSet(SettingCallbackInfo &info, Value &) {
 	WarnDeprecatedSetting(info, NullOnDivisionByZeroSetting::Name);
 }
 
+void ProduceArrowStringViewSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, ProduceArrowStringViewSetting::Name);
+}
+
+void ExtensionDirectorySetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, ExtensionDirectorySetting::Name);
+}
+
+void OldImplicitCastingSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, OldImplicitCastingSetting::Name);
+}
+
 void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (input.IsNull()) {
 		throw InvalidInputException("regex_match_operator_semantics setting cannot be NULL");

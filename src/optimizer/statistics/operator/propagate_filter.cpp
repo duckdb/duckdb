@@ -329,6 +329,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			filter.expressions.erase_at(i);
+			removed_expressions = true;
 			i--;
 			if (filter.expressions.empty()) {
 				// if there is a projection map, we should keep the filter

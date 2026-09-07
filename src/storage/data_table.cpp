@@ -688,19 +688,20 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	// Global constraint verification.
 	auto &data_table = table_entry.GetStorage();
-	data_table.info->indexes.VerifyForeignKey(storage ? &storage->delete_indexes : nullptr, dst_keys_ptr, dst_chunk,
-	                                          global_conflict_manager);
+	auto &local_storage = LocalStorage::Get(context, db);
+	auto sibling_storage = local_storage.GetStorage(data_table);
+	auto sibling_delete_indexes = sibling_storage ? &sibling_storage->delete_indexes : nullptr;
+
+	data_table.info->indexes.VerifyForeignKey(sibling_delete_indexes, dst_keys_ptr, dst_chunk, global_conflict_manager);
 
 	// Check if we can insert the chunk into the local storage.
-	auto &local_storage = LocalStorage::Get(context, db);
 	bool local_error = false;
-	auto local_verification = local_storage.Find(data_table);
+	auto local_verification = sibling_storage != nullptr;
 
 	// Local constraint verification.
 	if (local_verification) {
 		auto &local_indexes = local_storage.GetIndexes(context, data_table);
-		local_indexes.VerifyForeignKey(storage ? &storage->delete_indexes : nullptr, dst_keys_ptr, dst_chunk,
-		                               local_conflict_manager);
+		local_indexes.VerifyForeignKey(sibling_delete_indexes, dst_keys_ptr, dst_chunk, local_conflict_manager);
 		local_error = IsForeignKeyConstraintError(local_conflict_manager, is_append, count);
 	}
 	// Global constraint verification.

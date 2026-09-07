@@ -55,6 +55,11 @@ public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
+	//! Whether the thread driving ExecuteTask holds a partially processed task.
+	//! `task` is owned by that thread alone, so only it may call this.
+	bool HasTaskInProgress() const {
+		return task != nullptr;
+	}
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
 	void WaitForTask();
 	void SignalTaskRescheduled(lock_guard<mutex> &);
@@ -187,7 +192,7 @@ private:
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
 
-	//! Total time blocked while waiting on tasks. In ticks. One tick corresponds to WAIT_TIME.
+	//! Total time blocked while waiting on tasks, in microseconds
 	atomic<idx_t> blocked_thread_time;
 };
 } // namespace duckdb
