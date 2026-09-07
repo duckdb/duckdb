@@ -451,10 +451,11 @@ jobs:
 
     - uses: emscripten-core/setup-emsdk@v16
       with:
-        version: latest
+        version: '6.0.9'
 
     - uses: ./.github/actions/ccache-action
       with:
+        key: wasm-eh-emscripten-6.0.9
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Build
