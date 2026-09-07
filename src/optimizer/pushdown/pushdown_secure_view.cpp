@@ -18,9 +18,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSecureView(unique_ptr<Logica
 		op->SetEstimatedCardinality(op->children[0]->EstimateCardinality(optimizer.GetContext()));
 	}
 
+	auto &secure_view = op->Cast<LogicalSecureView>();
 	FilterPushdown child_pushdown(optimizer, convert_mark_joins, projection_mode);
 	for (auto &f : filters) {
 		auto expr = std::move(f->filter);
+		// the operators inside the view are never shown - report the filter as part of the boundary node instead
+		secure_view.pushed_filters.push_back(expr->ToString());
 		if (ExpressionBarrier::Required(*expr) && !ExpressionBarrier::Contains(*expr)) {
 			expr = ExpressionBarrier::Wrap(std::move(expr));
 		}

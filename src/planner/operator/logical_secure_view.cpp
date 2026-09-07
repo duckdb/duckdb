@@ -1,5 +1,7 @@
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 
+#include "duckdb/common/string_util.hpp"
+
 namespace duckdb {
 
 LogicalSecureView::LogicalSecureView() : LogicalOperator(LogicalOperatorType::LOGICAL_SECURE_VIEW) {
@@ -26,6 +28,9 @@ idx_t LogicalSecureView::EstimateCardinality(ClientContext &context) {
 InsertionOrderPreservingMap<string> LogicalSecureView::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["View"] = view_name;
+	if (!pushed_filters.empty()) {
+		result["Filters"] = StringUtil::Join(pushed_filters, "\n");
+	}
 	SetParamsEstimatedCardinality(result);
 	return result;
 }

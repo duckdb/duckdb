@@ -835,11 +835,13 @@ unique_ptr<LogicalOperator> LogicalSample::Deserialize(Deserializer &deserialize
 void LogicalSecureView::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "view_name", view_name);
+	serializer.WritePropertyWithDefault<vector<string>>(201, "pushed_filters", pushed_filters);
 }
 
 unique_ptr<LogicalOperator> LogicalSecureView::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LogicalSecureView>(new LogicalSecureView());
 	deserializer.ReadPropertyWithDefault<string>(200, "view_name", result->view_name);
+	deserializer.ReadPropertyWithDefault<vector<string>>(201, "pushed_filters", result->pushed_filters);
 	return std::move(result);
 }
 

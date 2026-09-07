@@ -38,6 +38,36 @@ EXPLAIN ANALYZE SELECT * FROM secure_view WHERE i = 42
 ----
 analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]*1 row[\s\S]*
 
+# the filters that were pushed into the view are reported on the boundary node - they are the caller's own
+# expressions, so reporting them exposes nothing about the contents of the view
+query II
+EXPLAIN SELECT * FROM secure_view WHERE i = 42
+----
+physical_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]*Filters:[\s\S]*i = 42[\s\S]*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM secure_view WHERE i = 42
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]*Filters:[\s\S]*i = 42[\s\S]*
+
+# a filter that is wrapped in a barrier is reported as the caller wrote it
+query II
+EXPLAIN SELECT * FROM secure_view WHERE s::INT = 42
+----
+physical_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]*Filters:[\s\S]*CAST\(s AS INTEGER\) = 42[\s\S]*
+
+# a transitive filter derived from a join is reported as well
+query II
+EXPLAIN SELECT secure_view.i FROM secure_view JOIN integers USING (i) WHERE integers.i = 42
+----
+physical_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]*Filters:[\s\S]*i = 42[\s\S]*
+
+# no filters are reported when nothing was pushed in
+query II
+EXPLAIN SELECT * FROM secure_view
+----
+physical_plan	<!REGEX>:[\s\S]*SECURE_VIEW[\s\S]*Filters:[\s\S]*
+
 # the LOGICAL_SECURE_VIEW node is still visible in the optimized logical plan
 statement ok
 SET explain_output='optimized_only'
