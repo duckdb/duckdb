@@ -20,11 +20,15 @@
 
 namespace duckdb {
 
+//! Which syntactic form named the function: f(x) or x.f(y).
+enum class ParserRewriteCallForm : uint8_t { PLAIN, METHOD_CHAIN };
+
 //! Names that the parser rewrites into a syntax node instead of a catalog function call.
 //! Every path that can name a function must go through this, or the paths disagree.
 //! Returns nullptr when the name is an ordinary function.
 static unique_ptr<ParsedExpression> TransformParserFunctionRewrite(const string &lowercase_name,
-                                                                   vector<FunctionArgument> &function_children) {
+                                                                   vector<FunctionArgument> &function_children,
+                                                                   ParserRewriteCallForm call_form) {
 	auto reject_named_arguments = [&function_children](const char *context) {
 		for (auto &arg : function_children) {
 			if (arg.HasName()) {
@@ -89,7 +93,11 @@ static unique_ptr<ParsedExpression> TransformParserFunctionRewrite(const string 
 		coalesce_op->GetChildrenMutable().push_back(std::move(function_children[1].GetExpressionMutable()));
 		return std::move(coalesce_op);
 	}
-	if (lowercase_name == "coalesce") {
+	// COALESCE has a grammar rule of its own (CoalesceExpression), which is how the plain path spells
+	// it. Reaching the plain path under this name therefore means the caller wrote it as a function
+	// call - quoted, or schema-qualified - which resolves in the catalog and lets a user macro named
+	// coalesce win. The method chain has no grammar form, so the rewrite is its only route.
+	if (lowercase_name == "coalesce" && call_form == ParserRewriteCallForm::METHOD_CHAIN) {
 		reject_named_arguments("COALESCE expressions");
 		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 		for (auto &arg : function_children) {
@@ -192,7 +200,19 @@ PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer,
 			function_expr->GetArgumentsMutable().insert(function_expr->GetArgumentsMutable().begin(), std::move(expr));
 			// A method-chained call names a function too, so it takes the same rewrites.
 			auto lowercase_name = StringUtil::Lower(function_expr->FunctionName().GetIdentifierName());
-			if (auto rewritten = TransformParserFunctionRewrite(lowercase_name, function_expr->GetArgumentsMutable())) {
+			const bool distinct = function_expr->Distinct();
+			const bool has_order_by = function_expr->OrderBy() && !function_expr->OrderBy()->orders.empty();
+			if (auto rewritten = TransformParserFunctionRewrite(lowercase_name, function_expr->GetArgumentsMutable(),
+			                                                    ParserRewriteCallForm::METHOD_CHAIN)) {
+				// The method grammar accepts DISTINCT and ORDER BY for every call, but a rewrite yields a
+				// syntax node with nowhere to put them. Reject rather than drop them silently.
+				auto upper_name = StringUtil::Upper(lowercase_name);
+				if (distinct) {
+					throw ParserException("DISTINCT is not supported in %s expressions", upper_name);
+				}
+				if (has_order_by) {
+					throw ParserException("ORDER BY is not supported in %s expressions", upper_name);
+				}
 				expr = std::move(rewritten);
 			} else {
 				expr = std::move(function_expr);
@@ -320,7 +340,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		lowercase_name = "count_star";
 	}
 
-	if (auto rewritten = TransformParserFunctionRewrite(lowercase_name, function_children)) {
+	if (auto rewritten =
+	        TransformParserFunctionRewrite(lowercase_name, function_children, ParserRewriteCallForm::PLAIN)) {
 		return rewritten;
 	}
 	if (function_expression_arguments.has_ignore_nulls) {
