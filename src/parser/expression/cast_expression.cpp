@@ -35,9 +35,11 @@ void CastExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", child);
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		// older versions store the cast target as a LogicalType
+		// Older versions store the cast target as a LogicalType. Resolve built-in types rather than writing an
+		// unbound type: below v1.5.0 an unbound type degrades to the legacy USER type, whose modifiers are bare
+		// values, so a named modifier such as a VARCHAR collation would be lost.
 		D_ASSERT(cast_type);
-		serializer.WriteProperty<LogicalType>(201, "cast_type", LogicalType::UNBOUND(cast_type->Copy()));
+		serializer.WriteProperty<LogicalType>(201, "cast_type", UnboundType::TryDefaultBind(*cast_type));
 	}
 	serializer.WritePropertyWithDefault<bool>(202, "try_cast", try_cast);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
