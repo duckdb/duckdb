@@ -140,23 +140,31 @@ struct MatchProcessLifetimeState {
 	idx_t started = 0;
 	idx_t depth = 0;
 	bool throw_at_leaf = false;
+	bool fail_at_leaf = false;
+	bool create_result = false;
+	bool state_valid = true;
+	idx_t root_children = 1;
 	vector<idx_t> destroyed;
 };
 
 class NestedTestMatchProcess final : public MatchProcess {
 public:
 	NestedTestMatchProcess(const Matcher &matcher_p, MatchState &state, MatchProcessLifetimeState &lifetime_p)
-	    : matcher(matcher_p), child_state(state), lifetime(lifetime_p), depth(++lifetime.active) {
+	    : matcher(matcher_p), input_state(state), child_state(state), lifetime(lifetime_p), depth(++lifetime.active) {
 		lifetime.started++;
 	}
 
 	~NestedTestMatchProcess() override {
+		lifetime.state_valid &= &input_state.context == &child_state.context;
 		lifetime.destroyed.push_back(depth);
 		lifetime.active--;
 	}
 
 	MatchStep Resume(optional<MatcherResult> child_result) override {
 		if (child_result) {
+			if (depth == 1 && ++completed_children < lifetime.root_children) {
+				return MatchStep::Child({matcher, child_state});
+			}
 			return MatchStep::Complete(*child_result);
 		}
 		if (depth < lifetime.depth) {
@@ -165,14 +173,23 @@ public:
 		if (lifetime.throw_at_leaf) {
 			throw InvalidInputException("Nested matcher test failure");
 		}
+		if (lifetime.fail_at_leaf) {
+			return MatchStep::Complete(MatcherResult::Failure());
+		}
+		if (lifetime.create_result) {
+			return MatchStep::Complete(child_state.AllocateParseResult<ListParseResult>(
+			    vector<reference<ParseResult>>(), string("nested result"), optional_idx()));
+		}
 		return MatchStep::Complete(MatcherResult::Success());
 	}
 
 private:
 	const Matcher &matcher;
+	MatchState &input_state;
 	MatchState child_state;
 	MatchProcessLifetimeState &lifetime;
 	idx_t depth;
+	idx_t completed_children = 0;
 };
 
 class NestedTestMatcher final : public Matcher {
@@ -197,7 +214,7 @@ private:
 	MatchProcessLifetimeState &lifetime;
 };
 
-TEST_CASE("Heap matcher segments preserve custom process lifetimes", "[api][grammar_extension]") {
+TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
@@ -206,17 +223,23 @@ TEST_CASE("Heap matcher segments preserve custom process lifetimes", "[api][gram
 	MatchContext context(suggestions, allocator, max_token_index);
 	MatchState state(iterator, context);
 	MatchProcessLifetimeState lifetime;
-	lifetime.destroyed.reserve(130);
+	lifetime.destroyed.reserve(2049);
 	NestedTestMatcher matcher(lifetime);
 
-	SECTION("Completed frames are reused across segment boundaries") {
+	SECTION("Completed frames are reused across vector growth boundaries") {
 		MatchStack stack;
-		for (idx_t depth : {idx_t(1), idx_t(32), idx_t(33), idx_t(64), idx_t(65), idx_t(130), idx_t(33)}) {
+		lifetime.create_result = true;
+		for (idx_t depth : {idx_t(1), idx_t(64), idx_t(65), idx_t(128), idx_t(129), idx_t(256), idx_t(257), idx_t(1025),
+		                    idx_t(33), idx_t(130)}) {
 			lifetime.depth = depth;
 			lifetime.started = 0;
 			lifetime.destroyed.clear();
-			REQUIRE(stack.Execute({matcher, state}).IsSuccess());
+			auto result = stack.Execute({matcher, state});
+			REQUIRE(result.IsSuccess());
+			REQUIRE(result.HasParseResult());
+			REQUIRE(result.GetParseResult()->name == "nested result");
 			REQUIRE(lifetime.active == 0);
+			REQUIRE(lifetime.state_valid);
 			REQUIRE(lifetime.started == depth);
 			REQUIRE(lifetime.destroyed.size() == depth);
 			for (idx_t i = 0; i < depth; i++) {
@@ -226,18 +249,54 @@ TEST_CASE("Heap matcher segments preserve custom process lifetimes", "[api][gram
 	}
 
 	SECTION("Exceptions destroy child processes before their parents") {
-		lifetime.depth = 130;
+		lifetime.depth = 1025;
 		lifetime.throw_at_leaf = true;
 		{
 			MatchStack stack;
 			REQUIRE_THROWS_AS(stack.Execute({matcher, state}), InvalidInputException);
 		}
 		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
 		REQUIRE(lifetime.started == lifetime.depth);
 		REQUIRE(lifetime.destroyed.size() == lifetime.depth);
 		for (idx_t i = 0; i < lifetime.depth; i++) {
 			REQUIRE(lifetime.destroyed[i] == lifetime.depth - i);
 		}
+	}
+
+	SECTION("A waiting parent resumes after multiple deep children") {
+		lifetime.depth = 1025;
+		lifetime.root_children = 2;
+		MatchStack stack;
+		REQUIRE(stack.Execute({matcher, state}).IsSuccess());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == 1 + 2 * (lifetime.depth - 1));
+		REQUIRE(lifetime.destroyed.size() == lifetime.started);
+		for (idx_t sibling = 0; sibling < 2; sibling++) {
+			for (idx_t i = 0; i < lifetime.depth - 1; i++) {
+				REQUIRE(lifetime.destroyed[sibling * (lifetime.depth - 1) + i] == lifetime.depth - i);
+			}
+		}
+		REQUIRE(lifetime.destroyed.back() == 1);
+	}
+
+	SECTION("Failed matches leave the vector ready for another execution") {
+		lifetime.depth = 1025;
+		lifetime.fail_at_leaf = true;
+		MatchStack stack;
+		REQUIRE_FALSE(stack.Execute({matcher, state}).IsSuccess());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == lifetime.depth);
+		REQUIRE(lifetime.destroyed.size() == lifetime.depth);
+		lifetime.fail_at_leaf = false;
+		lifetime.started = 0;
+		lifetime.destroyed.clear();
+		REQUIRE(stack.Execute({matcher, state}).IsSuccess());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == lifetime.depth);
 	}
 }
 
