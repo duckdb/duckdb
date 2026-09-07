@@ -39,7 +39,7 @@ public:
 public:
 	const Matcher &matcher;
 	MatchState &match_state;
-	match_process_ptr_t process;
+	arena_ptr<MatchProcess> process;
 	MatchProcessAllocator::Position process_position;
 	optional<MatcherResult> child_result;
 	optional<MatcherResult> result;

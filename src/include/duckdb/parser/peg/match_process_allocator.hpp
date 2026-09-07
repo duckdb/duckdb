@@ -43,16 +43,10 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	match_process_ptr_t Make(ARGS &&...args) {
+	arena_ptr<MatchProcess> Make(ARGS &&...args) {
 		static_assert(std::is_base_of<MatchProcess, T>::value, "Expected a matcher process");
-		auto previous = position;
-		try {
-			auto storage = Allocate(sizeof(T), alignof(T));
-			return match_process_ptr_t(new (storage) T(std::forward<ARGS>(args)...), MatchProcessDeleter {true});
-		} catch (...) {
-			Rewind(previous);
-			throw;
-		}
+		auto storage = Allocate(sizeof(T), alignof(T));
+		return arena_ptr<MatchProcess>(new (storage) T(std::forward<ARGS>(args)...));
 	}
 
 private:

@@ -1,6 +1,5 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/match_process_allocator.hpp"
-#include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/matcher/choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher/optional_matcher.hpp"
@@ -44,10 +43,6 @@ data_ptr_t MatchProcessAllocator::Allocate(idx_t size, idx_t alignment) {
 	}
 }
 
-match_process_ptr_t Matcher::StartMatch(MatchState &state, MatchProcessAllocator &) const {
-	return match_process_ptr_t(StartMatch(state).release());
-}
-
 MatchStep MatchStep::Child(MatchInput input) {
 	return MatchStep(input, nullopt);
 }
@@ -84,8 +79,8 @@ private:
 	bool completed = false;
 };
 
-unique_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<AtomicMatchProcess>(*this, state);
+arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
+	return allocator.Make<AtomicMatchProcess>(*this, state);
 }
 
 class ListMatchProcess : public MatchProcess {
@@ -157,8 +152,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<ListMatchProcess>(*this, state);
+arena_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
+	return allocator.Make<ListMatchProcess>(*this, state);
 }
 
 class ChoiceMatchProcess : public MatchProcess {
@@ -202,8 +197,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<ChoiceMatchProcess>(*this, state);
+arena_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
+	return allocator.Make<ChoiceMatchProcess>(*this, state);
 }
 
 class OptionalMatchProcess : public MatchProcess {
@@ -241,8 +236,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<OptionalMatchProcess>(*this, state);
+arena_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
+	return allocator.Make<OptionalMatchProcess>(*this, state);
 }
 
 class RepeatMatchProcess : public MatchProcess {
@@ -294,40 +289,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<RepeatMatchProcess>(*this, state);
-}
-
-namespace {
-
-//! Final factory implementations cannot bypass an extension's legacy StartMatch override.
-template <class MATCHER, class PROCESS>
-class PooledMatcher final : public MATCHER {
-public:
-	using MATCHER::MATCHER;
-	using MATCHER::StartMatch;
-
-	match_process_ptr_t StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
-		return allocator.Make<PROCESS>(*this, state);
-	}
-};
-
-} // namespace
-
-unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
-	return make_uniq<PooledMatcher<ListMatcher, ListMatchProcess>>();
-}
-
-unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
-	return make_uniq<PooledMatcher<ChoiceMatcher, ChoiceMatchProcess>>(std::move(matchers));
-}
-
-unique_ptr<OptionalMatcher> MatcherFactory::CreateOptional(Matcher &matcher) const {
-	return make_uniq<PooledMatcher<OptionalMatcher, OptionalMatchProcess>>(matcher);
-}
-
-unique_ptr<RepeatMatcher> MatcherFactory::CreateRepeat(Matcher &matcher) const {
-	return make_uniq<PooledMatcher<RepeatMatcher, RepeatMatchProcess>>(matcher);
+arena_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
+	return allocator.Make<RepeatMatchProcess>(*this, state);
 }
 
 } // namespace duckdb

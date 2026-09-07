@@ -57,8 +57,8 @@ public:
 	GrammarExtensionTestMatcher() : child("ANSWER", KeywordInfo()) {
 	}
 
-	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override {
-		return make_uniq<GrammarExtensionTestMatchProcess>(child, state);
+	arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
+		return allocator.Make<GrammarExtensionTestMatchProcess>(child, state);
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -201,8 +201,8 @@ public:
 	    : Matcher(MatcherType::LIST), lifetime(lifetime_p) {
 	}
 
-	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override {
-		return make_uniq<NestedTestMatchProcess>(*this, state, lifetime);
+	arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
+		return allocator.Make<NestedTestMatchProcess>(*this, state, lifetime);
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &) const override {
@@ -261,13 +261,13 @@ TEST_CASE("Heap matcher segments preserve custom process lifetimes", "[api][gram
 	}
 }
 
-class LegacyListTestMatcher final : public ListMatcher {
+class DerivedListTestMatcher final : public ListMatcher {
 public:
-	explicit LegacyListTestMatcher(MatchProcessLifetimeState &lifetime_p) : lifetime(lifetime_p) {
+	explicit DerivedListTestMatcher(MatchProcessLifetimeState &lifetime_p) : lifetime(lifetime_p) {
 	}
 
-	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override {
-		return make_uniq<NestedTestMatchProcess>(*this, state, lifetime);
+	arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
+		return allocator.Make<NestedTestMatchProcess>(*this, state, lifetime);
 	}
 
 private:
@@ -299,19 +299,11 @@ private:
 
 class ArenaNestedTestMatcher final : public ListMatcher {
 public:
-	explicit ArenaNestedTestMatcher(MatchProcessLifetimeState &lifetime_p, bool mixed_ownership_p = false)
-	    : lifetime(lifetime_p), mixed_ownership(mixed_ownership_p) {
+	explicit ArenaNestedTestMatcher(MatchProcessLifetimeState &lifetime_p) : lifetime(lifetime_p) {
 	}
 
-	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override {
-		return make_uniq<NestedTestMatchProcess>(*this, state, lifetime);
-	}
-
-	match_process_ptr_t StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
+	arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
 		if (lifetime.active % 2) {
-			if (mixed_ownership) {
-				return Matcher::StartMatch(state, allocator);
-			}
 			return allocator.Make<ArenaNestedTestMatchProcess<9000, 64>>(*this, state, lifetime);
 		}
 		return allocator.Make<ArenaNestedTestMatchProcess<32, 8>>(*this, state, lifetime);
@@ -319,10 +311,9 @@ public:
 
 private:
 	MatchProcessLifetimeState &lifetime;
-	bool mixed_ownership;
 };
 
-TEST_CASE("Heap matcher preserves overrides on derived built-in matchers", "[api][grammar_extension]") {
+TEST_CASE("Matcher drivers preserve overrides on derived built-in matchers", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
@@ -332,9 +323,14 @@ TEST_CASE("Heap matcher preserves overrides on derived built-in matchers", "[api
 	MatchState state(iterator, context);
 	MatchProcessLifetimeState lifetime;
 	lifetime.depth = 130;
-	LegacyListTestMatcher matcher(lifetime);
-	MatchStack stack;
-	REQUIRE(stack.Execute({matcher, state}).IsSuccess());
+	DerivedListTestMatcher matcher(lifetime);
+	SECTION("Heap driver") {
+		context.use_heap_based_parser = true;
+	}
+	SECTION("Recursive driver") {
+		context.use_heap_based_parser = false;
+	}
+	REQUIRE(matcher.MatchParseResult(state).IsSuccess());
 	REQUIRE(lifetime.started == lifetime.depth);
 	REQUIRE(lifetime.active == 0);
 	REQUIRE(lifetime.destroyed.size() == lifetime.depth);
@@ -383,19 +379,6 @@ TEST_CASE("Heap matcher reuses variable-sized aligned process storage", "[api][g
 	SECTION("Constructor exceptions destroy constructed members and parent processes") {
 		lifetime.throw_in_constructor = true;
 	}
-	SECTION("Pooled and heap-owned processes can alternate on the same stack") {
-		lifetime.depth = 130;
-		ArenaNestedTestMatcher mixed_matcher(lifetime, true);
-		MatchStack stack;
-		REQUIRE(stack.Execute({mixed_matcher, state}).IsSuccess());
-		REQUIRE(lifetime.active == 0);
-		REQUIRE(lifetime.storage_valid);
-		REQUIRE(lifetime.started == lifetime.depth);
-		REQUIRE(lifetime.destroyed.size() == lifetime.depth);
-		for (idx_t i = 0; i < lifetime.depth; i++) {
-			REQUIRE(lifetime.destroyed[i] == lifetime.depth - i);
-		}
-	}
 	SECTION("Siblings reuse process slots while their parent stays alive") {
 		lifetime.depth = 65;
 		lifetime.root_children = 2;
@@ -424,40 +407,50 @@ TEST_CASE("Heap matcher reuses variable-sized aligned process storage", "[api][g
 	}
 }
 
-TEST_CASE("Process constructor failures restore the pool checkpoint", "[api][grammar_extension]") {
+TEST_CASE("Recursive matcher reuses process storage and unwinds safely", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_results;
 	idx_t max_token_index = 0;
 	MatchContext context(suggestions, parse_results, max_token_index);
+	context.use_heap_based_parser = false;
 	MatchState state(iterator, context);
 	MatchProcessLifetimeState lifetime;
-	lifetime.depth = 1;
-	lifetime.throw_in_constructor = true;
+	lifetime.depth = 130;
+	lifetime.destroyed.reserve(lifetime.depth);
 	ArenaNestedTestMatcher matcher(lifetime);
-	ArenaAllocator arena(Allocator::DefaultAllocator());
-	MatchProcessAllocator pool(arena);
-	auto position = pool.GetPosition();
-	idx_t reserved = 0;
-	for (idx_t i = 0; i < 10; i++) {
-		REQUIRE_THROWS_AS((pool.Make<ArenaNestedTestMatchProcess<9000, 64>>(matcher, state, lifetime)),
-		                  InvalidInputException);
-		REQUIRE(lifetime.active == 0);
-		REQUIRE(pool.GetPosition().segment.get() == position.segment.get());
-		REQUIRE(pool.GetPosition().offset == position.offset);
-		if (i == 0) {
-			reserved = arena.AllocationSize();
-		}
-		REQUIRE(arena.AllocationSize() == reserved);
+
+	SECTION("Siblings reuse storage while their parent remains alive") {
+		lifetime.root_children = 2;
 	}
-	lifetime.throw_in_constructor = false;
-	auto process = pool.Make<ArenaNestedTestMatchProcess<9000, 64>>(matcher, state, lifetime);
-	REQUIRE(lifetime.active == 1);
-	process.reset();
-	pool.Rewind(position);
+	SECTION("Failed matches destroy every process") {
+		lifetime.fail_at_leaf = true;
+	}
+	SECTION("Resume exceptions unwind children before parents") {
+		lifetime.throw_at_leaf = true;
+	}
+	SECTION("Constructor exceptions unwind children before parents") {
+		lifetime.throw_in_constructor = true;
+	}
+
+	if (lifetime.throw_at_leaf || lifetime.throw_in_constructor) {
+		REQUIRE_THROWS_AS(matcher.MatchParseResult(state), InvalidInputException);
+	} else {
+		REQUIRE(matcher.MatchParseResult(state).IsSuccess() == !lifetime.fail_at_leaf);
+	}
+	auto child_count = lifetime.depth - 1;
 	REQUIRE(lifetime.active == 0);
 	REQUIRE(lifetime.storage_valid);
+	REQUIRE(lifetime.started == 1 + lifetime.root_children * child_count);
+	REQUIRE(lifetime.destroyed.size() == lifetime.started);
+	for (idx_t sibling = 0; sibling < lifetime.root_children; sibling++) {
+		for (idx_t i = 0; i < child_count; i++) {
+			REQUIRE(lifetime.destroyed[sibling * child_count + i] == lifetime.depth - i);
+			REQUIRE(lifetime.addresses[1 + sibling * child_count + i] == lifetime.addresses[1 + i]);
+		}
+	}
+	REQUIRE(lifetime.destroyed.back() == 1);
 }
 
 TEST_CASE("Packrat results outlive reused process storage", "[api][grammar_extension]") {
@@ -519,7 +512,8 @@ TEST_CASE("Compiled grammar processes use arena ownership", "[api][grammar_exten
 	auto position = pool.GetPosition();
 	auto process = grammar->TopLevelStatementMatcher().StartMatch(state, pool);
 	REQUIRE(process);
-	REQUIRE(process.get_deleter().arena_allocated);
+	REQUIRE(pool.GetPosition().segment);
+	REQUIRE(pool.GetPosition().offset > 0);
 	process.reset();
 	pool.Rewind(position);
 }

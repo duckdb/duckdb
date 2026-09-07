@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/arena_containers/arena_ptr.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
@@ -244,20 +245,6 @@ public:
 	virtual MatchStep Resume(optional<MatcherResult> child_result) = 0;
 };
 
-struct MatchProcessDeleter {
-	bool arena_allocated = false;
-
-	void operator()(MatchProcess *process) const {
-		if (arena_allocated) {
-			process->~MatchProcess();
-		} else {
-			delete process;
-		}
-	}
-};
-
-using match_process_ptr_t = unique_ptr<MatchProcess, MatchProcessDeleter>;
-
 enum class MatcherType {
 	KEYWORD,
 	LIST,
@@ -280,10 +267,8 @@ public:
 
 	//! Match and construct the parse result
 	MatcherResult MatchParseResult(MatchState &state) const;
-	//! Create matcher-local state that can be scheduled recursively or iteratively.
-	virtual unique_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
-	//! Pool-aware creation defaults to the existing extension override.
-	DUCKDB_API virtual match_process_ptr_t StartMatch(MatchState &state, MatchProcessAllocator &allocator) const;
+	//! Create matcher-local state with allocator.Make<PROCESS>() for either execution driver.
+	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const = 0;
 	virtual bool IsAtomic() const {
 		return false;
 	}
@@ -353,7 +338,7 @@ public:
 	bool IsAtomic() const final {
 		return true;
 	}
-	unique_ptr<MatchProcess> StartMatch(MatchState &state) const final;
+	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const final;
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
 };
 
