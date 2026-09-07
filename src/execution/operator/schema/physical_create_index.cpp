@@ -151,13 +151,13 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 				for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
 					full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(lstate.key_chunk.data[i]);
 				}
-				full_chunk.SetCardinality(visible_count);
+				full_chunk.SetCardinalityUnsafe(visible_count);
 			} else {
 				for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
 					verify_keys.data[i].Slice(lstate.key_chunk.data[i], visible_sel, visible_count);
 					full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(verify_keys.data[i]);
 				}
-				full_chunk.SetCardinality(visible_count);
+				full_chunk.SetCardinalityUnsafe(visible_count);
 			}
 			table.GetStorage().VerifyFKReferentialIntegrity(*bound_fk, context.client, full_chunk);
 		}
@@ -209,7 +209,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 				for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
 					full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(local_chunk.data[i]);
 				}
-				full_chunk.SetCardinality(local_chunk.size());
+				full_chunk.SetCardinalityUnsafe(local_chunk.size());
 				storage.VerifyFKReferentialIntegrity(*bound_fk, context, full_chunk);
 			}
 		}
