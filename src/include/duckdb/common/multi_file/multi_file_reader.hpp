@@ -119,8 +119,6 @@ public:
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
 	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 
-	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
-	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
 	//! Parse a Value containing 1 or more files into a vector of files. A file is specified either as a path
 	//! (VARCHAR) or as a STRUCT/VARIANT holding the path together with the options to open the file with
 	DUCKDB_API virtual vector<OpenFileInfo> ParseFileList(const Value &input);

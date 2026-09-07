@@ -94,30 +94,6 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["allow_empty"] = LogicalType::BOOLEAN;
 }
 
-vector<string> MultiFileReader::ParsePaths(const Value &input) {
-	if (input.IsNull()) {
-		throw ParserException("%s cannot take NULL list as parameter", function_name);
-	}
-
-	if (input.type().id() == LogicalTypeId::VARCHAR) {
-		return {StringValue::Get(input)};
-	} else if (input.type().id() == LogicalTypeId::LIST) {
-		vector<string> paths;
-		for (auto &val : ListValue::GetChildren(input)) {
-			if (val.IsNull()) {
-				throw ParserException("%s reader cannot take NULL input as parameter", function_name);
-			}
-			if (val.type().id() != LogicalTypeId::VARCHAR) {
-				throw ParserException("%s reader can only take a list of strings as a parameter", function_name);
-			}
-			paths.push_back(StringValue::Get(val));
-		}
-		return paths;
-	} else {
-		throw InternalException("Unsupported type for MultiFileReader::ParsePaths called with: '%s'");
-	}
-}
-
 OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
 	if (input.IsNull()) {
 		throw ParserException("%s reader cannot take NULL input as parameter", function_name);
