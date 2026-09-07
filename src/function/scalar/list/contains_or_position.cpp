@@ -1,12 +1,43 @@
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
+
+static unique_ptr<FunctionData> ListSearchBind(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
+	auto &function = input.GetBoundFunction();
+	auto &context = input.GetClientContext();
+	auto list_type = arguments[0]->GetReturnType();
+	if (list_type.id() != LogicalTypeId::LIST && list_type.id() != LogicalTypeId::ARRAY) {
+		return nullptr;
+	}
+	auto &child_type =
+	    list_type.id() == LogicalTypeId::LIST ? ListType::GetChildType(list_type) : ArrayType::GetChildType(list_type);
+	auto is_struct = [](const LogicalType &type) {
+		return StructType::IsStruct(type);
+	};
+	if (!TypeVisitor::Contains(child_type, is_struct) &&
+	    !TypeVisitor::Contains(arguments[1]->GetReturnType(), is_struct)) {
+		return nullptr;
+	}
+	auto comparison_type = LogicalType::MaxLogicalType(context, child_type, arguments[1]->GetReturnType());
+	// Merge the element types before pushing collations so each field uses the collation from either argument.
+	vector<LogicalType> types {LogicalType::LIST(comparison_type), comparison_type};
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		arguments[i] = BoundCastExpression::AddCastToType(context, std::move(arguments[i]), types[i]);
+		ExpressionBinder::PushCollation(context, arguments[i], types[i], CollationType::COMBINABLE_COLLATIONS);
+		function.GetArguments()[i] = arguments[i]->GetReturnType();
+	}
+	return nullptr;
+}
 
 template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -77,6 +108,7 @@ ScalarFunction ListContainsFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
 	                          LogicalType::BOOLEAN, ListSearchFunction<bool>);
 	fun.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	fun.SetBindCallback(ListSearchBind);
 	fun.SetFilterPruneCallback(ListContainsFilterPrune);
 	return fun;
 }
@@ -86,6 +118,7 @@ ScalarFunction ListPositionFun::GetFunction() {
 	                          LogicalType::INTEGER, ListSearchFunction<int32_t, true>);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	fun.SetBindCallback(ListSearchBind);
 	fun.SetStatisticsCallback(ListPositionPropagateStats);
 	return fun;
 }
