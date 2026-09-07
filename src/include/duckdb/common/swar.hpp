@@ -84,11 +84,22 @@ struct SwarBlock {
 
 	//! A byte pattern repeated over a word, a byte matches when it equals `value` on the bits set in `mask`
 	struct BytePattern {
-		BytePattern(uint8_t value_p, uint8_t mask_p)
-		    : value(SwarWord::Repeat(value_p & mask_p)), mask(SwarWord::Repeat(mask_p)) {
+		//! Matches one byte
+		static BytePattern Byte(uint8_t byte) {
+			return BytePattern(byte, 0xff);
+		}
+		//! Matches both bytes, and every byte that agrees with them on the bits where they agree
+		static BytePattern Either(uint8_t a, uint8_t b) {
+			const auto mask = static_cast<uint8_t>(~(a ^ b));
+			return BytePattern(a, mask);
 		}
 		uint64_t value;
 		uint64_t mask;
+
+	private:
+		BytePattern(uint8_t value_p, uint8_t mask_p)
+		    : value(SwarWord::Repeat(value_p & mask_p)), mask(SwarWord::Repeat(mask_p)) {
+		}
 	};
 
 	//! The fewest and the most patterns MaybeAnyMask takes at once

@@ -443,17 +443,16 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array.skip_comment[static_cast<uint8_t>('\n')] = false;
 
 	auto &stop_patterns = transition_array.stop_patterns;
-	stop_patterns.emplace_back(delimiter_first_byte, 0xff);
+	stop_patterns.push_back(SwarBlock::BytePattern::Byte(delimiter_first_byte));
 	if (quote != '\0') {
-		stop_patterns.emplace_back(quote, 0xff);
+		stop_patterns.push_back(SwarBlock::BytePattern::Byte(quote));
 	}
-	// the byte class holding \n and \r
-	stop_patterns.emplace_back(0x08, 0xf8);
+	stop_patterns.push_back(SwarBlock::BytePattern::Either('\n', '\r'));
 	if (comment != '\0') {
-		stop_patterns.emplace_back(comment, 0xff);
+		stop_patterns.push_back(SwarBlock::BytePattern::Byte(comment));
 	}
 	if (escape != '\0' && escape != quote) {
-		stop_patterns.emplace_back(escape, 0xff);
+		stop_patterns.push_back(SwarBlock::BytePattern::Byte(escape));
 	}
 }
 
