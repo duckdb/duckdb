@@ -3,10 +3,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 
-
 namespace duckdb {
 void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints,
-                                          ForeignKeyConstraint &fk) {
+                                   ForeignKeyConstraint &fk) {
 	// find the matching primary key constraint
 	bool found_constraint = false;
 	// if no columns are defined, we will automatically try to bind to the primary key
@@ -45,7 +44,7 @@ void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<uniqu
 		}
 		bool equals = true;
 		for (idx_t i = 0; i < fk.pk_columns.size(); i++) {
-			if (fk.pk_columns[i] != pk_names[i]) {
+			if (!(fk.pk_columns[i] == pk_names[i])) {
 				equals = false;
 				break;
 			}
@@ -78,8 +77,7 @@ void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<uniqu
 	                      fk.info.table, fk_names);
 }
 
-void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identifier> &names,
-                                  vector<PhysicalIndex> &indexes) {
+void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identifier> &names, vector<PhysicalIndex> &indexes) {
 	D_ASSERT(indexes.empty());
 	D_ASSERT(!names.empty());
 	for (auto &name : names) {
@@ -108,7 +106,7 @@ void CheckForeignKeyTypes(const ColumnList &pk_columns, const ColumnList &fk_col
 	}
 }
 
-void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const identifier_set_t &gcols,
+void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const unordered_set<string> &gcols,
                                        bool &contains_gcol) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr,
 	                                                               [&](const ColumnRefExpression &column_ref) {
@@ -121,7 +119,7 @@ void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const 
 }
 
 bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
-	identifier_set_t generated_columns;
+	unordered_set<string> generated_columns;
 	for (auto &col : table_info.columns.Logical()) {
 		if (!col.Generated()) {
 			continue;

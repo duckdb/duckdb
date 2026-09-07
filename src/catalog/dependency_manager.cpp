@@ -104,8 +104,7 @@ MangledEntryName DependencyManager::MangleName(const CatalogEntry &entry) {
 	return MangleName(GetLookupProperties(entry));
 }
 
-void DependencyManager::AddDependency(CatalogTransaction transaction, CatalogEntry &entry,
-                                      CatalogEntry &dependency) {
+void DependencyManager::AddDependency(CatalogTransaction transaction, CatalogEntry &entry, CatalogEntry &dependency) {
 	LogicalDependencyList list;
 	list.AddDependency(dependency);
 	AddObject(transaction, entry, list);

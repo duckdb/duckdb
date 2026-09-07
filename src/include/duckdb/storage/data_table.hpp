@@ -293,7 +293,7 @@ public:
 	              IndexStorageInfo index_info, ConstraintCheckMode check_mode);
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index);
-	
+
 	//! Verify that all rows in chunk satisfy the FK referential integrity constraint (FK values exist in PK table).
 	//! Use this during index builds on existing data (e.g. ALTER TABLE ADD FOREIGN KEY).
 	void VerifyFKReferentialIntegrity(const BoundForeignKeyConstraint &bound_fk, ClientContext &context,

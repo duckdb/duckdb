@@ -1,6 +1,6 @@
 # name: test/sql/alter/add_fk/test_add_fk.test
 # description: Test adding a FOREIGN KEY to a table.
-# group: [add_pk]
+# group: [add_fk]
 
 statement ok
 PRAGMA enable_verification

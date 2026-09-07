@@ -100,6 +100,7 @@ public:
 	bool IsAddUniqueConstraint() const;
 	DatabaseModificationType GetModifications() const;
 	bool IsAddForeignKey() const;
+
 protected:
 	explicit AlterInfo(AlterType type);
 

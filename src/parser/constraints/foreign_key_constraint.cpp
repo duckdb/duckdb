@@ -14,7 +14,7 @@ ForeignKeyConstraint::ForeignKeyConstraint(vector<Identifier> pk_columns, vector
       info(std::move(info)) {
 }
 
-string ForeignKeyConstraint::GetName(const string& table_name) const {
+string ForeignKeyConstraint::GetName(const string &table_name) const {
 	string name = table_name + "_";
 	for (const auto &column_name : fk_columns) {
 		name += StringUtil::Lower(column_name.GetIdentifierName()) + "_";
