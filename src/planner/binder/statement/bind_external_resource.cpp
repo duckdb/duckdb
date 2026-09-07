@@ -17,7 +17,7 @@ BoundStatement Binder::Bind(ExternalResourceStatement &stmt) {
 		// SHOW [ALL] EXTERNAL RESOURCES desugars to `SELECT * FROM duckdb_external_resources(all := <all>)`.
 		vector<unique_ptr<ParsedExpression>> children;
 		if (stmt.all) {
-			auto all_expr = make_uniq<ConstantExpression>(Value::BOOLEAN(true));
+			auto all_expr = ConstantExpression::Boolean(true);
 			all_expr->SetAlias("discover");
 			children.push_back(std::move(all_expr));
 		}

@@ -50,7 +50,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 		return std::move(result);
 	}
 	auto null_column = column_entry.Copy();
-	null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
+	null_column.SetDefaultValue(ConstantExpression::Null());
 	auto alter_entry_data = add_column.GetAlterEntryData();
 	return unique_ptr<SQLStatement>(std::move(
 	    TransformAndMaterializeAlter(alter_entry_data,
@@ -426,7 +426,7 @@ PEGTransformerFactory::TransformResetOptions(PEGTransformer &transformer,
 			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
 		}
 		auto &const_expr = opt.second->Cast<ConstantExpression>();
-		if (!const_expr.GetValue().IsNull()) {
+		if (!const_expr.GetLiteral().IsNull()) {
 			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
 		}
 		option_names.insert(Identifier(opt.first));

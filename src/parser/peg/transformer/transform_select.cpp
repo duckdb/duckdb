@@ -558,7 +558,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClause(PEGTrans
 void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> &expr, vector<Value> &result) {
 	if (expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
 		auto &const_expr = expr->Cast<ConstantExpression>();
-		result.push_back(const_expr.GetValue());
+		result.push_back(const_expr.GetLiteral().ToValue());
 	} else if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref_expr = expr->Cast<ColumnRefExpression>();
 		for (auto &col : col_ref_expr.ColumnNames()) {
@@ -598,14 +598,9 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 		}
 		return true;
 	}
-	default: {
-		Value val;
-		if (!ConstructConstantFromExpression(*expr, val)) {
-			return false;
-		}
-		entry.values.push_back(std::move(val));
-		return true;
-	}
+	default:
+		// constants and other expressions are kept as-is and folded by the binder
+		return false;
 	}
 }
 
@@ -724,15 +719,10 @@ static unique_ptr<TableRef> BuildNearestJoin(const optional<JoinType> &join_type
 		                      EnumUtil::ToString(result->type));
 	}
 	if (number_literal) {
-		auto value = (*number_literal)->Cast<ConstantExpression>().GetValue();
-		auto literal_text = value.ToString();
+		auto &literal = (*number_literal)->Cast<ConstantExpression>().GetLiteral();
+		auto literal_text = literal.ToValue().ToString();
 		int64_t count = 0;
-		if (value.type().IsIntegral()) {
-			auto bigint_value = value.DefaultTryCastAs(LogicalType::BIGINT);
-			if (bigint_value) {
-				count = bigint_value->GetValue<int64_t>();
-			}
-		}
+		literal.TryGetInt64(count);
 		if (count < 1) {
 			throw ParserException("NEAREST expects a positive integer literal, got \"%s\"", literal_text);
 		}
@@ -1836,8 +1826,8 @@ optional_idx PEGTransformerFactory::TransformRepeatableSample(PEGTransformer &tr
 
 optional_idx PEGTransformerFactory::TransformSampleSeed(PEGTransformer &transformer,
                                                         unique_ptr<ParsedExpression> number_literal) {
-	auto const_expr = number_literal->Cast<ConstantExpression>();
-	return optional_idx(const_expr.GetValue().GetValue<idx_t>());
+	auto &const_expr = number_literal->Cast<ConstantExpression>();
+	return optional_idx(const_expr.GetLiteral().ToValue().GetValue<idx_t>());
 }
 
 unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransformer &transformer,
@@ -1849,7 +1839,7 @@ unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransfo
 		                      "Only constants are supported in sample clause currently");
 	}
 	auto &const_expr = sample_value->Cast<ConstantExpression>();
-	auto &sample_value_const = const_expr.GetValue();
+	auto sample_value_const = const_expr.GetLiteral().ToValue();
 	result->is_percentage = sample_unit.value_or(false);
 	if (result->is_percentage) {
 		auto percentage = sample_value_const.GetValue<double>();
@@ -1931,7 +1921,7 @@ LimitPercentResult PEGTransformerFactory::TransformOffsetValue(PEGTransformer &t
 
 LimitPercentResult PEGTransformerFactory::TransformLimitAll(PEGTransformer &transformer) {
 	LimitPercentResult result;
-	result.expression = make_uniq<ConstantExpression>(Value());
+	result.expression = ConstantExpression::Null();
 	result.is_percent = false;
 	return result;
 }

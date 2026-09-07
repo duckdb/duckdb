@@ -189,6 +189,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/grammar_change.hpp"
+#include "duckdb/parser/literal.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
@@ -3319,6 +3320,30 @@ const char* EnumUtil::ToChars<LimitValueType>(LimitValueType value) {
 template<>
 LimitValueType EnumUtil::FromString<LimitValueType>(const char *value) {
 	return static_cast<LimitValueType>(StringUtil::StringToEnum(GetLimitValueTypeValues(), 2, "LimitValueType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLiteralKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LiteralKind::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(LiteralKind::NULL_LITERAL), "NULL_LITERAL" },
+		{ static_cast<uint32_t>(LiteralKind::BOOLEAN), "BOOLEAN" },
+		{ static_cast<uint32_t>(LiteralKind::INTEGER), "INTEGER" },
+		{ static_cast<uint32_t>(LiteralKind::NUMERIC), "NUMERIC" },
+		{ static_cast<uint32_t>(LiteralKind::STRING), "STRING" },
+		{ static_cast<uint32_t>(LiteralKind::HEX), "HEX" },
+		{ static_cast<uint32_t>(LiteralKind::BIT), "BIT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LiteralKind>(LiteralKind value) {
+	return StringUtil::EnumToString(GetLiteralKindValues(), 8, "LiteralKind", static_cast<uint32_t>(value));
+}
+
+template<>
+LiteralKind EnumUtil::FromString<LiteralKind>(const char *value) {
+	return static_cast<LiteralKind>(StringUtil::StringToEnum(GetLiteralKindValues(), 8, "LiteralKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLoadTypeValues() {

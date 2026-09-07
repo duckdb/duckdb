@@ -77,8 +77,9 @@ string TypeExpression::ToString() const {
 	if (result.empty() && type_name == "VARCHAR" && !params.empty()) {
 		if (params.back()->HasAlias() && params.back()->GetAlias() == "collation") {
 			// Special case for VARCHAR with collation
-			auto collate_expr = params.back()->Cast<ConstantExpression>();
-			return StringUtil::Format("VARCHAR COLLATE %s", SQLIdentifier(StringValue::Get(collate_expr.GetValue())));
+			auto &collate_expr = params.back()->Cast<ConstantExpression>();
+			return StringUtil::Format("VARCHAR COLLATE %s",
+			                          SQLIdentifier(collate_expr.GetLiteral().ToValue().ToString()));
 		}
 	}
 

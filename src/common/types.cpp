@@ -1962,7 +1962,7 @@ static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
 		} break;
 		case ExpressionType::VALUE_CONSTANT: {
 			auto &const_expr = arg->Cast<ConstantExpression>();
-			bound_args.emplace_back(arg->GetAlias().GetIdentifierName(), const_expr.GetValue());
+			bound_args.emplace_back(arg->GetAlias().GetIdentifierName(), const_expr.GetLiteral().ToValue());
 		} break;
 		default:
 			throw InvalidInputException("Cannot default bind unbound type with non-type, non-expression parameter");
