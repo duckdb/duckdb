@@ -10,7 +10,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/expression/unsafe_barrier.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 
 namespace duckdb {
 
@@ -19,7 +19,7 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 	D_ASSERT(conj_expr.GetChildren().size() > 1);
 	for (idx_t idx = 0; idx < conj_expr.GetChildren().size(); idx++) {
 		permutation.push_back(idx);
-		if (conj_expr.GetChildren()[idx]->CanThrow() || UnsafeBarrier::Contains(*conj_expr.GetChildren()[idx])) {
+		if (conj_expr.GetChildren()[idx]->CanThrow() || ExpressionBarrier::Contains(*conj_expr.GetChildren()[idx])) {
 			disable_permutations = true;
 		}
 		if (idx != conj_expr.GetChildren().size() - 1) {
@@ -34,7 +34,7 @@ AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t
 	permutation = ExpressionHeuristics::GetInitialOrder(table_filters);
 	for (auto &entry : table_filters) {
 		auto &expr_filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "AdaptiveFilter");
-		if (expr_filter.expr->CanThrow() || UnsafeBarrier::Contains(*expr_filter.expr)) {
+		if (expr_filter.expr->CanThrow() || ExpressionBarrier::Contains(*expr_filter.expr)) {
 			// a filter that can throw must keep the order the optimizer put it in
 			disable_permutations = true;
 		}

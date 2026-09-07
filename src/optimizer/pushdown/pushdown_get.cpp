@@ -7,7 +7,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
-#include "duckdb/planner/expression/unsafe_barrier.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
@@ -43,9 +43,9 @@ static void NormalizeColumnRefAliases(unique_ptr<Expression> &expr, const Logica
 	});
 }
 
-void FilterPushdown::PushdownUnsafeFilters(LogicalGet &get, vector<unique_ptr<Filter>> &unsafe_filters) {
-	if (unsafe_filters.empty() || !filters.empty()) {
-		// nothing to push, or one of the other filters remains on top of the scan - in that case the unsafe filters
+void FilterPushdown::PushdownBarrierFilters(LogicalGet &get, vector<unique_ptr<Filter>> &barrier_filters) {
+	if (barrier_filters.empty() || !filters.empty()) {
+		// nothing to push, or one of the other filters remains on top of the scan - in that case the barrier filters
 		// have to stay on top as well, so that they are evaluated after it
 		return;
 	}
@@ -55,8 +55,8 @@ void FilterPushdown::PushdownUnsafeFilters(LogicalGet &get, vector<unique_ptr<Fi
 	if (!table || !table->IsDuckTable()) {
 		return;
 	}
-	for (idx_t i = 0; i < unsafe_filters.size(); i++) {
-		auto &expr = *unsafe_filters[i]->filter;
+	for (idx_t i = 0; i < barrier_filters.size(); i++) {
+		auto &expr = *barrier_filters[i]->filter;
 		if (expr.IsVolatile()) {
 			continue;
 		}
@@ -80,7 +80,7 @@ void FilterPushdown::PushdownUnsafeFilters(LogicalGet &get, vector<unique_ptr<Fi
 		if (combiner.TryPushdownGenericExpression(get, expr) != FilterPushdownResult::PUSHED_DOWN_FULLY) {
 			continue;
 		}
-		unsafe_filters.erase_at(i);
+		barrier_filters.erase_at(i);
 		i--;
 	}
 }
@@ -93,22 +93,22 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		NormalizeColumnRefAliases(filter->filter, get);
 	}
 
-	// hold back the unsafe filters: they may only be pushed into the scan if every other filter ends up in the scan
+	// hold back the barrier filters: they may only be pushed into the scan if every other filter ends up in the scan
 	// as well, since a filter that remains on top of the scan would otherwise run after them
-	vector<unique_ptr<Filter>> unsafe_filters;
+	vector<unique_ptr<Filter>> barrier_filters;
 	for (idx_t i = 0; i < filters.size(); i++) {
-		if (!filters[i]->is_unsafe) {
+		if (!filters[i]->has_barrier) {
 			continue;
 		}
-		unsafe_filters.push_back(std::move(filters[i]));
+		barrier_filters.push_back(std::move(filters[i]));
 		filters.erase_at(i);
 		i--;
 	}
-	auto restore_unsafe_filters = [&]() {
-		for (auto &unsafe_filter : unsafe_filters) {
-			filters.push_back(std::move(unsafe_filter));
+	auto restore_barrier_filters = [&]() {
+		for (auto &barrier_filter : barrier_filters) {
+			filters.push_back(std::move(barrier_filter));
 		}
-		unsafe_filters.clear();
+		barrier_filters.clear();
 	};
 
 	if (get.function.pushdown_complex_filter || get.function.filter_pushdown) {
@@ -134,7 +134,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		get.function.pushdown_complex_filter(optimizer.context, get, get.bind_data.get(), expressions);
 
 		if (expressions.empty()) {
-			restore_unsafe_filters();
+			restore_barrier_filters();
 			return PushFinalFilters(std::move(op));
 		}
 		// re-generate the filters
@@ -148,7 +148,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 
 	if (get.table_filters.HasFilters() || !get.function.filter_pushdown) {
 		// the table function does not support filter pushdown: push a LogicalFilter on top
-		restore_unsafe_filters();
+		restore_barrier_filters();
 		return FinishPushdown(std::move(op));
 	}
 	if (PushFilters() == FilterResult::UNSATISFIABLE) {
@@ -204,8 +204,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		}
 	}
 
-	PushdownUnsafeFilters(get, unsafe_filters);
-	restore_unsafe_filters();
+	PushdownBarrierFilters(get, barrier_filters);
+	restore_barrier_filters();
 
 	//! Now we try to pushdown the remaining filters to perform zonemap checking
 	return FinishPushdown(std::move(op));

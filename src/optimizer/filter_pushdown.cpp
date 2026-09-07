@@ -10,7 +10,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/common/algorithm.hpp"
-#include "duckdb/planner/expression/unsafe_barrier.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 
 namespace duckdb {
 
@@ -79,7 +79,7 @@ FilterPushdown::FilterPushdown(Optimizer &optimizer, bool convert_mark_joins, Pr
       projection_mode(projection_mode) {
 }
 
-bool FilterPushdown::UnsafeFilterCanPassThrough(LogicalOperatorType type) {
+bool FilterPushdown::BarrierCanPassThrough(LogicalOperatorType type) {
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_PROJECTION:
@@ -92,10 +92,10 @@ bool FilterPushdown::UnsafeFilterCanPassThrough(LogicalOperatorType type) {
 	}
 }
 
-vector<unique_ptr<Expression>> FilterPushdown::ExtractUnsafeFilters() {
+vector<unique_ptr<Expression>> FilterPushdown::ExtractBarrierFilters() {
 	vector<unique_ptr<Expression>> result;
 	for (idx_t i = 0; i < filters.size(); i++) {
-		if (!filters[i]->is_unsafe) {
+		if (!filters[i]->has_barrier) {
 			continue;
 		}
 		result.push_back(std::move(filters[i]->filter));
@@ -107,12 +107,12 @@ vector<unique_ptr<Expression>> FilterPushdown::ExtractUnsafeFilters() {
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(!combiner.HasFilters());
-	if (!UnsafeFilterCanPassThrough(op->type)) {
-		// this operator can remove rows - unsafe expressions must be evaluated on top of it instead of below it
-		auto unsafe_expressions = ExtractUnsafeFilters();
-		if (!unsafe_expressions.empty()) {
+	if (!BarrierCanPassThrough(op->type)) {
+		// this operator can remove rows - barred expressions must be evaluated on top of it instead of below it
+		auto barrier_expressions = ExtractBarrierFilters();
+		if (!barrier_expressions.empty()) {
 			auto result = Rewrite(std::move(op));
-			return AddLogicalFilter(std::move(result), std::move(unsafe_expressions));
+			return AddLogicalFilter(std::move(result), std::move(barrier_expressions));
 		}
 	}
 	switch (op->type) {
@@ -278,10 +278,10 @@ unique_ptr<LogicalOperator> FilterPushdown::AddLogicalFilter(unique_ptr<LogicalO
 		// No left expressions, so needn't to add an extra filter operator.
 		return op;
 	}
-	// unsafe expressions are evaluated after every other expression in the filter, so that they never run on rows
+	// barred expressions are evaluated after every other expression in the filter, so that they never run on rows
 	// that one of the other expressions removes
 	std::stable_partition(expressions.begin(), expressions.end(),
-	                      [](const unique_ptr<Expression> &expr) { return !UnsafeBarrier::Contains(*expr); });
+	                      [](const unique_ptr<Expression> &expr) { return !ExpressionBarrier::Contains(*expr); });
 	auto filter = make_uniq<LogicalFilter>();
 	if (op->has_estimated_cardinality) {
 		// set the filter's estimated cardinality as the child op's.
@@ -365,11 +365,11 @@ unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOpe
 void FilterPushdown::Filter::ExtractBindings() {
 	bindings.clear();
 	LogicalJoin::GetExpressionBindings(*filter, bindings);
-	ExtractUnsafe();
+	ExtractBarrier();
 }
 
-void FilterPushdown::Filter::ExtractUnsafe() {
-	is_unsafe = UnsafeBarrier::Contains(*filter);
+void FilterPushdown::Filter::ExtractBarrier() {
+	has_barrier = ExpressionBarrier::Contains(*filter);
 }
 
 } // namespace duckdb

@@ -1,5 +1,5 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/planner/expression/unsafe_barrier.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 
@@ -9,7 +9,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSecureView(unique_ptr<Logica
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_SECURE_VIEW);
 	// filters can be pushed into a secure view, but only if evaluating them on rows that the view does not emit
 	// cannot be observed from the outside. Expressions that can throw an error or have side effects are wrapped in
-	// an unsafe() barrier: those are never pushed past an operator inside the view that removes rows, and are always
+	// a barrier: those are never pushed past an operator inside the view that removes rows, and are always
 	// evaluated after the filters they end up next to.
 	//
 	// freeze the cardinality estimate of the view before anything is pushed into it - otherwise the estimate of the
@@ -21,8 +21,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSecureView(unique_ptr<Logica
 	FilterPushdown child_pushdown(optimizer, convert_mark_joins, projection_mode);
 	for (auto &f : filters) {
 		auto expr = std::move(f->filter);
-		if (UnsafeBarrier::Required(*expr) && !UnsafeBarrier::Contains(*expr)) {
-			expr = UnsafeBarrier::Wrap(std::move(expr));
+		if (ExpressionBarrier::Required(*expr) && !ExpressionBarrier::Contains(*expr)) {
+			expr = ExpressionBarrier::Wrap(std::move(expr));
 		}
 		if (child_pushdown.AddFilter(std::move(expr)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree

@@ -22,10 +22,11 @@
         "type": "scalar_function"
     },
     {
-        "name": "unsafe",
+        "name": "__internal_barrier",
+        "struct": "BarrierFun",
         "parameters": "arg",
-        "description": "Returns arg unchanged, and marks it as unsafe: the expression acts as an optimizer barrier that is never evaluated on rows removed by the operators around it",
-        "example": "unsafe(s::INTEGER = 42)",
+        "description": "Returns arg unchanged, and marks it as an optimizer barrier: the expression is never evaluated on rows removed by the operators around it",
+        "example": "__internal_barrier(s::INTEGER = 42)",
         "type": "scalar_function"
     },
     {

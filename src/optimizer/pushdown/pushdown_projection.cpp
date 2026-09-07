@@ -163,9 +163,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 		bool is_volatile = IsVolatile(proj, *f.filter);
 		bool preserve_computed_expression = projection_mode == ProjectionMode::PRESERVE_COMPUTED_EXPRESSIONS &&
 		                                    ReferencesComputedExpression(proj, *f.filter);
-		if (is_volatile || (f.filter->CanThrow() && !f.is_unsafe)) {
-			// Volatile and throwing expressions cannot move across the projection. Expressions carrying an unsafe()
-			// barrier are the exception: a projection does not remove any rows, so pushing them through it does not
+		if (is_volatile || (f.filter->CanThrow() && !f.has_barrier)) {
+			// Volatile and throwing expressions cannot move across the projection. Expressions carrying a barrier
+			// are the exception: a projection does not remove any rows, so pushing them through it does not
 			// change which rows they are evaluated on.
 			remain_expressions.push_back(std::move(f.filter));
 		} else if (preserve_computed_expression) {

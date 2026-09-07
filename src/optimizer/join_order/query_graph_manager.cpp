@@ -756,7 +756,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				continue;
 			}
 			if (info.must_remain_at_root) {
-				// the filter carries an unsafe() barrier - it is only placed once the full join tree is built
+				// the filter carries a barrier - it is only placed once the full join tree is built
 				continue;
 			}
 			// now check if the filter is a subset of the current relation

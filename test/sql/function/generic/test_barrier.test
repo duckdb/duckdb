@@ -1,23 +1,23 @@
-# name: test/sql/function/generic/test_unsafe.test
-# description: Test the unsafe() optimizer barrier
+# name: test/sql/function/generic/test_barrier.test
+# description: Test the __internal_barrier() optimizer barrier
 # group: [generic]
 
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
-# unsafe() returns its argument unchanged, for any type
+# __internal_barrier() returns its argument unchanged, for any type
 query IIIII
-SELECT unsafe(42), unsafe('hello'), unsafe(NULL), unsafe([1, 2, 3]), unsafe({'a': 1})
+SELECT __internal_barrier(42), __internal_barrier('hello'), __internal_barrier(NULL), __internal_barrier([1, 2, 3]), __internal_barrier({'a': 1})
 ----
 42	hello	NULL	[1, 2, 3]	{'a': 1}
 
 query I
-SELECT typeof(unsafe(42::TINYINT))
+SELECT typeof(__internal_barrier(42::TINYINT))
 ----
 TINYINT
 
 query I
-SELECT unsafe(i) FROM range(3) t(i) ORDER BY 1
+SELECT __internal_barrier(i) FROM range(3) t(i) ORDER BY 1
 ----
 0
 1
@@ -25,7 +25,7 @@ SELECT unsafe(i) FROM range(3) t(i) ORDER BY 1
 
 # errors inside the barrier still propagate
 statement error
-SELECT unsafe(error('boom'))
+SELECT __internal_barrier(error('boom'))
 ----
 <REGEX>:.*boom.*
 
@@ -52,31 +52,31 @@ SELECT sec.s FROM secrets sec JOIN allowed a ON (sec.id = a.id) WHERE sec.s::INT
 
 # with the barrier it is not
 query I
-SELECT sec.s FROM secrets sec JOIN allowed a ON (sec.id = a.id) WHERE unsafe(sec.s::INT = 42)
+SELECT sec.s FROM secrets sec JOIN allowed a ON (sec.id = a.id) WHERE __internal_barrier(sec.s::INT = 42)
 ----
 42
 
 query II
-EXPLAIN SELECT sec.s FROM secrets sec JOIN allowed a ON (sec.id = a.id) WHERE unsafe(sec.s::INT = 42)
+EXPLAIN SELECT sec.s FROM secrets sec JOIN allowed a ON (sec.id = a.id) WHERE __internal_barrier(sec.s::INT = 42)
 ----
-physical_plan	<REGEX>:[\s\S]*FILTER[\s\S]*unsafe[\s\S]*HASH_JOIN[\s\S]*
+physical_plan	<REGEX>:[\s\S]*FILTER[\s\S]*__internal_barrier[\s\S]*HASH_JOIN[\s\S]*
 
 statement ok
 RESET disabled_optimizers
 
 # a barrier is pushed into a table scan, but is always evaluated after the other filters of that scan
 query II
-EXPLAIN SELECT * FROM secrets WHERE unsafe(s::INT = 42) AND id = 2
+EXPLAIN SELECT * FROM secrets WHERE __internal_barrier(s::INT = 42) AND id = 2
 ----
-physical_plan	<REGEX>:[\s\S]*SEQ_SCAN[\s\S]*unsafe[\s\S]*
+physical_plan	<REGEX>:[\s\S]*SEQ_SCAN[\s\S]*__internal_barrier[\s\S]*
 
 query II
-SELECT * FROM secrets WHERE unsafe(s::INT = 42) AND id = 2
+SELECT * FROM secrets WHERE __internal_barrier(s::INT = 42) AND id = 2
 ----
 2	42
 
 query II
-SELECT * FROM secrets WHERE id = 2 AND unsafe(s::INT = 42)
+SELECT * FROM secrets WHERE id = 2 AND __internal_barrier(s::INT = 42)
 ----
 2	42
 
@@ -89,7 +89,7 @@ CREATE SEQUENCE seq
 
 # the LIMIT removes rows, so the barrier stays above it and is evaluated 3 times, not 10
 query I
-SELECT count(*) FROM (SELECT * FROM t LIMIT 3) WHERE unsafe(nextval('seq') >= 0)
+SELECT count(*) FROM (SELECT * FROM t LIMIT 3) WHERE __internal_barrier(nextval('seq') >= 0)
 ----
 3
 
@@ -100,11 +100,11 @@ SELECT currval('seq')
 
 # a barrier passes through a projection - it does not change which rows the expression sees
 query II
-EXPLAIN SELECT * FROM (SELECT i * 2 AS k FROM t) WHERE unsafe(k = 4)
+EXPLAIN SELECT * FROM (SELECT i * 2 AS k FROM t) WHERE __internal_barrier(k = 4)
 ----
-physical_plan	<REGEX>:[\s\S]*SEQ_SCAN[\s\S]*unsafe[\s\S]*
+physical_plan	<REGEX>:[\s\S]*SEQ_SCAN[\s\S]*__internal_barrier[\s\S]*
 
 query I
-SELECT * FROM (SELECT i * 2 AS k FROM t) WHERE unsafe(k = 4)
+SELECT * FROM (SELECT i * 2 AS k FROM t) WHERE __internal_barrier(k = 4)
 ----
 4

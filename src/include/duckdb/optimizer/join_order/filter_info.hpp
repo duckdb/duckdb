@@ -43,7 +43,7 @@ public:
 	bool from_logical_filter = false;
 	//! Logical filters above a LEFT join can depend on NULL-extended rows and must remain filters.
 	bool must_remain_filter = false;
-	//! Filters carrying an unsafe() barrier must not be pushed below any join in the reordered plan - they are only
+	//! Filters carrying a barrier must not be pushed below any join in the reordered plan - they are only
 	//! placed once the entire join tree has been built.
 	bool must_remain_at_root = false;
 	//! Index of the equivalence group for INNER equality/IS NOT DISTINCT FROM join filters.

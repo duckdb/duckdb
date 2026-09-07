@@ -78,7 +78,7 @@ SELECT * FROM secure_view WHERE i = 42
 statement ok
 PRAGMA enable_optimizer
 
-# a filter whose evaluation is observable - it can throw - is wrapped in an unsafe() barrier before it is pushed in
+# a filter whose evaluation is observable - it can throw - is wrapped in an __internal_barrier() barrier before it is pushed in
 query II
 EXPLAIN SELECT * FROM secure_view WHERE s::INT = 42
 ----
@@ -128,7 +128,7 @@ SELECT sec.s FROM secrets sec JOIN allowed a ON (sec.id = a.id) WHERE sec.s::INT
 
 # the same query written with an explicit barrier does not
 query I
-SELECT sec.s FROM secrets sec JOIN allowed a ON (sec.id = a.id) WHERE unsafe(sec.s::INT = 42)
+SELECT sec.s FROM secrets sec JOIN allowed a ON (sec.id = a.id) WHERE __internal_barrier(sec.s::INT = 42)
 ----
 42
 
