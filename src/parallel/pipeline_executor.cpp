@@ -433,10 +433,6 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	return PushFinalize();
 }
 
-bool PipelineExecutor::RemainingSinkChunk() const {
-	return remaining_sink_chunk;
-}
-
 PipelineExecuteResult PipelineExecutor::Execute() {
 	return Execute(NumericLimits<idx_t>::Maximum());
 }

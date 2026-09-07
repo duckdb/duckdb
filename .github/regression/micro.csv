@@ -35,6 +35,7 @@ benchmark/micro/logger/storage/file/log_message_size/small_string.benchmark
 benchmark/micro/filter/choose_correct_filter_function.benchmark
 benchmark/micro/optimizer/topn_window_elimination.benchmark
 benchmark/micro/optimizer/count_not_null_column_prune.benchmark
+benchmark/micro/optimizer/removed_filter_column_prune.benchmark
 benchmark/micro/aggregate/group_two_string_dictionaries.benchmark
 benchmark/micro/functions/nested_macros.benchmark
 benchmark/micro/result_collection/stream_drop.benchmark

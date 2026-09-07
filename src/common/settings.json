@@ -336,11 +336,35 @@
         "default_value": "false"
     },
     {
+        "name": "debug_enable_caching_operators",
+        "description": "Enables caching operators that cache intermediate results",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true",
+        "is_debug": true,
+        "aliases": [
+            "enable_caching_operators"
+        ],
+        "struct": "EnableCachingOperatorsSetting"
+    },
+    {
         "name": "debug_eviction_queue_sleep_micro_seconds",
         "description": "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory",
         "type": "UBIGINT",
         "scope": "global",
         "default_value": "0"
+    },
+    {
+        "name": "debug_force_bitpacking_mode",
+        "description": "DEBUG SETTING: forces a specific bitpacking mode",
+        "type": "ENUM<BitpackingMode>",
+        "scope": "global",
+        "default_value": "AUTO",
+        "is_debug": true,
+        "aliases": [
+            "force_bitpacking_mode"
+        ],
+        "struct": "ForceBitpackingModeSetting"
     },
     {
         "name": "debug_force_commit_failure",
@@ -371,11 +395,47 @@
         "default_value": "false"
     },
     {
+        "name": "debug_force_mbedtls_unsafe",
+        "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true,
+        "is_debug": true,
+        "aliases": [
+            "force_mbedtls_unsafe"
+        ],
+        "struct": "ForceMbedtlsUnsafeSetting"
+    },
+    {
         "name": "debug_force_no_cross_product",
         "description": "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "false"
+    },
+    {
+        "name": "debug_force_update_to_del_and_insert",
+        "description": "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false",
+        "is_debug": true,
+        "aliases": [
+            "force_update_to_del_and_insert"
+        ],
+        "struct": "ForceUpdateToDelAndInsertSetting"
+    },
+    {
+        "name": "debug_force_variant_shredding",
+        "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true,
+        "is_debug": true,
+        "aliases": [
+            "force_variant_shredding"
+        ],
+        "struct": "ForceVariantShredding"
     },
     {
         "name": "debug_order_verification",
@@ -395,6 +455,13 @@
         "description": "DEBUG SETTING: skip checkpointing on commit",
         "type": "BOOLEAN",
         "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_transformer_trampoline_style",
+        "description": "Use the experimental trampoline-style parser transformer",
+        "type": "BOOLEAN",
+        "default_scope": "local",
         "default_value": "false"
     },
     {
@@ -606,13 +673,6 @@
         "default_value": "50"
     },
     {
-        "name": "enable_caching_operators",
-        "description": "Enables caching operators that cache intermediate results",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "true"
-    },
-    {
         "name": "enable_external_access",
         "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",
@@ -760,10 +820,14 @@
     },
     {
         "name": "extension_directory",
-        "description": "Set the directory to store extensions in",
+        "description": "DEPRECATED: Use extension_directories instead",
         "type": "VARCHAR",
         "scope": "global",
-        "default_value": ""
+        "default_value": "",
+        "is_deprecated": true,
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "extension_repository_directory",
@@ -826,13 +890,6 @@
         "default_value": ""
     },
     {
-        "name": "force_bitpacking_mode",
-        "description": "DEBUG SETTING: forces a specific bitpacking mode",
-        "type": "ENUM<BitpackingMode>",
-        "scope": "global",
-        "default_value": "AUTO"
-    },
-    {
         "name": "force_column_metadata_reuse",
         "description": "Force re-use of row group metadata on a column-level when checkpointing on older storage versions 6 and 7. This breaks storage backward-compatibility with older DuckDB versions.",
         "type": "BOOLEAN",
@@ -851,28 +908,6 @@
         "custom_implementation": [
             "set"
         ]
-    },
-    {
-        "name": "force_mbedtls_unsafe",
-        "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
-        "type": "BOOLEAN",
-        "scope": "global",
-        "custom_implementation": true
-    },
-    {
-        "name": "force_update_to_del_and_insert",
-        "description": "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "false"
-    },
-    {
-        "name": "force_variant_shredding",
-        "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
-        "type": "VARCHAR",
-        "scope": "global",
-        "struct": "ForceVariantShredding",
-        "custom_implementation": true
     },
     {
         "name": "geometry_minimum_shredding_size",
@@ -1081,6 +1116,16 @@
         ]
     },
     {
+        "name": "max_streaming_buffer_size",
+        "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Buffered bytes stay under this cap plus at most one chunk: an oversized chunk is only admitted into an empty queue",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "streaming_buffer_size"
+        ]
+    },
+    {
         "name": "max_temp_directory_size",
         "description": "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)",
         "type": "VARCHAR",
@@ -1120,10 +1165,14 @@
     },
     {
         "name": "old_implicit_casting",
-        "description": "Allow implicit casting to/from VARCHAR",
+        "description": "DEPRECATED: Compatibility setting for the pre-0.10 implicit VARCHAR casting behavior; will be removed",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "is_deprecated": true,
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "operator_memory_limit",
@@ -1227,10 +1276,14 @@
     },
     {
         "name": "produce_arrow_string_view",
-        "description": "Whether Arrow strings should be produced by DuckDB in Utf8View format instead of Utf8",
+        "description": "DEPRECATED: Already controlled by enable_arrow_string_view",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "is_deprecated": true,
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "profiling_coverage",
@@ -1241,10 +1294,11 @@
     },
     {
         "name": "profiling_mode",
-        "description": "DEPRECATED: Sets the profiling mode",
+        "description": "DEPRECATED: Use enable_profiling and profiling_coverage instead",
         "type": "VARCHAR",
         "scope": "local",
-        "custom_implementation": true
+        "custom_implementation": true,
+        "is_deprecated": true
     },
     {
         "name": "profiling_output",
@@ -1358,13 +1412,6 @@
         "description": "Serialize on checkpoint with compatibility for a given duckdb version",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true
-    },
-    {
-        "name": "streaming_buffer_size",
-        "description": "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)",
-        "type": "VARCHAR",
-        "scope": "local",
         "custom_implementation": true
     },
     {
