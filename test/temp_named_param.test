@@ -1,0 +1,65 @@
+# name test/temp_named_param.test
+# description: temp test file for named params for scalar, window, and aggregate functions -- to be moved to function test files
+# group: 
+
+# require anonymize
+
+require core_functions # check if this actually works
+
+# -----------------------------------------------------------------------------------------------------------------
+# EXTENSION SCALAR FUNCTIONS 
+# -----------------------------------------------------------------------------------------------------------------
+
+# array_functions.cpp
+
+query I
+SELECT array_cross_product(
+    array2 := array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT),
+    array1 := array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT)
+)
+----
+[1.0, -2.0, 1.0]
+
+query I
+SELECT array_cosine_similarity(
+    array2 := array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), 
+    array1 := array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT)
+)
+----
+0.9925834
+
+query I
+SELECT array_cross_product(
+    array2 := array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), 
+    array1 := array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT)
+)
+----
+[1.0, -2.0, 1.0]
+
+query I
+SELECT array_distance(
+    array2 := array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), 
+    array1 := array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT)
+)
+----
+1.7320508
+
+query I
+SELECT array_inner_product(
+    array2:= array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), 
+    array1:= array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT)
+)
+----
+20.0
+
+query I
+SELECT array_negative_inner_product(
+    array2 := array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), 
+    array1 := array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT)
+)
+----
+-20.0
+
+# -----------------------------------------------------------------------------------------------------------------
+# JSON SCALAR FUNCTIONS
+# -----------------------------------------------------------------------------------------------------------------
