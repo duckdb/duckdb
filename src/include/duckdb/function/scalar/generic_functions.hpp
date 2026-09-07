@@ -45,6 +45,16 @@ struct ErrorFun {
 	static ScalarFunction GetFunction();
 };
 
+struct UnsafeFun {
+	static constexpr const char *Name = "unsafe";
+	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Description = "Returns arg unchanged, and marks it as unsafe: the expression acts as an optimizer barrier that is never evaluated on rows removed by the operators around it";
+	static constexpr const char *Example = "unsafe(s::INTEGER = 42)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CreateSortKeyFun {
 	static constexpr const char *Name = "create_sort_key";
 	static constexpr const char *Parameters = "parameters...";

@@ -9,6 +9,8 @@
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/algorithm.hpp"
+#include "duckdb/planner/expression/unsafe_barrier.hpp"
 
 namespace duckdb {
 
@@ -77,8 +79,42 @@ FilterPushdown::FilterPushdown(Optimizer &optimizer, bool convert_mark_joins, Pr
       projection_mode(projection_mode) {
 }
 
+bool FilterPushdown::UnsafeFilterCanPassThrough(LogicalOperatorType type) {
+	switch (type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		return true;
+	default:
+		return false;
+	}
+}
+
+vector<unique_ptr<Expression>> FilterPushdown::ExtractUnsafeFilters() {
+	vector<unique_ptr<Expression>> result;
+	for (idx_t i = 0; i < filters.size(); i++) {
+		if (!filters[i]->is_unsafe) {
+			continue;
+		}
+		result.push_back(std::move(filters[i]->filter));
+		filters.erase_at(i);
+		i--;
+	}
+	return result;
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(!combiner.HasFilters());
+	if (!UnsafeFilterCanPassThrough(op->type)) {
+		// this operator can remove rows - unsafe expressions must be evaluated on top of it instead of below it
+		auto unsafe_expressions = ExtractUnsafeFilters();
+		if (!unsafe_expressions.empty()) {
+			auto result = Rewrite(std::move(op));
+			return AddLogicalFilter(std::move(result), std::move(unsafe_expressions));
+		}
+	}
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		return PushdownAggregate(std::move(op));
@@ -120,8 +156,7 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 	case LogicalOperatorType::LOGICAL_UNNEST:
 		return PushdownUnnest(std::move(op));
 	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
-		// we can never push filters into a secure view - emit them above the view instead
-		return FinishPushdown(std::move(op));
+		return PushdownSecureView(std::move(op));
 	default:
 		return FinishPushdown(std::move(op));
 	}
@@ -243,6 +278,10 @@ unique_ptr<LogicalOperator> FilterPushdown::AddLogicalFilter(unique_ptr<LogicalO
 		// No left expressions, so needn't to add an extra filter operator.
 		return op;
 	}
+	// unsafe expressions are evaluated after every other expression in the filter, so that they never run on rows
+	// that one of the other expressions removes
+	std::stable_partition(expressions.begin(), expressions.end(),
+	                      [](const unique_ptr<Expression> &expr) { return !UnsafeBarrier::Contains(*expr); });
 	auto filter = make_uniq<LogicalFilter>();
 	if (op->has_estimated_cardinality) {
 		// set the filter's estimated cardinality as the child op's.
@@ -326,6 +365,11 @@ unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOpe
 void FilterPushdown::Filter::ExtractBindings() {
 	bindings.clear();
 	LogicalJoin::GetExpressionBindings(*filter, bindings);
+	ExtractUnsafe();
+}
+
+void FilterPushdown::Filter::ExtractUnsafe() {
+	is_unsafe = UnsafeBarrier::Contains(*filter);
 }
 
 } // namespace duckdb

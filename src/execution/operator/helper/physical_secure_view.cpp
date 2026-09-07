@@ -2,8 +2,9 @@
 
 namespace duckdb {
 
-PhysicalSecureView::PhysicalSecureView(PhysicalPlan &physical_plan, PhysicalOperator &child, string view_name_p)
-    : PhysicalOperator(physical_plan, PhysicalOperatorType::SECURE_VIEW, child.GetTypes(), child.estimated_cardinality),
+PhysicalSecureView::PhysicalSecureView(PhysicalPlan &physical_plan, PhysicalOperator &child, string view_name_p,
+                                       idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::SECURE_VIEW, child.GetTypes(), estimated_cardinality),
       view_name(std::move(view_name_p)) {
 	children.push_back(child);
 }

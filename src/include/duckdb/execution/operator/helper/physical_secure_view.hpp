@@ -19,7 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::SECURE_VIEW;
 
 public:
-	PhysicalSecureView(PhysicalPlan &physical_plan, PhysicalOperator &child, string view_name);
+	PhysicalSecureView(PhysicalPlan &physical_plan, PhysicalOperator &child, string view_name,
+	                   idx_t estimated_cardinality);
 
 	//! The name of the view - used for printing the plan
 	string view_name;

@@ -7,6 +7,8 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/expression/unsafe_barrier.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -41,6 +43,48 @@ static void NormalizeColumnRefAliases(unique_ptr<Expression> &expr, const Logica
 	});
 }
 
+void FilterPushdown::PushdownUnsafeFilters(LogicalGet &get, vector<unique_ptr<Filter>> &unsafe_filters) {
+	if (unsafe_filters.empty() || !filters.empty()) {
+		// nothing to push, or one of the other filters remains on top of the scan - in that case the unsafe filters
+		// have to stay on top as well, so that they are evaluated after it
+		return;
+	}
+	// only push into a table scan we control the filter order of - external scans may evaluate a pushed-down
+	// expression against values (e.g. partition constants) that no surviving row ever has
+	auto table = get.GetTable();
+	if (!table || !table->IsDuckTable()) {
+		return;
+	}
+	for (idx_t i = 0; i < unsafe_filters.size(); i++) {
+		auto &expr = *unsafe_filters[i]->filter;
+		if (expr.IsVolatile()) {
+			continue;
+		}
+		// restrict this to single-column expressions - a multi-column expression is only pushed down partially, and
+		// is then also used for zone map pruning
+		vector<ColumnBinding> bindings;
+		ExtractFilterBindings(expr, bindings);
+		if (bindings.empty()) {
+			continue;
+		}
+		bool single_column = true;
+		for (idx_t binding_idx = 1; binding_idx < bindings.size(); binding_idx++) {
+			if (bindings[binding_idx] != bindings[0]) {
+				single_column = false;
+				break;
+			}
+		}
+		if (!single_column) {
+			continue;
+		}
+		if (combiner.TryPushdownGenericExpression(get, expr) != FilterPushdownResult::PUSHED_DOWN_FULLY) {
+			continue;
+		}
+		unsafe_filters.erase_at(i);
+		i--;
+	}
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op->Cast<LogicalGet>();
@@ -48,6 +92,24 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	for (auto &filter : filters) {
 		NormalizeColumnRefAliases(filter->filter, get);
 	}
+
+	// hold back the unsafe filters: they may only be pushed into the scan if every other filter ends up in the scan
+	// as well, since a filter that remains on top of the scan would otherwise run after them
+	vector<unique_ptr<Filter>> unsafe_filters;
+	for (idx_t i = 0; i < filters.size(); i++) {
+		if (!filters[i]->is_unsafe) {
+			continue;
+		}
+		unsafe_filters.push_back(std::move(filters[i]));
+		filters.erase_at(i);
+		i--;
+	}
+	auto restore_unsafe_filters = [&]() {
+		for (auto &unsafe_filter : unsafe_filters) {
+			filters.push_back(std::move(unsafe_filter));
+		}
+		unsafe_filters.clear();
+	};
 
 	if (get.function.pushdown_complex_filter || get.function.filter_pushdown) {
 		// this scan supports some form of filter push-down
@@ -72,7 +134,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		get.function.pushdown_complex_filter(optimizer.context, get, get.bind_data.get(), expressions);
 
 		if (expressions.empty()) {
-			return op;
+			restore_unsafe_filters();
+			return PushFinalFilters(std::move(op));
 		}
 		// re-generate the filters
 		for (auto &expr : expressions) {
@@ -85,6 +148,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 
 	if (get.table_filters.HasFilters() || !get.function.filter_pushdown) {
 		// the table function does not support filter pushdown: push a LogicalFilter on top
+		restore_unsafe_filters();
 		return FinishPushdown(std::move(op));
 	}
 	if (PushFilters() == FilterResult::UNSATISFIABLE) {
@@ -139,6 +203,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 			i--;
 		}
 	}
+
+	PushdownUnsafeFilters(get, unsafe_filters);
+	restore_unsafe_filters();
 
 	//! Now we try to pushdown the remaining filters to perform zonemap checking
 	return FinishPushdown(std::move(op));

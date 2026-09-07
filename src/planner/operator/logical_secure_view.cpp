@@ -15,6 +15,11 @@ vector<ColumnBinding> LogicalSecureView::GetColumnBindings() {
 }
 
 idx_t LogicalSecureView::EstimateCardinality(ClientContext &context) {
+	if (has_estimated_cardinality) {
+		// the estimate is frozen before filters are pushed into the view - what the optimizer derives from those
+		// filters using the statistics of the view contents must not escape the boundary
+		return estimated_cardinality;
+	}
 	return children[0]->EstimateCardinality(context);
 }
 
