@@ -1,5 +1,5 @@
 # name: test/sql/alter/alter_col/test_set_not_null_after_delete.test
-# description: SET NOT NULL uses deletes and updates from the current transaction
+# description: SET NOT NULL ignores rows deleted by the current transaction
 # group: [alter_col]
 
 statement ok
@@ -29,47 +29,3 @@ statement error
 INSERT INTO t VALUES (NULL);
 ----
 NOT NULL constraint failed: t.i
-
-statement ok
-CREATE TABLE updated(i INTEGER);
-
-statement ok
-INSERT INTO updated VALUES (NULL), (42);
-
-statement ok
-BEGIN TRANSACTION;
-
-statement ok
-UPDATE updated SET i = 7 WHERE i IS NULL;
-
-statement ok
-ALTER TABLE updated ALTER COLUMN i SET NOT NULL;
-
-statement ok
-COMMIT;
-
-query I
-SELECT * FROM updated ORDER BY i;
-----
-7
-42
-
-statement ok
-CREATE TABLE updated_to_null(i INTEGER);
-
-statement ok
-INSERT INTO updated_to_null VALUES (1), (2);
-
-statement ok
-BEGIN TRANSACTION;
-
-statement ok
-UPDATE updated_to_null SET i = NULL WHERE i = 1;
-
-statement error
-ALTER TABLE updated_to_null ALTER COLUMN i SET NOT NULL;
-----
-NOT NULL constraint failed: updated_to_null.i
-
-statement ok
-ROLLBACK;

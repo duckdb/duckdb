@@ -2313,7 +2313,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 	TransactionData constraint_visibility(transaction.transaction_id, transaction_manager.GetLastCommit() + 1);
 	ScanOptions scan_options(constraint_visibility);
 	scan_options.insert_type = InsertedScanType::ALL_ROWS;
-	scan_options.update_type = UpdateScanType::ALLOW_OWN_UPDATES;
+	scan_options.update_type = UpdateScanType::DISALLOW_UPDATES;
 	while (true) {
 		scan_chunk.Reset();
 		state.table_state.Scan(scan_options, scan_chunk, state.segment_lock);

@@ -34,7 +34,6 @@ public:
 public:
 	bool HasUpdates() const;
 	bool HasUncommittedUpdates(idx_t vector_index);
-	bool HasUncommittedUpdates(idx_t vector_index, transaction_t transaction_id);
 	bool HasUpdates(idx_t vector_index) const;
 	bool HasUpdates(idx_t start_row_idx, idx_t end_row_idx);
 
