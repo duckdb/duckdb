@@ -182,7 +182,7 @@ struct MatchState {
 	}
 
 	template <class RESULT, class... ARGS>
-	MatcherResult AllocateParseResult(ARGS &&...args);
+	MatcherResult AllocateParseResult(ARGS &&... args);
 
 	void UpdateMaxTokenIndex() {
 		if (token_iterator.Position() > context.max_token_index) {
@@ -372,7 +372,7 @@ private:
 };
 
 template <class RESULT, class... ARGS>
-MatcherResult MatchState::AllocateParseResult(ARGS &&...args) {
+MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}

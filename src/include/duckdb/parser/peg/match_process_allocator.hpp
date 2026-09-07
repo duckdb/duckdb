@@ -43,7 +43,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	arena_ptr<MatchProcess> Make(ARGS &&...args) {
+	arena_ptr<MatchProcess> Make(ARGS &&... args) {
 		static_assert(std::is_base_of<MatchProcess, T>::value, "Expected a matcher process");
 		auto storage = Allocate(sizeof(T), alignof(T));
 		return arena_ptr<MatchProcess>(new (storage) T(std::forward<ARGS>(args)...));
