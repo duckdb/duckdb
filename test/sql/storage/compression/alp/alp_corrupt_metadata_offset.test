@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alp/alp_corrupt_metadata_offset.test
+# description: An ALP metadata end outside the segment must be rejected
+# group: [alp]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alp_corrupt_metadata_offset.db.gz {TEST_DIR}/alp_corrupt_metadata_offset.db
+
+load {TEST_DIR}/alp_corrupt_metadata_offset.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALP';
+----
+ALP
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALP segment: requested range extends past the end of the segment
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALP segment: requested range extends past the end of the segment

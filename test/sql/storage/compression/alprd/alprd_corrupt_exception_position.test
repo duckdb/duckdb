@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alprd/alprd_corrupt_exception_position.test
+# description: An ALPRD exception position outside the vector must be rejected
+# group: [alprd]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alprd_corrupt_exception_position.db.gz {TEST_DIR}/alprd_corrupt_exception_position.db
+
+load {TEST_DIR}/alprd_corrupt_exception_position.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('two_alp') WHERE compression='ALPRD';
+----
+ALPRD
+
+statement error
+SELECT * FROM two_alp LIMIT 1;
+----
+Data Corruption Error: Corrupted ALPRD segment: exception position 60000 is outside vector size 1024
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT * FROM two_alp LIMIT 1;
+----
+Data Corruption Error: Corrupted ALPRD segment: exception position 60000 is outside vector size 1024

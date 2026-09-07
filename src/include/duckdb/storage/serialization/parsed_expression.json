@@ -589,11 +589,6 @@
     "enum": "TYPE",
     "members": [
       {
-        "name": "qualified_name",
-        "type": "QualifiedName",
-        "serialize_skip": true
-      },
-      {
         "id": 200,
         "name": "catalog",
         "serialize_property": "qualified_name.Catalog()",
@@ -622,7 +617,23 @@
         "name": "children",
         "type": "vector<unique_ptr<ParsedExpression>>",
         "accessor_mut": "GetChildren()"
+      },
+      {
+        "id": 204,
+        "name": "qualified_name",
+        "serialize_property": "qualified_name",
+        "deserialize_property": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_condition": "qualified_name.Path().size() > 3",
+        "deserialize_default": "QualifiedName()",
+        "deserialize_skip_assign": true
       }
+    ],
+    "finalize_deserialization": [
+      "if (!qualified_name.Path().empty()) {",
+      "\tresult->SetQualifiedName(std::move(qualified_name));",
+      "}"
     ],
     "methods": {
       "SetQualifiedName": [

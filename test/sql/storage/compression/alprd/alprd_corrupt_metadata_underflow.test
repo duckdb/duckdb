@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alprd/alprd_corrupt_metadata_underflow.test
+# description: An ALPRD metadata end inside the segment header must be rejected
+# group: [alprd]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alprd_corrupt_metadata_underflow.db.gz {TEST_DIR}/alprd_corrupt_metadata_underflow.db
+
+load {TEST_DIR}/alprd_corrupt_metadata_underflow.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALPRD' LIMIT 1;
+----
+ALPRD
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD segment: metadata ends before the segment header
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD segment: metadata ends before the segment header

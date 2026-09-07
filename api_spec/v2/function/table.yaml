@@ -1,0 +1,1355 @@
+module: table
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  table_function:
+    description: |
+      An owned opaque handle to a custom table function being built. Created with
+      `[[table_function_create_with_connection]]` or `[[table_function_create_with_extension]]`, configured with the
+      setter functions (e.g. `[[table_function_set_name]]`, `[[table_function_set_exec_callback]]`, etc.) and the
+      signature obtained via `[[table_function_get_signature]]`, made available with `[[table_function_register]]`, and
+      destroyed with `[[table_function_destroy]]`.
+
+  table_function_bind_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function during the query preparation "bind"
+      phase. The "bind" callback receives this handle and must use it to declare the columns the function returns;
+      it can also inspect the arguments given to the function, initialize some constant state and hint at the
+      number of rows the scan will produce.
+
+  table_function_init_global_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function during the global state
+      initialization "init global" phase. The "init global" callback receives this handle and can use it to e.g.
+      set up the state shared by every thread scanning the function, and to declare how many threads may scan it.
+
+  table_function_init_local_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function during the local state
+      initialization "init local" phase. The "init local" callback receives this handle and can use it to e.g.
+      set up worker-local state, typically by claiming work from the shared global state.
+
+  table_function_exec_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function during the execution "exec" phase.
+      The "exec" callback receives this handle and can use it to e.g. access the global and local state and write
+      the next batch of rows to the output chunk.
+
+  table_function_progress_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function during the "progress" phase. The
+      "progress" callback receives this handle and can use it to report how far the scan has advanced.
+
+
+  table_function_filter_pushdown_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function during the "filter pushdown" phase of
+      query optimization. The "filter pushdown" callback receives this handle and can use it to inspect the filter
+      predicates the query applies to the function's rows, and to accept the ones it will apply itself.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Callbacks
+#-----------------------------------------------------------------------------------------------------------------------
+callbacks:
+  table_function_bind_callback:
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  table_function_init_global_callback:
+    parameters:
+      info:
+        type: table_function_init_global_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  table_function_init_local_callback:
+    parameters:
+      info:
+        type: table_function_init_local_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  table_function_exec_callback:
+    parameters:
+      info:
+        type: table_function_exec_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  table_function_progress_callback:
+    parameters:
+      info:
+        type: table_function_progress_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  table_function_filter_pushdown_callback:
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_create_with_connection:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Creates a new table function that will be registered on the connection's database.
+
+      The function starts out empty: configure it with the setter functions (e.g. `[[table_function_set_name]]`,
+      `[[table_function_set_exec_callback]]`, etc.) and the signature obtained via
+      `[[table_function_get_signature]]`, then make it available with `[[table_function_register]]`.
+      The caller owns the returned handle and must destroy it with `[[table_function_destroy]]`, also after
+      registration.
+    parameters:
+      connection:
+        type: connection
+        description: The connection to create the function in.
+      function:
+        type: table_function
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created table function. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_create_with_extension:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Creates a new table function that will be registered on the loading extension's database.
+
+      Use this from an extension load callback, where an extension handle is available. The function starts out
+      empty: configure it with the setter functions (e.g. `[[table_function_set_name]]`,
+      `[[table_function_set_exec_callback]]`, etc.) and the signature obtained via
+      `[[table_function_get_signature]]`, then make it available with `[[table_function_register]]`.
+      The caller owns the returned handle and must destroy it with `[[table_function_destroy]]`, also after
+      registration.
+    parameters:
+      extension:
+        type: extension
+        description: The extension to create the function in.
+      function:
+        type: table_function
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created table function. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Properties
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_set_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the name of the table function.
+
+      The name is borrowed and copied. Calling this again replaces the previous name.
+      A name must be set before registration.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the name of.
+      name:
+        type: str
+        indirection: 1
+        description: The name to set. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_get_signature:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Returns the function's signature so it can be configured.
+
+      Add parameters with `[[function_signature_add_parameter]]` and set a variadic tail with
+      `[[function_signature_set_varargs]]`. The signature is modified in place. A table function maps the
+      signature onto the two ways SQL passes arguments to a table function: a parameter without a default value
+      becomes a required positional argument, a parameter with a default value becomes a named argument the
+      caller may omit. The variadic tail extends the positional arguments. A table function declares the columns
+      it returns from its bind callback instead of through a return type, so registration rejects a signature
+      whose return type was set with `[[function_signature_set_return_type]]`.
+    parameters:
+      function:
+        type: table_function
+        kind: IN
+        description: The function to get the signature of.
+      sig:
+        type: function_signature
+        indirection: 1
+        kind: OUT
+        description: The returned signature. Borrowed and valid for the lifetime of the function handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets arbitrary user data on the table function.
+
+      Associates an opaque pointer with the function, retrievable from the callbacks via
+      `[[table_function_bind_get_user_data]]`, `[[table_function_init_global_get_user_data]]`,
+      `[[table_function_exec_get_user_data]]` and their counterparts on the other phases. The opaque handle
+      bundles the pointer with an optional destructor, invoked when the data is no longer needed.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the user data of.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the user data pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_bind_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the bind callback of the table function.
+
+      The bind callback is invoked during query planning for each call site of the function. It must declare the
+      columns the function returns via `[[table_function_bind_add_result_column]]`. It can also inspect the
+      constant argument values and set "bind data" that is shared with all later callbacks. A bind callback must
+      be set before registration.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the bind callback of.
+      callback:
+        type: table_function_bind_callback
+        description: The bind callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_init_global_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the optional global init callback of the table function.
+
+      The global init callback is invoked once per scan, at the start of execution. It can set "global state"
+      shared by every thread scanning the function, and declare how many threads may scan it in parallel via
+      `[[table_function_init_global_set_max_threads]]`.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the global init callback of.
+      callback:
+        type: table_function_init_global_callback
+        description: The global init callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_init_local_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the optional local init callback of the table function.
+
+      The local init callback is invoked once per thread that will scan the function. It can set worker-local
+      "local state", retrievable from the exec callback, typically derived from the shared global state.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the local init callback of.
+      callback:
+        type: table_function_init_local_callback
+        description: The local init callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_exec_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the exec callback of the table function.
+
+      The exec callback implements the function's logic: it is invoked repeatedly during query execution and
+      writes the next batch of rows to the output chunk, until it produces an empty batch to signal the end of
+      the scan. An exec callback must be set before registration.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the exec callback of.
+      callback:
+        type: table_function_exec_callback
+        description: The exec callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_progress_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the optional progress callback of the table function.
+
+      The progress callback is invoked on demand during execution to report how far the scan has advanced, which
+      the engine surfaces as the query's progress. It is invoked concurrently with the exec callback, so it must
+      read the global state in a thread-safe way.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the progress callback of.
+      callback:
+        type: table_function_progress_callback
+        description: The progress callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  table_function_set_projection_pushdown:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets whether the table function supports projection pushdown. Defaults to false.
+
+      With projection pushdown, the engine asks the function for only the columns a query actually uses: the exec
+      callback's output chunk holds one vector per requested column rather than one per column declared in bind,
+      and the global init, local init and exec callbacks can look up which declared column each vector stands for
+      via e.g. `[[table_function_exec_get_column_index]]`. Without it the output chunk always holds every declared
+      column, and the engine drops the unused ones itself.
+    parameters:
+      function:
+        type: table_function
+        description: The function to configure.
+      enable:
+        type: bool
+        description: Whether the function supports projection pushdown.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_filter_pushdown_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the optional filter pushdown callback of the table function.
+
+      The filter pushdown callback is invoked while the query is optimized, after the bind callback and before any
+      init callback, with the filter predicates the query applies to the function's rows. Each predicate is a
+      bound expression the callback can inspect with the `expression` functions; the callback accepts the
+      predicates it will apply itself via `[[table_function_filter_pushdown_accept]]`, typically after
+      recording what they select in the bind data. The engine then stops applying the accepted predicates and
+      keeps applying the rest above the scan, so accepting a predicate is a promise to filter the rows exactly as
+      it would have. The optimizer may invoke the callback more than once for the same query, each time with the
+      predicates not yet accepted; it is not invoked when there are none.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the filter pushdown callback of.
+      callback:
+        type: table_function_filter_pushdown_callback
+        description: The filter pushdown callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Bind Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_bind_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_bind_set_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the function's "bind data" from the bind callback.
+
+      The bind data is stored with the bound call site and retrievable from every later callback. The opaque
+      handle bundles the pointer with an optional destructor, invoked when the bind data is no longer needed,
+      and an optional equality callback used when comparing two bound call sites; without one, pointer equality
+      is used.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_bind_get_arg_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Returns the number of arguments of the call site being bound.
+
+      The arguments are presented in signature order: one for every parameter declared with
+      `[[function_signature_add_parameter]]`, followed by any variadic tail arguments. A parameter the call site
+      omitted is still present, carrying the default value declared for it, so the count only varies with the
+      length of the variadic tail. Valid indices for `[[table_function_bind_get_arg_type]]` and
+      `[[table_function_bind_get_arg_value]]` are [0, count).
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of arguments.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_bind_get_arg_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Retrieves the type of the argument at the given index.
+
+      Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed
+      via `[[logical_type_destroy]]`.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the argument to get the type of.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the argument type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_bind_get_arg_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Retrieves the constant value of the argument at the given index.
+
+      The arguments of a table function are always constants, folded before the bind callback runs, so this
+      never fails for an index in bounds; it does fail when the index is out of bounds. The value may be NULL.
+      The returned value is owned by the caller and must be destroyed via `[[value_destroy]]`.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the argument to get the value of.
+      value:
+        type: value
+        indirection: 1
+        kind: OUT
+        description: Receives the constant value. Owned by the caller; destroy via `[[value_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_bind_add_result_column:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Declares one of the columns the function returns.
+
+      Call this once per column, in order: the columns declared here are the columns of the table the function
+      produces, and the vectors of the output chunk the exec callback fills follow the same order. At least one
+      column must be declared. The type must be a fully defined concrete type; ANY is rejected, as a result
+      column carries data. The name and type are borrowed and copied.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      name:
+        type: identifier
+        description: The name of the column. Borrowed and copied.
+      type:
+        type: logical_type
+        description: The type of the column. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_bind_set_cardinality:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the estimated number of rows the scan will produce.
+
+      The estimate is a hint for the optimizer, not a limit: producing a different number of rows is not an
+      error. Without it, the optimizer falls back on its own defaults.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      cardinality:
+        type: idx
+        description: The estimated number of rows.
+      is_exact:
+        type: bool
+        description: Whether the estimate is exact, which also makes it an upper bound on the row count.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Global Init Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_init_global_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    parameters:
+      info:
+        type: table_function_init_global_info
+        description: The global init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_init_global_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: table_function_init_global_info
+        description: The global init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_init_global_set_global_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the function's "global state" from the global init callback.
+
+      The global state lives for the duration of the scan and is retrievable from the local init, exec and
+      progress callbacks. Every thread scanning the function shares it, so the function must synchronize its own
+      access to it. The opaque handle bundles the pointer with an optional destructor, invoked when the scan is
+      done with the state.
+    parameters:
+      info:
+        type: table_function_init_global_info
+        description: The global init info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the global state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_init_global_set_max_threads:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets how many threads may scan the function in parallel.
+
+      Defaults to 1, a single-threaded scan. The engine creates at most this many local states, and therefore
+      runs at most this many exec callbacks concurrently. It is an upper bound, not a request: the engine may
+      use fewer threads.
+    parameters:
+      info:
+        type: table_function_init_global_info
+        description: The global init info handle.
+      max_threads:
+        type: idx
+        description: The maximum number of threads. Must be at least 1.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  table_function_init_global_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the scan produces.
+
+      With projection pushdown (see `[[table_function_set_projection_pushdown]]`) this is the number of columns the
+      query uses, which is the number of vectors in the exec callback's output chunk; without it, it is the number
+      of columns declared in bind. Valid indices for `[[table_function_init_global_get_column_index]]` are `0` up to
+      (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_init_global_info
+        description: The global init info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns the scan produces.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_init_global_get_column_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns which declared column the scan's column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order: the exec callback fills the output chunk's vector at `index` with that column's data. Without
+      projection pushdown the mapping is the identity. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: table_function_init_global_info
+        description: The global init info handle.
+      index:
+        type: idx
+        description: The index of the column in the scan's output.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Local Init Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_init_local_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    parameters:
+      info:
+        type: table_function_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_init_local_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: table_function_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_init_local_get_global_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      Shared with every other thread scanning the function; access to it must be synchronized by the function.
+    parameters:
+      info:
+        type: table_function_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_init_local_set_local_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the function's worker-local "local state" from the local init callback.
+
+      The local state is associated with the executing thread for the duration of the scan and retrievable from
+      the exec callback via `[[table_function_exec_get_local_state]]`. No other thread observes it, so it needs
+      no synchronization. The opaque handle bundles the pointer with an optional destructor, invoked when the
+      local state is no longer needed.
+    parameters:
+      info:
+        type: table_function_init_local_info
+        description: The local init info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the local state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  table_function_init_local_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the scan produces.
+
+      With projection pushdown (see `[[table_function_set_projection_pushdown]]`) this is the number of columns the
+      query uses, which is the number of vectors in the exec callback's output chunk; without it, it is the number
+      of columns declared in bind. Valid indices for `[[table_function_init_local_get_column_index]]` are `0` up to
+      (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_init_local_info
+        description: The local init info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns the scan produces.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_init_local_get_column_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns which declared column the scan's column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order: the exec callback fills the output chunk's vector at `index` with that column's data. Without
+      projection pushdown the mapping is the identity. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: table_function_init_local_info
+        description: The local init info handle.
+      index:
+        type: idx
+        description: The index of the column in the scan's output.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Exec Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_exec_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    parameters:
+      info:
+        type: table_function_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_exec_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: table_function_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_exec_get_global_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      Shared with every other thread scanning the function; access to it must be synchronized by the function.
+    parameters:
+      info:
+        type: table_function_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_exec_get_local_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the worker-local local state set by the function's local init callback.
+    parameters:
+      info:
+        type: table_function_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the local state pointer for the executing thread, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_exec_get_output_chunk:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Retrieves the output chunk the exec callback must write the next batch of rows into.
+
+      The chunk holds one vector per column declared with `[[table_function_bind_add_result_column]]`, in the
+      same order; reach them with `[[data_chunk_get_vector]]`. The chunk starts out empty on every invocation:
+      write the rows, then declare how many there are with `[[vector_set_size]]` on the first vector, which the
+      engine takes as the batch's row count and propagates to the other vectors. Producing an empty batch signals
+      the end of the scan, after which the callback is not invoked again on that thread. Borrowed; valid only for
+      the duration of the callback.
+    parameters:
+      info:
+        type: table_function_exec_info
+        description: The exec info handle.
+      chunk:
+        type: data_chunk
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed output chunk to write into.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  table_function_exec_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the scan produces.
+
+      With projection pushdown (see `[[table_function_set_projection_pushdown]]`) this is the number of columns the
+      query uses, which is the number of vectors in the exec callback's output chunk; without it, it is the number
+      of columns declared in bind. Valid indices for `[[table_function_exec_get_column_index]]` are `0` up to
+      (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_exec_info
+        description: The exec info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns the scan produces.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_exec_get_column_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns which declared column the scan's column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order: the exec callback fills the output chunk's vector at `index` with that column's data. Without
+      projection pushdown the mapping is the identity. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: table_function_exec_info
+        description: The exec info handle.
+      index:
+        type: idx
+        description: The index of the column in the scan's output.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Progress Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_progress_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    parameters:
+      info:
+        type: table_function_progress_info
+        description: The progress info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_progress_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: table_function_progress_info
+        description: The progress info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_progress_get_global_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      The progress callback runs concurrently with the exec callbacks scanning the function, so it must read the
+      global state in a thread-safe way.
+    parameters:
+      info:
+        type: table_function_progress_info
+        description: The progress info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_progress_set_progress:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Reports how far the scan has advanced.
+
+      A fraction between 0.0 (nothing scanned yet) and 1.0 (done); values outside that range are clamped. A
+      progress callback that returns without calling this reports no progress.
+    parameters:
+      info:
+        type: table_function_progress_info
+        description: The progress info handle.
+      progress:
+        type: f64
+        description: The fraction of the scan that is complete, in [0.0, 1.0].
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Filter Pushdown Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_filter_pushdown_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the user data set via `[[table_function_set_user_data]]`, or null if none was set.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the bind data set via `[[table_function_bind_set_bind_data]]`, or null if none was set.
+
+      This is the same object the init and exec callbacks later receive, so a predicate the callback accepts can be
+      recorded in it for the scan to apply.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_get_filter_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of filter predicates offered to the function.
+
+      The predicates are combined with `AND`: every row the scan produces must satisfy all of them. Valid indices
+      for `[[table_function_filter_pushdown_get_filter]]` and `[[table_function_filter_pushdown_accept]]` are
+      `0` up to (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of predicates.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_get_filter:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the filter predicate at the given index.
+
+      Fails if the index is out of bounds. The predicate is a bound expression evaluating to `BOOLEAN`; inspect it
+      with `[[expression_get_type]]` and the other `expression` functions, and resolve the column references it
+      contains via `[[table_function_filter_pushdown_get_column_index]]`. Borrowed; valid only for the duration of
+      the callback.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      index:
+        type: idx
+        description: The index of the predicate to retrieve.
+      filter:
+        type: expression
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives the borrowed predicate.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_accept:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Accepts the filter predicate at the given index: the function will apply it itself.
+
+      The engine stops applying an accepted predicate, so the scan must produce only rows that satisfy it, or the
+      query returns rows it should not. Predicates left unaccepted are applied by the engine as usual, so a callback
+      that recognizes nothing can simply return. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      index:
+        type: idx
+        description: The index of the predicate to accept.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the predicates can refer to.
+
+      A column reference inside a predicate (`[[expression_column_ref_get_index]]`) indexes the columns the query
+      reads from the function, not the columns declared in bind. Valid indices for
+      `[[table_function_filter_pushdown_get_column_index]]` are `0` up to (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of referable columns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_filter_pushdown_get_column_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Resolves a column reference found in a predicate to the declared column it refers to.
+
+      Takes the index a `EXPRESSION_TYPE_BOUND_COLUMN_REF` node reports and returns the index of the column among
+      the ones declared with `[[table_function_bind_add_result_column]]`, in declaration order. Fails if the index
+      is out of bounds.
+    parameters:
+      info:
+        type: table_function_filter_pushdown_info
+        description: The filter pushdown info handle.
+      index:
+        type: idx
+        description: The column index reported by a column reference node.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Register
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_register:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Registers the table function, making it available for use in SQL queries.
+
+      The function is registered on the target given at creation: the connection's database or the loading
+      extension. Registration requires a name, a bind callback and an exec callback, and rejects a signature
+      that declares a return type, since a table function declares the columns it returns from its bind
+      callback. The caller still owns the handle after registration and must destroy it with
+      `[[table_function_destroy]]`, which does not affect the registered function.
+    parameters:
+      function:
+        type: table_function
+        description: The function to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Destroys the table function, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to
+      prevent double-destruction. Destroying the handle after registration does not affect the registered
+      function.
+    parameters:
+      function:
+        type: table_function
+        description: The function to destroy.
+        indirection: 1
+    return_type: ERROR

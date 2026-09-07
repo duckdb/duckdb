@@ -117,6 +117,7 @@ class StdoutParse:
     last_unfinished_test: str | None
     preferred_assertion: StdoutAssertionFailure | None
     fallback_failure_block: tuple[str | None, list[str]] | None
+    fatal_error_lines: list[str]
     failed_reason_line: str | None
 
 
@@ -602,6 +603,32 @@ def infer_timed_out_test_from_stdout(stdout_lines: list[str], batch):
     return None
 
 
+def extract_fatal_error_lines(stdout_lines: list[str]):
+    for idx, line in enumerate(stdout_lines):
+        if not FATAL_ERROR_PATTERN.match(line):
+            continue
+
+        lines = []
+        for next_line in stdout_lines[idx + 1 :]:
+            stripped = next_line.strip()
+            if PROGRESS_TEST_START_PATTERN.match(stripped):
+                break
+            if stripped.startswith("test cases:") or stripped.startswith("assertions:"):
+                break
+            if stripped.startswith("==============================================================================="):
+                break
+            if stripped.startswith("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"):
+                break
+            lines.append(stripped)
+
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        while lines and not lines[-1].strip():
+            lines.pop()
+        return lines
+    return []
+
+
 def extract_failed_reason_line(stdout_lines: list[str]):
     for idx, line in enumerate(stdout_lines):
         if not FAILED_HEADER_PATTERN.match(line):
@@ -755,6 +782,7 @@ def parse_stdout_failure_info(stdout_lines: list[str]):
         last_unfinished_test=last_unfinished_test,
         preferred_assertion=preferred_assertion,
         fallback_failure_block=fallback_failure_block,
+        fatal_error_lines=extract_fatal_error_lines(stdout_lines),
         failed_reason_line=extract_failed_reason_line(stdout_lines),
     )
 
@@ -948,6 +976,8 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
 
     test_name = stderr_info.test_name
     line_number = stderr_info.line_number
+    if stdout_info.fatal_error_lines and stdout_info.last_started_test:
+        test_name, line_number = retarget_failing_test(stdout_info.last_started_test, test_name, line_number)
     if test_name is None and returncode is not None and returncode < 0:
         test_name = stdout_info.last_unfinished_test or infer_timed_out_test_from_stdout(stdout_lines, batch)
     reproduce_batch = [test_name] if test_name else list(batch)
@@ -983,6 +1013,8 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
     snippet_lines = []
     if stderr_info.query_failure_lines:
         detail_lines.extend(stderr_info.query_failure_lines)
+    elif stdout_info.fatal_error_lines:
+        detail_lines.extend(stdout_info.fatal_error_lines)
 
     preferred_assertion = stdout_info.preferred_assertion
     if preferred_assertion is not None:
@@ -996,6 +1028,10 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             if detail_lines:
                 detail_lines.append("")
             detail_lines.extend(preferred_assertion.detail_lines)
+    if not snippet_lines and test_name is not None and line_number is not None:
+        snippet_lines = render_test_snippet(test_name, line_number)
+    if not detail_lines and stderr_info.failing_summary_block:
+        detail_lines.extend(stderr_info.failing_summary_block)
     if not detail_lines:
         if stdout_info.fallback_failure_block:
             stdout_failure_test_name, stdout_failure_block = stdout_info.fallback_failure_block
@@ -1004,10 +1040,6 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             )
             reproduce_batch = [test_name] if test_name else list(batch)
             detail_lines.extend(stdout_failure_block)
-    if not snippet_lines and test_name is not None and line_number is not None:
-        snippet_lines = render_test_snippet(test_name, line_number)
-    if not detail_lines and stderr_info.failing_summary_block:
-        detail_lines.extend(stderr_info.failing_summary_block)
     if not detail_lines:
         detail_lines.extend(extract_interesting_failure_block(stderr_lines))
     if not detail_lines:

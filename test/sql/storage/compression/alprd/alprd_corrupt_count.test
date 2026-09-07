@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alprd/alprd_corrupt_count.test
+# description: An ALPRD segment count larger than the persisted vector must be rejected
+# group: [alprd]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alprd_corrupt_count.db.gz {TEST_DIR}/alprd_corrupt_count.db
+
+load {TEST_DIR}/alprd_corrupt_count.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALPRD' LIMIT 1;
+----
+ALPRD
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD vector: attempted to read past the end of the segment
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD vector: attempted to read past the end of the segment

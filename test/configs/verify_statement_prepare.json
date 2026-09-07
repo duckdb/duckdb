@@ -18,6 +18,7 @@
       "reason": "Different error message",
       "paths": [
         "test/sql/cast/cast_error_location.test",
+        "test/sql/types/type_constructor_error_location.test",
         "test/sql/types/struct/unnest_struct_mix.test",
         "test/sql/settings/allowed_directories.test",
         "test/sql/function/string/regex_extract_all.test"

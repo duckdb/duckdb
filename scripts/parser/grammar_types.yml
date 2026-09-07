@@ -217,6 +217,7 @@ AlterTableInfo:
   rules:
     - AlterTableOptions
     - AddColumn
+    - DropConstraint
     - DropColumn
     - SetPartitionedBy
     - ResetPartitionedBy
@@ -542,6 +543,7 @@ ColumnRefExpression:
   by_value: true
   rules:
     - NestedColumnName
+    - NestedSchemaTableColumnName
     - CatalogReservedSchemaTableColumnName
     - SchemaReservedTableColumnName
     - TableReservedColumnName

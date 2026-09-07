@@ -83,7 +83,9 @@ else
 	script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 	repository_root="$(cd "$script_dir/.." && pwd)"
 	stage_file "$repository_root/src/include/duckdb.h"
+	stage_file "$repository_root/src/include/duckdb_v2.h"
 	stage_file "$repository_root/src/include/duckdb_extension.h"
+	stage_file "$repository_root/src/include/duckdb_extension_v2.h"
 fi
 
 tar -C "$staging_dir" -czf "$temporary_archive" "${members[@]}"

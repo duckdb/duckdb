@@ -126,6 +126,18 @@ struct AccessModeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ActiveGrammarExtensionsSetting {
+	using RETURN_TYPE = vector<string>;
+	static constexpr const char *Name = "active_grammar_extensions";
+	static constexpr const char *Description = "The grammar extensions used by the parser";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static bool OnLocalSet(ClientContext &context, const Value &input);
+	static bool OnLocalReset(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AllocatorBackgroundThreadsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allocator_background_threads";
@@ -463,16 +475,6 @@ struct CheckpointThresholdSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct ConfigureProfilingSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "configure_profiling";
-	static constexpr const char *Description = "Accepts a JSON enabling custom metrics";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct CurrentDialectSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "current_dialect";
@@ -656,16 +658,6 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct DebugTransformerTrampolineStyleSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "debug_transformer_trampoline_style";
-	static constexpr const char *Description = "Use the experimental trampoline-style parser transformer";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
 struct DebugVerificationModeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "debug_verification_mode";
@@ -794,18 +786,6 @@ struct DefaultCollationSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct DefaultIoModeSetting {
-	using RETURN_TYPE = FileIOMode;
-	static constexpr const char *Name = "default_io_mode";
-	static constexpr const char *Description =
-	    "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "BUFFERED_IO";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
 struct DefaultNullOrderSetting {
 	using RETURN_TYPE = DefaultOrderByNullType;
 	static constexpr const char *Name = "default_null_order";
@@ -860,6 +840,7 @@ struct DelimJoinAsCteSetting {
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DialectCompatibilityModeSetting {
@@ -1043,6 +1024,7 @@ struct EnableObjectCacheSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct EnableOptimisticWriteSetting {
@@ -1141,6 +1123,7 @@ struct ExperimentalMetadataReuseSetting {
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ExplainOutputSetting {
@@ -1266,6 +1249,7 @@ struct ForceColumnMetadataReuseSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ForceCompressionSetting {
@@ -1319,6 +1303,16 @@ struct GeometryMinimumShreddingSize {
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "30000";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct HeapBasedParserSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "heap_based_parser";
+	static constexpr const char *Description = "Use the heap-based PEG parser";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -1479,6 +1473,7 @@ struct LegacyDisableNullTypeSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct LegacyMetricsFormatSetting {
@@ -1490,6 +1485,7 @@ struct LegacyMetricsFormatSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct LockConfigurationSetting {
@@ -1576,6 +1572,18 @@ struct MaxMemorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct MaxStreamingBufferSizeSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "max_streaming_buffer_size";
+	static constexpr const char *Description =
+	    "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Buffered bytes stay under this cap "
+	    "plus at most one chunk: an oversized chunk is only admitted into an empty queue";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct MaxTempDirectorySizeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "max_temp_directory_size";
@@ -1626,6 +1634,7 @@ struct NullOnDivisionByZeroSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct OldImplicitCastingSetting {
@@ -1669,16 +1678,6 @@ struct OrderedAggregateThresholdSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
-struct ParallelizeSequentialSourcesSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "parallelize_sequential_sources";
-	static constexpr const char *Description = "Whether to automatically parallelize sequential sources";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "true";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct PartitionedWriteFlushThresholdSetting {
@@ -1883,8 +1882,8 @@ struct RegexMatchOperatorSemanticsSetting {
 struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";
-	static constexpr const char *Description =
-	    "When a scalar subquery returns multiple rows - return a random row instead of returning an error.";
+	static constexpr const char *Description = "Throw an error when a scalar subquery returns more than one row. When "
+	                                           "disabled, an arbitrary row is returned instead.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
@@ -1979,17 +1978,6 @@ struct StorageCompatibilityVersionSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct StreamingBufferSizeSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "streaming_buffer_size";
-	static constexpr const char *Description =
-	    "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 

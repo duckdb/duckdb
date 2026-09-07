@@ -51,10 +51,6 @@ public:
 	}
 
 public:
-	const PipelineExecutor &GetPipelineExecutor() const;
-	bool TaskBlockedOnResult() const override;
-
-public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 };
 
@@ -167,10 +163,6 @@ public:
 		return external_input_producers;
 	}
 	bool HasExternalInputProducer(const Pipeline &pipeline) const;
-	void SetExternalStreamingResultProducer() {
-		external_streaming_result_producer = true;
-	}
-	bool IsStreamingResultPipeline() const;
 	void SetExternalInputEvent(const shared_ptr<Event> &event);
 	void CompleteExternalInput();
 	bool CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const;
@@ -206,7 +198,7 @@ private:
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	vector<weak_ptr<Pipeline>> parents;
-	//! The dependencies of this pipeline
+	//! The dependencies of this pipeline in other MetaPipelines
 	vector<weak_ptr<Pipeline>> dependencies;
 	//! Pipelines that must be initialized before this pipeline can consume their dataflow output
 	vector<weak_ptr<Pipeline>> dataflow_dependencies;
@@ -217,8 +209,6 @@ private:
 	idx_t base_batch_index = 0;
 	//! How this pipeline receives input chunks
 	PipelineInputMode input_mode = PipelineInputMode::SCHEDULED_SOURCE;
-	//! Whether this pipeline directly feeds a streaming result collector
-	bool external_streaming_result_producer = false;
 	//! Event that represents execution of an externally fed pipeline
 	weak_ptr<Event> external_input_event DUCKDB_GUARDED_BY(external_input_lock);
 	ExternalInputEventState external_input_event_state DUCKDB_GUARDED_BY(external_input_lock) =

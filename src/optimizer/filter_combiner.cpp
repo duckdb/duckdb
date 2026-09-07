@@ -455,8 +455,30 @@ static bool IsDirectNumericColumnComparison(const Expression &expr, const vector
 	       TypeSupportsMultiColumnComparison(right.GetReturnType());
 }
 
+static bool IsMonotoneIntervalColumn(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION || expr.GetReturnType() != LogicalType::INTERVAL) {
+		return false;
+	}
+	const auto &function = expr.Cast<BoundFunctionExpression>();
+	return function.GetChildren().size() == 1 &&
+	       function.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       function.Function().GetStability() == FunctionStability::CONSISTENT &&
+	       IsKnownMonotonic(function.Function().GetArgProperties(0).monotonicity);
+}
+
+static bool IsMonotoneIntervalColumnComparison(const Expression &expr, const vector<ColumnBinding> &bindings) {
+	if (bindings.size() != 2 || bindings[0] == bindings[1] || !BoundComparisonExpression::IsComparison(expr)) {
+		return false;
+	}
+	const auto &comparison = expr.Cast<BoundFunctionExpression>();
+	return SupportedFilterComparison(comparison.GetExpressionType()) &&
+	       IsMonotoneIntervalColumn(BoundComparisonExpression::Left(comparison)) &&
+	       IsMonotoneIntervalColumn(BoundComparisonExpression::Right(comparison));
+}
+
 static bool CanPushdownMultiColumnExpression(const Expression &expr, const vector<ColumnBinding> &bindings) {
-	return IsDirectNumericColumnComparison(expr, bindings) || IsColumnConstantOr(expr);
+	return IsDirectNumericColumnComparison(expr, bindings) || IsMonotoneIntervalColumnComparison(expr, bindings) ||
+	       IsColumnConstantOr(expr);
 }
 
 static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(LogicalGet &get, const Expression &expr,

@@ -268,6 +268,8 @@ enum class GeometryStorageType : uint8_t;
 
 enum class GeometryType : uint8_t;
 
+enum class GrammarChangeType : uint8_t;
+
 enum class GroupByExpressionInfoType : uint8_t;
 
 enum class HLLStorageType : uint8_t;
@@ -466,7 +468,11 @@ enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
 
+enum class ResultLifetime : uint8_t;
+
 enum class ResultModifierType : uint8_t;
+
+enum class ResultOrdering : uint8_t;
 
 enum class RowGroupAppendMode : uint8_t;
 
@@ -992,6 +998,9 @@ template<>
 const char* EnumUtil::ToChars<GeometryType>(GeometryType value);
 
 template<>
+const char* EnumUtil::ToChars<GrammarChangeType>(GrammarChangeType value);
+
+template<>
 const char* EnumUtil::ToChars<GroupByExpressionInfoType>(GroupByExpressionInfoType value);
 
 template<>
@@ -1289,7 +1298,13 @@ template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
 
 template<>
+const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value);
+
+template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
+
+template<>
+const char* EnumUtil::ToChars<ResultOrdering>(ResultOrdering value);
 
 template<>
 const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
@@ -1899,6 +1914,9 @@ template<>
 GeometryType EnumUtil::FromString<GeometryType>(const char *value);
 
 template<>
+GrammarChangeType EnumUtil::FromString<GrammarChangeType>(const char *value);
+
+template<>
 GroupByExpressionInfoType EnumUtil::FromString<GroupByExpressionInfoType>(const char *value);
 
 template<>
@@ -2196,7 +2214,13 @@ template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
 
 template<>
+ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value);
+
+template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
+
+template<>
+ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value);
 
 template<>
 RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
