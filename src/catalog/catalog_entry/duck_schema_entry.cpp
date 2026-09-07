@@ -351,7 +351,7 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 			throw CatalogException::MissingEntry(type, name, string());
 		}
 	}
-		// When adding a FK constraint via ALTER TABLE, notify the PK-side table and register the dependency,
+	// When adding a FK constraint via ALTER TABLE, notify the PK-side table and register the dependency,
 	// mirroring the same logic in CreateTable.
 	// Fast return.
 	if (info.type != AlterType::ALTER_TABLE) {

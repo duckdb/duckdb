@@ -928,7 +928,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
-		// FK has no serialized index data — the index is rebuilt from a table scan.
+	// FK has no serialized index data — the index is rebuilt from a table scan.
 	if (alter_info.IsAddForeignKey()) {
 		if (DeserializeOnly()) {
 			return;
@@ -943,8 +943,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 		auto &qualified_name = table_info.GetQualifiedName();
 		auto index_name = fk.GetName(qualified_name.Name().GetIdentifierName());
 
-		auto &table =
-		    catalog.GetEntry<TableCatalogEntry>(context, qualified_name).Cast<DuckTableEntry>();
+		auto &table = catalog.GetEntry<TableCatalogEntry>(context, qualified_name).Cast<DuckTableEntry>();
 		auto &storage = table.GetStorage();
 
 		vector<LogicalIndex> column_indexes;
@@ -953,8 +952,9 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 			column_indexes.push_back(col.Logical());
 		}
 
-		IndexStorageInfo index_storage_info{Identifier(index_name)};
-		storage.AddIndex(table.GetColumns(), column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info));
+		IndexStorageInfo index_storage_info {Identifier(index_name)};
+		storage.AddIndex(table.GetColumns(), column_indexes, IndexConstraintType::FOREIGN,
+		                 std::move(index_storage_info));
 		return;
 	}
 

@@ -98,6 +98,7 @@ public:
 	bool IsAddPrimaryKey() const;
 	bool IsAddUniqueConstraint() const;
 	bool IsAddForeignKey() const;
+
 protected:
 	explicit AlterInfo(AlterType type);
 

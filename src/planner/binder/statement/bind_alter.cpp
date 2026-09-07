@@ -19,10 +19,10 @@
 
 namespace duckdb {
 
-	unique_ptr<LogicalOperator> DuckCatalog::BindAlterAddForeignKey(Binder &binder, TableCatalogEntry &table_entry,
-                                                           unique_ptr<LogicalOperator> plan,
-                                                           unique_ptr<CreateIndexInfo> create_info,
-                                                           unique_ptr<AlterTableInfo> alter_info) {
+unique_ptr<LogicalOperator> DuckCatalog::BindAlterAddForeignKey(Binder &binder, TableCatalogEntry &table_entry,
+                                                                unique_ptr<LogicalOperator> plan,
+                                                                unique_ptr<CreateIndexInfo> create_info,
+                                                                unique_ptr<AlterTableInfo> alter_info) {
 	// TODO: ZZZ Seems no need this func?
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
 	IndexBinder index_binder(binder, binder.context);
@@ -40,8 +40,8 @@ unique_ptr<LogicalOperator> DuckCatalog::BindAlterAddIndex(Binder &binder, Table
 	                                    std::move(alter_info));
 }
 
-void Binder::BindParsedForeignKeyConstraint(ForeignKeyConstraint& fk, SchemaCatalogEntry &schema, TableCatalogEntry &table)
-{
+void Binder::BindParsedForeignKeyConstraint(ForeignKeyConstraint &fk, SchemaCatalogEntry &schema,
+                                            TableCatalogEntry &table) {
 	// TODO: ZZZ. Fill ForeignKeyConstraint info.
 	// auto &fk = cond->Cast<ForeignKeyConstraint>();
 	if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
@@ -85,8 +85,8 @@ void Binder::BindParsedForeignKeyConstraint(ForeignKeyConstraint& fk, SchemaCata
 		if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
 			auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
 			throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
-					"present on these columns",
-					pk_table_entry_ptr.name, fk_column_names);
+			                      "present on these columns",
+			                      pk_table_entry_ptr.name, fk_column_names);
 		}
 	}
 
@@ -95,7 +95,7 @@ void Binder::BindParsedForeignKeyConstraint(ForeignKeyConstraint& fk, SchemaCata
 	D_ASSERT(fk.info.fk_keys.size() == fk.fk_columns.size());
 }
 BoundStatement Binder::BindAlterAddForeignKey(BoundStatement &result, CatalogEntry &entry,
-                                         unique_ptr<AlterInfo> alter_info) {
+                                              unique_ptr<AlterInfo> alter_info) {
 	// TODO: ZZZ How to bind FK?
 	// Copy from BindAlterAddIndex, modify if needed
 	auto &table_info = alter_info->Cast<AlterTableInfo>();
@@ -114,7 +114,6 @@ BoundStatement Binder::BindAlterAddForeignKey(BoundStatement &result, CatalogEnt
 	BindParsedForeignKeyConstraint(constraint_info.constraint->Cast<ForeignKeyConstraint>(), table.schema, table);
 	auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
 
-
 	// Create the CreateIndexInfo.
 	auto create_index_info = make_uniq<CreateIndexInfo>();
 	create_index_info->table = table_info.GetQualifiedName().Name();
@@ -127,7 +126,8 @@ BoundStatement Binder::BindAlterAddForeignKey(BoundStatement &result, CatalogEnt
 	// It's ForeignKeyInfo --> vector<PhysicalIndex> fk_keys;
 	for (const auto &physical_index : fk.info.fk_keys) {
 		auto &col = column_list.GetColumn(physical_index);
-		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.GetQualifiedName().Name());
+		unique_ptr<ParsedExpression> parsed =
+		    make_uniq<ColumnRefExpression>(col.GetName(), table_info.GetQualifiedName().Name());
 		create_index_info->expressions.push_back(parsed->Copy());
 		create_index_info->parsed_expressions.push_back(parsed->Copy());
 	}
@@ -151,7 +151,7 @@ BoundStatement Binder::BindAlterAddForeignKey(BoundStatement &result, CatalogEnt
 
 	auto alter_table_info = unique_ptr_cast<AlterInfo, AlterTableInfo>(std::move(alter_info));
 	result.plan = table.catalog.BindAlterAddForeignKey(*this, table, std::move(plan), std::move(create_index_info),
-	                                              std::move(alter_table_info));
+	                                                   std::move(alter_table_info));
 	return std::move(result);
 }
 BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry,
@@ -290,13 +290,12 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	if (stmt.info->IsAddPrimaryKey()) {
 		return BindAlterAddIndex(result, *entry, std::move(stmt.info));
 	}
-	
-		if (stmt.info->IsAddForeignKey()) {
+
+	if (stmt.info->IsAddForeignKey()) {
 		return BindAlterAddForeignKey(result, *entry, std::move(stmt.info));
 	}
-		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
-		return result;
-
+	result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
+	return result;
 }
 
 } // namespace duckdb
