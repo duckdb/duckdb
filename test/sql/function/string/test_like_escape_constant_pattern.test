@@ -1,0 +1,317 @@
+# name: test/sql/function/string/test_like_escape_constant_pattern.test
+# description: LIKE / NOT LIKE ... ESCAPE with a constant pattern - exercises the matcher fast path built by LikeEscapeBindFunction
+# group: [string]
+
+statement ok
+CREATE TABLE t(id INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO t VALUES
+    (1, 'a_b'),
+    (2, 'aXb'),
+    (3, 'a%b'),
+    (4, 'a#b'),
+    (5, 'ab'),
+    (6, 'xxa_byy'),
+    (7, NULL),
+    (8, ''),
+    (9, 'a_b_c'),
+    (10, 'A_B');
+
+# A constant pattern is resolved into a matcher at bind time, a column pattern is not. Both must agree, so every
+# pattern below is also run through this single-row table to force the generic per-row matcher.
+statement ok
+CREATE TABLE p(pat VARCHAR);
+
+# === escaped wildcards are literal characters, so the pattern is still a constant string ===
+
+# 'a#_b' is the constant string "a_b"
+query I
+SELECT id FROM t WHERE s LIKE 'a#_b' ESCAPE '#' ORDER BY id
+----
+1
+
+statement ok
+DELETE FROM p; INSERT INTO p VALUES ('a#_b');
+
+query I
+SELECT id FROM t, p WHERE s LIKE pat ESCAPE '#' ORDER BY id
+----
+1
+
+# same, surrounded by wildcards
+query I
+SELECT id FROM t WHERE s LIKE '%a#_b%' ESCAPE '#' ORDER BY id
+----
+1
+6
+9
+
+statement ok
+DELETE FROM p; INSERT INTO p VALUES ('%a#_b%');
+
+query I
+SELECT id FROM t, p WHERE s LIKE pat ESCAPE '#' ORDER BY id
+----
+1
+6
+9
+
+# 'a#%b' is the constant string "a%b"
+query I
+SELECT id FROM t WHERE s LIKE 'a#%b' ESCAPE '#' ORDER BY id
+----
+3
+
+# the escape character escaping itself
+query I
+SELECT id FROM t WHERE s LIKE 'a##b' ESCAPE '#' ORDER BY id
+----
+4
+
+# an escape may also quote an ordinary character
+query I
+SELECT id FROM t WHERE s LIKE 'a#Xb' ESCAPE '#' ORDER BY id
+----
+2
+
+# === an unescaped '_' is a wildcard and keeps using the generic matcher ===
+
+query I
+SELECT id FROM t WHERE s LIKE 'a_b' ESCAPE '#' ORDER BY id
+----
+1
+2
+3
+4
+
+statement ok
+DELETE FROM p; INSERT INTO p VALUES ('a_b');
+
+query I
+SELECT id FROM t, p WHERE s LIKE pat ESCAPE '#' ORDER BY id
+----
+1
+2
+3
+4
+
+# === the escape character may itself be a wildcard character ===
+
+# with ESCAPE '%', '%%' is a literal percent sign
+query I
+SELECT id FROM t WHERE s LIKE 'a%%b' ESCAPE '%' ORDER BY id
+----
+3
+
+statement ok
+DELETE FROM p; INSERT INTO p VALUES ('a%%b');
+
+query I
+SELECT id FROM t, p WHERE s LIKE pat ESCAPE '%' ORDER BY id
+----
+3
+
+# ... and '%_' is a literal underscore
+query I
+SELECT id FROM t WHERE s LIKE 'a%_b' ESCAPE '%' ORDER BY id
+----
+1
+
+# a trailing escaped '%' is a literal percent sign, not a wildcard: it must not match "ab"
+query I
+SELECT id FROM t WHERE s LIKE 'ab%%' ESCAPE '%' ORDER BY id
+----
+
+statement ok
+DELETE FROM p; INSERT INTO p VALUES ('ab%%');
+
+query I
+SELECT id FROM t, p WHERE s LIKE pat ESCAPE '%' ORDER BY id
+----
+
+# with ESCAPE '_', '__' is a literal underscore
+query I
+SELECT id FROM t WHERE s LIKE 'a__b' ESCAPE '_' ORDER BY id
+----
+1
+
+# the same pattern text means different things under different escape characters, so the two must not be conflated
+query TT
+SELECT 'ab' LIKE 'a#b' ESCAPE '#', 'ab' LIKE 'a#b' ESCAPE '@'
+----
+true	false
+
+query TT
+SELECT 'a#b' LIKE 'a#b' ESCAPE '#', 'a#b' LIKE 'a#b' ESCAPE '@'
+----
+false	true
+
+# === NOT LIKE ... ESCAPE ===
+
+query I
+SELECT id FROM t WHERE s NOT LIKE 'a#_b' ESCAPE '#' ORDER BY id
+----
+2
+3
+4
+5
+6
+8
+9
+10
+
+query I
+SELECT id FROM t WHERE s NOT LIKE '%a#_b%' ESCAPE '#' ORDER BY id
+----
+2
+3
+4
+5
+8
+10
+
+# NOT LIKE ... ESCAPE is planned as NOT like_escape(...); not_like_escape is reachable by calling it by name
+query I
+SELECT id FROM t WHERE not_like_escape(s, 'a#_b', '#') ORDER BY id
+----
+2
+3
+4
+5
+6
+8
+9
+10
+
+query TT
+SELECT not_like_escape('a_b', 'a#_b', '#'), not_like_escape('aXb', 'a#_b', '#')
+----
+false	true
+
+# === edge cases ===
+
+# an only-percent pattern has no constant segment to anchor on
+query I
+SELECT id FROM t WHERE s LIKE '%' ESCAPE '#' ORDER BY id
+----
+1
+2
+3
+4
+5
+6
+8
+9
+10
+
+# an empty pattern matches only the empty string
+query I
+SELECT id FROM t WHERE s LIKE '' ESCAPE '#' ORDER BY id
+----
+8
+
+# an empty escape string disables escaping, so '_' goes back to being a wildcard
+query I
+SELECT id FROM t WHERE s LIKE 'a_b' ESCAPE '' ORDER BY id
+----
+1
+2
+3
+4
+
+# ... and the escape character is then matched literally
+query I
+SELECT id FROM t WHERE s LIKE 'a#b' ESCAPE '' ORDER BY id
+----
+4
+
+# a NULL pattern or escape yields NULL, never a match
+query I
+SELECT id FROM t WHERE s LIKE NULL ESCAPE '#' ORDER BY id
+----
+
+query I
+SELECT id FROM t WHERE s LIKE 'a#_b' ESCAPE NULL ORDER BY id
+----
+
+query T
+SELECT 'a_b' LIKE 'a#_b' ESCAPE NULL
+----
+NULL
+
+# a multi-character escape string is rejected
+statement error
+SELECT id FROM t WHERE s LIKE 'a#_b' ESCAPE '##'
+----
+Escape string must be empty or one character
+
+# A dangling escape character is an invalid pattern, so no matcher is built for it. The generic matcher validates
+# the pattern while it walks it, which means the error surfaces once a row gets far enough to reach the trailing
+# escape - a row that mismatches earlier never sees it.
+statement error
+SELECT 'abc' LIKE 'abc#' ESCAPE '#'
+----
+Like pattern must not end with escape character
+
+query T
+SELECT 'xyz' LIKE 'abc#' ESCAPE '#'
+----
+false
+
+# the same holds when the escape character is a wildcard character, where the pattern is fully consumed
+statement error
+SELECT 'ab' LIKE 'ab%' ESCAPE '%'
+----
+Like pattern must not end with escape character
+
+statement error
+SELECT '' LIKE '%' ESCAPE '%'
+----
+Like pattern must not end with escape character
+
+# === a runtime-constant pattern is folded at bind time as well ===
+
+statement ok
+PREPARE prep AS SELECT id FROM t WHERE s LIKE '%' || ? || '%' ESCAPE '#' ORDER BY id
+
+# an escaped underscore is a literal underscore
+query I
+EXECUTE prep('a#_b')
+----
+1
+6
+9
+
+# ... while a bare one is still a wildcard
+query I
+EXECUTE prep('a_b')
+----
+1
+2
+3
+4
+6
+9
+
+query I
+EXECUTE prep('zznotfound')
+----
+
+# === a per-row escape column keeps using the generic ternary path ===
+
+statement ok
+CREATE TABLE esc_t(id INTEGER, s VARCHAR, pat VARCHAR, esc VARCHAR);
+
+statement ok
+INSERT INTO esc_t VALUES
+    (1, 'a_b', 'a#_b', '#'),
+    (2, 'a%b', 'a%%b', '%'),
+    (3, 'aXb', 'a#_b', '#'),
+    (4, 'ab', 'ab%%', '%');
+
+query I
+SELECT id FROM esc_t WHERE s LIKE pat ESCAPE esc ORDER BY id
+----
+1
+2
