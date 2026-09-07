@@ -590,13 +590,8 @@ jobs:
         fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
           make gather-libs
-          zip -r -j static-libs-${{ matrix.config.artifact_suffix }}.zip \
-            src/include/duckdb.h \
-            src/include/duckdb_v2.h \
-            src/include/duckdb_extension.h \
-            src/include/duckdb_extension_v2.h \
-            build/release/libs/
-          assets+=(static-libs-${{ matrix.config.artifact_suffix }}.zip)
+          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/libs/*"
+          assets+=(duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
           make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
@@ -620,8 +615,8 @@ jobs:
     - uses: actions/upload-artifact@v7
       if: ${{ matrix.config.publish_static }}
       with:
-        name: duckdb-static-libs-${{ matrix.config.artifact_suffix }}
-        path: static-libs-${{ matrix.config.artifact_suffix }}.zip
+        path: duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
+        archive: false
 
     - name: ARM64 release tests
       if: ${{ matrix.config.run_arm_tests && !fromJson(needs.prepare.outputs.skip_tests) }}
