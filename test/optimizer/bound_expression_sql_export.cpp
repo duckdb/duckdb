@@ -770,6 +770,86 @@ TEST_CASE("Bound expression SQL export reconstructs structural expression forms"
 	connection.Rollback();
 }
 
+TEST_CASE("Incremental scalar registration preserves live SQL identity", "[bound_expression_sql_export][extension]") {
+	DuckDB source_db;
+	DuckDB target_db;
+	Connection source(source_db);
+	Connection target(target_db);
+	const Identifier name("incremental_sql_identity");
+	auto make_function = [&](const LogicalType &type) {
+		auto function = ScalarFunction(name, {type}, type, ScalarFunction::NopFunction);
+		function.SetCatalogName(Identifier("unowned_catalog"));
+		function.SetSchemaName(Identifier("unowned_schema"));
+		return function;
+	};
+	auto register_functions = [&](DuckDB &db) {
+		ExtensionLoader loader(*db.instance, "incremental_sql_identity_extension");
+		loader.RegisterFunction(make_function(LogicalType::INTEGER));
+		auto initial = loader.GetFunction(name).functions.GetFunctionByOffset(0);
+		loader.AddFunctionOverload(make_function(LogicalType::BIGINT));
+		ScalarFunctionSet additions(name);
+		additions.AddFunction(make_function(LogicalType::SMALLINT));
+		auto renamed = make_function(LogicalType::VARCHAR);
+		renamed.SetName(Identifier("noncanonical_name"));
+		additions.AddFunction(std::move(renamed));
+		loader.AddFunctionOverload(std::move(additions));
+		auto &functions = loader.GetFunction(name).functions;
+		REQUIRE(functions.Size() == 4);
+		REQUIRE(functions.GetFunctionByOffset(0) == initial);
+		idx_t index = 0;
+		for (auto &type : {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::SMALLINT, LogicalType::VARCHAR}) {
+			auto &definition = functions.GetFunctionByOffset(index++);
+			REQUIRE(definition->GetSignature().GetParameter(0).GetType() == type);
+			REQUIRE(definition->GetReturnType() == type);
+			REQUIRE(definition->GetName() == name);
+			REQUIRE(definition->GetCatalogName() == Identifier::SystemCatalog());
+			REQUIRE(definition->GetSchemaName() == Identifier::DefaultSchema());
+		}
+	};
+	register_functions(source_db);
+	register_functions(target_db);
+	source.BeginTransaction();
+	BoundExpressionSQLExportContext context;
+	for (auto &value : {Value::INTEGER(7), Value::BIGINT(8), Value::SMALLINT(9), Value("ten")}) {
+		auto sql =
+		    "SELECT " + name.GetIdentifierName() + "(" + value.ToSQLString() + "::" + value.type().ToString() + ")";
+		auto plan = BindExportQuery(source, sql);
+		auto expression = FindExpression(*plan, [&](const Expression &candidate) {
+			return candidate.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+			       candidate.Cast<BoundFunctionExpression>().Function().GetName() == name;
+		});
+		REQUIRE(expression);
+		auto &function = expression->Cast<BoundFunctionExpression>().Function();
+		REQUIRE(function.GetLogicalArguments() == vector<LogicalType> {value.type()});
+		REQUIRE(function.GetLogicalReturnType() == value.type());
+		REQUIRE(ExpressionExecutor::EvaluateScalar(*source.context, *expression) == value);
+		auto exported = BoundExpressionSQLExporter::Export(*expression, context);
+		REQUIRE(exported.IsValid());
+		REQUIRE(exported.IsSuccess());
+		REQUIRE(exported.GetValue());
+		REQUIRE(exported.GetValue()->Cast<FunctionExpression>().GetQualifiedName() ==
+		        QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), name));
+		plan.reset();
+		auto rebound = target.Query("SELECT " + exported.GetValue()->ToString());
+		REQUIRE_NO_FAIL(*rebound);
+		REQUIRE(rebound->GetTypes() == vector<LogicalType> {value.type()});
+		REQUIRE(rebound->RowCount() == 1);
+		REQUIRE(rebound->GetValue(0, 0) == value);
+	}
+	auto standalone = make_function(LogicalType::INTEGER);
+	standalone.SetCatalogName(Identifier::SystemCatalog());
+	standalone.SetSchemaName(Identifier::DefaultSchema());
+	vector<unique_ptr<Expression>> children;
+	children.push_back(Constant(Value::INTEGER(-7)));
+	auto bound = standalone.Bind(*source.context, std::move(children));
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*source.context, *bound) == Value::INTEGER(-7));
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+	RequireIssue(BoundExpressionSQLExporter::Export(*bound, context),
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+	source.Rollback();
+}
+
 TEST_CASE("SQL export excludes internal types recursively", "[bound_expression_sql_export]") {
 	auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(0));
 	LogicalPlanVerificationPath path;

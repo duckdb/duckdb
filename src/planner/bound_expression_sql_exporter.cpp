@@ -117,6 +117,7 @@ static bool IsSQLRepresentableType(const LogicalType &type) {
 		return false;
 	}
 	static const auto admitted_ids = [] {
+		// SQL export follows AllTypes' value-type coverage, with SQLNULL included and TUPLE excluded.
 		unordered_set<LogicalTypeId> ids {LogicalTypeId::SQLNULL};
 		for (auto &sql_type : LogicalType::AllTypes()) {
 			if (sql_type.id() != LogicalTypeId::TUPLE) {

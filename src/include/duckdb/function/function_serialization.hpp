@@ -197,8 +197,9 @@ public:
 			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
-		// Binary plans retain the physical implementation, not the original logical SQL call.
-		const auto function = *functions.functions.GetFunctionByArguments(context, arguments);
+		const auto definition = functions.functions.GetFunctionByArguments(context, arguments);
+		// Bind by const reference, not shared pointer, so binary plans do not acquire SQL addressability.
+		const auto &function = *definition;
 
 		// Does this function support serializing its bound data?
 		if (!has_serialize) {
