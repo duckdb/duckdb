@@ -235,7 +235,7 @@ optional_idx HTTPTransportManager::GetFileDescriptorLimit() {
 		return optional_idx();
 	}
 	if (limit.rlim_cur >= NumericLimits<idx_t>::Maximum()) {
-		return optional_idx(NumericLimits<idx_t>::Maximum());
+		return optional_idx();
 	}
 	return optional_idx(static_cast<idx_t>(limit.rlim_cur));
 #else
