@@ -397,6 +397,7 @@ public:
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(const ParsedExpression &expr);
 	static QualifiedName StringToQualifiedName(vector<string> input);
+	static QualifiedColumnName StringToQualifiedColumnName(const vector<string> &input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
 	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
 	static unique_ptr<ParsedExpression> TryNegateValue(const ConstantExpression &expr);
@@ -504,6 +505,10 @@ public:
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeAddConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                               TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeAddColumnTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                          TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -3824,6 +3829,20 @@ public:
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeIntoNameValuesTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeOptionalParensNameListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeOptionalParensNameListTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
+	static void InitializeParenthesizedNameListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeParenthesizedNameListTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeBareNameListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeBareNameListTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeIncludeOrExcludeNullsTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                      TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeIncludeOrExcludeNullsTrampoline(PEGTransformer &transformer,
@@ -4945,6 +4964,12 @@ public:
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<AlterTableInfo> TransformAddConstraint(PEGTransformer &transformer,
 	                                                         unique_ptr<Constraint> top_level_constraint);
+	static unique_ptr<TransformResultValue> TransformDropConstraintInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<AlterTableInfo> TransformDropConstraint(PEGTransformer &transformer,
+	                                                          const optional<bool> &if_exists,
+	                                                          const Identifier &identifier,
+	                                                          const optional<bool> &drop_behavior);
 	static unique_ptr<TransformResultValue> TransformAddColumnInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<AlterTableInfo> TransformAddColumn(PEGTransformer &transformer, const bool &has_result,
@@ -7723,7 +7748,17 @@ public:
 	static unique_ptr<TransformResultValue> TransformIntoNameValuesInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static UnpivotNameValues TransformIntoNameValues(PEGTransformer &transformer, const Identifier &col_id_or_string,
-	                                                 const vector<Identifier> &identifier);
+	                                                 const vector<string> &optional_parens_name_list);
+	static unique_ptr<TransformResultValue> TransformOptionalParensNameListInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformParenthesizedNameListInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static vector<string> TransformParenthesizedNameList(PEGTransformer &transformer,
+	                                                     const vector<Identifier> &col_id_or_string);
+	static unique_ptr<TransformResultValue> TransformBareNameListInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static vector<string> TransformBareNameList(PEGTransformer &transformer,
+	                                            const vector<Identifier> &col_id_or_string);
 	static unique_ptr<TransformResultValue> TransformIncludeOrExcludeNullsInternal(PEGTransformer &transformer,
 	                                                                               ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformIncludeNullsInternal(PEGTransformer &transformer,
@@ -7962,7 +7997,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformPivotGroupByListInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static vector<string> TransformPivotGroupByList(PEGTransformer &transformer,
-	                                                const vector<Identifier> &col_id_or_string);
+	                                                const vector<string> &optional_parens_name_list);
 	static unique_ptr<TransformResultValue> TransformTableUnpivotClauseInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformTableUnpivotClause(PEGTransformer &transformer,

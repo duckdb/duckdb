@@ -20,8 +20,8 @@ class ClientContext;
 struct ExternalFileCacheUtil {
 	//! Get the cache validation mode in order of file open info, client context (for client-local settings), or
 	//! database config.
-	static CacheValidationMode GetCacheValidationMode(const OpenFileInfo &info,
-	                                                  optional_ptr<ClientContext> client_context, DatabaseInstance &db);
+	DUCKDB_API static CacheValidationMode
+	GetCacheValidationMode(const OpenFileInfo &info, optional_ptr<ClientContext> client_context, DatabaseInstance &db);
 };
 
 } // namespace duckdb

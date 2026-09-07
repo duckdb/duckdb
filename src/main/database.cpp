@@ -5,6 +5,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/http_util.hpp"
+#include "duckdb/common/http_transport_manager.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
@@ -60,7 +61,7 @@ DBConfig::DBConfig() {
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
-	http_util = make_shared_ptr<HTTPUtil>();
+	http_transport_manager = HTTPTransportManager::Create(make_shared_ptr<HTTPUtil>());
 	callback_manager = make_uniq<ExtensionCallbackManager>();
 }
 
@@ -93,6 +94,7 @@ DatabaseInstance::~DatabaseInstance() {
 	if (db_manager) {
 		db_manager->ResetDatabases();
 	}
+	config.http_transport_manager->Close();
 	// destroy child elements
 	connection_manager.reset();
 	object_cache.reset();
@@ -512,6 +514,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
+	config.http_transport_manager->Initialize(DBConfig::GetSystemMaxThreads(*config.file_system));
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedPath(database_path);
 		config.AddAllowedPath(database_path + string(".wal"));

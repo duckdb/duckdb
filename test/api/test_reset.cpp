@@ -202,7 +202,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "force_variant_shredding",
-	    "streaming_buffer_size",
+	    "max_streaming_buffer_size",
+	    "streaming_buffer_size", // alias of max_streaming_buffer_size
 	    "log_query_path",
 	    "password",
 	    "username",

@@ -68,8 +68,9 @@ void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &option
 	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
 	transaction.SetIsCheckpointTransaction();
 	checkpoint_transaction = &transaction;
-	options.transaction_id = transaction.start_time;
-	transaction_manager.SetActiveCheckpoint(transaction.start_time);
+	options.checkpoint_id = transaction_manager.NextCheckpointId();
+	options.visibility_bound = transaction.view.visibility_bound;
+	transaction_manager.SetActiveCheckpoint(options.checkpoint_id.GetIndex());
 }
 
 void ActiveCheckpointWrapper::Commit() {
@@ -366,7 +367,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &storage = table.GetStorage();
 		auto &table_info = storage.GetDataTableInfo();
 		auto &index_list = table_info->GetIndexes();
-		index_list.MergeCheckpointDeltas(options.transaction_id);
+		index_list.MergeCheckpointDeltas(options.checkpoint_id);
 	}
 	active_checkpoint.Commit();
 }

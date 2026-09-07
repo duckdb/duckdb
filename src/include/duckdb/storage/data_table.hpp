@@ -275,7 +275,7 @@ public:
 	void SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info);
 	void VacuumIndexes();
 	void VerifyIndexBuffers() const;
-	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count);
 	void Destroy();
 
 	Identifier GetTableName() const;

@@ -346,7 +346,7 @@ static bool TypeSupportsConstantFilter(const LogicalType &type) {
 
 static bool TypeSupportsMultiColumnComparison(const LogicalType &type) {
 	auto physical = type.InternalType();
-	return TypeIsNumeric(physical) || physical == PhysicalType::BOOL;
+	return TypeIsNumeric(physical) || physical == PhysicalType::VARCHAR || physical == PhysicalType::BOOL;
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &table_filters,

@@ -540,7 +540,7 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(const Identifier &na
 	return nullptr;
 }
 
-void TableIndexList::MergeCheckpointDeltas(const transaction_t checkpoint_id) const {
+void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) const {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		entry->MergeCheckpointDeltas(checkpoint_id);

@@ -217,6 +217,7 @@ AlterTableInfo:
   rules:
     - AlterTableOptions
     - AddColumn
+    - DropConstraint
     - DropColumn
     - SetPartitionedBy
     - ResetPartitionedBy
@@ -714,6 +715,9 @@ StringList:
     - UnpivotHeader
     - UnpivotHeaderSingle
     - UnpivotHeaderList
+    - OptionalParensNameList
+    - ParenthesizedNameList
+    - BareNameList
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"

@@ -266,7 +266,8 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Constant vector case optimization
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		// member casts can emit non-flat vectors (e.g. a shredded VARIANT) - flatten before marking constant
+		result.FlattenAndSetConstant();
 		if (ConstantVector::IsNull(source)) {
 			ConstantVector::SetNull(result, count_t(count));
 		} else {

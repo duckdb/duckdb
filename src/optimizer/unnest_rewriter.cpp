@@ -454,8 +454,10 @@ bool UnnestRewriter::RewriteInlineCTEDedupCandidate(unique_ptr<LogicalOperator> 
 		return false;
 	}
 
-	// After replacing the CTE refs by the shared domain producer, expressions in the join subtree must read
-	// directly from the producer bindings. The dedup bindings are retargeted to their original delimiter columns.
+	// After replacing the CTE refs by the shared domain producer, expressions in the continuation must
+	// read directly from the producer bindings. Projection pullup can leave projections above a pushed
+	// filter/join; those still reference the domain CTE scan and must be rewritten with the join subtree.
+	// The dedup bindings are retargeted to their original delimiter columns.
 	ColumnBindingReplacer domain_ref_replacer;
 	for (idx_t binding_idx = 0; binding_idx < lhs_bindings.size(); binding_idx++) {
 		domain_ref_replacer.replacement_bindings.emplace_back(
@@ -464,7 +466,7 @@ bool UnnestRewriter::RewriteInlineCTEDedupCandidate(unique_ptr<LogicalOperator> 
 	for (idx_t binding_idx = 0; binding_idx < dedup_bindings.size(); binding_idx++) {
 		domain_ref_replacer.replacement_bindings.emplace_back(dedup_bindings[binding_idx], delim_columns[binding_idx]);
 	}
-	domain_ref_replacer.VisitOperator(topmost_op);
+	domain_ref_replacer.VisitOperator(*domain_cte.children[1]);
 	overwritten_tbl_idx = dedup_bindings[0].table_index;
 	// Inline CTE dedup inputs can contain repeated source columns, e.g. table-in-out UNNEST can project an input
 	// column and carry it again as a delimiter column. The RHS projection path only has the unique delimiter

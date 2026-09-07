@@ -28,6 +28,16 @@ class PipelineBuildStateData;
 class PhysicalCTE;
 
 enum class PipelineInputMode : uint8_t { SCHEDULED_SOURCE, EXTERNAL_INPUT };
+enum class PipelineDependencyType : uint8_t { REQUIRED, OPTIONAL_DEPENDENCY };
+
+//! A dependency of a Pipeline on another Pipeline within the same MetaPipeline
+struct PipelineDependency {
+	PipelineDependency(Pipeline &pipeline_p, PipelineDependencyType type_p);
+
+	weak_ptr<Pipeline> pipeline;
+	PipelineDependencyType type;
+};
+
 enum class ExternalInputEventState : uint8_t {
 	EXTERNAL_INPUT_UNSET,
 	EXTERNAL_INPUT_REGISTERED,
@@ -49,10 +59,6 @@ public:
 	string TaskType() const override {
 		return "PipelineTask";
 	}
-
-public:
-	const PipelineExecutor &GetPipelineExecutor() const;
-	bool TaskBlockedOnResult() const override;
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
@@ -113,7 +119,14 @@ public:
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
 	void AddDataflowDependency(shared_ptr<Pipeline> &pipeline);
+	//! The dependencies of this pipeline on pipelines of other MetaPipelines
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
+	//! The dependencies of this pipeline on pipelines of the same MetaPipeline
+	const vector<PipelineDependency> &GetIntraDependencies() const {
+		return intra_dependencies;
+	}
+	//! All pipelines this pipeline waits on before it can start: 'intra_dependencies' and 'dependencies'
+	vector<shared_ptr<Pipeline>> GetAllDependencies() const;
 	const vector<weak_ptr<Pipeline>> &GetDataflowDependencies() const {
 		return dataflow_dependencies;
 	}
@@ -167,10 +180,6 @@ public:
 		return external_input_producers;
 	}
 	bool HasExternalInputProducer(const Pipeline &pipeline) const;
-	void SetExternalStreamingResultProducer() {
-		external_streaming_result_producer = true;
-	}
-	bool IsStreamingResultPipeline() const;
 	void SetExternalInputEvent(const shared_ptr<Event> &event);
 	void CompleteExternalInput();
 	bool CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const;
@@ -208,6 +217,9 @@ private:
 	vector<weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline in other MetaPipelines
 	vector<weak_ptr<Pipeline>> dependencies;
+	//! The dependencies of this pipeline in the same MetaPipeline (or sibling MetaPipelines in case of recursive
+	//! dependencies)
+	vector<PipelineDependency> intra_dependencies;
 	//! Pipelines that must be initialized before this pipeline can consume their dataflow output
 	vector<weak_ptr<Pipeline>> dataflow_dependencies;
 	//! Pipelines that push input into this pipeline instead of scanning its source
@@ -217,8 +229,6 @@ private:
 	idx_t base_batch_index = 0;
 	//! How this pipeline receives input chunks
 	PipelineInputMode input_mode = PipelineInputMode::SCHEDULED_SOURCE;
-	//! Whether this pipeline directly feeds a streaming result collector
-	bool external_streaming_result_producer = false;
 	//! Event that represents execution of an externally fed pipeline
 	weak_ptr<Event> external_input_event DUCKDB_GUARDED_BY(external_input_lock);
 	ExternalInputEventState external_input_event_state DUCKDB_GUARDED_BY(external_input_lock) =
@@ -235,6 +245,13 @@ private:
 
 private:
 	void RemoveDependency(const shared_ptr<Pipeline> &pipeline);
+	//! Add a dependency on a pipeline within the same MetaPipeline (or sibling MetaPipelines in case of recursive
+	//! dependencies)
+	void AddIntraDependency(Pipeline &dependency, PipelineDependencyType type);
+	//! Remove an optional dependency on the given pipeline, returns whether one was removed
+	bool RemoveOptionalIntraDependency(const Pipeline &dependency);
+	//! Copy all dependencies (within and across MetaPipelines) of 'other'
+	void InheritDependencies(const Pipeline &other);
 	void ClearExternalInput();
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
