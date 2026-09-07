@@ -14,7 +14,8 @@ public:
 
 	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		MatchState repeat_state(state);
-		vector<reference<ParseResult>> results;
+		auto &allocator = state.allocator;
+		auto children_begin = allocator.ChildrenBegin();
 
 		optional_idx start_offset;
 		if (auto current = repeat_state.token_iterator.Current()) {
@@ -28,7 +29,7 @@ public:
 			return MatcherResult::Failure();
 		}
 		if (first_result.HasParseResult()) {
-			results.push_back(*first_result.GetParseResult());
+			allocator.PushChild(*first_result.GetParseResult());
 		}
 
 		// After the first success, the overall result is a success.
@@ -49,12 +50,14 @@ public:
 				break;
 			}
 			if (next_result.HasParseResult()) {
-				results.push_back(*next_result.GetParseResult());
+				allocator.PushChild(*next_result.GetParseResult());
 			}
 		}
 
 		// Return all collected results in a RepeatParseResult.
-		return state.AllocateParseResult<RepeatParseResult>(std::move(results), start_offset);
+		idx_t child_count;
+		auto children = allocator.TakeChildren(children_begin, child_count);
+		return state.AllocateParseResult<RepeatParseResult>(children, child_count, start_offset);
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {

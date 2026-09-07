@@ -36,6 +36,12 @@ void PackratMatchState::StoreResult(const Matcher &matcher, MatchState &state, c
 	state.packrat_cache->Store(matcher, token_index_before.GetIndex(), cache_entry);
 }
 
+MatchStack::~MatchStack() {
+	while (!frames.empty()) {
+		PopFrame();
+	}
+}
+
 MatchStackFrame::MatchStackFrame(match_frame_index_t frame_index_p, const Matcher &matcher_p, MatchState &state_p)
     : frame_index(frame_index_p), matcher(matcher_p), match_state(state_p) {
 }
@@ -117,21 +123,53 @@ MatcherResult MatchStack::ExecuteTerminalMatcher(const Matcher &matcher, MatchSt
 	return result;
 }
 
+data_ptr_t MatchStack::AllocateFrameMemory(idx_t size) {
+	size = AlignValue<idx_t>(size);
+	if (block_index < blocks.size() && block_offset + size > blocks[block_index].GetSize()) {
+		block_index++;
+		block_offset = 0;
+	}
+	if (block_index == blocks.size()) {
+		blocks.push_back(Allocator::DefaultAllocator().Allocate(MaxValue<idx_t>(size, FRAME_BLOCK_SIZE)));
+	}
+	auto memory = blocks[block_index].get() + block_offset;
+	block_offset += size;
+	return memory;
+}
+
+template <class FRAME, class... ARGS>
+void MatchStack::AllocateFrame(ARGS &&... args) {
+	static_assert(sizeof(FRAME) <= FRAME_BLOCK_SIZE, "match frames must fit in a frame block");
+	auto previous_block_index = block_index;
+	auto previous_block_offset = block_offset;
+	auto memory = AllocateFrameMemory(sizeof(FRAME));
+	auto &frame = *new (memory) FRAME(std::forward<ARGS>(args)...);
+	frames.push_back(FrameEntry {frame, previous_block_index, previous_block_offset});
+}
+
+void MatchStack::PopFrame() {
+	auto &entry = frames.back();
+	block_index = entry.block_index;
+	block_offset = entry.block_offset;
+	entry.frame.get().~MatchStackFrame();
+	frames.pop_back();
+}
+
 void MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
 	state.rule = matcher.GetRule();
 	auto frame_index = frames.size();
 	switch (matcher.Type()) {
 	case MatcherType::OPTIONAL:
-		frames.push_back(make_uniq<OptionalMatchStackFrame>(frame_index, matcher.Cast<OptionalMatcher>(), state));
+		AllocateFrame<OptionalMatchStackFrame>(frame_index, matcher.Cast<OptionalMatcher>(), state);
 		break;
 	case MatcherType::CHOICE:
-		frames.push_back(make_uniq<ChoiceMatchStackFrame>(frame_index, matcher.Cast<ChoiceMatcher>(), state));
+		AllocateFrame<ChoiceMatchStackFrame>(frame_index, matcher.Cast<ChoiceMatcher>(), state);
 		break;
 	case MatcherType::LIST:
-		frames.push_back(make_uniq<ListMatchStackFrame>(frame_index, matcher.Cast<ListMatcher>(), state));
+		AllocateFrame<ListMatchStackFrame>(frame_index, matcher.Cast<ListMatcher>(), state);
 		break;
 	case MatcherType::REPEAT:
-		frames.push_back(make_uniq<RepeatMatchStackFrame>(frame_index, matcher.Cast<RepeatMatcher>(), state));
+		AllocateFrame<RepeatMatchStackFrame>(frame_index, matcher.Cast<RepeatMatcher>(), state);
 		break;
 	case MatcherType::KEYWORD:
 	case MatcherType::VARIABLE:
@@ -147,7 +185,7 @@ void MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
 
 void MatchStack::PushChildFrame(MatchStackFrame &parent, const Matcher &matcher, MatchState &state) {
 	D_ASSERT(!frames.empty());
-	D_ASSERT(frames.back()->frame_index == parent.frame_index);
+	D_ASSERT(frames.back().frame.get().frame_index == parent.frame_index);
 	D_ASSERT(!parent.HasChildResult());
 	if (IsTerminalMatcher(matcher)) {
 		parent.SetChildResult(ExecuteTerminalMatcher(matcher, state));
@@ -159,6 +197,10 @@ void MatchStack::PushChildFrame(MatchStackFrame &parent, const Matcher &matcher,
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 	auto &matcher = frame.matcher;
 	auto &state = frame.match_state;
+	if (!matcher.CanStartAt(state)) {
+		frame.SetResult(MatcherResult::Failure());
+		return;
+	}
 	if (!PackratMatchState::IsEnabled(matcher, state)) {
 		return;
 	}
@@ -193,7 +235,7 @@ MatcherResult MatchStack::ExecuteInternal(const Matcher &matcher, MatchState &st
 	}
 	PushFrame(matcher, state);
 	while (!frames.empty()) {
-		auto &frame = *frames.back();
+		auto &frame = frames.back().frame.get();
 		auto frame_count = frames.size();
 		ExecuteFrame(frame);
 		if (!frame.HasResult()) {
@@ -201,11 +243,11 @@ MatcherResult MatchStack::ExecuteInternal(const Matcher &matcher, MatchState &st
 			continue;
 		}
 		auto result = FinalizeFrame(frame);
-		frames.pop_back();
+		PopFrame();
 		if (frames.empty()) {
 			return result;
 		}
-		auto &parent = *frames.back();
+		auto &parent = frames.back().frame.get();
 		parent.SetChildResult(result);
 	}
 	throw InternalException("Matcher stack completed without a result");

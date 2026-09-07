@@ -17,7 +17,9 @@ public:
 	void Execute(MatchStack &stack) override {
 		if (HasChildResult()) {
 			auto child_result = TakeChildResult();
-			D_ASSERT(child_state);
+			if (!child_state) {
+				throw InternalException("Choice frame has a child result but no child state");
+			}
 			if (child_result.IsSuccess()) {
 				match_state.token_iterator.SetPosition(child_state->token_iterator);
 				if (!child_result.HasParseResult()) {
@@ -31,17 +33,21 @@ public:
 			child_index++;
 			child_state.reset();
 		}
+		while (child_index < choice_matcher.matchers.size() &&
+		       !choice_matcher.matchers[child_index].get().CanStartAt(match_state)) {
+			child_index++;
+		}
 		if (child_index >= choice_matcher.matchers.size()) {
 			SetResult(MatcherResult::Failure());
 			return;
 		}
-		child_state = make_uniq<MatchState>(match_state);
+		child_state.emplace(match_state);
 		stack.PushChildFrame(*this, choice_matcher.matchers[child_index].get(), *child_state);
 	}
 
 private:
 	const ChoiceMatcher &choice_matcher;
-	unique_ptr<MatchState> child_state;
+	optional<MatchState> child_state;
 	idx_t child_index = 0;
 	optional_idx start_offset;
 };

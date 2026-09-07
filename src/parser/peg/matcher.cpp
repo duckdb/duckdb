@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
 #include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
@@ -18,44 +19,44 @@
 
 namespace duckdb {
 
-MatcherResult Matcher::MatchParseResult(MatchState &state) const {
-	state.rule = rule;
-	if (state.use_heap_based_parser) {
-		MatchStack stack;
-		return stack.Execute(*this, state);
-	}
-	auto result = MatcherResult::Failure();
-	if (!state.packrat_cache || !IsPackratMemoized() || !GetPackratId().IsValid()) {
-		result = MatchParseResultInternal(state);
-	} else {
-		auto token_index = state.token_iterator.Position();
-		auto cached_result = state.packrat_cache->Lookup(*this, token_index);
-		if (cached_result) {
-			state.token_iterator.SetPosition(cached_result->token_index_after);
-			state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
-			if (cached_result->success) {
-				result = MatcherResult::Success(cached_result->result);
-			}
-		} else {
-			auto max_token_index_before = state.GetMaxTokenIndex();
-			result = MatchParseResultInternal(state);
-			ParserPackratEntry cache_entry;
-			cache_entry.success = result.IsSuccess();
-			cache_entry.token_index_after = state.token_iterator.Position();
-			cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
-			cache_entry.result = result.GetParseResult();
-			state.packrat_cache->Store(*this, token_index, cache_entry);
+MatcherResult Matcher::MatchHeapBased(MatchState &state) const {
+	MatchStack stack;
+	return stack.Execute(*this, state);
+}
+
+MatcherResult Matcher::MatchMemoized(MatchState &state) const {
+	D_ASSERT(IsPackratMemoized() && GetPackratId().IsValid());
+	auto token_index = state.token_iterator.Position();
+	auto cached_result = state.packrat_cache->Lookup(*this, token_index);
+	if (cached_result) {
+		state.token_iterator.SetPosition(cached_result->token_index_after);
+		state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
+		if (cached_result->success) {
+			return MatcherResult::Success(cached_result->result);
 		}
+		return MatcherResult::Failure();
 	}
+	auto max_token_index_before = state.GetMaxTokenIndex();
+	auto result = MatchParseResultInternal(state);
+	ParserPackratEntry cache_entry;
+	cache_entry.success = result.IsSuccess();
+	cache_entry.token_index_after = state.token_iterator.Position();
+	cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
+	cache_entry.result = result.GetParseResult();
+	state.packrat_cache->Store(*this, token_index, cache_entry);
 	return result;
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
-	auto entry = state.added_suggestions.find(*this);
-	if (entry != state.added_suggestions.end()) {
+	if (!state.added_suggestions) {
+		state.added_suggestions = make_uniq<reference_set_t<const Matcher>>();
+	}
+	auto &added_suggestions = *state.added_suggestions;
+	auto entry = added_suggestions.find(*this);
+	if (entry != added_suggestions.end()) {
 		return SuggestionType::MANDATORY;
 	}
-	state.added_suggestions.insert(*this);
+	added_suggestions.insert(*this);
 	return AddSuggestionInternal(state);
 }
 
@@ -77,14 +78,37 @@ void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	auto &result = *matcher;
 	result.packrat_id = optional_idx(matchers.size());
+	result.keyword_table = keyword_table;
+	if (result.Type() == MatcherType::KEYWORD) {
+		auto &keyword_matcher = result.Cast<KeywordMatcher>();
+		keyword_matcher.keyword_id = keyword_table.Register(keyword_matcher.keyword);
+	}
 	matchers.push_back(std::move(matcher));
 	return result;
 }
 
-optional_ptr<ParseResult> ParseResultAllocator::Allocate(unique_ptr<ParseResult> parse_result) {
-	auto result_ptr = parse_result.get();
-	parse_results.push_back(std::move(parse_result));
-	return optional_ptr<ParseResult>(result_ptr);
+ParseResultAllocator::ParseResultAllocator() : arena(Allocator::DefaultAllocator()) {
+}
+
+ParseResultAllocator::~ParseResultAllocator() {
+	for (auto &parse_result : parse_results) {
+		parse_result.get().~ParseResult();
+	}
+}
+
+reference<ParseResult> *ParseResultAllocator::TakeChildren(idx_t begin, idx_t &count) {
+	D_ASSERT(begin <= child_scratch.size());
+	count = child_scratch.size() - begin;
+	if (count == 0) {
+		return nullptr;
+	}
+	auto memory = arena.AllocateAligned(count * sizeof(reference<ParseResult>));
+	auto children = reinterpret_cast<reference<ParseResult> *>(memory);
+	for (idx_t i = 0; i < count; i++) {
+		new (children + i) reference<ParseResult>(child_scratch[begin + i]);
+	}
+	DiscardChildren(begin);
+	return children;
 }
 
 } // namespace duckdb

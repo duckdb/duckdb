@@ -36,6 +36,10 @@ public:
 	Matcher &CreateRootMatcher(const string &root_rule);
 	//! Look up a matcher for a rule that was built by CreateRootMatcher. Throws if the rule has not been built.
 	Matcher &GetMatcher(const string &rule_name);
+	//! Number of packrat-memoized rules, the row width of a ParserPackratCache
+	idx_t PackratSlotCount() const {
+		return packrat_memoized_rules.size();
+	}
 
 private:
 	// Base primitives
@@ -53,6 +57,9 @@ private:
 	virtual unique_ptr<RepeatMatcher> CreateRepeat(Matcher &matcher) const;
 
 	void SetRuleOverrides();
+
+	//! Computes the first set of every matcher, see Matcher::CanStartAt
+	void ComputeFirstSets();
 
 	void AddKeywordOverride(const char *name, KeywordInfo keyword_info);
 	void AddRuleOverride(const char *name, unique_ptr<Matcher> &&matcher_p);
@@ -74,7 +81,8 @@ private:
 	mutable case_insensitive_map_t<reference<KeywordMatcher>> keywords;
 	case_insensitive_map_t<KeywordInfo> keyword_overrides;
 	string_set_t no_suggestion_rules;
-	string_set_t packrat_memoized_rules;
+	//! The packrat-memoized rules, mapped to their dense slot in the packrat cache
+	string_map_t<idx_t> packrat_memoized_rules;
 };
 
 } // namespace duckdb

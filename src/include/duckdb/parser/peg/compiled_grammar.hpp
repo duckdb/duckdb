@@ -32,6 +32,10 @@ public:
 	bool HasGrammarChanges() const {
 		return has_grammar_changes;
 	}
+	//! Number of packrat-memoized matchers, the row width of a ParserPackratCache for this grammar
+	idx_t PackratSlotCount() const {
+		return packrat_slot_count;
+	}
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
@@ -43,6 +47,7 @@ public:
 
 private:
 	MatcherAllocator allocator;
+	idx_t packrat_slot_count = 0;
 	optional_ptr<const Matcher> program_matcher;
 	optional_ptr<const Matcher> top_level_statement_matcher;
 

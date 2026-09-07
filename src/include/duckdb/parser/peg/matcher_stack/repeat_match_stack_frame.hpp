@@ -9,6 +9,7 @@ class RepeatMatchStackFrame : public MatchStackFrame {
 public:
 	RepeatMatchStackFrame(match_frame_index_t frame_index, const RepeatMatcher &matcher, MatchState &state)
 	    : MatchStackFrame(frame_index, matcher, state), repeat_matcher(matcher), repeat_state(state) {
+		children_begin = state.allocator.ChildrenBegin();
 		if (auto current = repeat_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
@@ -19,6 +20,7 @@ public:
 			auto child_result = TakeChildResult();
 			if (!child_result.IsSuccess()) {
 				if (!matched_once) {
+					match_state.allocator.DiscardChildren(children_begin);
 					SetResult(MatcherResult::Failure());
 				} else {
 					SetRepeatResult();
@@ -27,7 +29,7 @@ public:
 			}
 			matched_once = true;
 			if (child_result.HasParseResult()) {
-				results.push_back(*child_result.GetParseResult());
+				match_state.allocator.PushChild(*child_result.GetParseResult());
 			}
 			match_state.token_iterator.SetPosition(repeat_state.token_iterator);
 			auto current = repeat_state.token_iterator.Current();
@@ -42,13 +44,15 @@ public:
 
 private:
 	void SetRepeatResult() {
-		SetResult(match_state.AllocateParseResult<RepeatParseResult>(std::move(results), start_offset));
+		idx_t child_count;
+		auto children = match_state.allocator.TakeChildren(children_begin, child_count);
+		SetResult(match_state.AllocateParseResult<RepeatParseResult>(children, child_count, start_offset));
 	}
 
 private:
 	const RepeatMatcher &repeat_matcher;
 	MatchState repeat_state;
-	vector<reference<ParseResult>> results;
+	idx_t children_begin;
 	bool matched_once = false;
 	optional_idx start_offset;
 };

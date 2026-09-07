@@ -4,34 +4,41 @@
 
 namespace duckdb {
 
-size_t ParserPackratKeyHash::operator()(const ParserPackratKey &key) const {
-	return std::hash<idx_t>()(key.matcher_id) ^ (std::hash<idx_t>()(key.token_index) << 1);
+ParserPackratCache::ParserPackratCache(idx_t start_token_index_p, idx_t slot_count_p)
+    : start_token_index(start_token_index_p), slot_count(slot_count_p) {
 }
-
-ParserPackratCache::ParserPackratCache() = default;
 
 ParserPackratCache::~ParserPackratCache() = default;
 
-optional_ptr<const ParserPackratEntry> ParserPackratCache::Lookup(const Matcher &matcher, idx_t token_index) const {
+idx_t ParserPackratCache::GetEntryIndex(const Matcher &matcher, idx_t token_index) const {
 	D_ASSERT(matcher.IsPackratMemoized());
-	auto packrat_id = matcher.GetPackratId();
-	D_ASSERT(packrat_id.IsValid());
-	auto matcher_id = packrat_id.GetIndex();
-	ParserPackratKey key {matcher_id, token_index};
-	auto entry = entries.find(key);
-	if (entry == entries.end()) {
+	D_ASSERT(matcher.GetPackratSlot() < slot_count);
+	D_ASSERT(token_index >= start_token_index);
+	return (token_index - start_token_index) * slot_count + matcher.GetPackratSlot();
+}
+
+optional_ptr<const ParserPackratEntry> ParserPackratCache::Lookup(const Matcher &matcher, idx_t token_index) const {
+	auto entry_index = GetEntryIndex(matcher, token_index);
+	if (entry_index >= entries.size() || !entries[entry_index].valid) {
 		return nullptr;
 	}
-	return optional_ptr<const ParserPackratEntry>(&entry->second);
+	return optional_ptr<const ParserPackratEntry>(&entries[entry_index]);
 }
 
 void ParserPackratCache::Store(const Matcher &matcher, idx_t token_index, ParserPackratEntry entry) {
-	D_ASSERT(matcher.IsPackratMemoized());
-	auto packrat_id = matcher.GetPackratId();
-	D_ASSERT(packrat_id.IsValid());
-	auto matcher_id = packrat_id.GetIndex();
-	ParserPackratKey key {matcher_id, token_index};
-	entries.insert(make_pair(key, entry));
+	auto entry_index = GetEntryIndex(matcher, token_index);
+	if (entry_index >= entries.size()) {
+		// grow geometrically so that a parse that keeps advancing does not re-allocate at every token
+		auto new_size = MaxValue<idx_t>(entry_index + 1, entries.size() * 2);
+		entries.resize(new_size);
+	}
+	auto &stored = entries[entry_index];
+	if (stored.valid) {
+		// keep the first result that was memoized for this position
+		return;
+	}
+	stored = entry;
+	stored.valid = true;
 }
 
 } // namespace duckdb

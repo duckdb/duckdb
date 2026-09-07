@@ -1805,6 +1805,11 @@ packrat_memoized_rules:
   - ColId
   - ColumnReference
   - FunctionExpression
+  - CatalogQualification
+  - SchemaQualification
+  - ReservedSchemaQualification
+  - TableQualification
+  - ReservedTableQualification
 
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted

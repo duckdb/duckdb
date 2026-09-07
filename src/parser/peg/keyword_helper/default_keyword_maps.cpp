@@ -2,27 +2,34 @@
 
 namespace duckdb {
 
-bool DefaultKeywordMaps::IsKeywordOfCategory(const string &text, PEGKeywordCategory category) const {
-	switch (category) {
-	case PEGKeywordCategory::KEYWORD_RESERVED:
-		return reserved_keyword_map.count(text) != 0;
-	case PEGKeywordCategory::KEYWORD_UNRESERVED:
-		return unreserved_keyword_map.count(text) != 0;
-	case PEGKeywordCategory::KEYWORD_TYPE_FUNC:
-		return typefunc_keyword_map.count(text) != 0;
-	case PEGKeywordCategory::KEYWORD_COL_NAME:
-		return colname_keyword_map.count(text) != 0;
-	case PEGKeywordCategory::KEYWORD_TYPE_NAME:
-		return typename_keyword_map.count(text) != 0;
-	default:
-		return false;
+void DefaultKeywordMaps::AddCategory(const case_insensitive_set_t &keywords, PEGKeywordCategory category) {
+	for (auto &keyword : keywords) {
+		keyword_categories[keyword] |= PEGKeywordHelper::CategoryBit(category);
 	}
 }
 
+void DefaultKeywordMaps::Finalize() {
+	AddCategory(reserved_keyword_map, PEGKeywordCategory::KEYWORD_RESERVED);
+	AddCategory(unreserved_keyword_map, PEGKeywordCategory::KEYWORD_UNRESERVED);
+	AddCategory(typefunc_keyword_map, PEGKeywordCategory::KEYWORD_TYPE_FUNC);
+	AddCategory(colname_keyword_map, PEGKeywordCategory::KEYWORD_COL_NAME);
+	AddCategory(typename_keyword_map, PEGKeywordCategory::KEYWORD_TYPE_NAME);
+}
+
+bool DefaultKeywordMaps::IsKeywordOfCategory(const string &text, PEGKeywordCategory category) const {
+	return (KeywordCategories(text) & PEGKeywordHelper::CategoryBit(category)) != 0;
+}
+
 bool DefaultKeywordMaps::IsKeyword(const string &text) const {
-	return reserved_keyword_map.count(text) != 0 || unreserved_keyword_map.count(text) != 0 ||
-	       colname_keyword_map.count(text) != 0 || typefunc_keyword_map.count(text) != 0 ||
-	       typename_keyword_map.count(text) != 0;
+	return keyword_categories.find(text) != keyword_categories.end();
+}
+
+uint8_t DefaultKeywordMaps::KeywordCategories(const string &text) const {
+	auto entry = keyword_categories.find(text);
+	if (entry == keyword_categories.end()) {
+		return 0;
+	}
+	return entry->second;
 }
 
 vector<ParserKeyword> DefaultKeywordMaps::ToList() const {

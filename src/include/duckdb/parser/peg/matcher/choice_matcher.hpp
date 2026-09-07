@@ -21,6 +21,9 @@ public:
 			start_offset = optional_idx(current->offset);
 		}
 		for (idx_t i = 0; i < matchers.size(); i++) {
+			if (!matchers[i].get().CanStartAt(state)) {
+				continue;
+			}
 			MatchState choice_state(state);
 			auto child_result = matchers[i].get().MatchParseResult(choice_state);
 			if (child_result.IsSuccess()) {

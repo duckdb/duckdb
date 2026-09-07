@@ -15,6 +15,7 @@ public:
 public:
 	bool KeywordCategoryType(const std::string &text, const PEGKeywordCategory type) const override;
 	bool IsKeyword(const string &text) const override;
+	uint8_t KeywordCategories(const string &text) const override;
 	vector<ParserKeyword> KeywordList() const override;
 
 private:

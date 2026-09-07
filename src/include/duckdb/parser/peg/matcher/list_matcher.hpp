@@ -16,7 +16,8 @@ public:
 
 	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		MatchState list_state(state);
-		vector<reference<ParseResult>> results;
+		auto &allocator = state.allocator;
+		auto children_begin = allocator.ChildrenBegin();
 		// when suppress_suggestions is set, we discard any suggestions added by child matchers
 		auto saved_suggestion_size = suppress_suggestions ? list_state.suggestions.size() : 0;
 
@@ -31,27 +32,31 @@ public:
 				auto child_result = child_matcher.get().MatchParseResult(list_state);
 				if (!child_result.IsSuccess()) {
 					DiscardSuggestions(list_state, saved_suggestion_size);
+					allocator.DiscardChildren(children_begin);
 					return MatcherResult::Failure();
 				}
 				if (child_result.HasParseResult()) {
-					results.push_back(*child_result.GetParseResult());
+					allocator.PushChild(*child_result.GetParseResult());
 				}
 				continue;
 			}
 			if (suppress_suggestions) {
 				DiscardSuggestions(list_state, saved_suggestion_size);
+				allocator.DiscardChildren(children_begin);
 				return MatcherResult::Failure();
 			}
 			if (child_matcher.get().AddSuggestion(list_state) == SuggestionType::OPTIONAL) {
 				continue;
 			}
 			state.token_iterator.SetPosition(list_state.token_iterator);
+			allocator.DiscardChildren(children_begin);
 			return MatcherResult::Failure();
 		}
 		state.token_iterator.SetPosition(list_state.token_iterator);
 		DiscardSuggestions(list_state, saved_suggestion_size);
-		// Empty name implies it's a subrule, e.g. 'SET'i (StandardAssignment / SetTimeZone)
-		return state.AllocateParseResult<ListParseResult>(std::move(results), name, start_offset);
+		idx_t child_count;
+		auto children = allocator.TakeChildren(children_begin, child_count);
+		return state.AllocateParseResult<ListParseResult>(children, child_count, start_offset);
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {

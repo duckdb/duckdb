@@ -43,6 +43,9 @@ public:
 	string ToString() const override {
 		return "'" + keyword + "'";
 	}
+	idx_t GetKeywordId() const {
+		return keyword_id;
+	}
 
 private:
 	bool MatchKeyword(MatchState &state) const {
@@ -50,7 +53,8 @@ private:
 		if (!token) {
 			return false;
 		}
-		if (StringUtil::CIEquals(keyword, token->text)) {
+		// literals are interned case-insensitively, so comparing ids is a case-insensitive comparison
+		if (state.token_iterator.CurrentKeywordId(*keyword_table) == keyword_id) {
 			// move to the next token
 			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
@@ -60,8 +64,11 @@ private:
 	}
 
 private:
+	friend class MatcherAllocator;
 	const string keyword;
 	const KeywordInfo info;
+	//! Id of the keyword in the grammar's keyword table, assigned by the MatcherAllocator
+	idx_t keyword_id = DConstants::INVALID_INDEX;
 };
 
 } // namespace duckdb
