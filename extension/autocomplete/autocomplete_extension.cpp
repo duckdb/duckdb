@@ -469,8 +469,9 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	idx_t max_token_index = 0;
 	TokenIterator token_iterator(tokens);
 	auto parser_options = context.GetParserOptions();
-	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY,
-	                 parser_options.identifier_case_mode, parser_options.heap_based_parser);
+	MatchContext match_context(suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY,
+	                           parser_options.identifier_case_mode, parser_options.heap_based_parser);
+	MatchState state(token_iterator, match_context);
 
 	compiled_grammar->ProgramMatcher().MatchParseResult(state);
 
@@ -560,8 +561,9 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	idx_t max_token_index = 0;
 	TokenIterator token_iterator(root_tokens);
 	auto parser_options = context.GetParserOptions();
-	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY,
-	                 parser_options.identifier_case_mode, parser_options.heap_based_parser);
+	MatchContext match_context(suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY,
+	                           parser_options.identifier_case_mode, parser_options.heap_based_parser);
+	MatchState state(token_iterator, match_context);
 
 	auto match_result = compiled_grammar->ProgramMatcher().MatchParseResult(state);
 	// `+ 1` accounts for the EOI sentinel — the matcher walk may report success without

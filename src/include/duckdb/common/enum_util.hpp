@@ -334,11 +334,7 @@ enum class MacroType : uint8_t;
 
 enum class MapInvalidReason : uint8_t;
 
-enum class MatchFrameState : uint8_t;
-
 enum class MatchMode : uint8_t;
-
-enum class MatchResultState : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
@@ -472,7 +468,11 @@ enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
 
+enum class ResultLifetime : uint8_t;
+
 enum class ResultModifierType : uint8_t;
+
+enum class ResultOrdering : uint8_t;
 
 enum class RowGroupAppendMode : uint8_t;
 
@@ -1097,13 +1097,7 @@ template<>
 const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
 
 template<>
-const char* EnumUtil::ToChars<MatchFrameState>(MatchFrameState value);
-
-template<>
 const char* EnumUtil::ToChars<MatchMode>(MatchMode value);
-
-template<>
-const char* EnumUtil::ToChars<MatchResultState>(MatchResultState value);
 
 template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
@@ -1304,7 +1298,13 @@ template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
 
 template<>
+const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value);
+
+template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
+
+template<>
+const char* EnumUtil::ToChars<ResultOrdering>(ResultOrdering value);
 
 template<>
 const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
@@ -2013,13 +2013,7 @@ template<>
 MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
 
 template<>
-MatchFrameState EnumUtil::FromString<MatchFrameState>(const char *value);
-
-template<>
 MatchMode EnumUtil::FromString<MatchMode>(const char *value);
-
-template<>
-MatchResultState EnumUtil::FromString<MatchResultState>(const char *value);
 
 template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
@@ -2220,7 +2214,13 @@ template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
 
 template<>
+ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value);
+
+template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
+
+template<>
+ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value);
 
 template<>
 RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);

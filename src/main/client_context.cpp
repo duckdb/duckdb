@@ -408,6 +408,14 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	auto &scheduler = TaskScheduler::GetScheduler(*this);
 	scheduler.RelaunchThreads();
 
+	if (result && result->GetResultType() == QueryResultType::STREAM_RESULT) {
+		// Record the streaming buffer peak while the profiler is still running
+		auto &stream_result = static_cast<StreamQueryResult &>(*result);
+		if (stream_result.HasBufferedData()) {
+			QueryProfiler::Get(*this).SetStreamingPeakBufferSize(stream_result.GetBufferedData().PeakBufferedBytes());
+		}
+	}
+
 	optional_ptr<ErrorData> passed_error = nullptr;
 	if (result && result->HasError()) {
 		passed_error = result->GetErrorObject();
@@ -444,10 +452,8 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	D_ASSERT(active_query->IsOpenResult(pending));
 	D_ASSERT(active_query->prepared);
 	auto &executor = GetExecutor();
-	auto &prepared = *active_query->prepared;
-	bool create_stream_result =
-	    prepared.properties.output_type == QueryResultOutputType::ALLOW_STREAMING && pending.allow_stream_result;
-	const bool keep_result_open = create_stream_result || executor.HasStreamingResultCollector();
+	// A streaming request always plans a streaming sink, so the collector alone decides
+	const bool keep_result_open = executor.HasStreamingResultCollector();
 	unique_ptr<QueryResult> result;
 	D_ASSERT(executor.HasResultCollector());
 	// we have a result collector - fetch the result directly from the result collector
