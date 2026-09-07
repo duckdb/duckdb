@@ -19,6 +19,8 @@ TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding"
 	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth=4"));
 	REQUIRE_NO_FAIL(con.Query("SET enable_progress_bar=true"));
 	REQUIRE_NO_FAIL(con.Query("SET enable_progress_bar_print=false"));
+	// the default streaming buffer holds the whole table, so a fetch would drain the scan before we look
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='64KB'"));
 
 	// after one chunk read-ahead has claimed four row groups, only the first of them is being decoded
 	auto stream = con.SendQuery("SELECT i FROM integers");
