@@ -220,10 +220,6 @@ public:
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
-	bool TaskBlockedOnResult() const override {
-		return pipeline.IsStreamingResultPipeline() && pipeline_executor.RemainingSinkChunk();
-	}
-
 private:
 	// Keep partial execution reasonably coarse so blocked pipelines make progress without creating tiny tasks.
 	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;

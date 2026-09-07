@@ -1,8 +1,4 @@
 #include "duckdb/parser/peg/matcher_stack.hpp"
-#include "duckdb/parser/peg/matcher_stack/choice_match_stack_frame.hpp"
-#include "duckdb/parser/peg/matcher_stack/list_match_stack_frame.hpp"
-#include "duckdb/parser/peg/matcher_stack/optional_match_stack_frame.hpp"
-#include "duckdb/parser/peg/matcher_stack/repeat_match_stack_frame.hpp"
 
 namespace duckdb {
 
@@ -17,16 +13,8 @@ MatchStack::~MatchStack() {
 }
 
 idx_t MatchStack::FrameSlotSize() {
-	static_assert(alignof(OptionalMatchStackFrame) <= alignof(idx_t), "Optional matcher frame alignment is too large");
-	static_assert(alignof(ChoiceMatchStackFrame) <= alignof(idx_t), "Choice matcher frame alignment is too large");
-	static_assert(alignof(ListMatchStackFrame) <= alignof(idx_t), "List matcher frame alignment is too large");
-	static_assert(alignof(RepeatMatchStackFrame) <= alignof(idx_t), "Repeat matcher frame alignment is too large");
-
-	idx_t result = sizeof(OptionalMatchStackFrame);
-	result = MaxValue<idx_t>(result, sizeof(ChoiceMatchStackFrame));
-	result = MaxValue<idx_t>(result, sizeof(ListMatchStackFrame));
-	result = MaxValue<idx_t>(result, sizeof(RepeatMatchStackFrame));
-	return AlignValue<idx_t>(result);
+	static_assert(alignof(MatchStackFrame) <= alignof(idx_t), "Matcher frame alignment is too large");
+	return AlignValue<idx_t>(sizeof(MatchStackFrame));
 }
 
 idx_t MatchStack::FrameSegmentSize() {
@@ -62,13 +50,6 @@ void MatchStack::SetActiveFrameSegment(idx_t segment_index) {
 	active_frame_segment_index = segment_index;
 }
 
-data_ptr_t MatchStack::AllocateFrameSlot(idx_t size) {
-	if (size > FrameSlotSize()) {
-		return frame_allocator.AllocateAligned(size);
-	}
-	return AllocateFrameSlot();
-}
-
 data_ptr_t MatchStack::AllocateFrameSlot() {
 	auto frame_index = frames.size();
 	auto segment_index = frame_index / FRAME_SEGMENT_CAPACITY;
@@ -81,9 +62,9 @@ data_ptr_t MatchStack::AllocateFrameSlot() {
 
 void MatchStack::DestroyTopFrame() {
 	D_ASSERT(!frames.empty());
-	auto frame = frames.back();
+	auto &frame = frames.back().get();
 	frames.pop_back();
-	frame->~MatchStackFrame();
+	frame.~MatchStackFrame();
 }
 
 optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
@@ -116,172 +97,93 @@ void PackratMatchState::StoreResult(const Matcher &matcher, MatchState &state, c
 	state.context.packrat_cache->Store(matcher, token_index_before.GetIndex(), cache_entry);
 }
 
-MatchStackFrame::MatchStackFrame(match_frame_index_t frame_index_p, const Matcher &matcher_p, MatchState &state_p)
-    : frame_index(frame_index_p), matcher(matcher_p), match_state(state_p) {
+MatchStackFrame::MatchStackFrame(MatchInput input) : matcher(input.matcher), match_state(input.state) {
 }
 
-void MatchStackFrame::SetResult(const MatcherResult &result) {
-	D_ASSERT(result_state == MatchResultState::NONE);
-	result_state = result.IsSuccess() ? MatchResultState::SUCCESS : MatchResultState::FAILURE;
-	parse_result = result.GetParseResult();
+bool MatchStackFrame::IsInitialized() const {
+	return process || result;
 }
 
-bool MatchStackFrame::HasResult() const {
-	return result_state != MatchResultState::NONE;
-}
-
-MatcherResult MatchStackFrame::GetResult() const {
-	D_ASSERT(HasResult());
-	if (result_state != MatchResultState::SUCCESS) {
-		return MatcherResult::Failure();
-	}
-	return MatcherResult::Success(parse_result);
-}
-
-void MatchStackFrame::SetChildResult(const MatcherResult &result) {
-	D_ASSERT(child_result_state == MatchResultState::NONE);
-	child_result_state = result.IsSuccess() ? MatchResultState::SUCCESS : MatchResultState::FAILURE;
-	child_parse_result = result.GetParseResult();
-}
-
-bool MatchStackFrame::HasChildResult() const {
-	return child_result_state != MatchResultState::NONE;
-}
-
-MatcherResult MatchStackFrame::TakeChildResult() {
-	D_ASSERT(HasChildResult());
-	auto result_state = child_result_state;
-	auto parse_result = child_parse_result;
-	child_result_state = MatchResultState::NONE;
-	child_parse_result = nullptr;
-	if (result_state != MatchResultState::SUCCESS) {
-		return MatcherResult::Failure();
-	}
-	return MatcherResult::Success(parse_result);
-}
-
-bool MatchStack::IsTerminalMatcher(const Matcher &matcher) {
-	switch (matcher.Type()) {
-	case MatcherType::KEYWORD:
-	case MatcherType::VARIABLE:
-	case MatcherType::STRING_LITERAL:
-	case MatcherType::NUMBER_LITERAL:
-	case MatcherType::OPERATOR:
-	case MatcherType::END_OF_INPUT:
-		return true;
-	case MatcherType::OPTIONAL:
-	case MatcherType::CHOICE:
-	case MatcherType::LIST:
-	case MatcherType::REPEAT:
-		return false;
-	default:
-		// Extension matchers execute through their virtual implementation.
-		return true;
-	}
-}
-
-MatcherResult MatchStack::ExecuteTerminalMatcher(const Matcher &matcher, MatchState &state) {
-	D_ASSERT(IsTerminalMatcher(matcher));
+MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
+	auto &matcher = input.matcher;
+	auto &state = input.state;
+	D_ASSERT(matcher.IsAtomic());
 	state.rule = matcher.GetRule();
-	if (!PackratMatchState::IsEnabled(matcher, state)) {
-		return matcher.MatchParseResultInternal(state);
-	}
 
 	PackratMatchState packrat_state;
-	auto cached_result = packrat_state.TryLoadCachedResult(matcher, state);
-	if (cached_result) {
-		return *cached_result;
+	if (PackratMatchState::IsEnabled(matcher, state)) {
+		auto cached_result = packrat_state.TryLoadCachedResult(matcher, state);
+		if (cached_result) {
+			return *cached_result;
+		}
 	}
 
-	auto result = matcher.MatchParseResultInternal(state);
+	auto result = static_cast<const AtomicMatcher &>(matcher).MatchAtomic(state);
 	packrat_state.StoreResult(matcher, state, result);
 	return result;
 }
 
-void MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
-	state.rule = matcher.GetRule();
-	auto frame_index = frames.size();
+void MatchStack::PushFrame(MatchInput input) {
+	input.state.rule = input.matcher.GetRule();
 	auto frame_slot = AllocateFrameSlot();
-	MatchStackFrame *frame;
-	switch (matcher.Type()) {
-	case MatcherType::OPTIONAL:
-		frame = new (frame_slot) OptionalMatchStackFrame(frame_index, matcher.Cast<OptionalMatcher>(), state);
-		break;
-	case MatcherType::CHOICE:
-		frame = new (frame_slot) ChoiceMatchStackFrame(frame_index, matcher.Cast<ChoiceMatcher>(), state);
-		break;
-	case MatcherType::LIST:
-		frame = new (frame_slot) ListMatchStackFrame(frame_index, matcher.Cast<ListMatcher>(), state);
-		break;
-	case MatcherType::REPEAT:
-		frame = new (frame_slot) RepeatMatchStackFrame(frame_index, matcher.Cast<RepeatMatcher>(), state);
-		break;
-	case MatcherType::KEYWORD:
-	case MatcherType::VARIABLE:
-	case MatcherType::STRING_LITERAL:
-	case MatcherType::NUMBER_LITERAL:
-	case MatcherType::OPERATOR:
-	case MatcherType::END_OF_INPUT:
-		throw InternalException("Terminal matcher cannot create a heap-based parser frame");
-	default:
-		throw InternalException("Unsupported matcher type in heap-based parser");
-	}
-	frames.push_back(frame);
-}
-
-void MatchStack::PushChildFrame(MatchStackFrame &parent, const Matcher &matcher, MatchState &state) {
-	D_ASSERT(!frames.empty());
-	D_ASSERT(frames.back()->frame_index == parent.frame_index);
-	D_ASSERT(!parent.HasChildResult());
-	if (IsTerminalMatcher(matcher)) {
-		parent.SetChildResult(ExecuteTerminalMatcher(matcher, state));
-		return;
-	}
-	PushFrame(matcher, state);
+	frames.push_back(*new (frame_slot) MatchStackFrame(input));
 }
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 	auto &matcher = frame.matcher;
 	auto &state = frame.match_state;
-	if (!PackratMatchState::IsEnabled(matcher, state)) {
-		return;
+	if (PackratMatchState::IsEnabled(matcher, state)) {
+		auto cached_result = frame.packrat_state.TryLoadCachedResult(matcher, state);
+		if (cached_result) {
+			frame.result = *cached_result;
+			return;
+		}
 	}
-	auto cached_result = frame.packrat_state.TryLoadCachedResult(matcher, state);
-	if (cached_result) {
-		frame.SetResult(*cached_result);
-	}
+	frame.process = matcher.StartMatch(state);
 }
 
 void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
-	if (frame.state == MatchFrameState::INITIALIZE) {
+	if (!frame.IsInitialized()) {
 		InitializeFrame(frame);
-		frame.state = MatchFrameState::EXECUTE;
+		D_ASSERT(frame.IsInitialized());
 	}
-	if (!frame.HasResult()) {
-		frame.Execute(*this);
+	if (frame.result) {
+		return;
 	}
+	D_ASSERT(frame.process);
+	auto step = frame.process->Resume(frame.child_result);
+	frame.child_result.reset();
+	auto child = step.GetChild();
+	if (!child) {
+		frame.result = step.GetResult();
+		return;
+	}
+	if (child->matcher.IsAtomic()) {
+		frame.child_result = ExecuteAtomicMatcher(*child);
+		return;
+	}
+	PushFrame(*child);
 }
 
 MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
-	auto result = frame.GetResult();
+	D_ASSERT(frame.result);
+	auto result = *frame.result;
 	auto &matcher = frame.matcher;
 	auto &state = frame.match_state;
 	frame.packrat_state.StoreResult(matcher, state, result);
 	return result;
 }
 
-MatcherResult MatchStack::ExecuteInternal(const Matcher &matcher, MatchState &state) {
+MatcherResult MatchStack::Execute(MatchInput input) {
 	D_ASSERT(frames.empty());
-	if (IsTerminalMatcher(matcher)) {
-		return ExecuteTerminalMatcher(matcher, state);
+	if (input.matcher.IsAtomic()) {
+		return ExecuteAtomicMatcher(input);
 	}
-	PushFrame(matcher, state);
+	PushFrame(input);
 	while (!frames.empty()) {
-		auto &frame = *frames.back();
-		auto frame_count = frames.size();
+		auto &frame = frames.back().get();
 		ExecuteFrame(frame);
-		if (!frame.HasResult()) {
-			D_ASSERT(frames.size() > frame_count || frame.HasChildResult());
+		if (!frame.result) {
 			continue;
 		}
 		auto result = FinalizeFrame(frame);
@@ -289,14 +191,11 @@ MatcherResult MatchStack::ExecuteInternal(const Matcher &matcher, MatchState &st
 		if (frames.empty()) {
 			return result;
 		}
-		auto &parent = *frames.back();
-		parent.SetChildResult(result);
+		auto &parent = frames.back().get();
+		D_ASSERT(!parent.child_result);
+		parent.child_result = result;
 	}
 	throw InternalException("Matcher stack completed without a result");
-}
-
-MatcherResult MatchStack::Execute(const Matcher &matcher, MatchState &state) {
-	return ExecuteInternal(matcher, state);
 }
 
 } // namespace duckdb

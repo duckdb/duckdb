@@ -19,6 +19,7 @@ blacklist = [
     "UnavailableReason",
     "VirtualColumnBindingType",
     "Slot",
+    "State",
     "ScheduleMode",
     "MemoryUpdateMode",
     "SchedulePolicy",

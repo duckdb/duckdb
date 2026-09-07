@@ -12,6 +12,7 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -35,7 +36,7 @@ static ErrorData BuildAutocheckpointError(AttachedDatabase &db, const std::excep
 void DuckCleanupInfo::Cleanup() {
 	for (auto &transaction : transactions) {
 		if (transaction->awaiting_cleanup) {
-			transaction->Cleanup(lowest_start_time);
+			transaction->Cleanup(lowest_visibility_bound);
 		}
 	}
 }
@@ -45,16 +46,17 @@ bool DuckCleanupInfo::ScheduleCleanup() noexcept {
 }
 
 DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : TransactionManager(db) {
-	// start timestamp starts at two
-	current_start_timestamp = 2;
+	// the first timestamp a real transaction can draw: one past the bootstrap stamp, which is also
+	// the bound the system transaction reads at
+	current_start_timestamp = SYSTEM_TRANSACTION_TIMESTAMP + 1;
 	// transaction ID starts very high:
 	// it should be much higher than the current start timestamp
 	// if transaction_id < start_timestamp for any set of active transactions
 	// uncommitted data could be read by
 	current_transaction_id = TRANSACTION_ID_START;
 	lowest_active_id = TRANSACTION_ID_START;
-	lowest_active_start = MAX_TRANSACTION_ID;
-	active_checkpoint = MAX_TRANSACTION_ID;
+	lowest_visibility_bound = VisibilityBound::IncludingUncommitted();
+	active_checkpoint = 0;
 	if (!db.GetCatalog().IsDuckCatalog()) {
 		// Specifically the StorageManager of the DuckCatalog is relied on, with `db.GetStorageManager`
 		throw InternalException("DuckTransactionManager should only be created together with a DuckCatalog");
@@ -89,7 +91,7 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	transaction_t start_time = current_start_timestamp++;
 	transaction_t transaction_id = current_transaction_id++;
 	if (active_transactions.empty()) {
-		lowest_active_start = start_time;
+		lowest_visibility_bound = VisibilityBound::Before(start_time);
 		lowest_active_id = transaction_id;
 	}
 
@@ -102,12 +104,12 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	return transaction_ref;
 }
 
-void DuckTransactionManager::SetActiveCheckpoint(transaction_t checkpoint_id) {
+void DuckTransactionManager::SetActiveCheckpoint(idx_t checkpoint_id) {
 	active_checkpoint = checkpoint_id;
 }
 
 void DuckTransactionManager::ResetActiveCheckpoint() {
-	active_checkpoint = MAX_TRANSACTION_ID;
+	active_checkpoint = 0;
 }
 
 DuckTransactionManager::CheckpointDecision::CheckpointDecision(string reason_p)
@@ -244,7 +246,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		}
 	}
 	CheckpointOptions options;
-	if (GetLastCommit() > LowestActiveStart()) {
+	if (GetLastCommit() >= LowestVisibilityBound()) {
 		// we cannot do a full checkpoint if any transaction needs to read old data
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
 	}
@@ -520,17 +522,18 @@ DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, bool sto
 	// Find the transaction in the active transactions,
 	// as well as the lowest start time, transaction id, and active query.
 	idx_t t_index = active_transactions.size();
-	auto lowest_start_time = TRANSACTION_ID_START;
+	auto computed_lowest_visibility_bound = VisibilityBound::AllCommitted();
 	auto lowest_transaction_id = MAX_TRANSACTION_ID;
 	for (idx_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == &transaction) {
 			t_index = i;
 			continue;
 		}
-		lowest_start_time = MinValue(lowest_start_time, active_transactions[i]->start_time);
+		computed_lowest_visibility_bound = VisibilityBound::Min(
+		    computed_lowest_visibility_bound, VisibilityBound::Before(active_transactions[i]->start_time));
 		lowest_transaction_id = MinValue(lowest_transaction_id, active_transactions[i]->transaction_id);
 	}
-	lowest_active_start = lowest_start_time;
+	lowest_visibility_bound = computed_lowest_visibility_bound;
 	lowest_active_id = lowest_transaction_id;
 	D_ASSERT(t_index != active_transactions.size());
 
@@ -551,7 +554,7 @@ DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, bool sto
 		current_transaction->awaiting_cleanup = true;
 		cleanup_info->transactions.push_back(std::move(current_transaction));
 	}
-	cleanup_info->lowest_start_time = lowest_start_time;
+	cleanup_info->lowest_visibility_bound = computed_lowest_visibility_bound;
 
 	// Remove the transaction from the list of active transactions.
 	active_transactions.unsafe_erase_at(t_index);
@@ -561,10 +564,10 @@ DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, bool sto
 	idx_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
 		D_ASSERT(recently_committed_transactions[i]);
-		if (recently_committed_transactions[i]->commit_id >= lowest_start_time) {
+		if (recently_committed_transactions[i]->commit_id >= computed_lowest_visibility_bound) {
 			// recently_committed_transactions is ordered on commit_id.
 			// Thus, if the current commit_id is greater than
-			// lowest_start_time, any subsequent commit IDs are also greater.
+			// lowest_visibility_bound, any subsequent commit IDs are also greater.
 			break;
 		}
 

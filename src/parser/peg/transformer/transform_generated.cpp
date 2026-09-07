@@ -72,6 +72,26 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAddConstraintIn
 	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropConstraintInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> if_exists {};
+	auto &if_exists_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (if_exists_opt.HasResult()) {
+		auto if_exists_value = transformer.Transform<bool>(if_exists_opt.GetResult());
+		if_exists = if_exists_value;
+	}
+	auto identifier = list_pr.GetChild(3).Cast<IdentifierParseResult>().identifier;
+	optional<bool> drop_behavior {};
+	auto &drop_behavior_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (drop_behavior_opt.HasResult()) {
+		auto drop_behavior_value = transformer.Transform<bool>(drop_behavior_opt.GetResult());
+		drop_behavior = drop_behavior_value;
+	}
+	auto result = TransformDropConstraint(transformer, if_exists, identifier, drop_behavior);
+	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAddColumnInternal(PEGTransformer &transformer,
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -10973,6 +10993,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"AlterSchemaStmt", &PEGTransformerFactory::TransformAlterSchemaStmtInternal},
 	    {"AlterTableOptions", &PEGTransformerFactory::TransformAlterTableOptionsInternal},
 	    {"AddConstraint", &PEGTransformerFactory::TransformAddConstraintInternal},
+	    {"DropConstraint", &PEGTransformerFactory::TransformDropConstraintInternal},
 	    {"AddColumn", &PEGTransformerFactory::TransformAddColumnInternal},
 	    {"AddColumnEntry", &PEGTransformerFactory::TransformAddColumnEntryInternal},
 	    {"DropColumn", &PEGTransformerFactory::TransformDropColumnInternal},

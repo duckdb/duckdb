@@ -209,6 +209,40 @@ struct MatchState {
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
+//! Input to start a Matcher execution
+struct MatchInput {
+	const Matcher &matcher;
+	MatchState &state;
+};
+
+//! Essentially a std::variant<MatchInput, MatcherResult>
+//! Produced by a MatchProcess::Resume call, controlling the next step in the execution
+class MatchStep {
+public:
+	static MatchStep Child(MatchInput input);
+	static MatchStep Complete(MatcherResult result);
+
+	optional<MatchInput> GetChild();
+	MatcherResult GetResult() const;
+
+private:
+	MatchStep(optional<MatchInput> child_p, optional<MatcherResult> result_p)
+	    : child(std::move(child_p)), result(std::move(result_p)) {
+	}
+
+private:
+	optional<MatchInput> child;
+	optional<MatcherResult> result;
+};
+
+class MatchProcess {
+public:
+	virtual ~MatchProcess() = default;
+
+	//! Resume matching, optionally with the result of the previously requested child.
+	virtual MatchStep Resume(optional<MatcherResult> child_result) = 0;
+};
+
 enum class MatcherType {
 	KEYWORD,
 	LIST,
@@ -219,18 +253,23 @@ enum class MatcherType {
 	STRING_LITERAL,
 	NUMBER_LITERAL,
 	OPERATOR,
-	END_OF_INPUT
+	END_OF_INPUT,
+	CUSTOM
 };
 
 class Matcher {
 public:
-	explicit Matcher(MatcherType type) : type(type) {
+	explicit Matcher(MatcherType type = MatcherType::CUSTOM) : type(type) {
 	}
 	virtual ~Matcher() = default;
 
 	//! Match and construct the parse result
 	MatcherResult MatchParseResult(MatchState &state) const;
-	virtual MatcherResult MatchParseResultInternal(MatchState &state) const = 0;
+	//! Create matcher-local state that can be scheduled recursively or iteratively.
+	virtual unique_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
+	virtual bool IsAtomic() const {
+		return false;
+	}
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
@@ -287,6 +326,18 @@ protected:
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
 	optional_ptr<const CompiledGrammarRule> rule;
+};
+
+class AtomicMatcher : public Matcher {
+public:
+	explicit AtomicMatcher(MatcherType type) : Matcher(type) {
+	}
+
+	bool IsAtomic() const final {
+		return true;
+	}
+	unique_ptr<MatchProcess> StartMatch(MatchState &state) const final;
+	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
 };
 
 class KeywordInfo {
