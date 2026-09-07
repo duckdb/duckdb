@@ -968,7 +968,12 @@ bool StringValueResult::AddRowInternal() {
 void StringValueResult::SetLastPositionAfterNewline(const idx_t buffer_pos) {
 	if (state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON &&
 	    states.states[1] != CSVState::RECORD_SEPARATOR) {
-		last_position.buffer_pos = buffer_pos + 2;
+		if (buffer_pos + 2 < buffer_size && buffer_ptr[buffer_pos + 1] == '\r' && buffer_ptr[buffer_pos + 2] == '\n') {
+			// \r\r\n is 3 bytes, skip all of it
+			last_position.buffer_pos = buffer_pos + 3;
+		} else {
+			last_position.buffer_pos = buffer_pos + 2;
+		}
 	} else {
 		last_position.buffer_pos = buffer_pos + 1;
 	}
@@ -1497,6 +1502,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' && previous_buffer_handle->actual_size > 0 &&
 			    previous_buffer[previous_buffer_handle->actual_size - 1] == '\r') {
 				iterator.pos.buffer_pos++;
+				// \r\r\n split as \r\r | \n: start the next value after the leading \n
+				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 			}
 		} else {
 			idx_t pre_carry_pos = iterator.pos.buffer_pos;
@@ -1518,6 +1525,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 						        buffer_handle_ptr[iterator.pos.buffer_pos] == '\n')) {
 							state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
 						}
+						// The \r\r\n is fully consumed, start the next value after it
+						result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 						return;
 					}
 				} else {
@@ -1533,6 +1542,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 			if (over_buffer_string.empty() && iterator.pos.buffer_pos > pre_carry_pos &&
 			    result.last_position.buffer_pos > previous_buffer_handle->actual_size &&
 			    buffer_handle_ptr[pre_carry_pos] == '\r') {
+				// The rest of a \r\r\n was consumed, start the next value after it
+				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 				return;
 			}
 		}
@@ -1551,7 +1562,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 		if (states.NewRow() || states.NewValue()) {
 			break;
-		} else if (!result.comment && !states.IsComment()) {
+		} else if (!result.comment && !states.IsComment() &&
+		           !(over_buffer_string.empty() && (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r' ||
+		                                            buffer_handle_ptr[iterator.pos.buffer_pos] == '\n'))) {
 			over_buffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
 		}
 		if (states.IsQuoted()) {
@@ -1699,7 +1712,13 @@ void StringValueScanner::ProcessOverBufferValue() {
 	}
 	if (states.IsCarriageReturn() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-		result.last_position = {iterator.pos.buffer_idx, ++iterator.pos.buffer_pos + 1, result.buffer_size};
+		iterator.pos.buffer_pos++;
+		// For \r\r\n the state machine stops at the first \r, skip the second one too
+		if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+		    buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
+			iterator.pos.buffer_pos++;
+		}
+		result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos + 1, result.buffer_size};
 	} else {
 		result.last_position = {iterator.pos.buffer_idx, ++iterator.pos.buffer_pos, result.buffer_size};
 	}
