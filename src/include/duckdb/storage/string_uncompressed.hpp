@@ -38,9 +38,7 @@ struct StringDictionaryEntry {
 };
 
 struct StringSegmentLayout {
-	//! Dictionary size and end read from the first eight segment bytes and validated within the segment.
-	StringDictionaryContainer dictionary;
-	//! Dictionary bytes [dictionary.end - dictionary.size, dictionary.end)
+	//! Dictionary bytes [DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t), dictionary end)
 	unsafe_array_ptr<const uint8_t> dictionary_data;
 	//! Dictionary offsets read from the segment after validating the array's byte range.
 	unsafe_array_ptr<const int32_t> offsets;
