@@ -260,22 +260,6 @@ unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, 
 	return make_uniq<KeywordMatcher>(keyword, info);
 }
 
-unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
-	return make_uniq<ListMatcher>();
-}
-
-unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
-	return make_uniq<ChoiceMatcher>(std::move(matchers));
-}
-
-unique_ptr<OptionalMatcher> MatcherFactory::CreateOptional(Matcher &matcher) const {
-	return make_uniq<OptionalMatcher>(matcher);
-}
-
-unique_ptr<RepeatMatcher> MatcherFactory::CreateRepeat(Matcher &matcher) const {
-	return make_uniq<RepeatMatcher>(matcher);
-}
-
 KeywordMatcher &MatcherFactory::Keyword(const string &keyword) const {
 	auto it = keywords.find(keyword);
 	if (it != keywords.end()) {

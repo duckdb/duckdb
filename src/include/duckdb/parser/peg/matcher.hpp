@@ -27,6 +27,7 @@ class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
+class MatchProcessAllocator;
 
 enum class SuggestionState : uint8_t {
 	SUGGEST_KEYWORD,
@@ -180,7 +181,7 @@ struct MatchState {
 	}
 
 	template <class RESULT, class... ARGS>
-	MatcherResult AllocateParseResult(ARGS &&... args);
+	MatcherResult AllocateParseResult(ARGS &&...args);
 
 	void UpdateMaxTokenIndex() {
 		if (token_iterator.Position() > context.max_token_index) {
@@ -243,6 +244,20 @@ public:
 	virtual MatchStep Resume(optional<MatcherResult> child_result) = 0;
 };
 
+struct MatchProcessDeleter {
+	bool arena_allocated = false;
+
+	void operator()(MatchProcess *process) const {
+		if (arena_allocated) {
+			process->~MatchProcess();
+		} else {
+			delete process;
+		}
+	}
+};
+
+using match_process_ptr_t = unique_ptr<MatchProcess, MatchProcessDeleter>;
+
 enum class MatcherType {
 	KEYWORD,
 	LIST,
@@ -267,6 +282,8 @@ public:
 	MatcherResult MatchParseResult(MatchState &state) const;
 	//! Create matcher-local state that can be scheduled recursively or iteratively.
 	virtual unique_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
+	//! Pool-aware creation defaults to the existing extension override.
+	DUCKDB_API virtual match_process_ptr_t StartMatch(MatchState &state, MatchProcessAllocator &allocator) const;
 	virtual bool IsAtomic() const {
 		return false;
 	}
@@ -370,7 +387,7 @@ private:
 };
 
 template <class RESULT, class... ARGS>
-MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
+MatcherResult MatchState::AllocateParseResult(ARGS &&...args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}

@@ -1,10 +1,52 @@
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/match_process_allocator.hpp"
+#include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/matcher/choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher/optional_matcher.hpp"
 #include "duckdb/parser/peg/matcher/repeat_matcher.hpp"
 
 namespace duckdb {
+
+MatchProcessAllocator::Segment &MatchProcessAllocator::AllocateSegment(idx_t size) {
+	auto capacity = MaxValue(SEGMENT_CAPACITY, size);
+	auto data = arena.AllocateAligned(capacity);
+	return *arena.Make<Segment>(data, capacity);
+}
+
+data_ptr_t MatchProcessAllocator::Allocate(idx_t size, idx_t alignment) {
+	D_ASSERT(size > 0 && alignment > 0);
+	D_ASSERT((alignment & (alignment - 1)) == 0);
+	if (size > NumericLimits<idx_t>::Maximum() - (alignment - 1)) {
+		throw OutOfMemoryException("Matcher process allocation is too large");
+	}
+	const auto required = size + alignment - 1;
+	if (!position.segment) {
+		if (!first_segment) {
+			first_segment = AllocateSegment(required);
+		}
+		position = {first_segment, 0};
+	}
+	while (true) {
+		auto &segment = *position.segment;
+		D_ASSERT(position.offset <= segment.capacity);
+		auto data = segment.data + position.offset;
+		auto padding = (alignment - reinterpret_cast<uintptr_t>(data) % alignment) % alignment;
+		auto available = segment.capacity - position.offset;
+		if (padding <= available && size <= available - padding) {
+			position.offset += padding + size;
+			return data + padding;
+		}
+		if (!segment.next) {
+			segment.next = AllocateSegment(required);
+		}
+		position = {segment.next, 0};
+	}
+}
+
+match_process_ptr_t Matcher::StartMatch(MatchState &state, MatchProcessAllocator &) const {
+	return match_process_ptr_t(StartMatch(state).release());
+}
 
 MatchStep MatchStep::Child(MatchInput input) {
 	return MatchStep(input, nullopt);
@@ -254,6 +296,38 @@ private:
 
 unique_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state) const {
 	return make_uniq<RepeatMatchProcess>(*this, state);
+}
+
+namespace {
+
+//! Final factory implementations cannot bypass an extension's legacy StartMatch override.
+template <class MATCHER, class PROCESS>
+class PooledMatcher final : public MATCHER {
+public:
+	using MATCHER::MATCHER;
+	using MATCHER::StartMatch;
+
+	match_process_ptr_t StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
+		return allocator.Make<PROCESS>(*this, state);
+	}
+};
+
+} // namespace
+
+unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
+	return make_uniq<PooledMatcher<ListMatcher, ListMatchProcess>>();
+}
+
+unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
+	return make_uniq<PooledMatcher<ChoiceMatcher, ChoiceMatchProcess>>(std::move(matchers));
+}
+
+unique_ptr<OptionalMatcher> MatcherFactory::CreateOptional(Matcher &matcher) const {
+	return make_uniq<PooledMatcher<OptionalMatcher, OptionalMatchProcess>>(matcher);
+}
+
+unique_ptr<RepeatMatcher> MatcherFactory::CreateRepeat(Matcher &matcher) const {
+	return make_uniq<PooledMatcher<RepeatMatcher, RepeatMatchProcess>>(matcher);
 }
 
 } // namespace duckdb

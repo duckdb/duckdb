@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-MatchStack::MatchStack() : frame_allocator(Allocator::DefaultAllocator(), FrameSegmentSize() / 2) {
+MatchStack::MatchStack()
+    : frame_allocator(Allocator::DefaultAllocator(), FrameSegmentSize() / 2), process_allocator(frame_allocator) {
 	frames.reserve(FRAME_SEGMENT_CAPACITY);
 }
 
@@ -63,8 +64,10 @@ data_ptr_t MatchStack::AllocateFrameSlot() {
 void MatchStack::DestroyTopFrame() {
 	D_ASSERT(!frames.empty());
 	auto &frame = frames.back().get();
+	auto process_position = frame.process_position;
 	frames.pop_back();
 	frame.~MatchStackFrame();
+	process_allocator.Rewind(process_position);
 }
 
 optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
@@ -97,7 +100,8 @@ void PackratMatchState::StoreResult(const Matcher &matcher, MatchState &state, c
 	state.context.packrat_cache->Store(matcher, token_index_before.GetIndex(), cache_entry);
 }
 
-MatchStackFrame::MatchStackFrame(MatchInput input) : matcher(input.matcher), match_state(input.state) {
+MatchStackFrame::MatchStackFrame(MatchInput input, MatchProcessAllocator::Position process_position_p)
+    : matcher(input.matcher), match_state(input.state), process_position(process_position_p) {
 }
 
 bool MatchStackFrame::IsInitialized() const {
@@ -126,7 +130,7 @@ MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
 void MatchStack::PushFrame(MatchInput input) {
 	input.state.rule = input.matcher.GetRule();
 	auto frame_slot = AllocateFrameSlot();
-	frames.push_back(*new (frame_slot) MatchStackFrame(input));
+	frames.push_back(*new (frame_slot) MatchStackFrame(input, process_allocator.GetPosition()));
 }
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
@@ -139,7 +143,7 @@ void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 			return;
 		}
 	}
-	frame.process = matcher.StartMatch(state);
+	frame.process = matcher.StartMatch(state, process_allocator);
 }
 
 void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
