@@ -104,9 +104,7 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                     },
                 )
                 self.assertEqual(archive.extractfile(members["libduckdb_static.a"]).read(), b"library")
-                self.assertEqual(
-                    archive.extractfile(members["libcore_functions_extension.a"]).read(), b"extension"
-                )
+                self.assertEqual(archive.extractfile(members["libcore_functions_extension.a"]).read(), b"extension")
 
 
 if __name__ == "__main__":
