@@ -226,3 +226,104 @@ statement error
 SELECT (1).no_such_function_xyz();
 ----
 Scalar Function with name no_such_function_xyz does not exist
+
+# ---------------------------------------------------------------- coalesce written as a function call
+# COALESCE(...) has a grammar rule of its own, so the plain path never names it. Spelling it as a
+# function call - quoted, or schema-qualified - is therefore a deliberate catalog lookup that a user
+# macro can own, and the rewrite must not take it away. The method chain has no grammar form, so
+# there the rewrite is the only route.
+
+statement ok
+CREATE SCHEMA s;
+
+statement ok
+CREATE MACRO "coalesce"(a, b) AS 999;
+
+statement ok
+CREATE MACRO s.coalesce(a, b) AS 777;
+
+query II
+SELECT "coalesce"(NULL, 5), s.coalesce(NULL, 5);
+----
+999	777
+
+# the grammar form ignores the macro, exactly as before
+query I
+SELECT COALESCE(NULL, 5);
+----
+5
+
+# and the chained form still rewrites, macro or no macro
+query I
+SELECT (NULL::INTEGER).coalesce(1);
+----
+1
+
+# ---------------------------------------------------------------- modifiers a syntax node cannot carry
+# The method grammar accepts DISTINCT and ORDER BY on every call, but a rewritten name becomes a
+# syntax node with nowhere to put them. The equivalent plain forms are parse errors, so the chained
+# forms must reject rather than silently drop them.
+
+statement error
+SELECT (NULL).coalesce(DISTINCT 5);
+----
+DISTINCT is not supported in COALESCE expressions
+
+statement error
+SELECT (NULL).coalesce(5 ORDER BY 1);
+----
+ORDER BY is not supported in COALESCE expressions
+
+statement error
+SELECT (1).ifnull(DISTINCT 2);
+----
+DISTINCT is not supported in IFNULL expressions
+
+statement error
+SELECT (1).ifnull(2 ORDER BY 1);
+----
+ORDER BY is not supported in IFNULL expressions
+
+statement error
+SELECT (true).if(DISTINCT 'a', 'b');
+----
+DISTINCT is not supported in IF expressions
+
+statement error
+SELECT (true).if('a', 'b' ORDER BY 1);
+----
+ORDER BY is not supported in IF expressions
+
+statement error
+SELECT ('abc'::INTEGER).try(ORDER BY 1);
+----
+ORDER BY is not supported in TRY expressions
+
+statement error
+SELECT (1).construct_array(DISTINCT 2);
+----
+DISTINCT is not supported in CONSTRUCT_ARRAY expressions
+
+statement error
+SELECT ('2020-01-01').date(ORDER BY 1);
+----
+ORDER BY is not supported in DATE expressions
+
+# a chained call that is not a rewrite keeps its modifiers
+query I
+SELECT (a).string_agg(',' ORDER BY a DESC) FROM integers;
+----
+3,1
+
+# RESPECT/IGNORE NULLS is rejected before the rewrite is even reached, and FILTER is not part of the
+# method grammar at all. Pinned here so the boundary of the check above is visible.
+
+statement error
+SELECT (NULL).coalesce(5 IGNORE NULLS);
+----
+RESPECT/IGNORE NULLS is not supported for non-window functions
+
+statement error
+SELECT (NULL).coalesce(5) FILTER (WHERE true);
+----
+syntax error
