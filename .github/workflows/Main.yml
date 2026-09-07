@@ -812,7 +812,12 @@ jobs:
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
         make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz
+        make gather-libs
+        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/libs/*"
+        ./scripts/upload-assets-to-staging.sh github_release \
+          duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz \
+          duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz \
+          duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
@@ -822,6 +827,11 @@ jobs:
     - uses: actions/upload-artifact@v7
       with:
         path: duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
 
     - name: Release tests
