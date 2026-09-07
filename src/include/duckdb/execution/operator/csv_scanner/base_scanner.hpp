@@ -207,29 +207,6 @@ protected:
 	//! Finds the structural bytes of the current buffer, mutable because the line finder is const
 	mutable CSVStructuralCursor cursor;
 
-	//! The byte patterns of the dialect that end a skip of the cursor
-	static vector<SwarBlock::BytePattern> StopPatterns(const CSVStateMachine &state_machine) {
-		const auto &options = state_machine.state_machine_options;
-		vector<SwarBlock::BytePattern> patterns;
-		const auto &delimiter = options.delimiter.GetValue();
-		patterns.emplace_back(static_cast<uint8_t>(delimiter.empty() ? '\0' : delimiter[0]), 0xff);
-		const char quote = options.quote.GetValue();
-		if (quote != '\0') {
-			patterns.emplace_back(static_cast<uint8_t>(quote), 0xff);
-		}
-		// the byte class holding \n and \r
-		patterns.emplace_back(0x08, 0xf8);
-		const char comment = options.comment.GetValue();
-		if (comment != '\0') {
-			patterns.emplace_back(static_cast<uint8_t>(comment), 0xff);
-		}
-		const char escape = options.escape.GetValue();
-		if (escape != '\0' && escape != quote) {
-			patterns.emplace_back(static_cast<uint8_t>(escape), 0xff);
-		}
-		return patterns;
-	}
-
 	//! Binds the cursor to the current buffer
 	void BindCursor() const {
 		cursor.Bind(*cur_buffer_handle);

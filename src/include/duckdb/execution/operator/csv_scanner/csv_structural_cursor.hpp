@@ -24,8 +24,9 @@ public:
 
 	//! Takes the byte patterns that end a skip, a byte matches a pattern on the bits set in its mask
 	explicit CSVStructuralCursor(vector<SwarBlock::BytePattern> patterns_p) : patterns(std::move(patterns_p)) {
-		if (patterns.empty() || patterns.size() > SwarBlock::MAX_PATTERNS) {
-			throw InternalException("CSVStructuralCursor takes 1 to %d byte patterns", SwarBlock::MAX_PATTERNS);
+		if (patterns.size() < SwarBlock::MIN_PATTERNS || patterns.size() > SwarBlock::MAX_PATTERNS) {
+			throw InternalException("CSVStructuralCursor takes %d to %d byte patterns", SwarBlock::MIN_PATTERNS,
+			                        SwarBlock::MAX_PATTERNS);
 		}
 	}
 

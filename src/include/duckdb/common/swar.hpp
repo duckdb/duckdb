@@ -91,14 +91,14 @@ struct SwarBlock {
 		uint64_t mask;
 	};
 
-	//! The most patterns MaybeAnyMask takes at once
-	static constexpr idx_t MAX_PATTERNS = 8;
+	//! The fewest and the most patterns MaybeAnyMask takes at once
+	static constexpr idx_t MIN_PATTERNS = 2;
+	static constexpr idx_t MAX_PATTERNS = 5;
 
 	//! Mask of the bytes matching any pattern plus possibly bytes right above a match, no match is ever missed
 	static inline uint64_t MaybeAnyMask(const_data_ptr_t block, const vector<BytePattern> &patterns) {
+		//! We have between 2 (delimiter/newline) and 5 (delimiter,newline,comment,quote,escape) patterns
 		switch (patterns.size()) {
-		case 1:
-			return MaybeAnyMaskUnrolled<1>(block, patterns);
 		case 2:
 			return MaybeAnyMaskUnrolled<2>(block, patterns);
 		case 3:
@@ -107,15 +107,9 @@ struct SwarBlock {
 			return MaybeAnyMaskUnrolled<4>(block, patterns);
 		case 5:
 			return MaybeAnyMaskUnrolled<5>(block, patterns);
-		case 6:
-			return MaybeAnyMaskUnrolled<6>(block, patterns);
-		case 7:
-			return MaybeAnyMaskUnrolled<7>(block, patterns);
-		case 8:
-			return MaybeAnyMaskUnrolled<8>(block, patterns);
 		default:
-			throw InternalException("SwarBlock::MaybeAnyMask takes 1 to %d patterns, got %d", MAX_PATTERNS,
-			                        patterns.size());
+			throw InternalException("SwarBlock::MaybeAnyMask takes %d to %d patterns, got %d", MIN_PATTERNS,
+			                        MAX_PATTERNS, patterns.size());
 		}
 	}
 

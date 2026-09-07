@@ -441,6 +441,20 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	transition_array.skip_comment[static_cast<uint8_t>('\r')] = false;
 	transition_array.skip_comment[static_cast<uint8_t>('\n')] = false;
+
+	auto &stop_patterns = transition_array.stop_patterns;
+	stop_patterns.emplace_back(delimiter_first_byte, 0xff);
+	if (quote != '\0') {
+		stop_patterns.emplace_back(quote, 0xff);
+	}
+	// the byte class holding \n and \r
+	stop_patterns.emplace_back(0x08, 0xf8);
+	if (comment != '\0') {
+		stop_patterns.emplace_back(comment, 0xff);
+	}
+	if (escape != '\0' && escape != quote) {
+		stop_patterns.emplace_back(escape, 0xff);
+	}
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {
