@@ -2281,8 +2281,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	return result;
 }
 
-void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTable &parent,
-                                             const BoundConstraint &constraint) {
+void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction,
+                                             DataTable &parent, const BoundConstraint &constraint) {
 	if (total_rows == 0) {
 		return;
 	}
@@ -2306,9 +2306,6 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 
 	InitializeCreateIndexScan(state);
 
-	auto client_context = context.GetClientContext();
-	D_ASSERT(client_context);
-	auto &transaction = DuckTransaction::Get(*client_context, parent.db);
 	auto &transaction_manager = DuckTransactionManager::Get(parent.db);
 	TransactionData constraint_visibility(transaction.GetTransactionId(),
 	                                      VisibilityBound::Through(transaction_manager.GetLastCommit()));

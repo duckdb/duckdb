@@ -751,7 +751,7 @@ void LocalStorage::VerifyNewConstraint(DataTable &parent, const BoundConstraint 
 	if (!storage) {
 		return;
 	}
-	storage->GetCollection().VerifyNewConstraint(context, parent, constraint);
+	storage->GetCollection().VerifyNewConstraint(context, transaction, parent, constraint);
 }
 
 } // namespace duckdb
