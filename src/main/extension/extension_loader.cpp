@@ -297,7 +297,7 @@ void ExtensionLoader::RegisterCoordinateSystem(CreateCoordinateSystemInfo &info)
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunction function) {
 	auto &scalar_function = GetFunction(function.name);
-	scalar_function.functions.AddFunction(scalar_function.FinalizeFunction(function));
+	scalar_function.functions.AddFunction(scalar_function.FinalizeFunction(std::move(function)));
 }
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLINT

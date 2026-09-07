@@ -25,7 +25,7 @@ struct WriteLogBindData : FunctionData {
 	LogicalType return_type;
 
 	explicit WriteLogBindData() {};
-	WriteLogBindData(const WriteLogBindData &other) {
+	WriteLogBindData(const WriteLogBindData &other) : FunctionData(other) {
 		disable_logging = other.disable_logging;
 		scope = other.scope;
 		level = other.level;

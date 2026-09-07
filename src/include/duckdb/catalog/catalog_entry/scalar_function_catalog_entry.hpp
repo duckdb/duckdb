@@ -32,6 +32,6 @@ public:
 
 private:
 	friend class ExtensionLoader;
-	shared_ptr<const ScalarFunction> FinalizeFunction(const ScalarFunction &function) const;
+	shared_ptr<const ScalarFunction> FinalizeFunction(ScalarFunction function) const;
 };
 } // namespace duckdb
