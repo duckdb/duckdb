@@ -31,7 +31,6 @@ struct ExportAggregateFunctionBindData : public FunctionData {
 struct ExportAggregateFunction {
 	static unique_ptr<BoundAggregateExpression> Bind(unique_ptr<BoundAggregateExpression> child_aggregate);
 	static void SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout);
-	static LogicalType GetUnderlyingReturnType(const LogicalType &state_type);
 };
 
 } // namespace duckdb

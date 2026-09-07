@@ -24,7 +24,6 @@ class Catalog;
 class ClientContext;
 class Expression;
 class ExpressionExecutor;
-class FunctionSerializer;
 class Transaction;
 
 class AggregateFunction;
@@ -75,12 +74,16 @@ public:
 	}
 	FunctionData(FunctionData &&) : internal_kind(InternalKind::GENERIC) {
 	}
-	FunctionData &operator=(const FunctionData &) {
-		internal_kind = InternalKind::GENERIC;
+	FunctionData &operator=(const FunctionData &other) {
+		if (this != &other) {
+			internal_kind = InternalKind::GENERIC;
+		}
 		return *this;
 	}
-	FunctionData &operator=(FunctionData &&) {
-		internal_kind = InternalKind::GENERIC;
+	FunctionData &operator=(FunctionData &&other) {
+		if (this != &other) {
+			internal_kind = InternalKind::GENERIC;
+		}
 		return *this;
 	}
 	DUCKDB_API virtual ~FunctionData();
@@ -383,7 +386,8 @@ private:
 		SQLAddressability() = default;
 		SQLAddressability(const SQLAddressability &) {
 		}
-		SQLAddressability(SQLAddressability &&) {
+		SQLAddressability(SQLAddressability &&other) {
+			other.value = false;
 		}
 		SQLAddressability &operator=(const SQLAddressability &other) {
 			if (this != &other) {
@@ -394,6 +398,7 @@ private:
 		SQLAddressability &operator=(SQLAddressability &&other) {
 			if (this != &other) {
 				value = false;
+				other.value = false;
 			}
 			return *this;
 		}
@@ -415,7 +420,6 @@ private:
 	friend class AggregateFunctionCatalogEntry;
 	friend class BoundAggregateFunction;
 	friend class BoundScalarFunction;
-	friend class FunctionSerializer;
 	friend class ScalarFunctionCatalogEntry;
 };
 

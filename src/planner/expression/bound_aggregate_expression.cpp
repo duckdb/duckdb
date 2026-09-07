@@ -140,9 +140,8 @@ void BoundAggregateExpression::Serialize(Serializer &serializer) const {
 unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
-	optional<FunctionSerializer::LogicalDefinitionData> logical_definition;
 	auto entry = FunctionSerializer::Deserialize<BoundAggregateFunction, AggregateFunctionCatalogEntry>(
-	    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, return_type, &logical_definition);
+	    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, return_type);
 	auto aggregate_type = deserializer.ReadProperty<AggregateType>(203, "aggregate_type");
 	auto filter =
 	    deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(204, "filter", unique_ptr<Expression>());
@@ -151,13 +150,6 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithExplicitDefault(205, "order_bys", result->order_bys, unique_ptr<BoundOrderModifier>());
 	deserializer.ReadPropertyWithExplicitDefault(206, "state_export", result->state_export_mode,
 	                                             AggregateStateExportMode::NONE);
-	auto logical_return_type = result->function.GetReturnType();
-	if (logical_definition && result->state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
-		logical_return_type = ExportAggregateFunction::GetUnderlyingReturnType(return_type);
-	}
-	FunctionSerializer::RestoreLogicalDefinition(deserializer.Get<ClientContext &>(),
-	                                             CatalogType::AGGREGATE_FUNCTION_ENTRY, result->function,
-	                                             logical_definition, logical_return_type);
 	if (result->state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
 		if (!return_type.IsAggregateState()) {
 			throw SerializationException("Aggregate State export should return an aggregate state type");

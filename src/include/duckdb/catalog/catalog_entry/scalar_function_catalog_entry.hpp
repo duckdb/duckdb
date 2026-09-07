@@ -29,5 +29,10 @@ public:
 
 public:
 	unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction transaction, AlterInfo &info) override;
+	void AddFunctionOverload(ScalarFunction function);
+	DUCKDB_API void ReplaceFunctionOverload(idx_t index, ScalarFunction function);
+
+private:
+	void InstallFunction(ScalarFunction function, optional_idx index);
 };
 } // namespace duckdb

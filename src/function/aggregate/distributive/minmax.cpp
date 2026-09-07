@@ -354,15 +354,6 @@ shared_ptr<const AggregateFunction> GetCollatedMinMaxFunction(ClientContext &con
 	return func->functions.GetFunctionByOffset(best_function.GetIndex());
 }
 
-static void ReplaceBoundImplementation(BoundAggregateFunction &target, const BoundAggregateFunction &replacement) {
-	target.SetName(replacement.GetName());
-	target.GetArguments() = replacement.GetArguments();
-	target.SetReturnType(replacement.GetReturnType());
-	target.SetProperties(replacement.GetProperties());
-	target.SetCallbacks(replacement.GetCallbacks());
-	target.SetExtraFunctionInfo(replacement.GetFunctionInfo());
-}
-
 template <class OP, class OP_STRING, class OP_VECTOR>
 unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto &context = input.GetClientContext();
@@ -412,7 +403,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto expr = minmax_func.Bind(context, std::move(arguments));
 	arguments = std::move(expr->GetChildrenMutable());
 
-	ReplaceBoundImplementation(function, expr->Function());
+	function.ReplaceImplementation(expr->Function());
 	return std::move(expr->BindInfoMutable());
 }
 
@@ -570,7 +561,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 			auto expr =
 			    function_binder.BindAggregateFunction(std::move(collated_function), std::move(collated_arguments));
 			arguments = std::move(expr->GetChildrenMutable());
-			ReplaceBoundImplementation(function, expr->Function());
+			function.ReplaceImplementation(expr->Function());
 			return std::move(expr->BindInfoMutable());
 		}
 	}

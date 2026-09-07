@@ -21,7 +21,6 @@ namespace duckdb {
 class BufferManager;
 class BoundExpressionSQLExportState;
 class FunctionBinder;
-class FunctionSerializer;
 class InterruptState;
 class BoundAggregateFunction;
 struct AggregateRewriteInput;
@@ -844,6 +843,7 @@ public:
 
 	//! Swap in a different implementation, keeping the definition this was bound from intact
 	void ReplaceImplementation(const AggregateFunction &function);
+	void ReplaceImplementation(const BoundAggregateFunction &function);
 
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
@@ -897,25 +897,12 @@ private:
 	void SetLogicalReturnType(LogicalType return_type_p) {
 		logical_return_type = std::move(return_type_p);
 	}
-	void RestoreLogicalDefinition(shared_ptr<const AggregateFunction> definition_p, vector<LogicalType> arguments_p,
-	                              LogicalType return_type_p) {
-		definition = std::move(definition_p);
-		logical_arguments = std::move(arguments_p);
-		logical_return_type = std::move(return_type_p);
-	}
-	void ClearLogicalDefinition() {
-		definition = CopyStandaloneDefinition(*definition);
-		logical_arguments = arguments;
-		logical_return_type = return_type;
-	}
-
 	shared_ptr<const AggregateFunction> definition;
 	vector<LogicalType> logical_arguments;
 	LogicalType logical_return_type;
 
 	friend class BoundExpressionSQLExportState;
 	friend class FunctionBinder;
-	friend class FunctionSerializer;
 };
 
 // Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().

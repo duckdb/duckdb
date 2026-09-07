@@ -117,11 +117,7 @@ static bool IsSQLRepresentableType(const LogicalType &type) {
 	}
 	return !TypeVisitor::Contains(type, [](const LogicalType &entry) {
 		switch (entry.id()) {
-		case LogicalTypeId::INVALID:
-		case LogicalTypeId::UNKNOWN:
-		case LogicalTypeId::ANY:
 		case LogicalTypeId::UNBOUND:
-		case LogicalTypeId::TEMPLATE:
 		case LogicalTypeId::TYPE:
 		case LogicalTypeId::STRING_LITERAL:
 		case LogicalTypeId::INTEGER_LITERAL:
@@ -163,6 +159,17 @@ static LogicalPlanVerificationFunctionIdentity DefinitionFunctionIdentity(const 
 	identity.arguments = arguments;
 	identity.return_type = return_type;
 	return identity;
+}
+
+template <class FUNCTION>
+static LogicalPlanVerificationIssue UnaddressableFunction(const LogicalPlanVerificationPath &path,
+                                                          const FUNCTION &function) {
+	auto identity = DefinitionFunctionIdentity(*function.GetDefinition(), function.GetLogicalArguments(),
+	                                           function.GetLogicalReturnType());
+	if (!identity.IsValid()) {
+		return UnsupportedFeature(path, "function_identity", "The function has no representable SQL identity");
+	}
+	return UnsupportedFunction(path, std::move(identity), "The retained function definition is not SQL-addressable");
 }
 
 class BoundExpressionSQLExportState {
@@ -223,9 +230,8 @@ public:
 			    InternalExpressionInvariant(path, expression, "Expression export requires a final bound class"));
 		case ExpressionClass::INVALID:
 			return Failure(InternalInvariant(path, "Expression export received an invalid expression class"));
-		default:
-			return Failure(InternalInvariant(path, "Expression export received an unknown expression class"));
 		}
+		return Failure(InternalInvariant(path, "Expression export received an unknown expression class"));
 	}
 
 private:
@@ -548,25 +554,24 @@ private:
 	BoundExpressionSQLExportResult ExportScalarFunction(const BoundFunctionExpression &expression,
 	                                                    const LogicalPlanVerificationPath &path) {
 		auto &function = expression.Function();
-		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetArguments()) ||
-		    expression.GetReturnType() != function.GetReturnType()) {
-			return Failure(InternalExpressionInvariant(path, expression,
-			                                           "Bound scalar function has an inconsistent current signature"));
+		for (auto &child : expression.GetChildren()) {
+			if (!child) {
+				return Failure(InternalExpressionInvariant(path, expression, "Bound scalar function has a null child"));
+			}
 		}
 		auto &definition = function.GetDefinition();
 		if (!definition) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound scalar function has no retained definition"));
 		}
+		if (!function.HasSQLAddressableDefinition()) {
+			return Failure(UnaddressableFunction(path, function));
+		}
 		auto identity =
 		    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 		if (!identity.IsValid()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound scalar function identity is incomplete"));
-		}
-		if (!function.HasSQLAddressableDefinition()) {
-			return Failure(UnsupportedFunction(path, std::move(identity),
-			                                   "The retained scalar function definition is not SQL-addressable"));
 		}
 		QualifiedName name(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
 		if (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()) ||
@@ -585,7 +590,9 @@ private:
 			    UnsupportedFunction(path, std::move(identity),
 			                        "The bound scalar function requires argument aliases that are not retained"));
 		}
-		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetLogicalArguments()) ||
+		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetArguments()) ||
+		    expression.GetReturnType() != function.GetReturnType() ||
+		    !ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetLogicalArguments()) ||
 		    expression.GetReturnType() != function.GetLogicalReturnType()) {
 			return Failure(UnsupportedFunction(
 			    path, std::move(identity), "The bound scalar function no longer represents its logical SQL signature"));
@@ -606,6 +613,12 @@ private:
 
 	BoundExpressionSQLExportResult ExportAggregate(const BoundAggregateExpression &expression,
 	                                               const LogicalPlanVerificationPath &path) {
+		for (auto &child : expression.GetChildren()) {
+			if (!child) {
+				return Failure(
+				    InternalExpressionInvariant(path, expression, "Bound aggregate function has a null child"));
+			}
+		}
 		if (expression.GetExpressionType() != ExpressionType::BOUND_AGGREGATE) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid expression type"));
@@ -616,15 +629,14 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function has no retained definition"));
 		}
+		if (!function.HasSQLAddressableDefinition()) {
+			return Failure(UnaddressableFunction(path, function));
+		}
 		auto identity =
 		    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 		if (!identity.IsValid()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function identity is incomplete"));
-		}
-		if (!function.HasSQLAddressableDefinition()) {
-			return Failure(UnsupportedFunction(path, std::move(identity),
-			                                   "The retained aggregate function definition is not SQL-addressable"));
 		}
 		QualifiedName name(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
 		if (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()) ||

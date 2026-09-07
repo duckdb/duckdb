@@ -23,7 +23,6 @@ namespace duckdb {
 class BaseStatistics;
 class BoundExpressionSQLExportState;
 class FunctionBinder;
-class FunctionSerializer;
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
@@ -606,25 +605,12 @@ private:
 	void SetLogicalReturnType(LogicalType return_type_p) {
 		logical_return_type = std::move(return_type_p);
 	}
-	void RestoreLogicalDefinition(shared_ptr<const ScalarFunction> definition_p, vector<LogicalType> arguments_p,
-	                              LogicalType return_type_p) {
-		definition = std::move(definition_p);
-		logical_arguments = std::move(arguments_p);
-		logical_return_type = std::move(return_type_p);
-	}
-	void ClearLogicalDefinition() {
-		definition = CopyStandaloneDefinition(*definition);
-		logical_arguments = arguments;
-		logical_return_type = return_type;
-	}
-
 	shared_ptr<const ScalarFunction> definition;
 	vector<LogicalType> logical_arguments;
 	LogicalType logical_return_type;
 
 	friend class BoundExpressionSQLExportState;
 	friend class FunctionBinder;
-	friend class FunctionSerializer;
 };
 
 class BindScalarFunctionInput : public BindFunctionInput {

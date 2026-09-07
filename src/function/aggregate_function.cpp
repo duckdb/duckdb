@@ -147,6 +147,11 @@ bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const
 	return !(*this == rhs);
 }
 
+void BoundAggregateFunction::ReplaceImplementation(const BoundAggregateFunction &function) {
+	BaseAggregateFunction::operator=(function);
+	BoundSimpleFunction::operator=(function);
+}
+
 void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {
 	this->name = function.name;
 	this->schema_name = function.GetSchemaName();
