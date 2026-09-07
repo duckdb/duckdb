@@ -8,12 +8,17 @@
 
 #pragma once
 
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 namespace duckdb {
+
+struct CreateTableInfo;
+class ParsedExpression;
 
 void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identifier> &names, vector<PhysicalIndex> &indexes);
 void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints,
