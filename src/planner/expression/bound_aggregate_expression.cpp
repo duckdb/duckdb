@@ -151,11 +151,9 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithExplicitDefault(205, "order_bys", result->order_bys, unique_ptr<BoundOrderModifier>());
 	deserializer.ReadPropertyWithExplicitDefault(206, "state_export", result->state_export_mode,
 	                                             AggregateStateExportMode::NONE);
-	auto logical_return_type = return_type;
+	auto logical_return_type = result->function.GetReturnType();
 	if (logical_definition && result->state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
 		logical_return_type = ExportAggregateFunction::GetUnderlyingReturnType(return_type);
-		FunctionSerializer::ValidateLogicalDefinition(logical_return_type, *logical_definition);
-		ExportAggregateFunction::ValidateStateExport(*result, return_type);
 	}
 	FunctionSerializer::RestoreLogicalDefinition(deserializer.Get<ClientContext &>(),
 	                                             CatalogType::AGGREGATE_FUNCTION_ENTRY, result->function,

@@ -189,10 +189,12 @@ static unique_ptr<Expression> Constant(Value value) {
 	return make_uniq<BoundConstantExpression>(std::move(value));
 }
 
-static unique_ptr<Expression> BinaryRoundTrip(ClientContext &context, const Expression &expression) {
+static unique_ptr<Expression>
+BinaryRoundTrip(ClientContext &context, const Expression &expression,
+                const StorageCompatibility &compatibility = StorageCompatibility::Latest()) {
 	MemoryStream stream(Allocator::Get(context));
 	SerializationOptions options;
-	options.storage_compatibility = StorageCompatibility::Latest();
+	options.storage_compatibility = compatibility;
 	BinarySerializer::Serialize(expression, stream, options);
 	stream.Rewind();
 	bound_parameter_map_t parameters;
@@ -220,7 +222,7 @@ static void RequireCorruptLogicalReturn(ClientContext &context, const Expression
 	optional_idx offset;
 	for (idx_t i = 0; i + field_size <= stream.GetPosition(); i++) {
 		if (std::memcmp(stream.GetData() + i, old_field.GetData(), field_size) == 0) {
-			// The outer function follows any embedded state-function metadata.
+			// The outer function follows its children.
 			offset = i;
 		}
 	}
@@ -229,41 +231,6 @@ static void RequireCorruptLogicalReturn(ClientContext &context, const Expression
 	stream.Rewind();
 	bound_parameter_map_t parameters;
 	REQUIRE_THROWS_AS(BinaryDeserializer::Deserialize<Expression>(stream, context, parameters), SerializationException);
-}
-
-static unique_ptr<Expression> DeserializeLegacyAggregate(ClientContext &context,
-                                                         const BoundAggregateExpression &expression) {
-	SerializationOptions options;
-	options.storage_compatibility = StorageCompatibility::Latest();
-	MemoryStream stream;
-	BinarySerializer::Serialize(expression, stream, options);
-	MemoryStream fields;
-	BinarySerializer serializer(fields, options);
-	serializer.Begin();
-	auto &function = expression.Function();
-	auto &definition = *function.GetDefinition();
-	serializer.WriteProperty(507, "has_logical_definition", true);
-	serializer.WriteProperty(508, "logical_catalog_name", definition.GetCatalogName());
-	serializer.WriteProperty(509, "logical_schema_name", definition.GetSchemaName());
-	serializer.WriteProperty(510, "logical_name", definition.GetName());
-	serializer.WriteProperty(511, "logical_arguments", function.GetLogicalArguments());
-	serializer.WriteProperty(512, "logical_return_type", function.GetLogicalReturnType());
-	auto field_size = fields.GetPosition();
-	serializer.End();
-	optional_idx offset;
-	for (idx_t i = 0; i + field_size <= stream.GetPosition(); i++) {
-		if (std::memcmp(stream.GetData() + i, fields.GetData(), field_size) == 0) {
-			offset = i;
-		}
-	}
-	REQUIRE(offset.IsValid());
-	MemoryStream legacy;
-	legacy.WriteData(stream.GetData(), offset.GetIndex());
-	auto end = offset.GetIndex() + field_size;
-	legacy.WriteData(stream.GetData() + end, stream.GetPosition() - end);
-	legacy.Rewind();
-	bound_parameter_map_t parameters;
-	return BinaryDeserializer::Deserialize<Expression>(legacy, context, parameters);
 }
 
 struct SQLBindingEntry {
@@ -1557,8 +1524,7 @@ TEST_CASE("Bound function deserialization rejects incompatible logical returns",
 	connection.Rollback();
 }
 
-TEST_CASE("Aggregate state owns its underlying return and physical reconstruction",
-          "[bound_expression_sql_export][serialization]") {
+TEST_CASE("Aggregate state owns only its underlying return witness", "[bound_expression_sql_export][serialization]") {
 	DuckDB db;
 	Connection connection(db);
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE decimal_values(i DECIMAL(9,2))"));
@@ -1592,18 +1558,7 @@ TEST_CASE("Aggregate state owns its underlying return and physical reconstructio
 	REQUIRE(restored_state.Function().GetName() == "sum_no_overflow");
 	REQUIRE(restored_state.Function().GetDefinition()->GetName() == "sum");
 	REQUIRE(ExportAggregateFunction::GetUnderlyingReturnType(restored_state.GetReturnType()) == decimal_return);
-	auto state_value = EvaluateAggregate(restored_state, input_value);
-	vector<unique_ptr<Expression>> arguments;
-	arguments.push_back(Constant(state_value));
-	ErrorData error;
-	FunctionBinder binder(*connection.context);
-	auto finalize =
-	    binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("finalize"), std::move(arguments), error);
-	REQUIRE(finalize);
-	REQUIRE(finalize->GetReturnType() == decimal_return);
-	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *finalize) == expected);
-	auto restored_finalize = BinaryRoundTrip(*connection.context, *finalize);
-	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *restored_finalize) == expected);
+	REQUIRE(EvaluateAggregate(restored_state, input_value).type() == restored_state.GetReturnType());
 	auto exported = BoundExpressionSQLExporter::Export(restored_state, context);
 	REQUIRE(exported.IsSuccess());
 	auto rebound = connection.Query("SELECT finalize(" + exported.GetValue()->ToString() + ") FROM decimal_values v");
@@ -1630,9 +1585,9 @@ TEST_CASE("Aggregate state owns its underlying return and physical reconstructio
 	auto legacy = state->Copy();
 	auto legacy_info = make_uniq<ExtensionTypeInfo>(*state->GetReturnType().GetExtensionInfo());
 	legacy_info->properties.erase("underlying_return_type");
-	legacy_info->properties.erase("bound_function");
 	legacy->SetReturnType(state->GetReturnType().WithExtensionInfo(std::move(legacy_info)));
-	auto legacy_roundtrip = DeserializeLegacyAggregate(*connection.context, legacy->Cast<BoundAggregateExpression>());
+	auto legacy_roundtrip =
+	    BinaryRoundTrip(*connection.context, *legacy, StorageCompatibility::FromIndex(StorageVersion::V1_5_0));
 	REQUIRE(legacy_roundtrip->GetReturnType() == legacy->GetReturnType());
 	LogicalPlanVerificationPath path;
 	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
@@ -1648,7 +1603,7 @@ TEST_CASE("Aggregate state owns its underlying return and physical reconstructio
 	connection.Rollback();
 }
 
-TEST_CASE("Rewritten list comprehensions serialize their new logical signatures",
+TEST_CASE("Rewritten scalar calls serialize without stale logical identity",
           "[bound_expression_sql_export][serialization]") {
 	DuckDB db;
 	Connection connection(db);
@@ -1662,10 +1617,17 @@ TEST_CASE("Rewritten list comprehensions serialize their new logical signatures"
 	});
 	REQUIRE(filter);
 	REQUIRE(filter->GetReturnType() == LogicalType::LIST(LogicalType::INTEGER));
-	REQUIRE(filter->Cast<BoundFunctionExpression>().Function().GetLogicalReturnType() == filter->GetReturnType());
+	REQUIRE(filter->Cast<BoundFunctionExpression>().Function().GetLogicalReturnType() != filter->GetReturnType());
+	BoundExpressionSQLExportContext context;
+	REQUIRE(BoundExpressionSQLExporter::Export(*filter, context).HasError());
 	auto restored = BinaryRoundTrip(*connection.context, *filter);
 	REQUIRE(restored->GetReturnType() == filter->GetReturnType());
 	REQUIRE(restored->Cast<BoundFunctionExpression>().Function().GetLogicalReturnType() == filter->GetReturnType());
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+	// The rewrite also retains the pre-rewrite physical argument signature.
+	RequireIssue(BoundExpressionSQLExporter::Export(*restored, context),
+	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_serializer=true"));
 	auto result = connection.Query("SELECT [x + c FOR x, i IN l IF i > 2] FROM lists");
 	REQUIRE_FALSE(result->HasError());
@@ -1674,89 +1636,168 @@ TEST_CASE("Rewritten list comprehensions serialize their new logical signatures"
 	connection.Rollback();
 }
 
-TEST_CASE("Bound expression SQL export observes folded string_agg separators",
+TEST_CASE("Scalar serialization preserves widened decimal results without stale logical arguments",
+          "[bound_expression_sql_export][serialization]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	for (auto width : {4, 9, 18, 37}) {
+		INFO(width);
+		REQUIRE_NO_FAIL(connection.Query("SET debug_verify_serializer=false"));
+		auto type = LogicalType::DECIMAL(width, 0);
+		auto result_type = LogicalType::DECIMAL(width + 1, 0);
+		REQUIRE_NO_FAIL(connection.Query("CREATE OR REPLACE TABLE rounding_values(i " + type.ToString() + ")"));
+		REQUIRE_NO_FAIL(connection.Query("INSERT INTO rounding_values VALUES (" + string(width, '9') + ")"));
+		auto plan = BindExportQuery(connection, "SELECT round(i, -1) FROM rounding_values");
+		auto expression = FindExpression(*plan, [](const Expression &candidate) {
+			return candidate.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+			       candidate.Cast<BoundFunctionExpression>().Function().GetName() == "round";
+		});
+		REQUIRE(expression);
+		auto &function = expression->Cast<BoundFunctionExpression>().Function();
+		REQUIRE(function.GetLogicalArguments()[0] == type);
+		REQUIRE(function.GetLogicalReturnType() == result_type);
+		REQUIRE(function.GetArguments()[0] == (width == 37 ? type : result_type));
+		auto restored = BinaryRoundTrip(*connection.context, *expression);
+		REQUIRE(restored->GetReturnType() == result_type);
+		REQUIRE_NO_FAIL(connection.Query("SET debug_verify_serializer=true"));
+		auto result = connection.Query("SELECT round(i, -1) FROM rounding_values");
+		REQUIRE_FALSE(result->HasError());
+		REQUIRE(result->GetTypes() == vector<LogicalType> {result_type});
+		REQUIRE(result->GetValue(0, 0) == Value("1" + string(width, '0')).DefaultCastAs(result_type));
+		auto &column = expression->Cast<BoundFunctionExpression>().GetChildren()[0];
+		vector<SQLBindingEntry> bindings;
+		CollectSQLBindings(*column, bindings);
+		REQUIRE(bindings.size() == 1);
+		auto context = ResolveBinding(bindings[0].binding, {Identifier("i")}, type);
+		if (width == 37) {
+			RequireRoundTrip(connection, *restored, context, " FROM rounding_values", "round(i, -1)");
+		} else {
+			auto exported = BoundExpressionSQLExporter::Export(*restored, context);
+			REQUIRE(exported.IsValid());
+			REQUIRE(exported.HasError());
+			REQUIRE(exported.GetIssues().size() == 1);
+			REQUIRE(exported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
+			REQUIRE(exported.GetIssues()[0].phase == LogicalPlanVerificationPhase::EXPRESSION_EXPORT);
+		}
+	}
+	auto hash_plan = BindExportQuery(connection, "SELECT hash(i) FROM rounding_values");
+	auto hash = FindExpression(*hash_plan, [](const Expression &candidate) {
+		return candidate.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+		       candidate.Cast<BoundFunctionExpression>().Function().GetName() == "hash";
+	});
+	REQUIRE(hash);
+	REQUIRE_FALSE(hash->Cast<BoundFunctionExpression>().Function().GetArguments()[0].IsComplete());
+	auto hash_copy = BinaryRoundTrip(*connection.context, *hash);
+	auto &hash_column = hash->Cast<BoundFunctionExpression>().GetChildren()[0]->Cast<BoundColumnRefExpression>();
+	auto hash_context = ResolveBinding(hash_column.Binding(), {Identifier("i")}, hash_column.GetReturnType());
+	RequireRoundTrip(connection, *hash_copy, hash_context, " FROM rounding_values", "hash(i)");
+	connection.Rollback();
+}
+
+TEST_CASE("Bound expression SQL export preserves explicit string_agg separators",
           "[bound_expression_sql_export][aggregate][serialization]") {
 	DuckDB db;
 	Connection connection(db);
 	Connection baseline(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE string_values(x VARCHAR)"));
+	REQUIRE_NO_FAIL(connection.Query("INSERT INTO string_values VALUES ('a'), ('b')"));
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_serializer=true"));
 	REQUIRE_NO_FAIL(baseline.Query("SET debug_verify_serializer=true"));
-	REQUIRE_NO_FAIL(baseline.Query("SET disabled_optimizers='distinct_aggregate_rewrite'"));
+	REQUIRE_NO_FAIL(baseline.Query("PRAGMA disable_optimizer"));
 	connection.BeginTransaction();
 
-	vector<string> distinct_queries {
-	    "SELECT array_to_string(list_sort(string_split(string_agg(DISTINCT x, '&'), '&')), '&') "
-	    "FROM (VALUES ('a'), ('b'), ('a')) t(x)",
-	    "SELECT string_agg(DISTINCT x, '&' ORDER BY x) FROM (VALUES ('b'), ('a'), ('a')) t(x)"};
-	for (auto &query : distinct_queries) {
-		INFO(query);
-		auto optimized_result = connection.Query(query);
-		auto baseline_result = baseline.Query(query);
-		REQUIRE_FALSE(optimized_result->HasError());
-		REQUIRE_FALSE(baseline_result->HasError());
-		REQUIRE(optimized_result->Equals(*baseline_result, false));
-		REQUIRE(optimized_result->GetValue(0, 0) == Value("a&b"));
-
-		auto optimized_plan = OptimizeExportQuery(connection, query);
-		auto optimized_aggregate = FindExpression(*optimized_plan, [](const Expression &expression) {
-			return expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
-			       expression.Cast<BoundAggregateExpression>().Function().GetDefinition()->GetName() == "string_agg";
+	vector<string> calls {"string_agg(x, '&')",
+	                      "string_agg(DISTINCT x, '&')",
+	                      "string_agg(x, '&') FILTER (WHERE x IS NOT NULL)",
+	                      "string_agg(x, '&' ORDER BY x)",
+	                      "string_agg(DISTINCT x, '&' ORDER BY x)",
+	                      "string_agg(x, '&') EXPORT_STATE",
+	                      "string_agg(x, '&' ORDER BY x) EXPORT_STATE"};
+	for (auto &call : calls) {
+		INFO(call);
+		auto plan = BindExportQuery(connection, "SELECT " + call + " FROM string_values");
+		auto expression = FindExpression(*plan, [](const Expression &candidate) {
+			return candidate.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE;
 		});
-		REQUIRE(optimized_aggregate);
-		auto &optimized_string_agg = optimized_aggregate->Cast<BoundAggregateExpression>();
-		REQUIRE(optimized_string_agg.BindInfo());
-		REQUIRE(optimized_string_agg.Function().GetArguments().size() == 1);
-		REQUIRE(optimized_string_agg.GetChildren().size() == 1);
+		REQUIRE(expression);
+		auto &aggregate = expression->Cast<BoundAggregateExpression>();
+		REQUIRE(aggregate.BindInfo());
+		REQUIRE(aggregate.GetChildren().size() == 2);
+		REQUIRE(aggregate.Function().GetArguments().size() == 2);
+		REQUIRE(aggregate.Function().GetLogicalArguments() ==
+		        vector<LogicalType> {LogicalType::VARCHAR, LogicalType::VARCHAR});
+		REQUIRE(aggregate.GetChildren()[1]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT);
+		REQUIRE(aggregate.GetChildren()[1]->Cast<BoundConstantExpression>().GetValue() == Value("&"));
+		auto &column = aggregate.GetChildren()[0]->Cast<BoundColumnRefExpression>();
+		auto context = ResolveBinding(column.Binding(), {Identifier("x")}, LogicalType::VARCHAR);
+		for (auto serialize : {false, true}) {
+			auto restored = serialize ? BinaryRoundTrip(*connection.context, aggregate) : aggregate.Copy();
+			auto &restored_aggregate = restored->Cast<BoundAggregateExpression>();
+			REQUIRE(restored_aggregate.GetChildren().size() == 2);
+			REQUIRE(restored_aggregate.Function().GetArguments().size() == 2);
+			auto exported = BoundExpressionSQLExporter::Export(*restored, context);
+			REQUIRE(exported.IsValid());
+			REQUIRE(exported.IsSuccess());
+			auto sql = exported.GetValue()->ToString();
+			auto oracle = call;
+			if (aggregate.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+				sql = "finalize(" + sql + ")";
+				oracle = "finalize(" + oracle + ")";
+			}
+			if (aggregate.GetAggregateType() == AggregateType::DISTINCT &&
+			    (!aggregate.GetOrderBys() || aggregate.GetOrderBys()->orders.empty())) {
+				// DISTINCT without ORDER BY does not define concatenation order.
+				sql = "array_to_string(list_sort(string_split(" + sql + ", '&')), '&')";
+				oracle = "array_to_string(list_sort(string_split(" + oracle + ", '&')), '&')";
+			}
+			auto result = connection.Query("SELECT " + sql + " FROM string_values");
+			auto expected = baseline.Query("SELECT " + oracle + " FROM string_values");
+			REQUIRE_FALSE(result->HasError());
+			REQUIRE_FALSE(expected->HasError());
+			REQUIRE(result->Equals(*expected, false));
+			REQUIRE(result->GetTypes() == vector<LogicalType> {LogicalType::VARCHAR});
+			REQUIRE(result->GetValue(0, 0) == Value("a&b"));
+		}
 	}
+	connection.Rollback();
+}
 
-	auto explicit_plan =
-	    BindExportQuery(connection, "SELECT string_agg(x, '&') FROM (VALUES ('a'), ('b')) AS string_values(x)");
-	auto explicit_separator = FindExpression(*explicit_plan, [](const Expression &expression) {
-		return expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
-		       expression.Cast<BoundAggregateExpression>().Function().GetDefinition()->GetName() == "string_agg";
-	});
-	REQUIRE(explicit_separator);
-	auto &explicit_bound = explicit_separator->Cast<BoundAggregateExpression>();
-	REQUIRE(explicit_bound.BindInfo());
-	REQUIRE(explicit_bound.Function().GetArguments().size() == 1);
-	REQUIRE(explicit_bound.Function().GetLogicalArguments() ==
-	        vector<LogicalType> {LogicalType::VARCHAR, LogicalType::VARCHAR});
-	REQUIRE(explicit_bound.GetChildren().size() == 1);
-	REQUIRE(explicit_bound.Function().GetDefinition()->GetSignature().GetParameters().size() == 2);
-	auto explicit_source = CreateSyntheticSQLSource(explicit_bound);
-	LogicalPlanVerificationPath path;
-	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-	RequireFunctionIssue(BoundExpressionSQLExporter::Export(explicit_bound, explicit_source.context),
-	                     LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path, Identifier::SystemCatalog(),
-	                     Identifier::DefaultSchema(), Identifier("string_agg"),
-	                     {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR);
-	auto serialized_explicit = BinaryRoundTrip(*connection.context, explicit_bound);
-	REQUIRE(serialized_explicit->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-	auto &serialized_explicit_bound = serialized_explicit->Cast<BoundAggregateExpression>();
-	REQUIRE(serialized_explicit_bound.BindInfo());
-	REQUIRE(serialized_explicit_bound.Function().GetArguments().size() == 1);
-	REQUIRE(serialized_explicit_bound.Function().GetLogicalArguments() ==
-	        explicit_bound.Function().GetLogicalArguments());
-	REQUIRE(serialized_explicit_bound.GetChildren().size() == 1);
-	RequireFunctionIssue(BoundExpressionSQLExporter::Export(serialized_explicit_bound, explicit_source.context),
-	                     LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path, Identifier::SystemCatalog(),
-	                     Identifier::DefaultSchema(), Identifier("string_agg"),
-	                     {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR);
-
-	auto default_plan =
-	    BindExportQuery(connection, "SELECT string_agg(x) FROM (VALUES ('a'), ('b')) AS string_values(x)");
-	auto default_separator = FindExpression(*default_plan, [](const Expression &expression) {
-		return expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
-		       expression.Cast<BoundAggregateExpression>().Function().GetDefinition()->GetName() == "string_agg";
-	});
-	REQUIRE(default_separator);
-	auto &default_bound = default_separator->Cast<BoundAggregateExpression>();
-	REQUIRE(default_bound.Function().GetArguments().size() == 1);
-	REQUIRE(default_bound.GetChildren().size() == 1);
-	REQUIRE(default_bound.Function().GetDefinition()->GetSignature().GetParameters().size() == 1);
-	auto default_source = CreateSyntheticSQLSource(default_bound);
-	RequireRoundTrip(connection, default_bound, default_source.context, default_source.from_clause,
-	                 "string_agg(v.exported_0)");
+TEST_CASE("Logical function identity respects storage compatibility", "[bound_expression_sql_export][serialization]") {
+	DuckDB db;
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE compatibility_values(i INTEGER)"));
+	REQUIRE_NO_FAIL(connection.Query("INSERT INTO compatibility_values VALUES (1), (2)"));
+	connection.BeginTransaction();
+	for (auto call : {"abs(i)", "log2(i)", "sum(i)", "quantile_cont(i, 0.5)"}) {
+		INFO(call);
+		auto plan = BindExportQuery(connection, string("SELECT ") + call + " FROM compatibility_values");
+		auto expression = FindExpression(*plan, [](const Expression &candidate) {
+			return candidate.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE ||
+			       (candidate.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+			        candidate.GetExpressionType() == ExpressionType::BOUND_FUNCTION);
+		});
+		REQUIRE(expression);
+		auto source = CreateSyntheticSQLSource(*expression);
+		auto current =
+		    BinaryRoundTrip(*connection.context, *expression, StorageCompatibility::FromIndex(StorageVersion::V2_0_0));
+		REQUIRE(BoundExpressionSQLExporter::Export(*current, source.context).IsSuccess());
+		auto legacy =
+		    BinaryRoundTrip(*connection.context, *expression, StorageCompatibility::FromIndex(StorageVersion::V1_5_0));
+		REQUIRE(legacy->GetReturnType() == expression->GetReturnType());
+		LogicalPlanVerificationPath path;
+		path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+		RequireIssue(BoundExpressionSQLExporter::Export(*legacy, source.context),
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+	}
+	REQUIRE_NO_FAIL(connection.Query("SET storage_compatibility_version='v1.5.0'"));
+	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_serializer=true"));
+	auto result = connection.Query("SELECT abs(-7), log2(8), sum(i), quantile_cont(i, 0.5) FROM compatibility_values");
+	REQUIRE_FALSE(result->HasError());
+	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(7));
+	REQUIRE(result->GetValue(1, 0) == Value::DOUBLE(3));
+	REQUIRE(result->GetValue(2, 0) == Value::HUGEINT(hugeint_t(3)));
+	REQUIRE(result->GetValue(3, 0) == Value::DOUBLE(1.5));
 	connection.Rollback();
 }
 

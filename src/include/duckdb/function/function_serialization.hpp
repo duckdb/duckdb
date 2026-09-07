@@ -173,6 +173,20 @@ private:
 	}
 
 	static void SerializeLogicalDefinition(Serializer &serializer, const BoundScalarFunction &function) {
+		// A rewritten call need not retain the original logical signature.
+		if (function.GetLogicalReturnType() != function.GetReturnType()) {
+			return;
+		}
+		auto &arguments = function.GetArguments();
+		auto &logical_arguments = function.GetLogicalArguments();
+		if (arguments.size() != logical_arguments.size()) {
+			return;
+		}
+		for (idx_t i = 0; i < arguments.size(); i++) {
+			if (arguments[i].IsComplete() && arguments[i] != logical_arguments[i]) {
+				return;
+			}
+		}
 		SerializeLogicalDefinitionInternal(serializer, function);
 	}
 
@@ -182,6 +196,9 @@ private:
 
 	template <class FUNC>
 	static void SerializeLogicalDefinitionInternal(Serializer &serializer, const FUNC &function) {
+		if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+			return;
+		}
 		auto has_logical_definition = function.HasSQLAddressableDefinition();
 		serializer.WritePropertyWithDefault<bool>(507, "has_logical_definition", has_logical_definition, false);
 		if (!has_logical_definition) {
@@ -348,8 +365,8 @@ public:
 					bound_function.SetReturnType(return_type);
 				}
 
-				RestoreLogicalDefinition(context, catalog_type, bound_function, logical_definition, return_type,
-				                         deferred);
+				RestoreLogicalDefinition(context, catalog_type, bound_function, logical_definition,
+				                         bound_function.GetReturnType(), deferred);
 				return make_pair(std::move(bound_function), std::move(bound_data));
 			} catch (std::exception &ex) {
 				ErrorData error(ex);
@@ -370,7 +387,8 @@ public:
 		if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 			bound_function.SetReturnType(return_type);
 		}
-		RestoreLogicalDefinition(context, catalog_type, bound_function, logical_definition, return_type, deferred);
+		RestoreLogicalDefinition(context, catalog_type, bound_function, logical_definition,
+		                         bound_function.GetReturnType(), deferred);
 
 		return make_pair(std::move(bound_function), std::move(bound_data));
 	}

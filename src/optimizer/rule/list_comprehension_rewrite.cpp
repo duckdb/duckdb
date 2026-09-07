@@ -8,7 +8,6 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/lambda_functions.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -265,6 +264,7 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ClientContext &context, Lis
 		filter_children.push_back(std::move(inner_apply.GetChildrenMutable()[i]));
 	}
 
+	auto filter_return_type = filter_children[0]->GetReturnType();
 	auto filter_lambda = filter_expr.Copy();
 	if (filter_lambda->GetReturnType() != LogicalType::BOOLEAN) {
 		filter_lambda = BoundCastExpression::AddCastToType(context, std::move(filter_lambda), LogicalType::BOOLEAN);
@@ -276,17 +276,17 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ClientContext &context, Lis
 			break;
 		}
 	}
-	vector<unique_ptr<Expression>> filter_arguments;
-	filter_arguments.push_back(std::move(filter_children[0]));
-	filter_arguments.push_back(std::move(filter_children[1]));
-	FunctionBinder binder(context);
-	auto new_filter = binder.BindScalarFunction(list_filter_expr.Function().GetDefinition(),
-	                                            std::move(filter_arguments), list_filter_expr.IsOperator());
-	for (idx_t i = 2; i < filter_children.size(); i++) {
-		new_filter->Cast<BoundFunctionExpression>().GetChildrenMutable().push_back(std::move(filter_children[i]));
-	}
+	auto filter_bind_info =
+	    make_uniq<ListLambdaBindData>(filter_return_type, std::move(filter_lambda), inner_bind.has_index);
+
+	auto new_func = list_filter_expr.Function();
+	new_func.SetReturnType(filter_return_type);
+
+	auto new_filter = make_uniq<BoundFunctionExpression>(std::move(new_func), std::move(filter_children),
+	                                                     std::move(filter_bind_info), list_filter_expr.IsOperator());
 
 	// Build list_apply(list_filter(...), lambda result_expr)
+	auto apply_return_type = LogicalType::LIST(result_expr.GetReturnType());
 	auto apply_lambda = result_expr.Copy();
 	if (inner_bind.has_index) {
 		// The apply function included an index but it was not used. Adapt references to exclude index
@@ -298,12 +298,13 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ClientContext &context, Lis
 	apply_children.push_back(std::move(new_filter));
 	// the lambda keeps its argument position, the captures follow it
 	apply_children.push_back(MakeLambdaChild(*apply_lambda, false, std::move(lambda_parameter_names)));
-	auto result =
-	    binder.BindScalarFunction(root.Function().GetDefinition(), std::move(apply_children), root.IsOperator());
 	for (auto &captured_child : match.captured_children) {
-		result->Cast<BoundFunctionExpression>().GetChildrenMutable().push_back(std::move(captured_child));
+		apply_children.push_back(std::move(captured_child));
 	}
-	return result;
+
+	auto apply_bind_info = make_uniq<ListLambdaBindData>(apply_return_type, std::move(apply_lambda));
+	return make_uniq<BoundFunctionExpression>(root.Function(), std::move(apply_children), std::move(apply_bind_info),
+	                                          root.IsOperator());
 }
 
 } // namespace

@@ -49,40 +49,6 @@ bool FunctionData::SupportStatementCache() const {
 
 Function::Function(Identifier name_p) : name(std::move(name_p)) {
 }
-
-Function::Function(const Function &other)
-    : name(other.name), extra_info(other.extra_info), catalog_name(other.catalog_name), schema_name(other.schema_name) {
-}
-
-Function::Function(Function &&other)
-    : name(std::move(other.name)), extra_info(std::move(other.extra_info)), catalog_name(std::move(other.catalog_name)),
-      schema_name(std::move(other.schema_name)) {
-	other.sql_addressable = false;
-}
-
-Function &Function::operator=(const Function &other) {
-	if (this != &other) {
-		name = other.name;
-		extra_info = other.extra_info;
-		catalog_name = other.catalog_name;
-		schema_name = other.schema_name;
-	}
-	sql_addressable = false;
-	return *this;
-}
-
-Function &Function::operator=(Function &&other) {
-	if (this != &other) {
-		name = std::move(other.name);
-		extra_info = std::move(other.extra_info);
-		catalog_name = std::move(other.catalog_name);
-		schema_name = std::move(other.schema_name);
-		other.sql_addressable = false;
-	}
-	sql_addressable = false;
-	return *this;
-}
-
 Function::~Function() {
 }
 
