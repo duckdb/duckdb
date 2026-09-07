@@ -287,6 +287,13 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropColumn(
 	return std::move(result);
 }
 
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropConstraint(PEGTransformer &transformer,
+                                                                          const optional<bool> &if_exists,
+                                                                          const Identifier &identifier,
+                                                                          const optional<bool> &drop_behavior) {
+	throw NotImplementedException("No support for that ALTER TABLE option yet!");
+}
+
 unique_ptr<AlterTableInfo>
 PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const bool &has_result,
                                             unique_ptr<ColumnRefExpression> nested_column_name,

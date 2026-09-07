@@ -50,7 +50,7 @@ class ListMatchProcess : public MatchProcess {
 public:
 	ListMatchProcess(const ListMatcher &matcher_p, MatchState &state_p)
 	    : matcher(matcher_p), state(state_p), list_state(state_p) {
-		saved_suggestion_size = matcher.suppress_suggestions ? list_state.suggestions.size() : 0;
+		saved_suggestion_size = matcher.suppress_suggestions ? list_state.context.suggestions.size() : 0;
 		if (auto current = list_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
@@ -99,8 +99,9 @@ private:
 		if (!matcher.suppress_suggestions) {
 			return;
 		}
-		list_state.suggestions.erase(list_state.suggestions.begin() + NumericCast<int64_t>(saved_suggestion_size),
-		                             list_state.suggestions.end());
+		list_state.context.suggestions.erase(list_state.context.suggestions.begin() +
+		                                         NumericCast<int64_t>(saved_suggestion_size),
+		                                     list_state.context.suggestions.end());
 	}
 
 private:
@@ -145,7 +146,7 @@ public:
 		if (child_index >= matcher.matchers.size()) {
 			return MatchStep::Complete(MatcherResult::Failure());
 		}
-		child_state = make_uniq<MatchState>(state);
+		child_state.emplace(state);
 		awaiting_child = true;
 		return MatchStep::Child({matcher.matchers[child_index].get(), *child_state});
 	}
@@ -153,7 +154,7 @@ public:
 private:
 	const ChoiceMatcher &matcher;
 	MatchState &state;
-	unique_ptr<MatchState> child_state;
+	optional<MatchState> child_state;
 	idx_t child_index = 0;
 	optional_idx start_offset;
 	bool awaiting_child = false;

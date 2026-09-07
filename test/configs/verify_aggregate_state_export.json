@@ -72,6 +72,7 @@
       "paths": [
         "test/extension/test_function_named_args.test",
         "test/extension/volatile_aggregate.test",
+        "test/issues/general/test_24049.test",
         "test/sql/aggregate/aggregates/test_approximate_distinct_count.test",
         "test/sql/aggregate/aggregates/test_stddev.test",
         "test/sql/cte/cte_describe.test",

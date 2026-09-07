@@ -1071,16 +1071,14 @@ ScanOptions::ScanOptions(TransactionData transaction) : transaction(transaction)
 void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType type) {
 	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
 
-	transaction_t start_ts;
-	transaction_t transaction_id;
+	VisibilityBound visibility_bound;
 	if (type == TableScanType::TABLE_SCAN_COMMITTED_ROWS) {
-		start_ts = transaction_manager.GetLastCommit() + 1;
-		transaction_id = MAX_TRANSACTION_ID;
+		visibility_bound = VisibilityBound::Through(transaction_manager.GetLastCommit());
 	} else {
-		start_ts = transaction_manager.LowestActiveStart();
-		transaction_id = transaction_manager.LowestActiveId();
+		visibility_bound = transaction_manager.LowestVisibilityBound();
 	}
-	TransactionData transaction(transaction_id, start_ts);
+	// a scan on behalf of no transaction: there are no writes of its own to see
+	TransactionData transaction(MAX_TRANSACTION_ID, visibility_bound);
 
 	ScanOptions options(transaction);
 	options.insert_type = InsertedScanType::ALL_ROWS;
@@ -1297,9 +1295,9 @@ void RowGroup::FinalizeAppend(RowGroupAppendState &state) {
 	}
 }
 
-void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+void RowGroup::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count) {
 	auto &vinfo = GetOrCreateVersionInfo();
-	vinfo.CleanupAppend(lowest_transaction, start, count);
+	vinfo.CleanupAppend(lowest_visibility_bound, start, count);
 }
 
 void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, DataChunk &update_chunk, row_t *ids,
@@ -1490,7 +1488,7 @@ idx_t RowGroup::GetCommittedRowCount() {
 	if (!vinfo) {
 		return count;
 	}
-	ScanOptions options(TransactionData(0, TRANSACTION_ID_START));
+	ScanOptions options(TransactionData(0, VisibilityBound::AllCommitted()));
 	options.insert_type = InsertedScanType::ALL_ROWS;
 	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
 	return vinfo->GetRowCount(options, count);
@@ -1919,7 +1917,7 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) co
 	return result;
 }
 
-void RowGroup::CompressVersionInfo(transaction_t lowest_active_start) {
+void RowGroup::CompressVersionInfo(VisibilityBound lowest_visibility_bound) {
 	if (HasUnloadedDeletes()) {
 		// deletes were not loaded - they are still stored in their compact serialized form
 		return;
@@ -1928,7 +1926,7 @@ void RowGroup::CompressVersionInfo(transaction_t lowest_active_start) {
 	if (!vinfo) {
 		return;
 	}
-	vinfo->CompressVersionIds(lowest_active_start);
+	vinfo->CompressVersionIds(lowest_visibility_bound);
 }
 
 vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {
@@ -2139,7 +2137,7 @@ void VersionDeleteState::Flush() {
 	// it is possible for delete statements to delete the same tuple multiple times when combined with a USING clause
 	// in the current_info->Delete, we check which tuples are actually deleted (excluding duplicate deletions)
 	// this is returned in the actual_delete_count
-	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.transaction_id, rows, count);
+	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.GetTransactionId(), rows, count);
 	delete_count += actual_delete_count;
 	if (transaction.transaction && actual_delete_count > 0) {
 		// now push the delete into the undo buffer, but only if any deletes were actually performed

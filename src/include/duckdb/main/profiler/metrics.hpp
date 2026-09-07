@@ -87,6 +87,13 @@ struct MetricSystemPeakBufferMemory {
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
+struct MetricSystemPeakStreamingBufferSize {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "system.peak_streaming_buffer_size";
+	static constexpr const char *Description = "Peak number of bytes buffered by a streaming query result";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricSystemPeakTempDirSize {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "system.peak_temp_dir_size";

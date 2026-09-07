@@ -36,14 +36,6 @@ PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
 	}
 }
 
-bool PipelineTask::TaskBlockedOnResult() const {
-	return pipeline.IsStreamingResultPipeline() && pipeline_executor->RemainingSinkChunk();
-}
-
-const PipelineExecutor &PipelineTask::GetPipelineExecutor() const {
-	return *pipeline_executor;
-}
-
 TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
 	if (!pipeline_executor) {
 		pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline, reserved_batch_index);
@@ -252,14 +244,6 @@ bool Pipeline::HasExternalInputProducer(const Pipeline &pipeline) const {
 		}
 	}
 	return false;
-}
-
-bool Pipeline::IsStreamingResultPipeline() const {
-	if (external_streaming_result_producer) {
-		return true;
-	}
-	return sink && sink->type == PhysicalOperatorType::RESULT_COLLECTOR &&
-	       sink->Cast<PhysicalResultCollector>().IsStreaming();
 }
 
 bool Pipeline::CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const {

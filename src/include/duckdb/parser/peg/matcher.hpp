@@ -143,53 +143,58 @@ struct MatcherSuggestion {
 	char extra_char = '\0';
 };
 
-struct MatchState {
-	MatchState(TokenIterator &token_iterator_p, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, MatchMode mode_p = MatchMode::BUILD_PARSE_RESULT,
-	           IdentifierCaseMode identifier_case_mode_p = IdentifierCaseMode::PRESERVE_CASE,
-	           bool use_heap_based_parser_p = false, ParserPackratCache *packrat_cache_p = nullptr)
-	    : token_iterator(token_iterator_p), suggestions(suggestions), allocator(allocator),
-	      max_token_index(max_token_index), identifier_case_mode(identifier_case_mode_p),
-	      packrat_cache(packrat_cache_p), mode(mode_p), use_heap_based_parser(use_heap_based_parser_p) {
-	}
-	MatchState(MatchState &state)
-	    : token_iterator(state.token_iterator), suggestions(state.suggestions), allocator(state.allocator),
-	      max_token_index(state.max_token_index), identifier_case_mode(state.identifier_case_mode),
-	      packrat_cache(state.packrat_cache), mode(state.mode), use_heap_based_parser(state.use_heap_based_parser),
-	      rule(state.rule) {
+struct MatchContext {
+	MatchContext(vector<MatcherSuggestion> &suggestions_p, ParseResultAllocator &allocator_p, idx_t &max_token_index_p,
+	             MatchMode mode_p = MatchMode::BUILD_PARSE_RESULT,
+	             IdentifierCaseMode identifier_case_mode_p = IdentifierCaseMode::PRESERVE_CASE,
+	             bool use_heap_based_parser_p = false, ParserPackratCache *packrat_cache_p = nullptr)
+	    : suggestions(suggestions_p), allocator(allocator_p), max_token_index(max_token_index_p),
+	      identifier_case_mode(identifier_case_mode_p), packrat_cache(packrat_cache_p), mode(mode_p),
+	      use_heap_based_parser(use_heap_based_parser_p) {
 	}
 
-	TokenIterator token_iterator;
 	vector<MatcherSuggestion> &suggestions;
-	reference_set_t<const Matcher> added_suggestions;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
-	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
+	IdentifierCaseMode identifier_case_mode;
 	ParserPackratCache *packrat_cache;
 	MatchMode mode;
 	bool use_heap_based_parser;
+};
+
+struct MatchState {
+	MatchState(TokenIterator &token_iterator_p, MatchContext &context_p)
+	    : token_iterator(token_iterator_p), context(context_p) {
+	}
+	MatchState(const MatchState &state)
+	    : token_iterator(state.token_iterator), context(state.context), rule(state.rule) {
+	}
+
+	TokenIterator token_iterator;
+	MatchContext &context;
+	unique_ptr<reference_set_t<const Matcher>> added_suggestions;
 	optional_ptr<const CompiledGrammarRule> rule;
 
 	bool BuildParseResult() const {
-		return mode == MatchMode::BUILD_PARSE_RESULT;
+		return context.mode == MatchMode::BUILD_PARSE_RESULT;
 	}
 
 	template <class RESULT, class... ARGS>
 	MatcherResult AllocateParseResult(ARGS &&... args);
 
 	void UpdateMaxTokenIndex() {
-		if (token_iterator.Position() > max_token_index) {
-			max_token_index = token_iterator.Position();
+		if (token_iterator.Position() > context.max_token_index) {
+			context.max_token_index = token_iterator.Position();
 		}
 	}
 
 	idx_t GetMaxTokenIndex() const {
-		return max_token_index;
+		return context.max_token_index;
 	}
 
 	//! Fold a non-quoted identifier in-place according to the configured case mode
 	void FoldIdentifier(string &text) const {
-		switch (identifier_case_mode) {
+		switch (context.identifier_case_mode) {
 		case IdentifierCaseMode::LOWERCASE:
 			text = StringUtil::Lower(text);
 			break;
@@ -369,7 +374,7 @@ MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}
-	auto result = allocator.Allocate(make_uniq<RESULT>(std::forward<ARGS>(args)...));
+	auto result = context.allocator.Allocate(make_uniq<RESULT>(std::forward<ARGS>(args)...));
 	if (rule) {
 		result->SetRule(*rule);
 		result->name = rule->name;

@@ -1572,6 +1572,18 @@ struct MaxMemorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct MaxStreamingBufferSizeSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "max_streaming_buffer_size";
+	static constexpr const char *Description =
+	    "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Buffered bytes stay under this cap "
+	    "plus at most one chunk: an oversized chunk is only admitted into an empty queue";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct MaxTempDirectorySizeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "max_temp_directory_size";
@@ -1966,17 +1978,6 @@ struct StorageCompatibilityVersionSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct StreamingBufferSizeSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "streaming_buffer_size";
-	static constexpr const char *Description =
-	    "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 

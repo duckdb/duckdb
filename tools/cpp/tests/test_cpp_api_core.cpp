@@ -36,6 +36,15 @@ TEST_CASE("Stable C++API: Database GetOption by name and option target scope", "
 
 	REQUIRE_THROWS_MATCHES(db.GetOption("no_such_option"), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
+TEST_CASE("Stable C++API: RenderQuotedIdentifier quotes only when required", "[cpp_api]") {
+	using duckdb::cxx::RenderQuotedIdentifier;
+	REQUIRE(RenderQuotedIdentifier("col") == "col");
+	REQUIRE(RenderQuotedIdentifier("MyCol") == "MyCol");
+	REQUIRE(RenderQuotedIdentifier("select") == "\"select\"");
+	REQUIRE(RenderQuotedIdentifier("my col") == "\"my col\"");
+	REQUIRE(RenderQuotedIdentifier("a\"b") == "\"a\"\"b\"");
+}
+
 TEST_CASE("Stable C++API: LibraryVersion reports the engine version", "[cpp_api]") {
 	const auto version = duckdb::cxx::LibraryVersion();
 	REQUIRE_FALSE(version.empty());

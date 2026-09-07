@@ -24,6 +24,9 @@ static const TransformFrameOps ALTER_TABLE_OPTIONS_OPS = {"AlterTableOptions",
 static const TransformFrameOps ADD_CONSTRAINT_OPS = {"AddConstraint",
                                                      &PEGTransformerFactory::InitializeAddConstraintTrampoline,
                                                      &PEGTransformerFactory::FinalizeAddConstraintTrampoline};
+static const TransformFrameOps DROP_CONSTRAINT_OPS = {"DropConstraint",
+                                                      &PEGTransformerFactory::InitializeDropConstraintTrampoline,
+                                                      &PEGTransformerFactory::FinalizeDropConstraintTrampoline};
 static const TransformFrameOps ADD_COLUMN_OPS = {"AddColumn", &PEGTransformerFactory::InitializeAddColumnTrampoline,
                                                  &PEGTransformerFactory::FinalizeAddColumnTrampoline};
 static const TransformFrameOps ADD_COLUMN_ENTRY_OPS = {"AddColumnEntry",
@@ -2941,6 +2944,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"AlterSchemaStmt", &ALTER_SCHEMA_STMT_OPS},
 	    {"AlterTableOptions", &ALTER_TABLE_OPTIONS_OPS},
 	    {"AddConstraint", &ADD_CONSTRAINT_OPS},
+	    {"DropConstraint", &DROP_CONSTRAINT_OPS},
 	    {"AddColumn", &ADD_COLUMN_OPS},
 	    {"AddColumnEntry", &ADD_COLUMN_ENTRY_OPS},
 	    {"DropColumn", &DROP_COLUMN_OPS},
@@ -4121,6 +4125,37 @@ PEGTransformerFactory::FinalizeAddConstraintTrampoline(PEGTransformer &transform
                                                        GeneratedTransformProcess &process) {
 	auto top_level_constraint = process.TakeResult<unique_ptr<Constraint>>(0);
 	auto result = TransformAddConstraint(transformer, std::move(top_level_constraint));
+	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDropConstraintTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(2);
+	auto &drop_behavior_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (drop_behavior_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("DropBehavior"), drop_behavior_opt.GetResult()}, 1);
+	}
+	auto &if_exists_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (if_exists_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("IfExists"), if_exists_opt.GetResult()}, 0);
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDropConstraintTrampoline(PEGTransformer &transformer,
+                                                        GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	optional<bool> if_exists {};
+	if (process.child_results[0]) {
+		if_exists = process.TakeResult<bool>(0);
+	}
+	auto identifier = list_pr.GetChild(3).Cast<IdentifierParseResult>().identifier;
+	optional<bool> drop_behavior {};
+	if (process.child_results[1]) {
+		drop_behavior = process.TakeResult<bool>(1);
+	}
+	auto result = TransformDropConstraint(transformer, if_exists, identifier, drop_behavior);
 	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
 }
 

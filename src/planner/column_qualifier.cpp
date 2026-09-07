@@ -302,6 +302,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	if (!new_colref) {
 		new_colref = std::move(colref);
 	}
+	new_colref->ClearAlias();
 	// we can! transform this into a function call on the column
 	// i.e. "x.lower()" becomes "lower(x)"
 	function.GetArgumentsMutable().insert(function.GetArgumentsMutable().begin(), std::move(new_colref));

@@ -33,7 +33,6 @@ class TableIndexIterationHelper;
 
 struct IndexSerializationInfo {
 	case_insensitive_map_t<Value> options;
-	transaction_t checkpoint_id;
 };
 
 // IndexStorageInfo is move-only. Keep every serialized info in owned_infos and expose stable ordered references.
@@ -125,7 +124,7 @@ public:
 		other.unbound_count = 0;
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
-	void MergeCheckpointDeltas(transaction_t checkpoint_id) const;
+	void MergeCheckpointDeltas(optional_idx checkpoint_id) const;
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	shared_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
