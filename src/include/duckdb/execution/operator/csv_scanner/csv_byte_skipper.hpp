@@ -22,9 +22,9 @@ class CSVByteSkipper {
 public:
 	//! Where a skip ended
 	enum class SkippedTo : uint8_t {
-		CANDIDATE_FOUND, 	//! Stop candidate found
+		CANDIDATE_FOUND,     //! Stop candidate found
 		CANDIDATE_NOT_FOUND, //! No stop candidate found in the whole range
-		TAIL //! If we have fewer than 64 bytes, the caller needs to check byte by byte
+		TAIL                 //! If we have fewer than 64 bytes, the caller needs to check byte by byte
 	};
 
 	//! Takes the byte patterns that end a skip, a byte matches a pattern on the bits set in its mask
