@@ -168,6 +168,11 @@ public:
 	void ScanRowIds(TransactionData transaction, CollectionScanState &state, SegmentNode<RowGroup> &node,
 	                const array_ptr<const row_t> &row_ids, idx_t live_row_end, idx_t scheduler_thread_count,
 	                ColumnFetchState &fetch_state, DataChunk &result);
+	//! Appends a leading run of at least two Fetch-only windows in this pinned RowGroup, bounded by live_row_end.
+	//! Returns whole windows consumed, including those with no visible rows, or zero if no run is eligible.
+	idx_t TryFetchRowIds(TransactionData transaction, const vector<StorageIndex> &column_ids,
+	                     SegmentNode<RowGroup> &node, const array_ptr<const row_t> &row_ids, idx_t live_row_end,
+	                     idx_t scheduler_thread_count, ColumnFetchState &fetch_state, DataChunk &result);
 	//! Prepares the next eligible vector in the assigned range, idempotent, returns false when none remain
 	bool PrepareScan(ScanOptions options, CollectionScanState &state);
 	//! Processes the vector prepared by PrepareScan, clearing the prepared state when the vector is finished

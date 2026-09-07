@@ -355,9 +355,6 @@ private:
 		const auto batch_window_end = batch.window_begin + batch.window_count;
 		const bool use_window_chunk = batch.window_count > 1;
 		l_state.all_columns.Reset();
-		if (use_window_chunk && row_id_scan.window_chunk.ColumnCount() == 0) {
-			row_id_scan.window_chunk.Initialize(context, scanned_types);
-		}
 		{
 			// Do not hold the revert lock while the caller consumes this batch's output.
 			auto row_group_revert_lock =
@@ -367,7 +364,8 @@ private:
 			auto &scan_state = row_id_scan.scan_state.table_state;
 			auto row_group = scan_state.row_group;
 			const auto &windows = row_id_scan_data->windows;
-			for (idx_t window_idx = batch.window_begin; window_idx < batch_window_end; window_idx++) {
+			const auto batch_row_id_end = windows[batch.window_begin].row_id_begin + batch.candidate_count;
+			for (idx_t window_idx = batch.window_begin; window_idx < batch_window_end;) {
 				if (window_idx > batch.window_begin) {
 					context.InterruptCheck();
 				}
@@ -381,12 +379,29 @@ private:
 					idx_t segment_idx;
 					// Later appends do not restore windows removed from this pinned tree by rollback.
 					if (!scan_state.row_groups->TryGetSegmentIndex(tree_lock, window.vector_start, segment_idx)) {
+						window_idx++;
 						continue;
 					}
 					row_group =
 					    scan_state.row_groups->GetSegmentByIndex(tree_lock, UnsafeNumericCast<int64_t>(segment_idx));
 				}
 				const auto row_ids = row_id_scan_data->row_ids.data() + window.row_id_begin;
+				if (window_idx + 1 < batch_window_end) {
+					const auto remaining_ids = array_ptr<const row_t>(row_ids, batch_row_id_end - window.row_id_begin);
+					const auto consumed_windows = row_group->GetNode().TryFetchRowIds(
+					    TransactionData(transaction), scan_state.GetColumnIds(), *row_group, remaining_ids,
+					    live_row_end, row_id_scan_data->scheduler_thread_count, l_state.fetch_state,
+					    l_state.all_columns);
+					if (consumed_windows > 0) {
+						// Keep scan_state and its decoders associated with their last scanned RowGroup.
+						window_idx += consumed_windows;
+						D_ASSERT(window_idx <= batch_window_end);
+						continue;
+					}
+				}
+				if (use_window_chunk && row_id_scan.window_chunk.ColumnCount() == 0) {
+					row_id_scan.window_chunk.Initialize(context, scanned_types);
+				}
 				auto &scan_chunk = use_window_chunk ? row_id_scan.window_chunk : l_state.all_columns;
 				scan_chunk.Reset();
 				row_group->GetNode().ScanRowIds(TransactionData(transaction), scan_state, *row_group,
@@ -396,6 +411,7 @@ private:
 				if (use_window_chunk) {
 					l_state.all_columns.Append(scan_chunk);
 				}
+				window_idx++;
 			}
 		}
 

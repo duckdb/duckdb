@@ -907,6 +907,79 @@ static idx_t GetRowIdSelectThreshold(const ColumnData &column_data, const idx_t 
 	}
 }
 
+idx_t RowGroup::TryFetchRowIds(TransactionData transaction, const vector<StorageIndex> &column_ids,
+                               SegmentNode<RowGroup> &node, const array_ptr<const row_t> &row_ids, idx_t live_row_end,
+                               idx_t scheduler_thread_count, ColumnFetchState &fetch_state, DataChunk &result) {
+	D_ASSERT(!row_ids.empty() && row_ids.size() <= STANDARD_VECTOR_SIZE);
+	const auto row_start = node.GetRowStart();
+	const auto row_end = MinValue<idx_t>(node.GetRowEnd(), live_row_end);
+	idx_t fetch_count = 0;
+	idx_t window_count = 0;
+	idx_t min_select_count = STANDARD_VECTOR_SIZE;
+	while (fetch_count < row_ids.size()) {
+		const auto row_id = UnsafeNumericCast<idx_t>(row_ids[fetch_count]);
+		D_ASSERT(row_id >= row_start);
+		if (row_id >= row_end) {
+			break;
+		}
+		const auto vector_start = row_start + (row_id - row_start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+		// Do not clip this boundary on rollback: a run must consume whole planned windows.
+		const auto vector_end = vector_start + STANDARD_VECTOR_SIZE;
+		idx_t window_end = fetch_count + 1;
+		while (window_end < row_ids.size() && UnsafeNumericCast<idx_t>(row_ids[window_end]) < vector_end) {
+			window_end++;
+		}
+		const auto candidate_count = window_end - fetch_count;
+		const auto physical_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, row_end - vector_start);
+		// A full window might use Scan. Leave windows cut by rollback to ScanRowIds for revalidation.
+		if (candidate_count >= physical_count || UnsafeNumericCast<idx_t>(row_ids[window_end - 1]) >= row_end) {
+			break;
+		}
+		if (physical_count == STANDARD_VECTOR_SIZE) {
+			if (window_count == 0) {
+				// Include filter columns. MVCC can only reduce the count, so these existing thresholds are
+				// conservative.
+				for (const auto &column : column_ids) {
+					const auto threshold = GetRowIdSelectThreshold(GetColumn(column), scheduler_thread_count);
+					if (threshold > 0) {
+						min_select_count = MinValue(min_select_count, threshold);
+						if (candidate_count >= min_select_count) {
+							return 0;
+						}
+					}
+				}
+			}
+			if (candidate_count >= min_select_count) {
+				break;
+			}
+		}
+		fetch_count = window_end;
+		window_count++;
+	}
+	if (window_count < 2) {
+		return 0;
+	}
+
+	idx_t offsets[STANDARD_VECTOR_SIZE];
+	for (idx_t i = 0; i < fetch_count; i++) {
+		D_ASSERT(i == 0 || row_ids[i - 1] < row_ids[i]);
+		offsets[i] = UnsafeNumericCast<idx_t>(row_ids[i]) - row_start;
+	}
+	sel_t visible_sel_buffer[STANDARD_VECTOR_SIZE];
+	SelectionVector visible_sel(visible_sel_buffer, STANDARD_VECTOR_SIZE);
+	const auto visible_count = Fetch(transaction, offsets, fetch_count, visible_sel);
+	if (visible_count > 0) {
+		// Fetch does not fill the selection when there is no version info.
+		const auto &fetch_sel = visible_count == fetch_count ? *FlatVector::IncrementalSelectionVector() : visible_sel;
+		fetch_state.row_group = &node;
+		const auto result_offset = result.size();
+		D_ASSERT(result_offset + visible_count <= STANDARD_VECTOR_SIZE);
+		FetchRows(transaction, fetch_state, column_ids, offsets, fetch_sel, visible_count, result, result_offset);
+		result.SetChildCardinality(result_offset + visible_count);
+	}
+	return window_count;
+}
+
 void RowGroup::ScanRowIds(TransactionData transaction, CollectionScanState &state, SegmentNode<RowGroup> &node,
                           const array_ptr<const row_t> &row_ids, idx_t live_row_end, idx_t scheduler_thread_count,
                           ColumnFetchState &fetch_state, DataChunk &result) {
