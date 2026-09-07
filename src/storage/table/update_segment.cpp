@@ -1559,6 +1559,26 @@ bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 	return false;
 }
 
+bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index, transaction_t transaction_id) {
+	auto read_lock = lock.GetSharedLock();
+	auto entry = GetUpdateNode(*read_lock, vector_index);
+	if (!entry.IsSet()) {
+		return false;
+	}
+	auto pin = entry.Pin();
+	auto update = UpdateInfo::Get(pin).next;
+	while (update.IsSet()) {
+		auto update_pin = update.Pin();
+		auto &update_info = UpdateInfo::Get(update_pin);
+		auto version_number = update_info.version_number.load();
+		if (version_number >= TRANSACTION_ID_START && version_number != transaction_id) {
+			return true;
+		}
+		update = update_info.next;
+	}
+	return false;
+}
+
 bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {
 	auto read_lock = lock.GetSharedLock();
 	if (!root) {

@@ -31,8 +31,10 @@ enum class DeletedScanType {
 enum class UpdateScanType {
 	//! allow updates
 	STANDARD,
-	// disallow updates - throw on updates
-	DISALLOW_UPDATES
+	//! disallow updates - throw on updates
+	DISALLOW_UPDATES,
+	//! allow updates from the current transaction, but throw on updates from other transactions
+	ALLOW_OWN_UPDATES
 };
 
 struct ScanOptions {
