@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alprd/alprd_corrupt_dictionary_count.test
+# description: An ALPRD dictionary count above the maximum must be rejected
+# group: [alprd]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alprd_corrupt_dictionary_count.db.gz {TEST_DIR}/alprd_corrupt_dictionary_count.db
+
+load {TEST_DIR}/alprd_corrupt_dictionary_count.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALPRD' LIMIT 1;
+----
+ALPRD
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupt database file: ALPRD dictionary size exceeds maximum
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupt database file: ALPRD dictionary size exceeds maximum

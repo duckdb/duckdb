@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/sorting/sort.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
@@ -48,6 +49,13 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	// get the BoundOrderByNode
 	auto idx_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0U);
 	auto lists_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(child_type, 1U);
+	// Normalize the sort key without changing the sorted values (#25108): push the
+	// type's collation (for INTERVAL this wraps the expression in
+	// normalized_interval(...), the same normalization comparison operators, ORDER BY
+	// and aggregates apply) onto the key expression BEFORE constructing its
+	// BoundOrderByNode. The key then byte-compares like ORDER BY, while the list
+	// payload keeps the original (non-normalized) values.
+	ExpressionBinder::PushCollation(context, lists_col_expr, child_type);
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(idx_col_expr));
 	orders.emplace_back(order_type, null_order, std::move(lists_col_expr));

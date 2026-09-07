@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alprd/alprd_corrupt_right_bit_width.test
+# description: An ALPRD right bit width at or above the value width must be rejected
+# group: [alprd]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alprd_corrupt_right_bit_width.db.gz {TEST_DIR}/alprd_corrupt_right_bit_width.db
+
+load {TEST_DIR}/alprd_corrupt_right_bit_width.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALPRD' LIMIT 1;
+----
+ALPRD
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD segment: right bit width 64 exceeds 63
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD segment: right bit width 64 exceeds 63

@@ -89,9 +89,8 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	lstate.key_chunk.ReferenceColumns(chunk, indexed_columns);
 	lstate.row_chunk.ReferenceColumns(chunk, rowid_column);
 
-	// Check for NULLs, if we are creating a PRIMARY KEY.
-	// FIXME: Later, we want to ensure that we skip the NULL check for any non-PK alter.
-	if (alter_table_info) {
+	// PRIMARY KEY columns cannot be NULL. UNIQUE allows NULLs.
+	if (alter_table_info && info->constraint_type == IndexConstraintType::PRIMARY) {
 		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
 			if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
 				throw ConstraintException("NOT NULL constraint failed: %s", info->GetIndexName());

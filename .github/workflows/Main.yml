@@ -81,6 +81,7 @@ jobs:
       runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
       runners: ${{ steps.runners.outputs.runners }}
       images: ${{ steps.config.outputs.images }}
+      image_version: ${{ steps.config.outputs.image_version }}
       linux_release_matrix: ${{ steps.selection.outputs.linux_release_matrix }}
       linux_musl_matrix: ${{ steps.selection.outputs.linux_musl_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
@@ -228,7 +229,10 @@ jobs:
           )
 
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
-          echo "images=$images" >> "$GITHUB_OUTPUT"
+          {
+            echo "image_version=$image_version"
+            echo "images=$images"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install tools
         timeout-minutes: 10
@@ -420,6 +424,7 @@ jobs:
       opt_in_archs: ${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}
       allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       runners: ${{ needs.prepare.outputs.runners }}
+      image_version: ${{ needs.prepare.outputs.image_version }}
       runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
@@ -576,12 +581,21 @@ jobs:
       run: |
         assets=()
         if [[ "${{ matrix.config.publish_source }}" == "true" ]]; then
-          zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
+          zip -j libduckdb-src.zip \
+            src/include/duckdb.h \
+            src/include/duckdb_v2.h \
+            src/include/duckdb_extension.h \
+            src/include/duckdb_extension_v2.h
           assets+=(libduckdb-src.zip)
         fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
           make gather-libs
-          zip -r -j static-libs-${{ matrix.config.artifact_suffix }}.zip src/include/duckdb.h build/release/libs/
+          zip -r -j static-libs-${{ matrix.config.artifact_suffix }}.zip \
+            src/include/duckdb.h \
+            src/include/duckdb_v2.h \
+            src/include/duckdb_extension.h \
+            src/include/duckdb_extension_v2.h \
+            build/release/libs/
           assets+=(static-libs-${{ matrix.config.artifact_suffix }}.zip)
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then

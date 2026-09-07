@@ -112,6 +112,28 @@ TEST_CASE("Stable C++API: ColumnDataCollection reset", "[cpp_api]") {
 	REQUIRE(ScanInts(conn, collection) == std::vector<int32_t> {9});
 }
 
+TEST_CASE("Stable C++API: ColumnDataCollection clear", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	std::vector<LogicalType> types;
+	types.push_back(conn.ParseType("INTEGER"));
+	ColumnDataCollection collection(conn, types);
+
+	// Same observable effect as Reset; the difference is that the buffers survive for the next appends.
+	for (int32_t round = 0; round < 3; round++) {
+		collection.Append(MakeIntChunk(conn, {round, round}));
+		REQUIRE(collection.GetRowCount() == 2);
+		collection.Clear();
+		REQUIRE(collection.GetRowCount() == 0);
+		REQUIRE(ScanInts(conn, collection).empty());
+	}
+
+	collection.Append(MakeIntChunk(conn, {7}));
+	REQUIRE(ScanInts(conn, collection) == std::vector<int32_t> {7});
+}
+
 TEST_CASE("Stable C++API: ColumnDataCollection scan refuses a mismatching chunk", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");

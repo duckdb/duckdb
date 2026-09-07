@@ -1,4 +1,5 @@
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
@@ -568,7 +569,7 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 	}
 }
 
-void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transaction_t start_time,
+void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, VisibilityBound visibility_bound,
                                          CatalogEntry &object) {
 	if (IsSystemEntry(object)) {
 		return;
@@ -576,7 +577,7 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 	auto info = GetLookupProperties(object);
 	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
 		auto dep_committed_at = dep.timestamp.load();
-		if (dep_committed_at > start_time) {
+		if (dep_committed_at >= visibility_bound) {
 			// In the event of a CASCADE, the dependency drop has not committed yet
 			// so we would be halted by the existence of a dependency we are already dropping unless we check the
 			// timestamp
@@ -594,7 +595,7 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 			return;
 		}
 		D_ASSERT(dep.Subject().flags.IsOwnership());
-		if (dep_committed_at > start_time) {
+		if (dep_committed_at >= visibility_bound) {
 			// Same as above, objects that are owned by the object that is being dropped will be dropped as part of this
 			// transaction. Only objects that were introduced by other transactions, that this transaction could not
 			// see, should cause this error:
@@ -670,21 +671,19 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 
 void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, ClientContext &context) {
 	auto transaction = catalog.GetCatalogTransaction(context);
-	// Read all the entries visible to this snapshot
-	ReorderEntries(entries, transaction);
+	// Read all the entries visible to this snapshot. Internal entries are not exported
+	ReorderEntries(entries, transaction, false);
 }
 
 void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries) {
-	// Read all committed entries
-	CatalogTransaction transaction(catalog.GetDatabase(), TRANSACTION_ID_START - 1, TRANSACTION_ID_START - 1);
-	ReorderEntries(entries, transaction);
+	// Read all committed entries. A checkpoint writes internal entries too
+	CatalogTransaction transaction(catalog.GetDatabase(), MAX_COMMIT_ID, VisibilityBound::Before(MAX_COMMIT_ID));
+	ReorderEntries(entries, transaction, true);
 }
 
 void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,
-                                     catalog_entry_vector_t &order) {
+                                     catalog_entry_vector_t &order, bool allow_internal) {
 	auto &catalog_entry = *LookupEntry(transaction, entry);
-	// We use this in CheckpointManager, it has the highest commit ID, allowing us to read any committed data
-	bool allow_internal = transaction.start_time == TRANSACTION_ID_START - 1;
 	if (visited.count(catalog_entry) || (!allow_internal && catalog_entry.internal)) {
 		// Already seen and ordered appropriately
 		return;
@@ -695,7 +694,7 @@ void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntr
 	auto info = GetLookupProperties(entry);
 	ScanSubjects(transaction, info, [&](DependencyEntry &dep) { dependents.push_back(dep); });
 	for (auto &dep : dependents) {
-		ReorderEntry(transaction, dep, visited, order);
+		ReorderEntry(transaction, dep, visited, order, allow_internal);
 	}
 
 	// Then write the entry
@@ -703,11 +702,12 @@ void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntr
 	order.push_back(catalog_entry);
 }
 
-void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction) {
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction,
+                                       bool allow_internal) {
 	catalog_entry_vector_t reordered;
 	catalog_entry_set_t visited;
 	for (auto &entry : entries) {
-		ReorderEntry(transaction, entry, visited, reordered);
+		ReorderEntry(transaction, entry, visited, reordered, allow_internal);
 	}
 	// If this would fail, that means there are more entries that we somehow reached through the dependency manager
 	// but those entries should not actually be visible to this transaction

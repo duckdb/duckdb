@@ -16,8 +16,8 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 set(DUCKDB_MAIN_EXTENSION_CONFIG_TYPE "OUT_OF_TREE")
-include("${CMAKE_CURRENT_LIST_DIR}/main_core.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/main_cloud.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/main_search.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/main_scanner.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/core.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/cloud.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/search.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/scanner.cmake")
 unset(DUCKDB_MAIN_EXTENSION_CONFIG_TYPE)

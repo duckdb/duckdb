@@ -722,37 +722,8 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 		return false;
 	}
 
-	// Resolve bound column references in the index_expr against the current input projection
-	ProjectionIndex updated_index_column;
-	bool found_index_column_in_input = false;
-
-	// Find the indexed column amongst the input columns
-	for (idx_t i = 0; i < input.column_ids.size(); ++i) {
-		if (input.column_ids[i] == indexed_columns[0]) {
-			updated_index_column = ProjectionIndex(i);
-			found_index_column_in_input = true;
-			break;
-		}
-	}
-
-	// If found, update the bound column ref within index_expr
-	if (found_index_column_in_input) {
-		ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
-			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-				return;
-			}
-
-			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
-
-			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.Binding().column_index == indexed_columns[0]) {
-				bound_column_ref_expr.BindingMutable().column_index = updated_index_column;
-			}
-		});
-	}
-
-	// Get ART column.
-	auto &col = column_list.GetColumn(LogicalIndex(indexed_columns[0]));
+	// Get ART column. GetColumnIds returns physical column IDs, which skip generated columns.
+	auto &col = column_list.GetColumn(PhysicalIndex(indexed_columns[0]));
 
 	// The indexes of the filters match input.column_indexes, which are: i -> column_index.
 	// Try to find a filter on the ART column.
@@ -768,6 +739,15 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 	if (!storage_index.IsValid()) {
 		return false;
 	}
+
+	// A bound column reference in an unbound index expression is an ordinal into indexed_columns, which is not the
+	// column's position in this scan. Rebind the references to the ART column's position in the scan input.
+	ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
+		if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return;
+		}
+		expr.Cast<BoundColumnRefExpression>().BindingMutable().column_index = storage_index;
+	});
 
 	// Try to find a matching filter for the column.
 	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index);
