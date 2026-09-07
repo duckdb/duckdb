@@ -1,4 +1,4 @@
-# name: test/sql/match_recognize/test_match_recognize_oracle.test
+# name: test/sql/match_recognize/test_match_recognize_oracle.test_slow
 # description: MATCH_RECOGNIZE results checked against Oracle
 # group: [match_recognize]
 
