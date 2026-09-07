@@ -16,12 +16,14 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/function/function_sql_export.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
 class BaseStatistics;
+class BoundExpressionSQLExportState;
+class FunctionBinder;
+class FunctionSerializer;
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
@@ -440,16 +442,6 @@ public:
 
 	DUCKDB_API bool Equal(const ScalarFunction &rhs) const;
 
-	bool HasSQLExportCallback() const {
-		return sql_export != nullptr;
-	}
-	scalar_function_sql_export_t GetSQLExportCallback() const {
-		return sql_export;
-	}
-	void SetSQLExportCallback(scalar_function_sql_export_t callback) {
-		sql_export = callback;
-	}
-
 public:
 	unique_ptr<BoundFunctionExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments,
 	                                         optional_ptr<Binder> binder = nullptr) const;
@@ -567,9 +559,6 @@ public:
 		}
 		return function;
 	}
-
-private:
-	scalar_function_sql_export_t sql_export = nullptr;
 };
 
 class BoundScalarFunction : public BaseScalarFunction<BoundScalarFunction>, public BoundSimpleFunction {
@@ -598,9 +587,44 @@ public:
 			catalog_name = definition->GetCatalogName();
 		}
 	}
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
 
 private:
+	static shared_ptr<const ScalarFunction> CopyStandaloneDefinition(const ScalarFunction &function);
+
+	bool HasSQLAddressableDefinition() const {
+		return definition && definition->IsSQLAddressable();
+	}
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
+	void RestoreLogicalDefinition(shared_ptr<const ScalarFunction> definition_p, vector<LogicalType> arguments_p,
+	                              LogicalType return_type_p) {
+		definition = std::move(definition_p);
+		logical_arguments = std::move(arguments_p);
+		logical_return_type = std::move(return_type_p);
+	}
+	void ClearLogicalDefinition() {
+		definition = CopyStandaloneDefinition(*definition);
+		logical_arguments = arguments;
+		logical_return_type = return_type;
+	}
+
 	shared_ptr<const ScalarFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class BoundExpressionSQLExportState;
+	friend class FunctionBinder;
+	friend class FunctionSerializer;
 };
 
 class BindScalarFunctionInput : public BindFunctionInput {

@@ -119,7 +119,13 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
 
 BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function)
     // the function does not come from a function set - copy it into a definition of its own
-    : BoundScalarFunction(make_shared_ptr<ScalarFunction>(function)) {
+    : BoundScalarFunction(CopyStandaloneDefinition(function)) {
+}
+
+shared_ptr<const ScalarFunction> BoundScalarFunction::CopyStandaloneDefinition(const ScalarFunction &function) {
+	auto result = make_shared_ptr<ScalarFunction>(function);
+	result->ClearSQLAddressable();
+	return std::move(result);
 }
 
 BoundScalarFunction::BoundScalarFunction(shared_ptr<const ScalarFunction> function_p)
@@ -140,6 +146,8 @@ BoundScalarFunction::BoundScalarFunction(shared_ptr<const ScalarFunction> functi
 	for (auto &param : function.GetSignature().GetParameters()) {
 		arguments.push_back(param.GetType());
 	}
+	logical_arguments = arguments;
+	logical_return_type = return_type;
 }
 
 bool BoundScalarFunction::operator==(const BoundScalarFunction &rhs) const {

@@ -153,23 +153,16 @@ static bool ChildrenAreConsistentWithArguments(const vector<unique_ptr<Expressio
 }
 
 template <class FUNCTION>
-static LogicalPlanVerificationFunctionIdentity
-DefinitionFunctionIdentity(const FUNCTION &definition, const vector<unique_ptr<Expression>> &children,
-                           const LogicalType &return_type) {
+static LogicalPlanVerificationFunctionIdentity DefinitionFunctionIdentity(const FUNCTION &definition,
+                                                                          const vector<LogicalType> &arguments,
+                                                                          const LogicalType &return_type) {
 	LogicalPlanVerificationFunctionIdentity identity;
 	identity.catalog = definition.GetCatalogName().GetIdentifierName();
 	identity.schema = definition.GetSchemaName().GetIdentifierName();
 	identity.name = definition.GetName().GetIdentifierName();
-	for (auto &child : children) {
-		identity.arguments.push_back(child ? child->GetReturnType() : LogicalType::INVALID);
-	}
+	identity.arguments = arguments;
 	identity.return_type = return_type;
 	return identity;
-}
-
-static bool ArgumentsRemainRepresented(const FunctionSignature &signature, idx_t argument_count) {
-	auto &parameters = signature.GetParameters();
-	return argument_count >= parameters.size() && (argument_count == parameters.size() || signature.HasVarArgs());
 }
 
 class BoundExpressionSQLExportState {
@@ -565,10 +558,15 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound scalar function has no retained definition"));
 		}
-		auto identity = DefinitionFunctionIdentity(*definition, expression.GetChildren(), expression.GetReturnType());
+		auto identity =
+		    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 		if (!identity.IsValid()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound scalar function identity is incomplete"));
+		}
+		if (!function.HasSQLAddressableDefinition()) {
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The retained scalar function definition is not SQL-addressable"));
 		}
 		QualifiedName name(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
 		if (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()) ||
@@ -582,15 +580,15 @@ private:
 				                                   "The bound scalar function uses an internal argument type"));
 			}
 		}
-		auto callback = definition->GetSQLExportCallback();
-		if (!callback && definition->GetProperties().GetCaptureArgumentAliases()) {
+		if (definition->GetProperties().GetCaptureArgumentAliases()) {
 			return Failure(
 			    UnsupportedFunction(path, std::move(identity),
 			                        "The bound scalar function requires argument aliases that are not retained"));
 		}
-		if (!callback && !ArgumentsRemainRepresented(definition->GetSignature(), expression.GetChildren().size())) {
+		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetLogicalArguments()) ||
+		    expression.GetReturnType() != function.GetLogicalReturnType()) {
 			return Failure(UnsupportedFunction(
-			    path, std::move(identity), "The bound scalar function no longer retains every required SQL argument"));
+			    path, std::move(identity), "The bound scalar function no longer represents its logical SQL signature"));
 		}
 		vector<unique_ptr<ParsedExpression>> children;
 		vector<LogicalPlanVerificationIssue> issues;
@@ -598,20 +596,12 @@ private:
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
 		}
-		if (callback) {
-			ScalarFunctionSQLExportInput input(function, expression.BindInfo().get(), std::move(children));
-			auto result = callback(input);
-			if (!result.IsValid()) {
-				return Failure(InternalInvariant(path, "Scalar function SQL export callback returned an invalid result",
-				                                 LogicalPlanVerificationConstructIdentity::Function(identity)));
-			}
-			if (result.HasError()) {
-				return Failure(UnsupportedFunction(path, std::move(identity), result.GetError()));
-			}
-			return BoundExpressionSQLExportResult::Success(std::move(result.GetValue()));
+		unique_ptr<ParsedExpression> result =
+		    make_uniq<FunctionExpression>(name, std::move(children), nullptr, nullptr, false, false, false);
+		if (definition->HasBindCallback() && definition->GetReturnType() != function.GetLogicalReturnType()) {
+			result = make_uniq<CastExpression>(function.GetLogicalReturnType(), std::move(result));
 		}
-		return BoundExpressionSQLExportResult::Success(
-		    make_uniq<FunctionExpression>(name, std::move(children), nullptr, nullptr, false, false, false));
+		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
 
 	BoundExpressionSQLExportResult ExportAggregate(const BoundAggregateExpression &expression,
@@ -621,20 +611,20 @@ private:
 			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid expression type"));
 		}
 		auto &function = expression.Function();
-		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetArguments()) ||
-		    expression.GetReturnType() != function.GetReturnType()) {
-			return Failure(
-			    InternalExpressionInvariant(path, expression, "Bound aggregate has an inconsistent current signature"));
-		}
 		auto &definition = function.GetDefinition();
 		if (!definition) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function has no retained definition"));
 		}
-		auto identity = DefinitionFunctionIdentity(*definition, expression.GetChildren(), expression.GetReturnType());
+		auto identity =
+		    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 		if (!identity.IsValid()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function identity is incomplete"));
+		}
+		if (!function.HasSQLAddressableDefinition()) {
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The retained aggregate function definition is not SQL-addressable"));
 		}
 		QualifiedName name(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
 		if (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()) ||
@@ -658,14 +648,18 @@ private:
 				                                   "The bound aggregate uses an internal argument type"));
 			}
 		}
-		auto callback = definition->GetSQLExportCallback();
-		if (!callback && definition->GetProperties().GetCaptureArgumentAliases()) {
+		if (definition->GetProperties().GetCaptureArgumentAliases()) {
 			return Failure(UnsupportedFunction(path, std::move(identity),
 			                                   "The bound aggregate requires argument aliases that are not retained"));
 		}
-		if (!callback && !ArgumentsRemainRepresented(definition->GetSignature(), expression.GetChildren().size())) {
+		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetLogicalArguments())) {
 			return Failure(UnsupportedFunction(path, std::move(identity),
-			                                   "The bound aggregate no longer retains every required SQL argument"));
+			                                   "The bound aggregate no longer represents its logical SQL arguments"));
+		}
+		if (expression.StateExportMode() == AggregateStateExportMode::NONE &&
+		    expression.GetReturnType() != function.GetLogicalReturnType()) {
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The bound aggregate no longer represents its logical SQL return type"));
 		}
 		vector<optional_ptr<const Expression>> source_children;
 		vector<optional<LogicalType>> expected_types;
@@ -712,24 +706,14 @@ private:
 				order_bys->orders.emplace_back(order.type, order.null_order, std::move(children[child_index++]));
 			}
 		}
-		if (callback) {
-			AggregateFunctionSQLExportInput input(function, expression.BindInfo().get(), std::move(arguments),
-			                                      std::move(filter), std::move(order_bys),
-			                                      expression.GetAggregateType(), expression.StateExportMode());
-			auto result = callback(input);
-			if (!result.IsValid()) {
-				return Failure(InternalInvariant(path,
-				                                 "Aggregate function SQL export callback returned an invalid result",
-				                                 LogicalPlanVerificationConstructIdentity::Function(identity)));
-			}
-			if (result.HasError()) {
-				return Failure(UnsupportedFunction(path, std::move(identity), result.GetError()));
-			}
-			return BoundExpressionSQLExportResult::Success(std::move(result.GetValue()));
-		}
-		return BoundExpressionSQLExportResult::Success(make_uniq<FunctionExpression>(
+		unique_ptr<ParsedExpression> result = make_uniq<FunctionExpression>(
 		    name, std::move(arguments), std::move(filter), std::move(order_bys), expression.IsDistinct(), false,
-		    expression.StateExportMode() == AggregateStateExportMode::STATE_EXPORT));
+		    expression.StateExportMode() == AggregateStateExportMode::STATE_EXPORT);
+		if (expression.StateExportMode() == AggregateStateExportMode::NONE && definition->HasBindCallback() &&
+		    definition->GetReturnType() != function.GetLogicalReturnType()) {
+			result = make_uniq<CastExpression>(function.GetLogicalReturnType(), std::move(result));
+		}
+		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
 
 	BoundExpressionSQLExportResult ExportChild(const Expression &expression, const LogicalPlanVerificationPath &path,

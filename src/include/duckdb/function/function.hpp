@@ -24,15 +24,18 @@ class Catalog;
 class ClientContext;
 class Expression;
 class ExpressionExecutor;
+class FunctionSerializer;
 class Transaction;
 
 class AggregateFunction;
 class AggregateFunctionSet;
+class AggregateFunctionCatalogEntry;
 class CopyFunction;
 class PragmaFunction;
 class PragmaFunctionSet;
 class ScalarFunctionSet;
 class ScalarFunction;
+class ScalarFunctionCatalogEntry;
 class TableFunctionSet;
 class TableFunction;
 class SimpleFunction;
@@ -65,10 +68,21 @@ enum class FunctionCollationHandling : uint8_t {
 	IGNORE_COLLATIONS = 2
 };
 
-enum class FunctionDataKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN };
-
 struct FunctionData {
 public:
+	FunctionData() = default;
+	FunctionData(const FunctionData &) : internal_kind(InternalKind::GENERIC) {
+	}
+	FunctionData(FunctionData &&) : internal_kind(InternalKind::GENERIC) {
+	}
+	FunctionData &operator=(const FunctionData &) {
+		internal_kind = InternalKind::GENERIC;
+		return *this;
+	}
+	FunctionData &operator=(FunctionData &&) {
+		internal_kind = InternalKind::GENERIC;
+		return *this;
+	}
 	DUCKDB_API virtual ~FunctionData();
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
@@ -93,12 +107,20 @@ public:
 	}
 
 private:
-	virtual FunctionDataKind GetKind() const {
-		return FunctionDataKind::GENERIC;
+	enum InternalKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN };
+
+	explicit FunctionData(InternalKind internal_kind_p) : internal_kind(internal_kind_p) {
 	}
+	InternalKind GetInternalKind() const {
+		return internal_kind;
+	}
+
+	InternalKind internal_kind = InternalKind::GENERIC;
 
 	friend struct BoundBetweenExpression;
 	friend struct BoundCastExpression;
+	friend struct BetweenFunctionData;
+	friend struct CastFunctionData;
 };
 
 struct TableFunctionData : public FunctionData {
@@ -306,6 +328,10 @@ private:
 class Function {
 public:
 	DUCKDB_API explicit Function(Identifier name);
+	DUCKDB_API Function(const Function &other);
+	DUCKDB_API Function(Function &&other);
+	DUCKDB_API Function &operator=(const Function &other);
+	DUCKDB_API Function &operator=(Function &&other);
 	DUCKDB_API virtual ~Function();
 
 	//! The name of the function
@@ -353,6 +379,24 @@ private:
 	Identifier catalog_name;
 	//! Optional schema name of the function
 	Identifier schema_name;
+	//! Whether this definition is addressable through SQL catalog binding
+	bool sql_addressable = false;
+
+	void MarkSQLAddressable() {
+		sql_addressable = true;
+	}
+	void ClearSQLAddressable() {
+		sql_addressable = false;
+	}
+	bool IsSQLAddressable() const {
+		return sql_addressable;
+	}
+
+	friend class AggregateFunctionCatalogEntry;
+	friend class BoundAggregateFunction;
+	friend class BoundScalarFunction;
+	friend class FunctionSerializer;
+	friend class ScalarFunctionCatalogEntry;
 };
 
 class SimpleFunction : public Function {

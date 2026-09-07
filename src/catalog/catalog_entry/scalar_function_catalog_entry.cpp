@@ -16,6 +16,7 @@ ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog &catalog, SchemaC
 	functions.ApplyToFunctions([&](ScalarFunction &function) {
 		function.SetCatalogName(catalog.GetAttached().GetName());
 		function.SetSchemaName(schema.name);
+		function.MarkSQLAddressable();
 	});
 }
 

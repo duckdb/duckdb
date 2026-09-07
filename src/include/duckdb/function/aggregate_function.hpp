@@ -13,13 +13,15 @@
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
-#include "duckdb/function/function_sql_export.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 class BufferManager;
+class BoundExpressionSQLExportState;
+class FunctionBinder;
+class FunctionSerializer;
 class InterruptState;
 class BoundAggregateFunction;
 struct AggregateRewriteInput;
@@ -608,16 +610,6 @@ public:
 
 	unique_ptr<BoundAggregateExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments) const;
 
-	bool HasSQLExportCallback() const {
-		return sql_export != nullptr;
-	}
-	aggregate_function_sql_export_t GetSQLExportCallback() const {
-		return sql_export;
-	}
-	void SetSQLExportCallback(aggregate_function_sql_export_t callback) {
-		sql_export = callback;
-	}
-
 	//! Statistics callback for aggregates whose result always lies within the range of their first
 	//! argument (e.g. min, max, first, median): the output inherits the input column statistics
 	static unique_ptr<BaseStatistics> PropagateInputValueStats(ClientContext &context, BoundAggregateExpression &expr,
@@ -843,9 +835,6 @@ public:
 	static void StateDestroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
 		AggregateExecutor::Destroy<STATE, OP>(states, aggr_input_data, count);
 	}
-
-private:
-	aggregate_function_sql_export_t sql_export = nullptr;
 };
 
 class BoundAggregateFunction : public BaseAggregateFunction, public BoundSimpleFunction {
@@ -877,7 +866,12 @@ public:
 			catalog_name = definition->GetCatalogName();
 		}
 	}
-
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
 	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
@@ -892,7 +886,36 @@ public:
 	}
 
 private:
+	static shared_ptr<const AggregateFunction> CopyStandaloneDefinition(const AggregateFunction &function);
+
+	bool HasSQLAddressableDefinition() const {
+		return definition && definition->IsSQLAddressable();
+	}
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
+	void RestoreLogicalDefinition(shared_ptr<const AggregateFunction> definition_p, vector<LogicalType> arguments_p,
+	                              LogicalType return_type_p) {
+		definition = std::move(definition_p);
+		logical_arguments = std::move(arguments_p);
+		logical_return_type = std::move(return_type_p);
+	}
+	void ClearLogicalDefinition() {
+		definition = CopyStandaloneDefinition(*definition);
+		logical_arguments = arguments;
+		logical_return_type = return_type;
+	}
+
 	shared_ptr<const AggregateFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class BoundExpressionSQLExportState;
+	friend class FunctionBinder;
+	friend class FunctionSerializer;
 };
 
 // Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().

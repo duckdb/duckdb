@@ -7,11 +7,15 @@
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/function_serialization.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -261,7 +265,7 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 
 	auto [bound_aggr, bind_info] = function_binder.ResolveFunction(aggr, args);
 
-	const auto &bound_args = bound_aggr.GetArguments();
+	const auto &bound_args = bound_aggr.GetLogicalArguments();
 	bool signature_matches = bound_args.size() == argument_types.size();
 	for (idx_t arg_idx = 0; signature_matches && arg_idx < bound_args.size(); arg_idx++) {
 		// an ANY argument in the function signature (e.g. string_agg's data argument) matches any requested type
@@ -276,6 +280,38 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 
 	const auto state_size = bound_aggr.GetStateSize(bind_info.get());
 	return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info), state_size);
+}
+
+unique_ptr<ExportAggregateBindData> DeserializeStateFunction(ClientContext &context, const Value &serialized,
+                                                             const LogicalType &return_type,
+                                                             const vector<LogicalType> &argument_types,
+                                                             const map<idx_t, Value> &constant_parameters) {
+	if (serialized.IsNull() || serialized.type().id() != LogicalTypeId::BLOB) {
+		throw SerializationException("Aggregate state bound function must be a BLOB");
+	}
+	vector<unique_ptr<Expression>> arguments;
+	for (idx_t i = 0; i < argument_types.size(); i++) {
+		auto constant = constant_parameters.find(i);
+		arguments.push_back(make_uniq<BoundConstantExpression>(
+		    constant == constant_parameters.end() ? Value(argument_types[i]) : constant->second));
+	}
+	auto &blob = StringValue::Get(serialized);
+	MemoryStream stream;
+	stream.WriteData(const_data_ptr_cast(blob.data()), blob.size());
+	stream.Rewind();
+	BinaryDeserializer deserializer(stream);
+	deserializer.Set<ClientContext &>(context);
+	bound_parameter_map_t parameters;
+	deserializer.Set<bound_parameter_map_t &>(parameters);
+	deserializer.Begin();
+	auto result = FunctionSerializer::Deserialize<BoundAggregateFunction, AggregateFunctionCatalogEntry>(
+	    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, arguments, return_type);
+	deserializer.End();
+	if (result.first.GetReturnType() != return_type || !result.first.HasGetStateTypeCallback()) {
+		throw SerializationException("Aggregate state function cannot reconstruct its underlying result");
+	}
+	auto state_size = result.first.GetStateSize(result.second.get());
+	return make_uniq<ExportAggregateBindData>(std::move(result.first), std::move(result.second), state_size);
 }
 
 // parses the "parameters" property of an AGGREGATE_STATE type
@@ -340,11 +376,20 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	map<idx_t, Value> constant_parameters;
 	ParseStateParameters(entry->second, argument_types, constant_parameters);
 
-	auto inner = BindExportedAggregate(context, function_name, argument_types, constant_parameters);
+	auto serialized = ext_info->properties.find("bound_function");
+	auto inner = serialized == ext_info->properties.end()
+	                 ? BindExportedAggregate(context, function_name, argument_types, constant_parameters)
+	                 : DeserializeStateFunction(context, serialized->second,
+	                                            ExportAggregateFunction::GetUnderlyingReturnType(arg_return_type),
+	                                            argument_types, constant_parameters);
 
 	auto order_entry = ext_info->properties.find("order_bys");
 	if (order_entry == ext_info->properties.end()) {
 		// a plain (non-ordered) aggregate state
+		if (serialized != ext_info->properties.end() && inner->aggr.GetStateType(inner->bind_data.get()).type !=
+		                                                    arg_return_type.WithAlias("").WithExtensionInfo(nullptr)) {
+			throw SerializationException("Aggregate state layout does not match its reconstructed function");
+		}
 		return inner;
 	}
 	// an ordered aggregate state: the value is the buffer (LIST<buffered_struct>) - reconstruct the sorted wrapper
@@ -535,7 +580,7 @@ void CombineAggrFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_d
 void EncodeStateParameters(ExtensionTypeInfo &ext_info, const BoundAggregateFunction &bound_function,
                            const AggregateStateLayout &layout) {
 	ext_info.properties.emplace("function_name", bound_function.GetName());
-	auto &call_arguments = bound_function.GetArguments();
+	auto &call_arguments = layout.rebind_arguments.empty() ? bound_function.GetArguments() : layout.rebind_arguments;
 	vector<Value> arguments;
 	if (layout.constant_parameters.empty()) {
 		// all parameters are plain types - store the parameters as a list of types
@@ -573,14 +618,29 @@ string OrderModifierToString(OrderType order_type, OrderByNullType null_order) {
 	return StringUtil::Format("%s %s", EnumUtil::ToChars(order_type), EnumUtil::ToChars(null_order));
 }
 
-// constructs the AGGREGATE_STATE type for the given bound aggregate function
-// the state layout (a struct) is aliased to AGGREGATE_STATE, with the function name and signature stored in the
-// extension type info so that the aggregate can be re-bound later (e.g. by FINALIZE/COMBINE)
-LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function,
-                                     optional_ptr<FunctionData> bind_data) {
+// State consumers restore the physical producer independently of SQL rebinding.
+void EncodeStateFunction(ExtensionTypeInfo &ext_info, const BoundAggregateFunction &function,
+                         optional_ptr<FunctionData> bind_data, const LogicalType &return_type) {
+	if (!return_type.IsComplete() || return_type.IsAggregateState()) {
+		throw SerializationException("Aggregate state underlying return type must be concrete");
+	}
+	ext_info.properties.emplace("underlying_return_type", Value::TYPE(return_type));
+	MemoryStream stream;
+	SerializationOptions options;
+	options.storage_compatibility = StorageCompatibility::Latest();
+	BinarySerializer serializer(stream, options);
+	serializer.Begin();
+	FunctionSerializer::Serialize(serializer, function, bind_data);
+	serializer.End();
+	ext_info.properties.emplace("bound_function", Value::BLOB(stream.GetData(), stream.GetPosition()));
+}
+
+LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function, optional_ptr<FunctionData> bind_data,
+                                     const LogicalType &return_type) {
 	auto layout = bound_function.GetStateType(bind_data);
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	EncodeStateParameters(*ext_info, bound_function, layout);
+	EncodeStateFunction(*ext_info, bound_function, bind_data, return_type);
 	return layout.type.WithAlias("AGGREGATE_STATE").WithExtensionInfo(std::move(ext_info));
 }
 
@@ -588,10 +648,12 @@ LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_functio
 // (LIST<buffered_struct>), with the inner signature and the ORDER BY spec stored in the extension info
 LogicalType CreateSortedAggregateStateType(const BoundAggregateFunction &inner_function,
                                            optional_ptr<FunctionData> inner_bind_data, const LogicalType &buffer_struct,
-                                           const vector<SortedAggregateStateOrder> &orders) {
+                                           const vector<SortedAggregateStateOrder> &orders,
+                                           const LogicalType &return_type) {
 	LogicalType state_layout = LogicalType::LIST(buffer_struct);
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	EncodeStateParameters(*ext_info, inner_function, inner_function.GetStateType(inner_bind_data));
+	EncodeStateFunction(*ext_info, inner_function, inner_bind_data, return_type);
 	// per key: the buffered column it sorts on and the modifier string (the argument count is re-derived on re-bind)
 	vector<Value> order_values;
 	for (auto &order : orders) {
@@ -749,14 +811,14 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 			throw BinderException("to_aggregate_state: an ordered aggregate state must have at least one ORDER BY key");
 		}
 		bound_function.GetArguments()[0] = LogicalType::LIST(buffer_struct);
-		bound_function.SetReturnType(
-		    CreateSortedAggregateStateType(aggr, bind_data->bind_data.get(), buffer_struct, orders));
+		bound_function.SetReturnType(CreateSortedAggregateStateType(aggr, bind_data->bind_data.get(), buffer_struct,
+		                                                            orders, aggr.GetReturnType()));
 		return std::move(bind_data);
 	}
 
 	auto state_layout = aggr.GetStateType(bind_data->bind_data.get()).type;
 	bound_function.GetArguments()[0] = state_layout;
-	bound_function.SetReturnType(CreateAggregateStateType(aggr, bind_data->bind_data.get()));
+	bound_function.SetReturnType(CreateAggregateStateType(aggr, bind_data->bind_data.get(), aggr.GetReturnType()));
 	return std::move(bind_data);
 }
 
@@ -766,6 +828,49 @@ void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &
 }
 
 } // namespace
+
+LogicalType ExportAggregateFunction::GetUnderlyingReturnType(const LogicalType &state_type) {
+	auto info = state_type.GetExtensionInfo();
+	if (!state_type.IsAggregateState() || !info) {
+		throw SerializationException("Aggregate state has no underlying return type");
+	}
+	auto entry = info->properties.find("underlying_return_type");
+	if (entry == info->properties.end() || entry->second.IsNull() || entry->second.type().id() != LogicalTypeId::TYPE) {
+		throw SerializationException("Aggregate state has no underlying return type");
+	}
+	auto result = TypeValue::GetType(entry->second);
+	if (!result.IsComplete() || result.IsAggregateState()) {
+		throw SerializationException("Aggregate state underlying return type is incomplete");
+	}
+	return result;
+}
+
+void ExportAggregateFunction::ValidateStateExport(const BoundAggregateExpression &aggregate,
+                                                  const LogicalType &state_type) {
+	LogicalType expected;
+	if (aggregate.GetOrderBys() && !aggregate.GetOrderBys()->orders.empty()) {
+		LogicalType buffer_struct;
+		vector<SortedAggregateStateOrder> orders;
+		idx_t argument_count;
+		FunctionBinder::GetSortedAggregateStateLayout(aggregate, buffer_struct, orders, argument_count);
+		// Sorted state binding casts narrowed optimizer inputs back to the owning buffer schema.
+		if (state_type.id() != LogicalTypeId::LIST || !state_type.IsComplete() ||
+		    ListType::GetChildType(state_type).id() != LogicalTypeId::STRUCT ||
+		    StructType::GetChildCount(ListType::GetChildType(state_type)) != StructType::GetChildCount(buffer_struct)) {
+			throw SerializationException("Sorted aggregate state has an incompatible buffer schema");
+		}
+		return;
+	}
+	auto function = aggregate.Function();
+	if (!function.HasGetStateTypeCallback()) {
+		throw SerializationException("Aggregate state function has no state layout");
+	}
+	function.SetReturnType(GetUnderlyingReturnType(state_type));
+	expected = function.GetStateType(aggregate.BindInfo().get()).type;
+	if (expected != state_type.WithAlias("").WithExtensionInfo(nullptr)) {
+		throw SerializationException("Aggregate state layout does not match its reconstructed function");
+	}
+}
 
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
 	auto &bound_function = aggregate.FunctionMutable();
@@ -808,11 +913,13 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 		vector<SortedAggregateStateOrder> orders;
 		idx_t argument_count; // re-derived from the inner aggregate on re-bind
 		FunctionBinder::GetSortedAggregateStateLayout(*child_aggregate, buffer_struct, orders, argument_count);
-		SetStateExport(*child_aggregate, CreateSortedAggregateStateType(
-		                                     bound_function, child_aggregate->BindInfo().get(), buffer_struct, orders));
+		SetStateExport(*child_aggregate,
+		               CreateSortedAggregateStateType(bound_function, child_aggregate->BindInfo().get(), buffer_struct,
+		                                              orders, child_aggregate->GetReturnType()));
 		return child_aggregate;
 	}
-	SetStateExport(*child_aggregate, CreateAggregateStateType(bound_function, child_aggregate->BindInfo().get()));
+	SetStateExport(*child_aggregate, CreateAggregateStateType(bound_function, child_aggregate->BindInfo().get(),
+	                                                          child_aggregate->GetReturnType()));
 	return child_aggregate;
 }
 

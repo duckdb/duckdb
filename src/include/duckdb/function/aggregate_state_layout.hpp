@@ -516,6 +516,8 @@ struct AggregateStateLayout {
 	LogicalType type;
 	AggregateStateField field;
 	idx_t total_state_size = 0;
+	//! Alternate arguments needed to re-bind a state whose aggregate folds physical inputs into bind data
+	vector<LogicalType> rebind_arguments;
 	//! Constant values for arguments that must be re-bound with a specific constant rather than only the type
 	unordered_map<idx_t, Value> constant_parameters;
 };

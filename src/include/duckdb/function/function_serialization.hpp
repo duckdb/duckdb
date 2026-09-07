@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -35,6 +36,7 @@ public:
 		// the fields are present, they will be used.
 		serializer.WritePropertyWithDefault<Identifier>(505, "catalog_name", function.GetCatalogName(), Identifier());
 		serializer.WritePropertyWithDefault<Identifier>(506, "schema_name", function.GetSchemaName(), Identifier());
+		SerializeLogicalDefinition(serializer, function);
 
 		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
@@ -157,10 +159,144 @@ public:
 		}
 	}
 
+private:
+	struct LogicalDefinitionData {
+		Identifier catalog_name;
+		Identifier schema_name;
+		Identifier name;
+		vector<LogicalType> arguments;
+		LogicalType return_type;
+	};
+
+	template <class FUNC>
+	static void SerializeLogicalDefinition(Serializer &, const FUNC &) {
+	}
+
+	static void SerializeLogicalDefinition(Serializer &serializer, const BoundScalarFunction &function) {
+		SerializeLogicalDefinitionInternal(serializer, function);
+	}
+
+	static void SerializeLogicalDefinition(Serializer &serializer, const BoundAggregateFunction &function) {
+		SerializeLogicalDefinitionInternal(serializer, function);
+	}
+
+	template <class FUNC>
+	static void SerializeLogicalDefinitionInternal(Serializer &serializer, const FUNC &function) {
+		auto has_logical_definition = function.HasSQLAddressableDefinition();
+		serializer.WritePropertyWithDefault<bool>(507, "has_logical_definition", has_logical_definition, false);
+		if (!has_logical_definition) {
+			return;
+		}
+		auto &definition = *function.GetDefinition();
+		serializer.WriteProperty(508, "logical_catalog_name", definition.GetCatalogName());
+		serializer.WriteProperty(509, "logical_schema_name", definition.GetSchemaName());
+		serializer.WriteProperty(510, "logical_name", definition.GetName());
+		serializer.WriteProperty(511, "logical_arguments", function.GetLogicalArguments());
+		serializer.WriteProperty(512, "logical_return_type", function.GetLogicalReturnType());
+	}
+
+	template <class FUNC>
+	static optional<LogicalDefinitionData> DeserializeLogicalDefinition(Deserializer &, FUNC *) {
+		return {};
+	}
+
+	static optional<LogicalDefinitionData> DeserializeLogicalDefinition(Deserializer &deserializer,
+	                                                                    BoundScalarFunction *) {
+		return DeserializeLogicalDefinitionInternal(deserializer);
+	}
+
+	static optional<LogicalDefinitionData> DeserializeLogicalDefinition(Deserializer &deserializer,
+	                                                                    BoundAggregateFunction *) {
+		return DeserializeLogicalDefinitionInternal(deserializer);
+	}
+
+	static optional<LogicalDefinitionData> DeserializeLogicalDefinitionInternal(Deserializer &deserializer) {
+		if (!deserializer.ReadPropertyWithDefault<bool>(507, "has_logical_definition")) {
+			return {};
+		}
+		LogicalDefinitionData result;
+		result.catalog_name = deserializer.ReadProperty<Identifier>(508, "logical_catalog_name");
+		result.schema_name = deserializer.ReadProperty<Identifier>(509, "logical_schema_name");
+		result.name = deserializer.ReadProperty<Identifier>(510, "logical_name");
+		result.arguments = deserializer.ReadProperty<vector<LogicalType>>(511, "logical_arguments");
+		result.return_type = deserializer.ReadProperty<LogicalType>(512, "logical_return_type");
+		return result;
+	}
+
 	template <class FUNC, class CATALOG_ENTRY>
-	static pair<FUNC, unique_ptr<FunctionData>> Deserialize(Deserializer &deserializer, CatalogType catalog_type,
-	                                                        vector<unique_ptr<Expression>> &children,
-	                                                        LogicalType return_type) { // NOLINT: clang-tidy bug
+	static shared_ptr<const FUNC> DeserializeFunctionDefinition(ClientContext &context, CatalogType catalog_type,
+	                                                            const LogicalDefinitionData &logical) {
+		if (logical.catalog_name.empty() || logical.schema_name.empty() || logical.name.empty() ||
+		    !logical.return_type.IsComplete()) {
+			throw SerializationException("Serialized logical function definition is incomplete");
+		}
+		for (auto &argument : logical.arguments) {
+			if (!argument.IsComplete()) {
+				throw SerializationException("Serialized logical function argument type is incomplete");
+			}
+		}
+		auto &entry = Catalog::GetEntry(context, catalog_type,
+		                                QualifiedName(logical.catalog_name, logical.schema_name, logical.name));
+		if (entry.type != catalog_type) {
+			throw SerializationException("Serialized logical function has the wrong catalog entry type");
+		}
+		auto &functions = entry.Cast<CATALOG_ENTRY>();
+		auto definition = functions.functions.GetFunctionByArguments(context, logical.arguments);
+		if (!definition->IsSQLAddressable()) {
+			throw SerializationException("Serialized logical function definition is not SQL-addressable");
+		}
+		return definition;
+	}
+
+	template <class FUNC>
+	static void RestoreLogicalDefinition(ClientContext &, CatalogType, FUNC &, const optional<LogicalDefinitionData> &,
+	                                     const LogicalType &, optional_ptr<optional<LogicalDefinitionData>> = nullptr) {
+	}
+
+	static void ValidateLogicalDefinition(const LogicalType &return_type, const LogicalDefinitionData &logical) {
+		if (!return_type.IsComplete() || return_type != logical.return_type) {
+			throw SerializationException(
+			    "Serialized logical function return type does not match the reconstructed result");
+		}
+	}
+
+	static void RestoreLogicalDefinition(ClientContext &context, CatalogType catalog_type,
+	                                     BoundScalarFunction &function, const optional<LogicalDefinitionData> &logical,
+	                                     const LogicalType &, optional_ptr<optional<LogicalDefinitionData>> = nullptr) {
+		if (!logical) {
+			function.ClearLogicalDefinition();
+			return;
+		}
+		auto definition =
+		    DeserializeFunctionDefinition<ScalarFunction, ScalarFunctionCatalogEntry>(context, catalog_type, *logical);
+		ValidateLogicalDefinition(function.GetReturnType(), *logical);
+		function.RestoreLogicalDefinition(std::move(definition), logical->arguments, logical->return_type);
+	}
+
+	static void RestoreLogicalDefinition(ClientContext &context, CatalogType catalog_type,
+	                                     BoundAggregateFunction &function,
+	                                     const optional<LogicalDefinitionData> &logical, const LogicalType &return_type,
+	                                     optional_ptr<optional<LogicalDefinitionData>> deferred = nullptr) {
+		if (deferred) {
+			*deferred = logical;
+			function.ClearLogicalDefinition();
+			return;
+		}
+		if (!logical) {
+			function.ClearLogicalDefinition();
+			return;
+		}
+		auto definition = DeserializeFunctionDefinition<AggregateFunction, AggregateFunctionCatalogEntry>(
+		    context, catalog_type, *logical);
+		ValidateLogicalDefinition(return_type, *logical);
+		function.RestoreLogicalDefinition(std::move(definition), logical->arguments, logical->return_type);
+	}
+
+public:
+	template <class FUNC, class CATALOG_ENTRY>
+	static pair<FUNC, unique_ptr<FunctionData>>
+	Deserialize(Deserializer &deserializer, CatalogType catalog_type, vector<unique_ptr<Expression>> &children,
+	            const LogicalType &return_type, optional_ptr<optional<LogicalDefinitionData>> deferred = nullptr) {
 		auto &context = deserializer.Get<ClientContext &>();
 
 		auto name = deserializer.ReadProperty<Identifier>(500, "name");
@@ -168,6 +304,7 @@ public:
 		auto original_arguments = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(502, "original_arguments");
 		auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
 		auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
+		auto logical_definition = DeserializeLogicalDefinition(deserializer, static_cast<FUNC *>(nullptr));
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 
 		if (catalog_name.empty()) {
@@ -208,9 +345,11 @@ public:
 				auto [bound_function, bound_data] = binder.ResolveFunction(function, children);
 
 				if (TypeRequiresAssignment(bound_function.GetReturnType())) {
-					bound_function.SetReturnType(std::move(return_type));
+					bound_function.SetReturnType(return_type);
 				}
 
+				RestoreLogicalDefinition(context, catalog_type, bound_function, logical_definition, return_type,
+				                         deferred);
 				return make_pair(std::move(bound_function), std::move(bound_data));
 			} catch (std::exception &ex) {
 				ErrorData error(ex);
@@ -229,11 +368,14 @@ public:
 		deserializer.Unset<LogicalType>();
 
 		if (TypeRequiresAssignment(bound_function.GetReturnType())) {
-			bound_function.SetReturnType(std::move(return_type));
+			bound_function.SetReturnType(return_type);
 		}
+		RestoreLogicalDefinition(context, catalog_type, bound_function, logical_definition, return_type, deferred);
 
 		return make_pair(std::move(bound_function), std::move(bound_data));
 	}
+
+	friend class BoundAggregateExpression;
 };
 
 } // namespace duckdb

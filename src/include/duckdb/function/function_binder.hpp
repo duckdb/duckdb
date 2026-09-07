@@ -253,12 +253,12 @@ public:
 	pair<BoundScalarFunction, unique_ptr<FunctionData>>
 	ResolveFunction(const ScalarFunction &function, vector<unique_ptr<Expression>> &children,
 	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
-		return ResolveFunction(make_shared_ptr<ScalarFunction>(function), children, keyword_args);
+		return ResolveFunction(BoundScalarFunction::CopyStandaloneDefinition(function), children, keyword_args);
 	}
 
 	pair<BoundScalarFunction, unique_ptr<FunctionData>> ResolveFunction(const ScalarFunction &function,
 	                                                                    vector<unique_ptr<Expression>> &children) {
-		return ResolveFunction(make_shared_ptr<ScalarFunction>(function), children);
+		return ResolveFunction(BoundScalarFunction::CopyStandaloneDefinition(function), children);
 	}
 
 	pair<BoundAggregateFunction, unique_ptr<FunctionData>>
@@ -274,12 +274,12 @@ public:
 	pair<BoundAggregateFunction, unique_ptr<FunctionData>>
 	ResolveFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> &children,
 	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
-		return ResolveFunction(make_shared_ptr<AggregateFunction>(function), children, keyword_args);
+		return ResolveFunction(BoundAggregateFunction::CopyStandaloneDefinition(function), children, keyword_args);
 	}
 
 	pair<BoundAggregateFunction, unique_ptr<FunctionData>> ResolveFunction(const AggregateFunction &function,
 	                                                                       vector<unique_ptr<Expression>> &children) {
-		return ResolveFunction(make_shared_ptr<AggregateFunction>(function), children);
+		return ResolveFunction(BoundAggregateFunction::CopyStandaloneDefinition(function), children);
 	}
 
 	pair<BoundWindowFunction, unique_ptr<FunctionData>>

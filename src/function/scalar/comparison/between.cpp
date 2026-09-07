@@ -12,7 +12,8 @@ namespace duckdb {
 
 struct BetweenFunctionData : public FunctionData {
 	BetweenFunctionData(bool lower_inclusive, bool upper_inclusive)
-	    : lower_inclusive(lower_inclusive), upper_inclusive(upper_inclusive) {
+	    : FunctionData(InternalKind::BOUND_BETWEEN), lower_inclusive(lower_inclusive),
+	      upper_inclusive(upper_inclusive) {
 	}
 
 	bool lower_inclusive;
@@ -26,11 +27,6 @@ public:
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<BetweenFunctionData>();
 		return lower_inclusive == other.lower_inclusive && upper_inclusive == other.upper_inclusive;
-	}
-
-private:
-	FunctionDataKind GetKind() const override {
-		return FunctionDataKind::BOUND_BETWEEN;
 	}
 };
 
@@ -245,7 +241,8 @@ bool BoundBetweenExpression::UpperInclusive(const BoundFunctionExpression &betwe
 }
 
 bool BoundBetweenExpression::HasValidBindData(const BoundFunctionExpression &between_expr) {
-	return between_expr.BindInfo() && between_expr.BindInfo()->GetKind() == FunctionDataKind::BOUND_BETWEEN;
+	return between_expr.BindInfo() &&
+	       between_expr.BindInfo()->GetInternalKind() == FunctionData::InternalKind::BOUND_BETWEEN;
 }
 
 const Expression &BoundBetweenExpression::Input(const BoundFunctionExpression &between_expr) {

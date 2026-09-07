@@ -1085,6 +1085,19 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, vecto
 	return argument_names;
 }
 
+static vector<LogicalType> CaptureLogicalArguments(const BoundSimpleFunction &function,
+                                                   const vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(function.GetArguments().size() == arguments.size());
+	vector<LogicalType> result;
+	result.reserve(arguments.size());
+	for (idx_t argument_index = 0; argument_index < arguments.size(); argument_index++) {
+		auto target_type = function.GetArguments()[argument_index];
+		PrepareTypeForCast(target_type);
+		result.push_back(target_type.IsComplete() ? target_type : arguments[argument_index]->GetReturnType());
+	}
+	return result;
+}
+
 pair<BoundScalarFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vector<unique_ptr<Expression>> &arguments,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
@@ -1105,6 +1118,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vec
 
 	// Attempt to resolve template types, before we call the "Bind" callback.
 	ResolveTemplateTypes(bound_function, arguments);
+	bound_function.SetLogicalArguments(CaptureLogicalArguments(bound_function, arguments));
 
 	unique_ptr<FunctionData> bind_info;
 
@@ -1123,6 +1137,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vec
 	}
 
 	HandleCollations(context, bound_function, bound_function.GetProperties(), arguments);
+	bound_function.SetLogicalReturnType(bound_function.GetReturnType());
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, arguments);
@@ -1139,15 +1154,16 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const Scala
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &function,
                                                           vector<unique_ptr<Expression>> children, bool is_operator,
                                                           optional_ptr<Binder> binder) {
-	return BindScalarFunction(make_shared_ptr<ScalarFunction>(function), std::move(children), {}, is_operator, binder);
+	return BindScalarFunction(BoundScalarFunction::CopyStandaloneDefinition(function), std::move(children), {},
+	                          is_operator, binder);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &function,
                                                           vector<unique_ptr<Expression>> children,
                                                           vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                                           bool is_operator, optional_ptr<Binder> binder) {
-	return BindScalarFunction(make_shared_ptr<ScalarFunction>(function), std::move(children), std::move(keyword_args),
-	                          is_operator, binder);
+	return BindScalarFunction(BoundScalarFunction::CopyStandaloneDefinition(function), std::move(children),
+	                          std::move(keyword_args), is_operator, binder);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const ScalarFunction> function,
@@ -1195,6 +1211,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const AggregateFunction> function_p,
 	}
 
 	ResolveTemplateTypes(bound_function, children);
+	bound_function.SetLogicalArguments(CaptureLogicalArguments(bound_function, children));
 
 	unique_ptr<FunctionData> bind_info;
 
@@ -1207,6 +1224,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const AggregateFunction> function_p,
 	}
 
 	CheckTemplateTypesResolved(bound_function);
+	bound_function.SetLogicalReturnType(bound_function.GetReturnType());
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
@@ -1225,7 +1243,7 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(const
                                                                            vector<unique_ptr<Expression>> children,
                                                                            unique_ptr<Expression> filter,
                                                                            AggregateType aggr_type) {
-	return BindAggregateFunction(make_shared_ptr<AggregateFunction>(function), std::move(children), {},
+	return BindAggregateFunction(BoundAggregateFunction::CopyStandaloneDefinition(function), std::move(children), {},
 	                             std::move(filter), aggr_type);
 }
 
@@ -1233,7 +1251,7 @@ unique_ptr<BoundAggregateExpression>
 FunctionBinder::BindAggregateFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> children,
                                       vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                       unique_ptr<Expression> filter, AggregateType aggr_type) {
-	return BindAggregateFunction(make_shared_ptr<AggregateFunction>(function), std::move(children),
+	return BindAggregateFunction(BoundAggregateFunction::CopyStandaloneDefinition(function), std::move(children),
 	                             std::move(keyword_args), std::move(filter), aggr_type);
 }
 

@@ -12,6 +12,7 @@ AggregateFunctionCatalogEntry::AggregateFunctionCatalogEntry(Catalog &catalog, S
 	functions.ApplyToFunctions([&](AggregateFunction &function) {
 		function.SetCatalogName(catalog.GetAttached().GetName());
 		function.SetSchemaName(schema.name);
+		function.MarkSQLAddressable();
 	});
 }
 
