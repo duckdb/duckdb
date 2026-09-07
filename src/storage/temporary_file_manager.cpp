@@ -10,7 +10,18 @@
 #include "duckdb/common/encryption_functions.hpp"
 #include "zstd.h"
 
+#include <algorithm>
+
 namespace duckdb {
+
+static mutex temporary_file_ownership_lock;
+static vector<string> live_temporary_file_identifiers;
+
+static bool IsLiveTemporaryFileIdentifier(const string &identifier) {
+	lock_guard<mutex> guard(temporary_file_ownership_lock);
+	return std::find(live_temporary_file_identifiers.begin(), live_temporary_file_identifiers.end(), identifier) !=
+	       live_temporary_file_identifiers.end();
+}
 
 //===--------------------------------------------------------------------===//
 // TemporaryBufferSize
@@ -492,8 +503,9 @@ void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel 
 // TemporaryFileManager
 //===--------------------------------------------------------------------===//
 TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
-                                           atomic<idx_t> &size_on_disk_p)
-    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(size_on_disk_p), max_swap_space(0) {
+                                           const string &temporary_file_identifier_p, atomic<idx_t> &size_on_disk_p)
+    : db(db), temp_directory(temp_directory_p), temporary_file_identifier(temporary_file_identifier_p), files(*this),
+      size_on_disk(size_on_disk_p), max_swap_space(0) {
 }
 
 TemporaryFileManager::~TemporaryFileManager() {
@@ -711,8 +723,13 @@ void TemporaryFileManager::EraseUsedBlock(TemporaryFileManagerLock &lock, block_
 
 string TemporaryFileManager::CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const {
 	return FileSystem::GetFileSystem(db).JoinPath(
-	    temp_directory, StringUtil::Format("duckdb_temp_storage_%s-%llu.tmp", EnumUtil::ToString(identifier.size),
-	                                       identifier.file_index.GetIndex()));
+	    temp_directory, StringUtil::Format("duckdb_temp_storage_%s_%s-%llu.tmp", temporary_file_identifier,
+	                                       EnumUtil::ToString(identifier.size), identifier.file_index.GetIndex()));
+}
+
+string TemporaryFileManager::CreateTemporaryBlockFileName(block_id_t id) const {
+	return FileSystem::GetFileSystem(db).JoinPath(
+	    temp_directory, StringUtil::Format("duckdb_temp_block_%s-%lld.block", temporary_file_identifier, id));
 }
 
 optional_ptr<TemporaryFileHandle> TemporaryFileManager::GetFileHandle(TemporaryFileManagerLock &,
@@ -737,70 +754,74 @@ void TemporaryFileManager::EraseFileHandle(TemporaryFileManagerLock &, const Tem
 //===--------------------------------------------------------------------===//
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, atomic<idx_t> &size_on_disk,
                                                    optional_idx max_swap_space)
-    : db(db), temp_directory(std::move(path_p)),
-      temp_file(make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk)) {
+    : db(db), temp_directory(std::move(path_p)), temporary_file_identifier(StringUtil::GenerateRandomName()),
+      temp_file(make_uniq<TemporaryFileManager>(db, temp_directory, temporary_file_identifier, size_on_disk)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	D_ASSERT(!temp_directory.empty());
 	if (!fs.DirectoryExists(temp_directory)) {
 		fs.CreateDirectory(temp_directory);
 		created_directory = true;
-	} else {
-		// the directory already existed. This can happen if a previous DuckDB process using this
-		// temp directory crashed (e.g. kill -9, OOM kill, power loss) without running its destructors.
-		// any duckdb_temp_* files left behind are orphaned: no live process holds them open, and the
-		// block ids they reference are meaningless to this new process. Remove them before we start
-		// writing new files of our own, so garbage doesn't accumulate indefinitely across crashes.
-		vector<string> orphaned_files;
-		fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
-			if (isdir) {
-				return;
-			}
-			if (!StringUtil::StartsWith(path, "duckdb_temp_")) {
-				return;
-			}
-			orphaned_files.push_back(fs.JoinPath(temp_directory, path));
-		});
-		if (!orphaned_files.empty()) {
-			fs.RemoveFiles(orphaned_files);
-		}
 	}
+	const auto lock_name = "duckdb_temp_" + temporary_file_identifier + ".lock";
+	const auto lock_path = fs.JoinPath(temp_directory, lock_name);
+	ownership_lock = fs.OpenFile(lock_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE |
+	                                            FileFlags::FILE_FLAGS_FILE_CREATE | FileLockType::WRITE_LOCK);
+	{
+		lock_guard<mutex> guard(temporary_file_ownership_lock);
+		live_temporary_file_identifiers.push_back(temporary_file_identifier);
+	}
+	fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
+		if (isdir || !StringUtil::StartsWith(path, "duckdb_temp_") || !StringUtil::EndsWith(path, ".lock") ||
+		    path == lock_name) {
+			return;
+		}
+		const auto identifier = path.substr(string("duckdb_temp_").size(),
+		                                    path.size() - string("duckdb_temp_").size() - string(".lock").size());
+		if (IsLiveTemporaryFileIdentifier(identifier)) {
+			return;
+		}
+		unique_ptr<FileHandle> lock;
+		try {
+			lock = fs.OpenFile(fs.JoinPath(temp_directory, path),
+			                   FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileLockType::WRITE_LOCK);
+		} catch (const IOException &) {
+			return;
+		}
+		vector<string> files_to_delete;
+		const auto prefix = "duckdb_temp_" + identifier;
+		fs.ListFiles(temp_directory, [&](const string &candidate, bool candidate_isdir) {
+			if (!candidate_isdir && StringUtil::StartsWith(candidate, prefix)) {
+				files_to_delete.push_back(fs.JoinPath(temp_directory, candidate));
+			}
+		});
+		fs.RemoveFiles(files_to_delete);
+	});
 	temp_file->SetMaxSwapSpace(max_swap_space);
 }
 
 TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
-	// first release any temporary files
+	// First release any temporary files, then remove only this instance's files.
 	temp_file.reset();
-	// then delete the temporary file directory
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
-		bool delete_directory = created_directory;
 		vector<string> files_to_delete;
-		if (!created_directory) {
-			bool deleted_everything = true;
-			fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
-				if (isdir) {
-					deleted_everything = false;
-					return;
-				}
-				if (!StringUtil::StartsWith(path, "duckdb_temp_")) {
-					deleted_everything = false;
-					return;
-				}
-				files_to_delete.push_back(path);
-			});
-		}
-		if (delete_directory) {
-			// we want to remove all files in the directory
-			fs.RemoveDirectory(temp_directory);
-		} else {
-			vector<string> full_path_files_to_delete;
-			full_path_files_to_delete.reserve(files_to_delete.size());
-			for (auto &file : files_to_delete) {
-				full_path_files_to_delete.push_back(fs.JoinPath(temp_directory, file));
+		const auto prefix = "duckdb_temp_" + temporary_file_identifier;
+		fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
+			if (!isdir && StringUtil::StartsWith(path, prefix)) {
+				files_to_delete.push_back(fs.JoinPath(temp_directory, path));
 			}
-			fs.RemoveFiles(full_path_files_to_delete);
+		});
+		ownership_lock.reset();
+		fs.RemoveFiles(files_to_delete);
+		if (created_directory) {
+			fs.RemoveDirectoryExtended(temp_directory, {RemoveDirectoryMode::SINGLE});
 		}
 	}
+	lock_guard<mutex> guard(temporary_file_ownership_lock);
+	auto entry = std::find(live_temporary_file_identifiers.begin(), live_temporary_file_identifiers.end(),
+	                       temporary_file_identifier);
+	D_ASSERT(entry != live_temporary_file_identifiers.end());
+	live_temporary_file_identifiers.erase(entry);
 }
 
 TemporaryFileManager &TemporaryDirectoryHandle::GetTempFile() const {
