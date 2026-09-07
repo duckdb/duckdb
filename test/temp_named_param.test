@@ -1,6 +1,8 @@
-# name test/temp_named_param.test
+# name: test/temp_named_param.test
 # description: temp test file for named params for scalar, window, and aggregate functions -- to be moved to function test files
-# group: 
+# group: [test]
+
+# name test/temp_named_param.test
 
 # require anonymize
 
@@ -10,7 +12,7 @@ require core_functions # check if this actually works
 # EXTENSION SCALAR FUNCTIONS 
 # -----------------------------------------------------------------------------------------------------------------
 
-# array_functions.cpp
+# ARRAY
 
 query I
 SELECT array_cross_product(
@@ -59,6 +61,56 @@ SELECT array_negative_inner_product(
 )
 ----
 -20.0
+
+# BITSTRING
+
+query I
+SELECT bitstring(
+    length := 7,
+    bitstring := '1010'::BITSTRING
+)
+----
+0001010
+
+query I
+SELECT bitstring(
+    length := 7,
+    bitstring := '1010'
+)
+----
+0001010
+
+query I
+SELECT bitstring_byte_comparable(bitstring := '1010'::BIT)
+----
+\x03\x02\x03\x02
+
+query I
+SELECT get_bit(
+    index := 2,
+    bitstring := '0110010'::BIT
+)
+----
+1
+
+query I 
+SELECT set_bit(
+    new_value := 0,
+    bitstring := '0110010'::BIT, 
+    index := 2
+)
+----
+0100010
+
+query I 
+SELECT bit_position(
+    bitstring := '101010101'::BIT,
+    substring := '010'::BIT
+)
+----
+2
+
+BLOB
 
 # -----------------------------------------------------------------------------------------------------------------
 # JSON SCALAR FUNCTIONS

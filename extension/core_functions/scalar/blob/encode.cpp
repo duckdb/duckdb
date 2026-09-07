@@ -105,21 +105,19 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 } // namespace
 
 ScalarFunction EncodeFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, EncodeFunction);
+	return ScalarFunction({{"string", LogicalType::VARCHAR}}, LogicalType::BLOB, EncodeFunction);
 }
 
 ScalarFunctionSet DecodeFun::GetFunctions() {
 	ScalarFunctionSet decode("decode");
 
-	ScalarFunction unary_function({LogicalType::BLOB}, LogicalType::VARCHAR, UnaryDecodeFunction);
-	ScalarFunction binary_function({LogicalType::BLOB, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                               BinaryDecodeFunction);
-
-	unary_function.SetFallible();
-	binary_function.SetFallible();
+	ScalarFunction unary_function({{"blob", LogicalType::BLOB}}, LogicalType::VARCHAR, UnaryDecodeFunction);
+	ScalarFunction binary_function({{"blob", LogicalType::BLOB}, {"error_option", LogicalType::VARCHAR}},
+	                               LogicalType::VARCHAR, BinaryDecodeFunction);
 
 	decode.AddFunction(unary_function);
 	decode.AddFunction(binary_function);
+	decode.SetFallible();
 
 	return decode;
 }

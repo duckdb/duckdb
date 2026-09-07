@@ -38,11 +38,11 @@ void Base64DecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 } // namespace
 
 ScalarFunction ToBase64Fun::GetFunction() {
-	return ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, Base64EncodeFunction);
+	return ScalarFunction({{"blob", LogicalType::BLOB}}, LogicalType::VARCHAR, Base64EncodeFunction);
 }
 
 ScalarFunction FromBase64Fun::GetFunction() {
-	ScalarFunction function({LogicalType::VARCHAR}, LogicalType::BLOB, Base64DecodeFunction);
+	ScalarFunction function({{"string", LogicalType::VARCHAR}}, LogicalType::BLOB, Base64DecodeFunction);
 	function.SetFallible();
 	return function;
 }
