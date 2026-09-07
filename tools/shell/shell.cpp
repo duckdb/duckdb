@@ -1039,7 +1039,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	try {
 		auto iterator = con.context->IterateStatements(zSql);
 		while (iterator.Peek()) {
-			auto statement = iterator.GetStatement();
+			auto statement = iterator.GetStatementForExecution();
 			if (!statement) {
 				continue; // a peel that preprocessing swallowed
 			}
@@ -2333,6 +2333,12 @@ MetadataResult ShellState::DisplayManual(const vector<string> &args) {
 	} catch (const std::exception &ex) {
 		PrintF(PrintOutput::STDERR, "'%s' is not a valid function name - %s\n", args[1],
 		       ErrorData(ex).RawMessage().c_str());
+		return MetadataResult::FAIL;
+	}
+	if (qname.Path().size() > 3) {
+		// duckdb_functions() only reports the innermost schema, so a nested schema path cannot be matched here
+		PrintF(PrintOutput::STDERR,
+		       "'%s' is not a valid function name - expected NAME, SCHEMA.NAME or DATABASE.SCHEMA.NAME\n", args[1]);
 		return MetadataResult::FAIL;
 	}
 	// missing qualifiers match everything

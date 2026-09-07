@@ -12,6 +12,7 @@
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/function/type_constructor.hpp"
 
 namespace duckdb {
 
@@ -20,87 +21,45 @@ namespace {
 //----------------------------------------------------------------------------------------------------------------------
 // DECIMAL Type
 //----------------------------------------------------------------------------------------------------------------------
+LogicalType BindDefaultDecimalType(BindLogicalTypeInput &input) {
+	return LogicalType::DECIMAL(18, 3);
+}
+
 LogicalType BindDecimalType(BindLogicalTypeInput &input) {
-	auto &modifiers = input.modifiers;
-
-	uint8_t width = 18;
-	uint8_t scale = 3;
-
-	if (!modifiers.empty()) {
-		auto width_value = modifiers[0].GetValue();
-		if (width_value.IsNull()) {
-			throw BinderException("DECIMAL type width cannot be NULL");
-		}
-		if (!width_value.type().IsIntegral()) {
-			throw BinderException("DECIMAL type width must be an integral type");
-		}
-		auto cast_width = width_value.DefaultTryCastAs(LogicalTypeId::UTINYINT);
-		if (cast_width) {
-			width = cast_width->GetValueUnsafe<uint8_t>();
-			scale = 0; // reset scale to 0 if only width is provided
-		} else {
-			throw BinderException("DECIMAL type width must be between 1 and %d", Decimal::MAX_WIDTH_DECIMAL);
-		}
-	}
-
-	if (modifiers.size() > 1) {
-		auto scale_value = modifiers[1].GetValue();
-		if (scale_value.IsNull()) {
-			throw BinderException("DECIMAL type scale cannot be NULL");
-		}
-		if (!scale_value.type().IsIntegral()) {
-			throw BinderException("DECIMAL type scale must be an integral type");
-		}
-		auto cast_scale = scale_value.DefaultTryCastAs(LogicalTypeId::UTINYINT);
-		if (cast_scale) {
-			scale = cast_scale->GetValueUnsafe<uint8_t>();
-		} else {
-			throw BinderException("DECIMAL type scale must be between 0 and %d", Decimal::MAX_WIDTH_DECIMAL);
-		}
-	}
-
-	if (modifiers.size() > 2) {
-		throw BinderException("DECIMAL type can take at most two type modifiers, width and scale");
-	}
+	auto width = input.modifiers[0].GetValue().GetValue<uint8_t>();
+	auto scale = input.modifiers[1].GetValue().GetValue<uint8_t>();
 
 	if (width < 1 || width > Decimal::MAX_WIDTH_DECIMAL) {
-		throw BinderException("DECIMAL type width must be between 1 and %d", Decimal::MAX_WIDTH_DECIMAL);
+		throw BinderException(input.GetLocation(0), "DECIMAL type width must be between 1 and %d",
+		                      Decimal::MAX_WIDTH_DECIMAL);
 	}
-
 	if (scale > width) {
-		throw BinderException("DECIMAL type scale cannot be greater than width");
+		throw BinderException(input.GetLocation(1), "DECIMAL type scale cannot be greater than width");
 	}
 	return LogicalType::DECIMAL(width, scale);
+}
+
+void RegisterDecimalConstructors(TypeConstructorSet &set) {
+	set.AddFunction(TypeConstructor(TypeConstructor::Signature(), BindDefaultDecimalType));
+
+	auto signature = TypeConstructor::Signature();
+	signature.AddParameter("width", LogicalType::UTINYINT);
+	signature.AddParameter("scale", LogicalType::UTINYINT, Value::UTINYINT(0));
+	set.AddFunction(TypeConstructor(std::move(signature), BindDecimalType));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 // TIMESTAMP Type
 //----------------------------------------------------------------------------------------------------------------------
+LogicalType BindDefaultTimestampType(BindLogicalTypeInput &input) {
+	return LogicalType::TIMESTAMP;
+}
+
 LogicalType BindTimestampType(BindLogicalTypeInput &input) {
-	auto &modifiers = input.modifiers;
-
-	if (modifiers.empty()) {
-		return LogicalType::TIMESTAMP;
-	}
-
-	if (modifiers.size() > 1) {
-		throw BinderException("TIMESTAMP type takes at most one type modifier");
-	}
-
-	auto precision_value = modifiers[0].GetValue();
-	if (precision_value.IsNull()) {
-		throw BinderException("TIMESTAMP type precision cannot be NULL");
-	}
-	uint8_t precision;
-	auto cast_precision = precision_value.DefaultTryCastAs(LogicalTypeId::UTINYINT);
-	if (cast_precision) {
-		precision = cast_precision->GetValueUnsafe<uint8_t>();
-	} else {
-		throw BinderException("TIMESTAMP type precision must be between 0 and 9");
-	}
+	auto precision = input.modifiers[0].GetValue().GetValue<uint8_t>();
 
 	if (precision > 9) {
-		throw BinderException("TIMESTAMP only supports until nano-second precision (9)");
+		throw BinderException(input.GetLocation(0), "TIMESTAMP only supports until nano-second precision (9)");
 	}
 	if (precision == 0) {
 		return LogicalType::TIMESTAMP_S;
@@ -114,60 +73,77 @@ LogicalType BindTimestampType(BindLogicalTypeInput &input) {
 	return LogicalType::TIMESTAMP_NS;
 }
 
+void RegisterTimestampConstructors(TypeConstructorSet &set) {
+	set.AddFunction(TypeConstructor(TypeConstructor::Signature(), BindDefaultTimestampType));
+
+	auto signature = TypeConstructor::Signature();
+	signature.AddParameter("precision", LogicalType::UTINYINT);
+	set.AddFunction(TypeConstructor(std::move(signature), BindTimestampType));
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // VARCHAR Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindVarcharType(BindLogicalTypeInput &input) {
-	// Varchar type can have a single modifier indicating the length, but we ignore it for now
-	auto &modifiers = input.modifiers;
-
-	if (!modifiers.empty() && modifiers.size() <= 2) {
-		for (auto &mod : modifiers) {
-			if (mod.IsNamed("collation") && mod.GetType() == LogicalType::VARCHAR && mod.IsNotNull()) {
-				// Ignore all other modifiers and return collation type
-				auto collation = StringValue::Get(mod.GetValue());
-
-				if (!input.context) {
-					throw BinderException("Cannot bind varchar with collation without a connection");
-				}
-
-				// Ensure this is a valid collation
-				ExpressionBinder::TestCollation(*input.context, collation);
-
-				return LogicalType::VARCHAR_COLLATION(collation);
-			}
-		}
-	}
-
-	if (modifiers.size() > 1) {
-		throw BinderException("VARCHAR type takes at most one type modifier");
-	}
-
 	return LogicalType::VARCHAR;
+}
+
+LogicalType BindCollatedVarcharType(BindLogicalTypeInput &input) {
+	auto &collation = StringValue::Get(input.modifiers[0].GetValue());
+
+	if (!input.context) {
+		throw BinderException(input.query_location, "Cannot bind varchar with collation without a connection");
+	}
+
+	// Ensure this is a valid collation
+	ExpressionBinder::TestCollation(*input.context, collation);
+
+	return LogicalType::VARCHAR_COLLATION(collation);
+}
+
+void RegisterVarcharConstructors(TypeConstructorSet &set) {
+	set.AddFunction(TypeConstructor(TypeConstructor::Signature(), BindVarcharType));
+
+	// The length is accepted for compatibility, but VARCHAR is not length-limited so it is ignored
+	auto length_signature = TypeConstructor::Signature();
+	length_signature.AddParameter("length", LogicalType::BIGINT);
+	set.AddFunction(TypeConstructor(std::move(length_signature), BindVarcharType));
+
+	auto collation_signature = TypeConstructor::Signature();
+	collation_signature.AddParameter("collation", LogicalType::VARCHAR);
+	set.AddFunction(TypeConstructor(std::move(collation_signature), BindCollatedVarcharType));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 // BIT Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindBitType(BindLogicalTypeInput &input) {
-	// BIT type can have a single modifier indicating the length, but we ignore it for now
-	auto &args = input.modifiers;
-	if (args.size() > 1) {
-		throw BinderException("BIT type takes at most one type modifier");
-	}
 	return LogicalType::BIT;
+}
+
+void RegisterBitConstructors(TypeConstructorSet &set) {
+	set.AddFunction(TypeConstructor(TypeConstructor::Signature(), BindBitType));
+
+	// The length is accepted for compatibility, but BIT is not length-limited so it is ignored
+	auto signature = TypeConstructor::Signature();
+	signature.AddParameter("length", LogicalType::BIGINT);
+	set.AddFunction(TypeConstructor(std::move(signature), BindBitType));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 // INTERVAL Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindIntervalType(BindLogicalTypeInput &input) {
-	// Interval type can have a single modifier indicating the leading field, but we ignore it for now
-	auto &modifiers = input.modifiers;
-	if (modifiers.size() > 1) {
-		throw BinderException("INTERVAL type takes at most one type modifier");
-	}
 	return LogicalType::INTERVAL;
+}
+
+void RegisterIntervalConstructors(TypeConstructorSet &set) {
+	set.AddFunction(TypeConstructor(TypeConstructor::Signature(), BindIntervalType));
+
+	// The leading field is accepted for compatibility, but is ignored
+	auto signature = TypeConstructor::Signature();
+	signature.AddParameter("precision", LogicalType::UTINYINT);
+	set.AddFunction(TypeConstructor(std::move(signature), BindIntervalType));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -177,7 +153,7 @@ LogicalType BindEnumType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
 
 	if (arguments.empty()) {
-		throw BinderException("ENUM type requires at least one argument");
+		throw BinderException(input.query_location, "ENUM type requires at least one argument");
 	}
 
 	Vector enum_vector(LogicalType::VARCHAR, NumericCast<idx_t>(arguments.size()));
@@ -186,83 +162,57 @@ LogicalType BindEnumType(BindLogicalTypeInput &input) {
 	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
 		auto &arg = arguments[arg_idx];
 		if (arg.HasName()) {
-			throw BinderException("ENUM type arguments cannot have names (argument %d has name \"%s\")", arg_idx + 1,
+			throw BinderException(input.GetLocation(arg_idx),
+			                      "ENUM type arguments cannot have names (argument %d has name \"%s\")", arg_idx + 1,
 			                      arg.GetName());
 		}
-
-		if (arg.GetValue().type() != LogicalTypeId::VARCHAR) {
-			throw BinderException("ENUM type requires a set of VARCHAR arguments");
-		}
-
-		if (arg.GetValue().IsNull()) {
-			throw BinderException("ENUM type arguments cannot be NULL (argument %d is NULL)", arg_idx + 1);
-		}
-
 		string_data.WriteValue(string_t(StringValue::Get(arg.GetValue())));
 	}
 
 	return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(arguments.size()));
 }
 
+void RegisterEnumConstructors(TypeConstructorSet &set) {
+	auto signature = TypeConstructor::Signature();
+	signature.SetVarArgs(LogicalType::VARCHAR);
+	set.AddFunction(TypeConstructor(std::move(signature), BindEnumType));
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // LIST Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindListType(BindLogicalTypeInput &input) {
-	auto &arguments = input.modifiers;
-	if (arguments.size() != 1) {
-		throw BinderException("LIST type requires exactly one type modifier");
-	}
-	auto &child_val = arguments[0].GetValue();
-	if (child_val.IsNull()) {
-		throw BinderException("LIST type modifier cannot be NULL");
-	}
-	if (child_val.type() != LogicalTypeId::TYPE) {
-		throw BinderException("LIST type modifier must be a type, but got %s", child_val.ToString());
-	}
+	return LogicalType::LIST(TypeValue::GetType(input.modifiers[0].GetValue()));
+}
 
-	auto child_type = TypeValue::GetType(arguments[0].GetValue());
-	return LogicalType::LIST(child_type);
+void RegisterListConstructors(TypeConstructorSet &set) {
+	auto signature = TypeConstructor::Signature();
+	signature.AddParameter("child", LogicalType::TYPE());
+	set.AddFunction(TypeConstructor(std::move(signature), BindListType));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 // ARRAY Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindArrayType(BindLogicalTypeInput &input) {
-	auto &arguments = input.modifiers;
-	if (arguments.size() != 2) {
-		throw BinderException("ARRAY type requires exactly two type modifiers");
-	}
-	auto &elem_val = arguments[0].GetValue();
-	if (elem_val.IsNull()) {
-		throw BinderException("ARRAY type modifier cannot be NULL");
-	}
-	if (elem_val.type() != LogicalTypeId::TYPE) {
-		throw BinderException("ARRAY type modifier must be a type, but got %s", elem_val.ToString());
-	}
-
-	auto size_val = arguments[1].GetValue();
-	if (size_val.IsNull()) {
-		throw BinderException("ARRAY type size modifier cannot be NULL");
-	}
-	if (!size_val.type().IsIntegral()) {
-		throw BinderException("ARRAY type size modifier must be an integral type");
-	}
-	auto cast_size = size_val.DefaultTryCastAs(LogicalTypeId::BIGINT);
-	if (!cast_size) {
-		throw BinderException("ARRAY type size modifier must be a BIGINT");
-	}
-
-	auto array_size = cast_size->GetValueUnsafe<int64_t>();
+	auto child_type = TypeValue::GetType(input.modifiers[0].GetValue());
+	auto array_size = input.modifiers[1].GetValue().GetValue<int64_t>();
 
 	if (array_size < 1) {
-		throw BinderException("ARRAY type size must be at least 1");
+		throw BinderException(input.GetLocation(1), "ARRAY type size must be at least 1");
 	}
 	if (array_size > static_cast<int64_t>(ArrayType::MAX_ARRAY_SIZE)) {
-		throw BinderException("ARRAY type size must be at most %d", ArrayType::MAX_ARRAY_SIZE);
+		throw BinderException(input.GetLocation(1), "ARRAY type size must be at most %d", ArrayType::MAX_ARRAY_SIZE);
 	}
 
-	auto child_type = TypeValue::GetType(arguments[0].GetValue());
 	return LogicalType::ARRAY(child_type, UnsafeNumericCast<idx_t>(array_size));
+}
+
+void RegisterArrayConstructors(TypeConstructorSet &set) {
+	auto signature = TypeConstructor::Signature();
+	signature.AddParameter("child", LogicalType::TYPE());
+	signature.AddParameter("size", LogicalType::BIGINT);
+	set.AddFunction(TypeConstructor(std::move(signature), BindArrayType));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -275,21 +225,18 @@ LogicalType BindStructType(BindLogicalTypeInput &input) {
 	child_list_t<LogicalType> children;
 	children.reserve(arguments.size());
 
-	for (auto &arg : arguments) {
+	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
+		auto &arg = arguments[arg_idx];
 		if (!arg.HasName()) {
-			throw BinderException("STRUCT type arguments must have names");
-		}
-		if (arg.GetValue().type() != LogicalTypeId::TYPE) {
-			throw BinderException("STRUCT type arguments must be types");
-		}
-		if (arg.GetValue().IsNull()) {
-			throw BinderException("STRUCT type arguments cannot be NULL");
+			throw BinderException(input.GetLocation(arg_idx), "STRUCT type arguments must have names");
 		}
 
 		auto name = Identifier(arg.GetName());
 		if (name_collision_set.find(name) != name_collision_set.end()) {
-			throw BinderException("Duplicate STRUCT type argument name \"%s\"", name);
+			throw BinderException(input.GetLocation(arg_idx), "Duplicate STRUCT type argument name \"%s\"",
+			                      arg.GetName());
 		}
+		name_collision_set.insert(name);
 
 		children.emplace_back(std::move(name), TypeValue::GetType(arg.GetValue()));
 	}
@@ -297,56 +244,49 @@ LogicalType BindStructType(BindLogicalTypeInput &input) {
 	return LogicalType::STRUCT(std::move(children));
 }
 
+void RegisterStructConstructors(TypeConstructorSet &set) {
+	auto signature = TypeConstructor::Signature();
+	signature.SetVarArgs(LogicalType::TYPE());
+	set.AddFunction(TypeConstructor(std::move(signature), BindStructType));
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // TUPLE Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindTupleType(BindLogicalTypeInput &input) {
-	auto &arguments = input.modifiers;
-
 	vector<LogicalType> children;
-	children.reserve(arguments.size());
-	for (auto &arg : arguments) {
+	children.reserve(input.modifiers.size());
+	for (idx_t arg_idx = 0; arg_idx < input.modifiers.size(); arg_idx++) {
+		auto &arg = input.modifiers[arg_idx];
 		if (arg.HasName()) {
-			throw BinderException("TUPLE type arguments cannot have names - use STRUCT for named fields");
-		}
-		if (arg.GetValue().type() != LogicalTypeId::TYPE) {
-			throw BinderException("TUPLE type arguments must be types");
-		}
-		if (arg.GetValue().IsNull()) {
-			throw BinderException("TUPLE type arguments cannot be NULL");
+			throw BinderException(input.GetLocation(arg_idx),
+			                      "TUPLE type arguments cannot have names - use STRUCT for named fields");
 		}
 		children.push_back(TypeValue::GetType(arg.GetValue()));
 	}
 	return LogicalType::TUPLE(std::move(children));
 }
 
+void RegisterTupleConstructors(TypeConstructorSet &set) {
+	auto signature = TypeConstructor::Signature();
+	signature.SetVarArgs(LogicalType::TYPE());
+	set.AddFunction(TypeConstructor(std::move(signature), BindTupleType));
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // MAP Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindMapType(BindLogicalTypeInput &input) {
-	auto &arguments = input.modifiers;
-
-	if (arguments.size() != 2) {
-		throw BinderException("MAP type requires exactly two type modifiers: key type and value type");
-	}
-
-	auto &key_val = arguments[0].GetValue();
-	auto &val_val = arguments[1].GetValue();
-
-	if (key_val.type() != LogicalTypeId::TYPE || val_val.type() != LogicalTypeId::TYPE) {
-		throw BinderException("MAP type modifiers must be types");
-	}
-	if (key_val.IsNull()) {
-		throw BinderException("MAP type key type modifier cannot be NULL");
-	}
-	if (val_val.IsNull()) {
-		throw BinderException("MAP type value type modifier cannot be NULL");
-	}
-
-	auto key_type = TypeValue::GetType(arguments[0].GetValue());
-	auto val_type = TypeValue::GetType(arguments[1].GetValue());
-
+	auto key_type = TypeValue::GetType(input.modifiers[0].GetValue());
+	auto val_type = TypeValue::GetType(input.modifiers[1].GetValue());
 	return LogicalType::MAP(std::move(key_type), std::move(val_type));
+}
+
+void RegisterMapConstructors(TypeConstructorSet &set) {
+	auto signature = TypeConstructor::Signature();
+	signature.AddParameter("key", LogicalType::TYPE());
+	signature.AddParameter("value", LogicalType::TYPE());
+	set.AddFunction(TypeConstructor(std::move(signature), BindMapType));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -356,39 +296,38 @@ LogicalType BindUnionType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
 
 	if (arguments.empty()) {
-		throw BinderException("UNION type requires at least one type modifier");
+		throw BinderException(input.query_location, "UNION type requires at least one type modifier");
 	}
-
 	if (arguments.size() > UnionType::MAX_UNION_MEMBERS) {
-		throw BinderException("UNION type supports at most %d type modifiers", UnionType::MAX_UNION_MEMBERS);
+		throw BinderException(input.query_location, "UNION type supports at most %d type modifiers",
+		                      UnionType::MAX_UNION_MEMBERS);
 	}
 
 	child_list_t<LogicalType> children;
 	identifier_set_t name_collision_set;
 
-	for (auto &arg : arguments) {
+	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
+		auto &arg = arguments[arg_idx];
 		if (!arg.HasName()) {
-			throw BinderException("UNION type modifiers must have names");
-		}
-		if (arg.GetValue().type() != LogicalTypeId::TYPE) {
-			throw BinderException("UNION type modifiers must be types");
-		}
-		if (arg.GetValue().IsNull()) {
-			throw BinderException("UNION type modifiers cannot be NULL");
+			throw BinderException(input.GetLocation(arg_idx), "UNION type modifiers must have names");
 		}
 
 		auto &entry_name = arg.GetName();
-		auto entry_type = TypeValue::GetType(arg.GetValue());
-
 		if (name_collision_set.find(Identifier(entry_name)) != name_collision_set.end()) {
-			throw BinderException("Duplicate UNION type member name \"%s\"", entry_name);
+			throw BinderException(input.GetLocation(arg_idx), "Duplicate UNION type member name \"%s\"", entry_name);
 		}
-
 		name_collision_set.insert(Identifier(entry_name));
-		children.emplace_back(entry_name, entry_type);
+
+		children.emplace_back(entry_name, TypeValue::GetType(arg.GetValue()));
 	}
 
 	return LogicalType::UNION(std::move(children));
+}
+
+void RegisterUnionConstructors(TypeConstructorSet &set) {
+	auto signature = TypeConstructor::Signature();
+	signature.SetVarArgs(LogicalType::TYPE());
+	set.AddFunction(TypeConstructor(std::move(signature), BindUnionType));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -396,44 +335,27 @@ LogicalType BindUnionType(BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindVariantType(BindLogicalTypeInput &input) {
 	// We need this function to make sure we always create a VARIANT type with ExtraTypeInfo
-	auto &arguments = input.modifiers;
-
-	if (!arguments.empty()) {
-		throw BinderException("Type 'VARIANT' does not take any type parameters");
-	}
 	return LogicalType::VARIANT();
+}
+
+void RegisterVariantConstructors(TypeConstructorSet &set) {
+	set.AddFunction(TypeConstructor(TypeConstructor::Signature(), BindVariantType));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 // GEOMETRY Type
 //----------------------------------------------------------------------------------------------------------------------
+LogicalType BindDefaultGeometryType(BindLogicalTypeInput &input) {
+	return LogicalType::GEOMETRY();
+}
+
 LogicalType BindGeometryType(BindLogicalTypeInput &input) {
-	auto &arguments = input.modifiers;
-
-	if (arguments.empty()) {
-		return LogicalType::GEOMETRY();
-	}
-
-	if (arguments.size() > 1) {
-		throw BinderException(
-		    "GEOMETRY type takes a single optional type modifier with a coordinate system definition");
-	}
-
-	const auto &crs_value = arguments[0].GetValue();
-
-	// Don't do any casting here - only accept string type directly
-	if (crs_value.type() != LogicalTypeId::VARCHAR) {
-		throw BinderException("GEOMETRY type modifier must be a string with a coordinate system definition");
-	}
-	if (crs_value.IsNull()) {
-		throw BinderException("GEOMETRY type modifier cannot be NULL");
-	}
-
 	// FIXME: Use extension/ClientContext to expand incomplete/shorthand CRS definitions
-	auto &crs = StringValue::Get(crs_value);
+	auto &crs = StringValue::Get(input.modifiers[0].GetValue());
 
 	if (!input.context) {
-		throw BinderException("Cannot create GEOMETRY type with coordinate system without a connection");
+		throw BinderException(input.query_location,
+		                      "Cannot create GEOMETRY type with coordinate system without a connection");
 	}
 
 	const auto crs_result = CoordinateReferenceSystem::TryIdentify(*input.context, crs);
@@ -444,6 +366,7 @@ LogicalType BindGeometryType(BindLogicalTypeInput &input) {
 		}
 
 		throw BinderException(
+		    input.GetLocation(0),
 		    "Encountered unrecognized coordinate system '%s' when trying to create GEOMETRY type\n"
 		    "The coordinate system definition may be incomplete or invalid. Your options are as follows:\n"
 		    "* Load an extension that can identify this coordinate system\n"
@@ -456,26 +379,37 @@ LogicalType BindGeometryType(BindLogicalTypeInput &input) {
 	return LogicalType::GEOMETRY(crs_result->GetDefinition());
 }
 
+void RegisterGeometryConstructors(TypeConstructorSet &set) {
+	set.AddFunction(TypeConstructor(TypeConstructor::Signature(), BindDefaultGeometryType));
+
+	auto signature = TypeConstructor::Signature();
+	signature.AddParameter("crs", LogicalType::VARCHAR);
+	set.AddFunction(TypeConstructor(std::move(signature), BindGeometryType));
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // All Types
 //----------------------------------------------------------------------------------------------------------------------
 
+using constructor_registration_t = void (*)(TypeConstructorSet &set);
+
 struct DefaultType {
 	const char *name;
 	LogicalTypeId type;
-	bind_logical_type_function_t bind_function;
+	//! Registers the constructors accepting this type's modifiers, or null if it takes no modifiers
+	constructor_registration_t register_constructors;
 };
 
 using builtin_type_array = std::array<DefaultType, 83>;
 
-const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, BindDecimalType},
-                                           {"dec", LogicalTypeId::DECIMAL, BindDecimalType},
-                                           {"numeric", LogicalTypeId::DECIMAL, BindDecimalType},
+const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, RegisterDecimalConstructors},
+                                           {"dec", LogicalTypeId::DECIMAL, RegisterDecimalConstructors},
+                                           {"numeric", LogicalTypeId::DECIMAL, RegisterDecimalConstructors},
                                            {"time", LogicalTypeId::TIME, nullptr},
                                            {"time_ns", LogicalTypeId::TIME_NS, nullptr},
                                            {"date", LogicalTypeId::DATE, nullptr},
-                                           {"timestamp", LogicalTypeId::TIMESTAMP, BindTimestampType},
-                                           {"datetime", LogicalTypeId::TIMESTAMP, BindTimestampType},
+                                           {"timestamp", LogicalTypeId::TIMESTAMP, RegisterTimestampConstructors},
+                                           {"datetime", LogicalTypeId::TIMESTAMP, RegisterTimestampConstructors},
                                            {"timestamp_us", LogicalTypeId::TIMESTAMP, nullptr},
                                            {"timestamp_ms", LogicalTypeId::TIMESTAMP_MS, nullptr},
                                            {"timestamp_ns", LogicalTypeId::TIMESTAMP_NS, nullptr},
@@ -485,13 +419,13 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"timestamptz_ns", LogicalTypeId::TIMESTAMP_TZ_NS, nullptr},
                                            {"timetz", LogicalTypeId::TIME_TZ, nullptr},
                                            {"time with time zone", LogicalTypeId::TIME_TZ, nullptr},
-                                           {"interval", LogicalTypeId::INTERVAL, BindIntervalType},
-                                           {"varchar", LogicalTypeId::VARCHAR, BindVarcharType},
-                                           {"bpchar", LogicalTypeId::VARCHAR, BindVarcharType},
-                                           {"string", LogicalTypeId::VARCHAR, BindVarcharType},
-                                           {"char", LogicalTypeId::VARCHAR, BindVarcharType},
-                                           {"nvarchar", LogicalTypeId::VARCHAR, BindVarcharType},
-                                           {"text", LogicalTypeId::VARCHAR, BindVarcharType},
+                                           {"interval", LogicalTypeId::INTERVAL, RegisterIntervalConstructors},
+                                           {"varchar", LogicalTypeId::VARCHAR, RegisterVarcharConstructors},
+                                           {"bpchar", LogicalTypeId::VARCHAR, RegisterVarcharConstructors},
+                                           {"string", LogicalTypeId::VARCHAR, RegisterVarcharConstructors},
+                                           {"char", LogicalTypeId::VARCHAR, RegisterVarcharConstructors},
+                                           {"nvarchar", LogicalTypeId::VARCHAR, RegisterVarcharConstructors},
+                                           {"text", LogicalTypeId::VARCHAR, RegisterVarcharConstructors},
                                            {"blob", LogicalTypeId::BLOB, nullptr},
                                            {"bytea", LogicalTypeId::BLOB, nullptr},
                                            {"varbinary", LogicalTypeId::BLOB, nullptr},
@@ -525,16 +459,16 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"int1", LogicalTypeId::TINYINT, nullptr},
                                            {"utinyint", LogicalTypeId::UTINYINT, nullptr},
                                            {"uint8", LogicalTypeId::UTINYINT, nullptr},
-                                           {"struct", LogicalTypeId::STRUCT, BindStructType},
-                                           {"row", LogicalTypeId::STRUCT, BindStructType},
-                                           {"tuple", LogicalTypeId::TUPLE, BindTupleType},
-                                           {"list", LogicalTypeId::LIST, BindListType},
-                                           {"array", LogicalTypeId::ARRAY, BindArrayType},
-                                           {"map", LogicalTypeId::MAP, BindMapType},
-                                           {"union", LogicalTypeId::UNION, BindUnionType},
-                                           {"bit", LogicalTypeId::BIT, BindBitType},
-                                           {"bitstring", LogicalTypeId::BIT, BindBitType},
-                                           {"variant", LogicalTypeId::VARIANT, BindVariantType},
+                                           {"struct", LogicalTypeId::STRUCT, RegisterStructConstructors},
+                                           {"row", LogicalTypeId::STRUCT, RegisterStructConstructors},
+                                           {"tuple", LogicalTypeId::TUPLE, RegisterTupleConstructors},
+                                           {"list", LogicalTypeId::LIST, RegisterListConstructors},
+                                           {"array", LogicalTypeId::ARRAY, RegisterArrayConstructors},
+                                           {"map", LogicalTypeId::MAP, RegisterMapConstructors},
+                                           {"union", LogicalTypeId::UNION, RegisterUnionConstructors},
+                                           {"bit", LogicalTypeId::BIT, RegisterBitConstructors},
+                                           {"bitstring", LogicalTypeId::BIT, RegisterBitConstructors},
+                                           {"variant", LogicalTypeId::VARIANT, RegisterVariantConstructors},
                                            {"bignum", LogicalTypeId::BIGNUM, nullptr},
                                            {"varint", LogicalTypeId::BIGNUM, nullptr},
                                            {"boolean", LogicalTypeId::BOOLEAN, nullptr},
@@ -542,15 +476,25 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"logical", LogicalTypeId::BOOLEAN, nullptr},
                                            {"uuid", LogicalTypeId::UUID, nullptr},
                                            {"guid", LogicalTypeId::UUID, nullptr},
-                                           {"enum", LogicalTypeId::ENUM, BindEnumType},
+                                           {"enum", LogicalTypeId::ENUM, RegisterEnumConstructors},
                                            {"null", LogicalTypeId::SQLNULL, nullptr},
                                            {"float", LogicalTypeId::FLOAT, nullptr},
                                            {"real", LogicalTypeId::FLOAT, nullptr},
                                            {"float4", LogicalTypeId::FLOAT, nullptr},
                                            {"double", LogicalTypeId::DOUBLE, nullptr},
                                            {"float8", LogicalTypeId::DOUBLE, nullptr},
-                                           {"geometry", LogicalTypeId::GEOMETRY, BindGeometryType},
+                                           {"geometry", LogicalTypeId::GEOMETRY, RegisterGeometryConstructors},
                                            {"type", LogicalTypeId::TYPE, nullptr}}};
+
+TypeConstructorSet GetConstructors(const DefaultType &entry, const Identifier &name) {
+	TypeConstructorSet result(name);
+	if (entry.register_constructors) {
+		entry.register_constructors(result);
+	} else {
+		result.AddFunction(TypeConstructor::Identity(name));
+	}
+	return result;
+}
 
 optional_ptr<const DefaultType> TryGetDefaultTypeEntry(const Identifier &name) {
 	auto &internal_types = BUILTIN_TYPES;
@@ -583,21 +527,13 @@ LogicalType DefaultTypeGenerator::TryDefaultBind(const string &name, const vecto
 		return LogicalTypeId::INVALID;
 	}
 
-	if (!entry->bind_function) {
-		if (params.empty()) {
-			return LogicalType(entry->type);
-		} else {
-			throw InvalidInputException("Type %s does not take any type parameters", name);
-		}
-	}
-
 	vector<TypeArgument> args;
 	for (auto &param : params) {
 		args.emplace_back(param.first, param.second);
 	}
 
-	BindLogicalTypeInput input {nullptr, LogicalType(entry->type), args};
-	return entry->bind_function(input);
+	// no context is available here, so only the built-in types are reachable
+	return GetConstructors(*entry, Identifier(name)).Bind(nullptr, LogicalType(entry->type), args);
 }
 
 DefaultTypeGenerator::DefaultTypeGenerator(Catalog &catalog, SchemaCatalogEntry &schema)
@@ -618,7 +554,7 @@ unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext 
 	info.type = LogicalType(entry->type);
 	info.internal = true;
 	info.temporary = true;
-	info.bind_function = entry->bind_function;
+	info.constructors = GetConstructors(*entry, entry_name);
 	return make_uniq_base<CatalogEntry, TypeCatalogEntry>(catalog, schema, info);
 }
 

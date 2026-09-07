@@ -20,6 +20,8 @@ namespace duckdb {
 class DatabaseInstance;
 class Logger;
 class HTTPUtil;
+class HTTPTransportManager;
+class HTTPTransportManagerState;
 class FileOpener;
 struct FileOpenerInfo;
 
@@ -54,6 +56,7 @@ struct HTTPParams {
 
 public:
 	void Initialize(optional_ptr<FileOpener> opener);
+	DUCKDB_API idx_t GetTransportReuseDomain() const;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -65,6 +68,22 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+protected:
+	DUCKDB_API void SetTransportReuseDomain(idx_t transport_reuse_domain);
+
+private:
+	friend class HTTPUtil;
+	friend class HTTPTransportManager;
+
+	//! Manager borrowed from the owning DatabaseInstance.
+	optional_ptr<HTTPTransportManager> transport_manager;
+	//! Provider publication captured by the creating manager session.
+	optional_ptr<HTTPTransportManagerState> transport_state;
+	//! Manager-issued identity used for session-local reuse.
+	idx_t transport_session_id = DConstants::INVALID_INDEX;
+	//! Provider-issued identity for transport-compatible parameters.
+	idx_t transport_reuse_domain = 0;
 };
 
 struct SignatureV4Params {
@@ -285,6 +304,7 @@ public:
 	}
 	virtual ~HTTPClient() = default;
 	virtual void Initialize(HTTPParams &http_params) = 0;
+	DUCKDB_API virtual bool CanReuse(const HTTPParams &http_params) const;
 
 	virtual unique_ptr<HTTPResponse> Get(GetRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Put(PutRequestInfo &info) = 0;
@@ -303,6 +323,17 @@ public:
 private:
 	//! The base URL (scheme + host + port) this client was created for
 	const string base_url;
+};
+
+enum class HTTPTransportReusePolicy : uint8_t {
+	//! Requests do not use an HTTPClient and do not consume manager capacity.
+	CLIENT_FREE,
+	//! Each request uses a bounded client that is destroyed after the request.
+	EPHEMERAL,
+	//! Compatible clients may be reused only by their creating session.
+	SESSION_LOCAL,
+	//! Compatible clients may be reused across sessions in one DatabaseInstance.
+	SHARED
 };
 
 class HTTPUtil {
@@ -328,6 +359,7 @@ public:
 	static HTTPUtil &Get(DatabaseInstance &db);
 
 	virtual string GetName() const;
+	DUCKDB_API virtual HTTPTransportReusePolicy GetTransportReusePolicy() const;
 
 	virtual unique_ptr<HTTPParams> InitializeParameters(DatabaseInstance &db, const string &path);
 	virtual unique_ptr<HTTPParams> InitializeParameters(ClientContext &context, const string &path);
@@ -342,9 +374,11 @@ public:
 	//! Close a client — implementations may cache it for reuse
 	virtual void CloseClient(unique_ptr<HTTPClient> &&client);
 
+	//! Perform a checked request that throws when the provider returns no response.
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);
 
+	//! Advanced provider hook used by the checked Request wrappers.
 	virtual unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client);
 	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
@@ -361,6 +395,12 @@ public:
 	static bool IsHTTPProtocol(const string &url);
 	static void BumpToSecureProtocol(string &url);
 	static string CreateSignatureV4(EncryptionUtil &encryption_util, const SignatureV4Params &sig_params);
+
+private:
+	unique_ptr<HTTPClient> InitializeClientWithPolicy(BaseRequest &request, HTTPClientCachePolicy cache_policy);
+	unique_ptr<HTTPResponse> SendRequestOnce(BaseRequest &request, HTTPClient &client,
+	                                         HTTPClientCachePolicy initial_cache_policy,
+	                                         HTTPClientCachePolicy &retry_cache_policy);
 
 public:
 	static duckdb::unique_ptr<HTTPResponse>

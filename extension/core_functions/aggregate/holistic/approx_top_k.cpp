@@ -9,6 +9,8 @@ namespace duckdb {
 
 namespace {
 
+static constexpr int64_t MAX_APPROX_K = 1000000;
+
 struct ApproxTopKString {
 	ApproxTopKString() : str(UINT32_C(0)), hash(0) {
 	}
@@ -69,6 +71,9 @@ struct InternalApproxTopKState {
 		D_ASSERT(values.empty());
 		D_ASSERT(lookup_map.empty());
 		k = kval;
+		if (k > MAX_APPROX_K) {
+			throw InvalidInputException("Requested 'k' (%d) is bigger than accepted max (%d)", kval, MAX_APPROX_K);
+		}
 		capacity = kval * MONITORED_VALUES_RATIO;
 		stored_values = make_unsafe_uniq_array_uninitialized<ApproxTopKValue>(capacity);
 		values.reserve(capacity);
@@ -165,7 +170,6 @@ struct InternalApproxTopKState {
 				D_ASSERT(val.count <= values[k - 1].get().count);
 			}
 		}
-		// verify lookup map does not contain extra entries
 		D_ASSERT(lookup_map.size() == values.size());
 #endif
 	}
@@ -528,7 +532,11 @@ void ApproxTopKImportState(AggregateImportInputData &input) {
 			const auto &str_val = value_strings[sel_idx];
 			ApproxTopKString topk_string(str_val, Hash(str_val));
 			InternalApproxTopKState::CopyValue(val, topk_string, allocator);
-			target.lookup_map.insert(make_pair(val.str_val, reference<ApproxTopKValue>(val)));
+			const bool inserted =
+			    target.lookup_map.insert(make_pair(val.str_val, reference<ApproxTopKValue>(val))).second;
+			if (!inserted) {
+				throw InvalidInputException("Invalid approx_top_k state - the state values must be unique");
+			}
 			val.count = count_data[idx];
 		}
 		for (idx_t filter_idx = 0; filter_idx < filter_entries[i].length; filter_idx++) {
