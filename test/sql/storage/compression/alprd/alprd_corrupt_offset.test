@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alprd/alprd_corrupt_offset.test
+# description: An ALPRD vector offset past the segment must be rejected at a non-zero block offset
+# group: [alprd]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alprd_corrupt_offset.db.gz {TEST_DIR}/alprd_corrupt_offset.db
+
+load {TEST_DIR}/alprd_corrupt_offset.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='b' AND compression='ALPRD' LIMIT 1;
+----
+ALPRD
+
+statement error
+SELECT sum(b) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD segment: vector offsets do not describe a data range
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(b) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD segment: vector offsets do not describe a data range

@@ -3,11 +3,12 @@ import functools
 import math
 import os
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from benchmark import BenchmarkRunner
+from benchmark import BenchmarkRunner, find_benchmark_cache_directory
 from comparison import (
     MAX_CONFIRMATION_RUNS,
     MIN_CONFIRMATION_RUNS,
@@ -137,12 +138,19 @@ def parse_arguments():
 
 
 def clear_benchmark_caches(runner_paths: List[str]):
-    cache_paths = {
-        os.path.abspath(os.path.join(os.path.dirname(runner_path), "..", "..", "..", "duckdb_benchmark_data"))
-        for runner_path in runner_paths
-    }
+    cache_paths = {find_benchmark_cache_directory(runner_path) for runner_path in runner_paths}
     for cache_path in cache_paths:
         shutil.rmtree(cache_path, ignore_errors=True)
+
+
+def create_isolated_benchmark_root(source_root: Path, target_root: Path):
+    target_root.mkdir()
+    for source_path in source_root.iterdir():
+        if source_path.name == "duckdb_benchmark_data":
+            continue
+        target_path = target_root / source_path.name
+        target_path.symlink_to(source_path, target_is_directory=source_path.is_dir())
+    (target_root / "duckdb_benchmark_data").mkdir()
 
 
 def within_noise(measurement: BenchmarkMeasurement) -> bool:
@@ -168,11 +176,33 @@ def run_paired_samples(
     planned_runs = sum(batch_sizes)
     for batch_size in batch_sizes:
         if batch_index % 2 == 0:
-            old_batch, old_failure = old_runner.run(benchmark, batch_size)
-            new_batch, new_failure = new_runner.run(benchmark, batch_size)
+            first_runner = old_runner
+            second_runner = new_runner
         else:
-            new_batch, new_failure = new_runner.run(benchmark, batch_size)
-            old_batch, old_failure = old_runner.run(benchmark, batch_size)
+            first_runner = new_runner
+            second_runner = old_runner
+
+        first_batch, first_failure = first_runner.run(benchmark, batch_size)
+        second_batch, second_failure = second_runner.run(benchmark, batch_size)
+        if first_runner is old_runner:
+            old_batch, old_failure = first_batch, first_failure
+            new_batch, new_failure = second_batch, second_failure
+        else:
+            new_batch, new_failure = first_batch, first_failure
+            old_batch, old_failure = second_batch, second_failure
+
+        if second_failure:
+            second_failure += f"\nComparison batch {batch_index + 1} ran {first_runner.label} immediately before "
+            second_failure += f"{second_runner.label}."
+            if first_runner.cache_directory == second_runner.cache_directory:
+                second_failure += (
+                    f" Both runners use the same benchmark cache, so files may have been last written by "
+                    f"{first_runner.label}."
+                )
+            if second_runner is old_runner:
+                old_failure = second_failure
+            else:
+                new_failure = second_failure
 
         old_batch = old_batch or []
         new_batch = new_batch or []
@@ -806,8 +836,8 @@ def print_failure_summary(failures: List[BenchmarkResult]):
     for index, result in enumerate(failures, start=1):
         print(f"{index}: {result.benchmark}")
         if result.old_failure != result.new_failure:
-            print("Base:\n", result.old_failure)
-            print("PR:\n", result.new_failure)
+            print("Base:\n", result.old_failure or "No failure")
+            print("PR:\n", result.new_failure or "No failure")
         else:
             print(result.old_failure)
         print("-", 52)
@@ -851,20 +881,33 @@ def main() -> int:
         print(f"Failed to find benchmark list {args.benchmarks}")
         return 1
 
+    isolated_directories = None
+    old_root_directory = None
+    new_root_directory = None
     if args.benchmark_cache == "clear":
         clear_benchmark_caches([args.old, args.new])
+        isolated_directories = tempfile.TemporaryDirectory(prefix="duckdb-regression-benchmarks-")
+        isolation_root = Path(isolated_directories.name)
+        source_root = Path.cwd()
+        old_root_directory = isolation_root / "base"
+        new_root_directory = isolation_root / "pr"
+        create_isolated_benchmark_root(source_root, old_root_directory)
+        create_isolated_benchmark_root(source_root, new_root_directory)
+        if args.verbose:
+            print("benchmark cache: isolated Base and PR directories")
 
     with open(args.benchmarks, "r", encoding="utf-8") as benchmark_file:
         benchmarks = [line.strip() for line in benchmark_file if line.strip()]
     suite = Path(args.benchmarks).stem
     old_runner = BenchmarkRunner(
         args.old,
-        "base",
+        "Base",
         args.threads,
         args.memory_limit,
         args.verbose,
         args.disable_timeout,
         args.benchmark_argument,
+        root_directory=str(old_root_directory) if old_root_directory else None,
     )
     new_runner = BenchmarkRunner(
         args.new,
@@ -874,6 +917,7 @@ def main() -> int:
         args.verbose,
         args.disable_timeout,
         args.benchmark_argument,
+        root_directory=str(new_root_directory) if new_root_directory else None,
     )
     rounded_samples = sum(sampling_batch_sizes(args.samples)) if args.samples is not None else None
     if args.samples is None:
@@ -924,11 +968,10 @@ def main() -> int:
     print_geomean_summary(old_geomean, new_geomean, sample_text)
     print_result(bool(execution_failures), gate_failed, args.nofail, len(query_regressions))
 
-    if execution_failures:
-        return 1
-    if gate_failed and not args.nofail:
-        return 1
-    return 0
+    exit_code = 1 if execution_failures or (gate_failed and not args.nofail) else 0
+    if isolated_directories:
+        isolated_directories.cleanup()
+    return exit_code
 
 
 if __name__ == "__main__":

@@ -33,6 +33,9 @@ void DataPointer::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CompressionType>(103, "compression_type", compression_type);
 	serializer.WriteProperty<BaseStatistics>(104, "statistics", statistics);
 	serializer.WritePropertyWithDefault<unique_ptr<ColumnSegmentState>>(105, "segment_state", segment_state);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<optional<uint32_t>>(106, "byte_size", byte_size);
+	}
 }
 
 DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
@@ -47,6 +50,7 @@ DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
 	result.compression_type = compression_type;
 	deserializer.Set<CompressionType>(compression_type);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ColumnSegmentState>>(105, "segment_state", result.segment_state);
+	deserializer.ReadPropertyWithDefault<optional<uint32_t>>(106, "byte_size", result.byte_size);
 	deserializer.Unset<CompressionType>();
 	return result;
 }

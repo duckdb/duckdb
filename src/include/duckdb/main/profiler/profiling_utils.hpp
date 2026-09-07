@@ -30,6 +30,7 @@ public:
 	~QueryMetrics();
 
 	idx_t system_peak_buffer_memory;
+	idx_t system_peak_streaming_buffer_size;
 	idx_t system_peak_temp_dir_size;
 	double blocked_thread_time;
 
@@ -108,6 +109,7 @@ public:
 		latency_timer.reset();
 		query_sql = "";
 		system_peak_buffer_memory = 0;
+		system_peak_streaming_buffer_size = 0;
 		system_peak_temp_dir_size = 0;
 		blocked_thread_time = 0;
 	}

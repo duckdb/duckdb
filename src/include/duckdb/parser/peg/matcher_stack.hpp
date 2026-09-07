@@ -7,53 +7,51 @@
 
 #pragma once
 
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 
 namespace duckdb {
 
-using match_frame_index_t = idx_t;
+struct PackratMatchState {
+	static bool IsEnabled(const Matcher &matcher, const MatchState &state) {
+		return state.context.packrat_cache && matcher.IsPackratMemoized() && matcher.GetPackratId().IsValid();
+	}
 
-class MatchStack;
+	optional<MatcherResult> TryLoadCachedResult(const Matcher &matcher, MatchState &state);
+	void StoreResult(const Matcher &matcher, MatchState &state, const MatcherResult &result) const;
 
-enum class MatchFrameState : uint8_t { INITIALIZE, EXECUTE };
-enum class MatchResultState : uint8_t { NONE, FAILURE, SUCCESS };
+private:
+	optional_idx token_index_before;
+	idx_t max_token_index_before = 0;
+};
 
 struct MatchStackFrame {
-	MatchStackFrame(match_frame_index_t frame_index, const Matcher &matcher, MatchState &state);
-	virtual ~MatchStackFrame() = default;
+public:
+	explicit MatchStackFrame(MatchInput input);
 
-	virtual void Execute(MatchStack &stack);
-	void SetResult(const MatcherResult &result);
-	bool HasResult() const;
-	MatcherResult GetResult() const;
-	void SetChildResult(const MatcherResult &result);
-	bool HasChildResult() const;
-	MatcherResult TakeChildResult();
+public:
+	bool IsInitialized() const;
 
-	const match_frame_index_t frame_index;
+public:
 	const Matcher &matcher;
 	MatchState &match_state;
-	MatchFrameState state = MatchFrameState::INITIALIZE;
-	MatchResultState result_state = MatchResultState::NONE;
-	optional_ptr<ParseResult> parse_result;
-	MatchResultState child_result_state = MatchResultState::NONE;
-	optional_ptr<ParseResult> child_parse_result;
-	bool store_packrat_result = false;
-	idx_t token_index_before = 0;
-	idx_t max_token_index_before = 0;
+	unique_ptr<MatchProcess> process;
+	optional<MatcherResult> child_result;
+	optional<MatcherResult> result;
+	PackratMatchState packrat_state;
 };
 
 class MatchStack {
 public:
-	MatcherResult Execute(const Matcher &matcher, MatchState &state);
-	void PushChildFrame(MatchStackFrame &parent, const Matcher &matcher, MatchState &state);
+	MatcherResult Execute(MatchInput input);
 
 private:
-	void PushFrame(const Matcher &matcher, MatchState &state);
+	MatcherResult ExecuteAtomicMatcher(MatchInput input);
+	void PushFrame(MatchInput input);
 	void InitializeFrame(MatchStackFrame &frame);
 	void ExecuteFrame(MatchStackFrame &frame);
 	MatcherResult FinalizeFrame(MatchStackFrame &frame);
-	MatcherResult ExecuteInternal(const Matcher &matcher, MatchState &state);
 
 private:
 	vector<unique_ptr<MatchStackFrame>> frames;

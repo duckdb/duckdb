@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/alp/alp_corrupt_count.test
+# description: An inflated ALP segment count must not extend the encoded vector
+# group: [alp]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alp_corrupt_count.db.gz {TEST_DIR}/alp_corrupt_count.db
+
+load {TEST_DIR}/alp_corrupt_count.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALP';
+----
+ALP
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALP vector: attempted to read past the end of the segment
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALP vector: attempted to read past the end of the segment

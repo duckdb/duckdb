@@ -217,6 +217,7 @@ AlterTableInfo:
   rules:
     - AlterTableOptions
     - AddColumn
+    - DropConstraint
     - DropColumn
     - SetPartitionedBy
     - ResetPartitionedBy

@@ -1,0 +1,16 @@
+# name: test/sql/aggregate/aggregate_state_export/test_export_state_finalize_limits.test
+# group: [aggregate_state_export]
+
+statement error
+SELECT finalize(
+	to_aggregate_state(
+	{
+		'k': CAST(1099511627776 AS UBIGINT),
+		'values': list_value({'value': 7, 'count': CAST(5 AS UBIGINT)}),
+		'filter': list_value(CAST(0 AS UBIGINT), CAST(0 AS UBIGINT))
+	},
+	'approx_top_k', ['INTEGER', 'BIGINT'], [NULL, 3]
+	)
+);
+----
+Invalid Input Error: Requested 'k' (1099511627776) is bigger than accepted max (1000000)

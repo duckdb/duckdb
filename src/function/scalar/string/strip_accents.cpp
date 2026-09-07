@@ -1,17 +1,16 @@
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/swar.hpp"
 
 #include "utf8proc.hpp"
 
 namespace duckdb {
 
 bool IsAscii(const char *input, idx_t n) {
-	static constexpr uint64_t MASK = 0x8080808080808080U;
-
 	// Check 8 bytes at a time
 	idx_t i = 0;
-	for (; i + sizeof(uint64_t) <= n; i += sizeof(uint64_t)) {
-		if ((Load<uint64_t>(const_data_ptr_cast(input + i)) & MASK)) {
+	for (; i + SwarWord::SIZE <= n; i += SwarWord::SIZE) {
+		if (!SwarWord::IsAscii(Load<uint64_t>(const_data_ptr_cast(input + i)))) {
 			// non-ascii character in the next 8 bytes
 			return false;
 		}

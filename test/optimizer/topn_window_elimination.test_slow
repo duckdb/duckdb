@@ -20,6 +20,66 @@ CREATE TABLE tbl2(generated_col AS (x + 1), x INTEGER, y VARCHAR)
 statement ok
 INSERT INTO tbl2 VALUES (0, 'a'), (1, 'b'), (null, 'c')
 
+# Regression test: adding row IDs must preserve an empty projection map on the selected join side.
+# An empty map projects all columns, including the newly added row ID.
+statement ok
+CREATE TABLE topn_filter_l(id INTEGER, k INTEGER, x DOUBLE, y DOUBLE)
+
+statement ok
+CREATE TABLE topn_filter_r(id INTEGER, z DOUBLE)
+
+statement ok
+INSERT INTO topn_filter_l VALUES (1, 0, 5, 5), (1, 1, 1, 1), (1, 2, 2, 2), (2, 0, 9, 9)
+
+statement ok
+INSERT INTO topn_filter_r VALUES (1, 3), (2, 3)
+
+query IRR
+SELECT c.id, c.x, c.y
+FROM topn_filter_l c
+JOIN topn_filter_r p USING (id)
+WHERE greatest(c.x, p.z) = p.z
+QUALIFY row_number() OVER (PARTITION BY c.id ORDER BY c.k) = 1
+----
+1	1.0	1.0
+
+query II
+EXPLAIN SELECT c.id, c.x, c.y
+FROM topn_filter_l c
+JOIN topn_filter_r p USING (id)
+WHERE greatest(c.x, p.z) = p.z
+QUALIFY row_number() OVER (PARTITION BY c.id ORDER BY c.k) = 1
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
+
+# The duplicate-row-ID regression must exercise join late materialization rather than
+# passing by falling back to struct packing.
+# RelDebug uses an inner row-ID reconstruction join for this query. Debug's
+# column-lifetime verification projections can conservatively make late
+# materialization fall back to struct packing; both are valid optimized plans.
+statement ok
+CREATE TABLE topn_dup_l(id INTEGER, k INTEGER, p VARCHAR)
+
+statement ok
+CREATE TABLE topn_dup_r(k INTEGER, s INTEGER)
+
+statement ok
+INSERT INTO topn_dup_l VALUES (1, 1, 'x')
+
+statement ok
+INSERT INTO topn_dup_r VALUES (1, 20), (1, 10)
+
+query II
+EXPLAIN SELECT id, p
+FROM (
+	SELECT topn_dup_l.id, topn_dup_l.p, topn_dup_r.s
+	FROM topn_dup_l
+	JOIN topn_dup_r ON topn_dup_l.k = topn_dup_r.k
+) AS src
+QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 2
+----
+logical_opt	<REGEX>:.*(COMPARISON_JOIN.*Join Type: INNER.*rowid = rowid.*AGGREGATE|arg_max\(struct_pack\().*
+
 # An unpartitioned top-1 window must not turn empty input into a NULL row
 statement ok
 CREATE TABLE empty_topn(s INTEGER, p INTEGER)
@@ -41,6 +101,76 @@ FROM empty_topn
 WHERE s < random()
 QUALIFY row_number() OVER (ORDER BY s) <= 1
 ----
+
+# Ordering expressions can introduce NULLs even when their input columns cannot
+statement ok
+CREATE TABLE expression_nulls(id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO expression_nulls VALUES (1), (2), (3)
+
+query II
+SELECT id, row_number() OVER (ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST) AS rn
+FROM expression_nulls
+QUALIFY rn <= 3
+ORDER BY rn
+----
+2	1
+1	2
+3	3
+
+# Exercise the min_n/max_n rewrite without a payload column
+query I
+SELECT row_number() OVER (ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST) AS rn
+FROM expression_nulls
+QUALIFY rn <= 3
+ORDER BY rn
+----
+1
+2
+3
+
+# An expression whose ordering key is always NULL must not fabricate a NULL payload
+query II
+SELECT count(*), count(id)
+FROM (
+	SELECT id
+	FROM expression_nulls
+	QUALIFY row_number() OVER (ORDER BY NULLIF(id, id) NULLS LAST) = 1
+)
+----
+1	1
+
+# This is not specific to NULLIF: TRY_CAST can also introduce NULLs
+query IIII
+SELECT count(*), count(id), min(rn), max(rn)
+FROM (
+	SELECT id, row_number() OVER (ORDER BY TRY_CAST(id::VARCHAR || 'x' AS INTEGER) NULLS LAST) AS rn
+	FROM expression_nulls
+	QUALIFY rn <= 3
+)
+----
+3	3	1	3
+
+# Preserve nullable ordering keys through the partitioned, multi-payload path
+statement ok
+CREATE TABLE expression_null_payload(id INTEGER PRIMARY KEY, payload VARCHAR NOT NULL, grp INTEGER NOT NULL)
+
+statement ok
+INSERT INTO expression_null_payload VALUES (1, 'a', 1), (2, 'b', 1), (3, 'c', 1), (4, 'd', 2)
+
+query IIII
+SELECT id, payload, grp, row_number() OVER (
+	PARTITION BY grp ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST
+) AS rn
+FROM expression_null_payload
+QUALIFY rn <= 3
+ORDER BY grp, rn;
+----
+2	b	1	1
+1	a	1	2
+3	c	1	3
+4	d	2	1
 
 # NaN sorts after all finite floating-point values
 query II
@@ -115,11 +245,12 @@ EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], 
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
-# window function with join and one-sided projections + join column
+# Window function with join and one-sided projections + join column. Debug may
+# conservatively use the struct-pack fallback after verification projections.
 query II
 EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '{sort_order}', {topn})
 ----
-logical_opt	<REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
+logical_opt	<REGEX>:.*(COMPARISON_JOIN.*rowid = rowid.*AGGREGATE|arg_(min|max)\(struct_pack\().*
 
 # window function with join and two-sided projections
 query II
@@ -470,3 +601,54 @@ ORDER BY 1;
 1	1	1	/User/hawkfish/file.txt	file.txt
 2	2	2	/User/hawkfish/file.txt	file.txt
 7	3	0	/User/hawkfish/file.txt	file.txt
+
+# Issue 24363: Top-N window elimination with ORDER BY NULL
+query II
+SELECT * FROM (
+    SELECT c0, row_number() OVER (PARTITION BY c0 ORDER BY NULL) AS c1
+    FROM (VALUES (3),(3)) AS t(c0)
+) AS u WHERE c1 <= 7;
+----
+3	1
+3	2
+
+# ORDER BY NULL with LIMIT 1
+query II
+SELECT * FROM (
+    SELECT c0, row_number() OVER (PARTITION BY c0 ORDER BY NULL) AS c1
+    FROM (VALUES (3),(3)) AS t(c0)
+) AS u WHERE c1 <= 1;
+----
+3	1
+
+# ORDER BY constant integer (ORDER BY 1)
+query II
+SELECT * FROM (
+    SELECT c0, row_number() OVER (PARTITION BY c0 ORDER BY 1) AS c1
+    FROM (VALUES (3),(3)) AS t(c0)
+) AS u WHERE c1 <= 7;
+----
+3	1
+3	2
+
+# ORDER BY expression evaluating to NULL
+query II
+SELECT * FROM (
+    SELECT c0, row_number() OVER (PARTITION BY c0 ORDER BY 1 + NULL) AS c1
+    FROM (VALUES (3),(3)) AS t(c0)
+) AS u WHERE c1 <= 7;
+----
+3	1
+3	2
+
+# Multiple partitions with ORDER BY NULL
+query II
+SELECT * FROM (
+    SELECT c0, row_number() OVER (PARTITION BY c0 ORDER BY NULL) AS c1
+    FROM (VALUES (1), (1), (2), (2), (2)) AS t(c0)
+) AS u WHERE c1 <= 2 ORDER BY c0, c1;
+----
+1	1
+1	2
+2	1
+2	2

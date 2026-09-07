@@ -1766,10 +1766,10 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 			while (current_iterator.pos.buffer_pos + 8 < to_pos) {
 				uint64_t value = Load<uint64_t>(
 				    reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[current_iterator.pos.buffer_pos]));
-				if (ContainsZeroByte((value ^ state_machine_strict->transition_array.delimiter) &
-				                     (value ^ state_machine_strict->transition_array.new_line) &
-				                     (value ^ state_machine_strict->transition_array.carriage_return) &
-				                     (value ^ state_machine_strict->transition_array.comment))) {
+				if (SwarWord::MaybeZeroBytes((value ^ state_machine_strict->transition_array.delimiter) &
+				                             (value ^ state_machine_strict->transition_array.new_line) &
+				                             (value ^ state_machine_strict->transition_array.carriage_return) &
+				                             (value ^ state_machine_strict->transition_array.comment))) {
 					break;
 				}
 				current_iterator.pos.buffer_pos += 8;
@@ -1784,8 +1784,8 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 			while (current_iterator.pos.buffer_pos + 8 < to_pos) {
 				uint64_t value = Load<uint64_t>(
 				    reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[current_iterator.pos.buffer_pos]));
-				if (ContainsZeroByte((value ^ state_machine_strict->transition_array.quote) &
-				                     (value ^ state_machine_strict->transition_array.escape))) {
+				if (SwarWord::MaybeZeroBytes((value ^ state_machine_strict->transition_array.quote) &
+				                             (value ^ state_machine_strict->transition_array.escape))) {
 					break;
 				}
 				current_iterator.pos.buffer_pos += 8;

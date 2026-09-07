@@ -315,6 +315,35 @@ TEST_CASE("V2: column_data_collection reset keeps types, drops rows", "[capi_v2]
 	duckdb_v2_column_data_collection_destroy(&cdc);
 }
 
+TEST_CASE("V2: column_data_collection clear keeps types, drops rows", "[capi_v2][column_data_collection]") {
+	EnvFixture fx;
+	auto cdc = MakeIntCollection(fx.conn);
+	AppendInts(fx.conn, cdc, {1, 2, 3});
+	REQUIRE(RowCount(cdc) == 3);
+
+	// Same observable effect as reset; the difference is that the buffers are retained for the next appends.
+	REQUIRE(duckdb_v2_column_data_collection_clear(cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RowCount(cdc) == 0);
+	REQUIRE(ScanInts(fx.conn, cdc).empty());
+
+	AppendInts(fx.conn, cdc, {9, 8});
+	REQUIRE(RowCount(cdc) == 2);
+	REQUIRE(ScanInts(fx.conn, cdc) == std::vector<int32_t> {9, 8});
+
+	// Repeated fill/clear cycles are the point of it.
+	for (int round = 0; round < 3; round++) {
+		REQUIRE(duckdb_v2_column_data_collection_clear(cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
+		AppendInts(fx.conn, cdc, {round});
+		REQUIRE(ScanInts(fx.conn, cdc) == std::vector<int32_t> {round});
+	}
+
+	duckdb_v2_column_data_collection_destroy(&cdc);
+}
+
+TEST_CASE("V2: column_data_collection clear null arg", "[capi_v2][column_data_collection]") {
+	REQUIRE(duckdb_v2_column_data_collection_clear(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+}
+
 // ===========================================================================
 // Refusals: create / append / scan
 // ===========================================================================

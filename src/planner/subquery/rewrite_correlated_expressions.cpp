@@ -2,7 +2,6 @@
 
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -78,25 +77,27 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	return nullptr;
 }
 
-RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map)
+RewriteCorrelatedAggregates::RewriteCorrelatedAggregates(
+    column_binding_map_t<CorrelatedAggregateReplacement> &replacement_map)
     : replacement_map(replacement_map) {
 }
 
-void RewriteCountAggregates::Rewrite(LogicalOperator &op, column_binding_map_t<idx_t> &replacement_map) {
-	RewriteCountAggregates rewriter(replacement_map);
+void RewriteCorrelatedAggregates::Rewrite(LogicalOperator &op,
+                                          column_binding_map_t<CorrelatedAggregateReplacement> &replacement_map) {
+	RewriteCorrelatedAggregates rewriter(replacement_map);
 	rewriter.VisitOperator(op);
 }
 
-unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpression &expr,
-                                                            unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> RewriteCorrelatedAggregates::VisitReplace(BoundColumnRefExpression &expr,
+                                                                 unique_ptr<Expression> *expr_ptr) {
 	auto entry = replacement_map.find(expr.Binding());
 	if (entry != replacement_map.end()) {
-		// reference to a COUNT(*) aggregate
-		// replace this with CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
+		// Replace this with CASE WHEN the aggregate group is missing THEN EMPTY_RESULT ELSE AGGREGATE END.
 		auto is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-		is_null->GetChildrenMutable().push_back(expr.Copy());
+		is_null->GetChildrenMutable().push_back(
+		    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, entry->second.marker));
 		auto check = std::move(is_null);
-		auto result_if_true = make_uniq<BoundConstantExpression>(Value::Numeric(expr.GetReturnType(), 0));
+		auto result_if_true = make_uniq<BoundColumnRefExpression>(expr.GetReturnType(), entry->second.empty_result);
 		auto result_if_false = std::move(*expr_ptr);
 		return make_uniq<BoundCaseExpression>(std::move(check), std::move(result_if_true), std::move(result_if_false));
 	}
