@@ -220,7 +220,18 @@ bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx
 			return false;
 		}
 	}
-	while (pidx < plen && pdata[pidx] == PERCENTAGE) {
+	// a trailing '%' only matches an empty suffix when it is not escaped
+	while (pidx < plen) {
+		if (HAS_ESCAPE && pdata[pidx] == escape) {
+			if (pidx + 1 == plen) {
+				throw SyntaxException("Like pattern must not end with escape character!");
+			}
+			// the escape sequence needs a character to match against, and there is none left
+			break;
+		}
+		if (pdata[pidx] != PERCENTAGE) {
+			break;
+		}
 		pidx++;
 	}
 	return pidx == plen && sidx == slen;

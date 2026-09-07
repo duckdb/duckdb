@@ -33,7 +33,6 @@ class TableIndexIterationHelper;
 
 struct IndexSerializationInfo {
 	case_insensitive_map_t<Value> options;
-	transaction_t checkpoint_id;
 };
 
 // IndexStorageInfo is move-only. Keep every serialized info in owned_infos and expose stable ordered references.
@@ -61,8 +60,8 @@ public:
 	                 IndexAppendMode append_mode, optional_idx active_checkpoint);
 	//! Reverts an append to all index entries.
 	void RevertAppend(DataChunk &chunk, Vector &row_ids);
-	//! Reverts an append made directly to all bound physical indexes.
-	void RevertIndexAppend(DataChunk &chunk, row_t row_start);
+	//! Reverts an append with generated row IDs starting at row_start.
+	void RevertAppend(DataChunk &chunk, row_t row_start);
 	//! Appends deleted rows to all unique indexes.
 	void AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids);
 	//! Applies a removal or removal rollback to all index entries.
@@ -125,7 +124,7 @@ public:
 		other.unbound_count = 0;
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
-	void MergeCheckpointDeltas(transaction_t checkpoint_id) const;
+	void MergeCheckpointDeltas(optional_idx checkpoint_id) const;
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	shared_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);

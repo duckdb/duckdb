@@ -24,6 +24,9 @@ protected:
 
 private:
 	ColumnAliasBinder column_alias_binder;
+
+public:
+	bool ClaimsAlias(ColumnRefExpression &colref) override;
 };
 
 } // namespace duckdb

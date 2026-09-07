@@ -51,9 +51,16 @@ public:
 	}
 
 public:
-	//! Whether this is a streaming result collector
+	//! Whether this collector produces a result that must stay open after the fetch.
+	//! Custom collectors override this to keep the query alive for their stream
 	virtual bool IsStreaming() const {
 		return false;
+	}
+	//! Whether a producer is parked on this sink and only the consumer can release it. A streaming
+	//! collector without a parked-producer notion reports true: it is never waited on forever, at
+	//! the price of returning to the consumer on every unrelated block
+	virtual bool HasBlockedResultProducer(GlobalSinkState &state) const {
+		return IsStreaming();
 	}
 
 protected:

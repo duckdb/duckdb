@@ -13,3 +13,15 @@ query II
 SELECT column_name, min FROM (SUMMARIZE tbl);
 ----
 a	42
+
+# correlated summarize subquery
+query IIII
+SELECT i, column_name, min, max
+FROM range(2) t(i),
+LATERAL (
+	SUMMARIZE SELECT i + j AS x FROM range(2) u(j)
+)
+ORDER BY i;
+----
+0	x	0	1
+1	x	1	2

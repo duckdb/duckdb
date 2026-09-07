@@ -48,6 +48,8 @@ protected:
 	virtual BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
 
 	ProjectionIndex TryBindGroup(ParsedExpression &expr);
+	bool MatchesGroup(ParsedExpression &expr) override;
+	bool ClaimsAlias(ColumnRefExpression &colref) override;
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index);
 
 protected:

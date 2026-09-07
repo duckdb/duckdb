@@ -623,7 +623,7 @@ static FilterPropagateResult CheckInOperatorStatistics(optional_ptr<ClientContex
 		result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && filter_stats->CanHaveNull()) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		return FilterPropagateResult::FILTER_TRUE_OR_NULL;
 	}
 	return result;
 }
@@ -678,9 +678,12 @@ static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientConte
 	}
 	// a child matching every row makes NOT match no row - the converse does not hold, since a child
 	// that matches no row may be NULL rather than false, and NOT NULL does not match either
-	if (ExpressionFilter::CheckExpressionStatistics(context_p, child, input_stats) ==
-	    FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+	auto child_result = ExpressionFilter::CheckExpressionStatistics(context_p, child, input_stats);
+	if (child_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (child_result == FilterPropagateResult::FILTER_TRUE_OR_NULL) {
+		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }

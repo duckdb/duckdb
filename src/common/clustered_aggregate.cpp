@@ -34,7 +34,7 @@ namespace duckdb {
 // - Sequential -> process the rest (most) using a merge_loop (no hash lookups).
 // - Otherwise -> continue dual hash_store until the total hot-key budget is exhausted, then
 //   mixed_loop per cursor (hot via HT, cold via seq region).
-// - At the end, memmove st2's grouop_run slice down next to st1's so consumers see one contiguous range.
+// - At the end, memmove st2's group_run slice down next to st1's so consumers see one contiguous range.
 //   (we construct separate group_run[] arrays for the two cursors but concatenate in them eventually)
 //
 // Eventually we declare success iff >75% of the inputs ends up in a large run (>= 6).

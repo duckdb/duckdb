@@ -57,4 +57,16 @@ SELECT {FUN}(s, 5) FROM strings
 ----
 three₡four🦆end
 
+# very large negative offset with a small positive length: the requested window is
+# entirely before the start of the string, so the result should be empty
+query T
+SELECT {FUN}(s, -12345678, 12) FROM strings
+----
+(empty)
+
+query T
+SELECT {FUN}(s, -2147483648, 2) FROM strings
+----
+(empty)
+
 endloop

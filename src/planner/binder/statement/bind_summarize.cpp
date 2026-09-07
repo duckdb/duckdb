@@ -5,6 +5,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -90,11 +91,13 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 		node->from_table = std::move(basetableref);
 		query = std::move(node);
 	}
-	auto query_copy = query->Copy();
 
-	// we bind the plan once in a child-node to figure out the column names and column types
+	// Bind the source once to discover its columns and retain the plan for the summarize query.
+	auto source_select = make_uniq<SelectStatement>();
+	source_select->node = std::move(query);
+	auto source_ref = make_uniq<SubqueryRef>(std::move(source_select), "summarize_tbl");
 	auto child_binder = Binder::CreateBinder(context, this);
-	auto plan = child_binder->Bind(*query);
+	auto plan = child_binder->Bind(*source_ref);
 	D_ASSERT(plan.types.size() == plan.names.size());
 	vector<unique_ptr<ParsedExpression>> name_children;
 	vector<unique_ptr<ParsedExpression>> type_children;
@@ -108,8 +111,6 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 	vector<unique_ptr<ParsedExpression>> q75_children;
 	vector<unique_ptr<ParsedExpression>> count_children;
 	vector<unique_ptr<ParsedExpression>> null_percentage_children;
-	auto select = make_uniq<SelectStatement>();
-	select->node = std::move(query_copy);
 	for (idx_t i = 0; i < plan.names.size(); i++) {
 		name_children.push_back(make_uniq<ConstantExpression>(Value(plan.names[i])));
 		type_children.push_back(make_uniq<ConstantExpression>(Value(plan.types[i].ToString())));
@@ -139,8 +140,6 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 		count_children.push_back(SummarizeCreateCountStar());
 		null_percentage_children.push_back(SummarizeCreateNullPercentage(plan.names[i]));
 	}
-	auto subquery_ref = make_uniq<SubqueryRef>(std::move(select), "summarize_tbl");
-	subquery_ref->column_name_alias = plan.names;
 
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(SummarizeWrapUnnest(name_children, "column_name"));
@@ -155,7 +154,8 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 	select_node->select_list.push_back(SummarizeWrapUnnest(q75_children, "q75"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(count_children, "count"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(null_percentage_children, "null_percentage"));
-	select_node->from_table = std::move(subquery_ref);
+	MoveCorrelatedExpressions(*child_binder);
+	select_node->from_table = make_uniq<BoundRefWrapper>(std::move(plan), std::move(child_binder));
 
 	auto select_stmt = make_uniq<SelectStatement>();
 	select_stmt->node = std::move(select_node);
