@@ -1,0 +1,104 @@
+# name: test/optimizer/statistics/statistics_numeric_comparison_pruning.test
+# description: Row-group pruning for numeric, temporal, boolean, uuid, and enum inequality comparisons
+# group: [statistics]
+
+statement ok
+ATTACH '{TEST_DIR}/numeric_comparison.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+foreach type <numeric> decimal(4,1) decimal(9,1) decimal(18,1) decimal(38,1)
+
+statement ok
+CREATE TABLE db.numeric_values AS
+SELECT (CASE range // 2048 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 2 END)::{type} AS a,
+       (CASE range // 2048 WHEN 0 THEN 1 WHEN 1 THEN 2 ELSE 2 END)::{type} AS b
+FROM range(6144);
+
+query II
+EXPLAIN ANALYZE SELECT sum(a) FROM db.numeric_values WHERE a != b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM db.numeric_values WHERE a != b;
+----
+2048
+
+statement ok
+DROP TABLE db.numeric_values;
+
+endloop
+
+foreach type date timestamp
+
+statement ok
+CREATE TABLE db.temporal_values AS
+SELECT ('2000-01-01'::{type} + (CASE range // 2048 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 2 END) * INTERVAL '1 day') AS a,
+       ('2000-01-01'::{type} + (CASE range // 2048 WHEN 0 THEN 1 WHEN 1 THEN 2 ELSE 2 END) * INTERVAL '1 day') AS b
+FROM range(6144);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM db.temporal_values WHERE a != b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM db.temporal_values WHERE a != b;
+----
+2048
+
+statement ok
+DROP TABLE db.temporal_values;
+
+endloop
+
+statement ok
+CREATE TABLE db.boolean_values AS
+SELECT (CASE range // 2048 WHEN 0 THEN false WHEN 1 THEN false ELSE true END) AS a,
+       (CASE range // 2048 WHEN 0 THEN false WHEN 1 THEN true ELSE true END) AS b
+FROM range(6144);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM db.boolean_values WHERE a != b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM db.boolean_values WHERE a != b;
+----
+2048
+
+# UUID / ENUM compare as their integer physical types
+statement ok
+CREATE TABLE db.uuid_values AS
+SELECT (CASE range // 2048 WHEN 0 THEN '00000000-0000-0000-0000-000000000001' WHEN 1 THEN '00000000-0000-0000-0000-000000000001' ELSE '00000000-0000-0000-0000-000000000002' END)::UUID AS a,
+       (CASE range // 2048 WHEN 0 THEN '00000000-0000-0000-0000-000000000001' WHEN 1 THEN '00000000-0000-0000-0000-000000000002' ELSE '00000000-0000-0000-0000-000000000002' END)::UUID AS b
+FROM range(6144);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM db.uuid_values WHERE a != b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM db.uuid_values WHERE a != b;
+----
+2048
+
+statement ok
+CREATE TYPE db.ab AS ENUM ('a', 'b');
+
+statement ok
+CREATE TABLE db.enum_values AS
+SELECT (CASE range // 2048 WHEN 0 THEN 'a' WHEN 1 THEN 'a' ELSE 'b' END)::db.ab AS a,
+       (CASE range // 2048 WHEN 0 THEN 'a' WHEN 1 THEN 'b' ELSE 'b' END)::db.ab AS b
+FROM range(6144);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM db.enum_values WHERE a != b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM db.enum_values WHERE a != b;
+----
+2048

@@ -17,7 +17,6 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "fmt/core.h"
 
 namespace duckdb {
 class CatalogEntry;

@@ -89,9 +89,8 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	lstate.key_chunk.ReferenceColumns(chunk, indexed_columns);
 	lstate.row_chunk.ReferenceColumns(chunk, rowid_column);
 
-	// Check for NULLs, if we are creating a PRIMARY KEY.
-	// FIXME: Later, we want to ensure that we skip the NULL check for any non-PK alter.
-	if (alter_table_info) {
+	// PRIMARY KEY columns cannot be NULL. UNIQUE allows NULLs.
+	if (alter_table_info && info->constraint_type == IndexConstraintType::PRIMARY) {
 		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
 			if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
 				throw ConstraintException("NOT NULL constraint failed: %s", info->GetIndexName());
@@ -161,12 +160,10 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	} else {
 		// Ensure that there are no other indexes with that name on this table.
-		auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-		for (auto &index : indexes.Indexes()) {
-			if (index.GetIndexName() == info->GetIndexName()) {
-				throw CatalogException("an index with that name already exists for this table: %s",
-				                       SQLIdentifier(info->GetIndexName()));
-			}
+		const auto &indexes = storage.GetDataTableInfo()->GetIndexes();
+		if (indexes.Contains(info->GetIndexName())) {
+			throw CatalogException("an index with that name already exists for this table: %s",
+			                       SQLIdentifier(info->GetIndexName()));
 		}
 
 		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());

@@ -1,0 +1,391 @@
+module: column_data_collection
+handles:
+
+  column_data_collection:
+    description: | 
+      A column data collection represents a set of (buffer-managed) data chunks.
+      
+      You can append chunks to the collection iteratively, and then scan the collection back to retrieve the chunks in order. 
+      DuckDB will manage the memory for the chunks, and transparently offload chunks to disk if necessary.
+      A collection shall not be scanned while it is being appended to, and vice versa.
+      A collection shall not be appended to concurrently, but it can be scanned concurrently by multiple threads using a shared scan state and per-thread worker scan states. For concurrent appends, consider creating multiple collections and "combining" them into one collection at the end.
+
+  # For scanning
+  column_data_collection_shared_scan_state:
+    description: "Opaque state handle for shared state across multiple threads scanning a column data collection. This is used to coordinate work distribution, track global progress, or store any other state that needs to be shared across threads during the scan of the collection."
+  column_data_collection_worker_scan_state:
+    description: "Opaque state handle for local state while scanning a column data collection. This is used to track progress and any other state that needs to be maintained on a per-thread basis across calls while scanning the collection. It also keeps the buffers backing the most recently scanned chunk alive: chunks are scanned zero-copy, so a scanned chunk's data is only valid until the worker state's next scan call or its destruction."
+
+  # For appending
+  column_data_collection_append_state:
+    description: "Opaque state handle for appending to a column data collection. This is used to track progress and any other state that needs to be maintained across calls while appending to the collection."
+
+functions:
+  # -----------------------------------------------------------------------
+  # Construction and destruction
+  # -----------------------------------------------------------------------
+  # Create from connection
+  column_data_collection_create_with_connection:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Creates an empty column data collection from a connection.
+
+      Allocates a new, empty column data collection, drawing its buffer allocator from the connection's context. The collection starts with no chunks and is ready to have chunks appended to it. A collection must have at least one column; an empty types array is rejected with INVALID_INPUT.
+    role: constructor
+    parameters:
+      conn:
+        type: connection
+        description: The connection whose context supplies the collection's allocator.
+      types_array:
+        type: logical_type
+        indirection: 1
+        const: true
+        description: Pointer to an array of logical_type handles, one per column. This defines the schema for the chunks that will be stored in the collection. All chunks appended to this collection must have vectors that conform to these types.
+      types_count:
+        type: idx
+        description: Number of elements in the types_array.
+      out_collection:
+        type: column_data_collection
+        indirection: 1
+        kind: OUT
+        description: Receives the new collection handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  # Create from context
+  column_data_collection_create_with_context:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Creates an empty column data collection from a context.
+
+      Allocates a new, empty column data collection, drawing its buffer allocator from the context. Use this from inside a callback or extension where a context is already in hand. The collection starts with no chunks and is ready to have chunks appended to it. A collection must have at least one column; an empty types array is rejected with INVALID_INPUT.
+    role: constructor
+    parameters:
+      context:
+        type: context
+        description: The context whose allocator will be used for the collection.
+      types_array:
+        type: logical_type
+        indirection: 1
+        const: true
+        description: Pointer to an array of logical_type handles, one per column. This defines the schema for the chunks that will be stored in the collection. All chunks appended to this collection must have vectors that conform to these types.
+      types_count:
+        type: idx
+        description: Number of elements in the types_array.
+      out_collection:
+        type: column_data_collection
+        indirection: 1
+        kind: OUT
+        description: Receives the new collection handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  # Reset
+  column_data_collection_reset:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Drops all buffered rows, keeping the column types.
+
+      Drops all buffered rows and releases their memory. The column types are
+      unchanged and the collection is immediately appendable again. Existing
+      append and scan states are invalidated. Use
+      `[[column_data_collection_clear]]` instead to keep the memory for the
+      next appends.
+    belongs_to: column_data_collection
+    parameters:
+      collection:
+        type: column_data_collection
+        description: The collection to reset.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  column_data_collection_clear:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Drops all buffered rows, keeping the column types and the memory.
+
+      Like `[[column_data_collection_reset]]`, but the buffers are retained
+      rather than released, so the next appends write into memory that is
+      already allocated. Use this when the collection is refilled repeatedly.
+      The column types are unchanged and the collection is immediately
+      appendable again. Existing append and scan states are invalidated.
+    belongs_to: column_data_collection
+    parameters:
+      collection:
+        type: column_data_collection
+        description: The collection to clear.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  # Destroy
+  column_data_collection_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys a column data collection and all its chunks.
+
+      Cleans up the collection and all resources associated with it, including all contained chunks. Sets the collection handle to NULL.
+    role: destructor
+    parameters:
+      collection:
+        type: column_data_collection
+        indirection: 1
+        description: The collection to destroy.
+    return_type: ERROR
+
+  # Combine
+  column_data_collection_combine:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Merges the source collection into the target collection, consuming the source in the process.
+
+      Transfers all chunks from the source collection to the target collection. This destroys the source collection, setting the source handle to NULL. The two collections must have the same column types, and must have been created from the same context (or connections to the same database): the transferred chunks keep their original buffers, so combining collections from different databases would tie the target to a buffer manager it does not own.
+    parameters:
+      target:
+        type: column_data_collection
+        description: The collection to merge into. After the call, this collection will contain all chunks from both collections.
+      source:
+        type: column_data_collection
+        indirection: 1
+        description: The collection to merge from. This collection will be destroyed by this operation and its handle set to NULL.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  # -----------------------------------------------------------------------
+  # Accessors
+  # -----------------------------------------------------------------------
+  column_data_collection_row_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Returns the total number of rows across all chunks in the collection.
+
+      Sums the row counts of all chunks in the collection. This is the total number of rows represented by the collection, which may be more than the number of rows in any individual chunk.
+    role: getter
+    belongs_to: column_data_collection
+    parameters:
+      collection:
+        type: column_data_collection
+        description: The collection to inspect.
+      out_row_count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the total row count.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  ## -----------------------------------------------------------------------
+  ## Appending
+  ## -----------------------------------------------------------------------
+  column_data_collection_append_state_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Initializes an append state for the collection.
+
+      Returns an append state handle that can be used to append chunks to the collection while maintaining any necessary state across calls.
+    belongs_to: column_data_collection
+    parameters:
+      collection:
+        type: column_data_collection
+        description: The collection to prepare for appending.
+      out_state:
+        type: column_data_collection_append_state
+        indirection: 1
+        kind: OUT
+        description: Receives the new append state handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  column_data_collection_append_state_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys an append state handle.
+
+      Cleans up any resources associated with the append state. After this call, the state handle must not be used again.
+    role: destructor
+    belongs_to: column_data_collection
+    parameters:
+      state:
+        type: column_data_collection_append_state
+        indirection: 1
+        description: The append state to destroy.
+    return_type: ERROR
+
+  column_data_collection_append:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Appends a data chunk to the collection.
+
+      Appends a copy of the given chunk to the end of the collection. The
+      chunk's column count and types must equal the collection's exactly; a
+      mismatch is rejected with INVALID_INPUT before anything is copied.
+      Complex-typed vectors may be flattened in place by the copy.
+    belongs_to: column_data_collection
+    parameters:
+      collection:
+        type: column_data_collection
+        description: The collection to append to.
+      state:
+        type: column_data_collection_append_state
+        description: The append state to use this append operation.
+      chunk:
+        type: data_chunk
+        description: The chunk to append.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  ## -----------------------------------------------------------------------
+  ## Scanning
+  ## -----------------------------------------------------------------------
+  column_data_collection_shared_scan_state_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Initializes a shared scan state for the collection.
+
+      Returns a shared scan state handle that can be used by multiple threads to coordinate scanning of the collection. Caller owns the returned state and must destroy it via column_data_collection_shared_scan_state_destroy when done.
+    parameters:
+      collection:
+        type: column_data_collection
+        description: The collection to prepare for shared scanning.
+      out_state:
+        type: column_data_collection_shared_scan_state
+        indirection: 1
+        kind: OUT
+        description: Receives the new shared scan state handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  column_data_collection_shared_scan_state_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys a shared scan state handle.
+
+      Cleans up any resources associated with the shared scan state. After this call, the state handle must not be used again.
+    role: destructor
+    parameters:
+      state:
+        type: column_data_collection_shared_scan_state
+        indirection: 1
+        description: The shared scan state to destroy.
+    return_type: ERROR
+
+  column_data_collection_worker_scan_state_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Initializes a worker scan state for the collection.
+
+      Returns a "local" scan state handle for a worker thread to use while scanning the collection. This allows each thread to maintain its own progress and any other necessary information across multiple scan calls, while still coordinating with other threads via the shared scan state.
+    parameters:
+      collection:
+        type: column_data_collection
+        description: The collection to prepare for worker scanning.
+      out_state:
+        type: column_data_collection_worker_scan_state
+        indirection: 1
+        kind: OUT
+        description: Receives the new worker scan state handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  column_data_collection_worker_scan_state_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys a worker scan state handle.
+
+      Cleans up any resources associated with the worker scan state. After this call, the state handle must not be used again.
+    role: destructor
+    parameters:
+      state:
+        type: column_data_collection_worker_scan_state
+        indirection: 1
+        description: The worker scan state to destroy.
+    return_type: ERROR
+
+  column_data_collection_scan:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Scans the collection to retrieve the next data chunk, using shared state for coordination across threads and worker-local state for individual progress tracking.
+
+      Retrieves the next chunk of data from the collection based on the provided shared scan state and worker-local scan state. The output chunk's column count and types must equal the collection's exactly; a mismatch is rejected with INVALID_INPUT.
+
+      The scan is zero-copy where possible: the output chunk's vectors may reference the collection's buffers, kept alive by the worker scan state. The chunk's data is therefore only valid until the next scan call with the same worker state, or until the worker state or the collection is destroyed, whichever comes first. Copy the data out (or append it to another collection) before continuing the scan if it must outlive that window.
+    role: getter
+    belongs_to: column_data_collection
+    parameters:
+      collection:
+        type: column_data_collection
+        description: The collection to scan.
+      shared_state:
+        type: column_data_collection_shared_scan_state
+        description: The shared scan state to use for coordinating across threads.
+      worker_state:
+        type: column_data_collection_worker_scan_state
+        description: The worker-local scan state to use for this thread's scan operation.
+      out_chunk:
+        type: data_chunk
+        description: The output chunk to write to.
+      did_produce_chunk:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives true when a chunk was produced by this call, or false when the scan has completed (the chunk is then reset to empty).
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR

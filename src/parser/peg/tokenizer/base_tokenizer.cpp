@@ -181,6 +181,10 @@ TokenType Tokenizer::TokenizeStateToType(TokenizeState state) {
 
 void TokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
 	if (type == TokenType::COMMENT) {
+		if (end >= start + 2 && sql[start] == '/' && sql[start + 1] == '*') {
+			has_block_comment = true;
+			last_block_comment_position = start;
+		}
 		return;
 	}
 	if (start >= end) {
@@ -188,6 +192,20 @@ void TokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, bool u
 	}
 	string last_token = sql.substr(start, end - start);
 	tokens.emplace_back(std::move(last_token), start, type, unterminated);
+	if (tokens.size() < 2) {
+		return;
+	}
+	auto &previous_token = tokens[tokens.size() - 2];
+	auto previous_token_end = previous_token.offset + previous_token.length;
+	if (has_block_comment && last_block_comment_position >= previous_token_end && last_block_comment_position < start) {
+		tokens.back().preceded_by_block_comment = true;
+	}
+	for (idx_t pos = previous_token_end; pos < start; pos++) {
+		if (StringUtil::CharacterIsNewline(sql[pos])) {
+			tokens.back().preceded_by_newline = true;
+			break;
+		}
+	}
 }
 
 // Valid characters can be between A-Z, a-z, 0-9, underscore, or \200 - \377
@@ -232,6 +250,34 @@ bool Tokenizer::TokenizeInput(TokenizerBehavior &behavior) const {
 		tokens.emplace_back("", sql.size(), TokenType::END_OF_INPUT);
 	}
 	return !tokens.empty() && tokens.back().type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
+}
+
+void Tokenizer::PushOperatorToken(TokenizerBehavior &behavior, idx_t start, idx_t end) {
+	auto &sql = behavior.sql;
+	auto &tokens = behavior.tokens;
+	// Apply PostgreSQL trimming rule: an operator cannot end in '+' unless
+	// it contains at least one of: ~ ! @ # % ^ & | ` ?
+	idx_t end_pos = end;
+	bool has_special = false;
+	for (idx_t pos = start; pos < end_pos; pos++) {
+		char operator_char = sql[pos];
+		if (operator_char == '~' || operator_char == '!' || operator_char == '@' || operator_char == '#' ||
+		    operator_char == '%' || operator_char == '^' || operator_char == '&' || operator_char == '|' ||
+		    operator_char == '`' || operator_char == '?') {
+			has_special = true;
+			break;
+		}
+	}
+	if (!has_special) {
+		while (end_pos > start && sql[end_pos - 1] == '+') {
+			end_pos--;
+		}
+	}
+	behavior.PushToken(start, end_pos, TokenType::OPERATOR);
+	// Push any trimmed '+' characters as individual tokens
+	for (idx_t pos = end_pos; pos < end; pos++) {
+		tokens.emplace_back(string(1, sql[pos]), pos, TokenType::OPERATOR);
+	}
 }
 
 bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
@@ -321,6 +367,11 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 			}
 			idx_t op_len;
 			if (IsSpecialOperator(sql, i, op_len)) {
+				if (i + op_len < sql.size() && CharacterIsOperator(sql[i + op_len])) {
+					state = TokenizeState::OPERATOR;
+					last_pos = i;
+					break;
+				}
 				// special operator - push the special operator
 				tokens.emplace_back(sql.substr(i, op_len), last_pos, TokenType::OPERATOR);
 				i += op_len - 1;
@@ -403,30 +454,17 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 			i--;
 			break;
 		case TokenizeState::OPERATOR:
+			if (c == '/' && i + 1 < sql.size() && sql[i + 1] == '*') {
+				PushOperatorToken(behavior, last_pos, i);
+				// Go back to STANDARD state so it tokenizes as a block comment
+				state = TokenizeState::STANDARD;
+				last_pos = i;
+				i--;
+				break;
+			}
 			// operator literal - check if this is still an operator
 			if (!CharacterIsOperator(c)) {
-				// Apply PostgreSQL trimming rule: an operator cannot end in '+' unless
-				// it contains at least one of: ~ ! @ # % ^ & | ` ?
-				idx_t end_pos = i;
-				bool has_special = false;
-				for (idx_t j = last_pos; j < end_pos; j++) {
-					char oc = sql[j];
-					if (oc == '~' || oc == '!' || oc == '@' || oc == '#' || oc == '%' || oc == '^' || oc == '&' ||
-					    oc == '|' || oc == '`' || oc == '?') {
-						has_special = true;
-						break;
-					}
-				}
-				if (!has_special) {
-					while (end_pos > last_pos && sql[end_pos - 1] == '+') {
-						end_pos--;
-					}
-				}
-				behavior.PushToken(last_pos, end_pos, TokenType::OPERATOR);
-				// Push any trimmed '+' characters as individual tokens
-				for (idx_t j = end_pos; j < i; j++) {
-					tokens.emplace_back(string(1, sql[j]), j, TokenType::OPERATOR);
-				}
+				PushOperatorToken(behavior, last_pos, i);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
 				i--;
@@ -523,12 +561,7 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 				break;
 			}
 			// Marker found! Revert to standard state
-			size_t full_marker_len = dollar_quote_marker.size() + 2;
-			string quoted = sql.substr(last_pos, (start + dollar_quote_marker.size() + 1) - last_pos);
-			string content = quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len);
-			content = StringUtil::Replace(content, "'", "''");
-			quoted = "'" + content + "'";
-			tokens.emplace_back(quoted, dollar_marker_start - 1, TokenType::STRING_LITERAL);
+			behavior.PushToken(last_pos, end + 1, TokenType::STRING_LITERAL);
 			dollar_quote_marker = string();
 			state = TokenizeState::STANDARD;
 			i = end;
@@ -542,9 +575,14 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 
 	switch (state) {
 	case TokenizeState::SINGLE_LINE_COMMENT:
-	case TokenizeState::MULTI_LINE_COMMENT:
 		behavior.PushToken(last_pos, sql.size(), TokenType::COMMENT);
 		return false;
+	case TokenizeState::MULTI_LINE_COMMENT:
+		behavior.PushToken(last_pos, sql.size(), TokenType::COMMENT, true);
+		return false;
+	case TokenizeState::OPERATOR:
+		PushOperatorToken(behavior, last_pos, sql.size());
+		return true;
 	case TokenizeState::DOLLAR_QUOTED_STRING:
 		behavior.PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL, true);
 		return false;

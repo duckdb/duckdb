@@ -31,8 +31,15 @@ public:
 		}
 	}
 
+	//! Reserved for DuckDB's extension trust domain: the loadable binary and every file that decides whether it may
+	//! be loaded (install provenance, trusted repositories). These can only be written through INSTALL / CREATE
+	//! EXTENSION REPOSITORY, which pass FILE_FLAGS_ENABLE_EXTENSION_INSTALL.
+	//! To add a file to the trust domain, give it a ".duckdb_extension." segment, e.g.
+	//! "<name>.duckdb_extension.info" or "<name>.duckdb_extension.repo.json". Matching is on the file name only, so a
+	//! directory that happens to contain the marker does not reserve the files inside it
 	bool IsDuckDBExtensionName(const string &path) {
-		return StringUtil::EndsWith(path, ".duckdb_extension");
+		auto name = FileSystem::ExtractName(path);
+		return StringUtil::EndsWith(name, ".duckdb_extension") || StringUtil::Contains(name, ".duckdb_extension.");
 	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {

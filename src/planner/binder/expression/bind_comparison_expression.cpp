@@ -155,28 +155,23 @@ LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 	return expr.GetReturnType();
 }
 
-BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
-	// first try to bind the children of the case expression
-	ErrorData error;
-	BindChild(expr.LeftMutable(), depth, error);
-	BindChild(expr.RightMutable(), depth, error);
-	if (error.HasError()) {
-		return BindResult(std::move(error));
-	}
-
-	// the children have been successfully resolved
-	auto &left = BoundExpression::GetExpression(*expr.LeftMutable());
-	auto &right = BoundExpression::GetExpression(*expr.RightMutable());
+//! Unify the types of two bound operands and build the bound comparison over them. Returns nullptr and
+//! sets the error if the two types cannot be compared.
+unique_ptr<Expression> ExpressionBinder::CreateBoundComparison(ExpressionType comparison_type,
+                                                               unique_ptr<Expression> left,
+                                                               unique_ptr<Expression> right, ErrorData &error) {
 	auto left_sql_type = ExpressionBinder::GetExpressionReturnType(*left);
 	auto right_sql_type = ExpressionBinder::GetExpressionReturnType(*right);
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	LogicalType input_type;
 	if (!BoundComparisonExpression::TryBindComparison(context, left_sql_type, right_sql_type, input_type,
-	                                                  expr.GetExpressionType())) {
-		return BindResult(BinderException(expr,
-		                                  "Cannot compare values of type %s and type %s - an explicit cast is required",
-		                                  left_sql_type.ToString(), right_sql_type.ToString()));
+	                                                  comparison_type)) {
+		error =
+		    ErrorData(ExceptionType::BINDER,
+		              StringUtil::Format("Cannot compare values of type %s and type %s - an explicit cast is required",
+		                                 left_sql_type.ToString(), right_sql_type.ToString()));
+		return nullptr;
 	}
 	// add casts (if necessary)
 	left = BoundCastExpression::AddCastToType(context, std::move(left), input_type,
@@ -188,7 +183,25 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	PushCollation(context, right, input_type);
 
 	// now create the bound comparison expression
-	return BindResult(BoundComparisonExpression::Create(expr.GetExpressionType(), std::move(left), std::move(right)));
+	return BoundComparisonExpression::Create(comparison_type, std::move(left), std::move(right));
+}
+
+BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
+	// first try to bind the children of the case expression
+	ErrorData error;
+	auto left = BindChild(expr.LeftMutable(), depth, error);
+	auto right = BindChild(expr.RightMutable(), depth, error);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
+	}
+
+	ErrorData compare_error;
+	auto result = CreateBoundComparison(expr.GetExpressionType(), std::move(left), std::move(right), compare_error);
+	if (!result) {
+		compare_error.AddQueryLocation(expr);
+		return BindResult(std::move(compare_error));
+	}
+	return BindResult(std::move(result));
 }
 
 } // namespace duckdb

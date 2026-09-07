@@ -30,6 +30,10 @@ The join micro benchmark set contains benchmarks that look at the speed of vario
 [Order]
 The order micro benchmark set contains benchmarks that look at the speed of sorting data using the ORDER BY clause.
 
+[result_collection]
+[Result Collection]
+The result collection benchmarks measure how query results are delivered to a client: streaming results drained fully or materialized.
+
 [tpch]
 [TPC-H]
 The TPC-H benchmark is an industry standard benchmark geared towards measuring the performance of OLAP systems. It consists of 22 different queries that test different optimizations in the system.

@@ -17,6 +17,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
@@ -92,6 +93,12 @@ struct FileMetadata {
 	FileType file_type = FileType::FILE_TYPE_INVALID;
 	optional_idx device_id;
 	optional_idx file_id;
+	//! Optional: tag that uniquely identifies the version of the file (e.g., HTTP ETag).
+	//! Empty if the storage backend does not provide one.
+	string version_tag;
+	//! Time until which (inclusive) cached data may be served without revalidation.
+	//! Unset means the backend provides no freshness information; infinities mean always valid/invalid.
+	optional<timestamp_t> cache_valid_until;
 
 	// A key-value pair of the extended file metadata, which could store any attributes.
 	unordered_map<string, Value> extended_file_info;
@@ -223,6 +230,8 @@ public:
 	//! Returns a tag that uniquely identifies the version of the file,
 	//! used for checking cache invalidation for CachingFileSystem httpfs files
 	DUCKDB_API virtual string GetVersionTag(FileHandle &handle);
+	//! Returns the current cache freshness deadline, if provided by the file system
+	DUCKDB_API virtual optional<timestamp_t> GetCacheValidUntil(FileHandle &handle);
 	//! Returns the file type of the attached handle
 	DUCKDB_API virtual FileType GetFileType(FileHandle &handle);
 	//! Returns the file stats of the attached handle.

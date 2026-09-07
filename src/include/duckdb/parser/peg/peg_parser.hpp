@@ -1,52 +1,56 @@
 #pragma once
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/string.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
-enum class PEGRuleType {
-	LITERAL,   // literal rule ('Keyword')
-	REFERENCE, // reference to another rule (Rule)
-	OPTIONAL,  // optional rule (Rule?)
-	OR,        // or rule (Rule1 / Rule2)
-	REPEAT     // repeat rule (Rule1*
-};
 
-enum class PEGTokenType {
-	LITERAL,       // literal token ('Keyword')
-	REFERENCE,     // reference token (Rule)
-	OPERATOR,      // operator token (/ or )
-	FUNCTION_CALL, // start of function call (i.e. Function(...))
-	REGEX          // regular expression ([ \t\n\r] or <[a-z_]i[a-z0-9_]i>)
-};
+struct PEGExpression {
+	enum class Type : uint8_t {
+		LITERAL,         // keyword/string literal
+		REFERENCE,       // reference to a parameter or another rule
+		FUNCTION_CALL,   // function-call marker wrapping a child
+		SEQUENCE,        // ordered "AND" of children
+		CHOICE,          // "OR" between children ('/')
+		OPTIONAL,        // child?
+		REPEAT,          // child+  (one or more)
+		OPTIONAL_REPEAT, // child*  (zero or more)
+		REGEX            // regex
+	};
 
-struct PEGToken {
-	PEGTokenType type;
+public:
+	explicit PEGExpression(Type type_p) : type(type_p), text(string_t("")) {
+	}
+	PEGExpression(Type type_p, string_t text_p) : type(type_p), text(std::move(text_p)) {
+	}
+
+public:
+	Type type;
+	//! literal text / reference name / function name
 	string_t text;
+	//! used by SEQUENCE, CHOICE, OPTIONAL, REPEAT*, FUNCTION_CALL
+	vector<PEGExpression> children;
 };
 
 struct PEGRule {
-	string_map_t<idx_t> parameters;
-	vector<PEGToken> tokens;
-
-	void Clear() {
-		parameters.clear();
-		tokens.clear();
+public:
+	PEGRule(string_map_t<idx_t> &&parameters, PEGExpression &&expression)
+	    : parameters(std::move(parameters)), expression(std::move(expression)) {
 	}
+
+public:
+	string_map_t<idx_t> parameters;
+	PEGExpression expression;
 };
 
 struct PEGParser {
 public:
 	void ParseRules(const char *grammar);
-	void AddRule(string_t rule_name, PEGRule rule);
+	void AddRule(string_t rule_name, PEGRule &&rule);
 
 	case_insensitive_map_t<PEGRule> rules;
-};
-
-enum class PEGParseState {
-	RULE_NAME,      // Rule name
-	RULE_SEPARATOR, // look for <-
-	RULE_DEFINITION // part of rule definition
 };
 
 inline bool IsPEGOperator(char c) {

@@ -3,11 +3,9 @@
 using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR duckdb_v2_create_environment(duckdb_v2_environment_handle *out_env, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_env);
+	*out_env = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!out_env) {
-			throw duckdb::InvalidInputException("null out_env in duckdb_v2_create_environment");
-		}
-		*out_env = nullptr;
 		auto wrapper = duckdb::make_uniq<CV2Environment>();
 		wrapper->cache = duckdb::make_uniq<duckdb::DBInstanceCache>();
 		*out_env = Convert(wrapper.release());
@@ -33,10 +31,7 @@ DUCKDB_V2_ERROR duckdb_v2_destroy_environment(duckdb_v2_environment_handle *env)
 
 DUCKDB_V2_ERROR duckdb_v2_environment_database_count(duckdb_v2_environment_handle env, idx_t *out_count,
                                                      duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (!env || !out_count) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_environment_database_count");
-		}
-		*out_count = Convert(env)->open_database_count.load();
-	});
+	DUCKDB_CHECK_ARG(env);
+	DUCKDB_CHECK_ARG(out_count);
+	return WithErrorHandler(err, [&]() { *out_count = Convert(env)->open_database_count.load(); });
 }

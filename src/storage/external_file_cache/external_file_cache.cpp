@@ -14,6 +14,14 @@
 
 namespace duckdb {
 
+bool CacheValidationInfo::IsCacheReuseProhibited() const {
+	return cache_valid_until && *cache_valid_until == timestamp_t::ninfinity();
+}
+
+bool CacheValidationInfo::IsExpired() const {
+	return cache_valid_until && Timestamp::GetCurrentTimestamp() > *cache_valid_until;
+}
+
 class ExternalFileCache::ExternalFileCacheObjectCacheEntry : public ObjectCacheEntry {
 public:
 	ExternalFileCacheObjectCacheEntry(ExternalFileCache &cache_p, string path_p, idx_t generation_p)
@@ -37,7 +45,7 @@ public:
 		idx_t file_size = 0;
 		{
 			const annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
-			file_size = cached_file->file_size;
+			file_size = cached_file->validation_info.file_size;
 		}
 		const idx_t block_size = cache.GetCacheBlockSize(cached_file->path);
 		const idx_t num_blocks = (file_size + block_size - 1) / block_size;
@@ -179,7 +187,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(Cached
 	idx_t file_size = 0;
 	{
 		const annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
-		file_size = cached_file.file_size;
+		file_size = cached_file.validation_info.file_size;
 	}
 
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
@@ -221,13 +229,9 @@ ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)
     : path(std::move(path_p)), generation(generation_p) {
 }
 
-bool ExternalFileCache::CachedFile::IsValid(bool validate, const string &current_version_tag,
-                                            timestamp_t current_last_modified) {
-	if (!validate) {
-		return true; // Assume valid
-	}
-	annotated_lock_guard<annotated_mutex> guard(meta_lock);
-	return ExternalFileCache::IsValid(validate, version_tag, last_modified, current_version_tag, current_last_modified);
+//! Whether the last modified timestamp is usable as a cache validator
+static bool HasUsableLastModified(timestamp_t last_modified) {
+	return last_modified.IsFinite() && last_modified != timestamp_t(0);
 }
 
 bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
@@ -242,7 +246,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 		return false; // The file has certainly been modified
 	}
 
-	// If the modified time is not assigned (i.e., storage backend does not provide it), we can't validate it.
+	// If the modified time is not assigned, we can't validate it.
 	if (!current_last_modified.IsFinite() || !cached_last_modified.IsFinite()) {
 		return false;
 	}
@@ -261,6 +265,31 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 		return false;
 	}
 	return last_modified_time > LAST_MODIFIED_THRESHOLD;
+}
+
+bool ExternalFileCache::HasValidationMetadata(const CacheValidationInfo &info) {
+	return !info.version_tag.empty() || HasUsableLastModified(info.last_modified);
+}
+
+bool ExternalFileCache::IsValid(bool validate, const CacheValidationInfo &cached, const CacheValidationInfo &current) {
+	if (cached.IsCacheReuseProhibited() || current.IsCacheReuseProhibited()) {
+		return false;
+	}
+	if (!validate) {
+		return true; // Assume valid
+	}
+	if (HasValidationMetadata(cached) || HasValidationMetadata(current)) {
+		return IsValid(validate, cached.version_tag, cached.last_modified, current.version_tag, current.last_modified);
+	}
+	// No validators at all: cached data may be served within the freshness deadline the storage backend granted
+	// when the cache entry was created (e.g., HTTP Cache-Control), as long as the file size is unchanged.
+	if (cached.file_size != current.file_size) {
+		return false; // The file has certainly been modified
+	}
+	if (!cached.cache_valid_until) {
+		return false; // The backend does not provide expiry information, so we cannot validate at all
+	}
+	return Timestamp::GetCurrentTimestamp() <= *cached.cache_valid_until;
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)

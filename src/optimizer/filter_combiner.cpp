@@ -5,6 +5,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -343,6 +344,11 @@ static bool TypeSupportsConstantFilter(const LogicalType &type) {
 	return false;
 }
 
+static bool TypeSupportsMultiColumnComparison(const LogicalType &type) {
+	auto physical = type.InternalType();
+	return TypeIsNumeric(physical) || physical == PhysicalType::BOOL;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &table_filters,
                                                                const vector<ColumnIndex> &column_ids, column_t expr_id,
                                                                vector<ExpressionValueInformation> &info_list) {
@@ -392,6 +398,131 @@ void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
 	    });
 }
 
+static bool IsColumnConstantOr(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION ||
+	    expr.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {
+		return false;
+	}
+	const auto &conjunction = expr.Cast<BoundConjunctionExpression>();
+	if (conjunction.GetChildren().empty()) {
+		return false;
+	}
+	for (const auto &child : conjunction.GetChildren()) {
+		if (!BoundComparisonExpression::IsComparison(*child) ||
+		    !SupportedFilterComparison(child->GetExpressionType())) {
+			return false;
+		}
+		const auto &comparison = child->Cast<BoundFunctionExpression>();
+		const auto &left = BoundComparisonExpression::Left(comparison);
+		const auto &right = BoundComparisonExpression::Right(comparison);
+		optional_ptr<const BoundColumnRefExpression> column_ref;
+		optional_ptr<const BoundConstantExpression> constant;
+		if (left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+		    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+			column_ref = left.Cast<BoundColumnRefExpression>();
+			constant = right.Cast<BoundConstantExpression>();
+		} else if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+		           right.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			column_ref = right.Cast<BoundColumnRefExpression>();
+			constant = left.Cast<BoundConstantExpression>();
+		} else {
+			return false;
+		}
+		if (constant->GetValue().IsNull() || !TypeSupportsConstantFilter(column_ref->GetReturnType())) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool IsDirectNumericColumnComparison(const Expression &expr, const vector<ColumnBinding> &bindings) {
+	if (bindings.size() != 2 || bindings[0] == bindings[1] || !BoundComparisonExpression::IsComparison(expr)) {
+		return false;
+	}
+	const auto &comparison = expr.Cast<BoundFunctionExpression>();
+	const auto &left = BoundComparisonExpression::Left(comparison);
+	const auto &right = BoundComparisonExpression::Right(comparison);
+	const auto comparison_type = comparison.GetExpressionType();
+	const bool supported_comparison = comparison_type == ExpressionType::COMPARE_EQUAL ||
+	                                  comparison_type == ExpressionType::COMPARE_NOTEQUAL ||
+	                                  comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+	                                  comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+	                                  comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+	                                  comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+	return supported_comparison && left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       right.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       TypeSupportsMultiColumnComparison(left.GetReturnType()) &&
+	       TypeSupportsMultiColumnComparison(right.GetReturnType());
+}
+
+static bool IsMonotoneIntervalColumn(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION || expr.GetReturnType() != LogicalType::INTERVAL) {
+		return false;
+	}
+	const auto &function = expr.Cast<BoundFunctionExpression>();
+	return function.GetChildren().size() == 1 &&
+	       function.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       function.Function().GetStability() == FunctionStability::CONSISTENT &&
+	       IsKnownMonotonic(function.Function().GetArgProperties(0).monotonicity);
+}
+
+static bool IsMonotoneIntervalColumnComparison(const Expression &expr, const vector<ColumnBinding> &bindings) {
+	if (bindings.size() != 2 || bindings[0] == bindings[1] || !BoundComparisonExpression::IsComparison(expr)) {
+		return false;
+	}
+	const auto &comparison = expr.Cast<BoundFunctionExpression>();
+	return SupportedFilterComparison(comparison.GetExpressionType()) &&
+	       IsMonotoneIntervalColumn(BoundComparisonExpression::Left(comparison)) &&
+	       IsMonotoneIntervalColumn(BoundComparisonExpression::Right(comparison));
+}
+
+static bool CanPushdownMultiColumnExpression(const Expression &expr, const vector<ColumnBinding> &bindings) {
+	return IsDirectNumericColumnComparison(expr, bindings) || IsMonotoneIntervalColumnComparison(expr, bindings) ||
+	       IsColumnConstantOr(expr);
+}
+
+static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(LogicalGet &get, const Expression &expr,
+                                                                         const vector<ColumnBinding> &bindings) {
+	vector<ColumnBinding> distinct_bindings;
+	distinct_bindings.reserve(bindings.size());
+	// Maps column bindings to dense BoundReference indexes.
+	column_binding_map_t<idx_t> binding_indexes;
+	for (const auto &binding : bindings) {
+		const auto insert_result = binding_indexes.emplace(binding, distinct_bindings.size());
+		if (insert_result.second) {
+			distinct_bindings.push_back(binding);
+		}
+	}
+	if (distinct_bindings.size() <= 1) {
+		return nullptr;
+	}
+
+	vector<ProjectionIndex> column_indexes;
+	column_indexes.reserve(distinct_bindings.size());
+	for (const auto &binding : distinct_bindings) {
+		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size() ||
+		    get.GetColumnIds()[binding.column_index].IsVirtualColumn()) {
+			return nullptr;
+		}
+		column_indexes.emplace_back(binding.column_index);
+	}
+
+	auto filter_expr = expr.Copy();
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    filter_expr, [&](BoundColumnRefExpression &column_ref, unique_ptr<Expression> &child) {
+		    const auto entry = binding_indexes.find(column_ref.Binding());
+		    D_ASSERT(entry != binding_indexes.end());
+		    child =
+		        make_uniq<BoundReferenceExpression>(column_ref.GetAlias(), column_ref.GetReturnType(), entry->second);
+	    });
+	// Remove query-specific metadata so equivalent filters serialize identically for common-subplan matching.
+	ExpressionIterator::EnumerateExpression(filter_expr, [](Expression &expr) {
+		expr.ClearAlias();
+		expr.SetQueryLocation(optional_idx());
+	});
+	return make_uniq<ExpressionFilter>(std::move(filter_expr), std::move(column_indexes));
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &get, Expression &expr) {
 	if (!get.function.pushdown_expression) {
 		// the scan does not support pushing down generic expressions
@@ -404,39 +535,12 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto table = get.GetTable();
-	if (bindings.size() == 2 && bindings[0] != bindings[1] && table && table->IsDuckTable() &&
-	    BoundComparisonExpression::IsComparison(expr)) {
-		const auto &comparison = expr.Cast<BoundFunctionExpression>();
-		const auto &left = BoundComparisonExpression::Left(comparison);
-		const auto &right = BoundComparisonExpression::Right(comparison);
-		const auto comparison_type = comparison.GetExpressionType();
-		const bool supported_comparison = comparison_type == ExpressionType::COMPARE_EQUAL ||
-		                                  comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		                                  comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-		                                  comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-		                                  comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-		if (!supported_comparison || left.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-		    right.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || !left.GetReturnType().IsNumeric() ||
-		    !right.GetReturnType().IsNumeric()) {
+	if (table && table->IsDuckTable() && CanPushdownMultiColumnExpression(expr, bindings)) {
+		auto filter = TryCreateMultiColumnExpressionFilter(get, expr, bindings);
+		if (!filter) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
-		const auto &left_ref = left.Cast<BoundColumnRefExpression>();
-		const auto &right_ref = right.Cast<BoundColumnRefExpression>();
-		if (left_ref.Binding().table_index != get.table_index || right_ref.Binding().table_index != get.table_index ||
-		    left_ref.Binding().column_index >= get.GetColumnIds().size() ||
-		    right_ref.Binding().column_index >= get.GetColumnIds().size() ||
-		    get.GetColumnIds()[left_ref.Binding().column_index].IsVirtualColumn() ||
-		    get.GetColumnIds()[right_ref.Binding().column_index].IsVirtualColumn()) {
-			return FilterPushdownResult::NO_PUSHDOWN;
-		}
-
-		auto left_bound_ref = make_uniq<BoundReferenceExpression>(left_ref.GetAlias(), left_ref.GetReturnType(), 0);
-		auto right_bound_ref = make_uniq<BoundReferenceExpression>(right_ref.GetAlias(), right_ref.GetReturnType(), 1);
-		auto filter_expr =
-		    BoundComparisonExpression::Create(comparison_type, std::move(left_bound_ref), std::move(right_bound_ref));
-		vector<ProjectionIndex> column_indexes {left_ref.Binding().column_index, right_ref.Binding().column_index};
-		get.table_filters.PushMultiColumnFilter(
-		    make_uniq<ExpressionFilter>(std::move(filter_expr), std::move(column_indexes)));
+		get.table_filters.PushMultiColumnFilter(std::move(filter));
 		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
 	// we can only pushdown expressions that refer to exactly one column

@@ -1,0 +1,27 @@
+# name: test/sql/storage/compression/uncompressed/validity_corrupt_offset.test
+# description: Reading a validity segment with a block offset past the block must error, not read past the block
+# group: [uncompressed]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/validity_corrupt_offset.db.gz {TEST_DIR}/validity_corrupt_offset.db
+
+load {TEST_DIR}/validity_corrupt_offset.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE segment_type='VALIDITY' AND compression='Uncompressed';
+----
+Uncompressed
+
+statement error
+SELECT sum(b) FROM t;
+----
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(b) FROM t;
+----

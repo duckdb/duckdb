@@ -8,15 +8,15 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression
-	auto error = Bind(expr.ChildMutable(), depth);
-	if (error.HasError()) {
-		return BindResult(std::move(error));
+	auto result = Bind(expr.ChildMutable(), depth);
+	if (result.HasError()) {
+		return result;
 	}
 	// FIXME: We can also implement 'hello'::schema.custom_type; and pass by the schema down here.
 	// Right now just considering its DEFAULT_SCHEMA always
 	binder.BindLogicalType(expr.TargetTypeMutable());
 	// the children have been successfully resolved
-	auto &child = BoundExpression::GetExpression(*expr.ChildMutable());
+	auto child = std::move(result.expression);
 	if (expr.IsTryCast()) {
 		if (ExpressionBinder::GetExpressionReturnType(*child) == expr.TargetType()) {
 			// no cast required: type matches

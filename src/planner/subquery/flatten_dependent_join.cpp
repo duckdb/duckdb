@@ -4,9 +4,9 @@
 
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
@@ -18,6 +18,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 
@@ -733,11 +734,10 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCorrelatedN
                                                                                     bool propagate_null_values) {
 	auto state = PushDownCorrelatedNode(plan, propagate_null_values, {});
 	if (!replacement_map.empty()) {
-		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
-		RewriteCountAggregates::Rewrite(*plan, replacement_map);
+		RewriteCorrelatedAggregates::Rewrite(*plan, replacement_map);
 	}
 	if (!parent) {
-		ColumnBindingResolver::Verify(binder.context, *plan);
+		LogicalPlanVerifier::Verify(binder.context, *plan);
 	}
 	return state;
 }
@@ -795,7 +795,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownProjection(
 	auto &proj = plan->Cast<LogicalProjection>();
 	auto correlated_offset = plan->expressions.size() - correlated_columns.size();
 	if (!parent) {
-		ColumnBindingResolver::Verify(binder.context, *plan);
+		LogicalPlanVerifier::Verify(binder.context, *plan);
 	}
 	result.bindings = CreateContiguousState(ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)));
 	return result;
@@ -861,24 +861,51 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 		    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		join->conditions.push_back(std::move(cond));
 	}
-	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+	vector<ColumnBinding> special_handling_bindings;
+	vector<unique_ptr<Expression>> empty_aggregates;
+	for (idx_t i = 0, aggregate_count = aggr.expressions.size(); i < aggregate_count; i++) {
 		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().Function();
+		if (bound_func.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING) {
+			special_handling_bindings.emplace_back(aggr.aggregate_index, ProjectionIndex(i));
+			empty_aggregates.push_back(aggr.expressions[i]->Copy());
+		}
+	}
+	unique_ptr<LogicalOperator> empty_aggregate;
+	if (!empty_aggregates.empty()) {
+		aggr.children[0]->ResolveOperatorTypes();
+		auto child_bindings = aggr.children[0]->GetColumnBindings();
+		auto empty_input_bindings =
+		    LogicalOperator::GenerateColumnBindings(binder.GenerateTableIndex(), child_bindings.size());
+		auto empty_input = make_uniq<LogicalEmptyResult>(aggr.children[0]->types, empty_input_bindings);
+		auto empty_aggregate_index = binder.GenerateTableIndex();
+		auto aggregate = make_uniq<LogicalAggregate>(binder.GenerateTableIndex(), empty_aggregate_index,
+		                                             std::move(empty_aggregates));
+		ColumnBindingReplacer replacer;
+		replacer.AddReplacements(child_bindings, empty_input_bindings);
+		replacer.VisitOperatorBindings(*aggregate);
+		aggregate->children.push_back(std::move(empty_input));
+		empty_aggregate = std::move(aggregate);
 
-		auto count_fun = CountFunctionBase::GetFunction();
-		auto count_star_fun = CountStarFun::GetFunction();
-
-		const auto is_count_func =
-		    bound_func.GetName() == count_fun.name && bound_func.GetCallbacks() == count_fun.GetCallbacks();
-
-		const auto is_count_star_func =
-		    bound_func.GetName() == count_star_fun.name && bound_func.GetCallbacks() == count_star_fun.GetCallbacks();
-
-		if (is_count_func || is_count_star_func) {
-			replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
+		auto marker_index = ProjectionIndex(aggr.expressions.size());
+		FunctionBinder function_binder(binder.context);
+		aggr.expressions.push_back(function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
+		                                                                 AggregateType::NON_DISTINCT));
+		auto marker_binding = ColumnBinding(aggr.aggregate_index, marker_index);
+		for (idx_t i = 0; i < special_handling_bindings.size(); i++) {
+			replacement_map[special_handling_bindings[i]] = {marker_binding,
+			                                                 ColumnBinding(empty_aggregate_index, ProjectionIndex(i))};
 		}
 	}
 	plan = std::move(join);
+	if (empty_aggregate) {
+		// The RHS always produces one row, making this equivalent to a cross product.
+		// Keep it non-reorderable because projection maps depend on the output order.
+		auto cross_product = make_uniq<LogicalComparisonJoin>(JoinType::LEFT);
+		cross_product->children.push_back(std::move(plan));
+		cross_product->children.push_back(std::move(empty_aggregate));
+		plan = std::move(cross_product);
+	}
 	result.bindings = CreateContiguousState(ColumnBinding(left_index, ProjectionIndex(0)));
 	return result;
 }

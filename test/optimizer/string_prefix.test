@@ -16,13 +16,13 @@ INSERT INTO prefix_cases VALUES ('abc'), ('abcdef'), ('xabc'), ('🦆ab'), (NULL
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE left(s, 5) = '09999';
 ----
-analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+analyzed_plan	<REGEX>:.*Filters: s >= '09999'.*Row Groups Scanned: 1 / 82.*
 
 # reversed equality is rewritten
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE '09999' = left(s, 5);
 ----
-analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+analyzed_plan	<REGEX>:.*Filters: s >= '09999'.*Row Groups Scanned: 1 / 82.*
 
 # unicode handling
 query I
@@ -76,7 +76,7 @@ Out of Range Error: Substring length outside of supported range
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE substring(s, 1, 5) = '09999';
 ----
-analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+analyzed_plan	<REGEX>:.*Filters: s >= '09999'.*Row Groups Scanned: 1 / 82.*
 
 # entire string becomes equality operator
 query II
@@ -130,7 +130,7 @@ Out of Range Error: Substring length outside of supported range
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE substr(s, 1, 5) = '09999';
 ----
-analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+analyzed_plan	<REGEX>:.*Filters: s >= '09999'.*Row Groups Scanned: 1 / 82.*
 
 query I
 SELECT count(*) FROM prefix_cases WHERE substr(s, 1, 5) = 'abc';
@@ -142,7 +142,7 @@ SELECT count(*) FROM prefix_cases WHERE substr(s, 1, 5) = 'abc';
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE array_slice(s, 1, 5) = '09999';
 ----
-analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+analyzed_plan	<REGEX>:.*Filters: s >= '09999'.*Row Groups Scanned: 1 / 82.*
 
 query I
 SELECT count(*) FROM prefix_cases WHERE array_slice(s, 1, 5) = 'abc';
@@ -182,7 +182,7 @@ SELECT count(*) FROM (VALUES ('abcx', 3), ('abcx', 2)) t(s, n) WHERE array_slice
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE list_slice(s, 1, 5) = '09999';
 ----
-analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+analyzed_plan	<REGEX>:.*Filters: s >= '09999'.*Row Groups Scanned: 1 / 82.*
 
 query I
 SELECT count(*) FROM prefix_cases WHERE list_slice(s, 1, 5) = 'abc';
@@ -200,17 +200,17 @@ SELECT count(*) FROM (VALUES ('abcx', 3), ('abcx', 2)) t(s, n) WHERE list_slice(
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s[1:5] = '09999';
 ----
-analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+analyzed_plan	<REGEX>:.*Filters: s >= '09999'.*Row Groups Scanned: 1 / 82.*
 
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s[0:5] = '09999';
 ----
-analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+analyzed_plan	<REGEX>:.*Filters: s >= '09999'.*Row Groups Scanned: 1 / 82.*
 
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s[:5] = '09999';
 ----
-analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+analyzed_plan	<REGEX>:.*Filters: s >= '09999'.*Row Groups Scanned: 1 / 82.*
 
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s[:] = '09999000';

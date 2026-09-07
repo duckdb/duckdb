@@ -52,6 +52,8 @@ public:
 	CSVEncoder(ClientContext &context, const string &encoding_name, idx_t buffer_size);
 	//! Main encode function, it reads the file into an encoded buffer and converts it to the output buffer
 	idx_t Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t decoded_buffer_size);
+	//! Resets the encoder so the file can be read again from the beginning
+	void Reset();
 	string encoding_name;
 
 private:

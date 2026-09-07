@@ -290,6 +290,9 @@ public:
 	//! names and names with a single schema level keep the (catalog, schema, name) shape so that the search path
 	//! applies; a nested schema path yields a fully resolved [catalog, schema path..., name].
 	static QualifiedName BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name);
+	//! Register a read of the catalog owning the entry - required when bind data holds a reference to the entry,
+	//! so that cached prepared statement plans are invalidated when the catalog changes
+	static void RegisterEntryRead(optional_ptr<Binder> binder, ClientContext &context, CatalogEntry &entry);
 	QualifiedName BindTableName(const QualifiedName &name);
 	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
 	void BindCreateSchema(CreateSchemaInfo &info);
@@ -319,11 +322,21 @@ public:
 	void AddBoundView(ViewCatalogEntry &view);
 
 	void BeginSubqueryBind(Binder &parent, ExpressionBinder &binder);
-	ExpressionBinder &GetActiveBinder();
-	bool HasActiveBinder();
+	//! The innermost enclosing scope
+	ExpressionBinder &GetInnermostScope();
+	bool HasEnclosingScope();
 	void FinishSubqueryBind();
 
-	vector<reference<ExpressionBinder>> &GetActiveBinders();
+	//! The scopes enclosing this binder, stored outermost first
+	const vector<reference<ExpressionBinder>> &GetEnclosingScopes() const;
+	//! Add an enclosing scope that expressions bound by this binder can resolve against
+	void PushScope(ExpressionBinder &binder);
+	//! Remove the innermost enclosing scope
+	void PopScope();
+	//! Remove and return the scopes added since the chain had `count` entries
+	vector<reference<ExpressionBinder>> SaveScopesAfter(idx_t count);
+	//! Restore scopes previously removed by SaveScopesAfter
+	void RestoreScopes(const vector<reference<ExpressionBinder>> &scopes);
 
 	void MergeCorrelatedColumns(CorrelatedColumns &other);
 	//! Add a correlated column to this binder (if it does not exist)
@@ -520,7 +533,7 @@ private:
 	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers,
 	                                 TriggerEventType event_type);
 	//! Registers a row scope binding (named "new" for INSERT, "old" for DELETE) so child binders resolve
-	//! NEW.col / OLD.col at depth=1. The returned binder is pushed onto GetActiveBinders().
+	//! NEW.col / OLD.col at depth=1. The returned binder is pushed as an enclosing scope.
 	//! The caller must keep it alive until the matching pop_back().
 	unique_ptr<ExpressionBinder> SetupRowScope(TableIndex table_index, const vector<Identifier> &col_names,
 	                                           const vector<LogicalType> &col_types, const string &scope_name);
@@ -618,6 +631,8 @@ private:
 	                                   vector<unique_ptr<ParsedExpression>> &replacements, StarExpression &star,
 	                                   optional_ptr<duckdb_re2::RE2> regex);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
+	void NormalizeFilterStarExpression(ParsedExpression &expr);
+	void NormalizeFilterStarExpressions(SelectNode &statement);
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(Identifier &catalog_name, Identifier &schema_name);

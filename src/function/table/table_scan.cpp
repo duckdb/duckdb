@@ -25,7 +25,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
@@ -799,6 +798,12 @@ static bool ValueQualifies(const Value &value, const vector<ComparisonCondition>
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			passes = ValueOperations::LessThanEquals(value, comp.constant);
 			break;
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			passes = ValueOperations::DistinctFrom(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			passes = ValueOperations::NotDistinctFrom(value, comp.constant);
+			break;
 		default:
 			return true;
 		}
@@ -855,53 +860,24 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 	return expressions;
 }
 
-bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, TableFunctionInitInput &input,
+bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list, TableFunctionInitInput &input,
                   TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
-	if (art.unbound_expressions.size() > 1) {
+	if (art->UnboundExpressionCount() > 1) {
 		return false;
 	}
 
-	auto index_expr = art.unbound_expressions[0]->Copy();
-	auto &indexed_columns = art.GetColumnIds();
+	auto index_expr = art->CopyUnboundExpression(0);
+	auto indexed_columns = art->GetColumnIds();
 
 	// NOTE: We do not push down multi-column filters, e.g., 42 = a + b.
 	if (indexed_columns.size() != 1) {
 		return false;
 	}
 
-	// Resolve bound column references in the index_expr against the current input projection
-	ProjectionIndex updated_index_column;
-	bool found_index_column_in_input = false;
-
-	// Find the indexed column amongst the input columns
-	for (idx_t i = 0; i < input.column_ids.size(); ++i) {
-		if (input.column_ids[i] == indexed_columns[0]) {
-			updated_index_column = ProjectionIndex(i);
-			found_index_column_in_input = true;
-			break;
-		}
-	}
-
-	// If found, update the bound column ref within index_expr
-	if (found_index_column_in_input) {
-		ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
-			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-				return;
-			}
-
-			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
-
-			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.Binding().column_index == indexed_columns[0]) {
-				bound_column_ref_expr.BindingMutable().column_index = updated_index_column;
-			}
-		});
-	}
-
-	// Get ART column.
-	auto &col = column_list.GetColumn(LogicalIndex(indexed_columns[0]));
+	// Get ART column. GetColumnIds returns physical column IDs, which skip generated columns.
+	auto &col = column_list.GetColumn(PhysicalIndex(indexed_columns[0]));
 
 	// The indexes of the filters match input.column_indexes, which are: i -> column_index.
 	// Try to find a filter on the ART column.
@@ -918,39 +894,44 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 		return false;
 	}
 
+	// A bound column reference in an unbound index expression is an ordinal into indexed_columns, which is not the
+	// column's position in this scan. Rebind the references to the ART column's position in the scan input.
+	ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
+		if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return;
+		}
+		expr.Cast<BoundColumnRefExpression>().BindingMutable().column_index = storage_index;
+	});
+
 	// Try to find a matching filter for the column.
 	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index);
 	if (!filter) {
 		return false;
 	}
 
-	lock_guard<mutex> guard(entry.lock);
-	vector<reference<ART>> arts_to_scan;
-	arts_to_scan.push_back(art);
-	if (entry.deleted_rows_in_use) {
-		if (entry.deleted_rows_in_use->GetIndexType() != ART::TYPE_NAME) {
-			throw InternalException("Concurrent changes made to a non-ART index");
-		}
-		arts_to_scan.push_back(entry.deleted_rows_in_use->Cast<ART>());
-	}
-	if (entry.added_data_during_checkpoint) {
-		if (entry.added_data_during_checkpoint->GetIndexType() != ART::TYPE_NAME) {
-			throw InternalException("Concurrent changes made to a non-ART index");
-		}
-		arts_to_scan.push_back(entry.added_data_during_checkpoint->Cast<ART>());
-	}
-
 	auto expressions = ExtractFilterExpressions(col, *filter, storage_index.GetIndex());
 	for (const auto &filter_expr : expressions) {
-		for (auto &art_ref : arts_to_scan) {
-			auto &art_to_scan = art_ref.get();
-			auto scan_state = art_to_scan.TryInitializeScan(*index_expr, *filter_expr);
-			if (!scan_state) {
+		auto scan_state = art->TryInitializeScan(*index_expr, *filter_expr);
+		if (!scan_state) {
+			return false;
+		}
+
+		if (!art->Scan(*scan_state, max_count, row_ids)) {
+			row_ids.clear();
+			return false;
+		}
+		for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
+			auto delta_index = art.FindDelta(delta);
+			if (!delta_index) {
+				continue;
+			}
+			auto delta_scan_state = delta_index->TryInitializeScan(*index_expr, *filter_expr);
+			if (!delta_scan_state) {
 				return false;
 			}
 
 			// Check if we can use an index scan, and already retrieve the matching row ids.
-			if (!art_to_scan.Scan(*scan_state, max_count, row_ids)) {
+			if (!delta_index->Scan(*delta_scan_state, max_count, row_ids)) {
 				row_ids.clear();
 				return false;
 			}
@@ -1017,14 +998,12 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
-	for (auto &entry : indexes.IndexEntries()) {
-		auto &index = *entry.index;
-		if (index.GetIndexType() != ART::TYPE_NAME) {
+	for (auto entry : indexes.IndexEntries()) {
+		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
 			continue;
 		}
-		D_ASSERT(index.IsBound());
-		auto &art = index.Cast<ART>();
-		index_scan = TryScanIndex(art, entry, column_list, input, filter_set, max_count, row_ids);
+		auto index = entry->GetReadHandle<ART>();
+		index_scan = TryScanIndex(index, column_list, input, filter_set, max_count, row_ids);
 		if (index_scan) {
 			// found an index - break
 			break;

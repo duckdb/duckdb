@@ -4,6 +4,7 @@ TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
 	ExternalResourceStatement /
+	ExtensionRepositoryStatement /
 	CreateStatement /
 	SelectStatement /
 	SetStatement /
@@ -164,7 +165,7 @@ NumericModType <- 'NUMERIC' TypeModifiers?
 
 QualifiedTypeName <- CatalogReservedSchemaTypeName / SchemaReservedTypeName / TypeNameAsQualifiedName
 TypeNameAsQualifiedName <- TypeName
-CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification ReservedTypeName
+CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification+ ReservedTypeName
 SchemaReservedTypeName <- SchemaQualification ReservedTypeName
 TypeModifiers <- Parens(List(Expression)?)
 RowType <- RowOrStruct ColIdTypeList?
@@ -732,10 +733,11 @@ AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDataba
 AlterTableStmt <- 'TABLE' IfExists? BaseTableName List(AlterTableOptions)
 AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
 
-AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability /
+AlterTableOptions <- AddColumn / DropConstraint / DropColumn / AlterColumn / AddConstraint / ChangeNullability /
         RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy / SetOptions / ResetOptions
 
 AddConstraint <- 'ADD' TopLevelConstraint
+DropConstraint <- 'DROP' 'CONSTRAINT' IfExists? Identifier DropBehavior?
 AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
 AddColumnEntry <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
 DropColumn <- 'DROP' 'COLUMN'? IfExists? NestedColumnName DropBehavior?
@@ -980,7 +982,7 @@ CreateColumnList <- Parens(CreateTableColumnList?) PartitionSortedOptions? WithL
 IfNotExists <- 'IF' 'NOT' 'EXISTS'
 QualifiedName <- CatalogReservedSchemaIdentifier / SchemaReservedIdentifierOrStringLiteral / IdentifierOrStringLiteral
 SchemaReservedIdentifierOrStringLiteral <- SchemaQualification ReservedIdentifierOrStringLiteral
-CatalogReservedSchemaIdentifier <- CatalogQualification ReservedSchemaQualification ReservedIdentifierOrStringLiteral
+CatalogReservedSchemaIdentifier <- CatalogQualification ReservedSchemaQualification+ ReservedIdentifierOrStringLiteral
 IdentifierOrStringLiteral <- Identifier / StringLiteral
 ReservedIdentifierOrStringLiteral <- ReservedIdentifier / StringLiteral
 CatalogQualification <- CatalogName '.'
@@ -1033,7 +1035,8 @@ Identifier <- QuotedIdentifier / PlainIdentifier
 
 ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
 ColIdOrString <- ColId / StringLiteralIdentifier
-TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier
+TypeFuncName <- UnreservedKeyword / TypeFuncKeyword / Identifier
+TypeFuncKeyword <- TypeNameKeyword / FuncNameKeyword
 TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
 ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
 ColLabelOrString <- ColLabelIdentifier / StringLiteralIdentifier
@@ -1218,7 +1221,10 @@ ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOp
 ExportSource <- CatalogName 'TO'
 ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
 
-ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
+ColumnReference <- NestedSchemaTableColumnName / CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
+# a column of a table in a nested schema chain - five or more components, where the qualification is deeper than
+# catalog + schema and it is no longer positional which components are schemas and which is the table
+NestedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedSchemaQualification ReservedSchemaQualification+ ReservedColumnName
 CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedTableQualification ReservedColumnName
 SchemaReservedTableColumnName <- SchemaQualification ReservedTableQualification ReservedColumnName
 TableReservedColumnName <- TableQualification ReservedColumnName
@@ -1229,7 +1235,7 @@ FunctionArgumentList <- List(FunctionArgument)
 
 FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionNameAsQualifiedName
 FunctionNameAsQualifiedName <- FunctionName
-CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
+CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification* ReservedFunctionName
 SchemaReservedFunctionName <- SchemaQualification ReservedFunctionName
 
 DistinctOrAll <- DistinctKeyword / AllKeyword
@@ -1605,14 +1611,22 @@ OnConflictNothing <- 'DO' 'NOTHING'
 
 ReturningClause <- 'RETURNING' TargetList
 
-LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?
+LoadStatement <- 'LOAD' ColIdOrString FromSource? ExtensionAlias?
 ExtensionAlias <- 'AS' Identifier
-InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
+InstallStatement <- 'FORCE'? 'INSTALL' InstallAndLoad? IdentifierOrStringLiteral FromSource? VersionNumber?
+InstallAndLoad <- 'AND' 'LOAD'
 UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
 FromSource <- FromSourceIdentifier / FromSourceString
 FromSourceIdentifier <- 'FROM' Identifier
 FromSourceString <- 'FROM' StringLiteral
 VersionNumber <- 'VERSION' IdentifierOrStringLiteral
+
+ExtensionRepositoryStatement <- CreateExtensionRepositoryStmt / DropExtensionRepositoryStmt
+CreateExtensionRepositoryStmt <- 'CREATE' OrReplace? 'EXTENSION' 'REPOSITORY' IfNotExists? ColIdOrString RepositoryPrefix RepositoryPublicKey?
+RepositoryPrefix <- 'WITH'? 'PREFIX' StringLiteral
+RepositoryPublicKey <- 'USING'? 'PUBLIC' ('KEYS' / 'KEY') List(StringLiteral)
+DropExtensionRepositoryStmt <- 'DROP' 'EXTENSION' 'REPOSITORY' IfExists? ColIdOrString
+
 MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?
 MergeIntoUsingClause <- 'USING' TableRef
 MergeMatch <- MatchedClause / NotMatchedClause
@@ -1758,13 +1772,13 @@ BaseTableName <- QualifiedTableName / UnqualifiedBaseTableName
 UnqualifiedBaseTableName <- TableName
 QualifiedTableName <- CatalogReservedSchemaTable / SchemaReservedTable
 SchemaReservedTable <- SchemaQualification ReservedTableName
-CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
+CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification+ ReservedTableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
 TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
 WithOrdinality <- 'WITH' 'ORDINALITY'
-QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
+QualifiedTableFunction <- CatalogQualification? SchemaQualification* TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedFunctionArgument / PositionalFunctionArgument
 NamedFunctionArgument <- NamedParameter

@@ -36,6 +36,7 @@
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
@@ -50,6 +51,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/common/enums/current_transaction_state.hpp"
@@ -406,6 +408,14 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	auto &scheduler = TaskScheduler::GetScheduler(*this);
 	scheduler.RelaunchThreads();
 
+	if (result && result->GetResultType() == QueryResultType::STREAM_RESULT) {
+		// Record the streaming buffer peak while the profiler is still running
+		auto &stream_result = static_cast<StreamQueryResult &>(*result);
+		if (stream_result.HasBufferedData()) {
+			QueryProfiler::Get(*this).SetStreamingPeakBufferSize(stream_result.GetBufferedData().PeakBufferedBytes());
+		}
+	}
+
 	optional_ptr<ErrorData> passed_error = nullptr;
 	if (result && result->HasError()) {
 		passed_error = result->GetErrorObject();
@@ -442,14 +452,13 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	D_ASSERT(active_query->IsOpenResult(pending));
 	D_ASSERT(active_query->prepared);
 	auto &executor = GetExecutor();
-	auto &prepared = *active_query->prepared;
-	bool create_stream_result =
-	    prepared.properties.output_type == QueryResultOutputType::ALLOW_STREAMING && pending.allow_stream_result;
+	// A streaming request always plans a streaming sink, so the collector alone decides
+	const bool keep_result_open = executor.HasStreamingResultCollector();
 	unique_ptr<QueryResult> result;
 	D_ASSERT(executor.HasResultCollector());
 	// we have a result collector - fetch the result directly from the result collector
 	result = executor.GetResult();
-	if (!create_stream_result) {
+	if (!keep_result_open) {
 		CleanupInternal(lock, result.get(), false);
 	} else {
 		active_query->SetOpenResult(*result);
@@ -775,7 +784,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		StatementIterator iterator {ParseIterator(*this, query)};
 		vector<unique_ptr<SQLStatement>> result;
 		while (iterator.Peek()) {
-			auto stmt = iterator.GetStatementWithLock(lock);
+			auto stmt = iterator.GetStatementForExecutionWithLock(lock);
 			if (!stmt) {
 				continue; // a peel that preprocessing swallowed
 			}
@@ -809,7 +818,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 		plan = optimizer.Optimize(std::move(plan));
 
 		ColumnBindingResolver resolver;
-		resolver.Verify(*this, *plan);
+		LogicalPlanVerifier::Verify(*this, *plan);
 		resolver.VisitOperator(*plan);
 
 		plan->ResolveOperatorTypes();
@@ -1143,19 +1152,19 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	bool last_had_result = false;
 	while (has_current) {
 		// Get + preprocess the next engine-facing statement, reusing the lock we already hold. PRAGMA
-		// reparse / MULTI_STATEMENT unpacking happen inside GetStatementWithLock, which sees the
+		// reparse / MULTI_STATEMENT unpacking happen inside GetStatementForExecutionWithLock, which sees the
 		// transaction state left by the previously executed statement. A peel can preprocess to
 		// nothing, in which case statement is null and there is nothing to execute.
 		unique_ptr<SQLStatement> statement;
 		try {
-			statement = iterator.GetStatementWithLock(*lock);
+			statement = iterator.GetStatementForExecutionWithLock(*lock);
 		} catch (const std::exception &ex) {
 			return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
 		}
 
 		// Look ahead WITHOUT parsing: HasMore() only walks the token cursor, so it never parses (and
 		// never throws) the next statement here. The next statement is parsed later, in this loop's
-		// next GetStatementWithLock — after the current statement has executed. This lets a statement
+		// next GetStatementForExecutionWithLock — after the current statement has executed. This lets a statement
 		// register grammar (e.g. LOAD an extension) that a following statement then uses.
 		bool has_next = iterator.HasMore();
 
@@ -1597,16 +1606,16 @@ SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index,
 	return config.user_settings.TryGetSetting(db_config.user_settings, setting_index, result);
 }
 
-ParserOptions ClientContext::GetParserOptions() const {
+ParserOptions ClientContext::GetParserOptions() {
 	ParserOptions options;
 	options.identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
-	options.debug_transformer_trampoline_style = Settings::Get<DebugTransformerTrampolineStyleSetting>(*this);
+	options.heap_based_parser = Settings::Get<HeapBasedParserSetting>(*this);
 	options.regex_match_operator_semantics = Settings::Get<RegexMatchOperatorSemanticsSetting>(*this);
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
-	options.parser_cache = &db->GetParserCache();
+	options.compiled_grammar = CompiledGrammar::Get(*this);
 	return options;
 }
 
