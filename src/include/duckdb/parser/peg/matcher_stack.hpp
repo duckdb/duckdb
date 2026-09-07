@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "duckdb/common/array.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
@@ -54,31 +53,20 @@ public:
 	MatcherResult Execute(MatchInput input);
 
 private:
-	static constexpr idx_t FRAME_SEGMENT_CAPACITY = 64;
-	static constexpr idx_t INLINE_FRAME_SEGMENT_COUNT = 2;
+	static constexpr idx_t INITIAL_FRAME_CAPACITY = 64;
 
-	static idx_t FrameSlotSize();
-	static idx_t FrameSegmentSize();
 	MatcherResult ExecuteAtomicMatcher(MatchInput input);
-	void AllocateFrameSegment();
-	data_ptr_t GetFrameSegment(idx_t segment_index) const;
-	void SetActiveFrameSegment(idx_t segment_index);
-	data_ptr_t AllocateFrameSlot();
 	void DestroyTopFrame();
 	void PushFrame(MatchInput input);
 	void InitializeFrame(MatchStackFrame &frame);
-	void ExecuteFrame(MatchStackFrame &frame);
+	//! Returns true when the frame has completed.
+	bool ExecuteFrame(MatchStackFrame &frame);
 	MatcherResult FinalizeFrame(MatchStackFrame &frame);
 
 private:
-	ArenaAllocator frame_allocator;
+	ArenaAllocator arena;
 	MatchProcessAllocator process_allocator;
-	array<data_ptr_t, INLINE_FRAME_SEGMENT_COUNT> inline_frame_segments {};
-	vector<data_ptr_t> overflow_frame_segments;
-	idx_t frame_segment_count = 0;
-	data_ptr_t active_frame_segment = nullptr;
-	idx_t active_frame_segment_index = DConstants::INVALID_INDEX;
-	vector<reference<MatchStackFrame>> frames;
+	vector<MatchStackFrame> frames;
 };
 
 } // namespace duckdb

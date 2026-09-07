@@ -2,71 +2,21 @@
 
 namespace duckdb {
 
-MatchStack::MatchStack()
-    : frame_allocator(Allocator::DefaultAllocator(), FrameSegmentSize() / 2), process_allocator(frame_allocator) {
-	frames.reserve(FRAME_SEGMENT_CAPACITY);
+MatchStack::MatchStack() : arena(Allocator::DefaultAllocator()), process_allocator(arena) {
+	frames.reserve(INITIAL_FRAME_CAPACITY);
 }
 
 MatchStack::~MatchStack() {
+	// Child processes can reference state owned by their parents.
 	while (!frames.empty()) {
 		DestroyTopFrame();
 	}
 }
 
-idx_t MatchStack::FrameSlotSize() {
-	static_assert(alignof(MatchStackFrame) <= alignof(idx_t), "Matcher frame alignment is too large");
-	return AlignValue<idx_t>(sizeof(MatchStackFrame));
-}
-
-idx_t MatchStack::FrameSegmentSize() {
-	return FrameSlotSize() * FRAME_SEGMENT_CAPACITY;
-}
-
-void MatchStack::AllocateFrameSegment() {
-	auto frame_segment = frame_allocator.AllocateAligned(FrameSegmentSize());
-	if (frame_segment_count < INLINE_FRAME_SEGMENT_COUNT) {
-		inline_frame_segments[frame_segment_count] = frame_segment;
-	} else {
-		overflow_frame_segments.push_back(frame_segment);
-	}
-	frame_segment_count++;
-}
-
-data_ptr_t MatchStack::GetFrameSegment(idx_t segment_index) const {
-	D_ASSERT(segment_index < frame_segment_count);
-	if (segment_index < INLINE_FRAME_SEGMENT_COUNT) {
-		return inline_frame_segments[segment_index];
-	}
-	return overflow_frame_segments[segment_index - INLINE_FRAME_SEGMENT_COUNT];
-}
-
-void MatchStack::SetActiveFrameSegment(idx_t segment_index) {
-	if (segment_index >= frame_segment_count) {
-		frames.reserve((segment_index + 1) * FRAME_SEGMENT_CAPACITY);
-		do {
-			AllocateFrameSegment();
-		} while (segment_index >= frame_segment_count);
-	}
-	active_frame_segment = GetFrameSegment(segment_index);
-	active_frame_segment_index = segment_index;
-}
-
-data_ptr_t MatchStack::AllocateFrameSlot() {
-	auto frame_index = frames.size();
-	auto segment_index = frame_index / FRAME_SEGMENT_CAPACITY;
-	if (segment_index != active_frame_segment_index) {
-		SetActiveFrameSegment(segment_index);
-	}
-	auto slot_index = frame_index % FRAME_SEGMENT_CAPACITY;
-	return active_frame_segment + slot_index * FrameSlotSize();
-}
-
 void MatchStack::DestroyTopFrame() {
 	D_ASSERT(!frames.empty());
-	auto &frame = frames.back().get();
-	auto process_position = frame.process_position;
+	auto process_position = frames.back().process_position;
 	frames.pop_back();
-	frame.~MatchStackFrame();
 	process_allocator.Rewind(process_position);
 }
 
@@ -129,8 +79,7 @@ MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
 
 void MatchStack::PushFrame(MatchInput input) {
 	input.state.rule = input.matcher.GetRule();
-	auto frame_slot = AllocateFrameSlot();
-	frames.push_back(*new (frame_slot) MatchStackFrame(input, process_allocator.GetPosition()));
+	frames.emplace_back(input, process_allocator.GetPosition());
 }
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
@@ -146,13 +95,13 @@ void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 	frame.process = matcher.StartMatch(state, process_allocator);
 }
 
-void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
+bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 	if (!frame.IsInitialized()) {
 		InitializeFrame(frame);
 		D_ASSERT(frame.IsInitialized());
 	}
 	if (frame.result) {
-		return;
+		return true;
 	}
 	D_ASSERT(frame.process);
 	auto step = frame.process->Resume(frame.child_result);
@@ -160,13 +109,14 @@ void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 	auto child = step.GetChild();
 	if (!child) {
 		frame.result = step.GetResult();
-		return;
+		return true;
 	}
 	if (child->matcher.IsAtomic()) {
 		frame.child_result = ExecuteAtomicMatcher(*child);
-		return;
+		return false;
 	}
 	PushFrame(*child);
+	return false;
 }
 
 MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
@@ -185,17 +135,15 @@ MatcherResult MatchStack::Execute(MatchInput input) {
 	}
 	PushFrame(input);
 	while (!frames.empty()) {
-		auto &frame = frames.back().get();
-		ExecuteFrame(frame);
-		if (!frame.result) {
+		if (!ExecuteFrame(frames.back())) {
 			continue;
 		}
-		auto result = FinalizeFrame(frame);
+		auto result = FinalizeFrame(frames.back());
 		DestroyTopFrame();
 		if (frames.empty()) {
 			return result;
 		}
-		auto &parent = frames.back().get();
+		auto &parent = frames.back();
 		D_ASSERT(!parent.child_result);
 		parent.child_result = result;
 	}
