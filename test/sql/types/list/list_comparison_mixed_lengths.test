@@ -1,0 +1,338 @@
+# name: test/sql/types/list/list_comparison_regressions.test
+# description: Regressions for LIST comparisons - identical rows must produce identical verdicts
+# group: [list]
+
+# An empty list exhausts before still-equal duplicates (issue #25169)
+query TT
+SELECT c, c > [0] FROM (VALUES ([]::INTEGER[]), ([-2, -1]), ([-2, -1])) v(c);
+----
+[]	false
+[-2, -1]	false
+[-2, -1]	false
+
+# exhaustion from the other side: right-hand list is longer
+query TT
+SELECT c, c > [1, 2] FROM (VALUES ([1]::INTEGER[]), ([1, 2]), ([1, 2])) v(c);
+----
+[1]	false
+[1, 2]	false
+[1, 2]	false
+
+query TT
+SELECT c, NOT (c > [0]) FROM (VALUES ([]::INTEGER[]), ([-2, -1]), ([-2, -1])) v(c);
+----
+[]	true
+[-2, -1]	true
+[-2, -1]	true
+
+query TT
+SELECT c, c = [-2, -1] FROM (VALUES ([]::INTEGER[]), ([-2, -1]), ([-2, -1])) v(c);
+----
+[]	false
+[-2, -1]	true
+[-2, -1]	true
+
+query TT
+SELECT c, [0] < c FROM (VALUES ([]::INTEGER[]), ([-2, -1]), ([-2, -1])) v(c);
+----
+[]	false
+[-2, -1]	false
+[-2, -1]	false
+
+query TT
+SELECT c, c > ['a'] FROM (VALUES ([]::VARCHAR[]), (['b']), (['b'])) v(c);
+----
+[]	false
+[b]	true
+[b]	true
+
+query TT
+SELECT c, c = [NULL, 2] FROM (VALUES ([NULL, 2]::INTEGER[]), ([NULL, 2]), ([NULL, 2])) v(c);
+----
+[NULL, 2]	true
+[NULL, 2]	true
+[NULL, 2]	true
+
+# double-nested lists
+query TT
+SELECT c, c > [[0]] FROM (VALUES ([[]]::INTEGER[][]), ([[1]]), ([[1]])) v(c);
+----
+[[]]	false
+[[1]]	true
+[[1]]	true
+
+query TT
+SELECT c, c = [[1, 2]] FROM (VALUES ([[1, 2]]::INTEGER[][]), ([[1, 2]]), ([[1, 2]])) v(c);
+----
+[[1, 2]]	true
+[[1, 2]]	true
+[[1, 2]]	true
+
+# triple-nested lists
+query TT
+SELECT c, c = [[[1]]] FROM (VALUES ([[[1]]]::INTEGER[][][]), ([[[1]]]), ([[[1]]])) v(c);
+----
+[[[1]]]	true
+[[[1]]]	true
+[[[1]]]	true
+
+# the list_sort equality repro from the issue
+query T
+SELECT list_sort(c) = c FROM (VALUES ([0]), ([0]), ([0]), ([1, NULL, 2]), ([-1823031693]), ([1, NULL, 2]), ([-1823031693])) v(c);
+----
+true
+true
+true
+false
+true
+false
+true
+
+# a filter must not split identical rows
+query I
+SELECT c1 FROM (VALUES ([]::INTEGER[], 1), ([-2, -1], 2), ([-2, -1], 3)) t(c0, c1) WHERE (c0 > [0]) ORDER BY c1;
+----
+
+query I
+SELECT c1 FROM (VALUES ([]::INTEGER[], 1), ([-2, -1], 2), ([-2, -1], 3)) t(c0, c1) WHERE NOT (c0 > [0]) ORDER BY c1;
+----
+1
+2
+3
+
+# fixed-size arrays exhaust simultaneously, so they never partial-partition - guard test
+query TT
+SELECT c, c > [0, 0, 0]::INTEGER[3] FROM (VALUES ([0, -1, -1]::INTEGER[3]), ([0, -1, -1]::INTEGER[3])) v(c);
+----
+[0, -1, -1]	false
+[0, -1, -1]	false
+
+query T
+SELECT [1, 2, 3]::INTEGER[3] = [1, 2, 3]::INTEGER[3];
+----
+true
+
+# MAPs are lists of key/value structs internally, so they exercise the same position loop
+query T
+SELECT MAP{1: 2} = MAP{1: 3};
+----
+false
+
+query T
+SELECT MAP{1: 2} < MAP{1: 3};
+----
+true
+
+query TT
+SELECT c, c = MAP{1: [-2, -1]} FROM (VALUES (MAP{1: [-2, -1]}), (MAP{1: [-2, -1]})) v(c);
+----
+{1=[-2, -1]}	true
+{1=[-2, -1]}	true
+
+# inner-level exhaustion under a still-tied outer position (double-nested)
+query TT
+SELECT c, c = [[0], [1]] FROM (VALUES ([[0], []]::INTEGER[][]), ([[0], [1]]), ([[0], [1]])) v(c);
+----
+[[0], []]	false
+[[0], [1]]	true
+[[0], [1]]	true
+
+# mixed batch: exhaustion rows scattered before and after duplicates
+query TT
+SELECT c, c > [0] FROM (VALUES ([5]::INTEGER[]), ([]::INTEGER[]), ([-2, -1]), ([-2, -1]), ([]::INTEGER[]), ([7]::INTEGER[])) v(c);
+----
+[5]	true
+[]	false
+[-2, -1]	false
+[-2, -1]	false
+[]	false
+[7]	true
+
+query TT
+SELECT c, c >= [0] FROM (VALUES ([]::INTEGER[]), ([-2, -1]), ([-2, -1])) v(c);
+----
+[]	false
+[-2, -1]	false
+[-2, -1]	false
+
+# equal prefixes that only decide at the last element
+query TT
+SELECT c, c > [1, 2, 3] FROM (VALUES ([1, 2, 3]::INTEGER[]), ([1, 2, 4]), ([1, 2, 4]), ([1, 2, 2])) v(c);
+----
+[1, 2, 3]	false
+[1, 2, 4]	true
+[1, 2, 4]	true
+[1, 2, 2]	false
+
+# mixed list lengths in one batch
+query TT
+SELECT c, c > [1, 2, 3] FROM (VALUES ([1]::INTEGER[]), ([1, 2]), ([1, 2, 3]), ([1, 2, 3]), ([1, 2])) v(c);
+----
+[1]	false
+[1, 2]	false
+[1, 2, 3]	false
+[1, 2, 3]	false
+[1, 2]	false
+
+# NULL members: identical lists are equal, a definite difference elsewhere decides
+query TT
+SELECT c, c = [NULL, 1] FROM (VALUES ([NULL, 1]::INTEGER[]), ([NULL, 1]), ([NULL, 2])) v(c);
+----
+[NULL, 1]	true
+[NULL, 1]	true
+[NULL, 2]	false
+
+# 2D: inner-level exhaustion before still-equal duplicates
+query TT
+SELECT c, c = [[1], [0]] FROM (VALUES ([[1], []]::INTEGER[][]), ([[1], [0]]), ([[1], [0]])) v(c);
+----
+[[1], []]	false
+[[1], [0]]	true
+[[1], [0]]	true
+
+# 2D: NULLS LAST ordering inside inner lists
+query TT
+SELECT c, c > [[1, NULL]] FROM (VALUES ([[1, NULL]]::INTEGER[][]), ([[1, NULL]]), ([[1, 0]])) v(c);
+----
+[[1, NULL]]	false
+[[1, NULL]]	false
+[[1, 0]]	false
+
+# 2D: top-level length differences
+query TT
+SELECT c, c = [[1, 2], [3], [4]] FROM (VALUES ([[1, 2], [3]]::INTEGER[][]), ([[1, 2], [3], [4]]), ([[1, 2], [3], [4]])) v(c);
+----
+[[1, 2], [3]]	false
+[[1, 2], [3], [4]]	true
+[[1, 2], [3], [4]]	true
+
+# 2D: inner empty list in the middle of the batch
+query TT
+SELECT c, c > [[1], [0]] FROM (VALUES ([[1], []]::INTEGER[][]), ([[1], [2]]), ([[1], [2]])) v(c);
+----
+[[1], []]	false
+[[1], [2]]	true
+[[1], [2]]	true
+
+# triple-nested with multiple elements and duplicates
+query TT
+SELECT c, c > [[[1], [0]]] FROM (VALUES ([[[1], [2]]]::INTEGER[][][]), ([[[1], [2]]]), ([[[1], [0]]])) v(c);
+----
+[[[1], [2]]]	true
+[[[1], [2]]]	true
+[[[1], [0]]]	false
+
+# triple-nested with empty inner lists
+query TT
+SELECT c, c = [[[]], [[1]]] FROM (VALUES ([[[]], [[1]]]::INTEGER[][][]), ([[[]], [[1]]]), ([[[]], [[1]]])) v(c);
+----
+[[[]], [[1]]]	true
+[[[]], [[1]]]	true
+[[[]], [[1]]]	true
+
+# longer equal prefixes (5 elements) deciding at the last position
+query TT
+SELECT c, c > [1, 2, 3, 4, 5] FROM (VALUES ([1, 2, 3, 4, 5]::INTEGER[]), ([1, 2, 3, 4, 5]), ([1, 2, 3, 4, 6])) v(c);
+----
+[1, 2, 3, 4, 5]	false
+[1, 2, 3, 4, 5]	false
+[1, 2, 3, 4, 6]	true
+
+# graduated batch: 10 rows with list lengths 0..9, descending members, vs [9]
+query TT
+SELECT c, c > [9] FROM (VALUES ([]::INTEGER[]), ([9]), ([9, 8]), ([9, 8, 7]), ([9, 8, 7, 6]), ([9, 8, 7, 6, 5]), ([9, 8, 7, 6, 5, 4]), ([9, 8, 7, 6, 5, 4, 3]), ([9, 8, 7, 6, 5, 4, 3, 2]), ([9, 8, 7, 6, 5, 4, 3, 2, 1])) v(c);
+----
+[]	false
+[9]	false
+[9, 8]	true
+[9, 8, 7]	true
+[9, 8, 7, 6]	true
+[9, 8, 7, 6, 5]	true
+[9, 8, 7, 6, 5, 4]	true
+[9, 8, 7, 6, 5, 4, 3]	true
+[9, 8, 7, 6, 5, 4, 3, 2]	true
+[9, 8, 7, 6, 5, 4, 3, 2, 1]	true
+
+# same graduated batch vs a two-element constant
+query TT
+SELECT c, c > [9, 8] FROM (VALUES ([]::INTEGER[]), ([9]), ([9, 8]), ([9, 8, 7]), ([9, 8, 7, 6]), ([9, 8, 7, 6, 5]), ([9, 8, 7, 6, 5, 4]), ([9, 8, 7, 6, 5, 4, 3]), ([9, 8, 7, 6, 5, 4, 3, 2]), ([9, 8, 7, 6, 5, 4, 3, 2, 1])) v(c);
+----
+[]	false
+[9]	false
+[9, 8]	false
+[9, 8, 7]	true
+[9, 8, 7, 6]	true
+[9, 8, 7, 6, 5]	true
+[9, 8, 7, 6, 5, 4]	true
+[9, 8, 7, 6, 5, 4, 3]	true
+[9, 8, 7, 6, 5, 4, 3, 2]	true
+[9, 8, 7, 6, 5, 4, 3, 2, 1]	true
+
+# equality over the graduated batch: only the exact match is true
+query TT
+SELECT c, c = [9, 8] FROM (VALUES ([]::INTEGER[]), ([9]), ([9, 8]), ([9, 8, 7]), ([9, 8, 7, 6]), ([9, 8, 7, 6, 5]), ([9, 8, 7, 6, 5, 4]), ([9, 8, 7, 6, 5, 4, 3]), ([9, 8, 7, 6, 5, 4, 3, 2]), ([9, 8, 7, 6, 5, 4, 3, 2, 1])) v(c);
+----
+[]	false
+[9]	false
+[9, 8]	true
+[9, 8, 7]	false
+[9, 8, 7, 6]	false
+[9, 8, 7, 6, 5]	false
+[9, 8, 7, 6, 5, 4]	false
+[9, 8, 7, 6, 5, 4, 3]	false
+[9, 8, 7, 6, 5, 4, 3, 2]	false
+[9, 8, 7, 6, 5, 4, 3, 2, 1]	false
+
+# graduated batch with ascending members vs [1]
+query TT
+SELECT c, c > [1] FROM (VALUES ([]::INTEGER[]), ([1]), ([1, 2]), ([1, 2, 3]), ([1, 2, 3, 4]), ([1, 2, 3, 4, 5]), ([1, 2, 3, 4, 5, 6]), ([1, 2, 3, 4, 5, 6, 7]), ([1, 2, 3, 4, 5, 6, 7, 8]), ([1, 2, 3, 4, 5, 6, 7, 8, 9])) v(c);
+----
+[]	false
+[1]	false
+[1, 2]	true
+[1, 2, 3]	true
+[1, 2, 3, 4]	true
+[1, 2, 3, 4, 5]	true
+[1, 2, 3, 4, 5, 6]	true
+[1, 2, 3, 4, 5, 6, 7]	true
+[1, 2, 3, 4, 5, 6, 7, 8]	true
+[1, 2, 3, 4, 5, 6, 7, 8, 9]	true
+
+# same graduated batch in reversed row order
+query TT
+SELECT c, c > [9, 8] FROM (VALUES ([9, 8, 7, 6, 5, 4, 3, 2, 1]::INTEGER[]), ([9, 8, 7, 6, 5, 4, 3, 2]), ([9, 8, 7, 6, 5, 4, 3]), ([9, 8, 7, 6, 5, 4]), ([9, 8, 7, 6, 5]), ([9, 8, 7, 6]), ([9, 8, 7]), ([9, 8]), ([9]), ([]::INTEGER[])) v(c);
+----
+[9, 8, 7, 6, 5, 4, 3, 2, 1]	true
+[9, 8, 7, 6, 5, 4, 3, 2]	true
+[9, 8, 7, 6, 5, 4, 3]	true
+[9, 8, 7, 6, 5, 4]	true
+[9, 8, 7, 6, 5]	true
+[9, 8, 7, 6]	true
+[9, 8, 7]	true
+[9, 8]	false
+[9]	false
+[]	false
+
+# graduated batch with a duplicated [9, 8] row
+query TT
+SELECT c, c > [9, 8] FROM (VALUES ([]::INTEGER[]), ([9]), ([9, 8]), ([9, 8]), ([9, 8, 7]), ([9, 8, 7, 6]), ([9, 8, 7, 6, 5]), ([9, 8, 7, 6, 5, 4]), ([9, 8, 7, 6, 5, 4, 3]), ([9, 8, 7, 6, 5, 4, 3, 2]), ([9, 8, 7, 6, 5, 4, 3, 2, 1])) v(c);
+----
+[]	false
+[9]	false
+[9, 8]	false
+[9, 8]	false
+[9, 8, 7]	true
+[9, 8, 7, 6]	true
+[9, 8, 7, 6, 5]	true
+[9, 8, 7, 6, 5, 4]	true
+[9, 8, 7, 6, 5, 4, 3]	true
+[9, 8, 7, 6, 5, 4, 3, 2]	true
+[9, 8, 7, 6, 5, 4, 3, 2, 1]	true
+
+# struct guard: structs use a comparator path without the position partition
+query TT
+SELECT s, s > {'a': 0} FROM (VALUES ({'a': -1}), ({'a': -1}), ({'a': -1})) v(s);
+----
+{'a': -1}	false
+{'a': -1}	false
+{'a': -1}	false
