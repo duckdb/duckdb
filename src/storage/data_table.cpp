@@ -179,7 +179,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
-                     const vector<StorageIndex> &bound_columns, Expression &cast_expr)
+                     const vector<StorageIndex> &bound_columns, Expression &cast_expr,
+                     optional_ptr<BoundConstraint> constraint_to_verify)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
 	auto &transaction = DuckTransaction::Get(context, db);
 	auto &local_storage = LocalStorage::Get(transaction);
@@ -217,6 +218,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 		// scan the original table, and fill the new column with the transformed value
 		local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);
+
+		// re-verify any column constraint that the rewrite could have violated (e.g. NOT NULL)
+		if (constraint_to_verify) {
+			VerifyNewConstraint(local_storage, *this, *constraint_to_verify);
+		}
 	} catch (...) {
 		// nothing reached the catalog, so no undo entry will restore the parent
 		parent.version = previous_version;
