@@ -29,7 +29,7 @@ public:
 	bool skip_quoted[256];
 	//! For the Comment State
 	bool skip_comment[256];
-	//! The byte patterns that cover every byte the skip tables stop at, for the structural cursor
+	//! The byte patterns that cover every byte the skip tables stop at, for the byte skipper
 	vector<SwarBlock::BytePattern> stop_patterns;
 
 	const CSVState *operator[](const idx_t i) const {

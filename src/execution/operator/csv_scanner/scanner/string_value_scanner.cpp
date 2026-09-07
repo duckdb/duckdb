@@ -1760,16 +1760,16 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 	current_state.Initialize(initial_state);
 	bool first_column = true;
 	const idx_t to_pos = current_iterator.GetEndPos();
-	BindCursor();
+	skipper.SetBuffer(*cur_buffer_handle);
 	while (current_iterator.pos.buffer_pos < to_pos) {
 		state_machine_strict->Transition(current_state, buffer_handle_ptr[current_iterator.pos.buffer_pos++]);
 		if (current_state.IsState(CSVState::STANDARD) || current_state.IsState(CSVState::STANDARD_NEWLINE)) {
-			cursor.SkipUntilStop(state_machine_strict->transition_array.skip_standard, to_pos,
-			                     current_iterator.pos.buffer_pos);
+			skipper.SkipToStop(state_machine_strict->transition_array.skip_standard, to_pos,
+			                   current_iterator.pos.buffer_pos);
 		}
 		if (current_state.IsState(CSVState::QUOTED)) {
-			cursor.SkipUntilStop(state_machine_strict->transition_array.skip_quoted, to_pos,
-			                     current_iterator.pos.buffer_pos);
+			skipper.SkipToStop(state_machine_strict->transition_array.skip_quoted, to_pos,
+			                   current_iterator.pos.buffer_pos);
 		}
 		if ((current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
 		     current_state.IsState(CSVState::RECORD_SEPARATOR)) &&

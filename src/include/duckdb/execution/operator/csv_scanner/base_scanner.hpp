@@ -13,7 +13,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_structural_cursor.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_byte_skipper.hpp"
 
 namespace duckdb {
 
@@ -204,13 +204,8 @@ protected:
 	//! Initializes the scanner
 	virtual void Initialize();
 
-	//! Finds the structural bytes of the current buffer, mutable because the line finder is const
-	mutable CSVStructuralCursor cursor;
-
-	//! Binds the cursor to the current buffer
-	void BindCursor() const {
-		cursor.Bind(*cur_buffer_handle);
-	}
+	//! Skips the content bytes of the current buffer, mutable because the line finder is const
+	mutable CSVByteSkipper skipper;
 
 	//! Process one chunk
 	template <class T>
@@ -231,7 +226,7 @@ protected:
 		} else {
 			to_pos = cur_buffer_handle->actual_size;
 		}
-		BindCursor();
+		skipper.SetBuffer(*cur_buffer_handle);
 		while (iterator.pos.buffer_pos < to_pos) {
 			state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 			switch (states.states[1]) {
@@ -322,7 +317,7 @@ protected:
 				ever_quoted = true;
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
-				cursor.SkipUntilStop(state_machine->transition_array.skip_quoted, to_pos, iterator.pos.buffer_pos);
+				skipper.SkipToStop(state_machine->transition_array.skip_quoted, to_pos, iterator.pos.buffer_pos);
 			} break;
 			case CSVState::UNQUOTED: {
 				if (states.states[0] == CSVState::MAYBE_QUOTED) {
@@ -345,7 +340,7 @@ protected:
 				break;
 			case CSVState::STANDARD:
 				iterator.pos.buffer_pos++;
-				cursor.SkipUntilStop(state_machine->transition_array.skip_standard, to_pos, iterator.pos.buffer_pos);
+				skipper.SkipToStop(state_machine->transition_array.skip_standard, to_pos, iterator.pos.buffer_pos);
 				break;
 			case CSVState::QUOTED_NEW_LINE:
 				T::QuotedNewLine(result);
@@ -354,7 +349,7 @@ protected:
 			case CSVState::COMMENT:
 				T::SetComment(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
-				cursor.SkipUntilStop(state_machine->transition_array.skip_comment, to_pos, iterator.pos.buffer_pos);
+				skipper.SkipToStop(state_machine->transition_array.skip_comment, to_pos, iterator.pos.buffer_pos);
 				break;
 			default:
 				iterator.pos.buffer_pos++;
