@@ -401,6 +401,8 @@ Expression:
     - LikeClause
     - EscapeClause
     - OtherOperatorExpression
+    - InfixOtherOperatorExpression
+    - CustomPrefixExpression
     - BitwiseExpression
     - AdditiveExpression
     - MultiplicativeExpression

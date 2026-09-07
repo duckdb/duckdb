@@ -6397,6 +6397,15 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformOtherOperatorExpressionInternal(PEGTransformer &transformer,
                                                                 ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformInfixOtherOperatorExpressionInternal(PEGTransformer &transformer,
+                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto bitwise_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
 	optional<vector<OtherOperatorTail>> other_operator_tail {};
 	auto &other_operator_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
@@ -6410,8 +6419,17 @@ PEGTransformerFactory::TransformOtherOperatorExpressionInternal(PEGTransformer &
 		}
 		other_operator_tail = std::move(other_operator_tail_value);
 	}
-	auto result =
-	    TransformOtherOperatorExpression(transformer, std::move(bitwise_expression), std::move(other_operator_tail));
+	auto result = TransformInfixOtherOperatorExpression(transformer, std::move(bitwise_expression),
+	                                                    std::move(other_operator_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformCustomPrefixExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto any_op = transformer.Transform<string>(list_pr.GetChild(0));
+	auto other_operator_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformCustomPrefixExpression(transformer, any_op, std::move(other_operator_expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
@@ -11597,6 +11615,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"InSelectStatement", &PEGTransformerFactory::TransformInSelectStatementInternal},
 	    {"BetweenClause", &PEGTransformerFactory::TransformBetweenClauseInternal},
 	    {"OtherOperatorExpression", &PEGTransformerFactory::TransformOtherOperatorExpressionInternal},
+	    {"InfixOtherOperatorExpression", &PEGTransformerFactory::TransformInfixOtherOperatorExpressionInternal},
+	    {"CustomPrefixExpression", &PEGTransformerFactory::TransformCustomPrefixExpressionInternal},
 	    {"OtherOperatorTail", &PEGTransformerFactory::TransformOtherOperatorTailInternal},
 	    {"OtherOperator", &PEGTransformerFactory::TransformOtherOperatorInternal},
 	    {"AnyAllParsedOperator", &PEGTransformerFactory::TransformAnyAllParsedOperatorInternal},
