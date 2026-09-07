@@ -3,10 +3,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 
-
 namespace duckdb {
 void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints,
-                                          ForeignKeyConstraint &fk) {
+                                   ForeignKeyConstraint &fk) {
 	// find the matching primary key constraint
 	bool found_constraint = false;
 	// if no columns are defined, we will automatically try to bind to the primary key
@@ -78,8 +77,7 @@ void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<uniqu
 	                      fk.info.table, fk_names);
 }
 
-void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identifier> &names,
-                                  vector<PhysicalIndex> &indexes) {
+void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identifier> &names, vector<PhysicalIndex> &indexes) {
 	D_ASSERT(indexes.empty());
 	D_ASSERT(!names.empty());
 	for (auto &name : names) {

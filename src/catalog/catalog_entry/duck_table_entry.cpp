@@ -1386,8 +1386,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 				auto index_name = unique.GetName(prev_table.name);
 				names.insert(index_name);
 			}
-		}
-		else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 			const auto &fk = constraint->Cast<ForeignKeyConstraint>();
 			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				auto index_name = fk.GetName(prev_table.name.GetIdentifierName());
@@ -1406,8 +1405,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 			if (names.find(index_name) == names.end()) {
 				prev_indexes.RemoveIndex(index_name);
 			}
-		}
-		else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 			const auto &fk = constraint->Cast<ForeignKeyConstraint>();
 			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				continue;
@@ -1417,7 +1415,6 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 				prev_indexes.RemoveIndex(index_name);
 			}
 		}
-
 	}
 }
 
@@ -1429,22 +1426,22 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	auto create_info = GetInfo();
 	auto &table_info = create_info->Cast<CreateTableInfo>();
 
-	switch(info.constraint->type){
-		case ConstraintType::UNIQUE: {
-			const auto &unique = info.constraint->Cast<UniqueConstraint>();
-			const auto existing_pk = GetPrimaryKey();
-			if (unique.is_primary_key && existing_pk) {
-				auto existing_name = existing_pk->ToString();
-				throw CatalogException("table \"%s\" can have only one primary key: %s", name, existing_name);
-			}
-			break;
+	switch (info.constraint->type) {
+	case ConstraintType::UNIQUE: {
+		const auto &unique = info.constraint->Cast<UniqueConstraint>();
+		const auto existing_pk = GetPrimaryKey();
+		if (unique.is_primary_key && existing_pk) {
+			auto existing_name = existing_pk->ToString();
+			throw CatalogException("table \"%s\" can have only one primary key: %s", name, existing_name);
 		}
-		case ConstraintType::FOREIGN_KEY: {
-			break;
-		}
-		default: {
-			throw InternalException("unsupported constraint type in ALTER TABLE statement");
-		}
+		break;
+	}
+	case ConstraintType::FOREIGN_KEY: {
+		break;
+	}
+	default: {
+		throw InternalException("unsupported constraint type in ALTER TABLE statement");
+	}
 	}
 	table_info.constraints.push_back(info.constraint->Copy());
 	// We create a physical table with a new constraint and a new unique index.

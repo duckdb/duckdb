@@ -118,7 +118,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-		// Verify FK referential integrity for ALTER TABLE ADD FOREIGN KEY.
+	// Verify FK referential integrity for ALTER TABLE ADD FOREIGN KEY.
 	// TODO: Does it verify local data? Add test to check this!
 	if (bound_fk) {
 		// CreateIndexScan uses TABLE_SCAN_OMIT_PERMANENTLY_DELETED, which still surfaces

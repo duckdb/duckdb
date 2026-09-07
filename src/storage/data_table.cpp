@@ -788,7 +788,6 @@ void DataTable::VerifyFKReferentialIntegrity(const BoundForeignKeyConstraint &bo
 	VerifyAppendForeignKeyConstraint(nullptr, bound_fk, context, chunk);
 }
 
-
 void DataTable::VerifyDeleteForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
                                                  const BoundForeignKeyConstraint &bound_foreign_key,
                                                  ClientContext &context, DataChunk &chunk) {
