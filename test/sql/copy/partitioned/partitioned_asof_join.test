@@ -33,7 +33,7 @@ CREATE TABLE quote AS
 		getvariable('datadate') + INTERVAL 9 HOURS + INTERVAL (floor(random() * (7 * 60 * 60 + 30 * 60) * 1000)::INTEGER) MILLISECONDS AS time
 	FROM range(100_000) t(i)
 
-query III nosort expected
+query IIIII nosort expected
 SELECT tid, t.sym::VARCHAR AS sym, t.time, qid, q.time
 FROM (
     SELECT sym, time, tid
@@ -66,7 +66,7 @@ DROP TABLE quote
 statement ok
 CREATE VIEW quote AS FROM '{TEST_DIR}/quote/**/*.parquet'
 
-query III nosort expected
+query IIIII nosort expected
 SELECT tid, t.sym, t.time, qid, q.time
 FROM (
     SELECT sym, time, tid

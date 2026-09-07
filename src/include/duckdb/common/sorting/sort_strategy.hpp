@@ -41,7 +41,7 @@ public:
 	virtual SinkFinalizeType Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const = 0;
 	virtual ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
 	                                     const ProgressData source_progress) const = 0;
-	virtual void Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const;
+	virtual void Synchronize(ClientContext &client, const GlobalSinkState &source, GlobalSinkState &target) const;
 
 public:
 	//===--------------------------------------------------------------------===//

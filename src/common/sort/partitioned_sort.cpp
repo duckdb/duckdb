@@ -27,10 +27,10 @@ public:
 		return result;
 	}
 
-	void SyncPartitioning(const PartitionedSortGlobalSinkState &other) {
-	    // 		for (auto &strategy_sink : other.strategy_sinks) {
-	    // 			GetOrCreatePartition(client, strategy_sink.first);
-	    // 		}
+	void SyncPartitioning(ClientContext &client, const PartitionedSortGlobalSinkState &other) {
+		for (auto &strategy_sink : other.strategy_sinks) {
+			GetOrCreatePartition(client, strategy_sink.first);
+		}
 	};
 
 	//! The inner sort strategy
@@ -168,9 +168,6 @@ SinkFinalizeType PartitionedSort::Finalize(ClientContext &client, OperatorSinkFi
 	for (auto &strategy_sink : gsink.strategy_sinks) {
 		OperatorSinkFinalizeInput hfinalize {*strategy_sink.second, finalize.interrupt_state};
 		result = child_strategy->Finalize(client, hfinalize);
-
-		//	Map partition keys to bin numbers. strategy_sinks is a map, so the order is deterministic.
-		gsink.bin_sinks.emplace_back(strategy_sink.second.get());
 	}
 	return result;
 }
@@ -190,10 +187,10 @@ void PartitionedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin,
 //===--------------------------------------------------------------------===//
 // Synchronize
 //===--------------------------------------------------------------------===//
-void PartitionedSort::Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const {
+void PartitionedSort::Synchronize(ClientContext &client, const GlobalSinkState &source, GlobalSinkState &target) const {
 	auto &src = source.Cast<PartitionedSortGlobalSinkState>();
 	auto &tgt = target.Cast<PartitionedSortGlobalSinkState>();
-	tgt.SyncPartitioning(src);
+	tgt.SyncPartitioning(client, src);
 }
 
 //===--------------------------------------------------------------------===//
@@ -232,11 +229,28 @@ PartitionedSortGlobalSourceState::PartitionedSortGlobalSourceState(ClientContext
     : gsink(gsink) {
 	auto &child_strategy = gsink.child_strategy;
 
+	//	Process the sinks in a deterministic order so join sides match up.
+	set<Value> ordered_values;
 	for (auto &strategy_sink : gsink.strategy_sinks) {
-		auto child_source = child_strategy.GetGlobalSourceState(client, *strategy_sink.second);
+		ordered_values.insert(strategy_sink.first);
+	}
+
+	for (auto &value : ordered_values) {
+		auto &strategy_sink = gsink.strategy_sinks[value];
+		auto child_source = child_strategy.GetGlobalSourceState(client, *strategy_sink);
+
+		//	Always include an empty chunk row so join sides match up.
+		ChunkRow chunk_row;
 		const auto &child_chunks = child_strategy.GetHashGroups(*child_source);
-		chunk_rows.insert(chunk_rows.end(), child_chunks.begin(), child_chunks.end());
+		if (!child_chunks.empty()) {
+			D_ASSERT(child_chunks.size() == 1);
+			chunk_row = child_chunks[0];
+		}
+		chunk_rows.emplace_back(chunk_row);
 		child_sources.emplace_back(std::move(child_source));
+
+		//	Map partition keys to bin numbers.
+		gsink.bin_sinks.emplace_back(strategy_sink.get());
 	}
 }
 
@@ -285,6 +299,7 @@ PartitionedSort::HashGroupPtr PartitionedSort::GetColumnData(idx_t hash_bin, Ope
 SourceResultType PartitionedSort::MaterializeSortedRun(ExecutionContext &context, idx_t hash_bin,
                                                        OperatorSourceInput &source) const {
 	auto &gsource = source.global_state.Cast<PartitionedSortGlobalSourceState>();
+
 	auto &child_strategy = gsource.gsink.child_strategy;
 
 	OperatorSourceInput child_source {*gsource.child_sources[hash_bin], source.local_state, source.interrupt_state};
@@ -299,7 +314,8 @@ PartitionedSort::SortedRunPtr PartitionedSort::GetSortedRun(ClientContext &clien
 	auto &gsource = source.global_state.Cast<PartitionedSortGlobalSourceState>();
 	auto &child_strategy = gsource.gsink.child_strategy;
 
-	return child_strategy.GetSortedRun(client, 0, source);
+	OperatorSourceInput child_source {*gsource.child_sources[hash_bin], source.local_state, source.interrupt_state};
+	return child_strategy.GetSortedRun(client, 0, child_source);
 }
 
 }; // namespace duckdb
