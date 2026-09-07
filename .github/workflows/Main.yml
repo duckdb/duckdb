@@ -1204,6 +1204,8 @@ jobs:
           DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
           STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
+          CURRENT_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           is_release_event=false
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
@@ -1220,8 +1222,13 @@ jobs:
             run_release_dispatch=true
           fi
 
+          is_default_branch=false
+          if [[ "$CURRENT_REF" == "refs/heads/$DEFAULT_BRANCH" ]]; then
+            is_default_branch=true
+          fi
+
           publish_latest_alpha=false
-          if [[ "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$STAGED_VERSION" ]]; then
+          if [[ "$is_duckdb_repo" == "true" && "$is_default_branch" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$STAGED_VERSION" ]]; then
             publish_latest_alpha=true
           fi
 
@@ -1234,6 +1241,9 @@ jobs:
           echo "  is_duckdb_repo=$is_duckdb_repo"
           echo "  run_release_dispatch=$run_release_dispatch"
           echo "  staged_version=$STAGED_VERSION"
+          echo "  current_ref=$CURRENT_REF"
+          echo "  default_branch=$DEFAULT_BRANCH"
+          echo "  is_default_branch=$is_default_branch"
           echo "  publish_latest_alpha=$publish_latest_alpha"
 
           {
