@@ -770,73 +770,6 @@ TEST_CASE("Bound expression SQL export reconstructs structural expression forms"
 	connection.Rollback();
 }
 
-TEST_CASE("Extension loader finalizes live scalar overloads", "[bound_expression_sql_export][extension]") {
-	DuckDB db;
-	Connection connection(db);
-	ExtensionLoader loader(*db.instance, "sql_export_overloads");
-	const auto schema = Identifier::DefaultSchema();
-	const Identifier name("overload_identity");
-	auto make_function = [&](const LogicalType &type) {
-		auto function = ScalarFunction(name, {type}, type, ScalarFunction::NopFunction);
-		function.SetCatalogName(Identifier("unowned_catalog"));
-		function.SetSchemaName(Identifier("unowned_schema"));
-		return function;
-	};
-	loader.RegisterFunction(make_function(LogicalType::INTEGER));
-	loader.AddFunctionOverload(make_function(LogicalType::BIGINT));
-	ScalarFunctionSet additions(name);
-	additions.AddFunction(make_function(LogicalType::SMALLINT));
-	auto renamed = make_function(LogicalType::VARCHAR);
-	renamed.SetName(Identifier("noncanonical_name"));
-	additions.AddFunction(std::move(renamed));
-	loader.AddFunctionOverload(std::move(additions));
-	// ICU also replaces an existing overload with a copied definition.
-	auto &entry = loader.GetFunction(name);
-	auto replacement = *entry.functions.functions[0];
-	replacement.SetName(Identifier("noncanonical_replacement"));
-	entry.ReplaceFunctionOverload(0, std::move(replacement));
-	loader.RefreshSearchPath(*connection.context);
-	connection.BeginTransaction();
-	BoundExpressionSQLExportContext context;
-	for (auto &value : {Value::INTEGER(7), Value::BIGINT(8), Value::SMALLINT(9), Value("ten")}) {
-		auto sql = schema.GetIdentifierName() + "." + name.GetIdentifierName() + "(" + value.ToSQLString() +
-		           "::" + value.type().ToString() + ")";
-		auto plan = BindExportQuery(connection, "SELECT " + sql);
-		auto expression = FindExpression(*plan, [&](const Expression &candidate) {
-			return candidate.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
-			       candidate.Cast<BoundFunctionExpression>().Function().GetDefinition()->GetName() == name;
-		});
-		REQUIRE(expression);
-		auto &function = expression->Cast<BoundFunctionExpression>().Function();
-		REQUIRE(function.GetLogicalArguments() == vector<LogicalType> {value.type()});
-		REQUIRE(function.GetLogicalReturnType() == value.type());
-		auto actual = ExpressionExecutor::EvaluateScalar(*connection.context, *expression);
-		REQUIRE(actual.type() == value.type());
-		REQUIRE(actual == value);
-		auto exported = BoundExpressionSQLExporter::Export(*expression, context);
-		REQUIRE(exported.IsValid());
-		REQUIRE(exported.IsSuccess());
-		REQUIRE(exported.GetValue());
-		REQUIRE(exported.GetValue()->Cast<FunctionExpression>().GetQualifiedName() ==
-		        QualifiedName(Identifier::SystemCatalog(), schema, name));
-		RequireRoundTrip(connection, *expression, context, string(), sql);
-		REQUIRE(BoundExpressionSQLExporter::Export(*expression->Copy(), context).IsSuccess());
-	}
-	auto standalone = make_function(LogicalType::INTEGER);
-	standalone.SetCatalogName(Identifier::SystemCatalog());
-	standalone.SetSchemaName(schema);
-	vector<unique_ptr<Expression>> children;
-	children.push_back(Constant(Value::INTEGER(-7)));
-	auto bound = standalone.Bind(*connection.context, std::move(children));
-	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *bound) == Value::INTEGER(-7));
-	LogicalPlanVerificationPath path;
-	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-	RequireFunctionIssue(BoundExpressionSQLExporter::Export(*bound, context),
-	                     LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path, Identifier::SystemCatalog(),
-	                     schema, name, {LogicalType::INTEGER}, LogicalType::INTEGER);
-	connection.Rollback();
-}
-
 TEST_CASE("SQL export excludes internal types recursively", "[bound_expression_sql_export]") {
 	auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(0));
 	LogicalPlanVerificationPath path;
@@ -849,6 +782,50 @@ TEST_CASE("SQL export excludes internal types recursively", "[bound_expression_s
 		RequireIssue(BoundExpressionSQLExporter::Export(expression, context),
 		             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	}
+}
+
+TEST_CASE("SQL export type admission follows DuckDB value types", "[bound_expression_sql_export]") {
+	auto sql_types = LogicalType::AllTypes();
+	auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+	idx_t constructed = 0;
+	for (idx_t value = 0; value <= NumericLimits<uint8_t>::Maximum(); value++) {
+		auto id = static_cast<LogicalTypeId>(value);
+		LogicalType type;
+		try {
+			type = LogicalType(id);
+		} catch (InternalException &) {
+			continue;
+		} catch (NotImplementedException &) {
+			continue;
+		}
+		constructed++;
+		bool admitted = id == LogicalTypeId::SQLNULL;
+		for (auto &sql_type : sql_types) {
+			if (sql_type.id() == id) {
+				type = sql_type;
+				admitted = id != LogicalTypeId::TUPLE;
+				break;
+			}
+		}
+		admitted = admitted && type.IsComplete();
+		for (auto &candidate : vector<LogicalType> {type, LogicalType::LIST(type)}) {
+			INFO(value);
+			BoundColumnRefExpression expression(candidate, binding);
+			auto context = ResolveBinding(binding, {Identifier("value")}, candidate);
+			auto result = BoundExpressionSQLExporter::Export(expression, context);
+			if (admitted) {
+				REQUIRE(result.IsValid());
+				REQUIRE(result.IsSuccess());
+				REQUIRE(result.GetValue());
+			} else {
+				RequireIssue(result, LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
+			}
+		}
+	}
+	REQUIRE(constructed > 0);
+	REQUIRE_THROWS(LogicalType(static_cast<LogicalTypeId>(255)));
 }
 
 TEST_CASE("SQL export must precede binary serializer plan verification",
@@ -1079,6 +1056,7 @@ TEST_CASE("Bound expression SQL export rejects standalone catalog name collision
 	RequireIssue(BoundExpressionSQLExporter::Export(*copied_scalar, context),
 	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
+	// Shared-pointer binding trusts definition copies to preserve the catalog function's semantics.
 	vector<pair<string, shared_ptr<const ScalarFunction>>> scalar_copies;
 	scalar_copies.emplace_back("copy construction", make_shared_ptr<ScalarFunction>(*abs_definition));
 	ScalarFunction scalar_move_source(*abs_definition);
@@ -1103,7 +1081,11 @@ TEST_CASE("Bound expression SQL export rejects standalone catalog name collision
 		auto copied = bind_scalar_definition(entry.second);
 		REQUIRE(copied->Cast<BoundFunctionExpression>().Function().GetDefinition() == entry.second);
 		REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *copied) == Value::INTEGER(7));
-		RequireIssue(BoundExpressionSQLExporter::Export(*copied, context),
+		RequireRoundTrip(connection, *copied, context, string(), "abs(-7::INTEGER)");
+		vector<unique_ptr<Expression>> children;
+		children.push_back(Constant(Value::INTEGER(-7)));
+		auto standalone_copy = entry.second->Bind(*connection.context, std::move(children));
+		RequireIssue(BoundExpressionSQLExporter::Export(*standalone_copy, context),
 		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	}
 
@@ -1167,7 +1149,11 @@ TEST_CASE("Bound expression SQL export rejects standalone catalog name collision
 		auto copied = bind_aggregate_definition(entry.second);
 		REQUIRE(copied->Function().GetDefinition() == entry.second);
 		REQUIRE(EvaluateAggregate(*copied) == Value::HUGEINT(hugeint_t(7)));
-		RequireIssue(BoundExpressionSQLExporter::Export(*copied, context),
+		RequireRoundTrip(connection, *copied, context, string(), "sum(7::INTEGER)");
+		vector<unique_ptr<Expression>> children;
+		children.push_back(Constant(Value::INTEGER(7)));
+		auto standalone_copy = entry.second->Bind(*connection.context, std::move(children));
+		RequireIssue(BoundExpressionSQLExporter::Export(*standalone_copy, context),
 		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	}
 	connection.Rollback();

@@ -331,10 +331,6 @@ private:
 class Function {
 public:
 	DUCKDB_API explicit Function(Identifier name);
-	Function(const Function &other) = default;
-	Function(Function &&other) = default;
-	Function &operator=(const Function &other) = default;
-	Function &operator=(Function &&other) = default;
 	DUCKDB_API virtual ~Function();
 
 	//! The name of the function
@@ -382,39 +378,17 @@ private:
 	Identifier catalog_name;
 	//! Optional schema name of the function
 	Identifier schema_name;
-	struct SQLAddressability {
-		SQLAddressability() = default;
-		SQLAddressability(const SQLAddressability &) {
-		}
-		SQLAddressability(SQLAddressability &&other) {
-			other.value = false;
-		}
-		SQLAddressability &operator=(const SQLAddressability &other) {
-			if (this != &other) {
-				value = false;
-			}
-			return *this;
-		}
-		SQLAddressability &operator=(SQLAddressability &&other) {
-			if (this != &other) {
-				value = false;
-				other.value = false;
-			}
-			return *this;
-		}
-		bool value = false;
-	};
-	//! Only final catalog-owned definitions are SQL-addressable; copying a value does not transfer this property.
-	SQLAddressability sql_addressable;
+	//! Catalog definitions and their trusted copies are addressable; standalone binding clears this property.
+	bool sql_addressable = false;
 
 	void MarkSQLAddressable() {
-		sql_addressable.value = true;
+		sql_addressable = true;
 	}
 	void ClearSQLAddressable() {
-		sql_addressable.value = false;
+		sql_addressable = false;
 	}
 	bool IsSQLAddressable() const {
-		return sql_addressable.value;
+		return sql_addressable;
 	}
 
 	friend class AggregateFunctionCatalogEntry;

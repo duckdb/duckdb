@@ -363,11 +363,10 @@ struct ICUStrptime : public ICUDateFunc {
 			throw InternalException("ICU - Function for TailPatch not found");
 		}
 		// the overloads are immutable - swap in a patched copy
-		auto patched = *functions[best_index.GetIndex()];
-		auto original_bind = patched.GetBindCallback();
-		patched.SetBindCallback(StrpTimeBindFunction);
-		scalar_function.ReplaceFunctionOverload(best_index.GetIndex(), std::move(patched));
-		bind_strptime = original_bind;
+		auto patched = make_shared_ptr<ScalarFunction>(*functions[best_index.GetIndex()]);
+		bind_strptime = patched->GetBindCallback();
+		patched->SetBindCallback(StrpTimeBindFunction);
+		functions[best_index.GetIndex()] = std::move(patched);
 	}
 
 	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {

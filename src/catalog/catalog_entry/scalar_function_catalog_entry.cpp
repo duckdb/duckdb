@@ -12,32 +12,12 @@ constexpr const char *ScalarFunctionCatalogEntry::Name;
 
 ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
                                                        CreateScalarFunctionInfo &info)
-    : FunctionEntry(CatalogType::SCALAR_FUNCTION_ENTRY, catalog, schema, info), functions(info.functions.name) {
-	for (auto &function : info.functions.functions) {
-		AddFunctionOverload(*function);
-	}
-}
-
-void ScalarFunctionCatalogEntry::InstallFunction(ScalarFunction function, optional_idx index) {
-	auto stored = make_shared_ptr<ScalarFunction>(std::move(function));
-	stored->SetName(name);
-	stored->SetCatalogName(catalog.GetAttached().GetName());
-	stored->SetSchemaName(schema.name);
-	if (index.IsValid()) {
-		functions.functions[index.GetIndex()] = stored;
-	} else {
-		functions.AddFunction(stored);
-	}
-	stored->MarkSQLAddressable();
-}
-
-void ScalarFunctionCatalogEntry::AddFunctionOverload(ScalarFunction function) {
-	InstallFunction(std::move(function), optional_idx());
-}
-
-void ScalarFunctionCatalogEntry::ReplaceFunctionOverload(idx_t index, ScalarFunction function) {
-	D_ASSERT(index < functions.functions.size());
-	InstallFunction(std::move(function), index);
+    : FunctionEntry(CatalogType::SCALAR_FUNCTION_ENTRY, catalog, schema, info), functions(info.functions) {
+	functions.ApplyToFunctions([&](ScalarFunction &function) {
+		function.SetCatalogName(catalog.GetAttached().GetName());
+		function.SetSchemaName(schema.name);
+		function.MarkSQLAddressable();
+	});
 }
 
 unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {

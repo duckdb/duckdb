@@ -1,6 +1,7 @@
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
@@ -115,23 +116,16 @@ static bool IsSQLRepresentableType(const LogicalType &type) {
 	if (!type.IsComplete()) {
 		return false;
 	}
-	return !TypeVisitor::Contains(type, [](const LogicalType &entry) {
-		switch (entry.id()) {
-		case LogicalTypeId::UNBOUND:
-		case LogicalTypeId::TYPE:
-		case LogicalTypeId::STRING_LITERAL:
-		case LogicalTypeId::INTEGER_LITERAL:
-		case LogicalTypeId::POINTER:
-		case LogicalTypeId::VALIDITY:
-		case LogicalTypeId::TABLE:
-		case LogicalTypeId::LEGACY_AGGREGATE_STATE:
-		case LogicalTypeId::LAMBDA:
-		case LogicalTypeId::TUPLE:
-			return true;
-		default:
-			return false;
+	static const auto admitted_ids = [] {
+		unordered_set<LogicalTypeId> ids {LogicalTypeId::SQLNULL};
+		for (auto &sql_type : LogicalType::AllTypes()) {
+			if (sql_type.id() != LogicalTypeId::TUPLE) {
+				ids.insert(sql_type.id());
+			}
 		}
-	});
+		return ids;
+	}();
+	return !TypeVisitor::Contains(type, [](const LogicalType &entry) { return admitted_ids.count(entry.id()) == 0; });
 }
 
 static bool ChildrenAreConsistentWithArguments(const vector<unique_ptr<Expression>> &children,

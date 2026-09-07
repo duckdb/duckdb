@@ -297,14 +297,15 @@ void ExtensionLoader::RegisterCoordinateSystem(CreateCoordinateSystemInfo &info)
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunction function) {
 	auto &scalar_function = GetFunction(function.name);
-	scalar_function.AddFunctionOverload(std::move(function));
+	scalar_function.functions.AddFunction(std::move(function));
 }
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLINT
 	D_ASSERT(!functions.name.empty());
 	auto &scalar_function = GetFunction(functions.name);
+	functions.ApplyToFunctions([&](ScalarFunction &function) { function.name = functions.name; });
 	for (auto &function : functions.functions) {
-		scalar_function.AddFunctionOverload(*function);
+		scalar_function.functions.AddFunction(std::move(function));
 	}
 }
 
