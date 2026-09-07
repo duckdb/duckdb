@@ -52,7 +52,7 @@ public:
 	MatcherResult Execute(MatchInput input);
 
 private:
-	static constexpr idx_t FRAME_SEGMENT_CAPACITY = 32;
+	static constexpr idx_t FRAME_SEGMENT_CAPACITY = 64;
 	static constexpr idx_t INLINE_FRAME_SEGMENT_COUNT = 2;
 
 	static idx_t FrameSlotSize();
