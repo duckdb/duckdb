@@ -2310,7 +2310,8 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 	D_ASSERT(client_context);
 	auto &transaction = DuckTransaction::Get(*client_context, parent.db);
 	auto &transaction_manager = DuckTransactionManager::Get(parent.db);
-	TransactionData constraint_visibility(transaction.transaction_id, transaction_manager.GetLastCommit() + 1);
+	TransactionData constraint_visibility(transaction.GetTransactionId(),
+	                                      VisibilityBound::Through(transaction_manager.GetLastCommit()));
 	ScanOptions scan_options(constraint_visibility);
 	scan_options.insert_type = InsertedScanType::ALL_ROWS;
 	scan_options.update_type = UpdateScanType::DISALLOW_UPDATES;
