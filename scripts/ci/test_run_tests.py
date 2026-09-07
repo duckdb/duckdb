@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import shlex
 import sys
 import tempfile
 import textwrap
@@ -125,6 +126,26 @@ class RunTestsScriptTest(unittest.TestCase):
         finally:
             unittest_path.unlink(missing_ok=True)
             os.rmdir(wrapper_dir)
+
+    def test_failed_tests_reproducer_uses_runner_and_preserves_context(self):
+        command = run_tests.format_failed_tests_reproducer(
+            "/repo/build/reldebug/test/unittest",
+            "--force-storage --label 'two words'",
+            ["test/configs/a config.json"],
+            ["test/sql/a.test", "Compiled, test's name"],
+        )
+
+        self.assertEqual(
+            shlex.split(command),
+            [
+                os.path.relpath("/repo/build/reldebug/test/run", REPO_ROOT),
+                "--test-flags",
+                "--force-storage --label 'two words'",
+                "--test-config",
+                "test/configs/a config.json",
+                '"test/sql/a.test","Compiled, test\'s name"',
+            ],
+        )
 
     def test_summarizes_wrong_result_failure(self):
         stderr = """
@@ -255,6 +276,39 @@ mode skip unsupported: 1
                 self.assertIn("Skipped tests for the following reasons:", proc.stdout)
                 for expected_reason in case["expected_reasons"]:
                     self.assertIn(expected_reason, proc.stdout)
+
+    def test_successful_batches_print_progress_bar(self):
+        test_list_path = create_temp_file("test/sql/a.test\ntest/sql/b.test\n")
+        result = {
+            "failed": False,
+            "stdout": "All tests passed (1 assertion in 1 test case)\n",
+            "stderr": "",
+            "message": None,
+            "peak_rss_bytes": 0,
+        }
+
+        try:
+            with mock.patch("scripts.ci.run_tests.run_batch", side_effect=[result, result]):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(proc.stdout.count(".................................................."), 2)
+        self.assertIn("[ 50%]", proc.stdout)
+        self.assertIn("[100%]", proc.stdout)
 
     def test_aggregates_skipped_tests_from_multiple_batches(self):
         test_list_path = create_temp_file("test/sql/a.test\ntest/sql/b.test\n")
@@ -794,7 +848,12 @@ require windows: 2
                 returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
             ),
             run_tests.ConfigRunResult(
-                returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0
+                returncode=1,
+                passed_tests=0,
+                failed_tests=1,
+                skipped_tests=0,
+                elapsed_seconds=0.0,
+                failed_test_names=("test/sql/fast.test",),
             ),
         ]
 
@@ -819,6 +878,8 @@ require windows: 2
 
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         self.assertIn("error: stabilization rerun failure detected", proc.stdout)
+        self.assertIn("reproduce all failed tests:", proc.stdout)
+        self.assertIn("run '\"test/sql/fast.test\"'", proc.stdout)
 
     def test_retries_failed_fake_job(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
@@ -870,6 +931,7 @@ require windows: 2
         self.assertIn("recovered: passed on retry 1/1", proc.stdout)
         self.assertEqual(proc.stdout.count("fake failure"), 1)
         self.assertIn("ran tests: ", proc.stdout)
+        self.assertNotIn("reproduce all failed tests:", proc.stdout)
 
     def test_retries_timed_out_sleep_job(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
@@ -975,6 +1037,106 @@ require windows: 2
         self.assertIn("details: Mismatch on row 1, column count_star()(index 1)", proc.stdout)
         self.assertNotIn("### failed test batch", proc.stdout)
         self.assertNotIn("attempts:", proc.stdout)
+
+    def test_final_reproducer_includes_every_failure_in_test_list_order(self):
+        test_names = ["test/sql/a.test", "Compiled test name", "test/sql/b.test"]
+        test_list_path = create_temp_file("\n".join(test_names) + "\n")
+        stdout = """
+-------------------------------------------------------------------------------
+Compiled test name
+-------------------------------------------------------------------------------
+/repo/test.cpp:10
+...............................................................................
+
+/repo/test.cpp:12: FAILED:
+  REQUIRE( false )
+with expansion:
+  false
+"""
+        stderr = """
+1. test/sql/b.test:7
+================================================================================
+Error: Catalog Error: b failed
+================================================================================
+2. test/sql/a.test:9
+================================================================================
+Error: Catalog Error: a failed
+================================================================================
+"""
+
+        try:
+            with mock.patch(
+                "scripts.ci.run_tests.run_batch",
+                return_value={
+                    "failed": True,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "message": None,
+                    "peak_rss_bytes": 0,
+                },
+            ):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "3",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("reproduce all failed tests:", proc.stdout)
+        command = proc.stdout.rstrip().splitlines()[-1]
+        self.assertEqual(
+            shlex.split(command),
+            ["run", '"test/sql/a.test","Compiled test name","test/sql/b.test"'],
+        )
+
+    def test_final_reproducer_unions_failures_across_exhausted_retries(self):
+        test_list_path = create_temp_file("test/sql/a.test\ntest/sql/b.test\n")
+
+        def failure(test_name):
+            return {
+                "failed": True,
+                "stdout": "",
+                "stderr": f"1. {test_name}:4\nError: failed\n",
+                "message": None,
+                "peak_rss_bytes": 0,
+            }
+
+        try:
+            with mock.patch(
+                "scripts.ci.run_tests.run_batch",
+                side_effect=[failure("test/sql/b.test"), failure("test/sql/a.test")],
+            ):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "2",
+                        "--retry",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        command = proc.stdout.rstrip().splitlines()[-1]
+        self.assertEqual(shlex.split(command), ["run", '"test/sql/a.test","test/sql/b.test"'])
 
     def test_failed_batch_includes_mismatch_context(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
@@ -1888,6 +2050,56 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         self.assertIn("error: no tests selected for config 'test/configs/empty.json'", proc.stdout)
         self.assertIn("error: 1 config runs failed: test/configs/empty.json", proc.stdout)
+
+    def test_final_reproducer_preserves_flags_and_failed_configs(self):
+        test_list_path = create_temp_file("test/sql/a.test\ntest/sql/b.test\n")
+        run_results = [
+            run_tests.ConfigRunResult(
+                returncode=0, passed_tests=2, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            ),
+            run_tests.ConfigRunResult(
+                returncode=1,
+                passed_tests=1,
+                failed_tests=1,
+                skipped_tests=0,
+                elapsed_seconds=0.0,
+                failed_test_names=("test/sql/b.test",),
+            ),
+        ]
+
+        try:
+            with mock.patch("scripts.ci.run_tests.run_tests", side_effect=run_results):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-flags",
+                        "--force-storage --force-reload",
+                        "--test-config",
+                        "test/configs/pass.json",
+                        "--test-config",
+                        "test/configs/fail.json",
+                        "build/reldebug/test/unittest",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        command = proc.stdout.rstrip().splitlines()[-1]
+        self.assertEqual(
+            shlex.split(command),
+            [
+                "build/reldebug/test/run",
+                "--test-flags",
+                "--force-storage --force-reload",
+                "--test-config",
+                "test/configs/fail.json",
+                '"test/sql/b.test"',
+            ],
+        )
 
     def test_ci_groups_close_when_all_configs_pass(self):
         listed_tests_path = create_temp_file(
