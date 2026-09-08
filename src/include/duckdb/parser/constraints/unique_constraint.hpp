@@ -14,18 +14,20 @@
 
 namespace duckdb {
 
+enum class ConstraintTiming : uint8_t { IMMEDIATE, DEFERRED };
+
 class UniqueConstraint : public Constraint {
 public:
 	static constexpr const ConstraintType TYPE = ConstraintType::UNIQUE;
 
 public:
 	DUCKDB_API UniqueConstraint(const LogicalIndex index, const bool is_primary_key);
-	DUCKDB_API UniqueConstraint(const LogicalIndex index, const bool is_primary_key, const bool is_deferred);
+	DUCKDB_API UniqueConstraint(const LogicalIndex index, const bool is_primary_key, ConstraintTiming timing);
 	DUCKDB_API UniqueConstraint(const LogicalIndex index, Identifier column_name, const bool is_primary_key);
 	DUCKDB_API UniqueConstraint(const LogicalIndex index, Identifier column_name, const bool is_primary_key,
-	                            const bool is_deferred);
+	                            ConstraintTiming timing);
 	DUCKDB_API UniqueConstraint(vector<Identifier> columns, const bool is_primary_key);
-	DUCKDB_API UniqueConstraint(vector<Identifier> columns, const bool is_primary_key, const bool is_deferred);
+	DUCKDB_API UniqueConstraint(vector<Identifier> columns, const bool is_primary_key, ConstraintTiming timing);
 
 public:
 	DUCKDB_API string ToString() const override;

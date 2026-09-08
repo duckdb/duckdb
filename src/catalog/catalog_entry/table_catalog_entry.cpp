@@ -118,6 +118,8 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	logical_index_set_t not_null_columns;
 	logical_index_set_t unique_columns;
 	logical_index_set_t pk_columns;
+	logical_index_set_t deferred_unique_columns;
+	logical_index_set_t deferred_pk_columns;
 	identifier_set_t multi_key_pks;
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
@@ -130,8 +132,14 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 				// no columns specified: single column constraint
 				if (pk.IsPrimaryKey()) {
 					pk_columns.insert(pk.GetIndex());
+					if (pk.IsDeferred()) {
+						deferred_pk_columns.insert(pk.GetIndex());
+					}
 				} else {
 					unique_columns.insert(pk.GetIndex());
+					if (pk.IsDeferred()) {
+						deferred_unique_columns.insert(pk.GetIndex());
+					}
 				}
 			} else {
 				// multi-column constraint, this constraint needs to go at the end after all columns
@@ -170,10 +178,16 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		if (is_single_key_pk) {
 			// single column pk: insert constraint here
 			ss << " PRIMARY KEY";
+			if (deferred_pk_columns.find(column.Logical()) != deferred_pk_columns.end()) {
+				ss << " DEFERRED";
+			}
 		}
 		if (is_unique) {
 			// single column unique: insert constraint here
 			ss << " UNIQUE";
+			if (deferred_unique_columns.find(column.Logical()) != deferred_unique_columns.end()) {
+				ss << " DEFERRED";
+			}
 		}
 	}
 	// print any extra constraints that still need to be printed

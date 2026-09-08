@@ -10,30 +10,31 @@ UniqueConstraint::UniqueConstraint()
 }
 
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key)
-    : UniqueConstraint(index, is_primary_key, false) {
+    : UniqueConstraint(index, is_primary_key, ConstraintTiming::IMMEDIATE) {
 }
 
-UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key, const bool is_deferred)
-    : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key), is_deferred(is_deferred) {
+UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key, ConstraintTiming timing)
+    : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key),
+      is_deferred(timing == ConstraintTiming::DEFERRED) {
 }
 
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, Identifier column_name_p, const bool is_primary_key)
-    : UniqueConstraint(index, std::move(column_name_p), is_primary_key, false) {
+    : UniqueConstraint(index, std::move(column_name_p), is_primary_key, ConstraintTiming::IMMEDIATE) {
 }
 
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, Identifier column_name_p, const bool is_primary_key,
-                                   const bool is_deferred)
-    : UniqueConstraint(index, is_primary_key, is_deferred) {
+                                   ConstraintTiming timing)
+    : UniqueConstraint(index, is_primary_key, timing) {
 	columns.emplace_back(std::move(column_name_p));
 }
 
 UniqueConstraint::UniqueConstraint(vector<Identifier> columns, const bool is_primary_key)
-    : UniqueConstraint(std::move(columns), is_primary_key, false) {
+    : UniqueConstraint(std::move(columns), is_primary_key, ConstraintTiming::IMMEDIATE) {
 }
 
-UniqueConstraint::UniqueConstraint(vector<Identifier> columns, const bool is_primary_key, const bool is_deferred)
+UniqueConstraint::UniqueConstraint(vector<Identifier> columns, const bool is_primary_key, ConstraintTiming timing)
     : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), columns(std::move(columns)),
-      is_primary_key(is_primary_key), is_deferred(is_deferred) {
+      is_primary_key(is_primary_key), is_deferred(timing == ConstraintTiming::DEFERRED) {
 }
 
 string UniqueConstraint::ToString() const {
@@ -52,12 +53,13 @@ string UniqueConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> UniqueConstraint::Copy() const {
+	auto timing = is_deferred ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
 	if (!HasIndex()) {
-		return make_uniq<UniqueConstraint>(columns, is_primary_key, is_deferred);
+		return make_uniq<UniqueConstraint>(columns, is_primary_key, timing);
 	}
 
 	auto result =
-	    make_uniq<UniqueConstraint>(index, columns.empty() ? Identifier() : columns[0], is_primary_key, is_deferred);
+	    make_uniq<UniqueConstraint>(index, columns.empty() ? Identifier() : columns[0], is_primary_key, timing);
 	return std::move(result);
 }
 

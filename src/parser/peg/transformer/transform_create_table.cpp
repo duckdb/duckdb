@@ -166,9 +166,10 @@ PEGTransformerFactory::TransformCreateTableColumnList(PEGTransformer &transforme
 				if (constraint_type.type == ConstraintType::NOT_NULL) {
 					result.constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(col_idx)));
 				} else if (constraint_type.type == ConstraintType::UNIQUE) {
+					auto timing = constraint_type.is_deferred ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
 					result.constraints.push_back(
 					    make_uniq<UniqueConstraint>(LogicalIndex(col_idx), column_result.column_definition.GetName(),
-					                                constraint_type.is_primary_key, constraint_type.is_deferred));
+					                                constraint_type.is_primary_key, timing));
 				}
 			}
 			result.columns.AddColumn(std::move(column_result.column_definition));
@@ -358,16 +359,16 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopCheckConstraint(PEGTra
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopPrimaryKeyConstraint(
     PEGTransformer &transformer, const vector<string> &column_id_list, const optional<bool> &deferred_constraint) {
-	auto result =
-	    make_uniq<UniqueConstraint>(StringsToIdentifiers(column_id_list), true, deferred_constraint.value_or(false));
+	auto timing = deferred_constraint.value_or(false) ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
+	auto result = make_uniq<UniqueConstraint>(StringsToIdentifiers(column_id_list), true, timing);
 	return std::move(result);
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTransformer &transformer,
                                                                            const vector<string> &column_id_list,
                                                                            const optional<bool> &deferred_constraint) {
-	return make_uniq<UniqueConstraint>(StringsToIdentifiers(column_id_list), false,
-	                                   deferred_constraint.value_or(false));
+	auto timing = deferred_constraint.value_or(false) ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
+	return make_uniq<UniqueConstraint>(StringsToIdentifiers(column_id_list), false, timing);
 }
 
 ColumnConstraintEntry PEGTransformerFactory::TransformCheckConstraint(PEGTransformer &transformer,

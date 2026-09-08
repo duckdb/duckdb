@@ -2,6 +2,12 @@
 # description: Test parsing DEFERRED primary key and unique constraints
 # group: [deferred]
 
+# Deferred constraints must remain deferred after copying or reparsing the statement.
+foreach mode NONE COPY_STATEMENT REPARSE_STATEMENT
+
+statement ok
+SET debug_verify_statement='{mode}'
+
 statement error
 CREATE TABLE deferred_column_unique(i INTEGER UNIQUE DEFERRED);
 ----
@@ -21,6 +27,22 @@ statement error
 CREATE TABLE deferred_table_primary_key(i INTEGER, PRIMARY KEY(i) DEFERRED);
 ----
 Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
+
+# Keep the deferred modifier attached to the correct constraint on the same column.
+statement error
+CREATE TABLE mixed_unique(i INTEGER PRIMARY KEY UNIQUE DEFERRED);
+----
+Not implemented Error: Deferred UNIQUE constraints are not implemented yet
+
+statement error
+CREATE TABLE mixed_primary_key(i INTEGER UNIQUE PRIMARY KEY DEFERRED);
+----
+Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
+
+statement ok
+RESET debug_verify_statement
+
+endloop
 
 # Existing constraints continue to use eager enforcement when DEFERRED is absent.
 statement ok
