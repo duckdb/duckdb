@@ -71,7 +71,7 @@ FilterPropagateResult SuffixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	if (!SuffixFunction(string_t(min), string_t(suffix))) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	return string_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+	return string_stats->CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL
 	                                   : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 }
 

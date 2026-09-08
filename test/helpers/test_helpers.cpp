@@ -645,6 +645,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 	}
 
 	result->options.debug_initialize = test_config.GetDebugInitialize();
+	result->options.main_database_options = test_config.GetMainDatabaseOptions();
 	result->SetOptionByName("debug_verify_vector", EnumUtil::ToString(test_config.GetVectorVerification()));
 	return result;
 }

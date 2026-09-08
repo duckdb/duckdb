@@ -2,8 +2,6 @@ add_library_unity(
   duckdb_operator_helper
   OBJECT
   physical_batch_collector.cpp
-  physical_buffered_collector.cpp
-  physical_buffered_batch_collector.cpp
   physical_connect.cpp
   physical_external_resource.cpp
   physical_create_secret.cpp
@@ -14,11 +12,11 @@ add_library_unity(
   physical_limit.cpp
   physical_limit_percent.cpp
   physical_load.cpp
-  physical_materialized_collector.cpp
   physical_pragma.cpp
   physical_prepare.cpp
   physical_reservoir_sample.cpp
   physical_result_collector.cpp
+  physical_result_sink.cpp
   physical_set.cpp
   physical_set_variable.cpp
   physical_reset.cpp

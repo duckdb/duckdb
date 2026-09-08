@@ -38,7 +38,6 @@ on:
         default: ""
 
 env:
-  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
   DUCKDB_VERSION: ${{ inputs.duckdb_version }}
   DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
 
@@ -72,18 +71,9 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
-  vars:
-    runs-on: ubuntu-24.04
-    outputs:
-      BRANCHES_TO_BE_CACHED: ${{ env.BRANCHES_TO_BE_CACHED }}
-    steps:
-      - run: echo "Exposing env vars"
-
   build:
     name: Build Extension
-    needs:
-      - load-extension-configs
-      - vars
+    needs: load-extension-configs
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
       override_repository: duckdb/extension-template
@@ -101,7 +91,7 @@ jobs:
       use_merged_vcpkg_manifest: '1'
       duckdb_tag: ${{ inputs.duckdb_version }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
-      save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
+      save_cache: true
       extensions_test_selection: 'complete'
       extra_extension_config: ${{ needs.load-extension-configs.outputs.extension_config }}
 

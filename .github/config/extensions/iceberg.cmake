@@ -9,5 +9,6 @@ if (NOT MINGW)
      #FIXME: restore autoloading tests ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb-iceberg
             GIT_TAG bf975d6febdd1842294e80a4887fc52ae8623d5b
+            APPLY_PATCHES
             )
 endif()
