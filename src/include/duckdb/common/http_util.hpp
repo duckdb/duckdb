@@ -383,12 +383,17 @@ enum class HTTPRetryDecision : uint8_t {
 struct HTTPAttempt {
 	//! The response, null when the attempt threw
 	unique_ptr<HTTPResponse> response;
-	//! The exception the attempt threw, if any
+	//! The exception the attempt threw, if any. Only set when the attempt threw on this thread.
 	std::exception_ptr caught_e = nullptr;
+	//! The error the attempt reported, kept whole so a failure keeps its type when it is rethrown
+	ErrorData error;
 	string exception_error;
 	//! Status and Retry-After recovered from an HTTPException, used for throttle detection
 	string caught_status;
 	string caught_retry_after;
+
+	//! Record [error_p] as this attempt's failure, recovering the status and Retry-After it carries
+	DUCKDB_API void SetError(ErrorData error_p);
 };
 
 //! The retry policy of one HTTP request, carried across its attempts. It does no waiting of its own:
@@ -457,6 +462,7 @@ public:
 	//! the completion fires.
 	//! The completion may fire on another thread, so a caller that suspends on PENDING must arbitrate
 	//! between suspending and being resumed itself - see AsyncExecutionTask for the pattern.
+	//! COMPLETED is reported only once the completion has returned, so the result it wrote is readable.
 	DUCKDB_API virtual HTTPRequestState Send(BaseRequest &request, unique_ptr<HTTPClient> &client,
 	                                         HTTPExecutionMode mode, HTTPResponseCallback on_complete);
 
@@ -466,8 +472,8 @@ public:
 
 	//! Wait [delay_ms] before the next attempt of a request, then run [resume].
 	//! The default sleeps the calling thread, which is what the retry backoff has always done.
-	//! A platform that must not block overrides this to schedule [resume] and return PENDING.
-	DUCKDB_API virtual HTTPRequestState Wait(uint64_t delay_ms, std::function<void()> resume);
+	//! A platform that must not block overrides this to schedule [resume] and return immediately.
+	DUCKDB_API virtual void Wait(uint64_t delay_ms, std::function<void()> resume);
 	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
 	//! Whether a failed request should be retried, possibly using HTTPResponse information, and allowing overrides

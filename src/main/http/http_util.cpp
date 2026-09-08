@@ -202,20 +202,26 @@ void EndRequestTiming(BaseRequest &request) {
 }
 
 //! Runs one request's attempts without blocking the caller, asking HTTPUtil::Wait to come back later
-//! rather than sleeping here. Uses the same HTTPRetryState as the synchronous path.
+//! rather than sleeping here. Uses the same HTTPRetryState and cache policy as the synchronous path.
 //! Each callback holds a reference to the driver, which keeps it alive across a deferral.
 class AsyncRetryDriver : public enable_shared_from_this<AsyncRetryDriver> {
 public:
+	//! Produces the client for the next attempt under the cache policy that attempt calls for
+	using ClientFactory = std::function<unique_ptr<HTTPClient>(HTTPClientCachePolicy)>;
+
 	AsyncRetryDriver(HTTPUtil &http_util, BaseRequest &request, shared_ptr<HTTPClient> client_p,
+	                 HTTPClientCachePolicy initial_cache_policy_p, ClientFactory create_client_p,
 	                 HTTPResponseCallback on_complete)
-	    : http_util(http_util), request(request), client(std::move(client_p)), on_complete(std::move(on_complete)) {
+	    : http_util(http_util), request(request), client(std::move(client_p)),
+	      initial_cache_policy(initial_cache_policy_p), retry_cache_policy(initial_cache_policy_p),
+	      create_client(std::move(create_client_p)), on_complete(std::move(on_complete)) {
 	}
 
 	//! Issue the request, reporting whether everything resolved before returning
 	HTTPRequestState Start() {
 		Attempt();
 		// the completion may have landed on another thread while we were unwinding
-		return delivered ? HTTPRequestState::COMPLETED : HTTPRequestState::PENDING;
+		return finished ? HTTPRequestState::COMPLETED : HTTPRequestState::PENDING;
 	}
 
 private:
@@ -223,19 +229,37 @@ private:
 		auto self = shared_from_this();
 		// the span runs across the deferral, so it is opened here and closed by the completion
 		BeginRequestTiming(request);
-		// the returned state is not needed: an attempt that finished inline has already called back
-		client->Send(request, HTTPExecutionMode::DEFERRABLE,
-		             [self](unique_ptr<HTTPResponse> response, ErrorData error) {
-			             self->OnAttemptDone(std::move(response), std::move(error));
-		             });
+		attempt_reported = false;
+		try {
+			// the returned state is not needed: an attempt that finished inline has already called back
+			client->Send(request, HTTPExecutionMode::DEFERRABLE,
+			             [self](unique_ptr<HTTPResponse> response, ErrorData error) {
+				             self->attempt_reported = true;
+				             self->OnAttemptDone(std::move(response), std::move(error));
+			             });
+		} catch (std::exception &ex) {
+			if (attempt_reported) {
+				// this attempt already reported its outcome, so the throw came back out of our own completion
+				throw;
+			}
+			// a transport that throws instead of reporting still made an attempt, which may be retried
+			OnAttemptDone(nullptr, ErrorData(ex));
+		}
 	}
 
 	void OnAttemptDone(unique_ptr<HTTPResponse> response, ErrorData error) {
 		HTTPAttempt attempt;
 		attempt.response = std::move(response);
-		if (error.HasError()) {
-			attempt.exception_error = error.RawMessage();
+		if (attempt.response) {
+			attempt.response->url = request.url;
 		}
+		if (error.HasError()) {
+			attempt.SetError(std::move(error));
+		}
+		// a failed attempt must not be replayed on the transport that failed it, as SendRequestOnce also ensures
+		retry_cache_policy = (!attempt.response || attempt.response->HasRequestError())
+		                         ? HTTPClientCachePolicy::BYPASS_CACHE
+		                         : initial_cache_policy;
 		EndRequestTiming(request);
 		http_util.LogRequest(request, attempt.response.get());
 
@@ -247,32 +271,60 @@ private:
 		case HTTPRetryDecision::FAILED:
 			DeliverFailure(attempt);
 			return;
-		case HTTPRetryDecision::RETRY: {
-			// refresh the client for the next attempt, as the synchronous retry callback does
-			client = http_util.InitializeClient(request.params, request.proto_host_port);
-			if (!client) {
-				Deliver(nullptr, ErrorData("HTTP provider returned a null client during retry"));
-				return;
-			}
-			auto self = shared_from_this();
-			http_util.Wait(delay_ms, [self]() { self->Attempt(); });
+		case HTTPRetryDecision::RETRY:
+			Retry(delay_ms);
 			return;
-		}
 		}
 	}
 
-	//! A throw has nowhere to go from a completion, so Finalize's exception is delivered as an error
-	void DeliverFailure(HTTPAttempt &attempt) {
+	//! Refresh the client and schedule the next attempt, as the synchronous retry callback does.
+	//! An accepted request has to complete, so a failure to do either is delivered rather than thrown.
+	void Retry(uint64_t delay_ms) {
+		shared_ptr<HTTPClient> next_client;
 		try {
-			Deliver(retry_state.Finalize(request, attempt), ErrorData());
+			next_client = create_client(retry_cache_policy);
 		} catch (std::exception &ex) {
+			Deliver(nullptr, ErrorData(ex));
+			return;
+		}
+		if (!next_client) {
+			Deliver(nullptr, ErrorData("HTTP provider returned a null client during retry"));
+			return;
+		}
+		client = std::move(next_client);
+		auto self = shared_from_this();
+		try {
+			http_util.Wait(delay_ms, [self]() { self->Attempt(); });
+		} catch (std::exception &ex) {
+			if (completing) {
+				// the wait resumed us inline and we ran to completion, so this is the completion's own throw
+				throw;
+			}
 			Deliver(nullptr, ErrorData(ex));
 		}
 	}
 
+	//! A throw has nowhere to go from a completion, so Finalize's exception is delivered as an error.
+	//! Finalizing outside the completion keeps a throwing callback from being invoked a second time.
+	void DeliverFailure(HTTPAttempt &attempt) {
+		unique_ptr<HTTPResponse> response;
+		ErrorData error;
+		try {
+			response = retry_state.Finalize(request, attempt);
+		} catch (std::exception &ex) {
+			error = ErrorData(ex);
+		}
+		Deliver(std::move(response), std::move(error));
+	}
+
 	void Deliver(unique_ptr<HTTPResponse> response, ErrorData error) {
-		delivered = true;
+		if (completing.exchange(true)) {
+			// the completion runs exactly once, however many ways an attempt found to fail
+			return;
+		}
 		on_complete(std::move(response), std::move(error));
+		// published only now, so a caller that is told COMPLETED can read what the completion wrote
+		finished = true;
 	}
 
 private:
@@ -280,10 +332,18 @@ private:
 	BaseRequest &request;
 	//! Held, not borrowed, so a retry replacing it never writes into the caller's pointer
 	shared_ptr<HTTPClient> client;
+	//! The policy a successful attempt uses, and the one a failed attempt escalates away from
+	HTTPClientCachePolicy initial_cache_policy;
+	HTTPClientCachePolicy retry_cache_policy;
+	ClientFactory create_client;
 	HTTPResponseCallback on_complete;
 	HTTPRetryState retry_state;
-	//! Whether the completion has been invoked - written by whichever thread completes the request
-	atomic<bool> delivered {false};
+	//! Whether the current attempt reported an outcome, distinguishing a transport throw from our own
+	atomic<bool> attempt_reported {false};
+	//! Whether the completion has been entered - written by whichever thread completes the request
+	atomic<bool> completing {false};
+	//! Whether the completion has returned, which is what makes the result safe to read
+	atomic<bool> finished {false};
 };
 
 } // namespace
@@ -295,8 +355,12 @@ HTTPRequestState HTTPUtil::Send(BaseRequest &request, unique_ptr<HTTPClient> &cl
 		on_complete(SendRequest(request, client), ErrorData());
 		return HTTPRequestState::COMPLETED;
 	}
+	const auto initial_cache_policy =
+	    request.params.transport_manager ? HTTPClientCachePolicy::BYPASS_CACHE : HTTPClientCachePolicy::DEFAULT;
 	if (!client) {
-		client = InitializeClient(request.params, request.proto_host_port);
+		client = initial_cache_policy == HTTPClientCachePolicy::BYPASS_CACHE
+		             ? InitializeClientWithPolicy(request, initial_cache_policy)
+		             : InitializeClient(request.params, request.proto_host_port);
 		if (!client) {
 			throw InvalidConfigurationException(
 			    "HTTPClient is not been setup yet (possibly due to configuration), no HTTP request can be performed");
@@ -304,7 +368,10 @@ HTTPRequestState HTTPUtil::Send(BaseRequest &request, unique_ptr<HTTPClient> &cl
 	}
 	// the request takes the client over, and shares it so the transport can outlive our reference
 	shared_ptr<HTTPClient> owned_client = std::move(client);
-	auto driver = make_shared_ptr<AsyncRetryDriver>(*this, request, std::move(owned_client), std::move(on_complete));
+	auto driver = make_shared_ptr<AsyncRetryDriver>(
+	    *this, request, std::move(owned_client), initial_cache_policy,
+	    [this, &request](HTTPClientCachePolicy policy) { return InitializeClientWithPolicy(request, policy); },
+	    std::move(on_complete));
 	return driver->Start();
 }
 
@@ -317,7 +384,7 @@ bool HTTPUtil::CanWait() const {
 }
 
 // NOLINTNEXTLINE: taken by value so an asynchronous override can move it into its scheduler
-HTTPRequestState HTTPUtil::Wait(uint64_t delay_ms, std::function<void()> resume) {
+void HTTPUtil::Wait(uint64_t delay_ms, std::function<void()> resume) {
 	// this platform has a thread to wait on
 #ifndef DUCKDB_NO_THREADS
 	if (delay_ms > 0) {
@@ -325,7 +392,6 @@ HTTPRequestState HTTPUtil::Wait(uint64_t delay_ms, std::function<void()> resume)
 	}
 #endif
 	resume();
-	return HTTPRequestState::COMPLETED;
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
@@ -635,7 +701,29 @@ void HTTPUtil::DecomposeURL(const string &input, string &path_out, string &proto
 	}
 }
 
+void HTTPAttempt::SetError(ErrorData error_p) {
+	error = std::move(error_p);
+	exception_error = error.RawMessage();
+	// handlers turn error statuses into exceptions; recover the status for throttle detection
+	auto entry = error.ExtraInfo().find("status_code");
+	if (entry != error.ExtraInfo().end()) {
+		caught_status = entry->second;
+	}
+	auto retry_entry = error.ExtraInfo().find("header_Retry-After");
+	if (retry_entry != error.ExtraInfo().end()) {
+		caught_retry_after = retry_entry->second;
+	}
+}
+
 namespace {
+
+//! Record the exception an attempt threw, keeping the exact one so it can be rethrown unchanged
+void CaptureException(HTTPAttempt &attempt, const std::exception &e) {
+	attempt.SetError(ErrorData(e));
+	attempt.caught_e = std::current_exception();
+	// what() is the serialized form a try_request has always reported, so it is kept over the raw message
+	attempt.exception_error = e.what();
+}
 
 //! Perform one attempt, capturing whatever it produced - a response, or an exception plus the status
 //! and Retry-After that the handlers folded into it
@@ -647,21 +735,9 @@ HTTPAttempt RunOneAttempt(const std::function<unique_ptr<HTTPResponse>(void)> &o
 			attempt.response->url = request.url;
 		}
 	} catch (IOException &e) {
-		attempt.exception_error = e.what();
-		attempt.caught_e = std::current_exception();
+		CaptureException(attempt, e);
 	} catch (HTTPException &e) {
-		attempt.exception_error = e.what();
-		attempt.caught_e = std::current_exception();
-		// handlers turn error statuses into exceptions; recover the status for throttle detection
-		ErrorData error_data(e);
-		auto entry = error_data.ExtraInfo().find("status_code");
-		if (entry != error_data.ExtraInfo().end()) {
-			attempt.caught_status = entry->second;
-		}
-		auto retry_entry = error_data.ExtraInfo().find("header_Retry-After");
-		if (retry_entry != error_data.ExtraInfo().end()) {
-			attempt.caught_retry_after = retry_entry->second;
-		}
+		CaptureException(attempt, e);
 	}
 	return attempt;
 }
@@ -751,6 +827,9 @@ unique_ptr<HTTPResponse> HTTPRetryState::Finalize(const BaseRequest &request, HT
 	auto method = EnumUtil::ToString(request.type);
 	if (attempt.caught_e) {
 		std::rethrow_exception(attempt.caught_e);
+	} else if (attempt.error.HasError()) {
+		// the attempt failed on another thread, so its error is rethrown from the type it was caught as
+		attempt.error.Throw();
 	} else if (response && !response->HasRequestError()) {
 		throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'",
 		                    static_cast<int>(response->status), method, request.url);

@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "test_helpers.hpp"
 
@@ -294,11 +295,10 @@ public:
 
 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;
 
-	HTTPRequestState Wait(uint64_t delay_ms, std::function<void()> resume) override {
+	void Wait(uint64_t delay_ms, std::function<void()> resume) override {
 		waits++;
 		last_delay_ms = delay_ms;
 		scheduled = std::move(resume);
-		return HTTPRequestState::PENDING;
 	}
 
 	//! Run whatever the retry asked us to come back to, standing in for a timer firing
@@ -427,8 +427,7 @@ TEST_CASE("HTTP core gives up on a deferred request after its retries", "[api]")
 TEST_CASE("HTTP default Wait sleeps rather than scheduling", "[api]") {
 	HTTPUtil http_util;
 	idx_t resumed = 0;
-	auto state = http_util.Wait(0, [&]() { resumed++; });
-	REQUIRE(state == HTTPRequestState::COMPLETED);
+	http_util.Wait(0, [&]() { resumed++; });
 	REQUIRE(resumed == 1);
 }
 
@@ -683,4 +682,321 @@ TEST_CASE("HTTP deferred retry reports a null client instead of dereferencing it
 	http_util.Complete();
 	REQUIRE(completions == 1);
 	REQUIRE(reported_error);
+}
+
+namespace {
+
+//! A transport that completes on another thread and does not return from its own Send until that
+//! completion is running. That is the window in which the caller must not be told COMPLETED.
+class ConcurrentCompletionClient : public StubClient {
+public:
+	ConcurrentCompletionClient(std::thread &worker, atomic<bool> &entered) : worker(worker), entered(entered) {
+	}
+
+	HTTPRequestState Send(BaseRequest &, HTTPExecutionMode, HTTPResponseCallback on_complete) override {
+		worker = std::thread([callback = std::move(on_complete)]() mutable {
+			auto response = make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
+			response->success = true;
+			callback(std::move(response), ErrorData());
+		});
+		while (!entered) {
+			std::this_thread::yield();
+		}
+		return HTTPRequestState::PENDING;
+	}
+
+private:
+	std::thread &worker;
+	atomic<bool> &entered;
+};
+
+} // namespace
+
+TEST_CASE("HTTP completion is published only once the callback has run", "[api]") {
+	HTTPUtil http_util;
+	HTTPParams params(http_util);
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, params, nullptr, nullptr);
+
+	std::thread worker;
+	atomic<bool> entered {false};
+	atomic<bool> release {false};
+	atomic<bool> result_ready {false};
+	unique_ptr<HTTPClient> client = make_uniq<ConcurrentCompletionClient>(worker, entered);
+
+	idx_t completions = 0;
+	auto state = http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
+	                            [&](unique_ptr<HTTPResponse> response, ErrorData error) {
+		                            entered = true;
+		                            while (!release) {
+			                            std::this_thread::yield();
+		                            }
+		                            completions++;
+		                            result_ready = true;
+	                            });
+	const bool ready_at_return = result_ready;
+	release = true;
+	worker.join();
+
+	// the completion had not finished writing its result, so the caller must not have been told COMPLETED
+	REQUIRE(!ready_at_return);
+	REQUIRE(state == HTTPRequestState::PENDING);
+	REQUIRE(completions == 1);
+}
+
+namespace {
+
+//! A util whose transport hands every request off, so a test drives each attempt by hand
+class SteeredUtil : public HTTPUtil {
+public:
+	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;
+
+	unique_ptr<HTTPClient> InitializeClientExtended(HTTPParams &http_params, const string &proto_host_port,
+	                                                const HTTPClientInitializationOptions &options) override {
+		last_cache_policy = options.cache_policy;
+		if (fail_init) {
+			throw IOException("no client for you");
+		}
+		return InitializeClient(http_params, proto_host_port);
+	}
+
+	void Wait(uint64_t delay_ms, std::function<void()> resume) override {
+		waits++;
+		last_delay_ms = delay_ms;
+		scheduled = std::move(resume);
+	}
+
+	//! Run whatever the retry asked us to come back to, standing in for a timer firing
+	void FireTimer() {
+		auto callback = std::move(scheduled);
+		scheduled = nullptr;
+		callback();
+	}
+
+	//! Deliver the outcome of the attempt currently in flight
+	void Complete(unique_ptr<HTTPResponse> response, ErrorData error) {
+		auto callback = std::move(pending);
+		pending = nullptr;
+		callback(std::move(response), std::move(error));
+	}
+
+	idx_t attempts = 0;
+	idx_t waits = 0;
+	uint64_t last_delay_ms = 0;
+	bool fail_init = false;
+	HTTPClientCachePolicy last_cache_policy = HTTPClientCachePolicy::DEFAULT;
+	HTTPResponseCallback pending;
+
+private:
+	std::function<void()> scheduled;
+};
+
+class SteeredClient : public StubClient {
+public:
+	explicit SteeredClient(SteeredUtil &util) : util(util) {
+	}
+
+	HTTPRequestState Send(BaseRequest &, HTTPExecutionMode, HTTPResponseCallback on_complete) override {
+		util.attempts++;
+		util.pending = std::move(on_complete);
+		return HTTPRequestState::PENDING;
+	}
+
+private:
+	SteeredUtil &util;
+};
+
+unique_ptr<HTTPClient> SteeredUtil::InitializeClient(HTTPParams &, const string &) {
+	return make_uniq<SteeredClient>(*this);
+}
+
+unique_ptr<HTTPResponse> StatusResponse(HTTPStatusCode status) {
+	auto response = make_uniq<HTTPResponse>(status);
+	response->success = false;
+	return response;
+}
+
+//! The error a throttling server produces once a handler has turned its response into an exception
+ErrorData ThrottleError() {
+	HTTPResponse response(HTTPStatusCode::TooManyRequests_429);
+	response.headers.Insert("Retry-After", "5");
+	HTTPException throttled(response, "Request returned HTTP 429");
+	return ErrorData(throttled);
+}
+
+} // namespace
+
+TEST_CASE("HTTP deferred retry initialization failure completes the request", "[api]") {
+	SteeredUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 1;
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, params, nullptr, nullptr);
+	unique_ptr<HTTPClient> client = make_uniq<SteeredClient>(http_util);
+
+	idx_t completions = 0;
+	bool reported_error = false;
+	http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
+	               [&](unique_ptr<HTTPResponse> response, ErrorData error) {
+		               completions++;
+		               reported_error = error.HasError();
+	               });
+
+	// the retry cannot get a client, and an accepted request still has to complete
+	http_util.fail_init = true;
+	http_util.Complete(StatusResponse(HTTPStatusCode::InternalServerError_500), ErrorData());
+	REQUIRE(completions == 1);
+	REQUIRE(reported_error);
+	REQUIRE(http_util.waits == 0);
+}
+
+namespace {
+
+//! A client with no asynchronous transport whose first attempt throws, as a dropped socket does
+class ThrowOnceClient : public StubClient {
+public:
+	explicit ThrowOnceClient(idx_t &attempts) : attempts(attempts) {
+	}
+
+	unique_ptr<HTTPResponse> Get(GetRequestInfo &) override {
+		attempts++;
+		if (attempts == 1) {
+			throw IOException("connection reset");
+		}
+		auto response = make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
+		response->success = true;
+		return response;
+	}
+
+private:
+	idx_t &attempts;
+};
+
+class ThrowOnceUtil : public HTTPUtil {
+public:
+	unique_ptr<HTTPClient> InitializeClient(HTTPParams &, const string &) override {
+		return make_uniq<ThrowOnceClient>(attempts);
+	}
+
+	idx_t attempts = 0;
+};
+
+} // namespace
+
+TEST_CASE("HTTP deferred request retries a transport that throws", "[api]") {
+	ThrowOnceUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 1;
+	params.retry_wait_ms = 0;
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, params, nullptr, nullptr);
+
+	idx_t completions = 0;
+	bool succeeded = false;
+	unique_ptr<HTTPClient> client = make_uniq<ThrowOnceClient>(http_util.attempts);
+	auto state = http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
+	                            [&](unique_ptr<HTTPResponse> response, ErrorData error) {
+		                            completions++;
+		                            succeeded = response && response->success;
+	                            });
+
+	// the throw is an attempt like any other, so the retry that the blocking path would make happens here too
+	REQUIRE(state == HTTPRequestState::COMPLETED);
+	REQUIRE(completions == 1);
+	REQUIRE(succeeded);
+	REQUIRE(http_util.attempts == 2);
+}
+
+TEST_CASE("HTTP deferred error keeps its status, Retry-After and type", "[api]") {
+	SteeredUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 1;
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, params, nullptr, nullptr);
+	unique_ptr<HTTPClient> client = make_uniq<SteeredClient>(http_util);
+
+	idx_t completions = 0;
+	ExceptionType reported_type = ExceptionType::INVALID;
+	http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
+	               [&](unique_ptr<HTTPResponse> response, ErrorData error) {
+		               completions++;
+		               reported_type = error.Type();
+	               });
+
+	// a 429 is a throttle status even when a handler folded it into an exception, so it earns the extra
+	// retries and the Retry-After the response carried
+	http_util.Complete(nullptr, ThrottleError());
+	REQUIRE(http_util.waits == 1);
+	// Retry-After is 5s, and the jitter only ever subtracts half of it
+	REQUIRE(http_util.last_delay_ms >= 2500);
+	REQUIRE(http_util.last_delay_ms <= 5000);
+
+	// one configured retry plus five throttle retries, so seven attempts in total
+	while (http_util.attempts < 7) {
+		http_util.FireTimer();
+		http_util.Complete(nullptr, ThrottleError());
+	}
+	REQUIRE(completions == 1);
+	REQUIRE(reported_type == ExceptionType::HTTP);
+}
+
+TEST_CASE("HTTP deferred retry bypasses the cache after a transport failure", "[api]") {
+	SteeredUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 2;
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, params, nullptr, nullptr);
+	unique_ptr<HTTPClient> client = make_uniq<SteeredClient>(http_util);
+
+	http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE, [](unique_ptr<HTTPResponse>, ErrorData) {});
+
+	// an attempt that produced no response failed in the transport, which must not be reused
+	http_util.Complete(nullptr, ErrorData(IOException("connection reset")));
+	REQUIRE(http_util.last_cache_policy == HTTPClientCachePolicy::BYPASS_CACHE);
+
+	// a server that answered leaves the transport intact, exactly as the synchronous path decides
+	http_util.last_cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
+	http_util.FireTimer();
+	http_util.Complete(StatusResponse(HTTPStatusCode::InternalServerError_500), ErrorData());
+	REQUIRE(http_util.last_cache_policy == HTTPClientCachePolicy::DEFAULT);
+}
+
+TEST_CASE("HTTP completion that throws is not invoked a second time", "[api]") {
+	SteeredUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 0;
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, params, nullptr, nullptr);
+	request.try_request = true;
+	unique_ptr<HTTPClient> client = make_uniq<SteeredClient>(http_util);
+
+	idx_t completions = 0;
+	http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
+	               [&](unique_ptr<HTTPResponse> response, ErrorData error) {
+		               completions++;
+		               throw IOException("the caller could not take the result");
+	               });
+
+	// the throw belongs to the caller, and it does not earn them a second completion
+	REQUIRE_THROWS(http_util.Complete(StatusResponse(HTTPStatusCode::InternalServerError_500), ErrorData()));
+	REQUIRE(completions == 1);
+}
+
+TEST_CASE("HTTP deferred response carries the request url", "[api]") {
+	SteeredUtil http_util;
+	HTTPParams params(http_util);
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, params, nullptr, nullptr);
+	unique_ptr<HTTPClient> client = make_uniq<SteeredClient>(http_util);
+
+	string reported_url;
+	http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
+	               [&](unique_ptr<HTTPResponse> response, ErrorData error) {
+		               reported_url = response ? response->url : string();
+	               });
+
+	auto response = make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
+	response->success = true;
+	http_util.Complete(std::move(response), ErrorData());
+	REQUIRE(reported_url == request.url);
 }
