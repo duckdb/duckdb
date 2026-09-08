@@ -223,7 +223,11 @@ void QueryProfiler::StartExplainAnalyze() {
 
 void QueryProfiler::EndQuery() {
 	unique_lock<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+	if (!running) {
+		return;
+	}
+	if (!IsEnabled()) {
+		Reset();
 		return;
 	}
 

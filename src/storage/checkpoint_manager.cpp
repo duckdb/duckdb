@@ -69,7 +69,7 @@ void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &option
 	transaction.SetIsCheckpointTransaction();
 	checkpoint_transaction = &transaction;
 	options.checkpoint_id = transaction_manager.NextCheckpointId();
-	options.visibility_bound = VisibilityBound::Before(transaction.start_time);
+	options.visibility_bound = transaction.view.visibility_bound;
 	transaction_manager.SetActiveCheckpoint(options.checkpoint_id.GetIndex());
 }
 

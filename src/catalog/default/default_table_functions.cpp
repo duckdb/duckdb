@@ -76,7 +76,7 @@ WHERE type ILIKE log_type
 )"},
 	{DEFAULT_SCHEMA, "duckdb_profiling_settings", {}, {}, R"(
 SELECT * EXCLUDE(input_type, scope, aliases, typed_value)
-  FROM duckdb_settings()
+  FROM duckdb_settings(deprecated := true)
   WHERE name IN (
       'enable_profiling',
       'profiling_coverage',
