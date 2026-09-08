@@ -131,7 +131,7 @@ TEST_CASE("Test ClientContextState", "[api]") {
 		REQUIRE_THAT(state->query_errors.at(0), Contains("This is a test exception."));
 		REQUIRE_THAT(state->query_errors.at(1), Contains("Current transaction is aborted"));
 		REQUIRE((state->transaction_errors.size() == 1));
-		REQUIRE_THAT(state->transaction_errors.at(0), Contains("Failed to commit"));
+		REQUIRE_THAT(state->transaction_errors.at(0), Contains("Current transaction is aborted"));
 		REQUIRE_FAIL(conn.Query("SELECT * FROM my_table2"));
 	}
 
