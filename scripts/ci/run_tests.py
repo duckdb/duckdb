@@ -549,6 +549,9 @@ FAILED_HEADER_PATTERN = re.compile(r"^\s*.+:\s+FAILED:\s*$")
 EXPLICIT_MESSAGE_PATTERN = re.compile(r"^\s*explicitly with message:\s*$")
 # Catch prints source locations as "path:line:" with GCC/Clang and as "path(line):" with MSVC
 CATCH_ASSERTION_LOCATION_PATTERN = re.compile(r"^(.+?)(?::(\d+)|\((\d+)\)): FAILED:$")
+SANITIZER_PATTERN = re.compile(
+    r"(AddressSanitizer|LeakSanitizer|ThreadSanitizer|UndefinedBehaviorSanitizer)", flags=re.IGNORECASE
+)
 SANITIZER_OR_ASSERT_PATTERN = re.compile(
     r"(AddressSanitizer|LeakSanitizer|ThreadSanitizer|UndefinedBehaviorSanitizer|runtime error:|assert)",
     flags=re.IGNORECASE,
@@ -906,6 +909,14 @@ def parse_stderr_failure_info(stderr_lines: list[str], batch):
 
 
 def extract_interesting_failure_block(lines: list[str]):
+    for idx, line in enumerate(lines):
+        if not SANITIZER_PATTERN.search(line):
+            continue
+        block = [next_line.strip() for next_line in lines[idx:]]
+        while block and not block[-1]:
+            block.pop()
+        return block
+
     for idx, line in enumerate(lines):
         if not SANITIZER_OR_ASSERT_PATTERN.search(line):
             continue
