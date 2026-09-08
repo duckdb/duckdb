@@ -452,6 +452,10 @@ public:
 	DUCKDB_API virtual HTTPRequestState Send(BaseRequest &request, unique_ptr<HTTPClient> &client,
 	                                         HTTPExecutionMode mode, HTTPResponseCallback on_complete);
 
+	//! Whether this platform can delay between attempts, which is what makes a backoff worth granting.
+	//! A platform that overrides Wait to schedule overrides this too, to say the schedule is real.
+	DUCKDB_API virtual bool CanWait() const;
+
 	//! Wait [delay_ms] before the next attempt of a request, then run [resume].
 	//! The default sleeps the calling thread, which is what the retry backoff has always done.
 	//! A platform that must not block overrides this to schedule [resume] and return PENDING.

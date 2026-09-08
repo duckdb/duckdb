@@ -546,3 +546,53 @@ TEST_CASE("HTTP request completing on another thread is delivered exactly once",
 		REQUIRE((state == HTTPRequestState::PENDING || state == HTTPRequestState::COMPLETED));
 	}
 }
+
+namespace {
+
+//! Stands in for a platform whose Wait schedules rather than sleeps, the Wasm case: it cannot block,
+//! but it can still delay an attempt, so the backoff is worth granting
+class SchedulingUtil : public HTTPUtil {
+public:
+	bool CanWait() const override {
+		return true;
+	}
+};
+
+//! A platform with no way to delay an attempt at all
+class ImmediateUtil : public HTTPUtil {
+public:
+	bool CanWait() const override {
+		return false;
+	}
+};
+
+//! Drive a throttled request until the policy stops retrying, and report how many retries it granted
+idx_t CountThrottledRetries(HTTPUtil &http_util) {
+	HTTPParams params(http_util);
+	params.retries = 1;
+	HTTPHeaders headers;
+	HeadRequestInfo request("http://example.com/file", headers, params);
+	HTTPRetryState state;
+
+	idx_t retries = 0;
+	while (true) {
+		auto attempt = ResponseAttempt(HTTPStatusCode::TooManyRequests_429);
+		uint64_t delay_ms = 0;
+		if (state.OnAttempt(request, attempt, delay_ms) != HTTPRetryDecision::RETRY) {
+			return retries;
+		}
+		retries++;
+	}
+}
+
+} // namespace
+
+TEST_CASE("HTTP throttle retries follow the platform's ability to wait", "[api]") {
+	// a platform that can delay gets the plain retry plus the throttle allowance
+	SchedulingUtil scheduling;
+	REQUIRE(CountThrottledRetries(scheduling) == 6);
+
+	// one that cannot is left with the plain retry, since the extra ones would not back off
+	ImmediateUtil immediate;
+	REQUIRE(CountThrottledRetries(immediate) == 1);
+}

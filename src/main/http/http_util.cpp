@@ -283,6 +283,14 @@ HTTPRequestState HTTPUtil::Send(BaseRequest &request, unique_ptr<HTTPClient> &cl
 	return driver->Start();
 }
 
+bool HTTPUtil::CanWait() const {
+#ifdef DUCKDB_NO_THREADS
+	return false;
+#else
+	return true;
+#endif
+}
+
 // NOLINTNEXTLINE: taken by value so an asynchronous override can move it into its scheduler
 HTTPRequestState HTTPUtil::Wait(uint64_t delay_ms, std::function<void()> resume) {
 	// this platform has a thread to wait on
@@ -669,15 +677,11 @@ HTTPRetryDecision HTTPRetryState::OnAttempt(const BaseRequest &request, HTTPAtte
 	const bool throttled = (response && (response->status == HTTPStatusCode::TooManyRequests_429 ||
 	                                     response->status == HTTPStatusCode::ServiceUnavailable_503)) ||
 	                       attempt.caught_status == "429" || attempt.caught_status == "503";
-#ifndef DUCKDB_NO_THREADS
-	static constexpr idx_t THROTTLE_EXTRA_RETRIES = 5;
-#else
-	// without threads we cannot sleep between retries, so do not add zero-delay retries
-	static constexpr idx_t THROTTLE_EXTRA_RETRIES = 0;
-#endif
+	// zero-delay retries only add load, so the extra ones need a platform that can actually back off
+	const idx_t throttle_extra_retries = params.http_util.CanWait() ? 5 : 0;
 	static constexpr uint64_t THROTTLE_MAX_BACKOFF_MS = 10000;
 	const idx_t max_tries =
-	    !HTTPUtil::IsIdempotent(request.type) ? 0 : params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
+	    !HTTPUtil::IsIdempotent(request.type) ? 0 : params.retries + (throttled ? throttle_extra_retries : 0);
 	if (tries > max_tries) {
 		return HTTPRetryDecision::FAILED;
 	}
