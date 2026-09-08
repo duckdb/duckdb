@@ -1008,6 +1008,13 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	for (auto &subset : ref.config->subsets) {
 		subset_names.insert(subset.name);
 	}
+	if (!ref.config->after_match_variable.empty() && !declared_symbols.count(ref.config->after_match_variable) &&
+	    !subset_names.count(ref.config->after_match_variable)) {
+		// resuming at a variable the pattern never mentions has nowhere to resume from, and saying so
+		// here is more use than a match that never finds a row matched to it
+		throw BinderException("AFTER MATCH SKIP TO \"%s\", which is not a pattern variable of this MATCH_RECOGNIZE",
+		                      ref.config->after_match_variable);
+	}
 	if (!subset_names.empty()) {
 		if (subset_names.count(ref.config->after_match_variable)) {
 			throw NotImplementedException("AFTER MATCH SKIP TO a SUBSET variable is not supported yet");
