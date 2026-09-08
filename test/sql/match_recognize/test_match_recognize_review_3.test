@@ -558,3 +558,85 @@ FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
 )
 ----
 Nested row pattern navigation is not supported
+
+# The pattern is a tree of its own, compiled into the matcher's program rather than bound as an
+# expression. It still says everything the pattern algebra can say, and still survives being written
+# out and read back.
+
+query II
+FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES CLASSIFIER() AS c ALL ROWS PER MATCH
+    PATTERN ((A | B) C) DEFINE A AS x = 1, B AS x = 2, C AS true
+)
+----
+1	A
+2	C
+
+query I
+FROM range(6) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2,3})
+)
+----
+3
+3
+
+query I
+FROM range(6) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2,3}?)
+)
+----
+2
+2
+2
+
+query I
+FROM range(4) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (^ A+ $)
+)
+----
+4
+
+# two patterns that differ only in their bounds are not the same pattern
+query II
+SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2})))) AS a,
+       (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{3})))) AS b
+----
+6	6
+
+query II
+SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS x < 3))) AS a,
+       (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS x < 5))) AS b
+----
+3	5
+
+statement ok
+CREATE VIEW pattern_view AS
+    FROM range(6) t(x) MATCH_RECOGNIZE (
+        ORDER BY x MEASURES count(*) AS n, CLASSIFIER() AS c ALL ROWS PER MATCH
+        PATTERN (^ A{1,2}? (B | C)* {- D -}? $)
+        DEFINE A AS true, B AS x > 0, C AS x < 0, D AS false
+    );
+
+query III
+SELECT * FROM pattern_view ORDER BY x
+----
+0	1	A
+1	2	B
+2	3	B
+3	4	B
+4	5	B
+5	6	B
+
+query III
+SELECT * FROM pattern_view ORDER BY x
+----
+0	1	A
+1	2	B
+2	3	B
+3	4	B
+4	5	B
+5	6	B

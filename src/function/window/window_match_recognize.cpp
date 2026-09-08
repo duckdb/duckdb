@@ -156,86 +156,37 @@ unique_ptr<FunctionData> WindowMatchRecognizeExecutor::Bind(BindWindowFunctionIn
 //===--------------------------------------------------------------------===//
 // Serialization
 //===--------------------------------------------------------------------===//
-// The pattern is built from expression types that only exist here, so it is written out directly
-// rather than through the expression serializer.
-static void SerializePattern(Serializer &serializer, const Expression &pattern) {
-	serializer.WriteProperty(100, "type", pattern.GetExpressionType());
-	switch (pattern.GetExpressionType()) {
-	case ExpressionType::ALTERNATION: {
-		auto &alternation = pattern.Cast<BoundAlternationExpression>();
-		serializer.WriteObject(101, "left",
-		                       [&](Serializer &child) { SerializePattern(child, *alternation.child_left); });
-		serializer.WriteObject(102, "right",
-		                       [&](Serializer &child) { SerializePattern(child, *alternation.child_right); });
-		break;
-	}
-	case ExpressionType::CONCATENATION: {
-		auto &concatenation = pattern.Cast<BoundConcatenationExpression>();
-		serializer.WriteList(101, "children", concatenation.children.size(), [&](Serializer::List &list, idx_t i) {
-			list.WriteObject([&](Serializer &child) { SerializePattern(child, *concatenation.children[i]); });
-		});
-		break;
-	}
-	case ExpressionType::QUANTIFIER: {
-		auto &quantifier = pattern.Cast<BoundQuantifierExpression>();
-		serializer.WriteObject(101, "child", [&](Serializer &child) { SerializePattern(child, *quantifier.child); });
-		serializer.WriteProperty(102, "min_count", quantifier.min_count);
-		serializer.WriteProperty(103, "max_count", quantifier.max_count);
-		serializer.WriteProperty(104, "excluded", quantifier.excluded);
-		serializer.WritePropertyWithDefault(105, "reluctant", quantifier.reluctant, false);
-		break;
-	}
-	case ExpressionType::ANCHOR:
-		serializer.WriteProperty(101, "at_end", pattern.Cast<BoundAnchorExpression>().at_end);
-		break;
-	case ExpressionType::VALUE_CONSTANT:
-		serializer.WriteProperty(101, "symbol", pattern.Cast<BoundConstantExpression>().GetValue());
-		break;
-	default:
-		throw SerializationException("Unsupported MATCH_RECOGNIZE pattern node");
-	}
+void MatchRecognizePattern::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(100, "type", type);
+	serializer.WritePropertyWithDefault<idx_t>(101, "symbol", symbol);
+	serializer.WritePropertyWithDefault(102, "at_end", at_end);
+	serializer.WritePropertyWithDefault(103, "min_count", min_count);
+	serializer.WritePropertyWithDefault(104, "max_count", max_count);
+	serializer.WritePropertyWithDefault(105, "excluded", excluded);
+	serializer.WritePropertyWithDefault(106, "reluctant", reluctant);
+	serializer.WriteList(107, "children", children.size(), [&](Serializer::List &list, idx_t i) {
+		list.WriteObject([&](Serializer &child) { children[i]->Serialize(child); });
+	});
 }
 
-static unique_ptr<Expression> DeserializePattern(Deserializer &deserializer) {
-	auto type = deserializer.ReadProperty<ExpressionType>(100, "type");
-	switch (type) {
-	case ExpressionType::ALTERNATION: {
-		unique_ptr<Expression> left;
-		unique_ptr<Expression> right;
-		deserializer.ReadObject(101, "left", [&](Deserializer &child) { left = DeserializePattern(child); });
-		deserializer.ReadObject(102, "right", [&](Deserializer &child) { right = DeserializePattern(child); });
-		return make_uniq_base<Expression, BoundAlternationExpression>(std::move(left), std::move(right));
-	}
-	case ExpressionType::CONCATENATION: {
-		vector<unique_ptr<Expression>> children;
-		deserializer.ReadList(101, "children", [&](Deserializer::List &list, idx_t i) {
-			list.ReadObject([&](Deserializer &child) { children.push_back(DeserializePattern(child)); });
-		});
-		return make_uniq_base<Expression, BoundConcatenationExpression>(std::move(children));
-	}
-	case ExpressionType::QUANTIFIER: {
-		unique_ptr<Expression> child;
-		deserializer.ReadObject(101, "child", [&](Deserializer &inner) { child = DeserializePattern(inner); });
-		auto min_count = deserializer.ReadProperty<optional_idx>(102, "min_count");
-		auto max_count = deserializer.ReadProperty<optional_idx>(103, "max_count");
-		auto excluded = deserializer.ReadProperty<bool>(104, "excluded");
-		auto reluctant = deserializer.ReadPropertyWithExplicitDefault<bool>(105, "reluctant", false);
-		return make_uniq_base<Expression, BoundQuantifierExpression>(std::move(child), min_count, max_count, excluded,
-		                                                             reluctant);
-	}
-	case ExpressionType::ANCHOR:
-		return make_uniq_base<Expression, BoundAnchorExpression>(deserializer.ReadProperty<bool>(101, "at_end"));
-	case ExpressionType::VALUE_CONSTANT:
-		return make_uniq_base<Expression, BoundConstantExpression>(deserializer.ReadProperty<Value>(101, "symbol"));
-	default:
-		throw SerializationException("Unsupported MATCH_RECOGNIZE pattern node");
-	}
+unique_ptr<MatchRecognizePattern> MatchRecognizePattern::Deserialize(Deserializer &deserializer) {
+	auto result = make_uniq<MatchRecognizePattern>(deserializer.ReadProperty<MatchRecognizePatternType>(100, "type"));
+	result->symbol = deserializer.ReadPropertyWithDefault<idx_t>(101, "symbol");
+	result->at_end = deserializer.ReadPropertyWithDefault<bool>(102, "at_end");
+	result->min_count = deserializer.ReadPropertyWithDefault<optional_idx>(103, "min_count");
+	result->max_count = deserializer.ReadPropertyWithDefault<optional_idx>(104, "max_count");
+	result->excluded = deserializer.ReadPropertyWithDefault<bool>(105, "excluded");
+	result->reluctant = deserializer.ReadPropertyWithDefault<bool>(106, "reluctant");
+	deserializer.ReadList(107, "children", [&](Deserializer::List &list, idx_t i) {
+		list.ReadObject([&](Deserializer &child) { result->children.push_back(Deserialize(child)); });
+	});
+	return result;
 }
 
 void WindowMatchRecognizeExecutor::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                              const BoundWindowFunction &function) {
 	auto &config = bind_data->Cast<MatchRecognizeFunctionData>();
-	serializer.WriteObject(100, "pattern", [&](Serializer &child) { SerializePattern(child, *config.pattern); });
+	serializer.WriteObject(100, "pattern", [&](Serializer &child) { config.pattern->Serialize(child); });
 	serializer.WriteProperty(101, "conditions", config.conditions);
 	serializer.WriteProperty(102, "symbols", config.symbols);
 	serializer.WriteProperty(103, "after_match", config.after_match);
@@ -256,7 +207,8 @@ void WindowMatchRecognizeExecutor::Serialize(Serializer &serializer, const optio
 unique_ptr<FunctionData> WindowMatchRecognizeExecutor::Deserialize(Deserializer &deserializer,
                                                                    BoundWindowFunction &function) {
 	auto result = make_uniq<MatchRecognizeFunctionData>();
-	deserializer.ReadObject(100, "pattern", [&](Deserializer &child) { result->pattern = DeserializePattern(child); });
+	deserializer.ReadObject(100, "pattern",
+	                        [&](Deserializer &child) { result->pattern = MatchRecognizePattern::Deserialize(child); });
 	deserializer.ReadProperty(101, "conditions", result->conditions);
 	deserializer.ReadProperty(102, "symbols", result->symbols);
 	deserializer.ReadProperty(103, "after_match", result->after_match);
@@ -399,32 +351,28 @@ using SymbolMatcher = std::function<bool(idx_t symbol, idx_t row)>;
 //! The fewest rows a pattern node can match. A repetition of it can only be reached that many times
 //! fewer than there are rows, which is what keeps a counted quantifier around one from expanding into
 //! repetitions that could never be taken.
-static idx_t MinConsumption(const Expression &node) {
+static idx_t MinConsumption(const MatchRecognizePattern &node) {
 	const auto saturating_add = [](idx_t left, idx_t right) {
 		return left > NumericLimits<idx_t>::Maximum() - right ? NumericLimits<idx_t>::Maximum() : left + right;
 	};
-	switch (node.GetExpressionType()) {
-	case ExpressionType::VALUE_CONSTANT:
-		// a symbol takes exactly one row
+	switch (node.type) {
+	case MatchRecognizePatternType::SYMBOL:
 		return 1;
-	case ExpressionType::CONCATENATION: {
+	case MatchRecognizePatternType::CONCATENATION: {
 		idx_t total = 0;
-		for (auto &child : node.Cast<BoundConcatenationExpression>().children) {
+		for (auto &child : node.children) {
 			total = saturating_add(total, MinConsumption(*child));
 		}
 		return total;
 	}
-	case ExpressionType::ALTERNATION: {
-		auto &alternation = node.Cast<BoundAlternationExpression>();
-		return MinValue(MinConsumption(*alternation.child_left), MinConsumption(*alternation.child_right));
-	}
-	case ExpressionType::QUANTIFIER: {
-		auto &quantifier = node.Cast<BoundQuantifierExpression>();
-		if (!quantifier.min_count.IsValid() || quantifier.min_count.GetIndex() == 0) {
+	case MatchRecognizePatternType::ALTERNATION:
+		return MinValue(MinConsumption(*node.children[0]), MinConsumption(*node.children[1]));
+	case MatchRecognizePatternType::QUANTIFIER: {
+		if (!node.min_count.IsValid() || node.min_count.GetIndex() == 0) {
 			return 0;
 		}
-		const auto child = MinConsumption(*quantifier.child);
-		const auto count = quantifier.min_count.GetIndex();
+		const auto child = MinConsumption(*node.children[0]);
+		const auto count = node.min_count.GetIndex();
 		return child != 0 && count > NumericLimits<idx_t>::Maximum() / child ? NumericLimits<idx_t>::Maximum()
 		                                                                     : child * count;
 	}
@@ -443,73 +391,72 @@ struct PatternProgram {
 
 	//! `limit` bounds a counted quantifier: a repetition matching `n` rows can be reached at most
 	//! `limit / n` times before the rows run out, so more repetitions than that are unreachable
-	void Compile(const Expression &node, idx_t limit, bool excluded = false) {
-		switch (node.GetExpressionType()) {
-		case ExpressionType::VALUE_CONSTANT: {
+	void Compile(const MatchRecognizePattern &node, idx_t limit, bool excluded = false) {
+		switch (node.type) {
+		case MatchRecognizePatternType::SYMBOL: {
 			PatternInstruction symbol;
 			symbol.op = PatternOp::SYMBOL;
-			symbol.symbol = NumericCast<idx_t>(node.Cast<BoundConstantExpression>().GetValue().GetValue<uint64_t>());
+			symbol.symbol = node.symbol;
 			symbol.excluded = excluded;
 			Push(symbol);
 			break;
 		}
-		case ExpressionType::ANCHOR: {
+		case MatchRecognizePatternType::ANCHOR: {
 			PatternInstruction anchor;
 			anchor.op = PatternOp::ANCHOR;
-			anchor.at_end = node.Cast<BoundAnchorExpression>().at_end;
+			anchor.at_end = node.at_end;
 			Push(anchor);
 			break;
 		}
-		case ExpressionType::CONCATENATION:
-			for (auto &child : node.Cast<BoundConcatenationExpression>().children) {
+		case MatchRecognizePatternType::CONCATENATION:
+			for (auto &child : node.children) {
 				Compile(*child, limit, excluded);
 			}
 			break;
-		case ExpressionType::ALTERNATION: {
-			auto &alternation = node.Cast<BoundAlternationExpression>();
+		case MatchRecognizePatternType::ALTERNATION: {
 			auto split = Emit(PatternOp::SPLIT);
 			code[split].target = code.size();
-			Compile(*alternation.child_left, limit, excluded);
+			Compile(*node.children[0], limit, excluded);
 			auto jump = Emit(PatternOp::JUMP);
 			code[split].alternative = code.size();
-			Compile(*alternation.child_right, limit, excluded);
+			Compile(*node.children[1], limit, excluded);
 			code[jump].target = code.size();
 			break;
 		}
-		case ExpressionType::QUANTIFIER: {
-			auto &quantifier = node.Cast<BoundQuantifierExpression>();
-			const auto inner = excluded || quantifier.excluded;
+		case MatchRecognizePatternType::QUANTIFIER: {
+			auto &child_node = *node.children[0];
+			const auto inner = excluded || node.excluded;
 			// one repetition past what the rows allow already makes the program unsatisfiable, which is
 			// what every further one would have been too
-			const idx_t declared_min = quantifier.min_count.IsValid() ? quantifier.min_count.GetIndex() : 0;
-			const idx_t consumption = MinConsumption(*quantifier.child);
+			const idx_t declared_min = node.min_count.IsValid() ? node.min_count.GetIndex() : 0;
+			const idx_t consumption = MinConsumption(child_node);
 			const idx_t reachable = consumption == 0 ? limit + 1 : limit / consumption + 1;
 			const idx_t min_count = MinValue(declared_min, reachable);
 			for (idx_t i = 0; i < min_count; i++) {
-				Compile(*quantifier.child, limit, inner);
+				Compile(child_node, limit, inner);
 			}
 			// the matcher takes a split's target before its alternative, so which of the two is the
 			// repetition and which is the way out is what greedy and reluctant come down to
-			const auto reluctant = quantifier.reluctant;
-			if (!quantifier.max_count.IsValid()) {
+			const auto reluctant = node.reluctant;
+			if (!node.max_count.IsValid()) {
 				const auto loop = code.size();
 				auto split = Emit(PatternOp::SPLIT);
 				const auto again = code.size();
-				Compile(*quantifier.child, limit, inner);
+				Compile(child_node, limit, inner);
 				code[Emit(PatternOp::JUMP)].target = loop;
 				const auto leave = code.size();
 				code[split].target = reluctant ? leave : again;
 				code[split].alternative = reluctant ? again : leave;
 				break;
 			}
-			const auto max_count = MinValue(quantifier.max_count.GetIndex(), min_count + reachable);
+			const auto max_count = MinValue(node.max_count.GetIndex(), min_count + reachable);
 			vector<idx_t> exits;
 			for (idx_t i = min_count; i < max_count; i++) {
 				auto split = Emit(PatternOp::SPLIT);
 				const auto again = code.size();
 				(reluctant ? code[split].alternative : code[split].target) = again;
 				exits.push_back(split);
-				Compile(*quantifier.child, limit, inner);
+				Compile(child_node, limit, inner);
 			}
 			for (auto exit_split : exits) {
 				(reluctant ? code[exit_split].target : code[exit_split].alternative) = code.size();

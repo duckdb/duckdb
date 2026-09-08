@@ -53,48 +53,54 @@ static unique_ptr<SelectStatement> MakeSelectStatement(unique_ptr<QueryNode> nod
 	return statement;
 }
 
-BindResult ExpressionBinder::BindPatternExpression(unique_ptr<ParsedExpression> &expr, idx_t depth) {
-	switch (expr->GetExpressionType()) {
+//! Build the tree the matcher walks out of the one the parser produced. The pattern is not an
+//! expression: it is never evaluated, only compiled, so it is built directly rather than bound.
+static unique_ptr<MatchRecognizePattern> BuildPattern(const ParsedExpression &expr,
+                                                      const case_insensitive_map_t<idx_t> &symbol_index) {
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::COLUMN_REF: {
+		// the matcher compares symbols on every candidate row, so a leaf carries an index into the
+		// symbols rather than the name itself
+		auto result = make_uniq<MatchRecognizePattern>(MatchRecognizePatternType::SYMBOL);
+		auto entry = symbol_index.find(expr.Cast<ColumnRefExpression>().GetColumnName().GetIdentifierName());
+		if (entry == symbol_index.end()) {
+			throw InternalException("MATCH_RECOGNIZE pattern symbol %s has no condition", expr.ToString());
+		}
+		result->symbol = entry->second;
+		return result;
+	}
+	case ExpressionType::ANCHOR: {
+		auto result = make_uniq<MatchRecognizePattern>(MatchRecognizePatternType::ANCHOR);
+		result->at_end = expr.Cast<AnchorExpression>().at_end;
+		return result;
+	}
 	case ExpressionType::ALTERNATION: {
-		auto &alternation = expr->Cast<AlternationExpression>();
-		auto bound_left = BindExpression(alternation.child_left, depth);
-		if (bound_left.HasError()) {
-			return BindResult(bound_left.error);
-		}
-		auto bound_right = BindExpression(alternation.child_right, depth);
-		if (bound_right.HasError()) {
-			return BindResult(bound_right.error);
-		}
-		return BindResult(make_uniq_base<Expression, BoundAlternationExpression>(std::move(bound_left.expression),
-		                                                                         std::move(bound_right.expression)));
+		auto &alternation = expr.Cast<AlternationExpression>();
+		auto result = make_uniq<MatchRecognizePattern>(MatchRecognizePatternType::ALTERNATION);
+		result->children.push_back(BuildPattern(*alternation.child_left, symbol_index));
+		result->children.push_back(BuildPattern(*alternation.child_right, symbol_index));
+		return result;
 	}
 	case ExpressionType::CONCATENATION: {
-		auto &concatenation = expr->Cast<ConcatenationExpression>();
-		vector<unique_ptr<Expression>> bound_children;
-		for (auto &child : concatenation.children) {
-			auto child_bind_result = BindExpression(child, depth);
-			if (child_bind_result.HasError()) {
-				return BindResult(child_bind_result.error);
-			}
-			bound_children.push_back(std::move(child_bind_result.expression));
+		auto result = make_uniq<MatchRecognizePattern>(MatchRecognizePatternType::CONCATENATION);
+		for (auto &child : expr.Cast<ConcatenationExpression>().children) {
+			result->children.push_back(BuildPattern(*child, symbol_index));
 		}
-		return BindResult(make_uniq_base<Expression, BoundConcatenationExpression>(std::move(bound_children)));
+		return result;
 	}
 	case ExpressionType::QUANTIFIER: {
-		auto &quantifier = expr->Cast<QuantifiedExpression>();
-		auto bound_child = BindExpression(quantifier.child, depth);
-		if (bound_child.HasError()) {
-			return BindResult(bound_child.error);
-		}
-		return BindResult(make_uniq_base<Expression, BoundQuantifierExpression>(
-		    std::move(bound_child.expression), quantifier.min_count, quantifier.max_count, quantifier.excluded,
-		    quantifier.reluctant));
+		auto &quantifier = expr.Cast<QuantifiedExpression>();
+		auto result = make_uniq<MatchRecognizePattern>(MatchRecognizePatternType::QUANTIFIER);
+		result->min_count = quantifier.min_count;
+		result->max_count = quantifier.max_count;
+		result->excluded = quantifier.excluded;
+		result->reluctant = quantifier.reluctant;
+		result->children.push_back(BuildPattern(*quantifier.child, symbol_index));
+		return result;
 	}
-	case ExpressionType::ANCHOR:
-		return BindResult(make_uniq_base<Expression, BoundAnchorExpression>(expr->Cast<AnchorExpression>().at_end));
 	default:
 		throw NotImplementedException("Unimplemented pattern expression %s",
-		                              ExpressionTypeToString(expr->GetExpressionType()));
+		                              ExpressionTypeToString(expr.GetExpressionType()));
 	}
 }
 
@@ -240,16 +246,6 @@ static bool HasExclusion(const ParsedExpression &expr) {
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { found = found || HasExclusion(child); });
 	return found;
-}
-
-static void PatternSymbolsToConstants(unique_ptr<ParsedExpression> &expr) {
-	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = expr->Cast<ColumnRefExpression>();
-		expr = make_uniq<ConstantExpression>(Value(colref.GetColumnName().GetIdentifierName()));
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { PatternSymbolsToConstants(child); });
 }
 
 static unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> value, const string &child_name) {
@@ -901,41 +897,6 @@ static void RebindToMatcherInputs(unique_ptr<Expression> &expr, vector<unique_pt
 	    *expr, [&](unique_ptr<Expression> &child) { RebindToMatcherInputs(child, children, child_index); });
 }
 
-//! Replace each pattern leaf's symbol name with its index
-static void ResolvePatternSymbols(unique_ptr<Expression> &pattern, const case_insensitive_map_t<idx_t> &symbol_index) {
-	switch (pattern->GetExpressionType()) {
-	case ExpressionType::VALUE_CONSTANT: {
-		auto &constant = pattern->Cast<BoundConstantExpression>();
-		if (constant.GetValue().type().id() != LogicalTypeId::VARCHAR) {
-			return;
-		}
-		auto symbol = constant.GetValue().GetValue<string>();
-		auto entry = symbol_index.find(symbol);
-		if (entry == symbol_index.end()) {
-			throw InternalException("MATCH_RECOGNIZE pattern symbol %s has no condition", symbol);
-		}
-		pattern = make_uniq<BoundConstantExpression>(Value::UBIGINT(entry->second));
-		return;
-	}
-	case ExpressionType::ALTERNATION: {
-		auto &alternation = pattern->Cast<BoundAlternationExpression>();
-		ResolvePatternSymbols(alternation.child_left, symbol_index);
-		ResolvePatternSymbols(alternation.child_right, symbol_index);
-		return;
-	}
-	case ExpressionType::CONCATENATION:
-		for (auto &child : pattern->Cast<BoundConcatenationExpression>().children) {
-			ResolvePatternSymbols(child, symbol_index);
-		}
-		return;
-	case ExpressionType::QUANTIFIER:
-		ResolvePatternSymbols(pattern->Cast<BoundQuantifierExpression>().child, symbol_index);
-		return;
-	default:
-		return;
-	}
-}
-
 BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	// MATCH_RECOGNIZE is planned as a stack of select nodes:
 	//   1. the input, plus one boolean column per DEFINE
@@ -1203,9 +1164,6 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		}
 	}
 
-	// the matcher only needs the symbol a leaf names, and there is no longer a column to bind it to
-	PatternSymbolsToConstants(ref.config->pattern);
-
 	auto match_data = make_uniq<MatchRecognizeFunctionData>();
 
 	// the frame the matcher walks is evaluated over the same projection the conditions are
@@ -1287,8 +1245,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	for (idx_t i = 0; i < match_data->symbols.size(); i++) {
 		symbol_index[match_data->symbols[i]] = i;
 	}
-	match_data->pattern = condition_binder.Bind(ref.config->pattern);
-	ResolvePatternSymbols(match_data->pattern, symbol_index);
+	match_data->pattern = BuildPattern(*ref.config->pattern, symbol_index);
 
 	for (idx_t i = 0; i < navigations.size(); i++) {
 		match_data->navigations.push_back(MatchRecognizeFunctionData::Navigation {

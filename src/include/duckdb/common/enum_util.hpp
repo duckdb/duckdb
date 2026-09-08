@@ -340,6 +340,8 @@ enum class MatchRecognizeAfterMatch : uint8_t;
 
 enum class MatchRecognizeClauseKind : uint8_t;
 
+enum class MatchRecognizePatternType : uint8_t;
+
 enum class MatchRecognizeRows : uint8_t;
 
 enum class MatchResultState : uint8_t;
@@ -1108,6 +1110,9 @@ const char* EnumUtil::ToChars<MatchRecognizeAfterMatch>(MatchRecognizeAfterMatch
 
 template<>
 const char* EnumUtil::ToChars<MatchRecognizeClauseKind>(MatchRecognizeClauseKind value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizePatternType>(MatchRecognizePatternType value);
 
 template<>
 const char* EnumUtil::ToChars<MatchRecognizeRows>(MatchRecognizeRows value);
@@ -2030,6 +2035,9 @@ MatchRecognizeAfterMatch EnumUtil::FromString<MatchRecognizeAfterMatch>(const ch
 
 template<>
 MatchRecognizeClauseKind EnumUtil::FromString<MatchRecognizeClauseKind>(const char *value);
+
+template<>
+MatchRecognizePatternType EnumUtil::FromString<MatchRecognizePatternType>(const char *value);
 
 template<>
 MatchRecognizeRows EnumUtil::FromString<MatchRecognizeRows>(const char *value);

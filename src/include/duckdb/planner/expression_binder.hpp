@@ -242,7 +242,6 @@ private:
 
 protected:
 	BindResult BindExpression(BetweenExpression &expr, idx_t depth);
-	BindResult BindPatternExpression(unique_ptr<ParsedExpression> &expr, idx_t depth);
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
