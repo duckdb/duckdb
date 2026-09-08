@@ -147,8 +147,9 @@ virtual_column_map_t DuckTableEntry::GetVirtualColumns() const {
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                shared_ptr<DataTable> inherited_storage, shared_ptr<CatalogSet> inherited_triggers)
-    : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
-      triggers(std::move(inherited_triggers)), column_dependency_manager(std::move(info.column_dependency_manager)) {
+    : TableCatalogEntry(catalog, schema, info.Base()), columns(std::move(info.Base().columns)),
+      storage(std::move(inherited_storage)), triggers(std::move(inherited_triggers)),
+      column_dependency_manager(std::move(info.column_dependency_manager)) {
 	if (!triggers) {
 		triggers = make_shared_ptr<CatalogSet>(catalog);
 	}
@@ -238,6 +239,10 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	if (!remaining_indexes.empty()) {
 		storage->SetIndexStorageInfo(std::move(remaining_indexes));
 	}
+}
+
+const ColumnList &DuckTableEntry::GetColumns() const {
+	return columns;
 }
 
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, const StorageIndex &column_id) {
@@ -1150,6 +1155,14 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
 	auto not_null_idx = GetColumnIndex(info.column_name);
+	if (const auto pk = GetPrimaryKey()) {
+		auto &unique = pk->Cast<UniqueConstraint>();
+		for (const auto &pk_index : unique.GetLogicalIndexes(columns)) {
+			if (pk_index == not_null_idx) {
+				throw CatalogException("column %s is in a primary key", info.column_name);
+			}
+		}
+	}
 
 	auto create_info = GetInfo();
 	auto &table_info = create_info->Cast<CreateTableInfo>();
@@ -1355,9 +1368,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		return;
 	}
 
-	// Rolls back any physical index creation.
-	// FIXME: Currently only works for PKs.
-	// FIXME: Should be changed to work for any index-based constraint.
+	// Rolls back any physical index creation for index-based constraints.
 
 	auto &table = Cast<DuckTableEntry>();
 	auto &prev_table = prev_entry.Cast<DuckTableEntry>();
@@ -1373,10 +1384,8 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 			continue;
 		}
 		const auto &unique = constraint->Cast<UniqueConstraint>();
-		if (unique.is_primary_key) {
-			auto index_name = unique.GetName(prev_table.name);
-			names.insert(index_name);
-		}
+		auto index_name = unique.GetName(prev_table.name);
+		names.insert(index_name);
 	}
 
 	for (const auto &constraint : GetConstraints()) {
@@ -1384,9 +1393,6 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 			continue;
 		}
 		const auto &unique = constraint->Cast<UniqueConstraint>();
-		if (!unique.IsPrimaryKey()) {
-			continue;
-		}
 		auto index_name = unique.GetName(table.name);
 		if (names.find(index_name) == names.end()) {
 			prev_indexes.RemoveIndex(index_name);

@@ -72,6 +72,26 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAddConstraintIn
 	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropConstraintInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> if_exists {};
+	auto &if_exists_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (if_exists_opt.HasResult()) {
+		auto if_exists_value = transformer.Transform<bool>(if_exists_opt.GetResult());
+		if_exists = if_exists_value;
+	}
+	auto identifier = list_pr.GetChild(3).Cast<IdentifierParseResult>().identifier;
+	optional<bool> drop_behavior {};
+	auto &drop_behavior_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (drop_behavior_opt.HasResult()) {
+		auto drop_behavior_value = transformer.Transform<bool>(drop_behavior_opt.GetResult());
+		drop_behavior = drop_behavior_value;
+	}
+	auto result = TransformDropConstraint(transformer, if_exists, identifier, drop_behavior);
+	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAddColumnInternal(PEGTransformer &transformer,
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -8273,14 +8293,43 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIntoNameValuesI
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto col_id_or_string = transformer.Transform<Identifier>(list_pr.GetChild(2));
-	vector<Identifier> identifier;
-	auto identifier_items = ExtractParseResultsFromList(list_pr.GetChild(4));
-	for (auto &identifier_item : identifier_items) {
-		auto identifier_value = identifier_item.get().Cast<IdentifierParseResult>().identifier;
-		identifier.push_back(identifier_value);
-	}
-	auto result = TransformIntoNameValues(transformer, col_id_or_string, identifier);
+	auto optional_parens_name_list = transformer.Transform<vector<string>>(list_pr.GetChild(4));
+	auto result = TransformIntoNameValues(transformer, col_id_or_string, optional_parens_name_list);
 	return make_uniq<TypedTransformResult<UnpivotNameValues>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformOptionalParensNameListInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<vector<string>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformParenthesizedNameListInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<Identifier> col_id_or_string;
+	auto col_id_or_string_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	for (auto &col_id_or_string_item : col_id_or_string_items) {
+		auto col_id_or_string_value = transformer.Transform<Identifier>(col_id_or_string_item.get());
+		col_id_or_string.push_back(col_id_or_string_value);
+	}
+	auto result = TransformParenthesizedNameList(transformer, col_id_or_string);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBareNameListInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<Identifier> col_id_or_string;
+	auto col_id_or_string_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	for (auto &col_id_or_string_item : col_id_or_string_items) {
+		auto col_id_or_string_value = transformer.Transform<Identifier>(col_id_or_string_item.get());
+		col_id_or_string.push_back(col_id_or_string_value);
+	}
+	auto result = TransformBareNameList(transformer, col_id_or_string);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
 }
 
 unique_ptr<TransformResultValue>
@@ -9024,13 +9073,8 @@ PEGTransformerFactory::TransformTablePivotClauseBodyInternal(PEGTransformer &tra
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotGroupByListInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<Identifier> col_id_or_string;
-	auto col_id_or_string_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	for (auto &col_id_or_string_item : col_id_or_string_items) {
-		auto col_id_or_string_value = transformer.Transform<Identifier>(col_id_or_string_item.get());
-		col_id_or_string.push_back(col_id_or_string_value);
-	}
-	auto result = TransformPivotGroupByList(transformer, col_id_or_string);
+	auto optional_parens_name_list = transformer.Transform<vector<string>>(list_pr.GetChild(2));
+	auto result = TransformPivotGroupByList(transformer, optional_parens_name_list);
 	return make_uniq<TypedTransformResult<vector<string>>>(result);
 }
 
@@ -10973,6 +11017,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"AlterSchemaStmt", &PEGTransformerFactory::TransformAlterSchemaStmtInternal},
 	    {"AlterTableOptions", &PEGTransformerFactory::TransformAlterTableOptionsInternal},
 	    {"AddConstraint", &PEGTransformerFactory::TransformAddConstraintInternal},
+	    {"DropConstraint", &PEGTransformerFactory::TransformDropConstraintInternal},
 	    {"AddColumn", &PEGTransformerFactory::TransformAddColumnInternal},
 	    {"AddColumnEntry", &PEGTransformerFactory::TransformAddColumnEntryInternal},
 	    {"DropColumn", &PEGTransformerFactory::TransformDropColumnInternal},
@@ -11743,6 +11788,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"PivotColumnExpression", &PEGTransformerFactory::TransformPivotColumnExpressionInternal},
 	    {"PivotColumnSubquery", &PEGTransformerFactory::TransformPivotColumnSubqueryInternal},
 	    {"IntoNameValues", &PEGTransformerFactory::TransformIntoNameValuesInternal},
+	    {"OptionalParensNameList", &PEGTransformerFactory::TransformOptionalParensNameListInternal},
+	    {"ParenthesizedNameList", &PEGTransformerFactory::TransformParenthesizedNameListInternal},
+	    {"BareNameList", &PEGTransformerFactory::TransformBareNameListInternal},
 	    {"IncludeOrExcludeNulls", &PEGTransformerFactory::TransformIncludeOrExcludeNullsInternal},
 	    {"IncludeNulls", &PEGTransformerFactory::TransformIncludeNullsInternal},
 	    {"ExcludeNulls", &PEGTransformerFactory::TransformExcludeNullsInternal},

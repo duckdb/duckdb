@@ -9,6 +9,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 
 namespace duckdb {
 
@@ -83,9 +84,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	geojson_copy_fun.SetName("geojsonl");
 	loader.RegisterFunction(geojson_copy_fun);
 
-	// Pass the database's ParserCache so the parser matcher is reused, not rebuilt per macro.
 	ParserOptions parser_options;
-	parser_options.parser_cache = &loader.GetDatabaseInstance().GetParserCache();
+	parser_options.compiled_grammar = loader.GetDatabaseInstance().GetParserCache().GetMatcher();
 	for (idx_t index = 0; JSON_MACROS[index].name != nullptr; index++) {
 		auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(JSON_MACROS[index], parser_options);
 		loader.RegisterFunction(*info);
