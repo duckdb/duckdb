@@ -27,6 +27,7 @@
 
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -97,32 +98,6 @@ BindResult ExpressionBinder::BindPatternExpression(unique_ptr<ParsedExpression> 
 	}
 }
 
-//! Inside a DEFINE, naming another pattern variable means its value on the last row matched to it
-//! so far. That is what LAST() means, so the reference becomes one and is resolved by the same
-//! machinery. A reference already inside a navigation function is left alone.
-static void NavigateOtherSymbols(unique_ptr<ParsedExpression> &expr, const string &define_name,
-                                 const case_insensitive_set_t &symbols) {
-	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
-		auto name = StringUtil::Upper(expr->Cast<FunctionExpression>().FunctionName().GetIdentifierName());
-		if (name == "FIRST" || name == "LAST") {
-			return;
-		}
-	}
-	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = expr->Cast<ColumnRefExpression>();
-		auto &names = colref.ColumnNames();
-		if (names.size() >= 2 && !StringUtil::CIEquals(names[0].GetIdentifierName(), define_name) &&
-		    symbols.find(names[0].GetIdentifierName()) != symbols.end()) {
-			vector<unique_ptr<ParsedExpression>> children;
-			children.push_back(std::move(expr));
-			expr = make_uniq<FunctionExpression>("LAST", std::move(children));
-		}
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { NavigateOtherSymbols(child, define_name, symbols); });
-}
-
 //! Everything a reference names behind its first name is navigation into the column, so dropping a
 //! qualifier drops that one name and keeps the rest: X.c.f is field f of column c, not column f.
 static void DropQualifier(ColumnRefExpression &colref) {
@@ -136,22 +111,6 @@ static unique_ptr<ParsedExpression> WithoutQualifier(const ColumnRefExpression &
 	auto copy = colref.Copy();
 	DropQualifier(copy->Cast<ColumnRefExpression>());
 	return copy;
-}
-
-//! A condition is evaluated over a subquery of the input, so a pattern variable in front of a column
-//! has to go. A table of the input is gone by then too, but it has been hoisted rather than dropped.
-static void ZapDefineQualifier(ParsedExpression &root_expr, const string &define_name,
-                               const case_insensitive_set_t &symbols) {
-	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
-		if (!colref.IsQualified()) {
-			return;
-		}
-		const auto qualifier = colref.ColumnNames()[0].GetIdentifierName();
-		if (!StringUtil::CIEquals(qualifier, define_name) && !symbols.count(qualifier)) {
-			return;
-		}
-		DropQualifier(colref);
-	});
 }
 
 //! Names for the columns the clause generates. The input is bound before any of them is handed out,
@@ -254,75 +213,6 @@ static idx_t BindNavigationOffset(const string &function_name, const ParsedExpre
 	return NumericCast<idx_t>(offset);
 }
 
-//! CLASSIFIER() reads as the symbol being defined only because the row being tested is the one the
-//! condition decides on. Under navigation it names another row, whose symbol is state the matcher holds
-//! while it assembles the match and not anything the plan below it can produce.
-static void CheckNavigatedClassifier(const ParsedExpression &expr, bool navigated) {
-	if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
-		auto &function = expr.Cast<FunctionExpression>();
-		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
-		if (function_name == "CLASSIFIER" && function.GetArguments().empty()) {
-			if (navigated) {
-				throw NotImplementedException("CLASSIFIER() cannot be navigated in a DEFINE condition");
-			}
-			return;
-		}
-		navigated = navigated || function_name == "PREV" || function_name == "NEXT" || function_name == "FIRST" ||
-		            function_name == "LAST";
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { CheckNavigatedClassifier(child, navigated); });
-}
-
-static void ReplaceFunctions(unique_ptr<ParsedExpression> &expr, const WindowExpression &pattern_window,
-                             const string &define_name) {
-	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
-		auto &function = expr->Cast<FunctionExpression>();
-		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
-
-		string window_function;
-		if (function_name == "PREV") {
-			window_function = "lag";
-		} else if (function_name == "NEXT") {
-			window_function = "lead";
-
-		} else if (function_name == "CLASSIFIER" && function.GetArguments().empty()) {
-			// the row being tested is the one this DEFINE is deciding on, so it classifies as this symbol
-			expr = make_uniq<ConstantExpression>(Value(define_name));
-			return;
-		}
-
-		if (!window_function.empty()) {
-			auto new_expr =
-			    pattern_window.Copy(); // we copy here because we need to keep all the partitioning and stuff
-			auto &new_window = new_expr->Cast<WindowExpression>();
-			new_window.SetFunctionName(window_function);
-			new_window.GetArgumentsMutable() = std::move(function.GetArgumentsMutable());
-			expr = std::move(new_expr);
-		}
-		// we do nothing if it's something else
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceFunctions(child, pattern_window, define_name); });
-}
-
-//! DEFINE navigation turns into window functions, which cannot be nested inside the pattern window.
-//! Materialise them in the subquery below it and reference the result instead.
-static void HoistWindows(unique_ptr<ParsedExpression> &expr, SelectNode &subquery, GeneratedNames &names,
-                         vector<string> &hidden_columns) {
-	if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
-		auto alias = names.Reserve("__mr_win");
-		expr->SetAlias(Identifier(alias));
-		auto colref = make_uniq<ColumnRefExpression>(Identifier(alias));
-		subquery.select_list.push_back(std::move(expr));
-		hidden_columns.push_back(std::move(alias));
-		expr = std::move(colref);
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { HoistWindows(child, subquery, names, hidden_columns); });
-}
-
 //! Pattern symbols live in the same namespace as the input columns, so they are qualified with an
 //! internal prefix to keep a DEFINE from resolving to a base table column of the same name.
 static string DefineColumnName(const string &symbol) {
@@ -335,67 +225,10 @@ struct MatchRecognizeNavigation {
 	bool last;
 	//! The pattern variable navigated, empty for the match as a whole
 	string symbol;
-	//! The subquery column holding the navigated expression
-	string column;
+	//! Where the navigated expression sits in the projection below the matcher
+	idx_t column;
 	idx_t offset;
 };
-
-static bool ContainsNavigation(const ParsedExpression &expr) {
-	if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
-		auto name = StringUtil::Upper(expr.Cast<FunctionExpression>().FunctionName().GetIdentifierName());
-		if (name == "FIRST" || name == "LAST") {
-			return true;
-		}
-	}
-	bool found = false;
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { found = found || ContainsNavigation(child); });
-	return found;
-}
-
-//! Replace FIRST()/LAST() with a column the matcher fills in, and record what it has to navigate
-static void ExtractNavigation(unique_ptr<ParsedExpression> &expr, SelectNode &subquery,
-                              const case_insensitive_set_t &symbols, GeneratedNames &names,
-                              vector<MatchRecognizeNavigation> &navigations) {
-	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
-		auto &function = expr->Cast<FunctionExpression>();
-		auto name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
-		if (name == "FIRST" || name == "LAST") {
-			auto &args = function.GetArgumentsMutable();
-			if (args.empty() || args.size() > 2) {
-				throw BinderException("%s() takes an expression and an optional offset", name);
-			}
-			idx_t offset = 0;
-			if (args.size() == 2) {
-				offset = BindNavigationOffset(name, args[1].GetExpression());
-			}
-			auto inner = std::move(args[0].GetExpressionMutable());
-			if (ContainsNavigation(*inner)) {
-				throw BinderException("Nested row pattern navigation is not supported");
-			}
-
-			string symbol;
-			if (inner->GetExpressionType() == ExpressionType::COLUMN_REF) {
-				auto &colref = inner->Cast<ColumnRefExpression>();
-				auto &names = colref.ColumnNames();
-				if (names.size() >= 2 && symbols.find(names[0].GetIdentifierName()) != symbols.end()) {
-					symbol = DefineColumnName(names[0].GetIdentifierName());
-					inner = WithoutQualifier(colref);
-				}
-			}
-
-			auto column = names.Reserve("__mr_nav");
-			inner->SetAlias(Identifier(column));
-			subquery.select_list.push_back(std::move(inner));
-			navigations.push_back(MatchRecognizeNavigation {name == "LAST", symbol, column, offset});
-			expr = make_uniq<ColumnRefExpression>(Identifier(column));
-			return;
-		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		ExtractNavigation(child, subquery, symbols, names, navigations);
-	});
-}
 
 //! Pattern leaves only have to carry the symbol they name; there is no column behind them
 //! Whether any part of the pattern sits inside a {- -}
@@ -417,20 +250,6 @@ static void PatternSymbolsToConstants(unique_ptr<ParsedExpression> &expr) {
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { PatternSymbolsToConstants(child); });
-}
-
-//! MATCH_NUMBER() becomes a column the matcher rewrites for every match it attempts
-static void ReplaceMatchNumber(unique_ptr<ParsedExpression> &expr, const string &column) {
-	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
-		auto &function = expr->Cast<FunctionExpression>();
-		if (StringUtil::Upper(function.FunctionName().GetIdentifierName()) == "MATCH_NUMBER" &&
-		    function.GetArguments().empty()) {
-			expr = make_uniq<ColumnRefExpression>(Identifier(column));
-			return;
-		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMatchNumber(child, column); });
 }
 
 static unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> value, const string &child_name) {
@@ -576,8 +395,8 @@ static unique_ptr<ParsedExpression> MatchScopedValue(ClientContext &context, con
 //! depend on the match at all. A measure's are computed per input row below the pattern window and
 //! read back from above it, which is the route a DEFINE condition's already take.
 static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const WindowExpression &pattern_window,
-                                   const case_insensitive_map_t<vector<string>> &symbols, SelectNode &subquery,
-                                   GeneratedNames &names, vector<string> &hidden_columns) {
+                                   const case_insensitive_map_t<vector<string>> &symbols,
+                                   vector<unique_ptr<ParsedExpression>> &hoisted, GeneratedNames &names) {
 	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function = expr->Cast<FunctionExpression>();
 		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
@@ -587,8 +406,7 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 				throw BinderException("%s() takes an expression and an optional offset", function_name);
 			}
 			for (auto &argument : arguments) {
-				HoistMeasureNavigation(argument.GetExpressionMutable(), pattern_window, symbols, subquery, names,
-				                       hidden_columns);
+				HoistMeasureNavigation(argument.GetExpressionMutable(), pattern_window, symbols, hoisted, names);
 			}
 			auto &inner = *arguments[0].GetExpressionMutable();
 			if (inner.GetExpressionType() == ExpressionType::COLUMN_REF) {
@@ -605,8 +423,7 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 			window.GetArgumentsMutable() = std::move(arguments);
 			auto column = names.Reserve("__mr_win");
 			window.SetAlias(Identifier(column));
-			subquery.select_list.push_back(std::move(navigation));
-			hidden_columns.push_back(column);
+			hoisted.push_back(std::move(navigation));
 			// the navigation may be the whole measure, whose alias names the output column
 			auto alias = expr->GetAlias();
 			expr = make_uniq<ColumnRefExpression>(Identifier(column));
@@ -615,7 +432,7 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		HoistMeasureNavigation(child, pattern_window, symbols, subquery, names, hidden_columns);
+		HoistMeasureNavigation(child, pattern_window, symbols, hoisted, names);
 	});
 }
 
@@ -624,67 +441,195 @@ static bool HasAggregateModifiers(const FunctionExpression &function) {
 	return function.Distinct() || function.Filter() || (function.OrderBy() && !function.OrderBy()->orders.empty());
 }
 
-//! How many macros deep the clause will follow one naming another before deciding it never ends
-static idx_t MatchRecognizeMaxMacroDepth() {
-	return 64;
-}
+//! What a DEFINE condition needs from the plan below the matcher: one column per value the matcher
+//! cannot compute itself, and the descriptors telling it what to do with them.
+struct MatchRecognizeConditionInputs {
+	//! The projection the matcher reads from, built as the conditions are bound
+	TableIndex projection_index;
+	vector<unique_ptr<Expression>> &select_list;
+	vector<Identifier> &names;
+	vector<LogicalType> &types;
+	//! Names the output does not report, because they only exist for the matcher
+	vector<string> &hidden;
+	GeneratedNames &generated;
+	vector<MatchRecognizeNavigation> &navigations;
 
-static optional_ptr<CatalogEntry> LookupFunction(Binder &binder, const FunctionExpression &function, CatalogType type) {
-	EntryLookupInfo lookup(type, QualifiedName(function.FunctionName()));
-	auto &qualified = function.GetQualifiedName();
-	auto entry = binder.GetCatalogEntry(qualified.Catalog(), qualified.Schema(), lookup, OnEntryNotFound::RETURN_NULL);
-	return entry && entry->type == type ? entry : nullptr;
-}
-
-//! Expands a macro call the way any other binder would: the ordinary overload selection, argument
-//! substitution and qualification, and nothing else. Binding proper happens later, where the rest of
-//! the condition is bound.
-class MatchRecognizeMacroExpander : public ExpressionBinder {
-public:
-	MatchRecognizeMacroExpander(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
+	//! Compute this below the matcher and read it back as a column of its own
+	unique_ptr<Expression> Project(unique_ptr<Expression> value, const string &base) {
+		return ProjectAs(std::move(value), generated.Reserve(base));
 	}
 
-	using ExpressionBinder::UnfoldMacroExpression;
-
-protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) override {
-		throw InternalException("MATCH_RECOGNIZE expands macros here rather than binding them");
-	}
-	string UnsupportedAggregateMessage() override {
-		return "MATCH_RECOGNIZE expands macros here rather than binding them";
+	unique_ptr<Expression> ProjectAs(unique_ptr<Expression> value, const string &name) {
+		auto type = value->GetReturnType();
+		const auto index = select_list.size();
+		value->SetAlias(Identifier(name));
+		select_list.push_back(std::move(value));
+		names.emplace_back(name);
+		types.push_back(type);
+		hidden.push_back(name);
+		return make_uniq<BoundColumnRefExpression>(Identifier(name), type,
+		                                           ColumnBinding(projection_index, ProjectionIndex(index)));
 	}
 };
 
-//! A DEFINE's navigation becomes a column of the projection the matcher reads from, and that
-//! projection is built before the condition is bound - so a navigation reached through a macro is
-//! not there to be seen unless the macro is gone first. Expanding it rather than deciding what it
-//! must have been leaves overload selection and argument substitution to the code that owns them.
-//! MEASURES need none of this: they are bound where they stand.
-static void ExpandMacros(Binder &binder, unique_ptr<ParsedExpression> &expr, idx_t depth = 0) {
-	// a macro body can name another macro, and this is what stops one that names itself
-	if (depth > MatchRecognizeMaxMacroDepth()) {
-		throw BinderException("MATCH_RECOGNIZE expanded macros more than %llu deep, which is deeper than a macro "
-		                      "that ends somewhere goes",
-		                      MatchRecognizeMaxMacroDepth());
+//! Binds a DEFINE condition. The matcher settles a condition one candidate row at a time, so
+//! everything a condition reads that is not the row being tested - a navigation over the match, a
+//! neighbour in the ordered partition, the number of the match - becomes a column of the projection
+//! below it, and the condition reads that column.
+//!
+//! Deciding this while binding rather than before it is what lets a navigation reached through a
+//! macro be seen at all: by the time the hooks below are reached, the ordinary binder has expanded it.
+class MatchRecognizeDefineBinder : public SelectBinder {
+public:
+	MatchRecognizeDefineBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
+	                           MatchRecognizeConditionInputs &inputs, const WindowExpression &window_template_p,
+	                           const case_insensitive_set_t &symbols_p, const unique_ptr<Expression> &match_number_p)
+	    : SelectBinder(binder, context, node), inputs(inputs), window_template(window_template_p), symbols(symbols_p),
+	      match_number(match_number_p) {
 	}
-	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
-		auto &function = expr->Cast<FunctionExpression>();
-		// a macro spelled the way only an aggregate can be is reported as one, which is what it is
-		auto entry =
-		    HasAggregateModifiers(function) ? nullptr : LookupFunction(binder, function, CatalogType::MACRO_ENTRY);
-		if (entry) {
-			auto alias = expr->GetAlias();
-			MatchRecognizeMacroExpander expander(binder, binder.context);
-			expander.UnfoldMacroExpression(function, entry->Cast<ScalarMacroCatalogEntry>(), expr, 0);
-			expr->SetAlias(std::move(alias));
-			// what it expanded to can name a macro of its own
-			ExpandMacros(binder, expr, depth + 1);
-			return;
+
+	//! The variable whose condition is being bound
+	void BeginDefine(const string &name) {
+		define_name = name;
+	}
+
+protected:
+	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override {
+		auto &expr = *expr_ptr;
+		if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
+			auto &function = expr.Cast<FunctionExpression>();
+			auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
+			if (function_name == "CLASSIFIER" && function.GetArguments().empty()) {
+				if (navigated) {
+					// under navigation it names another row, whose symbol is state the matcher holds
+					// while it assembles the match and not anything the plan below it can produce
+					throw NotImplementedException("CLASSIFIER() cannot be navigated in a DEFINE condition");
+				}
+				// the row being tested is the one this DEFINE decides on, so it classifies as this symbol
+				expr_ptr = make_uniq<ConstantExpression>(Value(define_name));
+				return SelectBinder::BindExpression(expr_ptr, depth, root_expression);
+			}
+			if (function_name == "MATCH_NUMBER" && function.GetArguments().empty()) {
+				return BindResult(match_number->Copy());
+			}
+			if (function_name == "PREV" || function_name == "NEXT") {
+				return BindNeighbour(function, function_name, expr_ptr, depth);
+			}
+			if (function_name == "FIRST" || function_name == "LAST") {
+				return BindNavigation(function, function_name, depth);
+			}
 		}
+		if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
+			// a window walks the ordered partition rather than the match, so it is computed below the
+			// matcher like the navigation the clause writes as one
+			auto bound = SelectBinder::BindExpression(expr_ptr, depth, root_expression);
+			if (bound.HasError()) {
+				return bound;
+			}
+			return BindResult(inputs.Project(std::move(bound.expression), "__mr_win"));
+		}
+		if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
+			auto &colref = expr.Cast<ColumnRefExpression>();
+			auto &names = colref.ColumnNames();
+			const auto qualifier = names.size() >= 2 ? names[0].GetIdentifierName() : string();
+			if (!qualifier.empty() && StringUtil::CIEquals(qualifier, define_name)) {
+				// the variable being defined is the row being tested, so it is the row itself
+				expr_ptr = WithoutQualifier(colref);
+				return SelectBinder::BindExpression(expr_ptr, depth, root_expression);
+			}
+			if (!qualifier.empty() && symbols.count(qualifier)) {
+				// naming another variable means its value on the last row matched to it so far, which
+				// is what LAST() means
+				return BindNavigated(WithoutQualifier(colref), DefineColumnName(qualifier), true, 0, depth);
+			}
+		}
+		return SelectBinder::BindExpression(expr_ptr, depth, root_expression);
 	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { ExpandMacros(binder, child, depth); });
-}
+
+	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override {
+		return BindResult(BinderException(expr, UnsupportedAggregateMessage()));
+	}
+
+	string UnsupportedAggregateMessage() override {
+		return "A MATCH_RECOGNIZE condition decides one row at a time, so it cannot be an aggregate";
+	}
+
+private:
+	//! PREV()/NEXT() walk the ordered partition rather than the match, so they do not depend on the
+	//! match at all and are computed once, below the matcher
+	BindResult BindNeighbour(FunctionExpression &function, const string &function_name,
+	                         unique_ptr<ParsedExpression> &expr_ptr, idx_t depth) {
+		auto &arguments = function.GetArgumentsMutable();
+		if (arguments.empty() || arguments.size() > 2) {
+			throw BinderException("%s() takes an expression and an optional offset", function_name);
+		}
+		auto neighbour = window_template.Copy();
+		auto &window = neighbour->Cast<WindowExpression>();
+		window.SetFunctionName(function_name == "PREV" ? "lag" : "lead");
+		window.GetArgumentsMutable() = std::move(arguments);
+		expr_ptr = std::move(neighbour);
+		const auto saved = navigated;
+		navigated = true;
+		auto bound = SelectBinder::BindExpression(expr_ptr, depth, false);
+		navigated = saved;
+		if (bound.HasError()) {
+			return bound;
+		}
+		return BindResult(inputs.Project(std::move(bound.expression), "__mr_win"));
+	}
+
+	//! FIRST()/LAST() navigate the rows of the match being assembled, so the matcher resolves them per
+	//! row: what the plan supplies is the expression navigated, and the matcher reads it off the row
+	//! it navigated to
+	BindResult BindNavigation(FunctionExpression &function, const string &function_name, idx_t depth) {
+		auto &arguments = function.GetArgumentsMutable();
+		if (arguments.empty() || arguments.size() > 2) {
+			throw BinderException("%s() takes an expression and an optional offset", function_name);
+		}
+		idx_t offset = 0;
+		if (arguments.size() == 2) {
+			offset = BindNavigationOffset(function_name, arguments[1].GetExpression());
+		}
+		auto inner = std::move(arguments[0].GetExpressionMutable());
+		string symbol;
+		if (inner->GetExpressionType() == ExpressionType::COLUMN_REF) {
+			auto &colref = inner->Cast<ColumnRefExpression>();
+			auto &names = colref.ColumnNames();
+			if (names.size() >= 2 && symbols.count(names[0].GetIdentifierName())) {
+				symbol = DefineColumnName(names[0].GetIdentifierName());
+				inner = WithoutQualifier(colref);
+			}
+		}
+		return BindNavigated(std::move(inner), symbol, function_name == "LAST", offset, depth);
+	}
+
+	BindResult BindNavigated(unique_ptr<ParsedExpression> inner, string symbol, bool last, idx_t offset, idx_t depth) {
+		if (navigated) {
+			throw BinderException("Nested row pattern navigation is not supported");
+		}
+		navigated = true;
+		auto bound = BindExpression(inner, depth, false);
+		navigated = false;
+		if (bound.HasError()) {
+			return bound;
+		}
+		auto column = inputs.Project(std::move(bound.expression), "__mr_nav");
+		inputs.navigations.push_back(
+		    MatchRecognizeNavigation {last, std::move(symbol), inputs.select_list.size() - 1, offset});
+		return BindResult(std::move(column));
+	}
+
+	MatchRecognizeConditionInputs &inputs;
+	const WindowExpression &window_template;
+	//! Every pattern variable the clause declares
+	const case_insensitive_set_t &symbols;
+	//! The column the matcher rewrites with the number of the match it is assembling
+	const unique_ptr<Expression> &match_number;
+	//! The variable whose condition is being bound
+	string define_name;
+	//! Whether what is being bound is read off a row other than the one being tested
+	bool navigated = false;
+};
 
 //! An aggregate in MEASURES aggregates the rows of the match that its arguments name a variable for.
 //! The variable belongs to this clause's namespace rather than the input's, so it is resolved here
@@ -897,23 +842,35 @@ private:
 	bool scoped = false;
 };
 
-//! Binds what the matcher is configured with: the conditions, the columns they read, and the
-//! partitioning and ordering the pattern walks. They are ordinary expressions over the projection
-//! below the window, so ordinary binding is all they need; only the pattern is this clause's own,
-//! and the dispatch below already knows where that goes.
-class MatchRecognizeMatcherBinder : public ExpressionBinder {
-public:
-	MatchRecognizeMatcherBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
+//! The conditions and the window's frame are bound against the input, and evaluated over the
+//! projection built on top of it. A reference into the input therefore becomes a reference into that
+//! projection - to the column already computing it, or to one appended for it.
+static void RemapToProjection(unique_ptr<Expression> &expr, MatchRecognizeConditionInputs &inputs,
+                              column_binding_map_t<idx_t> &input_columns) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		// the matcher evaluates a condition per candidate row, which a subquery cannot be reduced to
+		throw BinderException("A DEFINE condition may not contain a subquery");
 	}
-
-protected:
-	string UnsupportedAggregateMessage() override {
-		return "A MATCH_RECOGNIZE condition decides one row at a time, so it cannot be an aggregate";
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &colref = expr->Cast<BoundColumnRefExpression>();
+		if (colref.Binding().table_index == inputs.projection_index) {
+			return;
+		}
+		auto entry = input_columns.find(colref.Binding());
+		if (entry == input_columns.end()) {
+			auto column = inputs.ProjectAs(expr->Copy(), inputs.generated.Reserve("__mr_read"));
+			input_columns[colref.Binding()] = inputs.select_list.size() - 1;
+			expr = std::move(column);
+			return;
+		}
+		expr =
+		    make_uniq<BoundColumnRefExpression>(colref.GetAlias(), colref.GetReturnType(),
+		                                        ColumnBinding(inputs.projection_index, ProjectionIndex(entry->second)));
+		return;
 	}
-	string UnsupportedWindowMessage() override {
-		return "A MATCH_RECOGNIZE condition decides one row at a time, so it cannot be a window function";
-	}
-};
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { RemapToProjection(child, inputs, input_columns); });
+}
 
 //! Record a column the matcher is handed per row, or report where it already is
 static idx_t AddMatcherInput(const unique_ptr<Expression> &column, vector<unique_ptr<Expression>> &children,
@@ -1035,15 +992,6 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		partition_names.push_back(expr->GetName());
 	}
 
-	// A DEFINE's navigation becomes a column of the projection the matcher reads from, which is built
-	// before the condition is bound - so what a macro stands for has to be visible by then. MEASURES
-	// need no such pass: they are bound where they stand, and the ordinary binder expands their macros.
-	for (auto &expr : ref.config->defines_expression_list) {
-		auto alias = expr->GetAlias();
-		ExpandMacros(*this, expr);
-		expr->SetAlias(std::move(alias));
-	}
-
 	// Every clause here is evaluated above a subquery of the input, so a reference that means
 	// anything to the input rather than to this clause is computed against the input itself and read
 	// back by name.
@@ -1113,23 +1061,54 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		}
 	}
 
-	// everything the conditions read is computed here, in the projection the matcher reads from
-	auto define_select_node = MakeSelectNode(std::move(input_table));
-	define_select_node->select_list.push_back(make_uniq<StarExpression>());
+	// Everything the matcher reads that is not the row being tested is computed in a projection of
+	// its own below the pattern window, and the conditions are bound as that projection is built.
+	auto define_binder = Binder::CreateBinder(context, this);
+
+	BoundSelectNode define_node;
+	define_node.from_table = define_binder->Bind(*input_table);
+	define_node.projection_index = GenerateTableIndex();
+	define_node.group_index = GenerateTableIndex();
+	define_node.group_projection_index = GenerateTableIndex();
+	define_node.aggregate_index = GenerateTableIndex();
+	define_node.groupings_index = GenerateTableIndex();
+	define_node.window_index = GenerateTableIndex();
+	define_node.prune_index = GenerateTableIndex();
+
+	// the input's own columns pass through, because the output still reports them
+	column_binding_map_t<idx_t> input_columns;
+	for (auto &binding : define_binder->bind_context.GetBindingsList()) {
+		auto &column_names = binding->GetColumnNames();
+		auto &column_types = binding->GetColumnTypes();
+		for (idx_t i = 0; i < column_names.size(); i++) {
+			const ColumnBinding source(binding->GetIndex(), ProjectionIndex(i));
+			input_columns[source] = define_node.select_list.size();
+			define_node.select_list.push_back(
+			    make_uniq<BoundColumnRefExpression>(column_names[i], column_types[i], source));
+			define_node.names.push_back(column_names[i]);
+			define_node.types.push_back(column_types[i]);
+		}
+	}
 
 	vector<string> hidden_columns;
+	vector<MatchRecognizeNavigation> navigations;
+	MatchRecognizeConditionInputs inputs {define_node.projection_index,
+	                                      define_node.select_list,
+	                                      define_node.names,
+	                                      define_node.types,
+	                                      hidden_columns,
+	                                      names,
+	                                      navigations};
+
+	// MATCH_NUMBER() reads this column; the matcher rewrites it for every match it attempts
+	auto match_number_ref =
+	    inputs.ProjectAs(make_uniq<BoundConstantExpression>(Value::UBIGINT(0)), match_number_column);
+
 	case_insensitive_set_t pattern_symbols;
 	vector<string> define_symbols;
-	vector<unique_ptr<ParsedExpression>> define_conditions;
-
-	// MATCH_NUMBER() reads this column; the matcher rewrites it per match
-	auto match_number_value = make_uniq<ConstantExpression>(Value::UBIGINT(0));
-	match_number_value->SetAlias(Identifier(match_number_column));
-	define_select_node->select_list.push_back(std::move(match_number_value));
-	hidden_columns.emplace_back(match_number_column);
-
-	vector<MatchRecognizeNavigation> navigations;
-
+	vector<unique_ptr<Expression>> define_conditions;
+	MatchRecognizeDefineBinder condition_binder(*define_binder, context, define_node, inputs, *window_template,
+	                                            declared_symbols, match_number_ref);
 	for (auto &expr : ref.config->defines_expression_list) {
 		auto define_name = expr->GetAlias().GetIdentifierName();
 		D_ASSERT(!define_name.empty());
@@ -1137,21 +1116,14 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 			// a symbol stands for one condition, so a second one for the same symbol has nowhere to go
 			throw BinderException("MATCH_RECOGNIZE defines pattern variable \"%s\" more than once", define_name);
 		}
-
-		CheckNavigatedClassifier(*expr, false);
-		// a reference to another variable is navigation over that variable's rows, so it has to
-		// become one before the navigation is pulled out
-		NavigateOtherSymbols(expr, define_name, declared_symbols);
-		// logical navigation is resolved by the matcher, so it leaves before qualifiers are checked
-		ExtractNavigation(expr, *define_select_node, declared_symbols, names, navigations);
-		ZapDefineQualifier(*expr, define_name, declared_symbols);
-		ReplaceFunctions(expr, *window_template, define_name);
-		HoistWindows(expr, *define_select_node, names, hidden_columns);
-		ReplaceMatchNumber(expr, match_number_column);
+		condition_binder.BeginDefine(define_name);
+		// a condition decides whether a row is the variable, so the matcher reads it as a boolean and
+		// the plan has to produce one
+		unique_ptr<ParsedExpression> condition = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(expr));
+		define_conditions.push_back(condition_binder.Bind(condition));
 
 		pattern_symbols.insert(define_name);
 		define_symbols.push_back(DefineColumnName(define_name));
-		define_conditions.push_back(std::move(expr));
 	}
 
 	// rewrite the pattern symbols to the internal names the matcher reports
@@ -1162,6 +1134,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	    });
 
 	// a symbol used by the pattern but never defined matches every row
+	vector<string> undefined_symbols;
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    *ref.config->pattern, [&](const ColumnRefExpression &colref) {
 		    auto column_name = colref.ColumnNames()[0].GetIdentifierName();
@@ -1170,19 +1143,30 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 				    return;
 			    }
 		    }
-		    define_symbols.push_back(column_name);
-		    if (ref.config->define_auto) {
-			    // the variable stands for the column of the same name being true, or non zero, or
-			    // whatever else that column's type calls true. The symbol carries the internal
-			    // prefix by now, so the column it names is what is left after it.
-			    auto source = column_name.substr(strlen(MATCH_RECOGNIZE_DEFINE_PREFIX));
-			    define_conditions.push_back(make_uniq<CastExpression>(
-			        LogicalType::BOOLEAN, make_uniq<ColumnRefExpression>(Identifier(source))));
-		    } else {
-			    define_conditions.push_back(make_uniq<ConstantExpression>(Value::BOOLEAN(true)));
+		    for (auto &existing : undefined_symbols) {
+			    if (StringUtil::CIEquals(existing, column_name)) {
+				    return;
+			    }
 		    }
-		    pattern_symbols.insert(MatchRecognizeSymbolName(column_name));
+		    undefined_symbols.push_back(column_name);
 	    });
+	for (auto &column_name : undefined_symbols) {
+		define_symbols.push_back(column_name);
+		const auto symbol = MatchRecognizeSymbolName(column_name);
+		unique_ptr<ParsedExpression> condition;
+		if (ref.config->define_auto) {
+			// the variable stands for the column of the same name being true, or non zero, or whatever
+			// else that column's type calls true
+			condition =
+			    make_uniq<CastExpression>(LogicalType::BOOLEAN, make_uniq<ColumnRefExpression>(Identifier(symbol)));
+		} else {
+			condition =
+			    make_uniq<CastExpression>(LogicalType::BOOLEAN, make_uniq<ConstantExpression>(Value::BOOLEAN(true)));
+		}
+		condition_binder.BeginDefine(symbol);
+		define_conditions.push_back(condition_binder.Bind(condition));
+		pattern_symbols.insert(symbol);
+	}
 
 	// a measure may name a pattern variable or a SUBSET of them; both resolve to a set of symbols
 	case_insensitive_map_t<vector<string>> measure_symbols;
@@ -1204,69 +1188,97 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		measure_symbols[subset.name] = std::move(members);
 	}
 
+	// PREV() and NEXT() in MEASURES walk the ordered partition rather than the match, and the ordering
+	// is the matcher's input rather than its output, so they are computed down here too and the
+	// measure reads the column they became
+	vector<unique_ptr<ParsedExpression>> measure_navigation;
+	for (auto &expr : ref.config->measures_expression_list) {
+		HoistMeasureNavigation(expr, *window_template, measure_symbols, measure_navigation, names);
+	}
+	if (!measure_navigation.empty()) {
+		SelectBinder navigation_binder(*define_binder, context, define_node);
+		for (auto &expr : measure_navigation) {
+			auto column = expr->GetAlias().GetIdentifierName();
+			inputs.ProjectAs(navigation_binder.Bind(expr), column);
+		}
+	}
+
 	// the matcher only needs the symbol a leaf names, and there is no longer a column to bind it to
 	PatternSymbolsToConstants(ref.config->pattern);
 
-	for (auto &navigation : navigations) {
-		hidden_columns.push_back(navigation.column);
-	}
-
-	for (auto &expr : ref.config->measures_expression_list) {
-		HoistMeasureNavigation(expr, *window_template, measure_symbols, *define_select_node, names, hidden_columns);
-	}
-
-	// Everything the matcher is configured with is bound here, against the projection that computes
-	// it, and the configuration is built from those bindings. Nothing about the pattern, the symbols,
-	// the skip policy or the navigation has to travel as an argument to be unpacked again.
-	auto define_ref = make_uniq<SubqueryRef>(MakeSelectStatement(std::move(define_select_node)));
-	auto define_binder = Binder::CreateBinder(context, this);
-	auto bound_define = define_binder->Bind(*define_ref);
-	MatchRecognizeMatcherBinder matcher_binder(*define_binder, context);
-
 	auto match_data = make_uniq<MatchRecognizeFunctionData>();
+
+	// the frame the matcher walks is evaluated over the same projection the conditions are
+	vector<unique_ptr<Expression>> bound_partitions;
+	for (auto &expr : ref.config->partition_expressions) {
+		auto partition = expr->Copy();
+		bound_partitions.push_back(condition_binder.Bind(partition));
+	}
+	auto &order_config = DBConfig::GetConfig(context);
+	vector<BoundOrderByNode> bound_orders;
+	for (auto &order : ref.config->order_by_expressions) {
+		auto expr = order.expression->Copy();
+		// the window walks the partition in the order the sorter will actually apply, so an ordering
+		// the query left unsaid is filled in here rather than reaching the sorter unresolved
+		const auto type = order_config.ResolveOrder(context, order.type);
+		const auto null_order = order_config.ResolveNullOrder(context, type, order.null_order);
+		bound_orders.emplace_back(type, null_order, condition_binder.Bind(expr));
+	}
+
+	// everything bound against the input now reads the projection that computes it
+	for (auto &condition : define_conditions) {
+		RemapToProjection(condition, inputs, input_columns);
+	}
+	for (auto &partition : bound_partitions) {
+		RemapToProjection(partition, inputs, input_columns);
+	}
+	for (auto &order : bound_orders) {
+		RemapToProjection(order.expression, inputs, input_columns);
+	}
 
 	// What the matcher reads per row is what the window hands it. The first of them is the number of
 	// the match being assembled, which the matcher rewrites per attempt rather than reading from the
 	// plan; the rest are the columns the conditions read.
 	vector<unique_ptr<Expression>> children;
 	expression_map_t<idx_t> child_index;
-	{
-		unique_ptr<ParsedExpression> match_number_ref = make_uniq<ColumnRefExpression>(Identifier(match_number_column));
-		children.push_back(matcher_binder.Bind(match_number_ref));
-		child_index[*children.back()] = MATCH_RECOGNIZE_MATCH_NUMBER_FIELD;
-	}
+	children.push_back(match_number_ref->Copy());
+	child_index[*children.back()] = MATCH_RECOGNIZE_MATCH_NUMBER_FIELD;
 
 	// a navigated column is one the matcher fills in per row, so where it sits among the ones it is
 	// handed is what the navigation descriptor names
 	unordered_set<idx_t> navigation_fields;
 	vector<idx_t> navigation_input;
 	for (auto &navigation : navigations) {
-		unique_ptr<ParsedExpression> column = make_uniq<ColumnRefExpression>(Identifier(navigation.column));
-		auto bound_column = matcher_binder.Bind(column);
-		navigation_input.push_back(AddMatcherInput(bound_column, children, child_index));
+		auto &projected = define_node.select_list[navigation.column];
+		unique_ptr<Expression> column = make_uniq<BoundColumnRefExpression>(
+		    projected->GetAlias(), projected->GetReturnType(),
+		    ColumnBinding(define_node.projection_index, ProjectionIndex(navigation.column)));
+		navigation_input.push_back(AddMatcherInput(column, children, child_index));
 		navigation_fields.insert(navigation_input.back());
 	}
 
-	for (idx_t i = 0; i < define_conditions.size(); i++) {
-		// a condition decides whether a row is the variable, so the matcher reads it as a boolean and
-		// the plan has to produce one
-		unique_ptr<ParsedExpression> condition =
-		    make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(define_conditions[i]));
-		auto bound_condition = matcher_binder.Bind(condition);
-		RebindToMatcherInputs(bound_condition, children, child_index);
+	for (auto &condition : define_conditions) {
+		RebindToMatcherInputs(condition, children, child_index);
 		// Both kinds depend on the match being assembled, so both are settled per candidate row.
 		// Re-deciding them for a whole partition after every match would be quadratic.
 		bool reads_match_number = false;
 		bool reads_navigation = false;
 		ExpressionIterator::VisitExpression<BoundReferenceExpression>(
-		    *bound_condition, [&](const BoundReferenceExpression &bound_ref) {
+		    *condition, [&](const BoundReferenceExpression &bound_ref) {
 			    reads_match_number = reads_match_number || bound_ref.Index() == MATCH_RECOGNIZE_MATCH_NUMBER_FIELD;
 			    reads_navigation = reads_navigation || navigation_fields.count(bound_ref.Index()) > 0;
 		    });
 		match_data->row_scoped.push_back(reads_navigation || reads_match_number);
 		match_data->depends_on_match_number = match_data->depends_on_match_number || reads_match_number;
-		match_data->conditions.push_back(std::move(bound_condition));
+		match_data->conditions.push_back(std::move(condition));
 	}
+
+	// the projection is complete once the matcher knows what it reads, so it can be planned
+	define_node.column_count = define_node.select_list.size();
+	BoundStatement bound_define;
+	bound_define.types = define_node.types;
+	bound_define.names = define_node.names;
+	bound_define.plan = CreatePlan(define_node);
 
 	match_data->symbols = define_symbols;
 	// the matcher compares symbols on every candidate row, so the pattern's leaves carry an index into
@@ -1275,7 +1287,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	for (idx_t i = 0; i < match_data->symbols.size(); i++) {
 		symbol_index[match_data->symbols[i]] = i;
 	}
-	match_data->pattern = matcher_binder.Bind(ref.config->pattern);
+	match_data->pattern = condition_binder.Bind(ref.config->pattern);
 	ResolvePatternSymbols(match_data->pattern, symbol_index);
 
 	for (idx_t i = 0; i < navigations.size(); i++) {
@@ -1294,19 +1306,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	bound_window->GetChildrenMutable() = std::move(children);
 	bound_window->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 	bound_window->WindowEndMutable() = WindowBoundary::UNBOUNDED_FOLLOWING;
-	for (auto &expr : ref.config->partition_expressions) {
-		auto partition = expr->Copy();
-		bound_window->PartitionsMutable().push_back(matcher_binder.Bind(partition));
-	}
-	auto &config = DBConfig::GetConfig(context);
-	for (auto &order : ref.config->order_by_expressions) {
-		auto expr = order.expression->Copy();
-		// the window walks the partition in the order the sorter will actually apply, so an ordering
-		// the query left unsaid is filled in here rather than reaching the sorter unresolved
-		const auto type = config.ResolveOrder(context, order.type);
-		const auto null_order = config.ResolveNullOrder(context, type, order.null_order);
-		bound_window->OrderByMutable().emplace_back(type, null_order, matcher_binder.Bind(expr));
-	}
+	bound_window->PartitionsMutable() = std::move(bound_partitions);
+	bound_window->OrderByMutable() = std::move(bound_orders);
 
 	// The window reports every match a row takes part in, so overlapping matches each get their own
 	// row when they are unnested. Unnesting also drops the rows that matched nothing, since their
@@ -1322,12 +1323,16 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	bound_window_result.names = bound_define.names;
 	bound_window_result.names.push_back(Identifier(spans_column));
 	bound_window_result.plan = std::move(logical_window);
-	define_binder->bind_context.AddGenericBinding(window_index, Identifier(names.Reserve("__mr_spans")),
-	                                              {Identifier(spans_column)},
-	                                              {WindowMatchRecognizeExecutor::ResultType()});
+
+	auto spans_binder = Binder::CreateBinder(context, this);
+	spans_binder->bind_context.AddGenericBinding(define_node.GetRootIndex(), Identifier(names.Reserve("__mr_rows")),
+	                                             bound_define.names, bound_define.types);
+	spans_binder->bind_context.AddGenericBinding(window_index, Identifier(names.Reserve("__mr_spans")),
+	                                             {Identifier(spans_column)},
+	                                             {WindowMatchRecognizeExecutor::ResultType()});
 
 	auto unnest_node =
-	    MakeSelectNode(make_uniq<BoundRefWrapper>(std::move(bound_window_result), std::move(define_binder)));
+	    MakeSelectNode(make_uniq<BoundRefWrapper>(std::move(bound_window_result), std::move(spans_binder)));
 	auto spans_star = make_uniq<StarExpression>();
 	spans_star->ExcludeListMutable().insert(QualifiedColumnName(Identifier(spans_column)));
 	unnest_node->select_list.push_back(std::move(spans_star));

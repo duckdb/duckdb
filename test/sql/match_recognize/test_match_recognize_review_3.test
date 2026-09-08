@@ -484,3 +484,77 @@ FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
 )
 ----
 reads the rows of one pattern variable
+
+# DEFINE conditions are bound by a binder of their own too. What a condition reads that is not the
+# row being tested becomes a column of the projection below the matcher, decided while binding rather
+# than before it - so a navigation reached through a macro is seen the same way a written one is.
+
+statement ok
+CREATE MACRO m_nav(v) AS m_first(v);
+
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS m_first(x) = 10
+)
+----
+2
+
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS m_nav(x) = 10
+)
+----
+2
+
+# naming another variable is its value on the last row matched to it
+query I
+FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A B+) DEFINE B AS x > A.x
+)
+----
+3
+
+# the variable being defined is the row being tested
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS A.x > 0
+)
+----
+2
+
+# a window walks the ordered partition, so it is computed below the matcher like PREV() is
+query I
+FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS row_number() OVER () > 0
+)
+----
+2
+
+# what a condition cannot be
+statement error
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS sum(x) > 0
+)
+----
+cannot be an aggregate
+
+statement error
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS x > (SELECT 1)
+)
+----
+may not contain a subquery
+
+statement error
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS LAST(CLASSIFIER()) = 'A'
+)
+----
+CLASSIFIER() cannot be navigated
+
+statement error
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A B) DEFINE B AS x > LAST(FIRST(x))
+)
+----
+Nested row pattern navigation is not supported
