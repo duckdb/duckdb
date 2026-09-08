@@ -21,31 +21,32 @@ void ByteStreamSplitDecoder::InitializePage() {
 	auto &block = reader.block;
 	// Subtract 1 from length as the block is allocated with 1 extra byte,
 	// but the byte stream split encoder needs to know the correct data size.
-	bss_decoder = make_uniq<BssDecoder>(block->ptr, block->len - 1);
-	block->inc(block->len);
+	idx_t bss_len;
+	auto loc = block->ConsumeRemaining(bss_len);
+	bss_decoder = make_uniq<BssDecoder>(loc, bss_len - 1);
 }
 
 void ByteStreamSplitDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
 	idx_t valid_count = reader.GetValidCount(defines, read_count, result_offset);
 
 	auto &allocator = reader.reader.allocator;
-	decoded_data_buffer.reset();
+	decoded_data_buffer.Reset();
 	switch (reader.Schema().parquet_type) {
 	case duckdb_parquet::Type::FLOAT:
-		decoded_data_buffer.resize(allocator, sizeof(float) * valid_count);
-		bss_decoder->GetBatch<float>(decoded_data_buffer.ptr, valid_count);
+		decoded_data_buffer.Resize(allocator, sizeof(float) * valid_count);
+		bss_decoder->GetBatch<float>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 		break;
 	case duckdb_parquet::Type::DOUBLE:
-		decoded_data_buffer.resize(allocator, sizeof(double) * valid_count);
-		bss_decoder->GetBatch<double>(decoded_data_buffer.ptr, valid_count);
+		decoded_data_buffer.Resize(allocator, sizeof(double) * valid_count);
+		bss_decoder->GetBatch<double>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 		break;
 	case duckdb_parquet::Type::INT32:
-		decoded_data_buffer.resize(allocator, sizeof(int32_t) * valid_count);
-		bss_decoder->GetBatch<int32_t>(decoded_data_buffer.ptr, valid_count);
+		decoded_data_buffer.Resize(allocator, sizeof(int32_t) * valid_count);
+		bss_decoder->GetBatch<int32_t>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 		break;
 	case duckdb_parquet::Type::INT64:
-		decoded_data_buffer.resize(allocator, sizeof(int64_t) * valid_count);
-		bss_decoder->GetBatch<int64_t>(decoded_data_buffer.ptr, valid_count);
+		decoded_data_buffer.Resize(allocator, sizeof(int64_t) * valid_count);
+		bss_decoder->GetBatch<int64_t>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 		break;
 	default:
 		throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT, DOUBLE, INT32 or INT64 data");

@@ -442,7 +442,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		uncompressed = true;
 	}
 	if (uncompressed) {
-		ReadData(block->ptr, page_hdr.compressed_page_size, page_hdr.type);
+		ReadData(block->GetCurrentLoc(), page_hdr.compressed_page_size, page_hdr.type);
 		return;
 	}
 
@@ -472,7 +472,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		    Reader().GetFileName());
 	}
 
-	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
+	ReadData(block->GetCurrentLoc(), uncompressed_bytes, page_hdr.type);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
@@ -485,12 +485,13 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 
 	if (compressed_bytes > 0) {
 		ResizeableBuffer compressed_buffer;
-		compressed_buffer.resize(GetAllocator(), compressed_bytes);
+		compressed_buffer.Resize(GetAllocator(), compressed_bytes);
 
-		ReadData(compressed_buffer.ptr, compressed_bytes, page_hdr.type);
+		ReadData(compressed_buffer.GetCurrentLoc(), compressed_bytes, page_hdr.type);
 
-		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes,
-		                   block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
+		DecompressInternal(chunk->meta_data.codec, compressed_buffer.GetCurrentLoc(), compressed_bytes,
+		                   block->GetCurrentLoc() + uncompressed_bytes,
+		                   page_hdr.uncompressed_page_size - uncompressed_bytes);
 	}
 }
 
@@ -498,7 +499,7 @@ void ColumnReader::AllocateBlock(idx_t size) {
 	if (!block) {
 		block = make_shared_ptr<ResizeableBuffer>(GetAllocator(), size);
 	} else {
-		block->resize(GetAllocator(), size);
+		block->Resize(GetAllocator(), size);
 	}
 }
 
@@ -527,16 +528,16 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
 			    page_hdr.uncompressed_page_size, compressed_page_size);
 		}
-		ReadData(block->ptr, compressed_page_size, page_hdr.type);
+		ReadData(block->GetCurrentLoc(), compressed_page_size, page_hdr.type);
 		return;
 	}
 
 	ResizeableBuffer compressed_buffer;
-	compressed_buffer.resize(GetAllocator(), compressed_page_size + 1);
-	ReadData(compressed_buffer.ptr, compressed_page_size, page_hdr.type);
+	compressed_buffer.Resize(GetAllocator(), compressed_page_size + 1);
+	ReadData(compressed_buffer.GetCurrentLoc(), compressed_page_size, page_hdr.type);
 
-	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_page_size, block->ptr,
-	                   page_hdr.uncompressed_page_size);
+	DecompressInternal(chunk->meta_data.codec, compressed_buffer.GetCurrentLoc(), compressed_page_size,
+	                   block->GetCurrentLoc(), page_hdr.uncompressed_page_size);
 }
 
 void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size,
@@ -633,23 +634,23 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	auto page_encoding = is_v1 ? v1_header.encoding : v2_header.encoding;
 
 	if (HasRepeats()) {
-		uint32_t rep_length = is_v1 ? block->read<uint32_t>() : v2_header.repetition_levels_byte_length;
-		block->available(rep_length);
-		repeated_decoder =
-		    make_uniq<RleBpDecoder>(block->ptr, rep_length, RleBpDecoder::ComputeBitWidthFromMaxValue(MaxRepeat()));
-		block->inc(rep_length);
+		uint32_t rep_length = is_v1 ? block->Read<uint32_t>() : v2_header.repetition_levels_byte_length;
+		block->Available(rep_length);
+		repeated_decoder = make_uniq<RleBpDecoder>(block->GetCurrentLoc(), rep_length,
+		                                           RleBpDecoder::ComputeBitWidthFromMaxValue(MaxRepeat()));
+		block->Inc(rep_length);
 	} else if (is_v2 && v2_header.repetition_levels_byte_length > 0) {
-		block->inc(v2_header.repetition_levels_byte_length);
+		block->Inc(v2_header.repetition_levels_byte_length);
 	}
 
 	if (HasDefines()) {
-		uint32_t def_length = is_v1 ? block->read<uint32_t>() : v2_header.definition_levels_byte_length;
-		block->available(def_length);
-		defined_decoder =
-		    make_uniq<RleBpDecoder>(block->ptr, def_length, RleBpDecoder::ComputeBitWidthFromMaxValue(MaxDefine()));
-		block->inc(def_length);
+		uint32_t def_length = is_v1 ? block->Read<uint32_t>() : v2_header.definition_levels_byte_length;
+		block->Available(def_length);
+		defined_decoder = make_uniq<RleBpDecoder>(block->GetCurrentLoc(), def_length,
+		                                          RleBpDecoder::ComputeBitWidthFromMaxValue(MaxDefine()));
+		block->Inc(def_length);
 	} else if (is_v2 && v2_header.definition_levels_byte_length > 0) {
-		block->inc(v2_header.definition_levels_byte_length);
+		block->Inc(v2_header.definition_levels_byte_length);
 	}
 
 	switch (page_encoding) {

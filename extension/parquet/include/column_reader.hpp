@@ -275,8 +275,8 @@ private:
 		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
 			// we can memcpy
 			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
-			memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
-			plain_data.unsafe_inc(copy_count);
+			memcpy(result_ptr + result_offset, plain_data.GetCurrentLoc(), copy_count);
+			plain_data.UnsafeInc(copy_count);
 			return;
 		}
 		auto &result_mask = FlatVector::ValidityMutable(result);
@@ -294,9 +294,9 @@ private:
 	                                const uint64_t num_values, idx_t row_offset = 0) {
 		if (!HAS_DEFINES && CONVERSION::PlainConstantSize() > 0) {
 			if (CHECKED) {
-				plain_data.inc(num_values * CONVERSION::PlainConstantSize());
+				plain_data.Inc(num_values * CONVERSION::PlainConstantSize());
 			} else {
-				plain_data.unsafe_inc(num_values * CONVERSION::PlainConstantSize());
+				plain_data.UnsafeInc(num_values * CONVERSION::PlainConstantSize());
 			}
 			return;
 		}

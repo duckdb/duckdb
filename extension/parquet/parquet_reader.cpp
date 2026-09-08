@@ -292,14 +292,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		}
 
 		ResizeableBuffer buf;
-		buf.resize(allocator, 8);
-		buf.zero();
+		buf.Resize(allocator, 8);
+		buf.Zero();
 
 		transport.Prefetch(file_size - prefetch_size, prefetch_size);
 		transport.SetLocation(file_size - 8);
-		transport.read(buf.ptr, 8);
+		transport.read(buf.GetCurrentLoc(), 8);
 
-		ParseParquetFooter(buf.ptr, file_handle.GetPath(), file_size, encryption_config, footer_len, footer_encrypted);
+		ParseParquetFooter(buf.GetCurrentLoc(), file_handle.GetPath(), file_size, encryption_config, footer_len,
+		                   footer_encrypted);
 
 		auto metadata_pos = file_size - (footer_len + 8);
 		transport.SetLocation(metadata_pos);
@@ -1896,8 +1897,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		}
 	}
 
-	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
-	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
+	state.define_buf.Resize(allocator, STANDARD_VECTOR_SIZE);
+	state.repeat_buf.Resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {
@@ -2348,11 +2349,11 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 
 	auto &deletion_filter = this->deletion_filter;
 
-	state.define_buf.zero();
-	state.repeat_buf.zero();
+	state.define_buf.Zero();
+	state.repeat_buf.Zero();
 
-	auto define_ptr = (uint8_t *)state.define_buf.ptr;
-	auto repeat_ptr = (uint8_t *)state.repeat_buf.ptr;
+	auto define_ptr = (uint8_t *)state.define_buf.GetCurrentLoc();
+	auto repeat_ptr = (uint8_t *)state.repeat_buf.GetCurrentLoc();
 
 	if (filters || deletion_filter) {
 		auto res = ProcessFilters(state, result, scan_count, define_ptr, repeat_ptr, log_prefetch);

@@ -33,8 +33,8 @@ public:
 		}
 	}
 
-	ByteBuffer BufferPtr() const {
-		return buffer_;
+	idx_t BytesConsumed() const {
+		return buffer_.GetOffset();
 	}
 
 	uint64_t TotalValues() const {
@@ -125,9 +125,9 @@ private:
 				if (++miniblock_index == number_of_miniblocks_per_block) {
 					// <min delta> <list of bitwidths of miniblocks> <miniblocks>
 					min_delta = ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
-					buffer_.available(number_of_miniblocks_per_block);
-					list_of_bitwidths_of_miniblocks = buffer_.ptr;
-					buffer_.unsafe_inc(number_of_miniblocks_per_block);
+					buffer_.Available(number_of_miniblocks_per_block);
+					list_of_bitwidths_of_miniblocks = buffer_.GetCurrentLoc();
+					buffer_.UnsafeInc(number_of_miniblocks_per_block);
 					miniblock_index = 0;
 				}
 			}

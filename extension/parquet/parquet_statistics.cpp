@@ -1218,7 +1218,7 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	}
 
 	auto new_buffer = make_uniq<ResizeableBuffer>(allocator, bloom_filter_data_size);
-	transport.read(new_buffer->ptr, UnsafeNumericCast<uint32_t>(bloom_filter_data_size));
+	transport.read(new_buffer->GetCurrentLoc(), UnsafeNumericCast<uint32_t>(bloom_filter_data_size));
 	ParquetBloomFilter bloom_filter(std::move(new_buffer));
 	return ApplyBloomFilter(duckdb_filter, bloom_filter, schema, hash_strategy);
 }
@@ -1235,27 +1235,27 @@ ParquetBloomFilter::ParquetBloomFilter(idx_t num_entries, double bloom_filter_fa
 	D_ASSERT(b > 0 && IsPowerOfTwo(b));
 
 	data = make_uniq<ResizeableBuffer>(Allocator::DefaultAllocator(), sizeof(ParquetBloomBlock) * b);
-	data->zero();
-	block_count = data->len / sizeof(ParquetBloomBlock);
-	D_ASSERT(data->len % sizeof(ParquetBloomBlock) == 0);
+	data->Zero();
+	block_count = data->GetLength() / sizeof(ParquetBloomBlock);
+	D_ASSERT(data->GetLength() % sizeof(ParquetBloomBlock) == 0);
 }
 
 ParquetBloomFilter::ParquetBloomFilter(unique_ptr<ResizeableBuffer> data_p) {
-	D_ASSERT(data_p->len % sizeof(ParquetBloomBlock) == 0);
+	D_ASSERT(data_p->GetLength() % sizeof(ParquetBloomBlock) == 0);
 	data = std::move(data_p);
-	block_count = data->len / sizeof(ParquetBloomBlock);
-	D_ASSERT(data->len % sizeof(ParquetBloomBlock) == 0);
+	block_count = data->GetLength() / sizeof(ParquetBloomBlock);
+	D_ASSERT(data->GetLength() % sizeof(ParquetBloomBlock) == 0);
 }
 
 void ParquetBloomFilter::FilterInsert(uint64_t x) {
-	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->ptr);
+	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->GetCurrentLoc());
 	uint64_t i = ((x >> 32) * block_count) >> 32;
 	auto &b = blocks[i];
 	ParquetBloomBlock::BlockInsert(b, x);
 }
 
 bool ParquetBloomFilter::FilterCheck(uint64_t x) {
-	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->ptr);
+	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->GetCurrentLoc());
 	auto i = ((x >> 32) * block_count) >> 32;
 	return ParquetBloomBlock::BlockCheck(blocks[i], x);
 }
@@ -1270,12 +1270,12 @@ static uint8_t PopCnt64(uint64_t n) {
 }
 
 double ParquetBloomFilter::OneRatio() {
-	auto bloom_ptr = reinterpret_cast<uint64_t *>(data->ptr);
+	auto bloom_ptr = reinterpret_cast<uint64_t *>(data->GetCurrentLoc());
 	idx_t one_count = 0;
-	for (idx_t b_idx = 0; b_idx < data->len / sizeof(uint64_t); ++b_idx) {
+	for (idx_t b_idx = 0; b_idx < data->GetLength() / sizeof(uint64_t); ++b_idx) {
 		one_count += PopCnt64(bloom_ptr[b_idx]);
 	}
-	return LossyNumericCast<double>(one_count) / (LossyNumericCast<double>(data->len) * 8.0);
+	return LossyNumericCast<double>(one_count) / (LossyNumericCast<double>(data->GetLength()) * 8.0);
 }
 
 ResizeableBuffer *ParquetBloomFilter::Get() {

@@ -1387,7 +1387,7 @@ void ParquetWriter::Finalize() {
 		// write nonsense bloom filter header
 		duckdb_parquet::BloomFilterHeader filter_header;
 		auto bloom_filter_bytes = bloom_filter_entry.bloom_filter->Get();
-		filter_header.numBytes = NumericCast<int32_t>(bloom_filter_bytes->len);
+		filter_header.numBytes = NumericCast<int32_t>(bloom_filter_bytes->GetLength());
 		filter_header.algorithm.__set_BLOCK(duckdb_parquet::SplitBlockAlgorithm());
 		filter_header.compression.__set_UNCOMPRESSED(duckdb_parquet::Uncompressed());
 		filter_header.hash.__set_XXHASH(duckdb_parquet::XxHash());
@@ -1401,11 +1401,11 @@ void ParquetWriter::Finalize() {
 
 		auto bloom_filter_header_size = Write(filter_header);
 		// write actual data
-		WriteData(bloom_filter_bytes->ptr, bloom_filter_bytes->len);
+		WriteData(bloom_filter_bytes->GetCurrentLoc(), bloom_filter_bytes->GetLength());
 
 		column_chunk.meta_data.__isset.bloom_filter_length = true;
 		column_chunk.meta_data.bloom_filter_length =
-		    NumericCast<int32_t>(bloom_filter_header_size + bloom_filter_bytes->len);
+		    NumericCast<int32_t>(bloom_filter_header_size + bloom_filter_bytes->GetLength());
 	}
 
 	const auto metadata_start_offset = writer->GetTotalWritten();

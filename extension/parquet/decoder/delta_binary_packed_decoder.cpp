@@ -19,23 +19,24 @@ DeltaBinaryPackedDecoder::DeltaBinaryPackedDecoder(ColumnReader &reader)
 
 void DeltaBinaryPackedDecoder::InitializePage() {
 	auto &block = reader.block;
-	dbp_decoder = make_uniq<DbpDecoder>(block->ptr, block->len);
-	block->inc(block->len);
+	idx_t dbp_len;
+	auto loc = block->ConsumeRemaining(dbp_len);
+	dbp_decoder = make_uniq<DbpDecoder>(loc, dbp_len);
 }
 
 void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
 	idx_t valid_count = reader.GetValidCount(defines, read_count, result_offset);
 
 	auto &allocator = reader.reader.allocator;
-	decoded_data_buffer.reset();
+	decoded_data_buffer.Reset();
 	switch (reader.Schema().parquet_type) {
 	case duckdb_parquet::Type::INT32:
-		decoded_data_buffer.resize(allocator, sizeof(int32_t) * (valid_count));
-		dbp_decoder->GetBatch<int32_t>(decoded_data_buffer.ptr, valid_count);
+		decoded_data_buffer.Resize(allocator, sizeof(int32_t) * (valid_count));
+		dbp_decoder->GetBatch<int32_t>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 		break;
 	case duckdb_parquet::Type::INT64:
-		decoded_data_buffer.resize(allocator, sizeof(int64_t) * (valid_count));
-		dbp_decoder->GetBatch<int64_t>(decoded_data_buffer.ptr, valid_count);
+		decoded_data_buffer.Resize(allocator, sizeof(int64_t) * (valid_count));
+		dbp_decoder->GetBatch<int64_t>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 		break;
 
 	default:

@@ -22,18 +22,18 @@ public:
 public:
 	template <typename T>
 	void GetBatch(data_ptr_t values_target_ptr, uint32_t batch_size) {
-		if (buffer_.len % sizeof(T) != 0) {
+		if (buffer_.GetRemaining() % sizeof(T) != 0) {
 			duckdb::stringstream error;
-			error << "Data buffer size for the BYTE_STREAM_SPLIT encoding (" << buffer_.len
+			error << "Data buffer size for the BYTE_STREAM_SPLIT encoding (" << buffer_.GetRemaining()
 			      << ") should be a multiple of the type size (" << sizeof(T) << ")";
 			throw std::runtime_error(error.str());
 		}
-		uint32_t num_buffer_values = buffer_.len / sizeof(T);
+		uint32_t num_buffer_values = buffer_.GetRemaining() / sizeof(T);
 
-		buffer_.available((value_offset_ + batch_size) * sizeof(T));
+		buffer_.Available((value_offset_ + batch_size) * sizeof(T));
 
 		for (uint32_t byte_offset = 0; byte_offset < sizeof(T); ++byte_offset) {
-			data_ptr_t input_bytes = buffer_.ptr + byte_offset * num_buffer_values + value_offset_;
+			data_ptr_t input_bytes = buffer_.GetCurrentLoc() + byte_offset * num_buffer_values + value_offset_;
 			for (uint32_t i = 0; i < batch_size; ++i) {
 				values_target_ptr[byte_offset + i * sizeof(T)] = *(input_bytes + i);
 			}
@@ -43,13 +43,13 @@ public:
 
 	template <typename T>
 	void Skip(uint32_t batch_size) {
-		if (buffer_.len % sizeof(T) != 0) {
+		if (buffer_.GetLength() % sizeof(T) != 0) {
 			duckdb::stringstream error;
-			error << "Data buffer size for the BYTE_STREAM_SPLIT encoding (" << buffer_.len
+			error << "Data buffer size for the BYTE_STREAM_SPLIT encoding (" << buffer_.GetLength()
 			      << ") should be a multiple of the type size (" << sizeof(T) << ")";
 			throw std::runtime_error(error.str());
 		}
-		buffer_.available((value_offset_ + batch_size) * sizeof(T));
+		buffer_.Available((value_offset_ + batch_size) * sizeof(T));
 		value_offset_ += batch_size;
 	}
 

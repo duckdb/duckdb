@@ -18,79 +18,112 @@ namespace duckdb {
 class ByteBuffer { // on to the 10 thousandth impl
 public:
 	ByteBuffer() {};
-	ByteBuffer(data_ptr_t ptr, uint64_t len) : ptr(ptr), len(len) {};
-
-	data_ptr_t ptr = nullptr;
-	uint64_t len = 0;
+	ByteBuffer(const data_ptr_t ptr, const idx_t len) : ptr(ptr), len(len) {};
 
 public:
-	void inc(const uint64_t increment) {
-		available(increment);
-		unsafe_inc(increment);
+	data_ptr_t operator[](const idx_t index) const {
+		Available(index + 1);
+		return ptr + offset + index;
 	}
 
-	void unsafe_inc(const uint64_t increment) {
-		len -= increment;
-		ptr += increment;
+	data_ptr_t GetCurrentLoc() const {
+		return ptr + offset;
+	}
+
+	idx_t GetOffset() const {
+		return offset;
+	}
+
+	idx_t GetLength() const {
+		return len;
+	}
+
+	idx_t GetRemaining() const {
+		return len - offset;
+	}
+
+	//! Hands off everything left in the buffer to a caller-managed sub-region: returns the current
+	//! location, writes its length to length_out, and consumes the buffer up to its end.
+	data_ptr_t ConsumeRemaining(idx_t &length_out) {
+		length_out = GetRemaining();
+		auto loc = GetCurrentLoc();
+		UnsafeInc(length_out);
+		return loc;
+	}
+
+	void Inc(const idx_t increment) {
+		Available(increment);
+		UnsafeInc(increment);
+	}
+
+	void UnsafeInc(const idx_t increment) {
+		offset += increment;
 	}
 
 	template <class T>
-	T read() {
-		available(sizeof(T));
-		return unsafe_read<T>();
+	T Read() {
+		Available(sizeof(T));
+		return UnsafeRead<T>();
 	}
 
 	template <class T>
-	T unsafe_read() {
-		T val = unsafe_get<T>();
-		unsafe_inc(sizeof(T));
+	T UnsafeRead() {
+		T val = UnsafeGet<T>();
+		UnsafeInc(sizeof(T));
 		return val;
 	}
 
 	template <class T>
-	T get() {
-		available(sizeof(T));
-		return unsafe_get<T>();
+	T Get() {
+		Available(sizeof(T));
+		return UnsafeGet<T>();
 	}
 
 	template <class T>
-	T unsafe_get() {
-		return Load<T>(ptr);
+	T UnsafeGet() {
+		return Load<T>(ptr + offset);
 	}
 
-	void copy_to(char *dest, const uint64_t len) const {
-		available(len);
-		unsafe_copy_to(dest, len);
+	void CopyTo(char *dest, const idx_t copy_len) const {
+		Available(copy_len);
+		UnsafeCopyTo(dest, copy_len);
 	}
 
-	void unsafe_copy_to(char *dest, const uint64_t len) const {
-		std::memcpy(dest, ptr, len);
+	void UnsafeCopyTo(char *dest, const idx_t copy_len) const {
+		std::memcpy(dest, ptr + offset, copy_len);
 	}
 
-	void zero() const {
-		std::memset(ptr, 0, len);
+	void Zero() const {
+		std::memset(ptr + offset, 0, len - offset);
 	}
 
-	void available(const uint64_t req_len) const {
-		if (!check_available(req_len)) {
+	void Available(const idx_t req_len) const {
+		if (!CheckAvailable(req_len)) {
 			throw std::runtime_error("Out of buffer");
 		}
 	}
 
-	bool check_available(const uint64_t req_len) const {
-		return req_len <= len;
+	bool CheckAvailable(const idx_t req_len) const {
+		return req_len <= len - offset;
 	}
+
+protected:
+	data_ptr_t ptr = nullptr;
+
+	idx_t offset = 0;
+	idx_t len = 0;
 };
 
 class ResizeableBuffer : public ByteBuffer {
 public:
 	ResizeableBuffer() {
 	}
-	ResizeableBuffer(Allocator &allocator, const uint64_t new_size) {
-		resize(allocator, new_size);
+	ResizeableBuffer(Allocator &allocator, const idx_t new_size) {
+		Resize(allocator, new_size);
 	}
-	void resize(Allocator &allocator, const uint64_t new_size) {
+	void Resize(Allocator &allocator, const idx_t new_size) {
 		len = new_size;
+		offset = 0;
 		if (new_size == 0) {
 			return;
 		}
@@ -101,9 +134,10 @@ public:
 			ptr = allocated_data.get();
 		}
 	}
-	void reset() {
+	void Reset() {
 		ptr = allocated_data.get();
 		len = alloc_len;
+		offset = 0;
 	}
 
 private:
