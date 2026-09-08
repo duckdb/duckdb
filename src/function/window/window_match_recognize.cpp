@@ -1148,14 +1148,17 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 		return row_conditions.Matches(index, row);
 	};
 
-	// a condition that navigates the match depends on the rows matched before the one it tests, and
-	// one that reads MATCH_NUMBER() on which attempt it is
+	// a condition that reads MATCH_NUMBER(), or navigates the match at all, depends on which attempt
+	// it is being tested in
 	auto memo = PatternMemo::PARTITION;
 	for (auto scoped : config.row_scoped) {
 		memo = scoped ? PatternMemo::ATTEMPT : memo;
 	}
-	if (!config.navigations.empty()) {
-		memo = PatternMemo::HISTORY;
+	for (auto &navigation : config.navigations) {
+		// navigating the match as a whole reads where it started, which the attempt fixes. Navigating a
+		// variable's rows reads which rows were matched to it, and that is what differs between two
+		// ways of reaching the same state.
+		memo = navigation.symbol.empty() ? memo : PatternMemo::HISTORY;
 	}
 
 	PatternProgram program;
