@@ -45,6 +45,8 @@ struct MultiFileReaderInterface {
 	virtual void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
 	virtual optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
 	                                FileExpandResult expand_result);
+	virtual optional_idx MaxThreads(ClientContext &context, const MultiFileBindData &bind_data_p,
+	                                const MultiFileGlobalState &global_state, FileExpandResult expand_result);
 	virtual unique_ptr<GlobalTableFunctionState>
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state) = 0;
 	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) = 0;
@@ -204,7 +206,14 @@ public:
 
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
-		auto interface = OP::CreateInterface(context);
+		return MultiFileBindInterface(context, input, return_types, names, OP::CreateInterface(context));
+	}
+
+	//! Bind using an explicitly provided interface - used by wrappers that construct the interface themselves
+	static unique_ptr<FunctionData> MultiFileBindInterface(ClientContext &context, TableFunctionBindInput &input,
+	                                                       vector<LogicalType> &return_types, vector<Identifier> &names,
+	                                                       unique_ptr<MultiFileReaderInterface> interface_p) {
+		auto interface = std::move(interface_p);
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
 
 		auto glob_input = multi_file_reader->GetGlobInput(*interface);
@@ -696,7 +705,7 @@ public:
 		}
 
 		auto expand_result = bind_data.file_list->GetExpandResult();
-		auto max_threads = bind_data.interface->MaxThreads(bind_data, *result, expand_result);
+		auto max_threads = bind_data.interface->MaxThreads(context, bind_data, *result, expand_result);
 		if (max_threads.IsValid()) {
 			result->max_threads = MinValue<idx_t>(result->max_threads, max_threads.GetIndex());
 		}

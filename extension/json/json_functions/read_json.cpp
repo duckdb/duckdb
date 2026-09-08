@@ -40,15 +40,16 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 }
 
 struct AutoDetectState {
-	AutoDetectState(ClientContext &context_p, MultiFileBindData &bind_data_p, const vector<OpenFileInfo> &files,
-	                MutableDateFormatMap &date_format_map)
-	    : context(context_p), bind_data(bind_data_p), files(files), date_format_map(date_format_map), files_scanned(0),
-	      tuples_scanned(0), bytes_scanned(0), total_file_size(0) {
+	AutoDetectState(ClientContext &context_p, JSONScanData &json_data_p, const vector<OpenFileInfo> &files,
+	                vector<shared_ptr<BaseUnionData>> &union_readers_p, MutableDateFormatMap &date_format_map)
+	    : context(context_p), json_data(json_data_p), files(files), union_readers(union_readers_p),
+	      date_format_map(date_format_map), files_scanned(0), tuples_scanned(0), bytes_scanned(0), total_file_size(0) {
 	}
 
 	ClientContext &context;
-	MultiFileBindData &bind_data;
+	JSONScanData &json_data;
 	const vector<OpenFileInfo> &files;
+	vector<shared_ptr<BaseUnionData>> &union_readers;
 	MutableDateFormatMap &date_format_map;
 	atomic<idx_t> files_scanned;
 	atomic<idx_t> tuples_scanned;
@@ -68,17 +69,16 @@ public:
 	static idx_t ExecuteInternal(AutoDetectState &auto_detect_state, JSONStructureNode &node, const idx_t file_idx,
 	                             ArenaAllocator &allocator, Vector &string_vector, idx_t remaining) {
 		auto &context = auto_detect_state.context;
-		auto &bind_data = auto_detect_state.bind_data;
 		auto &files = auto_detect_state.files;
-		auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
+		auto &json_data = auto_detect_state.json_data;
 		auto json_reader = make_shared_ptr<JSONReader>(context, json_data.options, files[file_idx].path);
-		if (bind_data.union_readers[file_idx]) {
+		if (auto_detect_state.union_readers[file_idx]) {
 			throw InternalException("Union data already set");
 		}
 		auto &reader = *json_reader;
 		auto union_data = make_uniq<BaseUnionData>(files[file_idx].path);
 		union_data->reader = std::move(json_reader);
-		bind_data.union_readers[file_idx] = std::move(union_data);
+		auto_detect_state.union_readers[file_idx] = std::move(union_data);
 
 		auto &global_allocator = Allocator::Get(context);
 		idx_t buffer_capacity = json_data.options.maximum_object_size * 2;
@@ -130,8 +130,7 @@ public:
 	}
 
 	void ExecuteTask() override {
-		auto &json_data = auto_detect_state.bind_data.bind_data->Cast<JSONScanData>();
-		auto &options = json_data.options;
+		auto &options = auto_detect_state.json_data.options;
 		for (idx_t file_idx = file_idx_start; file_idx < file_idx_end; file_idx++) {
 			ExecuteInternal(auto_detect_state, node, file_idx, allocator, string_vector, options.sample_size);
 		}
@@ -240,20 +239,16 @@ static void BindGeoJSONFeatureColumns(const LogicalType &type, const vector<Iden
 	}
 }
 
-void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, vector<LogicalType> &return_types,
-                          vector<Identifier> &names) {
-	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
-
+void JSONScan::AutoDetect(ClientContext &context, JSONScanData &json_data, const vector<OpenFileInfo> &files,
+                          vector<shared_ptr<BaseUnionData>> &union_readers, bool union_by_name,
+                          vector<LogicalType> &return_types, vector<Identifier> &names) {
 	MutableDateFormatMap date_format_map(*json_data.date_format_map);
 	JSONStructureNode node;
 	auto &options = json_data.options;
-	auto files = bind_data.file_list->GetAllFiles();
-	auto file_count = bind_data.file_options.union_by_name
-	                      ? files.size()
-	                      : MinValue<idx_t>(options.maximum_sample_files, files.size());
-	bind_data.union_readers.resize(files.empty() ? 0 : files.size());
+	auto file_count = union_by_name ? files.size() : MinValue<idx_t>(options.maximum_sample_files, files.size());
+	union_readers.resize(files.empty() ? 0 : files.size());
 
-	AutoDetectState auto_detect_state(context, bind_data, files, date_format_map);
+	AutoDetectState auto_detect_state(context, json_data, files, union_readers, date_format_map);
 	const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	const auto files_per_task = (file_count + num_threads - 1) / num_threads;
 	const auto num_tasks = (file_count + files_per_task - 1) / files_per_task;
@@ -342,16 +337,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	MultiFileFunction<JSONMultiFileInfo> table_function("read_json");
 
 	JSONScan::TableFunctionDefaults(table_function);
-	table_function.named_parameters["columns"] = LogicalType::ANY;
-	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["geojson"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
-	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
-	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;
-	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
-	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
-	table_function.named_parameters["records"] = LogicalType::VARCHAR;
-	table_function.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
+	JSONScan::AddReadJSONParameters(table_function);
 
 	// TODO: might be able to do filter pushdown/prune ?
 	table_function.function_info = std::move(function_info);
@@ -362,10 +348,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info) {
 	auto table_function = JSONFunctions::GetReadJSONTableFunction(std::move(info));
 	table_function.SetName(Identifier(std::move(name)));
-	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
-	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
-	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["map_inference_threshold"] = LogicalType::BIGINT;
+	JSONScan::AddAutoDetectParameters(table_function);
 	return MultiFileReader::CreateFunctionSet(table_function);
 }
 

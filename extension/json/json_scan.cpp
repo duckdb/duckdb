@@ -53,20 +53,21 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 	date_format_map = make_uniq<DateFormatMap>(std::move(candidate_formats));
 }
 
-JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const MultiFileBindData &bind_data_p)
-    : bind_data(bind_data_p), json_data(bind_data.bind_data->Cast<JSONScanData>()),
-      transform_options(json_data.transform_options), allocator(BufferAllocator::Get(context)),
+JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanData &json_data_p,
+                                         idx_t total_file_count)
+    : json_data(json_data_p), transform_options(json_data.transform_options), allocator(BufferAllocator::Get(context)),
       buffer_capacity(json_data.options.maximum_object_size * 2),
       system_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
-      enable_parallel_scans(bind_data.file_list->GetTotalFileCount() < system_threads) {
+      enable_parallel_scans(total_file_count < system_threads) {
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
     : scan_state(context, gstate.allocator, gstate.buffer_capacity) {
 }
 
-JSONGlobalTableFunctionState::JSONGlobalTableFunctionState(ClientContext &context, const MultiFileBindData &bind_data)
-    : state(context, bind_data) {
+JSONGlobalTableFunctionState::JSONGlobalTableFunctionState(ClientContext &context, const JSONScanData &json_data,
+                                                           idx_t total_file_count)
+    : state(context, json_data, total_file_count) {
 }
 
 JSONLocalTableFunctionState::JSONLocalTableFunctionState(ClientContext &context, JSONScanGlobalState &gstate)
@@ -125,6 +126,26 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;
 	table_function.filter_prune = false;
+}
+
+void JSONScan::AddReadJSONParameters(TableFunction &table_function) {
+	table_function.named_parameters["columns"] = LogicalType::ANY;
+	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["geojson"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
+	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
+	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;
+	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
+	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
+	table_function.named_parameters["records"] = LogicalType::VARCHAR;
+	table_function.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
+}
+
+void JSONScan::AddAutoDetectParameters(TableFunction &table_function) {
+	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
+	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
+	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["map_inference_threshold"] = LogicalType::BIGINT;
 }
 
 } // namespace duckdb

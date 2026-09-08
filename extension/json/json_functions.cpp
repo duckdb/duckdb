@@ -223,6 +223,8 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	functions.push_back(GetReadNDJSONFunction());
 	functions.push_back(GetReadJSONAutoFunction());
 	functions.push_back(GetReadNDJSONAutoFunction());
+	functions.push_back(GetReadSingleJSONFileFunction());
+	functions.push_back(GetReadJSONNewFunction());
 
 	// Table in-out
 	functions.push_back(GetJSONEachFunction());

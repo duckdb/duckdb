@@ -44,7 +44,8 @@ set(JSON_EXTENSION_FILES
     json_functions/json_modify.cpp
     json_functions/json_strip_nulls.cpp
     json_functions/read_json.cpp
-    json_functions/read_json_objects.cpp)
+    json_functions/read_json_objects.cpp
+    json_functions/read_single_json_file.cpp)
 
 build_static_extension(json ${JSON_EXTENSION_FILES})
 set(PARAMETERS "-warnings")

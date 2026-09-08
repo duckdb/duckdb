@@ -31,6 +31,12 @@ optional_idx MultiFileReaderInterface::MaxThreads(const MultiFileBindData &bind_
 	return optional_idx();
 }
 
+optional_idx MultiFileReaderInterface::MaxThreads(ClientContext &context, const MultiFileBindData &bind_data_p,
+                                                  const MultiFileGlobalState &global_state,
+                                                  FileExpandResult expand_result) {
+	return MaxThreads(bind_data_p, global_state, expand_result);
+}
+
 void MultiFileReaderInterface::FinalizeBindData(MultiFileBindData &multi_file_data) {
 }
 

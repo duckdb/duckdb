@@ -37,8 +37,11 @@ unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientCon
 
 bool JSONMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &value,
                                     MultiFileOptions &, BaseFileReaderOptions &options_p) {
-	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
-	auto &options = reader_options.options;
+	return JSONScan::ParseOption(context, key, value, options_p.Cast<JSONFileReaderOptions>().options);
+}
+
+bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const Value &value,
+                           JSONReaderOptions &options) {
 	if (value.IsNull()) {
 		throw BinderException("Cannot use NULL as argument to key %s", key);
 	}
@@ -280,10 +283,9 @@ unique_ptr<TableFunctionData> JSONMultiFileInfo::InitializeBindData(MultiFileBin
 	return std::move(json_data);
 }
 
-void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
-                                   MultiFileBindData &bind_data) {
-	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
-
+void JSONScan::BindSchema(ClientContext &context, JSONScanData &json_data, MultiFileList &files,
+                          vector<shared_ptr<BaseUnionData>> &union_readers, bool union_by_name,
+                          vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto &options = json_data.options;
 	names = options.name_list;
 	return_types = options.sql_type_list;
@@ -304,7 +306,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 			                      "\"columns\" parameter.");
 		}
 		// If we are reading VALUES, we can only have one column
-		if (json_data.options.record_type == JSONRecordType::VALUES && return_types.size() != 1) {
+		if (options.record_type == JSONRecordType::VALUES && return_types.size() != 1) {
 			throw BinderException("read_json requires a single column to be specified through the \"columns\" "
 			                      "parameter when \"records\" is set to 'false'.");
 		}
@@ -312,7 +314,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 
 	// Reading GeoJSON is opt-in, but a .geojson / .geojsonl file name is opt-in enough
 	if (!options.geojson.has_value()) {
-		const auto first_file = bind_data.file_list->GetFirstFile().path;
+		const auto first_file = files.GetFirstFile().path;
 		options.geojson =
 		    StringUtil::CIEndsWith(first_file, ".geojson") || StringUtil::CIEndsWith(first_file, ".geojsonl");
 	}
@@ -326,14 +328,15 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 	json_data.InitializeFormats();
 
 	if (options.auto_detect || options.record_type == JSONRecordType::AUTO_DETECT) {
-		JSONScan::AutoDetect(context, bind_data, return_types, names);
+		JSONScan::AutoDetect(context, json_data, files.GetAllFiles(), union_readers, union_by_name, return_types,
+		                     names);
 		D_ASSERT(return_types.size() == names.size());
 	}
 	json_data.key_names = IdentifiersToStrings(names);
+}
 
-	bind_data.multi_file_reader->BindOptions(bind_data.file_options, *bind_data.file_list, return_types, names,
-	                                         bind_data.reader_bind);
-
+void JSONScan::FinalizeBind(JSONScanData &json_data, vector<Identifier> &names) {
+	auto &options = json_data.options;
 	auto &transform_options = json_data.transform_options;
 	transform_options.strict_cast = !options.ignore_errors;
 	transform_options.error_duplicate_key = !options.ignore_errors;
@@ -342,20 +345,35 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 	transform_options.date_format_map = json_data.date_format_map.get();
 	transform_options.delay_error = true;
 
-	if (options.auto_detect) {
-		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
-		// We rename them so we can parse the file anyway. Note that we can't change json_data.key_names,
-		// because the JSON reader gets columns by exact name, not position
-		identifier_map_t<idx_t> name_collision_count;
-		for (auto &col_name : names) {
-			// Taken from CSV header_detection.cpp
-			while (name_collision_count.find(col_name) != name_collision_count.end()) {
-				name_collision_count[col_name] += 1;
-				col_name = Identifier(col_name + "_" + to_string(name_collision_count[col_name]));
-			}
-			name_collision_count[col_name] = 0;
-		}
+	if (!options.auto_detect) {
+		return;
 	}
+	// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
+	// We rename them so we can parse the file anyway. Note that we can't change json_data.key_names,
+	// because the JSON reader gets columns by exact name, not position
+	identifier_map_t<idx_t> name_collision_count;
+	for (auto &col_name : names) {
+		// Taken from CSV header_detection.cpp
+		while (name_collision_count.find(col_name) != name_collision_count.end()) {
+			name_collision_count[col_name] += 1;
+			col_name = Identifier(col_name + "_" + to_string(name_collision_count[col_name]));
+		}
+		name_collision_count[col_name] = 0;
+	}
+}
+
+void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
+                                   MultiFileBindData &bind_data) {
+	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
+
+	JSONScan::BindSchema(context, json_data, *bind_data.file_list, bind_data.union_readers,
+	                     bind_data.file_options.union_by_name, return_types, names);
+
+	bind_data.multi_file_reader->BindOptions(bind_data.file_options, *bind_data.file_list, return_types, names,
+	                                         bind_data.reader_bind);
+
+	JSONScan::FinalizeBind(json_data, names);
+
 	bool reuse_readers = true;
 	for (auto &union_reader : bind_data.union_readers) {
 		if (!union_reader || !union_reader->reader) {
@@ -398,8 +416,9 @@ void JSONMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderO
 unique_ptr<GlobalTableFunctionState> JSONMultiFileInfo::InitializeGlobalState(ClientContext &context,
                                                                               MultiFileBindData &bind_data,
                                                                               MultiFileGlobalState &global_state) {
-	auto json_state = make_uniq<JSONGlobalTableFunctionState>(context, bind_data);
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
+	auto json_state =
+	    make_uniq<JSONGlobalTableFunctionState>(context, json_data, bind_data.file_list->GetTotalFileCount());
 
 	auto &gstate = json_state->state;
 	// Perform projection pushdown
@@ -539,11 +558,10 @@ void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanG
 	const auto count = lstate.Read();
 	yyjson_val **values = scan_state.values;
 
-	auto &column_ids = json_reader.column_ids;
 	if (!gstate.names.empty()) {
 		vector<Vector *> result_vectors;
-		result_vectors.reserve(column_ids.size());
-		for (idx_t i = 0; i < column_ids.size(); i++) {
+		result_vectors.reserve(gstate.names.size());
+		for (idx_t i = 0; i < gstate.names.size(); i++) {
 			result_vectors.emplace_back(&output.data[i]);
 		}
 
@@ -616,7 +634,7 @@ AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &g
 
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
-	auto &json_data = gstate.bind_data.bind_data->Cast<JSONScanData>();
+	auto &json_data = gstate.json_data;
 	switch (json_data.options.type) {
 	case JSONScanType::READ_JSON:
 		ReadJSONFunction(context, *this, gstate, lstate, output);

@@ -156,6 +156,9 @@ private:
 	static TableFunctionSet GetReadNDJSONFunction();
 	static TableFunctionSet GetReadJSONAutoFunction();
 	static TableFunctionSet GetReadNDJSONAutoFunction();
+	static TableFunction GetReadSingleJSONFileTableFunction(shared_ptr<JSONScanInfo> function_info);
+	static TableFunctionSet GetReadSingleJSONFileFunction();
+	static TableFunctionSet GetReadJSONNewFunction();
 
 	static TableFunctionSet GetJSONEachFunction();
 	static TableFunctionSet GetJSONTreeFunction();

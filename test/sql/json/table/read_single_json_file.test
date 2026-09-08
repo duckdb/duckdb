@@ -1,0 +1,180 @@
+# name: test/sql/json/table/read_single_json_file.test
+# description: Test read_single_json_file and the TableFunctionMultiFileWrapper around it
+# group: [table]
+
+require json
+
+# read_single_json_file reads exactly one file
+query II
+SELECT * FROM read_single_json_file('data/json/example_n.ndjson')
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+# it does not accept a glob or a list of files
+statement error
+SELECT * FROM read_single_json_file('data/json/example_*.ndjson')
+----
+<REGEX>:.*IO Error.*
+
+statement error
+SELECT * FROM read_single_json_file(['data/json/example_n.ndjson'])
+----
+<REGEX>:.*No function matches.*
+
+# projection pushdown
+query I
+SELECT name FROM read_single_json_file('data/json/example_n.ndjson') WHERE id > 3 ORDER BY id
+----
+Broadcast News
+Raising Arizona
+
+# explicit columns
+query II
+SELECT * FROM read_single_json_file('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}) ORDER BY id
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+# records=false gives a single column
+query I
+SELECT typeof(json) FROM read_single_json_file('data/json/example_r.ndjson', records=false) LIMIT 1
+----
+STRUCT(id BIGINT, "name" VARCHAR)
+
+# the same options as read_json are supported
+query II
+SELECT * FROM read_single_json_file('data/json/unterminated_quotes.ndjson', ignore_errors=true) LIMIT 3
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+NULL	NULL
+
+statement error
+SELECT * FROM read_single_json_file('data/json/unterminated_quotes.ndjson')
+----
+<REGEX>:.*Malformed JSON.*
+
+statement error
+SELECT * FROM read_single_json_file('data/json/example_n.ndjson', auto_detect=false)
+----
+<REGEX>:.*auto_detect=false.*
+
+# geojson is detected from the file name, like it is for read_json
+query I
+SELECT geometry FROM read_single_json_file('data/json/geojson/geometries.geojsonl')
+----
+POINT (1 2)
+LINESTRING (0 0, 1 1)
+GEOMETRYCOLLECTION (POINT (7 8))
+
+# ------------------------------------------------------------------------------------------------
+# read_json_new - the multi file function wrapping read_single_json_file
+# ------------------------------------------------------------------------------------------------
+
+query II
+SELECT * FROM read_json_new('data/json/example_n.ndjson')
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+# globs, lists of files and the filename column all come from the multi file reader
+query II
+SELECT count(*), count(DISTINCT filename) FROM read_json_new('data/json/example_*.ndjson', filename=true)
+----
+15	3
+
+query I
+SELECT count(*) FROM read_json_new(['data/json/example_n.ndjson', 'data/json/example_r.ndjson'])
+----
+10
+
+# the wrapped function still gets its own named parameters
+query II
+SELECT * FROM read_json_new('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}) ORDER BY id
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+query I
+SELECT count(*) FROM read_json_new('data/json/unterminated_quotes.ndjson', ignore_errors=true)
+----
+5
+
+statement error
+SELECT * FROM read_json_new('data/json/example_n.ndjson', unknown_option=true)
+----
+<REGEX>:.*Invalid named parameter.*
+
+# union by name binds every file separately and unifies the resulting schemas
+query II
+SELECT * FROM read_json_new(['data/json/example_n.ndjson', 'data/json/different_schemas.ndjson'], union_by_name=true) ORDER BY ALL
+----
+1	O Brother, Where Art Thou?
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+2	NULL
+3	The Firm
+3	The Firm
+4	Broadcast News
+4	NULL
+5	Raising Arizona
+5	Raising Arizona
+
+# hive partitioning
+statement ok
+COPY (SELECT 1 AS id, 'a' AS part UNION ALL SELECT 2, 'b') TO '{TEST_DIR}/json_hive' (FORMAT json, PARTITION_BY part)
+
+query II
+SELECT part, id FROM read_json_new('{TEST_DIR}/json_hive/*/*.json', hive_partitioning=true) ORDER BY part
+----
+a	1
+b	2
+
+query II
+SELECT part, id FROM read_json_new('{TEST_DIR}/json_hive/*/*.json', hive_partitioning=true) WHERE part='b'
+----
+b	2
+
+# reading a directory works through the fallback glob
+query I
+SELECT count(*) FROM read_json_new('{TEST_DIR}/json_hive/part=a')
+----
+1
+
+# empty files
+query I
+SELECT count(*) FROM read_json_new('data/json/empty.ndjson')
+----
+0
+
+statement error
+SELECT * FROM read_json_new('data/json/this_file_does_not_exist.json')
+----
+<REGEX>:.*No files found.*
+
+query I
+SELECT count(*) FROM read_json_new('data/json/this_file_does_not_exist.json', allow_empty=true)
+----
+0
+
+# a larger file is read in parallel by multiple threads
+statement ok
+COPY (SELECT i AS id, 'string_' || i AS name FROM range(200000) t(i)) TO '{TEST_DIR}/big.ndjson' (FORMAT json)
+
+query II
+SELECT count(*), sum(id) FROM read_json_new('{TEST_DIR}/big.ndjson')
+----
+200000	19999900000
