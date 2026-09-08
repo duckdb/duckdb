@@ -222,14 +222,17 @@ static bool PushNestedCollation(ClientContext &context, unique_ptr<Expression> &
 
 bool CollationBinding::PushCollation(ClientContext &context, unique_ptr<Expression> &source,
                                      const LogicalType &sql_type, CollationType type) const {
-	if (StructType::IsStruct(sql_type)) {
-		return PushStructCollation(context, source, sql_type, type, *this);
-	}
-	if (sql_type.id() == LogicalTypeId::LIST) {
-		return PushNestedCollation(context, source, ListType::GetChildType(sql_type), type, *this);
-	}
-	if (sql_type.id() == LogicalTypeId::ARRAY) {
-		return PushNestedCollation(context, source, ArrayType::GetChildType(sql_type), type, *this);
+	// Leave collation of aliased structs, lists and arrays to the registered callbacks.
+	if (!sql_type.HasAlias()) {
+		if (StructType::IsStruct(sql_type)) {
+			return PushStructCollation(context, source, sql_type, type, *this);
+		}
+		if (sql_type.id() == LogicalTypeId::LIST) {
+			return PushNestedCollation(context, source, ListType::GetChildType(sql_type), type, *this);
+		}
+		if (sql_type.id() == LogicalTypeId::ARRAY) {
+			return PushNestedCollation(context, source, ArrayType::GetChildType(sql_type), type, *this);
+		}
 	}
 	for (auto &collation : collations) {
 		auto functions = collation.get_collation_functions(context, sql_type, type);
