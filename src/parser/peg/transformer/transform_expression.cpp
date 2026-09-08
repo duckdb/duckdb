@@ -1206,23 +1206,9 @@ string PEGTransformerFactory::TransformNotSimilarToOp(PEGTransformer &transforme
 	return "!" + RegexMatchOperatorFunctionName(transformer);
 }
 
-static unique_ptr<ParsedExpression> TransformOperatorFunction(string operator_name,
+static unique_ptr<ParsedExpression> TransformOperatorFunction(const QualifiedName &operator_name,
                                                               vector<unique_ptr<ParsedExpression>> children) {
-	auto split_operator = StringUtil::Split(operator_name, ".");
-	string schema_name;
-	string function_name;
-	if (split_operator.size() == 1) {
-		function_name = std::move(split_operator[0]);
-	} else if (split_operator.size() == 2) {
-		schema_name = std::move(split_operator[0]);
-		function_name = std::move(split_operator[1]);
-	} else {
-		throw ParserException("Too many identifiers found, expected schema.operator or operator");
-	}
-
-	auto result = make_uniq<FunctionExpression>(
-	    QualifiedName(Identifier(), Identifier(std::move(schema_name)), Identifier(std::move(function_name))),
-	    std::move(children));
+	auto result = make_uniq<FunctionExpression>(operator_name, std::move(children));
 	result->IsOperatorMutable() = true;
 	return result;
 }
@@ -1238,7 +1224,7 @@ PEGTransformerFactory::TransformInfixOtherOperatorExpression(PEGTransformer &tra
 	for (auto &other_operator_expr : *other_operator_tail) {
 		auto right_expr = std::move(other_operator_expr.expression);
 		if (other_operator_expr.op.is_any_all) {
-			auto op_string = other_operator_expr.op.name;
+			const auto &op_string = other_operator_expr.op.name.Name().GetIdentifierName();
 			auto is_any = other_operator_expr.op.is_any;
 
 			// Map operator string to ExpressionType (INVALID if not a comparison operator)
@@ -1301,11 +1287,10 @@ PEGTransformerFactory::TransformInfixOtherOperatorExpression(PEGTransformer &tra
 				return std::move(subquery_expr);
 			}
 		} else {
-			auto other_operator = std::move(other_operator_expr.op.name);
 			vector<unique_ptr<ParsedExpression>> children_function;
 			children_function.push_back(std::move(expr));
 			children_function.push_back(std::move(right_expr));
-			expr = TransformOperatorFunction(std::move(other_operator), std::move(children_function));
+			expr = TransformOperatorFunction(other_operator_expr.op.name, std::move(children_function));
 		}
 	}
 	return expr;
@@ -1316,7 +1301,7 @@ PEGTransformerFactory::TransformCustomPrefixExpression(PEGTransformer &transform
                                                        unique_ptr<ParsedExpression> other_operator_expression) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(other_operator_expression));
-	return TransformOperatorFunction(any_op, std::move(children));
+	return TransformOperatorFunction(QualifiedName(Identifier(any_op)), std::move(children));
 }
 
 OtherOperatorTail PEGTransformerFactory::TransformOtherOperatorTail(PEGTransformer &transformer,
@@ -1331,32 +1316,48 @@ OtherOperatorTail PEGTransformerFactory::TransformOtherOperatorTail(PEGTransform
 ParsedOperator PEGTransformerFactory::TransformAnyAllParsedOperator(PEGTransformer &transformer,
                                                                     const pair<string, bool> &any_all_operator) {
 	ParsedOperator result;
-	result.name = any_all_operator.first;
+	result.name = QualifiedName(Identifier(any_all_operator.first));
 	result.is_any_all = true;
 	result.is_any = any_all_operator.second;
 	return result;
 }
 
-ParsedOperator PEGTransformerFactory::TransformNamedOtherOperator(PEGTransformer &transformer, const string &child) {
+static ParsedOperator TransformUnqualifiedOperator(const string &operator_name) {
 	ParsedOperator result;
-	result.name = child;
+	result.name = QualifiedName(Identifier(operator_name));
 	return result;
 }
 
-string PEGTransformerFactory::TransformQualifiedOperator(PEGTransformer &transformer,
-                                                         const string &qualified_operator_contents) {
-	return qualified_operator_contents;
+ParsedOperator PEGTransformerFactory::TransformUnqualifiedOtherOperator(PEGTransformer &transformer,
+                                                                        const string &child) {
+	return TransformUnqualifiedOperator(child);
 }
 
-string PEGTransformerFactory::TransformQualifiedOperatorContents(PEGTransformer &transformer,
-                                                                 const optional<vector<string>> &col_id_dot,
-                                                                 const string &any_op) {
-	vector<string> result;
+ParsedOperator PEGTransformerFactory::TransformQualifiedOperator(PEGTransformer &transformer,
+                                                                 QualifiedName qualified_operator_contents) {
+	ParsedOperator result;
+	result.name = std::move(qualified_operator_contents);
+	return result;
+}
+
+QualifiedName PEGTransformerFactory::TransformQualifiedOperatorContents(PEGTransformer &transformer,
+                                                                        const optional<vector<string>> &col_id_dot,
+                                                                        const string &any_op) {
+	vector<Identifier> qualification;
 	if (col_id_dot) {
-		result = *col_id_dot;
+		if (col_id_dot->size() > 1) {
+			throw ParserException("Too many identifiers found, expected schema.operator or operator");
+		}
+		for (const auto &identifier : *col_id_dot) {
+			qualification.emplace_back(identifier);
+		}
 	}
-	result.push_back(any_op);
-	return StringUtil::Join(result, ".");
+	return QualifiedName(std::move(qualification), Identifier(any_op));
+}
+
+ParsedOperator PEGTransformerFactory::TransformUnqualifiedPrefixOperator(PEGTransformer &transformer,
+                                                                         const string &child) {
+	return TransformUnqualifiedOperator(child);
 }
 
 pair<string, bool> PEGTransformerFactory::TransformAnyAllOperator(PEGTransformer &transformer, const string &any_op,
@@ -1584,8 +1585,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 	// --- SPECIAL CASE: Handle -<Number> atomically to prevent overflow/precision loss ---
 	// We only do this if there is exactly one prefix and it is a minus.
 	if (prefix_repeat.GetChildren().size() == 1) {
-		auto prefix = transformer.Transform<string>(prefix_repeat.GetChildren()[0]);
-		if (prefix == "-" && IsNumberLiteral(base_expr_pr)) {
+		auto prefix = transformer.Transform<ParsedOperator>(prefix_repeat.GetChildren()[0]);
+		if (prefix.name.Path().size() == 1 && prefix.name.Name() == "-" && IsNumberLiteral(base_expr_pr)) {
 			string raw_number = GetRawText(base_expr_pr);
 			string full_text = "-" + raw_number;
 			return ConvertNumberToValue(full_text);
@@ -1594,15 +1595,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
 
-	vector<string> prefixes;
+	vector<ParsedOperator> prefixes;
 	for (auto &child_ref : prefix_repeat.GetChildren()) {
-		prefixes.push_back(transformer.Transform<string>(child_ref));
+		prefixes.push_back(transformer.Transform<ParsedOperator>(child_ref));
 	}
 
 	for (auto it = prefixes.rbegin(); it != prefixes.rend(); ++it) {
-		const string &prefix = *it;
+		auto &prefix = *it;
 
-		if (prefix == "-" && expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		if (prefix.name.Path().size() == 1 && prefix.name.Name() == "-" &&
+		    expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 			auto &const_expr = expr->Cast<ConstantExpression>();
 			if (auto negated_expr = TryNegateValue(const_expr)) {
 				expr = std::move(negated_expr);
@@ -1612,7 +1614,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(expr));
-		auto func_expr = make_uniq<FunctionExpression>(Identifier(prefix), std::move(children));
+		auto func_expr = make_uniq<FunctionExpression>(std::move(prefix.name), std::move(children));
 		func_expr->IsOperatorMutable() = true;
 		expr = std::move(func_expr);
 	}
@@ -1655,20 +1657,22 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePrefixExpression
 	}
 
 	auto &prefix_repeat = prefix_opt.GetResult().Cast<RepeatParseResult>();
-	vector<string> prefixes;
+	vector<ParsedOperator> prefixes;
 	auto prefix_children = prefix_repeat.GetChildren();
 	for (idx_t i = 0; i < prefix_children.size(); i++) {
-		prefixes.push_back(frame.TakeResult<string>(1 + i));
+		prefixes.push_back(frame.TakeResult<ParsedOperator>(1 + i));
 	}
 
-	if (prefixes.size() == 1 && prefixes[0] == "-" && IsNumberLiteral(base_expr_pr)) {
+	if (prefixes.size() == 1 && prefixes[0].name.Path().size() == 1 && prefixes[0].name.Name() == "-" &&
+	    IsNumberLiteral(base_expr_pr)) {
 		auto result = ConvertNumberToValue("-" + GetRawText(base_expr_pr));
 		return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 	}
 
 	for (auto it = prefixes.rbegin(); it != prefixes.rend(); ++it) {
-		const string &prefix = *it;
-		if (prefix == "-" && expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		auto &prefix = *it;
+		if (prefix.name.Path().size() == 1 && prefix.name.Name() == "-" &&
+		    expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 			auto &const_expr = expr->Cast<ConstantExpression>();
 			if (auto negated_expr = TryNegateValue(const_expr)) {
 				expr = std::move(negated_expr);
@@ -1677,7 +1681,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePrefixExpression
 		}
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(expr));
-		auto func_expr = make_uniq<FunctionExpression>(Identifier(prefix), std::move(children));
+		auto func_expr = make_uniq<FunctionExpression>(std::move(prefix.name), std::move(children));
 		func_expr->IsOperatorMutable() = true;
 		expr = std::move(func_expr);
 	}

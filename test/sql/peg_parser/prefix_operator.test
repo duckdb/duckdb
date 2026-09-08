@@ -16,3 +16,8 @@ query I
 SELECT @ -5 + -6;
 ----
 11
+
+query I
+SELECT OPERATOR(main.-) 5;
+----
+-5

@@ -6462,6 +6462,15 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNamedOtherOpera
                                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<ParsedOperator>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<ParsedOperator>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformUnqualifiedOtherOperatorInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto &choice_result = choice_pr.GetResult();
 	string child;
 	if (choice_result.type == ParseResultType::IDENTIFIER) {
@@ -6475,7 +6484,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNamedOtherOpera
 	} else {
 		child = transformer.Transform<string>(choice_result);
 	}
-	auto result = TransformNamedOtherOperator(transformer, child);
+	auto result = TransformUnqualifiedOtherOperator(transformer, child);
 	return make_uniq<TypedTransformResult<ParsedOperator>>(std::move(result));
 }
 
@@ -6541,9 +6550,10 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStringOperatorI
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQualifiedOperatorInternal(PEGTransformer &transformer,
                                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto qualified_operator_contents = transformer.Transform<string>(ExtractResultFromParens(list_pr.GetChild(1)));
-	auto result = TransformQualifiedOperator(transformer, qualified_operator_contents);
-	return make_uniq<TypedTransformResult<string>>(result);
+	auto qualified_operator_contents =
+	    transformer.Transform<QualifiedName>(ExtractResultFromParens(list_pr.GetChild(1)));
+	auto result = TransformQualifiedOperator(transformer, std::move(qualified_operator_contents));
+	return make_uniq<TypedTransformResult<ParsedOperator>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue>
@@ -6563,7 +6573,7 @@ PEGTransformerFactory::TransformQualifiedOperatorContentsInternal(PEGTransformer
 	}
 	auto any_op = transformer.Transform<string>(list_pr.GetChild(1));
 	auto result = TransformQualifiedOperatorContents(transformer, col_id_dot, any_op);
-	return make_uniq<TypedTransformResult<string>>(result);
+	return make_uniq<TypedTransformResult<QualifiedName>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnyOpInternal(PEGTransformer &transformer,
@@ -6803,19 +6813,30 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPrefixOperatorI
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	string result;
-	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
-		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
-	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
-		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
-	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
-		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
-	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
-		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	auto result = transformer.Transform<ParsedOperator>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<ParsedOperator>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformUnqualifiedPrefixOperatorInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	string child;
+	if (choice_result.type == ParseResultType::IDENTIFIER) {
+		child = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_result.type == ParseResultType::KEYWORD) {
+		child = choice_result.Cast<KeywordParseResult>().keyword;
+	} else if (choice_result.type == ParseResultType::STRING) {
+		child = choice_result.Cast<StringLiteralParseResult>().result;
+	} else if (choice_result.type == ParseResultType::OPERATOR) {
+		child = choice_result.Cast<OperatorParseResult>().operator_token;
 	} else {
-		result = transformer.Transform<string>(choice_pr.GetResult());
+		child = transformer.Transform<string>(choice_result);
 	}
-	return make_uniq<TypedTransformResult<string>>(result);
+	auto result = TransformUnqualifiedPrefixOperator(transformer, child);
+	return make_uniq<TypedTransformResult<ParsedOperator>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue>
@@ -11645,6 +11666,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"OtherOperator", &PEGTransformerFactory::TransformOtherOperatorInternal},
 	    {"AnyAllParsedOperator", &PEGTransformerFactory::TransformAnyAllParsedOperatorInternal},
 	    {"NamedOtherOperator", &PEGTransformerFactory::TransformNamedOtherOperatorInternal},
+	    {"UnqualifiedOtherOperator", &PEGTransformerFactory::TransformUnqualifiedOtherOperatorInternal},
 	    {"AnyAllOperator", &PEGTransformerFactory::TransformAnyAllOperatorInternal},
 	    {"AnyOrAll", &PEGTransformerFactory::TransformAnyOrAllInternal},
 	    {"SubqueryAny", &PEGTransformerFactory::TransformSubqueryAnyInternal},
@@ -11673,6 +11695,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"AtTimeZoneExpression", &PEGTransformerFactory::TransformAtTimeZoneExpressionInternal},
 	    {"AtTimeZoneExpressionTail", &PEGTransformerFactory::TransformAtTimeZoneExpressionTailInternal},
 	    {"PrefixOperator", &PEGTransformerFactory::TransformPrefixOperatorInternal},
+	    {"UnqualifiedPrefixOperator", &PEGTransformerFactory::TransformUnqualifiedPrefixOperatorInternal},
 	    {"MinusPrefixOperator", &PEGTransformerFactory::TransformMinusPrefixOperatorInternal},
 	    {"PlusPrefixOperator", &PEGTransformerFactory::TransformPlusPrefixOperatorInternal},
 	    {"TildePrefixOperator", &PEGTransformerFactory::TransformTildePrefixOperatorInternal},

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
@@ -21,7 +22,7 @@ struct BetweenInLikeOperator {
 };
 
 struct ParsedOperator {
-	string name;
+	QualifiedName name;
 	bool is_any_all = false;
 	bool is_any = true;
 };

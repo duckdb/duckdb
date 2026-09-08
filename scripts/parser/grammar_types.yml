@@ -1046,8 +1046,6 @@ String:
     - NotLikeOp
     - NotRegexInsensitiveMatchOp
     - NotSimilarToOp
-    - QualifiedOperator
-    - QualifiedOperatorContents
     - ColIdDot
     - AnyOp
     - StringOperator
@@ -1058,7 +1056,6 @@ String:
     - Term
     - Factor
     - ExponentOperator
-    - PrefixOperator
     - MinusPrefixOperator
     - PlusPrefixOperator
     - TildePrefixOperator
@@ -1626,6 +1623,21 @@ overrides:
     type: "ParsedOperator"
     by_value: true
   NamedOtherOperator:
+    type: "ParsedOperator"
+    by_value: true
+  UnqualifiedOtherOperator:
+    type: "ParsedOperator"
+    by_value: true
+  QualifiedOperator:
+    type: "ParsedOperator"
+    by_value: true
+  QualifiedOperatorContents:
+    type: "QualifiedName"
+    by_value: true
+  PrefixOperator:
+    type: "ParsedOperator"
+    by_value: true
+  UnqualifiedPrefixOperator:
     type: "ParsedOperator"
     by_value: true
   OtherOperatorTail:
