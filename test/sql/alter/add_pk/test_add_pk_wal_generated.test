@@ -10,7 +10,6 @@ PRAGMA disable_checkpoint_on_shutdown
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
-# Leading generated column: logical id of "a" is 1, physical id is 0.
 statement ok
 CREATE TABLE t_lead(g INTEGER GENERATED ALWAYS AS (a + 1), a INTEGER);
 
@@ -20,7 +19,6 @@ INSERT INTO t_lead(a) VALUES (1), (2);
 statement ok
 ALTER TABLE t_lead ADD PRIMARY KEY (a);
 
-# Generated column between two physical columns: logical id of "c" is 2, physical id is 1.
 statement ok
 CREATE TABLE t_mid(a INTEGER, g INTEGER GENERATED ALWAYS AS (a + 1), c INTEGER);
 
@@ -30,7 +28,6 @@ INSERT INTO t_mid(a, c) VALUES (1, 10), (2, 20);
 statement ok
 ALTER TABLE t_mid ADD PRIMARY KEY (c);
 
-# Same logical-vs-physical mismatch for ADD UNIQUE.
 statement ok
 CREATE TABLE t_uq(g INTEGER GENERATED ALWAYS AS (a + 1), a INTEGER);
 

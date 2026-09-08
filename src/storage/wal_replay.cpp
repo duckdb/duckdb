@@ -967,8 +967,9 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	vector<column_t> column_ids;
-	for (auto &column_index : column_indexes) {
-		column_ids.push_back(column_index.GetPrimaryIndex());
+	column_ids.reserve(logical_indexes.size());
+	for (const auto &logical_index : logical_indexes) {
+		column_ids.push_back(column_list.LogicalToPhysical(logical_index).index);
 	}
 
 	auto &storage = table.GetStorage();
