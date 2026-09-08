@@ -77,10 +77,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	copy_fun.SetName("jsonl");
 	loader.RegisterFunction(copy_fun);
 
-	// JSON copy function using the multi-file wrapper around read_single_json_file
-	auto new_copy_fun = JSONFunctions::GetJSONNewCopyFunction();
-	loader.RegisterFunction(new_copy_fun);
-
 	// GeoJSON copy function
 	auto geojson_copy_fun = JSONFunctions::GetGeoJSONCopyFunction();
 	loader.RegisterFunction(geojson_copy_fun);

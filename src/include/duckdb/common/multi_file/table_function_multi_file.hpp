@@ -21,6 +21,8 @@ public:
 	//! The schema the files are expected to produce - set by COPY, which takes its columns from the target table
 	vector<Identifier> expected_names;
 	vector<LogicalType> expected_types;
+	//! The bind data that determined the schema above, if it came from binding a file of this same scan
+	shared_ptr<FunctionData> schema_bind_data;
 };
 
 //! Bind data of a multi-file function that wraps a single-file table function
@@ -29,8 +31,8 @@ struct TableFunctionMultiFileData : public TableFunctionData {
 	//! The per-file cardinality estimate, kept when the readers used to combine the schemas are released
 	optional_idx cardinality;
 
-	//! Whether the schema every file is read with is known upfront - either because it was combined from several
-	//! files, or because COPY took it from the target table
+	//! Whether the schema every file is read with is known upfront - because it was combined from several files,
+	//! taken from the file the schema was determined on, or given by COPY from the target table
 	bool HasExpectedSchema() const {
 		return !options.expected_names.empty();
 	}
@@ -91,10 +93,11 @@ public:
 	double GetProgressInFile(ClientContext &context) override;
 	InsertionOrderPreservingMap<Value> GetMetadata() const override;
 
+	//! Release the resources the given local state holds for the unit it scanned last
+	void FinishScan(ClientContext &context, LocalTableFunctionState &local_state);
 	//! Bind the wrapped table function over this file - this sets up the columns of the reader.
 	//! When the schema of the scan is known upfront, the file is bound against that schema
-	void BindFunction(ClientContext &context, const vector<Identifier> &expected_names,
-	                  const vector<LogicalType> &expected_types);
+	void BindFunction(ClientContext &context, const TableFunctionFileReaderOptions &options);
 	//! The cardinality of this file (if the wrapped function can provide one)
 	optional_idx GetCardinality() const {
 		return cardinality;
@@ -183,6 +186,8 @@ public:
 	                                                           MultiFileGlobalState &global_state) override;
 	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &context,
 	                                                         GlobalTableFunctionState &global_state) override;
+	void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
+	                   LocalTableFunctionState &local_state) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        BaseUnionData &union_data, const MultiFileBindData &bind_data) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -207,9 +212,12 @@ public:
 	TableFunction function;
 	//! How the wrapped function is exposed as a multi-file function
 	TableFunctionMultiFileSettings settings;
-	//! The schema obtained by combining the schemas of several files (empty if the schema comes from a single file)
+	//! The schema obtained by combining the schemas of the files, and the bind data describing it (if any).
+	//! "schema_combined" distinguishes "no combining happened" from "combining produced an empty schema"
+	bool schema_combined = false;
 	vector<Identifier> combined_names;
 	vector<LogicalType> combined_types;
+	shared_ptr<FunctionData> combined_bind_data;
 };
 
 } // namespace duckdb

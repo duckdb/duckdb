@@ -21,8 +21,9 @@ public:
 
 	//! Thread context used to initialize the local state of the wrapped function
 	ThreadContext thread_context;
-	//! The reader the local state below belongs to
-	optional_ptr<TableFunctionFileReader> reader;
+	//! The reader the local state below belongs to - kept alive so its resources can still be released after the
+	//! multi file reader has moved on to the next file
+	shared_ptr<BaseFileReader> reader;
 	//! The local state of the wrapped function
 	unique_ptr<LocalTableFunctionState> local_state;
 };
@@ -43,8 +44,7 @@ string TableFunctionFileReader::GetReaderType() const {
 	return reader_type;
 }
 
-void TableFunctionFileReader::BindFunction(ClientContext &context, const vector<Identifier> &expected_names,
-                                           const vector<LogicalType> &expected_types) {
+void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFunctionFileReaderOptions &options) {
 	if (!function.bind) {
 		throw InternalException("Table function %s cannot be wrapped in a multi file function - it has no bind",
 		                        function.name);
@@ -57,10 +57,11 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const vector<
 	TableFunctionRef empty_ref;
 	TableFunctionBindInput bind_input(inputs, parameters, input_table_types, input_table_names,
 	                                  function.function_info.get(), nullptr, function, empty_ref);
-	if (!expected_names.empty()) {
+	if (!options.expected_names.empty()) {
 		// the schema of the scan is known upfront - bind this file against that schema
-		bind_input.expected_names = expected_names;
-		bind_input.expected_types = expected_types;
+		bind_input.expected_names = options.expected_names;
+		bind_input.expected_types = options.expected_types;
+		bind_input.expected_bind_data = options.schema_bind_data.get();
 	}
 	names.clear();
 	types.clear();
@@ -155,7 +156,13 @@ bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTa
 		ExecutionContext execution_context(context, lstate.thread_context, nullptr);
 		lstate.local_state = function.init_local(execution_context, init_input, global_state.get());
 	}
-	lstate.reader = this;
+	lstate.reader = shared_from_this();
+	if (function.claim_scan_unit) {
+		// the function scans the file in units - claim one, so that every unit becomes a scan of its own that the
+		// multi file reader can put back in order
+		TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
+		return function.claim_scan_unit(context, input);
+	}
 	return true;
 }
 
@@ -167,11 +174,20 @@ AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFun
 	input.async_result = AsyncResultType::IMPLICIT;
 	input.results_execution_mode = AsyncResultsExecutionMode::SYNCHRONOUS;
 	function.function(context, input, chunk);
-	if (chunk.size() == 0) {
-		// an empty chunk signals the end of the scan for this thread
+	if (chunk.size() == 0 && !function.claim_scan_unit) {
+		// an empty chunk signals the end of the scan for this thread - when the function scans in units it only
+		// signals the end of the current unit, and the next unit is claimed by TryInitializeScan
 		exhausted = true;
 	}
 	return AsyncResult::FromChunk(chunk);
+}
+
+void TableFunctionFileReader::FinishScan(ClientContext &context, LocalTableFunctionState &local_state) {
+	if (!function.finish_scan) {
+		return;
+	}
+	TableFunctionInput input(bind_data.get(), &local_state, global_state.get());
+	function.finish_scan(context, input);
 }
 
 double TableFunctionFileReader::GetProgressInFile(ClientContext &context) {
@@ -237,13 +253,21 @@ bool TableFunctionMultiFileWrapper::ParseCopyOption(ClientContext &context, cons
 	if (entry == function.named_parameters.end()) {
 		return false;
 	}
+	auto &type = entry->second;
 	if (values.size() > 1) {
 		throw BinderException("COPY parameter %s expects a single argument", key);
 	}
-	auto &type = entry->second;
-	Value val = values.empty() ? Value::BOOLEAN(true) : values[0];
-	if (!values.empty() && type.id() != LogicalTypeId::ANY && val.type() != type) {
-		val = val.DefaultCastAs(type);
+	Value val;
+	if (values.empty()) {
+		// a bare option is a shorthand for setting a flag - only boolean parameters can be given like that
+		if (type.id() != LogicalTypeId::BOOLEAN) {
+			throw BinderException("COPY parameter %s expects a single argument", key);
+		}
+		val = Value::BOOLEAN(true);
+	} else if (type.id() == LogicalTypeId::ANY || values[0].type() == type) {
+		val = values[0];
+	} else {
+		val = values[0].DefaultCastAs(type);
 	}
 	return ParseNamedParameter(key, val, options_p.Cast<TableFunctionFileReaderOptions>());
 }
@@ -284,6 +308,7 @@ optional_idx TableFunctionMultiFileWrapper::MaxThreads(ClientContext &context, c
 void TableFunctionMultiFileWrapper::CombineSchemas(ClientContext &context,
                                                    const vector<shared_ptr<BaseUnionData>> &union_data,
                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
+	schema_combined = true;
 	if (function.combine_schema) {
 		vector<reference<const FunctionData>> bind_data;
 		bool have_all_bind_data = true;
@@ -297,29 +322,33 @@ void TableFunctionMultiFileWrapper::CombineSchemas(ClientContext &context,
 		}
 		if (have_all_bind_data) {
 			TableFunctionCombineSchemaInput input(bind_data);
-			if (function.combine_schema(context, input, return_types, names)) {
-				// the function combined the schemas itself - we are done
+			combined_bind_data = function.combine_schema(context, input, return_types, names);
+			if (combined_bind_data) {
+				// the function combined the schemas itself - every file is read using the resulting bind data
 				combined_names = names;
 				combined_types = return_types;
 				ReleaseBindData(union_data);
 				return;
 			}
+			return_types.clear();
+			names.clear();
 		}
 	}
-	// fall back to combining the return types of the files - the files are then bound on their own and the column
-	// mapper casts the types of each file to the combined types
+	// fall back to combining the return types of the files
 	MultiFileReaderInterface::CombineSchemas(context, union_data, return_types, names);
+	combined_names = names;
+	combined_types = return_types;
 	ReleaseBindData(union_data);
 }
 
 void TableFunctionMultiFileWrapper::FinalizeBindData(MultiFileBindData &multi_file_data) {
-	if (combined_names.empty()) {
-		// the schema comes from a single file - every file is bound on its own
+	if (!schema_combined) {
 		return;
 	}
 	auto &data = multi_file_data.bind_data->Cast<TableFunctionMultiFileData>();
 	data.options.expected_names = std::move(combined_names);
 	data.options.expected_types = std::move(combined_types);
+	data.options.schema_bind_data = std::move(combined_bind_data);
 	// the readers that were opened to combine the schemas were bound before the combined schema was known - release
 	// them so that every file is bound against the combined schema instead
 	multi_file_data.union_readers.clear();
@@ -346,6 +375,13 @@ void TableFunctionMultiFileWrapper::BindReader(ClientContext &context, vector<Lo
 	}
 	bind_data.reader_bind = bind_data.multi_file_reader->BindReader(context, return_types, names, *bind_data.file_list,
 	                                                                bind_data, data.options, bind_data.file_options);
+	if (!schema_combined && !data.HasExpectedSchema() && bind_data.initial_reader) {
+		// the schema was taken from a single file - read every other file the same way that file is read
+		auto &reader = bind_data.initial_reader->Cast<TableFunctionFileReader>();
+		data.options.expected_names = reader.names;
+		data.options.expected_types = reader.types;
+		data.options.schema_bind_data = reader.bind_data;
+	}
 }
 
 unique_ptr<GlobalTableFunctionState>
@@ -358,13 +394,22 @@ unique_ptr<LocalTableFunctionState> TableFunctionMultiFileWrapper::InitializeLoc
 	return make_uniq<TableFunctionMultiFileLocalState>(context);
 }
 
+void TableFunctionMultiFileWrapper::FinishReading(ClientContext &context, GlobalTableFunctionState &,
+                                                  LocalTableFunctionState &lstate_p) {
+	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
+	if (!lstate.reader || !lstate.local_state) {
+		return;
+	}
+	lstate.reader->Cast<TableFunctionFileReader>().FinishScan(context, *lstate.local_state);
+}
+
 shared_ptr<BaseFileReader> TableFunctionMultiFileWrapper::CreateReader(ClientContext &context, const OpenFileInfo &file,
                                                                        BaseFileReaderOptions &options_p,
                                                                        const MultiFileOptions &) {
 	auto &options = options_p.Cast<TableFunctionFileReaderOptions>();
 	auto result =
 	    make_shared_ptr<TableFunctionFileReader>(function, file, options.named_parameters, settings.reader_type);
-	result->BindFunction(context, options.expected_names, options.expected_types);
+	result->BindFunction(context, options);
 	return std::move(result);
 }
 
@@ -375,7 +420,7 @@ shared_ptr<BaseFileReader> TableFunctionMultiFileWrapper::CreateReader(ClientCon
 	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
 	auto result =
 	    make_shared_ptr<TableFunctionFileReader>(function, file, data.options.named_parameters, settings.reader_type);
-	result->BindFunction(context, data.options.expected_names, data.options.expected_types);
+	result->BindFunction(context, data.options);
 	return std::move(result);
 }
 

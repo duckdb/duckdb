@@ -5,7 +5,6 @@
 #include "json_scan.hpp"
 #include "json_structure.hpp"
 #include "json_transform.hpp"
-#include "json_multi_file_info.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 
 namespace duckdb {
@@ -41,15 +40,15 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 
 struct AutoDetectState {
 	AutoDetectState(ClientContext &context_p, JSONScanData &json_data_p, const vector<OpenFileInfo> &files,
-	                vector<shared_ptr<BaseUnionData>> &union_readers_p, MutableDateFormatMap &date_format_map)
-	    : context(context_p), json_data(json_data_p), files(files), union_readers(union_readers_p),
+	                vector<shared_ptr<JSONReader>> &sampled_readers_p, MutableDateFormatMap &date_format_map)
+	    : context(context_p), json_data(json_data_p), files(files), sampled_readers(sampled_readers_p),
 	      date_format_map(date_format_map), files_scanned(0), tuples_scanned(0), bytes_scanned(0), total_file_size(0) {
 	}
 
 	ClientContext &context;
 	JSONScanData &json_data;
 	const vector<OpenFileInfo> &files;
-	vector<shared_ptr<BaseUnionData>> &union_readers;
+	vector<shared_ptr<JSONReader>> &sampled_readers;
 	MutableDateFormatMap &date_format_map;
 	atomic<idx_t> files_scanned;
 	atomic<idx_t> tuples_scanned;
@@ -72,13 +71,11 @@ public:
 		auto &files = auto_detect_state.files;
 		auto &json_data = auto_detect_state.json_data;
 		auto json_reader = make_shared_ptr<JSONReader>(context, json_data.options, files[file_idx].path);
-		if (auto_detect_state.union_readers[file_idx]) {
-			throw InternalException("Union data already set");
+		if (auto_detect_state.sampled_readers[file_idx]) {
+			throw InternalException("Reader for file %llu was already created", file_idx);
 		}
 		auto &reader = *json_reader;
-		auto union_data = make_uniq<BaseUnionData>(files[file_idx].path);
-		union_data->reader = std::move(json_reader);
-		auto_detect_state.union_readers[file_idx] = std::move(union_data);
+		auto_detect_state.sampled_readers[file_idx] = std::move(json_reader);
 
 		auto &global_allocator = Allocator::Get(context);
 		idx_t buffer_capacity = json_data.options.maximum_object_size * 2;
@@ -241,15 +238,14 @@ static void BindGeoJSONFeatureColumns(const LogicalType &type, const vector<Iden
 
 unique_ptr<JSONStructureNode> JSONScan::DetectStructure(ClientContext &context, JSONScanData &json_data,
                                                         const vector<OpenFileInfo> &files,
-                                                        vector<shared_ptr<BaseUnionData>> &union_readers,
-                                                        bool union_by_name) {
+                                                        vector<shared_ptr<JSONReader>> &sampled_readers) {
 	MutableDateFormatMap date_format_map(*json_data.date_format_map);
 	auto node = make_uniq<JSONStructureNode>();
 	auto &options = json_data.options;
-	auto file_count = union_by_name ? files.size() : MinValue<idx_t>(options.maximum_sample_files, files.size());
-	union_readers.resize(files.empty() ? 0 : files.size());
+	auto file_count = MinValue<idx_t>(options.maximum_sample_files, files.size());
+	sampled_readers.resize(files.empty() ? 0 : files.size());
 
-	AutoDetectState auto_detect_state(context, json_data, files, union_readers, date_format_map);
+	AutoDetectState auto_detect_state(context, json_data, files, sampled_readers, date_format_map);
 	const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	const auto files_per_task = (file_count + num_threads - 1) / num_threads;
 	const auto num_tasks = (file_count + files_per_task - 1) / files_per_task;
@@ -340,58 +336,15 @@ void JSONScan::StructureToColumns(ClientContext &context, JSONReaderOptions &opt
 }
 
 void JSONScan::AutoDetect(ClientContext &context, JSONScanData &json_data, const vector<OpenFileInfo> &files,
-                          vector<shared_ptr<BaseUnionData>> &union_readers, bool union_by_name,
-                          vector<LogicalType> &return_types, vector<Identifier> &names) {
+                          vector<shared_ptr<JSONReader>> &sampled_readers, vector<LogicalType> &return_types,
+                          vector<Identifier> &names) {
 	json_data.record_type_auto_detected = json_data.options.record_type == JSONRecordType::AUTO_DETECT;
-	auto node = DetectStructure(context, json_data, files, union_readers, union_by_name);
+	auto node = DetectStructure(context, json_data, files, sampled_readers);
 	StructureToColumns(context, json_data.options, *node, json_data.feature_columns, return_types, names);
 	if (json_data.keep_structure) {
 		// keep the structure around so it can be combined with the structures of other files later on
 		json_data.structure = std::move(node);
 	}
-}
-
-TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info) {
-	MultiFileFunction<JSONMultiFileInfo> table_function("read_json");
-
-	JSONScan::TableFunctionDefaults(table_function);
-	JSONScan::AddReadJSONParameters(table_function);
-
-	// TODO: might be able to do filter pushdown/prune ?
-	table_function.function_info = std::move(function_info);
-
-	return static_cast<TableFunction>(table_function);
-}
-
-TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info) {
-	auto table_function = JSONFunctions::GetReadJSONTableFunction(std::move(info));
-	table_function.SetName(Identifier(std::move(name)));
-	JSONScan::AddAutoDetectParameters(table_function);
-	return MultiFileReader::CreateFunctionSet(table_function);
-}
-
-TableFunctionSet JSONFunctions::GetReadJSONFunction() {
-	auto info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT,
-	                                          JSONRecordType::AUTO_DETECT, true);
-	return CreateJSONFunctionInfo("read_json", std::move(info));
-}
-
-TableFunctionSet JSONFunctions::GetReadNDJSONFunction() {
-	auto info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
-	                                          JSONRecordType::AUTO_DETECT, true);
-	return CreateJSONFunctionInfo("read_ndjson", std::move(info));
-}
-
-TableFunctionSet JSONFunctions::GetReadJSONAutoFunction() {
-	auto info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT,
-	                                          JSONRecordType::AUTO_DETECT, true);
-	return CreateJSONFunctionInfo("read_json_auto", std::move(info));
-}
-
-TableFunctionSet JSONFunctions::GetReadNDJSONAutoFunction() {
-	auto info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
-	                                          JSONRecordType::AUTO_DETECT, true);
-	return CreateJSONFunctionInfo("read_ndjson_auto", std::move(info));
 }
 
 } // namespace duckdb

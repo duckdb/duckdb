@@ -165,8 +165,8 @@ public:
 	//! Determine the names/types that are read from the given set of files - performing auto-detection if required.
 	//! Readers that were opened during auto-detection are stored in "union_readers" so they can be re-used
 	static void BindSchema(ClientContext &context, JSONScanData &json_data, MultiFileList &files,
-	                       vector<shared_ptr<BaseUnionData>> &union_readers, bool union_by_name,
-	                       vector<LogicalType> &return_types, vector<Identifier> &names);
+	                       vector<shared_ptr<JSONReader>> &sampled_readers, vector<LogicalType> &return_types,
+	                       vector<Identifier> &names);
 	//! Set up the transform options and de-duplicate the (case-insensitively) colliding column names
 	static void FinalizeBind(JSONScanData &json_data, vector<Identifier> &names);
 	//! JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity -
@@ -174,13 +174,12 @@ public:
 	static void DeduplicateColumnNames(vector<Identifier> &names);
 
 	static void AutoDetect(ClientContext &context, JSONScanData &json_data, const vector<OpenFileInfo> &files,
-	                       vector<shared_ptr<BaseUnionData>> &union_readers, bool union_by_name,
-	                       vector<LogicalType> &return_types, vector<Identifier> &names);
+	                       vector<shared_ptr<JSONReader>> &sampled_readers, vector<LogicalType> &return_types,
+	                       vector<Identifier> &names);
 	//! Sample the given files and build the JSON structure that describes all of them
 	static unique_ptr<JSONStructureNode> DetectStructure(ClientContext &context, JSONScanData &json_data,
 	                                                     const vector<OpenFileInfo> &files,
-	                                                     vector<shared_ptr<BaseUnionData>> &union_readers,
-	                                                     bool union_by_name);
+	                                                     vector<shared_ptr<JSONReader>> &sampled_readers);
 	//! Derive the columns that are read from a detected JSON structure
 	static void StructureToColumns(ClientContext &context, JSONReaderOptions &options, const JSONStructureNode &node,
 	                               vector<JSONFeatureColumn> &feature_columns, vector<LogicalType> &return_types,

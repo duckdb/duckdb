@@ -127,10 +127,14 @@ struct TableFunctionBindInput {
 	const TableFunctionRef &ref;
 	optional_ptr<unique_ptr<LogicalOperator>> input_plan;
 	//! (Optional) The schema this bind is expected to produce. This is set when binding a single file of a
-	//! multi-file scan whose schema was determined by combining the schemas of several files - the bind should
-	//! read the file using this schema instead of determining a schema of its own
+	//! multi-file scan whose schema was already determined - the bind should read the file using this schema
+	//! instead of determining a schema of its own
 	optional_ptr<const vector<Identifier>> expected_names;
 	optional_ptr<const vector<LogicalType>> expected_types;
+	//! (Optional) The bind data that determined the schema above, when it came from another bind of this same
+	//! function. This lets the bind read the file exactly the way the schema was determined, rather than deriving
+	//! that from the names and types alone
+	optional_ptr<const FunctionData> expected_bind_data;
 
 	bool HasExpectedSchema() const {
 		return expected_names && expected_types;
@@ -379,10 +383,21 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef bool (*table_function_pushdown_expression_t)(ClientContext &context, const LogicalGet &get, Expression &expr);
-//! Combines the schemas of several individually bound files into one - returns false if the schemas could not be
-//! combined, in which case the caller falls back to combining the return types
-typedef bool (*table_function_combine_schema_t)(ClientContext &context, TableFunctionCombineSchemaInput &input,
-                                                vector<LogicalType> &return_types, vector<Identifier> &names);
+//! Claims the next unit of work for the given local state - returns false when there is nothing left to scan.
+//! A function that implements this is scanned one unit at a time by its caller, rather than being run until it
+//! returns an empty chunk. This lets the caller tell the units apart, so that units scanned in parallel can be put
+//! back in order
+typedef bool (*table_function_claim_scan_unit_t)(ClientContext &context, TableFunctionInput &input);
+//! Called when a local state will not scan any more units - lets the function release the resources of the unit it
+//! scanned last. The counterpart of table_function_claim_scan_unit_t
+typedef void (*table_function_finish_scan_t)(ClientContext &context, TableFunctionInput &input);
+//! Combines the schemas of several individually bound files into one. Returns the bind data describing the combined
+//! schema, which is handed to the bind of every file that is read - or nullptr if the schemas could not be combined,
+//! in which case the caller falls back to combining the return types
+typedef unique_ptr<FunctionData> (*table_function_combine_schema_t)(ClientContext &context,
+                                                                    TableFunctionCombineSchemaInput &input,
+                                                                    vector<LogicalType> &return_types,
+                                                                    vector<Identifier> &names);
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
 
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -506,6 +521,10 @@ public:
 	//! (Optional) combines the schemas of several files that were bound individually into a single schema
 	//! Used when this function reads a single file and is wrapped into a multi-file function
 	table_function_combine_schema_t combine_schema;
+	//! (Optional) claims the next unit of work for a local state - see table_function_claim_scan_unit_t
+	table_function_claim_scan_unit_t claim_scan_unit;
+	//! (Optional) called when a local state will not scan any more units - see table_function_finish_scan_t
+	table_function_finish_scan_t finish_scan;
 	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)

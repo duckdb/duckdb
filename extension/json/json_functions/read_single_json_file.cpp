@@ -45,6 +45,8 @@ public:
 	JSONScanLocalState state;
 	//! Whether we have a part of the file assigned to us that we still need to read
 	bool scan_initialized = false;
+	//! Whether our caller claims the parts of the file we read - see table_function_claim_scan_unit_t
+	bool claimed_externally = false;
 };
 
 static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, TableFunctionBindInput &input,
@@ -69,14 +71,37 @@ static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, T
 		}
 		throw NotImplementedException("Unimplemented option %s", kv.first);
 	}
-	if (input.HasExpectedSchema()) {
-		// the schema was determined by combining the schemas of several files - read this file using that schema
-		// instead of auto-detecting a schema for this file alone
-		options.name_list = *input.expected_names;
-		options.sql_type_list = *input.expected_types;
+	if (options.auto_detect_specified && !options.auto_detect && !options.format_specified) {
+		// auto-detection was explicitly turned off - we do not detect the format either
+		options.format = JSONFormat::NEWLINE_DELIMITED;
 	}
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("read_single_json_file requires a non-NULL file name");
+	}
+	if (input.expected_bind_data && input.HasExpectedSchema()) {
+		// the schema of the scan was already determined - read this file exactly the way it was determined, so that
+		// every file of the scan produces the same columns from the same JSON keys
+		auto &source = input.expected_bind_data->Cast<ReadSingleJSONFileData>();
+		result->file = OpenFileInfo(StringValue::Get(input.inputs[0]));
+		result->options.record_type = source.options.record_type;
+		result->options.geojson = source.options.geojson;
+		result->options.auto_detect = false;
+		result->options.name_list = *input.expected_names;
+		result->options.sql_type_list = *input.expected_types;
+		result->key_names = source.key_names;
+		result->feature_columns = source.feature_columns;
+		// the date/timestamp formats that auto-detection settled on are part of how the scan is read
+		result->date_format_map = make_uniq<DateFormatMap>(*source.date_format_map);
+		JSONScan::FinalizeBind(*result, result->options.name_list);
+		names = result->options.name_list;
+		return_types = result->options.sql_type_list;
+		return std::move(result);
+	}
+	if (input.HasExpectedSchema()) {
+		// the schema is known but not how it was determined (COPY takes its columns from the target table) - read
+		// this file using those columns
+		options.name_list = *input.expected_names;
+		options.sql_type_list = *input.expected_types;
 	}
 	result->file = OpenFileInfo(StringValue::Get(input.inputs[0]));
 
@@ -85,8 +110,8 @@ static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, T
 	result->keep_structure = options.name_list.empty();
 
 	SimpleMultiFileList file_list(vector<OpenFileInfo> {result->file});
-	vector<shared_ptr<BaseUnionData>> union_readers;
-	JSONScan::BindSchema(context, *result, file_list, union_readers, false, return_types, names);
+	vector<shared_ptr<JSONReader>> sampled_readers;
+	JSONScan::BindSchema(context, *result, file_list, sampled_readers, return_types, names);
 	JSONScan::FinalizeBind(*result, names);
 	return std::move(result);
 }
@@ -129,6 +154,29 @@ static unique_ptr<LocalTableFunctionState> ReadSingleJSONFileInitLocal(Execution
 	return make_uniq<ReadSingleJSONFileLocalState>(context.client, gstate.state);
 }
 
+//! Assign the next part of the file to this thread - the JSON reader hands out one buffer at a time
+static bool ReadSingleJSONFileClaimScanUnit(ClientContext &context, TableFunctionInput &input) {
+	auto &gstate = input.global_state->Cast<ReadSingleJSONFileGlobalState>();
+	auto &lstate = input.local_state->Cast<ReadSingleJSONFileLocalState>();
+	// our caller hands out the parts of the file, so we must not claim the next one ourselves
+	lstate.claimed_externally = true;
+
+	lock_guard<mutex> guard(gstate.lock);
+	lstate.state.GetScanState().ResetForNextBuffer();
+	if (!lstate.state.TryInitializeScan(gstate.state, *gstate.reader)) {
+		return false;
+	}
+	lstate.scan_initialized = true;
+	return true;
+}
+
+//! Release the part of the file this thread was reading - this also reports any errors that were found in it
+static void ReadSingleJSONFileFinishScan(ClientContext &context, TableFunctionInput &input) {
+	auto &lstate = input.local_state->Cast<ReadSingleJSONFileLocalState>();
+	lstate.state.GetScanState().ResetForNextBuffer();
+	lstate.scan_initialized = false;
+}
+
 static void ReadSingleJSONFileFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
 	auto &gstate = input.global_state->Cast<ReadSingleJSONFileGlobalState>();
 	auto &lstate = input.local_state->Cast<ReadSingleJSONFileLocalState>();
@@ -136,6 +184,10 @@ static void ReadSingleJSONFileFunction(ClientContext &context, TableFunctionInpu
 
 	while (true) {
 		if (!lstate.scan_initialized) {
+			if (lstate.claimed_externally) {
+				// the next part of the file is claimed by our caller
+				return;
+			}
 			lock_guard<mutex> guard(gstate.lock);
 			lstate.state.GetScanState().ResetForNextBuffer();
 			if (!lstate.state.TryInitializeScan(gstate.state, reader)) {
@@ -164,15 +216,17 @@ static void ReadSingleJSONFileFunction(ClientContext &context, TableFunctionInpu
 
 //! Combine the schemas of several JSON files by merging the structures that were detected for them - this gives the
 //! same schema as running the auto-detection over all of the files at once
-static bool ReadSingleJSONFileCombineSchema(ClientContext &context, TableFunctionCombineSchemaInput &input,
-                                            vector<LogicalType> &return_types, vector<Identifier> &names) {
+static unique_ptr<FunctionData> ReadSingleJSONFileCombineSchema(ClientContext &context,
+                                                                TableFunctionCombineSchemaInput &input,
+                                                                vector<LogicalType> &return_types,
+                                                                vector<Identifier> &names) {
 	JSONStructureNode merged;
 	optional_ptr<const ReadSingleJSONFileData> first_file;
 	for (auto &bind_data : input.bind_data) {
 		auto &json_data = bind_data.get().Cast<ReadSingleJSONFileData>();
 		if (!json_data.structure) {
 			// the schema of this file was not auto-detected - fall back to combining the types
-			return false;
+			return nullptr;
 		}
 		JSONStructure::MergeNodes(merged, *json_data.structure);
 		if (!first_file) {
@@ -180,28 +234,29 @@ static bool ReadSingleJSONFileCombineSchema(ClientContext &context, TableFunctio
 		}
 	}
 	if (!first_file) {
-		return false;
+		return nullptr;
 	}
-	// derive the columns from the merged structure - the record type is re-detected on the combined structure
-	auto options = first_file->options;
+	// the result describes how every file of the scan is read - it is the bind the auto-detection would have
+	// produced if it had run over all of the sampled files at once
+	auto result = make_uniq<ReadSingleJSONFileData>();
+	result->options = first_file->options;
 	if (first_file->record_type_auto_detected) {
-		options.record_type = JSONRecordType::AUTO_DETECT;
+		// the record type is re-detected on the combined structure
+		result->options.record_type = JSONRecordType::AUTO_DETECT;
 	}
-	vector<JSONFeatureColumn> feature_columns;
-	JSONScan::StructureToColumns(context, options, merged, feature_columns, return_types, names);
+	// the date/timestamp formats that were settled on while detecting the structure are carried over
+	result->date_format_map = make_uniq<DateFormatMap>(*first_file->date_format_map);
+	JSONScan::StructureToColumns(context, result->options, merged, result->feature_columns, return_types, names);
 
-	// the combined schema is used to read every file, so its column names double as the JSON keys that are read.
-	// Columns that are duplicates for us (e.g. "id" and "Id") have to be renamed, which loses the key - leave those
-	// to the generic schema combining, which reads every file using the names that file bound to
-	identifier_set_t unique_names;
-	for (auto &name : names) {
-		if (!unique_names.insert(name).second) {
-			return_types.clear();
-			names.clear();
-			return false;
-		}
-	}
-	return true;
+	// the JSON reader looks columns up by their exact key, so the keys are kept before the column names that are
+	// duplicates for us (e.g. "id" and "Id") are renamed
+	result->key_names = IdentifiersToStrings(names);
+	JSONScan::DeduplicateColumnNames(names);
+	result->options.name_list = names;
+	result->options.sql_type_list = return_types;
+	result->options.auto_detect = false;
+	JSONScan::FinalizeBind(*result, names);
+	return std::move(result);
 }
 
 static double ReadSingleJSONFileProgress(ClientContext &context, const FunctionData *bind_data,
@@ -214,57 +269,89 @@ static double ReadSingleJSONFileProgress(ClientContext &context, const FunctionD
 
 static unique_ptr<NodeStatistics> ReadSingleJSONFileCardinality(ClientContext &context, const FunctionData *bind_data) {
 	auto &json_data = bind_data->Cast<ReadSingleJSONFileData>();
-	if (!json_data.estimated_cardinality_per_file.IsValid()) {
-		return nullptr;
+	idx_t per_file_cardinality = 42;
+	if (json_data.estimated_cardinality_per_file.IsValid()) {
+		per_file_cardinality = json_data.estimated_cardinality_per_file.GetIndex();
 	}
-	return make_uniq<NodeStatistics>(json_data.estimated_cardinality_per_file.GetIndex());
+	return make_uniq<NodeStatistics>(per_file_cardinality);
 }
 
 TableFunction JSONFunctions::GetReadSingleJSONFileTableFunction(shared_ptr<JSONScanInfo> function_info) {
+	const auto scan_type = function_info->type;
 	TableFunction table_function("read_single_json_file", {LogicalType::VARCHAR}, ReadSingleJSONFileFunction,
 	                             ReadSingleJSONFileBind, ReadSingleJSONFileInitGlobal, ReadSingleJSONFileInitLocal);
 	JSONScan::TableFunctionDefaults(table_function);
-	JSONScan::AddReadJSONParameters(table_function);
-	JSONScan::AddAutoDetectParameters(table_function);
+	if (scan_type != JSONScanType::READ_JSON_OBJECTS) {
+		// read_json_objects always emits a single JSON column - it has no schema options
+		JSONScan::AddReadJSONParameters(table_function);
+		JSONScan::AddAutoDetectParameters(table_function);
+	}
 	table_function.combine_schema = ReadSingleJSONFileCombineSchema;
+	table_function.claim_scan_unit = ReadSingleJSONFileClaimScanUnit;
+	table_function.finish_scan = ReadSingleJSONFileFinishScan;
 	table_function.table_scan_progress = ReadSingleJSONFileProgress;
 	table_function.cardinality = ReadSingleJSONFileCardinality;
 	table_function.function_info = std::move(function_info);
 	return table_function;
 }
 
-static shared_ptr<JSONScanInfo> ReadJSONScanInfo() {
-	return make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO_DETECT,
-	                                     true);
+TableFunction JSONFunctions::GetJSONTableFunction(Identifier name, shared_ptr<JSONScanInfo> function_info) {
+	// every JSON read function is the single-file JSON reader wrapped into a multi-file function
+	auto single_file_function = GetReadSingleJSONFileTableFunction(std::move(function_info));
+	TableFunctionMultiFileSettings settings;
+	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "json");
+	settings.reader_type = "JSON";
+	// the schema is determined by combining the schemas of up to 32 files
+	settings.maximum_sample_files = 32;
+	return TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), std::move(name),
+	                                                     std::move(settings));
+}
+
+static TableFunctionSet CreateJSONFunctionSet(Identifier name, shared_ptr<JSONScanInfo> function_info) {
+	return MultiFileReader::CreateFunctionSet(
+	    JSONFunctions::GetJSONTableFunction(std::move(name), std::move(function_info)));
+}
+
+static shared_ptr<JSONScanInfo> ReadJSONInfo(JSONFormat format) {
+	return make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, format, JSONRecordType::AUTO_DETECT, true);
+}
+
+static shared_ptr<JSONScanInfo> ReadJSONObjectsInfo(JSONFormat format) {
+	return make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, format, JSONRecordType::RECORDS, false);
 }
 
 TableFunctionSet JSONFunctions::GetReadSingleJSONFileFunction() {
 	TableFunctionSet function_set("read_single_json_file");
-	function_set.AddFunction(GetReadSingleJSONFileTableFunction(ReadJSONScanInfo()));
+	function_set.AddFunction(GetReadSingleJSONFileTableFunction(ReadJSONInfo(JSONFormat::AUTO_DETECT)));
 	return function_set;
 }
 
-TableFunction JSONFunctions::GetReadJSONNewTableFunction() {
-	auto single_file_function = GetReadSingleJSONFileTableFunction(ReadJSONScanInfo());
-	TableFunctionMultiFileSettings settings;
-	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "json");
-	settings.reader_type = "JSON";
-	// like read_json, the schema is determined by combining the schemas of up to 32 files
-	settings.maximum_sample_files = 32;
-	return TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), "read_json_new",
-	                                                     std::move(settings));
+TableFunctionSet JSONFunctions::GetReadJSONFunction() {
+	return CreateJSONFunctionSet("read_json", ReadJSONInfo(JSONFormat::AUTO_DETECT));
 }
 
-TableFunctionSet JSONFunctions::GetReadJSONNewFunction() {
-	// wrap the single-file JSON reader into a multi-file table function
-	auto single_file_function = GetReadSingleJSONFileTableFunction(ReadJSONScanInfo());
-	TableFunctionMultiFileSettings settings;
-	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "json");
-	settings.reader_type = "JSON";
-	// like read_json, the schema is determined by combining the schemas of up to 32 files
-	settings.maximum_sample_files = 32;
-	return TableFunctionMultiFileWrapper::CreateFunctionSet(std::move(single_file_function), "read_json_new",
-	                                                        std::move(settings));
+TableFunctionSet JSONFunctions::GetReadNDJSONFunction() {
+	return CreateJSONFunctionSet("read_ndjson", ReadJSONInfo(JSONFormat::NEWLINE_DELIMITED));
+}
+
+TableFunctionSet JSONFunctions::GetReadJSONAutoFunction() {
+	return CreateJSONFunctionSet("read_json_auto", ReadJSONInfo(JSONFormat::AUTO_DETECT));
+}
+
+TableFunctionSet JSONFunctions::GetReadNDJSONAutoFunction() {
+	return CreateJSONFunctionSet("read_ndjson_auto", ReadJSONInfo(JSONFormat::NEWLINE_DELIMITED));
+}
+
+TableFunctionSet JSONFunctions::GetReadJSONObjectsFunction() {
+	return CreateJSONFunctionSet("read_json_objects", ReadJSONObjectsInfo(JSONFormat::AUTO_DETECT));
+}
+
+TableFunctionSet JSONFunctions::GetReadNDJSONObjectsFunction() {
+	return CreateJSONFunctionSet("read_ndjson_objects", ReadJSONObjectsInfo(JSONFormat::NEWLINE_DELIMITED));
+}
+
+TableFunctionSet JSONFunctions::GetReadJSONObjectsAutoFunction() {
+	return CreateJSONFunctionSet("read_json_objects_auto", ReadJSONObjectsInfo(JSONFormat::AUTO_DETECT));
 }
 
 } // namespace duckdb
