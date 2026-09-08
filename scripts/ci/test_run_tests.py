@@ -1720,6 +1720,28 @@ assertions: 16 | 15 passed | 1 failed
         self.assertIn("assertions: 16 | 15 passed | 1 failed", stripped_lines)
         self.assertEqual(reproduce_batch, ["/tmp/a.test", "/tmp/b.test"])
 
+    def test_raw_output_tail_line_count_env(self):
+        # DUCKDB_TEST_RAW_OUTPUT_TAIL_LINES controls how much of the raw unittest output is dumped:
+        # the default only shows the tail, while 0 dumps the full output (used by the ThreadSanitizer job)
+        stderr = "\n".join(f"stderr line {i}" for i in range(120)) + "\n"
+
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DUCKDB_TEST_RAW_OUTPUT_TAIL_LINES", None)
+            lines = run_tests.render_raw_output_tail("", stderr)
+        default_lines = strip_ansi_lines(lines)
+        # by default only the last 100 lines are dumped, with a truncation header
+        self.assertIn("--- raw unittest stderr (last 100 of 120 lines) ---", default_lines)
+        self.assertIn("stderr line 20", default_lines)
+        self.assertNotIn("stderr line 0", default_lines)
+
+        with mock.patch.dict(os.environ, {"DUCKDB_TEST_RAW_OUTPUT_TAIL_LINES": "0"}, clear=False):
+            lines = run_tests.render_raw_output_tail("", stderr)
+        full_lines = strip_ansi_lines(lines)
+        # with 0 the whole output is dumped, without a truncation header
+        self.assertIn("--- raw unittest stderr ---", full_lines)
+        self.assertIn("stderr line 0", full_lines)
+        self.assertIn("stderr line 119", full_lines)
+
     def test_informative_failures_do_not_dump_raw_output(self):
         batch = ["/tmp/fail.test"]
         stderr = """

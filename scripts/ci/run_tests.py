@@ -1166,6 +1166,18 @@ def render_failure_lines(failure: FailureInfo):
 
 
 RAW_OUTPUT_TAIL_LINE_COUNT = 100
+# Set DUCKDB_TEST_RAW_OUTPUT_TAIL_LINES to 0 to dump the full raw unittest output instead of just the tail
+RAW_OUTPUT_TAIL_LINE_COUNT_ENV = "DUCKDB_TEST_RAW_OUTPUT_TAIL_LINES"
+
+
+def raw_output_tail_line_count() -> int:
+    value = os.environ.get(RAW_OUTPUT_TAIL_LINE_COUNT_ENV, "")
+    if not value:
+        return RAW_OUTPUT_TAIL_LINE_COUNT
+    try:
+        return max(0, int(value))
+    except ValueError:
+        return RAW_OUTPUT_TAIL_LINE_COUNT
 
 
 def is_low_information_failure(failure: FailureInfo):
@@ -1180,6 +1192,7 @@ def is_low_information_failure(failure: FailureInfo):
 
 def render_raw_output_tail(stdout: str, stderr: str):
     lines = []
+    tail_line_count = raw_output_tail_line_count()
     for stream_name, output in (("stdout", stdout), ("stderr", stderr)):
         stream_lines = [line.rstrip() for line in strip_ansi(normalize_output(output)).splitlines()]
         while stream_lines and not stream_lines[-1].strip():
@@ -1187,7 +1200,7 @@ def render_raw_output_tail(stdout: str, stderr: str):
         if not stream_lines:
             lines.extend(["", f"--- raw unittest {stream_name}: empty ---"])
             continue
-        tail = stream_lines[-RAW_OUTPUT_TAIL_LINE_COUNT:]
+        tail = stream_lines if tail_line_count == 0 else stream_lines[-tail_line_count:]
         header = f"--- raw unittest {stream_name}"
         if len(tail) < len(stream_lines):
             header += f" (last {len(tail)} of {len(stream_lines)} lines)"
