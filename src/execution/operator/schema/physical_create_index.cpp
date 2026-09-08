@@ -139,13 +139,6 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		throw TransactionException(
 		    "Transaction conflict: cannot add an index to a table that has been altered or dropped");
 	}
-	if (alter_table_info && info->constraint_type == IndexConstraintType::PRIMARY) {
-		auto &local_storage = LocalStorage::Get(context, storage.db);
-		for (const auto &column_id : storage_ids) {
-			BoundNotNullConstraint not_null {PhysicalIndex(column_id)};
-			local_storage.VerifyNewConstraint(storage, not_null);
-		}
-	}
 
 	auto &schema = table.schema;
 	info->column_ids = storage_ids;
@@ -173,6 +166,15 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		if (indexes.Contains(info->GetIndexName())) {
 			throw CatalogException("an index with that name already exists for this table: %s",
 			                       SQLIdentifier(info->GetIndexName()));
+		}
+
+		// PRIMARY KEY columns cannot be NULL.
+		if (info->constraint_type == IndexConstraintType::PRIMARY) {
+			auto &local_storage = LocalStorage::Get(context, storage.db);
+			for (const auto &column_id : storage_ids) {
+				BoundNotNullConstraint not_null {PhysicalIndex(column_id)};
+				local_storage.VerifyNewConstraint(storage, not_null);
+			}
 		}
 
 		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
