@@ -115,7 +115,7 @@ unique_ptr<QueryResult> PreparedStatement::Execute(identifier_map_t<BoundParamet
 		return make_uniq<QueryResult>(ErrorData(
 		    InvalidInputException("Attempting to execute a prepared statement after its connection was closed!")));
 	}
-	SubmitParameters parameters;
+	QueryParameters parameters;
 	return client_context->RunInternalStatement(CreateExecuteStatement(named_values), parameters);
 }
 
@@ -148,9 +148,7 @@ unique_ptr<QueryResult> PreparedStatement::Submit(identifier_map_t<BoundParamete
 		    InvalidInputException("Attempting to execute a prepared statement after its connection was closed!");
 		return make_uniq<QueryResult>(ErrorData(exception));
 	}
-	SubmitParameters parameters;
-	parameters.query_parameters = std::move(query_parameters);
-	return client_context->SubmitInternalStatement(CreateExecuteStatement(named_values), parameters);
+	return client_context->SubmitInternalStatement(CreateExecuteStatement(named_values), query_parameters);
 }
 
 } // namespace duckdb

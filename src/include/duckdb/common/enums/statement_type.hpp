@@ -12,7 +12,6 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/query_parameters.hpp"
 #include "duckdb/common/enums/database_modification_type.hpp"
 
 namespace duckdb {

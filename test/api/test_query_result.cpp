@@ -306,9 +306,12 @@ TEST_CASE("Multi-statement text chains completed results", "[api][query_result]"
 	REQUIRE(!last.next);
 	REQUIRE(last.RowCount() == 1);
 
-	// A submission takes a single statement
+	// A submission takes a single statement, and so does a parameterized eager query
 	auto handle = con.Submit("SELECT 1; SELECT 2;");
 	REQUIRE(handle->HasError());
+	REQUIRE_FAIL(con.Query("SELECT $1; SELECT $1;", 1));
+	auto single = con.Query("SELECT $1::INT", 7);
+	REQUIRE(CHECK_COLUMN(single, 0, {7}));
 }
 
 TEST_CASE("A prepared statement gets a fresh store on every submission", "[api][query_result]") {

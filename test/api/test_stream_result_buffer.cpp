@@ -1,7 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
-#include "duckdb/common/query_parameters.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
 #include "duckdb/main/query_profiler.hpp"

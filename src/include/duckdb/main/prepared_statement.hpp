@@ -12,6 +12,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/main/query_parameters.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/common/error_data.hpp"

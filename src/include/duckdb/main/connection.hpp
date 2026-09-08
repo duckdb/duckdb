@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/main/profiler/profiler_print_format.hpp"
+#include "duckdb/common/enums/query_result_memory_type.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/prepared_statement.hpp"
@@ -98,7 +99,6 @@ public:
 	                                          QueryParameters query_parameters = {});
 	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, vector<Value> &values,
 	                                          QueryParameters query_parameters = {});
-	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, SubmitParameters parameters);
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement, vector<Value> &values,
 	                                          QueryParameters query_parameters = {});
 

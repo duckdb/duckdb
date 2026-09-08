@@ -29,7 +29,7 @@
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/common/query_context.hpp"
-#include "duckdb/common/query_parameters.hpp"
+#include "duckdb/main/query_parameters.hpp"
 
 namespace duckdb {
 class Logger;
@@ -58,16 +58,6 @@ class BufferedData;
 struct ClientData;
 class ClientContextState;
 class RegisteredStateManager;
-
-struct SubmitParameters {
-	//! Prepared statement parameters (if any)
-	optional_ptr<identifier_map_t<BoundParameterData>> parameters;
-	//! The submission parameters given by the caller
-	QueryParameters query_parameters;
-	//! Whether the store is settled on retained at submission, so no producer ever parks. Set by
-	//! the callers that drive the query to completion themselves
-	bool retain_result = false;
-};
 
 //! A statement parameter: identifier ($1 -> "1"), binding index, and inferred type (UNKNOWN if not inferred).
 struct StatementParameter {
@@ -163,8 +153,6 @@ public:
 	//! Issue a query and run it to completion, returning a handle whose result is retained
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, QueryParameters query_parameters);
-	//! Issue a query with bound parameter values and run it to completion
-	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, SubmitParameters parameters);
 
 	//! Submits a query to the database and returns its handle, without running it. Note that "query" may only
 	//! contain a single statement.
@@ -178,15 +166,14 @@ public:
 	                                          QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, identifier_map_t<BoundParameterData> &values,
 	                                          QueryParameters query_parameters);
-	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, SubmitParameters parameters);
 
 	//! Run a statement that was generated internally rather than parsed from user SQL. Statement verification
 	//! is skipped, and the client context lock is held for the entire duration of the query.
 	DUCKDB_API unique_ptr<QueryResult> RunInternalStatement(unique_ptr<SQLStatement> statement,
-	                                                        const SubmitParameters &parameters);
+	                                                        const QueryParameters &parameters);
 	//! Same as RunInternalStatement, but returns the handle of the submitted query, which the caller drives
 	DUCKDB_API unique_ptr<QueryResult> SubmitInternalStatement(unique_ptr<SQLStatement> statement,
-	                                                           const SubmitParameters &parameters);
+	                                                           const QueryParameters &parameters);
 
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
@@ -290,7 +277,7 @@ public:
 private:
 	//! Submits a query to the database and returns its handle
 	unique_ptr<QueryResult> SubmitInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                       const SubmitParameters &parameters, bool verify = true);
+	                                       const QueryParameters &parameters, bool verify = true);
 	//! Drives a submitted query to completion and retains its result
 	unique_ptr<QueryResult> CompleteInternal(ClientContextLock &lock, unique_ptr<QueryResult> result);
 	//! Drives a query whose collector builds its own result object, and hands that object out. Null
@@ -300,26 +287,26 @@ private:
 	//! Parse statements from a query
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
 	void StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
-	                           SubmitParameters query_parameters);
+	                           QueryParameters query_parameters);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
 	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr,
 	                     bool invalidate_transaction = false);
 	unique_ptr<QueryResult> SubmitStatement(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                        const SubmitParameters &parameters);
+	                                        const QueryParameters &parameters);
 	unique_ptr<QueryResult> SubmitPreparedStatementInternal(ClientContextLock &lock,
 	                                                        shared_ptr<PreparedStatementData> statement_data_p,
-	                                                        const SubmitParameters &parameters);
+	                                                        const QueryParameters &parameters);
 	void CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData>
-	CreatePreparedStatement(ClientContextLock &lock, unique_ptr<SQLStatement> statement, SubmitParameters parameters);
+	CreatePreparedStatement(ClientContextLock &lock, unique_ptr<SQLStatement> statement, QueryParameters parameters);
 	unique_ptr<QueryResult> SubmitStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                                const SubmitParameters &parameters);
+	                                                const QueryParameters &parameters);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                             const SubmitParameters &parameters, bool verify = true);
+	                                             const QueryParameters &parameters, bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
@@ -341,7 +328,7 @@ private:
 
 	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock,
 	                                                                  unique_ptr<SQLStatement> statement,
-	                                                                  SubmitParameters parameters);
+	                                                                  QueryParameters parameters);
 
 	bool ErrorInvalidatesTransaction(ExceptionType type);
 
