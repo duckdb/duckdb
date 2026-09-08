@@ -184,7 +184,7 @@ void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefe
 	if (segment_state) {
 		auto &state = segment_state->Cast<UncompressedStringSegmentState>();
 		auto &block_manager = segment.GetBlockHandle()->GetBlockManager();
-		for (auto &block_id : state.on_disk_blocks) {
+		for (auto &block_id : state.GetOnDiskBlocks()) {
 			auto block_handle = state.GetHandle(block_manager, block_id);
 			prefetch_state.AddBlock(block_handle);
 		}
@@ -320,7 +320,7 @@ UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t 
 	auto result = make_uniq<UncompressedStringSegmentState>();
 	if (segment_state) {
 		auto &serialized_state = segment_state->Cast<SerializedStringSegmentState>();
-		result->on_disk_blocks = std::move(serialized_state.blocks);
+		result->InitializeOnDiskBlocks(std::move(serialized_state.blocks));
 	}
 	return std::move(result);
 }
@@ -357,11 +357,11 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, BaseStat
 //===--------------------------------------------------------------------===//
 unique_ptr<ColumnSegmentState> UncompressedStringStorage::SerializeState(ColumnSegment &segment) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	if (state.on_disk_blocks.empty()) {
+	if (state.GetOnDiskBlocks().empty()) {
 		// no on-disk blocks - nothing to write
 		return nullptr;
 	}
-	return make_uniq<SerializedStringSegmentState>(state.on_disk_blocks);
+	return make_uniq<SerializedStringSegmentState>(state.GetOnDiskBlocks());
 }
 
 unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deserializer &deserializer) {
@@ -372,7 +372,7 @@ unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deser
 
 void UncompressedStringStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	for (auto &block_id : state.on_disk_blocks) {
+	for (auto &block_id : state.GetOnDiskBlocks()) {
 		visitor.Visit(block_id);
 	}
 }
