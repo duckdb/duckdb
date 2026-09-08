@@ -44,17 +44,23 @@ public:
 
 class MatchStack {
 public:
+	MatchStack();
+	~MatchStack();
+
 	MatcherResult Execute(MatchInput input);
 
 private:
+	static constexpr idx_t INITIAL_FRAME_CAPACITY = 64;
+
 	MatcherResult ExecuteAtomicMatcher(MatchInput input);
 	void PushFrame(MatchInput input);
 	void InitializeFrame(MatchStackFrame &frame);
-	void ExecuteFrame(MatchStackFrame &frame);
+	//! Returns true when the frame has completed.
+	bool ExecuteFrame(MatchStackFrame &frame);
 	MatcherResult FinalizeFrame(MatchStackFrame &frame);
 
 private:
-	vector<unique_ptr<MatchStackFrame>> frames;
+	vector<MatchStackFrame> frames;
 };
 
 } // namespace duckdb
