@@ -116,6 +116,9 @@ PEGTransformerFactory::TransformMatchRecognizeBody(PEGTransformer &transformer,
 	config->rows_per_match = MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_DEFAULT;
 	config->after_match = MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_DEFAULT;
 
+	// one flag per clause kind, indexed by the kind itself
+	static_assert(static_cast<idx_t>(MatchRecognizeClauseKind::DEFINE) + 1 == 8,
+	              "MATCH_RECOGNIZE gained a clause kind that this array has no room for");
 	bool seen[8] = {false, false, false, false, false, false, false, false};
 	for (auto &clause : match_recognize_clause) {
 		auto index = static_cast<idx_t>(clause.kind);
