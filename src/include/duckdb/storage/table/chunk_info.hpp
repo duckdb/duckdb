@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/index/index_pointer.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
@@ -67,7 +68,7 @@ public:
 	//! Returns whether or not a single row in the ChunkVectorInfo should be used or not for the given transaction
 	bool Fetch(TransactionData transaction, row_t row);
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end);
-	bool Cleanup(transaction_t lowest_transaction) const;
+	bool Cleanup(VisibilityBound lowest_visibility_bound) const;
 	string ToString(idx_t max_count) const;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
@@ -80,10 +81,9 @@ public:
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
 
-	//! Attempts to compress the per-row insert/delete ids into constants
-	//! This is possible when the ids behave identically for all transactions with a start time of at least
-	//! lowest_active_start (i.e. all active and future transactions)
-	VersionCompressionResult CompressVersionIds(transaction_t lowest_active_start);
+	//! Attempts to compress the per-row insert/delete ids into constants. Ids that precede
+	//! lowest_visibility_bound look the same to every active and future transaction, so they can collapse
+	VersionCompressionResult CompressVersionIds(VisibilityBound lowest_visibility_bound);
 	//! Whether a compression pass could achieve anything for this vector (see recheck_compression)
 	bool RecheckCompression() const {
 		return recheck_compression;
@@ -92,7 +92,7 @@ public:
 	//! compressible now or in the future without a modification that re-arms the check
 	void VerifyCachedCompressionState() const;
 
-	bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const;
+	bool HasDeletes(VisibilityBound visibility_bound = VisibilityBound::IncludingUncommitted()) const;
 	bool HasUncommittedChanges() const;
 	bool AnyDeleted() const;
 	bool HasConstantInsertionId() const;
@@ -100,13 +100,13 @@ public:
 	bool HasConstantDeleteId() const;
 	transaction_t ConstantDeleteId() const;
 
-	void Write(WriteStream &writer, transaction_t transaction_id) const;
+	void Write(WriteStream &writer, VisibilityBound visibility_bound) const;
 	static unique_ptr<ChunkVectorInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
 
 private:
 	template <class INSERT_OP, class DELETE_OP>
-	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
-	                            optional_ptr<SelectionVector> sel_vector, idx_t max_count) const;
+	idx_t TemplatedGetSelVector(const SnapshotView &view, optional_ptr<SelectionVector> sel_vector,
+	                            idx_t max_count) const;
 
 	IndexPointer GetInsertedPointer() const;
 	IndexPointer GetDeletedPointer() const;

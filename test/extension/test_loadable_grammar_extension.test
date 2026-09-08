@@ -11,7 +11,7 @@ statement ok
 SET active_grammar_extensions = ['pipe_query_syntax'];
 
 statement ok
-SET debug_heap_based_parser=true;
+SET heap_based_parser=true;
 
 statement ok
 CREATE TABLE produce(item VARCHAR, category VARCHAR, sales INTEGER);

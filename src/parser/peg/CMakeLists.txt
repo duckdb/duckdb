@@ -9,6 +9,7 @@ add_library_unity(
   keyword_map.cpp
   matcher.cpp
   dialect_extension.cpp
+  matcher_process.cpp
   matcher_stack.cpp
   compiled_grammar.cpp
   grammar_change.cpp

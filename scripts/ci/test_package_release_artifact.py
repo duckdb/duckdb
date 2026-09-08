@@ -60,10 +60,51 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                 members = {member.name: member for member in archive.getmembers()}
                 self.assertEqual(
                     set(members),
-                    {"libduckdb.so", "libduckdb.so.1", "duckdb.h", "duckdb_extension.h"},
+                    {
+                        "libduckdb.so",
+                        "libduckdb.so.1",
+                        "duckdb.h",
+                        "duckdb_v2.h",
+                        "duckdb_extension.h",
+                        "duckdb_extension_v2.h",
+                    },
                 )
                 self.assertTrue(members["libduckdb.so"].issym())
                 self.assertEqual(members["libduckdb.so"].linkname, "libduckdb.so.1")
+
+    def test_static_libraries_release_artifact(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            libraries = root / "libs"
+            libraries.mkdir()
+            library = libraries / "libduckdb_static.a"
+            library.write_bytes(b"library")
+            extension = libraries / "libcore_functions_extension.a"
+            extension.write_bytes(b"extension")
+
+            self.run_make(
+                "static-libs-release-artifact",
+                root,
+                ARTIFACT_SUFFIX="linux-amd64",
+                STATIC_LIBRARIES=str(libraries / "*"),
+            )
+
+            archive_path = root / "duckdb-static-libs-linux-amd64.tar.gz"
+            with tarfile.open(archive_path, mode="r:gz") as archive:
+                members = {member.name: member for member in archive.getmembers()}
+                self.assertEqual(
+                    set(members),
+                    {
+                        "libduckdb_static.a",
+                        "libcore_functions_extension.a",
+                        "duckdb.h",
+                        "duckdb_v2.h",
+                        "duckdb_extension.h",
+                        "duckdb_extension_v2.h",
+                    },
+                )
+                self.assertEqual(archive.extractfile(members["libduckdb_static.a"]).read(), b"library")
+                self.assertEqual(archive.extractfile(members["libcore_functions_extension.a"]).read(), b"extension")
 
 
 if __name__ == "__main__":

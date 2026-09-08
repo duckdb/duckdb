@@ -64,7 +64,8 @@ public:
 	//! The estimated cardinality.
 	idx_t estimated_cardinality;
 
-	//! The global sink state.
+	//! The global sink state. Published under `lock` by Pipeline::ResetSink on a worker;
+	//! a reader racing pipeline initialization must hold `lock` to observe it safely
 	unique_ptr<GlobalSinkState> sink_state;
 	//! The global operator state.
 	unique_ptr<GlobalOperatorState> op_state;

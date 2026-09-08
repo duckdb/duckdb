@@ -111,6 +111,22 @@ SELECT * EXCLUDE (INTEGERS.i, integers.J) FROM integers
 ----
 3
 
+# dots in quoted identifiers are not qualification separators
+query I
+SELECT * EXCLUDE ("a.b") FROM (SELECT 1 AS "a.b", 2 AS c)
+----
+2
+
+query I
+SELECT * EXCLUDE ("table.with.dot"."column.with.dot") FROM (SELECT 1 AS "column.with.dot", 2 AS c) AS "table.with.dot"
+----
+2
+
+statement error
+SELECT * EXCLUDE (a.b.c.d.e) FROM (SELECT 1 AS e)
+----
+<REGEX>:Parser Error: Expected at most 4 entries.*
+
 statement error
 SELECT * EXCLUDE (integers.i, integers.j, integers2.i) FROM integers
 ----
@@ -143,8 +159,23 @@ SELECT * EXCLUDE (blabla) FROM integers
 ----
 
 statement error
+SELECT * EXCLUDE (type) FROM (SELECT 'hello' AS greeting)
+----
+<REGEX>:.*Binder Error.*Column "type" in EXCLUDE list not found in FROM clause.*Candidate bindings: "greeting".*
+
+statement error
+SELECT * EXCLUDE (ii) FROM integers
+----
+<REGEX>:.*Binder Error.*not found in FROM clause.*Candidate bindings: "i".*
+
+statement error
 SELECT integers.* EXCLUDE (blabla) FROM integers
 ----
+
+statement error
+SELECT integers.* EXCLUDE (ii) FROM integers
+----
+<REGEX>:.*Binder Error.*not found in integers.*Candidate bindings: "i".*
 
 # EXCEPT is accepted interchangeably with EXCLUDE
 query II

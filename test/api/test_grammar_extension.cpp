@@ -8,6 +8,7 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
+#include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -24,6 +25,53 @@ static unique_ptr<TransformResultValue> TransformGrammarExtensionTestAtom(PEGTra
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement));
 }
 
+class GrammarExtensionTestMatchProcess final : public MatchProcess {
+public:
+	GrammarExtensionTestMatchProcess(const Matcher &child_p, MatchState &state_p)
+	    : child(child_p), state(state_p), child_state(state_p) {
+	}
+
+	MatchStep Resume(optional<MatcherResult> child_result) override {
+		D_ASSERT(awaiting_child == child_result.has_value());
+		if (!child_result) {
+			awaiting_child = true;
+			return MatchStep::Child({child, child_state});
+		}
+		awaiting_child = false;
+		if (child_result->IsSuccess()) {
+			state.token_iterator.SetPosition(child_state.token_iterator);
+		}
+		return MatchStep::Complete(*child_result);
+	}
+
+private:
+	const Matcher &child;
+	MatchState &state;
+	MatchState child_state;
+	bool awaiting_child = false;
+};
+
+class GrammarExtensionTestMatcher final : public Matcher {
+public:
+	GrammarExtensionTestMatcher() : child("ANSWER", KeywordInfo()) {
+	}
+
+	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		return make_uniq<GrammarExtensionTestMatchProcess>(child, state);
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return child.AddSuggestion(state);
+	}
+
+	string ToString() const override {
+		return "GrammarExtensionTestMatcher";
+	}
+
+private:
+	KeywordMatcher child;
+};
+
 class AddGrammarExtensionTestValue final : public GrammarExtension {
 public:
 	AddGrammarExtensionTestValue() : GrammarExtension("extension_test_value", "GrammarExtensionTestValue") {
@@ -38,7 +86,7 @@ public:
 			    if (!keyword_helper.KeywordCategoryType("ANSWER", PEGKeywordCategory::KEYWORD_UNRESERVED)) {
 				    throw InternalException("Parser change keyword is missing from the compiled keyword helper");
 			    }
-			    return make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper);
+			    return make_uniq<GrammarExtensionTestMatcher>();
 		    }));
 		return changes;
 	}
@@ -83,6 +131,173 @@ TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_exten
 	Connection con(db);
 	ActivateGrammarExtensionTestSyntax(con);
 	CheckGrammarExtensionTestSyntax(con);
+	REQUIRE_NO_FAIL(*con.Query("SET heap_based_parser = true"));
+	CheckGrammarExtensionTestSyntax(con);
+}
+
+struct MatchProcessLifetimeState {
+	idx_t active = 0;
+	idx_t started = 0;
+	idx_t depth = 0;
+	bool throw_at_leaf = false;
+	bool fail_at_leaf = false;
+	bool create_result = false;
+	bool state_valid = true;
+	idx_t root_children = 1;
+	vector<idx_t> destroyed;
+};
+
+class NestedTestMatchProcess final : public MatchProcess {
+public:
+	NestedTestMatchProcess(const Matcher &matcher_p, MatchState &state, MatchProcessLifetimeState &lifetime_p)
+	    : matcher(matcher_p), input_state(state), child_state(state), lifetime(lifetime_p), depth(++lifetime.active) {
+		lifetime.started++;
+	}
+
+	~NestedTestMatchProcess() override {
+		lifetime.state_valid &= &input_state.context == &child_state.context;
+		lifetime.destroyed.push_back(depth);
+		lifetime.active--;
+	}
+
+	MatchStep Resume(optional<MatcherResult> child_result) override {
+		if (child_result) {
+			if (depth == 1 && ++completed_children < lifetime.root_children) {
+				return MatchStep::Child({matcher, child_state});
+			}
+			return MatchStep::Complete(*child_result);
+		}
+		if (depth < lifetime.depth) {
+			return MatchStep::Child({matcher, child_state});
+		}
+		if (lifetime.throw_at_leaf) {
+			throw InvalidInputException("Nested matcher test failure");
+		}
+		if (lifetime.fail_at_leaf) {
+			return MatchStep::Complete(MatcherResult::Failure());
+		}
+		if (lifetime.create_result) {
+			return MatchStep::Complete(child_state.AllocateParseResult<ListParseResult>(
+			    vector<reference<ParseResult>>(), string("nested result"), optional_idx()));
+		}
+		return MatchStep::Complete(MatcherResult::Success());
+	}
+
+private:
+	const Matcher &matcher;
+	MatchState &input_state;
+	MatchState child_state;
+	MatchProcessLifetimeState &lifetime;
+	idx_t depth;
+	idx_t completed_children = 0;
+};
+
+class NestedTestMatcher final : public Matcher {
+public:
+	explicit NestedTestMatcher(MatchProcessLifetimeState &lifetime_p)
+	    : Matcher(MatcherType::LIST), lifetime(lifetime_p) {
+	}
+
+	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		return make_uniq<NestedTestMatchProcess>(*this, state, lifetime);
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &) const override {
+		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		return "NestedTestMatcher";
+	}
+
+private:
+	MatchProcessLifetimeState &lifetime;
+};
+
+TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api][grammar_extension]") {
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_token_index = 0;
+	MatchContext context(suggestions, allocator, max_token_index);
+	MatchState state(iterator, context);
+	MatchProcessLifetimeState lifetime;
+	lifetime.destroyed.reserve(2049);
+	NestedTestMatcher matcher(lifetime);
+
+	SECTION("Completed frames are reused across vector growth boundaries") {
+		MatchStack stack;
+		lifetime.create_result = true;
+		for (idx_t depth : {idx_t(1), idx_t(64), idx_t(65), idx_t(128), idx_t(129), idx_t(256), idx_t(257), idx_t(1025),
+		                    idx_t(33), idx_t(130)}) {
+			lifetime.depth = depth;
+			lifetime.started = 0;
+			lifetime.destroyed.clear();
+			auto result = stack.Execute({matcher, state});
+			REQUIRE(result.IsSuccess());
+			REQUIRE(result.HasParseResult());
+			REQUIRE(result.GetParseResult()->name == "nested result");
+			REQUIRE(lifetime.active == 0);
+			REQUIRE(lifetime.state_valid);
+			REQUIRE(lifetime.started == depth);
+			REQUIRE(lifetime.destroyed.size() == depth);
+			for (idx_t i = 0; i < depth; i++) {
+				REQUIRE(lifetime.destroyed[i] == depth - i);
+			}
+		}
+	}
+
+	SECTION("Exceptions destroy child processes before their parents") {
+		lifetime.depth = 1025;
+		lifetime.throw_at_leaf = true;
+		{
+			MatchStack stack;
+			REQUIRE_THROWS_AS(stack.Execute({matcher, state}), InvalidInputException);
+		}
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == lifetime.depth);
+		REQUIRE(lifetime.destroyed.size() == lifetime.depth);
+		for (idx_t i = 0; i < lifetime.depth; i++) {
+			REQUIRE(lifetime.destroyed[i] == lifetime.depth - i);
+		}
+	}
+
+	SECTION("A waiting parent resumes after multiple deep children") {
+		lifetime.depth = 1025;
+		lifetime.root_children = 2;
+		MatchStack stack;
+		REQUIRE(stack.Execute({matcher, state}).IsSuccess());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == 1 + 2 * (lifetime.depth - 1));
+		REQUIRE(lifetime.destroyed.size() == lifetime.started);
+		for (idx_t sibling = 0; sibling < 2; sibling++) {
+			for (idx_t i = 0; i < lifetime.depth - 1; i++) {
+				REQUIRE(lifetime.destroyed[sibling * (lifetime.depth - 1) + i] == lifetime.depth - i);
+			}
+		}
+		REQUIRE(lifetime.destroyed.back() == 1);
+	}
+
+	SECTION("Failed matches leave the vector ready for another execution") {
+		lifetime.depth = 1025;
+		lifetime.fail_at_leaf = true;
+		MatchStack stack;
+		REQUIRE_FALSE(stack.Execute({matcher, state}).IsSuccess());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == lifetime.depth);
+		REQUIRE(lifetime.destroyed.size() == lifetime.depth);
+		lifetime.fail_at_leaf = false;
+		lifetime.started = 0;
+		lifetime.destroyed.clear();
+		REQUIRE(stack.Execute({matcher, state}).IsSuccess());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == lifetime.depth);
+	}
 }
 
 TEST_CASE("Grammar changes expose structured metadata", "[api][grammar_extension]") {
