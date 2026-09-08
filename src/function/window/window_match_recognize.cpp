@@ -133,8 +133,6 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 	vector<idx_t> classifiers;
 	//! Whether the pattern matched each row inside a {- -}, written alongside the classifier above
 	vector<uint8_t> excluded_rows;
-	//! Materialised only when a condition has to be settled per row, and then shared by the threads
-	DataChunk rows;
 	//! One boolean per symbol per row. Sink fills these as rows arrive, over disjoint ranges, so the
 	//! threads do not need to coordinate.
 	vector<vector<uint8_t>> condition_values;
@@ -538,18 +536,6 @@ void WindowMatchRecognizeExecutor::Sink(ExecutionContext &context, DataChunk &si
 		for (const auto &entry : lstate.result.data[i].Values<bool>()) {
 			values[input_idx + entry.GetIndex()] = entry.IsValid() && entry.GetValueUnsafe() ? 1 : 0;
 		}
-	}
-}
-
-//! Materialise the whole hash group. Row offsets are global to it, which is what the matcher and the
-//! condition evaluation both index by.
-static void FetchHashGroup(ColumnDataCollection &input, DataChunk &result_chunk) {
-	ColumnDataScanState scan_state;
-	DataChunk scan_chunk;
-	input.InitializeScanChunk(scan_chunk);
-	input.InitializeScan(scan_state);
-	while (input.Scan(scan_state, scan_chunk)) {
-		result_chunk.Append(scan_chunk);
 	}
 }
 
@@ -998,10 +984,9 @@ static idx_t SkipTo(const MatchRecognizeFunctionData &config, idx_t skip_symbol,
 }
 
 // this gets called per partition
-//! Work out where the partitions are, and materialise the rows if a condition has to be settled per
-//! row. Both are shared by every thread that reaches Finalize, so this happens once.
-static void PrepareHashGroup(ExecutionContext &context, WindowMatchRecognizeGlobalState &gstate,
-                             const MatchRecognizeFunctionData &config, WindowCollection &collection) {
+//! Work out where the partitions are. Every thread that reaches Finalize shares them, so this
+//! happens once.
+static void PrepareHashGroup(WindowMatchRecognizeGlobalState &gstate) {
 	lock_guard<mutex> lock(gstate.state_lock);
 	if (gstate.prepared) {
 		return;
@@ -1017,15 +1002,6 @@ static void PrepareHashGroup(ExecutionContext &context, WindowMatchRecognizeGlob
 		gstate.partitions.emplace_back(partition_start, payload_idx - 1);
 		partition_start = payload_idx;
 	}
-
-	auto per_row = !config.navigations.empty();
-	for (auto scoped : config.row_scoped) {
-		per_row = per_row || scoped;
-	}
-	if (per_row) {
-		gstate.rows.Initialize(context.client, collection.inputs->Types(), gstate.payload_count);
-		FetchHashGroup(*collection.inputs, gstate.rows);
-	}
 }
 
 //! Match the partitions of the hash group, taking them from the shared cursor until they run out.
@@ -1034,12 +1010,40 @@ static void PrepareHashGroup(ExecutionContext &context, WindowMatchRecognizeGlob
 class RowConditions {
 public:
 	RowConditions(ExecutionContext &context, WindowMatchRecognizeGlobalState &gstate,
-	              const MatchRecognizeFunctionData &config)
-	    : context(context), gstate(gstate), config(config),
+	              const MatchRecognizeFunctionData &config, const WindowCollection &collection)
+	    : context(context), gstate(gstate), config(config), collection(collection),
 	      columns_idx(gstate.executor.aux_idx.empty() ? 0 : gstate.executor.aux_idx[0]),
 	      executors(config.conditions.size()) {
 		for (auto &condition : config.conditions) {
 			conditions.push_back(condition->Copy());
+		}
+		// Which field of the condition input each condition reads, and where that field's value comes
+		// from. Resolving both once is what lets a row be assembled by copying only the values the
+		// condition being decided actually reads.
+		for (auto &condition : config.conditions) {
+			ExpressionIterator::VisitExpression<BoundReferenceExpression>(
+			    *condition, [&](const BoundReferenceExpression &bound_ref) {
+				    field_plan.resize(MaxValue<idx_t>(field_plan.size(), bound_ref.Index() + 1));
+			    });
+		}
+		for (idx_t i = 0; i < config.navigations.size(); i++) {
+			field_plan.resize(MaxValue<idx_t>(field_plan.size(), config.navigations[i].field + 1));
+			field_plan[config.navigations[i].field] = FieldPlan {FieldSource::NAVIGATION, i};
+		}
+		// the collected column holds the constant the matcher rewrites per match, not the number
+		if (!field_plan.empty()) {
+			field_plan[MATCH_NUMBER_FIELD] = FieldPlan {FieldSource::MATCH_NUMBER, DConstants::INVALID_INDEX};
+		}
+		for (auto &condition : config.conditions) {
+			unordered_set<idx_t> seen;
+			vector<idx_t> fields;
+			ExpressionIterator::VisitExpression<BoundReferenceExpression>(
+			    *condition, [&](const BoundReferenceExpression &bound_ref) {
+				    if (seen.insert(bound_ref.Index()).second) {
+					    fields.push_back(bound_ref.Index());
+				    }
+			    });
+			condition_fields.push_back(std::move(fields));
 		}
 		case_insensitive_map_t<idx_t> symbol_index;
 		for (idx_t i = 0; i < config.symbols.size(); i++) {
@@ -1094,47 +1098,33 @@ public:
 			return gstate.condition_values[index][row] != 0;
 		}
 
-		auto &columns = StructVector::GetEntries(gstate.rows.data[columns_idx]);
 		if (!ready) {
-			vector<LogicalType> column_types;
-			for (auto &column : columns) {
-				column_types.push_back(column.GetType());
-			}
-			row_chunk.Initialize(context.client, column_types, 1);
-			// one expression is evaluated at a time here, so the result holds a single column
-			row_result.Initialize(context.client, vector<LogicalType> {LogicalType::BOOLEAN}, 1);
-			// Each column is a dictionary over the group's rows whose selection is shared with the
-			// vector below, so pointing it at another row costs no allocation.
-			row_sel.Initialize(1);
-			for (idx_t col = 0; col < columns.size(); col++) {
-				row_chunk.data[col].Slice(columns[col], row_sel, 1);
-			}
-			navigation_sels.resize(config.navigations.size());
-			navigation_sliced.assign(config.navigations.size(), false);
-			for (auto &navigation_sel : navigation_sels) {
-				navigation_sel.Initialize(1);
-			}
-			row_chunk.SetCardinalityUnsafe(1);
-			ready = true;
+			Initialize();
 		}
 
-		row_sel.set_index(0, row);
-		if (config.depends_on_match_number) {
-			row_chunk.data[MATCH_NUMBER_FIELD].Reference(Value::UBIGINT(match_number), count_t(1));
-		}
-		for (idx_t i = 0; i < config.navigations.size(); i++) {
-			auto &navigation = config.navigations[i];
-			auto target = Navigate(navigation, i, row);
-			if (target.IsValid()) {
-				// a NULL reference below replaces the dictionary, so it has to be rebuilt after one
-				if (!navigation_sliced[i]) {
-					row_chunk.data[navigation.field].Slice(columns[navigation.field], navigation_sels[i], 1);
-					navigation_sliced[i] = true;
+		// The row is assembled a field at a time out of the collection, so what is held here is one
+		// row of the fields the conditions read rather than a copy of everything that was collected.
+		for (auto field : condition_fields[index]) {
+			auto &plan = field_plan[field];
+			auto &target = row_chunk.data[field];
+			switch (plan.source) {
+			case FieldSource::MATCH_NUMBER:
+				target.SetValue(0, Value::UBIGINT(match_number));
+				break;
+			case FieldSource::NAVIGATION: {
+				const auto navigated = Navigate(config.navigations[plan.navigation_idx], plan.navigation_idx, row);
+				if (navigated.IsValid()) {
+					// a cursor of its own, because seeking the row being tested would move this one
+					CopyField(*navigation_cursors[plan.navigation_idx], field, navigated.GetIndex(), target);
+				} else {
+					// the match has no such row, which is what the condition reads as NULL
+					FlatVector::ValidityMutable(target).SetInvalid(0);
 				}
-				navigation_sels[i].set_index(0, target.GetIndex());
-			} else {
-				row_chunk.data[navigation.field].Reference(Value(columns[navigation.field].GetType()), count_t(1));
-				navigation_sliced[i] = false;
+				break;
+			}
+			case FieldSource::CURRENT_ROW:
+				CopyField(*row_cursor, field, row, target);
+				break;
 			}
 		}
 
@@ -1150,6 +1140,47 @@ public:
 	}
 
 private:
+	//! Where a field of the condition input takes its value from
+	enum class FieldSource : uint8_t { CURRENT_ROW, MATCH_NUMBER, NAVIGATION };
+	struct FieldPlan {
+		FieldSource source = FieldSource::CURRENT_ROW;
+		idx_t navigation_idx = DConstants::INVALID_INDEX;
+	};
+
+	void Initialize() {
+		auto &field_types = StructType::GetChildTypes(collection.GetTypes()[columns_idx]);
+		vector<LogicalType> types;
+		for (auto &field_type : field_types) {
+			types.push_back(field_type.second);
+		}
+		row_chunk.Initialize(context.client, types, 1);
+		// one expression is evaluated at a time here, so the result holds a single column
+		row_result.Initialize(context.client, vector<LogicalType> {LogicalType::BOOLEAN}, 1);
+		// the vectors carry their own size, and reading one row out of them means saying so here
+		row_chunk.SetChildCardinality(1);
+		// A condition only writes the fields it reads, so the rest never hold anything. Starting them
+		// as NULL keeps what the allocation happened to contain out of the chunk entirely.
+		for (auto &field : row_chunk.data) {
+			field.SetVectorType(VectorType::FLAT_VECTOR);
+			FlatVector::ValidityMutable(field).SetInvalid(0);
+		}
+		field_plan.resize(MaxValue<idx_t>(field_plan.size(), types.size()));
+
+		row_cursor = make_uniq<WindowCursor>(collection, columns_idx);
+		for (idx_t i = 0; i < config.navigations.size(); i++) {
+			navigation_cursors.push_back(make_uniq<WindowCursor>(collection, columns_idx));
+		}
+		ready = true;
+	}
+
+	//! Copy one field of one collected row. Seeking can replace the cursor's chunk, so the value is
+	//! taken out of it here rather than referenced out of it.
+	static void CopyField(WindowCursor &cursor, idx_t field, idx_t row, Vector &target) {
+		const auto index = cursor.Seek(row);
+		auto &source = StructVector::GetEntries(cursor.chunk.data[0])[field];
+		VectorOperations::Copy(source, target, index + 1, index, 0);
+	}
+
 	//! The row FIRST()/LAST() navigates to, or an invalid index when the match has no such row
 	optional_idx Navigate(const MatchRecognizeFunctionData::Navigation &navigation, idx_t navigation_idx,
 	                      idx_t row) const {
@@ -1174,6 +1205,7 @@ private:
 	ExecutionContext &context;
 	WindowMatchRecognizeGlobalState &gstate;
 	const MatchRecognizeFunctionData &config;
+	const WindowCollection &collection;
 	idx_t columns_idx;
 	vector<unique_ptr<ExpressionExecutor>> executors;
 	vector<unique_ptr<Expression>> conditions;
@@ -1187,20 +1219,22 @@ private:
 	idx_t match_number = 1;
 	DataChunk row_chunk;
 	DataChunk row_result;
-	//! The selection behind the row_chunk dictionaries: entry 0 is the row being tested
-	SelectionVector row_sel;
-	//! One selection per navigation field, pointing at the row the navigation resolved to
-	vector<SelectionVector> navigation_sels;
-	//! Whether the navigation field still holds its dictionary rather than a NULL reference
-	vector<bool> navigation_sliced;
+	//! Where each field of row_chunk takes its value from
+	vector<FieldPlan> field_plan;
+	//! The fields each condition reads, so that deciding one copies no more than it needs
+	vector<vector<idx_t>> condition_fields;
+	//! Reads the row being tested. Owned by this thread, like the ones below.
+	unique_ptr<WindowCursor> row_cursor;
+	//! One per navigation, because two of them can be reading two different rows at once
+	vector<unique_ptr<WindowCursor>> navigation_cursors;
 	bool ready = false;
 };
 
 static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobalState &gstate,
-                           const MatchRecognizeFunctionData &config) {
+                           const MatchRecognizeFunctionData &config, const WindowCollection &collection) {
 	auto &classifiers = gstate.classifiers;
 	MatchRecognizeSpanWriter writer(context.client);
-	RowConditions row_conditions(context, gstate, config);
+	RowConditions row_conditions(context, gstate, config, collection);
 	SymbolMatcher symbol_matches = [&](idx_t index, idx_t row) {
 		return row_conditions.Matches(index, row);
 	};
@@ -1279,8 +1313,8 @@ void WindowMatchRecognizeExecutor::Finalize(ExecutionContext &context, optional_
 	// we always start with a new partition
 	D_ASSERT(gstate.partition_mask.RowIsValid(0));
 
-	PrepareHashGroup(context, gstate, config, *collection);
-	ScanPartitions(context, gstate, config);
+	PrepareHashGroup(gstate);
+	ScanPartitions(context, gstate, config, *collection);
 }
 
 void WindowMatchRecognizeExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
