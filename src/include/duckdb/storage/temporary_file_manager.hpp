@@ -263,7 +263,8 @@ class TemporaryFileManager {
 	friend class TemporaryFileHandle;
 
 public:
-	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p, atomic<idx_t> &size_on_disk);
+	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
+	                     const string &temporary_file_identifier_p, atomic<idx_t> &size_on_disk);
 	~TemporaryFileManager();
 
 private:
@@ -291,6 +292,8 @@ public:
 
 	//! Get the list of temporary files and their sizes
 	vector<TemporaryFileInformation> GetTemporaryFiles();
+	//! Create the path for a variable-size temporary block
+	string CreateTemporaryBlockFileName(block_id_t id) const;
 
 	//! Get/set maximum swap space
 	optional_idx GetMaxSwapSpace() const;
@@ -326,6 +329,8 @@ private:
 	DatabaseInstance &db;
 	//! The temporary directory
 	string temp_directory;
+	//! Identifier shared by all temporary files owned by this instance
+	string temporary_file_identifier;
 	//! Lock for parallel access
 	mutex manager_lock;
 	//! The set of active temporary file handles
@@ -359,7 +364,9 @@ public:
 private:
 	DatabaseInstance &db;
 	string temp_directory;
+	string temporary_file_identifier;
 	bool created_directory = false;
+	unique_ptr<FileHandle> ownership_lock;
 	unique_ptr<TemporaryFileManager> temp_file;
 };
 
