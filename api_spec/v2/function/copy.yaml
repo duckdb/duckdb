@@ -1,0 +1,1874 @@
+module: copy
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  copy_function:
+    description: |
+      An owned opaque handle to a custom copy function being built: an output format for `COPY ... TO`, an input
+      format for `COPY ... FROM`, or both. Created with `[[copy_function_create_with_connection]]` or
+      `[[copy_function_create_with_extension]]`, configured with the setter functions (e.g.
+      `[[copy_function_set_name]]`, `[[copy_to_set_batch_callback]]`, `[[copy_from_set_exec_callback]]`, etc.), made
+      available with `[[copy_function_register]]`, and destroyed with `[[copy_function_destroy]]`.
+
+  copy_to_bind_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the query preparation "bind" phase
+      of a `COPY ... TO` statement. The "bind" callback receives this handle and can use it to e.g. inspect the names
+      and types of the columns being written, read the statement's options and initialize some constant state.
+
+  copy_to_batch_size_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the "batch size" phase of a
+      `COPY ... TO` statement. The "batch size" callback receives this handle and must use it to report how many rows
+      a batch should carry.
+
+  copy_to_init_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the per-file "init" phase of a
+      `COPY ... TO` statement. The "init" callback receives this handle and can use it to e.g. read the path of the
+      file being written and set up the state shared by every batch written to that file.
+
+  copy_to_batch_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the "batch" phase of a
+      `COPY ... TO` statement. The "batch" callback receives this handle and can use it to take ownership of the rows
+      of the batch and to set the prepared form of the batch handed to the "flush" callback.
+
+  copy_to_flush_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the "flush" phase of a
+      `COPY ... TO` statement. The "flush" callback receives this handle and can use it to access the prepared batch
+      and write it to the output.
+
+  copy_to_finalize_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the per-file "finalize" phase of a
+      `COPY ... TO` statement. The "finalize" callback receives this handle and can use it to e.g. close the file
+      after every batch has been flushed to it.
+
+  copy_from_bind_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the query preparation "bind" phase
+      of a `COPY ... FROM` statement. The "bind" callback receives this handle and can use it to e.g. read the path of
+      the file to read, inspect the names and types of the columns the target table expects, read the statement's
+      options, hint at the number of rows the read will produce and initialize some constant state.
+
+  copy_from_init_global_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the global state initialization
+      "init global" phase of a `COPY ... FROM` statement. The "init global" callback receives this handle and can use
+      it to e.g. set up the state shared by every thread reading the file, and to declare how many threads may read
+      it.
+
+  copy_from_init_local_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the local state initialization
+      "init local" phase of a `COPY ... FROM` statement. The "init local" callback receives this handle and can use it
+      to e.g. set up worker-local state, typically by claiming work from the shared global state.
+
+  copy_from_exec_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the execution "exec" phase of a
+      `COPY ... FROM` statement. The "exec" callback receives this handle and can use it to e.g. access the global and
+      local state and write the next batch of rows to the output chunk.
+
+  copy_from_progress_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function during the "progress" phase of a
+      `COPY ... FROM` statement. The "progress" callback receives this handle and can use it to report how far the read
+      has advanced.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Callbacks
+#-----------------------------------------------------------------------------------------------------------------------
+callbacks:
+  copy_to_bind_callback:
+    parameters:
+      info:
+        type: copy_to_bind_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_to_batch_size_callback:
+    parameters:
+      info:
+        type: copy_to_batch_size_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_to_init_callback:
+    parameters:
+      info:
+        type: copy_to_init_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_to_batch_callback:
+    parameters:
+      info:
+        type: copy_to_batch_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_to_flush_callback:
+    parameters:
+      info:
+        type: copy_to_flush_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_to_finalize_callback:
+    parameters:
+      info:
+        type: copy_to_finalize_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_from_bind_callback:
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_from_init_global_callback:
+    parameters:
+      info:
+        type: copy_from_init_global_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_from_init_local_callback:
+    parameters:
+      info:
+        type: copy_from_init_local_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_from_exec_callback:
+    parameters:
+      info:
+        type: copy_from_exec_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_from_progress_callback:
+    parameters:
+      info:
+        type: copy_from_progress_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_function_create_with_connection:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Creates a new copy function that will be registered on the connection's database.
+
+      A copy function implements a file format for `COPY`: once registered, SQL reaches it with
+      `COPY ... TO 'path' (FORMAT name)` and `COPY table FROM 'path' (FORMAT name)`. The function starts out
+      empty: configure it with the setter functions (e.g. `[[copy_function_set_name]]`, the `copy_to_set_*` callbacks
+      for writing, the `copy_from_set_*` callbacks for reading, or both), then make it available with
+      `[[copy_function_register]]`. The caller owns the returned handle and must destroy it with
+      `[[copy_function_destroy]]`, also after registration.
+    parameters:
+      connection:
+        type: connection
+        description: The connection to create the function in.
+      function:
+        type: copy_function
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created copy function. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_function_create_with_extension:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Creates a new copy function that will be registered on the loading extension's database.
+
+      A copy function implements a file format for `COPY`: once registered, SQL reaches it with
+      `COPY ... TO 'path' (FORMAT name)` and `COPY table FROM 'path' (FORMAT name)`. Use this from an extension load callback, where an extension handle is available. The function starts out
+      empty: configure it with the setter functions (e.g. `[[copy_function_set_name]]`, the `copy_to_set_*` callbacks
+      for writing, the `copy_from_set_*` callbacks for reading, or both), then make it available with
+      `[[copy_function_register]]`. The caller owns the returned handle and must destroy it with
+      `[[copy_function_destroy]]`, also after registration.
+    parameters:
+      extension:
+        type: extension
+        description: The extension to create the function in.
+      function:
+        type: copy_function
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created copy function. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Properties
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_function_set_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the name of the copy function.
+
+      The name is the format SQL selects the function with: `COPY ... TO 'path' (FORMAT name)` or
+      `COPY table FROM 'path' (FORMAT name)`. It is borrowed and copied. Calling this again replaces the previous
+      name. A name must be set before registration.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the name of.
+      name:
+        type: str
+        indirection: 1
+        description: The name to set. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_function_set_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets arbitrary user data on the copy function.
+
+      Associates an opaque pointer with the function, retrievable from each callback of either side via its user data
+      accessor (e.g. `[[copy_to_bind_get_user_data]]`, `[[copy_from_exec_get_user_data]]`, etc.). The opaque handle
+      bundles the pointer with an optional destructor, invoked when the data is no longer needed.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the user data of.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the user data pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO Callbacks
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_set_bind_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the optional bind callback of the `COPY ... TO` side.
+
+      The bind callback is invoked during query planning for each `COPY ... TO` statement that uses the function. It
+      can inspect the names and types of the columns being written, read the statement's options and set "bind data"
+      that is shared with the other `COPY ... TO` callbacks.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_to_bind_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_set_batch_size_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the optional batch size callback of the `COPY ... TO` side.
+
+      The batch size callback is invoked during query planning, after the bind callback, for each `COPY ... TO`
+      statement that does not set `BATCH_SIZE` itself. It must report how many rows a batch should carry via
+      `[[copy_to_batch_size_set_target]]`; the engine then cuts the rows being written into batches of that size and
+      hands each to the batch callback. Without a batch size from either the statement or the callback, a batch is
+      cut for every chunk of rows sunk, i.e. a vector at a time. A batch may still be smaller than the reported size
+      (the last one of a file, or when `BATCH_SIZE_BYTES` cuts it first).
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_to_batch_size_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_set_init_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the optional init callback of the `COPY ... TO` side.
+
+      The init callback is invoked once per output file, before any batch destined for that file is prepared. It can
+      read the path of the file via `[[copy_to_init_get_file_path]]` and set "init data" that is shared with the
+      batch, flush and finalize callbacks of that file. A statement may write several files, e.g. when its output is
+      partitioned; each gets its own init data.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_to_init_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_set_batch_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the batch callback of the `COPY ... TO` side.
+
+      The batch callback is invoked during query execution with a batch of the rows being written, taken via
+      `[[copy_to_batch_take_input]]`. It prepares the batch for writing, e.g. by encoding it into the output format,
+      and sets "batch data" via `[[copy_to_batch_set_batch_data]]` that is handed to the flush callback. Batches may
+      be prepared by several threads at once, so the callback must synchronize its own access to the init data. A
+      batch callback must be set for the `COPY ... TO` side to be registered.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_to_batch_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_set_flush_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the flush callback of the `COPY ... TO` side.
+
+      The flush callback is invoked once per prepared batch to write its batch data, available via
+      `[[copy_to_flush_get_batch_data]]`, to the output. Flushes of the same file never run concurrently. A flush
+      callback must be set for the `COPY ... TO` side to be registered.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_to_flush_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_set_finalize_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the optional finalize callback of the `COPY ... TO` side.
+
+      The finalize callback is invoked once per output file after the last batch destined for that file has been
+      flushed. It can e.g. write a footer and close the file.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_to_finalize_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO Bind Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_bind_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_to_bind_info
+        description: The bind info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_bind_set_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the function's "bind data" from the bind callback.
+
+      The bind data is stored with the bound statement and retrievable from the other callbacks of the same side.
+      The opaque handle bundles the pointer with an optional destructor, invoked when the bind data is no longer
+      needed, and an optional equality callback used when comparing two bound statements; without one, pointer
+      equality is used.
+    parameters:
+      info:
+        type: copy_to_bind_info
+        description: The bind info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_bind_get_file_path:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the path the `COPY ... TO` statement writes to, as written in the statement.
+
+      This is the target before the engine's own rewrites: the path of each file actually being written, e.g. a
+      temporary name or a per-partition path, is only known to the init callback via `[[copy_to_init_get_file_path]]`.
+      The path is borrowed and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: copy_to_bind_info
+        description: The bind info handle.
+      path:
+        type: str
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the file path. Valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_bind_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns being written, i.e. the columns of the rows every batch carries.
+
+      Valid indices for `[[copy_to_bind_get_column_type]]` and `[[copy_to_bind_get_column_name]]` are [0, count).
+    parameters:
+      info:
+        type: copy_to_bind_info
+        description: The bind info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_bind_get_column_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the type of the column at the given index.
+
+      Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
+      `[[logical_type_destroy]]`.
+    parameters:
+      info:
+        type: copy_to_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the column to get the type of.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the column type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_bind_get_column_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the name of the column at the given index.
+
+      Fails if the index is out of bounds. The name is borrowed and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: copy_to_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the column to get the name of.
+      name:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the column name. Valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_bind_get_option_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of options the `COPY` statement passed to the function.
+
+      The engine's own options (e.g. `USE_TMP_FILE` or `BATCH_SIZE`) are handled before the function sees the
+      statement and are not included. Valid indices for `[[copy_to_bind_get_option_name]]` and `[[copy_to_bind_get_option_value]]` are
+      [0, count). The options are ordered by name.
+    parameters:
+      info:
+        type: copy_to_bind_info
+        description: The bind info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of options.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_bind_get_option_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the name of the option at the given index.
+
+      Option names are SQL identifiers, matched case-insensitively. Fails if the index is out of bounds. The name is
+      borrowed and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: copy_to_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the option to get the name of.
+      name:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the option name. Valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_bind_get_option_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the value of the option at the given index.
+
+      An option written with a single value (e.g. `DELIM ','`) yields that value. An option written as a bare name
+      (e.g. `HEADER`) yields the BOOLEAN `true`. An option written with a parenthesized list (e.g. `KEYS (a, b)`)
+      yields a tuple: an unnamed STRUCT with one field per element, in order. Fails if the index is out of bounds.
+      The returned value is owned by the caller and must be destroyed via `[[value_destroy]]`.
+    parameters:
+      info:
+        type: copy_to_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the option.
+      value:
+        type: value
+        indirection: 1
+        kind: OUT
+        description: Receives the option's value. Owned by the caller; destroy via `[[value_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO Batch Size Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_batch_size_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_to_batch_size_info
+        description: The batch size info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_batch_size_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the bind data set by the function's `COPY ... TO` bind callback.
+    parameters:
+      info:
+        type: copy_to_batch_size_info
+        description: The batch size info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_batch_size_set_target:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the number of rows a batch should carry, as the target the engine cuts batches at. The batch size
+      callback must set this to a value greater than 0; the statement fails otherwise.
+    parameters:
+      info:
+        type: copy_to_batch_size_info
+        description: The batch size info handle.
+      rows:
+        type: idx
+        description: The number of rows a batch should carry. Must be greater than 0.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO Init Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_init_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_to_init_info
+        description: The init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_init_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the bind data set by the function's `COPY ... TO` bind callback.
+    parameters:
+      info:
+        type: copy_to_init_info
+        description: The init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_init_get_file_path:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the path of the file the init callback is preparing.
+
+      This is the path the batches of this file are to be written to, after the engine has applied its own rewrites
+      (e.g. a temporary name while the file is being written, or a per-partition path). The path is borrowed and
+      valid only for the duration of the callback.
+    parameters:
+      info:
+        type: copy_to_init_info
+        description: The init info handle.
+      path:
+        type: str
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the file path. Valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_init_set_init_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the function's "init data" from the init callback.
+
+      The init data lives for the duration of the file being written and is retrievable from the batch, flush and
+      finalize callbacks of that file. Batches may be prepared by several threads at once, so the function must
+      synchronize its own access to it from the batch callback. The opaque handle bundles the pointer with an
+      optional destructor, invoked when the file is done with the data.
+    parameters:
+      info:
+        type: copy_to_init_info
+        description: The init info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the init data pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO Batch Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_batch_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_to_batch_info
+        description: The batch info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_batch_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the bind data set by the function's `COPY ... TO` bind callback.
+    parameters:
+      info:
+        type: copy_to_batch_info
+        description: The batch info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_batch_get_init_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the init data set by the function's `COPY ... TO` init callback for the file this batch belongs to.
+    parameters:
+      info:
+        type: copy_to_batch_info
+        description: The batch info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the init data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_batch_take_input:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Takes ownership of the rows of the batch to prepare.
+
+      The collection holds one column per column reported by `[[copy_to_bind_get_column_count]]`, in the same order,
+      and can be scanned with `[[column_data_collection_scan]]`. The batch can only be taken once: a second call
+      fails. Once taken, the caller owns the collection and must destroy it via `[[column_data_collection_destroy]]`,
+      e.g. by keeping it as the batch data with that destructor. A batch that is never taken is destroyed when the
+      callback returns.
+    parameters:
+      info:
+        type: copy_to_batch_info
+        description: The batch info handle.
+      collection:
+        type: column_data_collection
+        indirection: 1
+        kind: OUT
+        description: Receives the collection holding the rows of the batch. Owned by the caller; destroy via `[[column_data_collection_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_batch_set_batch_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the prepared "batch data" from the batch callback.
+
+      The batch data is the prepared form of the batch and is handed to the flush callback via
+      `[[copy_to_flush_get_batch_data]]`. The opaque handle bundles the pointer with an optional destructor, invoked
+      once the batch has been flushed.
+    parameters:
+      info:
+        type: copy_to_batch_info
+        description: The batch info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the batch data pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO Flush Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_flush_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_to_flush_info
+        description: The flush info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_flush_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the bind data set by the function's `COPY ... TO` bind callback.
+    parameters:
+      info:
+        type: copy_to_flush_info
+        description: The flush info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_flush_get_init_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the init data set by the function's `COPY ... TO` init callback for the file this batch belongs to.
+    parameters:
+      info:
+        type: copy_to_flush_info
+        description: The flush info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the init data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_flush_get_batch_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the batch data set by the function's batch callback for the batch being flushed.
+    parameters:
+      info:
+        type: copy_to_flush_info
+        description: The flush info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the batch data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO Finalize Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_finalize_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_to_finalize_info
+        description: The finalize info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_finalize_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the bind data set by the function's `COPY ... TO` bind callback.
+    parameters:
+      info:
+        type: copy_to_finalize_info
+        description: The finalize info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_finalize_get_init_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the init data set by the function's `COPY ... TO` init callback for the file being finalized.
+    parameters:
+      info:
+        type: copy_to_finalize_info
+        description: The finalize info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the init data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY FROM Callbacks
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_from_set_bind_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the bind callback of the `COPY ... FROM` side.
+
+      The bind callback is invoked during query planning for each `COPY ... FROM` statement that uses the function.
+      It can read the path of the file to read and the statement's options, inspect the names and types of the
+      columns the target table expects, hint at the number of rows the read will produce, and set "bind data" that is
+      shared with the other `COPY ... FROM` callbacks. The columns are fixed by the target table: the function must
+      produce them as they are. A bind callback must be set for the `COPY ... FROM` side to be registered.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_from_bind_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_set_init_global_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the optional global init callback of the `COPY ... FROM` side.
+
+      The global init callback is invoked once per statement, at the start of execution. It can set "global state"
+      shared by every thread reading the file, and declare how many threads may read it in parallel via
+      `[[copy_from_init_global_set_max_threads]]`.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_from_init_global_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_set_init_local_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the optional local init callback of the `COPY ... FROM` side.
+
+      The local init callback is invoked once per thread that will read the file. It can set worker-local "local
+      state", retrievable from the exec callback, typically derived from the shared global state.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_from_init_local_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_set_exec_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the exec callback of the `COPY ... FROM` side.
+
+      The exec callback implements the read: it is invoked repeatedly during query execution and writes the next
+      batch of rows to the output chunk, until it produces an empty batch to signal the end of the read. An exec
+      callback must be set for the `COPY ... FROM` side to be registered.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_from_exec_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_set_progress_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the optional progress callback of the `COPY ... FROM` side.
+
+      The progress callback is invoked on demand during execution to report how far the read has advanced, which the
+      engine surfaces as the query's progress. It is invoked concurrently with the exec callback, so it must read the
+      global state in a thread-safe way.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_from_progress_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY FROM Bind Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_from_bind_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: The bind info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_bind_set_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the function's "bind data" from the bind callback.
+
+      The bind data is stored with the bound statement and retrievable from the other callbacks of the same side.
+      The opaque handle bundles the pointer with an optional destructor, invoked when the bind data is no longer
+      needed, and an optional equality callback used when comparing two bound statements; without one, pointer
+      equality is used.
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: The bind info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_bind_get_file_path:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the path the `COPY ... FROM` statement reads from, as written in the statement.
+
+      The engine does not expand globs or check that the file exists; both are left to the function. The path is
+      borrowed and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: The bind info handle.
+      path:
+        type: str
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the file path. Valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_bind_get_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the target table expects, i.e. the columns every batch the exec callback
+      produces must carry, in this order.
+
+      Valid indices for `[[copy_from_bind_get_column_type]]` and `[[copy_from_bind_get_column_name]]` are [0, count).
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: The bind info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_bind_get_column_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the type of the column at the given index.
+
+      Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
+      `[[logical_type_destroy]]`.
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the column to get the type of.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the column type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_bind_get_column_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the name of the column at the given index.
+
+      Fails if the index is out of bounds. The name is borrowed and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the column to get the name of.
+      name:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the column name. Valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_bind_get_option_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of options the `COPY` statement passed to the function.
+
+      Every option other than `FORMAT` is included. Valid indices for `[[copy_from_bind_get_option_name]]` and `[[copy_from_bind_get_option_value]]` are
+      [0, count). The options are ordered by name.
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: The bind info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of options.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_bind_get_option_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the name of the option at the given index.
+
+      Option names are SQL identifiers, matched case-insensitively. Fails if the index is out of bounds. The name is
+      borrowed and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the option to get the name of.
+      name:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the option name. Valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_bind_get_option_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the value of the option at the given index.
+
+      An option written with a single value (e.g. `DELIM ','`) yields that value. An option written as a bare name
+      (e.g. `HEADER`) yields the BOOLEAN `true`. An option written with a parenthesized list (e.g. `KEYS (a, b)`)
+      yields a tuple: an unnamed STRUCT with one field per element, in order. Fails if the index is out of bounds.
+      The returned value is owned by the caller and must be destroyed via `[[value_destroy]]`.
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the option.
+      value:
+        type: value
+        indirection: 1
+        kind: OUT
+        description: Receives the option's value. Owned by the caller; destroy via `[[value_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_bind_set_cardinality:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Reports the estimated number of rows the read will produce.
+
+      The estimate is a hint for the optimizer, not a limit: producing a different number of rows is not an error.
+      Without it, the optimizer falls back on its own defaults.
+    parameters:
+      info:
+        type: copy_from_bind_info
+        description: The bind info handle.
+      cardinality:
+        type: idx
+        description: The estimated number of rows.
+      is_exact:
+        type: bool
+        description: Whether the estimate is exact, which also makes it an upper bound on the row count.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY FROM Global Init Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_from_init_global_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_from_init_global_info
+        description: The global init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_init_global_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the bind data set by the function's `COPY ... FROM` bind callback.
+    parameters:
+      info:
+        type: copy_from_init_global_info
+        description: The global init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_init_global_set_global_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the function's "global state" from the global init callback.
+
+      The global state lives for the duration of the read and is retrievable from the local init, exec and progress
+      callbacks. Every thread reading the file shares it, so the function must synchronize its own access to it. The
+      opaque handle bundles the pointer with an optional destructor, invoked when the read is done with the state.
+    parameters:
+      info:
+        type: copy_from_init_global_info
+        description: The global init info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the global state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_init_global_set_max_threads:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets how many threads may read the file in parallel.
+
+      Defaults to 1, a single-threaded read. The engine creates at most this many local states, and therefore runs at
+      most this many exec callbacks concurrently. It is an upper bound, not a request: the engine may use fewer
+      threads.
+    parameters:
+      info:
+        type: copy_from_init_global_info
+        description: The global init info handle.
+      max_threads:
+        type: idx
+        description: The maximum number of threads. Must be at least 1.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY FROM Local Init Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_from_init_local_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_from_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_init_local_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the bind data set by the function's `COPY ... FROM` bind callback.
+    parameters:
+      info:
+        type: copy_from_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_init_local_get_global_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      Shared with every other thread reading the file; access to it must be synchronized by the function.
+    parameters:
+      info:
+        type: copy_from_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_init_local_set_local_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Sets the function's worker-local "local state" from the local init callback.
+
+      The local state is associated with the executing thread for the duration of the read and retrievable from the
+      exec callback via `[[copy_from_exec_get_local_state]]`. No other thread observes it, so it needs no
+      synchronization. The opaque handle bundles the pointer with an optional destructor, invoked when the local
+      state is no longer needed.
+    parameters:
+      info:
+        type: copy_from_init_local_info
+        description: The local init info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the local state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY FROM Exec Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_from_exec_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_from_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_exec_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the bind data set by the function's `COPY ... FROM` bind callback.
+    parameters:
+      info:
+        type: copy_from_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_exec_get_global_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      Shared with every other thread reading the file; access to it must be synchronized by the function.
+    parameters:
+      info:
+        type: copy_from_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_exec_get_local_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the worker-local local state set by the function's local init callback.
+    parameters:
+      info:
+        type: copy_from_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the local state pointer for the executing thread, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_exec_get_output_chunk:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the output chunk the exec callback must write the next batch of rows into.
+
+      The chunk holds one vector per column reported by `[[copy_from_bind_get_column_count]]`, in the same order;
+      reach them with `[[data_chunk_get_vector]]`. The chunk starts out empty on every invocation: write the rows,
+      then declare how many there are with `[[vector_set_size]]` on the first vector, which the engine takes as the
+      batch's row count and propagates to the other vectors. Producing an empty batch signals the end of the read,
+      after which the callback is not invoked again on that thread. Borrowed; valid only for the duration of the
+      callback.
+    parameters:
+      info:
+        type: copy_from_exec_info
+        description: The exec info handle.
+      chunk:
+        type: data_chunk
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed output chunk to write into.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY FROM Progress Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_from_progress_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the user data set via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_from_progress_info
+        description: The progress info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_progress_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: Retrieves the bind data set by the function's `COPY ... FROM` bind callback.
+    parameters:
+      info:
+        type: copy_from_progress_info
+        description: The progress info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_progress_get_global_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      The progress callback runs concurrently with the exec callbacks reading the file, so it must read the global
+      state in a thread-safe way.
+    parameters:
+      info:
+        type: copy_from_progress_info
+        description: The progress info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_from_progress_set_progress:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Reports how far the read has advanced.
+
+      A fraction between 0.0 (nothing read yet) and 1.0 (done); values outside that range are clamped. A progress
+      callback that returns without calling this reports no progress.
+    parameters:
+      info:
+        type: copy_from_progress_info
+        description: The progress info handle.
+      progress:
+        type: f64
+        description: The fraction of the read that is complete, in [0.0, 1.0].
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Register
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_function_register:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Registers the copy function, making it available as a `COPY` format.
+
+      The function is registered on the target given at creation: the connection's database or the loading
+      extension. Registration requires a name and at least one configured side: a `COPY ... TO` side needs its batch
+      and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a direction the
+      function does not implement fails with an error. The caller still owns the handle after registration and must
+      destroy it with `[[copy_function_destroy]]`, which does not affect the registered function.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_function_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Destroys the copy function, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to
+      prevent double-destruction. Destroying the handle after registration does not affect the registered
+      function.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to destroy.
+        indirection: 1
+    return_type: ERROR

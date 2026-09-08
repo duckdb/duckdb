@@ -1,0 +1,38 @@
+# name: test/sql/cte/recursive_cte_ordered_aggregate.test
+# description: Test ordered aggregates in recursive CTEs
+# group: [cte]
+
+foreach threads 1 8
+
+statement ok
+SET threads={threads};
+
+statement ok
+PREPARE recursive_sorted_aggregate AS
+WITH RECURSIVE r(iter, asc_value, desc_value) AS (
+	VALUES (0, 'seed'::VARCHAR, 'seed'::VARCHAR)
+	UNION ALL
+	SELECT iter + 1,
+	       string_agg(v, ',' ORDER BY ord ASC NULLS FIRST),
+	       string_agg(v, ',' ORDER BY ord DESC NULLS LAST)
+	FROM r, (VALUES ('a', 2), ('b', 1), ('n', NULL)) t(v, ord)
+	WHERE iter < 3
+	GROUP BY iter
+)
+SELECT * FROM r WHERE iter = 3;
+
+query ITT
+EXECUTE recursive_sorted_aggregate;
+----
+3	n,b,a	a,b,n
+
+# Reuse the prepared plan and its sorted aggregate specifications.
+query ITT
+EXECUTE recursive_sorted_aggregate;
+----
+3	n,b,a	a,b,n
+
+statement ok
+DEALLOCATE recursive_sorted_aggregate;
+
+endloop

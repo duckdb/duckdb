@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/common/swar.hpp"
 
 namespace duckdb {
 
@@ -10,12 +11,6 @@ void InitializeTransitionArray(StateMachine &transition_array, const CSVState cu
 	}
 }
 
-// Shift and OR to replicate across all bytes
-void ShiftAndReplicateBits(uint64_t &value) {
-	value |= value << 8;
-	value |= value << 16;
-	value |= value << 32;
-}
 void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_options) {
 	D_ASSERT(state_machine_cache.find(state_machine_options) == state_machine_cache.end());
 	// Initialize transition array with default values to the Standard option
@@ -448,19 +443,11 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array.skip_comment[static_cast<uint8_t>('\r')] = false;
 	transition_array.skip_comment[static_cast<uint8_t>('\n')] = false;
 
-	transition_array.delimiter = delimiter_first_byte;
-	transition_array.new_line = static_cast<uint8_t>('\n');
-	transition_array.carriage_return = static_cast<uint8_t>('\r');
-	transition_array.quote = quote;
-	transition_array.escape = escape;
-
-	// Shift and OR to replicate across all bytes
-	ShiftAndReplicateBits(transition_array.delimiter);
-	ShiftAndReplicateBits(transition_array.new_line);
-	ShiftAndReplicateBits(transition_array.carriage_return);
-	ShiftAndReplicateBits(transition_array.quote);
-	ShiftAndReplicateBits(transition_array.escape);
-	ShiftAndReplicateBits(transition_array.comment);
+	transition_array.delimiter = SwarWord::Repeat(delimiter_first_byte);
+	transition_array.new_line = SwarWord::Repeat('\n');
+	transition_array.carriage_return = SwarWord::Repeat('\r');
+	transition_array.quote = SwarWord::Repeat(quote);
+	transition_array.escape = SwarWord::Repeat(escape);
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {

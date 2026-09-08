@@ -64,6 +64,7 @@ namespace duckdb {
 
 // Forward declare
 struct QualifiedName;
+struct CompiledGrammar;
 struct MatcherToken;
 struct GroupingExpressionMap;
 class Matcher;
@@ -119,8 +120,8 @@ struct TransformStackFrame {
 		if (slot >= child_results.size() || !child_results[slot]) {
 			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
 		}
-		auto *typed_result = TryCastTransformResult<T>(child_results[slot].get());
-		if (!typed_result) {
+		auto *result_value = TryGetTransformResult<T>(*child_results[slot]);
+		if (!result_value) {
 			auto bridged = TryBridgeTransformResultValue<T>(*child_results[slot]);
 			if (bridged) {
 				auto bridged_result = std::move(bridged->value);
@@ -130,7 +131,7 @@ struct TransformStackFrame {
 			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
 			                        ops.name);
 		}
-		auto result = std::move(typed_result->value);
+		auto result = std::move(*result_value);
 		child_results[slot].reset();
 		return result;
 	}
@@ -140,12 +141,12 @@ struct TransformStackFrame {
 		if (slot >= child_results.size() || !child_results[slot]) {
 			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
 		}
-		auto *typed_result = TryCastTransformResult<T>(child_results[slot].get());
-		if (!typed_result) {
+		auto *result_value = TryGetTransformResult<T>(*child_results[slot]);
+		if (!result_value) {
 			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
 			                        ops.name);
 		}
-		return typed_result->value;
+		return *result_value;
 	}
 
 	const transform_frame_index_t frame_index;
@@ -167,11 +168,11 @@ public:
 	template <class T>
 	T Execute(ParseResult &parse_result, const TransformFrameOps &ops) {
 		auto base_result = ExecuteInternal(parse_result, ops);
-		auto *typed_result = TryCastTransformResult<T>(base_result.get());
-		if (!typed_result) {
+		auto *result_value = TryGetTransformResult<T>(*base_result);
+		if (!result_value) {
 			throw InternalException("Unexpected trampoline transformer result type for root rule '%s'", ops.name);
 		}
-		return std::move(typed_result->value);
+		return std::move(*result_value);
 	}
 
 	TransformStackFrame &GetFrame(transform_frame_index_t frame_index);
@@ -196,8 +197,9 @@ class PEGTransformer {
 public:
 	using AnyTransformFunction = grammar_transform_function_t;
 
-	PEGTransformer(ArenaAllocator &allocator, TokenIterator &token_iterator, ParserOptions &options_p)
-	    : allocator(allocator), token_iterator(token_iterator), options(options_p) {
+	PEGTransformer(ArenaAllocator &allocator, TokenIterator &token_iterator, ParserOptions &options_p,
+	               const CompiledGrammar &grammar_p)
+	    : allocator(allocator), token_iterator(token_iterator), options(options_p), grammar(grammar_p) {
 	}
 
 public:
@@ -218,8 +220,8 @@ public:
 			throw InternalException("Transformer for rule '%s' returned a nullptr.", parse_result.name);
 		}
 
-		auto *typed_result_ptr = TryCastTransformResult<T>(base_result.get());
-		if (!typed_result_ptr) {
+		auto *result_value = TryGetTransformResult<T>(*base_result);
+		if (!result_value) {
 			// allow transparent bridging between string-typed and Identifier-typed rules
 			auto bridged = TryBridgeTransformResult<T>(*base_result);
 			if (bridged) {
@@ -230,7 +232,7 @@ public:
 			throw InternalException("Transformer for rule '" + parse_result.name + "' returned an unexpected type.");
 		}
 
-		auto result = std::move(typed_result_ptr->value);
+		auto result = std::move(*result_value);
 		SetResultLocation(result, parse_result.GetLocation());
 		return result;
 	}
@@ -328,6 +330,7 @@ public:
 	}
 
 	ParserOptions options;
+	const CompiledGrammar &grammar;
 };
 
 template <typename T>
@@ -339,8 +342,8 @@ inline unique_ptr<TypedTransformResult<T>> TryBridgeTransformResultValue(Transfo
 template <>
 inline unique_ptr<TypedTransformResult<string>>
 TryBridgeTransformResultValue<string>(TransformResultValue &base_result) {
-	if (auto *ident = TryCastTransformResult<Identifier>(base_result)) {
-		return make_uniq<TypedTransformResult<string>>(ident->value.GetIdentifierName());
+	if (auto *ident = TryGetTransformResult<Identifier>(base_result)) {
+		return make_uniq<TypedTransformResult<string>>(ident->GetIdentifierName());
 	}
 	return nullptr;
 }
@@ -348,8 +351,8 @@ TryBridgeTransformResultValue<string>(TransformResultValue &base_result) {
 template <>
 inline unique_ptr<TypedTransformResult<Identifier>>
 TryBridgeTransformResultValue<Identifier>(TransformResultValue &base_result) {
-	if (auto *str = TryCastTransformResult<string>(base_result)) {
-		return make_uniq<TypedTransformResult<Identifier>>(Identifier(str->value));
+	if (auto *str = TryGetTransformResult<string>(base_result)) {
+		return make_uniq<TypedTransformResult<Identifier>>(Identifier(*str));
 	}
 	return nullptr;
 }
@@ -357,8 +360,8 @@ TryBridgeTransformResultValue<Identifier>(TransformResultValue &base_result) {
 template <>
 inline unique_ptr<TypedTransformResult<vector<string>>>
 TryBridgeTransformResultValue<vector<string>>(TransformResultValue &base_result) {
-	if (auto *idents = TryCastTransformResult<vector<Identifier>>(base_result)) {
-		return make_uniq<TypedTransformResult<vector<string>>>(IdentifiersToStrings(idents->value));
+	if (auto *idents = TryGetTransformResult<vector<Identifier>>(base_result)) {
+		return make_uniq<TypedTransformResult<vector<string>>>(IdentifiersToStrings(*idents));
 	}
 	return nullptr;
 }
@@ -366,8 +369,8 @@ TryBridgeTransformResultValue<vector<string>>(TransformResultValue &base_result)
 template <>
 inline unique_ptr<TypedTransformResult<vector<Identifier>>>
 TryBridgeTransformResultValue<vector<Identifier>>(TransformResultValue &base_result) {
-	if (auto *strs = TryCastTransformResult<vector<string>>(base_result)) {
-		return make_uniq<TypedTransformResult<vector<Identifier>>>(StringsToIdentifiers(strs->value));
+	if (auto *strs = TryGetTransformResult<vector<string>>(base_result)) {
+		return make_uniq<TypedTransformResult<vector<Identifier>>>(StringsToIdentifiers(*strs));
 	}
 	return nullptr;
 }
@@ -389,11 +392,12 @@ public:
 	//! Throws on syntax error. `token_cursor` is in/out: it's the token index where matching
 	//! starts, and on return holds the token index immediately past the last consumed token.
 	static unique_ptr<SQLStatement> TransformTopLevelStatement(TokenIterator &token_iterator, ParserOptions &options,
-	                                                           const Matcher &root_matcher);
+	                                                           const CompiledGrammar &grammar);
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(const ParsedExpression &expr);
 	static QualifiedName StringToQualifiedName(vector<string> input);
+	static QualifiedColumnName StringToQualifiedColumnName(const vector<string> &input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
 	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
 	static unique_ptr<ParsedExpression> TryNegateValue(const ConstantExpression &expr);
@@ -501,6 +505,10 @@ public:
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeAddConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                               TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeAddColumnTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                          TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -3821,6 +3829,20 @@ public:
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeIntoNameValuesTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeOptionalParensNameListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeOptionalParensNameListTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
+	static void InitializeParenthesizedNameListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeParenthesizedNameListTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeBareNameListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeBareNameListTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeIncludeOrExcludeNullsTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                      TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeIncludeOrExcludeNullsTrampoline(PEGTransformer &transformer,
@@ -4942,6 +4964,12 @@ public:
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<AlterTableInfo> TransformAddConstraint(PEGTransformer &transformer,
 	                                                         unique_ptr<Constraint> top_level_constraint);
+	static unique_ptr<TransformResultValue> TransformDropConstraintInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<AlterTableInfo> TransformDropConstraint(PEGTransformer &transformer,
+	                                                          const optional<bool> &if_exists,
+	                                                          const Identifier &identifier,
+	                                                          const optional<bool> &drop_behavior);
 	static unique_ptr<TransformResultValue> TransformAddColumnInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<AlterTableInfo> TransformAddColumn(PEGTransformer &transformer, const bool &has_result,
@@ -7720,7 +7748,17 @@ public:
 	static unique_ptr<TransformResultValue> TransformIntoNameValuesInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static UnpivotNameValues TransformIntoNameValues(PEGTransformer &transformer, const Identifier &col_id_or_string,
-	                                                 const vector<Identifier> &identifier);
+	                                                 const vector<string> &optional_parens_name_list);
+	static unique_ptr<TransformResultValue> TransformOptionalParensNameListInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformParenthesizedNameListInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static vector<string> TransformParenthesizedNameList(PEGTransformer &transformer,
+	                                                     const vector<Identifier> &col_id_or_string);
+	static unique_ptr<TransformResultValue> TransformBareNameListInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static vector<string> TransformBareNameList(PEGTransformer &transformer,
+	                                            const vector<Identifier> &col_id_or_string);
 	static unique_ptr<TransformResultValue> TransformIncludeOrExcludeNullsInternal(PEGTransformer &transformer,
 	                                                                               ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformIncludeNullsInternal(PEGTransformer &transformer,
@@ -7959,7 +7997,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformPivotGroupByListInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static vector<string> TransformPivotGroupByList(PEGTransformer &transformer,
-	                                                const vector<Identifier> &col_id_or_string);
+	                                                const vector<string> &optional_parens_name_list);
 	static unique_ptr<TransformResultValue> TransformTableUnpivotClauseInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformTableUnpivotClause(PEGTransformer &transformer,
