@@ -59,19 +59,18 @@ struct MatchRecognizeRowSpans {
 };
 
 //! Appends memberships on behalf of one thread. The rows of a partition belong to the thread that
-//! took it, so only the arena is its own business; it is handed to the state it writes into once it
-//! is done, which is before anything reads the memberships back.
+//! took it, so the arena below is the thread's own; the state it writes into owns it from the start,
+//! so the memberships outlive the walk however it ends.
 //!
 //! The arena allocates through the buffer manager, so storage that grows with the memberships rather
 //! than with the rows grows against the memory limit and not outside it.
 struct MatchRecognizeSpanWriter {
-	explicit MatchRecognizeSpanWriter(ClientContext &client)
-	    : arena(make_uniq<ArenaAllocator>(BufferManager::GetBufferManager(client).GetBufferAllocator())) {
+	explicit MatchRecognizeSpanWriter(ArenaAllocator &arena_p) : arena(arena_p) {
 	}
 
 	void Append(MatchRecognizeRowSpans &row, const MatchRecognizeSpan &span) {
 		auto node = reinterpret_cast<MatchRecognizeRowSpans::Node *>(
-		    arena->AllocateAligned(sizeof(MatchRecognizeRowSpans::Node)));
+		    arena.AllocateAligned(sizeof(MatchRecognizeRowSpans::Node)));
 		node->span = span;
 		node->next = nullptr;
 		if (row.count++ == 0) {
@@ -82,7 +81,7 @@ struct MatchRecognizeSpanWriter {
 		row.last = node;
 	}
 
-	unique_ptr<ArenaAllocator> arena;
+	ArenaAllocator &arena;
 };
 
 struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
@@ -100,10 +99,12 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 		D_ASSERT(executor.wexpr.GetReturnType().id() == LogicalTypeId::LIST);
 	}
 
-	//! Take over the arena a thread filled, so that it outlives the walk that wrote it
-	void KeepSpans(MatchRecognizeSpanWriter &writer) {
+	//! An arena for a thread to fill. The state owns it from the start, so what is written into it is
+	//! still there whether the walk that wrote it finished or was cut short.
+	ArenaAllocator &SpanArena(ClientContext &client) {
 		lock_guard<mutex> guard(state_lock);
-		span_arenas.push_back(std::move(writer.arena));
+		span_arenas.push_back(make_uniq<ArenaAllocator>(BufferManager::GetBufferManager(client).GetBufferAllocator()));
+		return *span_arenas.back();
 	}
 
 	mutex state_lock;
@@ -1018,7 +1019,7 @@ private:
 static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobalState &gstate,
                            const MatchRecognizeFunctionData &config, const WindowCollection &collection) {
 	auto &classifiers = gstate.classifiers;
-	MatchRecognizeSpanWriter writer(context.client);
+	MatchRecognizeSpanWriter writer(gstate.SpanArena(context.client));
 	RowConditions row_conditions(context, gstate, config, collection);
 	SymbolMatcher symbol_matches = [&](idx_t index, idx_t row) {
 		return row_conditions.Matches(index, row);
@@ -1085,9 +1086,6 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 			row = SkipTo(config, row_conditions.SkipSymbol(), row, match_end, classifiers);
 		}
 	}
-
-	// the memberships have to outlive this walk, which the blocks they sit in do not
-	gstate.KeepSpans(writer);
 }
 
 void WindowMatchRecognizeExecutor::Finalize(ExecutionContext &context, optional_ptr<WindowCollection> collection,
