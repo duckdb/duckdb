@@ -386,15 +386,15 @@ private:
 		}
 
 		NodePtr leaf;
-		NodePtrHandle leaf_handle(leaf, EXTERNAL_NODE_PTR_STORAGE);
 		if (depth + 1 < key.len) {
 			// Outside of gates, we create a prefix for the inlined leaf.
 			auto count = key.len - depth - 1;
-			PrefixHandle::New(art, leaf_handle, key, depth + 1, count);
+			auto tail = PrefixHandle::New(art, leaf, key, depth + 1, count);
+			Leaf::New(tail.Get(), row_id.GetRowId());
+		} else {
+			Leaf::New(leaf, row_id.GetRowId());
 		}
 
-		// Create and insert the inlined leaf.
-		Leaf::New(leaf_handle.Get(), row_id.GetRowId());
 		NodePtr::InsertChild(art, node, key[depth], leaf);
 	}
 

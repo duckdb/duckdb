@@ -33,8 +33,9 @@ public:
 	PrefixHandle &operator=(PrefixHandle &&) = default;
 
 public:
-	//! Create a new prefix chain. The node points to the child of the last prefix node.
-	static void New(ART &art, NodePtrHandle &node, const ARTKey &key, const idx_t depth, idx_t count);
+	//! Create a non-empty prefix chain at node and return a pinned handle to its final child location.
+	//! The caller must keep node's storage valid for the duration of the call.
+	static NodePtrHandle New(ART &art, NodePtr &node, const ARTKey &key, const idx_t depth, const idx_t count);
 
 	//! Create a new deprecated prefix node and return a handle to it.
 	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node);
@@ -60,13 +61,14 @@ public:
 		Data()[pos] = byte;
 	}
 
-	//! Returns the child NodePtr. The reference is valid while this PrefixHandle is alive.
+	//! Returns the child NodePtr. The reference is valid while this handle owns the prefix pin.
 	NodePtr &Child(const ART &art) {
 		return ChildRef(art, handle);
 	}
 
-	NodeHandle TakeHandle() && {
-		return std::move(handle);
+	//! Transfer this prefix's pin to a handle for its child NodePtr storage location.
+	NodePtrHandle IntoChild(const ART &art) && {
+		return NodePtrHandle(Child(art), std::move(handle));
 	}
 
 	//! Get a mutable reference to the child NodePtr of the prefix.
@@ -91,7 +93,7 @@ public:
 	static OptionalNodePtr TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state);
 
 private:
-	static PrefixHandle NewInternal(ART &art, NodePtrHandle &node, const_data_ptr_t data, const uint8_t count,
+	static PrefixHandle NewInternal(ART &art, NodePtr &node, const_data_ptr_t data, const uint8_t count,
 	                                const idx_t offset);
 
 	static NodeHandle TransformToDeprecatedAppend(NodeHandle tail_handle, ART &art, FixedSizeAllocator &allocator,

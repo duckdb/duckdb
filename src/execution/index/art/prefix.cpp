@@ -67,12 +67,12 @@ void Prefix::New(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, cons
 	}
 }
 
-PrefixHandle PrefixHandle::NewInternal(ART &art, NodePtrHandle &node, const_data_ptr_t data, const uint8_t count,
+PrefixHandle PrefixHandle::NewInternal(ART &art, NodePtr &node, const_data_ptr_t data, const uint8_t count,
                                        const idx_t offset) {
-	node.Get() = NodePtr::GetAllocator(art, PREFIX).New();
-	node.Get().SetMetadata(static_cast<uint8_t>(PREFIX));
+	node = NodePtr::GetAllocator(art, PREFIX).New();
+	node.SetMetadata(static_cast<uint8_t>(PREFIX));
 
-	PrefixHandle prefix(NodeHandle(art, node.Get()));
+	PrefixHandle prefix(NodeHandle(art, node));
 	prefix.SetCount(art, count);
 	if (data) {
 		D_ASSERT(count);
@@ -82,21 +82,22 @@ PrefixHandle PrefixHandle::NewInternal(ART &art, NodePtrHandle &node, const_data
 	return prefix;
 }
 
-void PrefixHandle::New(ART &art, NodePtrHandle &node, const ARTKey &key, const idx_t depth, idx_t count) {
-	idx_t offset = 0;
+NodePtrHandle PrefixHandle::New(ART &art, NodePtr &node, const ARTKey &key, const idx_t depth, const idx_t count) {
+	D_ASSERT(count > 0);
 
-	while (count) {
-		auto min = MinValue(UnsafeNumericCast<idx_t>(art.PrefixCount()), count);
-		auto this_count = UnsafeNumericCast<uint8_t>(min);
-		auto prefix = NewInternal(art, node, key.data, this_count, offset + depth);
+	auto first_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count));
+	auto prefix = NewInternal(art, node, key.data, first_count, depth);
+	auto tail = std::move(prefix).IntoChild(art);
 
-		auto &child = prefix.Child(art);
-		auto handle = std::move(prefix).TakeHandle();
-		node.Rebind(child, std::move(handle));
+	idx_t offset = first_count;
+	while (offset < count) {
+		auto this_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count - offset));
+		auto next = NewInternal(art, tail.Get(), key.data, this_count, depth + offset);
+		tail = std::move(next).IntoChild(art);
 
 		offset += this_count;
-		count -= this_count;
 	}
+	return tail;
 }
 
 void Prefix::Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte,
