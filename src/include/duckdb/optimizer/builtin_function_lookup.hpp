@@ -28,6 +28,9 @@ shared_ptr<const ScalarFunction> GetBuiltinScalarFunction(ClientContext &context
 //! Aggregate counterpart of GetBuiltinScalarFunction
 shared_ptr<const AggregateFunction> GetBuiltinAggregateFunction(ClientContext &context, const Identifier &name,
                                                                 const vector<LogicalType> &arguments);
+//! Like GetBuiltinAggregateFunction, but returns nullptr instead of throwing when no overload matches
+shared_ptr<const AggregateFunction> TryGetBuiltinAggregateFunction(ClientContext &context, const Identifier &name,
+                                                                   const vector<LogicalType> &arguments);
 
 //! Look up a built-in scalar function as GetBuiltinScalarFunction does, and bind it to the given children
 unique_ptr<BoundFunctionExpression> BindBuiltinScalarFunction(ClientContext &context, const Identifier &name,

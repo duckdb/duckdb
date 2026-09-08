@@ -32,6 +32,20 @@ shared_ptr<const AggregateFunction> GetBuiltinAggregateFunction(ClientContext &c
 	return entry.functions.GetFunctionByArguments(context, arguments);
 }
 
+shared_ptr<const AggregateFunction> TryGetBuiltinAggregateFunction(ClientContext &context, const Identifier &name,
+                                                                   const vector<LogicalType> &arguments) {
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, BuiltinName(catalog, name));
+
+	ErrorData error;
+	FunctionBinder function_binder(context);
+	auto index = function_binder.BindFunction(entry.functions.name, entry.functions, arguments, error);
+	if (!index.IsValid()) {
+		return nullptr;
+	}
+	return entry.functions.GetFunctionByOffset(index.GetIndex());
+}
+
 unique_ptr<BoundFunctionExpression> BindBuiltinScalarFunction(ClientContext &context, const Identifier &name,
                                                               vector<unique_ptr<Expression>> children) {
 	vector<LogicalType> arguments;

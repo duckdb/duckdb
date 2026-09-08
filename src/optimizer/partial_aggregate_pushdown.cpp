@@ -580,8 +580,11 @@ static unique_ptr<BoundAggregateExpression> DEBindCombineAggr(ClientContext &con
 	for (auto &child : children) {
 		types.push_back(child->GetReturnType());
 	}
+	auto func = TryGetBuiltinAggregateFunction(context, CombineAggrFun::Name, types);
+	if (!func) {
+		return nullptr;
+	}
 	FunctionBinder function_binder(context);
-	auto func = GetBuiltinAggregateFunction(context, CombineAggrFun::Name, types);
 	return function_binder.BindAggregateFunction(std::move(func), std::move(children));
 }
 
