@@ -263,7 +263,8 @@ class TemporaryFileManager {
 	friend class TemporaryFileHandle;
 
 public:
-	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p, atomic<idx_t> &size_on_disk);
+	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p, string instance_id_p,
+	                     atomic<idx_t> &size_on_disk);
 	~TemporaryFileManager();
 
 private:
@@ -326,6 +327,8 @@ private:
 	DatabaseInstance &db;
 	//! The temporary directory
 	string temp_directory;
+	//! The identifier of the DuckDB instance that owns these temporary files
+	string instance_id;
 	//! Lock for parallel access
 	mutex manager_lock;
 	//! The set of active temporary file handles
@@ -355,11 +358,22 @@ public:
 
 public:
 	TemporaryFileManager &GetTempFile() const;
+	string GetTempBlockPath(block_id_t id) const;
+
+private:
+	void InitializeOwnerFile(FileSystem &fs);
+	void CleanupOrphanedFiles(FileSystem &fs);
+	void RemoveOwnedTemporaryFiles(FileSystem &fs, const string &owner_id);
+	void UnregisterOwner();
+	void ReleaseOwnerFile(FileSystem &fs, bool remove_owner_file);
 
 private:
 	DatabaseInstance &db;
 	string temp_directory;
-	bool created_directory = false;
+	string instance_id;
+	string owner_file_path;
+	unique_ptr<FileHandle> owner_file_handle;
+	bool owner_registered = false;
 	unique_ptr<TemporaryFileManager> temp_file;
 };
 
