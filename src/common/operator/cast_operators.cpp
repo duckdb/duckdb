@@ -1639,6 +1639,26 @@ string_t CastFromPointer::Operation(uintptr_t input, StringHeap &heap) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast To Pointer
+//===--------------------------------------------------------------------===//
+template <>
+uintptr_t CastToPointer::Operation(string_t input) {
+	auto data = input.GetData();
+	auto size = input.GetSize();
+	if (size < 3 || data[0] != '0' || (data[1] != 'x' && data[1] != 'X')) {
+		throw ConversionException("Could not convert string '%s' to a pointer", input.GetString());
+	}
+	uint64_t address = 0;
+	for (idx_t i = 2; i < size; i++) {
+		if (!StringUtil::CharacterIsHex(data[i]) || address > (NumericLimits<uint64_t>::Maximum() >> 4)) {
+			throw ConversionException("Could not convert string '%s' to a pointer", input.GetString());
+		}
+		address = (address << 4) | StringUtil::GetHexValue(data[i]);
+	}
+	return NumericCast<uintptr_t>(address);
+}
+
+//===--------------------------------------------------------------------===//
 // Cast From Pointer
 //===--------------------------------------------------------------------===//
 template <>

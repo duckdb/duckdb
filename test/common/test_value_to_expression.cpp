@@ -121,6 +121,20 @@ TEST_CASE("ConstantExpression::FromValue round-trips scalar values", "[api]") {
 	RequireExpressionRoundTrip(con, "'{\"a\": 1}'::JSON");
 }
 
+TEST_CASE("ConstantExpression::FromValue round-trips pointer values", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	for (auto pointer : {uintptr_t(0), uintptr_t(42), uintptr_t(1) << 40, ~uintptr_t(0)}) {
+		auto original = Value::POINTER(pointer);
+		auto parsed = ConstantExpression::FromValue(original);
+		REQUIRE(parsed->Cast<ConstantExpression>().GetLiteral().IsPointer());
+		INFO("pointer=" << pointer << " FromValue=" << parsed->ToString());
+		RequireSameExpressionValue(BindAndEvaluate(con, parsed->Copy()), original);
+		REQUIRE(parsed->ToString() == original.ToString());
+	}
+}
+
 TEST_CASE("ConstantExpression::FromValue round-trips nested values", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);

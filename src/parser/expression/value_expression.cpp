@@ -195,6 +195,8 @@ unique_ptr<ParsedExpression> ConstantExpression::FromValue(const Value &value) {
 		return MapExpression(value);
 	case LogicalTypeId::TYPE:
 		return TypeExpressionFor(TypeValue::GetType(value));
+	case LogicalTypeId::POINTER:
+		return FromLiteral(Literal::Pointer(value.GetPointer()));
 	case LogicalTypeId::UNION: {
 		auto tag = UnionValue::GetTag(value);
 		auto &name = UnionType::GetMemberName(type, tag);

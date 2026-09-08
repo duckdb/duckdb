@@ -3331,19 +3331,20 @@ const StringUtil::EnumStringLiteral *GetLiteralKindValues() {
 		{ static_cast<uint32_t>(LiteralKind::NUMERIC), "NUMERIC" },
 		{ static_cast<uint32_t>(LiteralKind::STRING), "STRING" },
 		{ static_cast<uint32_t>(LiteralKind::HEX), "HEX" },
-		{ static_cast<uint32_t>(LiteralKind::BIT), "BIT" }
+		{ static_cast<uint32_t>(LiteralKind::BIT), "BIT" },
+		{ static_cast<uint32_t>(LiteralKind::POINTER), "POINTER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<LiteralKind>(LiteralKind value) {
-	return StringUtil::EnumToString(GetLiteralKindValues(), 8, "LiteralKind", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLiteralKindValues(), 9, "LiteralKind", static_cast<uint32_t>(value));
 }
 
 template<>
 LiteralKind EnumUtil::FromString<LiteralKind>(const char *value) {
-	return static_cast<LiteralKind>(StringUtil::StringToEnum(GetLiteralKindValues(), 8, "LiteralKind", value));
+	return static_cast<LiteralKind>(StringUtil::StringToEnum(GetLiteralKindValues(), 9, "LiteralKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLoadTypeValues() {

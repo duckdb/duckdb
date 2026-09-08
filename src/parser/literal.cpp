@@ -59,12 +59,20 @@ Literal Literal::Bit(string text) {
 	return Literal(LiteralKind::BIT, std::move(text));
 }
 
+Literal Literal::Pointer(uintptr_t address) {
+	return Literal(LiteralKind::POINTER, Value::POINTER(address).ToString());
+}
+
 bool Literal::IsNumeric() const {
 	return kind == LiteralKind::INTEGER || kind == LiteralKind::NUMERIC;
 }
 
 bool Literal::IsNull() const {
 	return kind == LiteralKind::NULL_LITERAL;
+}
+
+bool Literal::IsPointer() const {
+	return kind == LiteralKind::POINTER;
 }
 
 bool Literal::TryGetInt64(int64_t &result) const {
@@ -172,6 +180,8 @@ Value Literal::ToValue() const {
 	}
 	case LiteralKind::BIT:
 		return Value::BIT(text);
+	case LiteralKind::POINTER:
+		return Value::POINTER(CastToPointer::Operation<string_t, uintptr_t>(string_t(text)));
 	default:
 		throw InternalException("Cannot convert an invalid literal to a value");
 	}
@@ -192,6 +202,8 @@ string Literal::ToString() const {
 		return "X'" + text + "'";
 	case LiteralKind::BIT:
 		return "B'" + text + "'";
+	case LiteralKind::POINTER:
+		return text;
 	default:
 		throw InternalException("Cannot render an invalid literal");
 	}

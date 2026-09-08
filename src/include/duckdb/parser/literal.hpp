@@ -34,7 +34,9 @@ enum class LiteralKind : uint8_t {
 	//! X'..' - even-length hex digits without the prefix and quotes
 	HEX = 6,
 	//! B'..' - validated bit digits without the prefix and quotes
-	BIT = 7
+	BIT = 7,
+	//! An address supplied by the host program as 0x-prefixed hex; never produced by the parser
+	POINTER = 8
 };
 
 //! A literal atom as written in the query text. Holds no type information: the binder turns it into a Value.
@@ -53,10 +55,13 @@ public:
 	static Literal Hex(string text);
 	//! Validates the bit digits (throws ParserException)
 	static Literal Bit(string text);
+	//! Wraps a host-program address; only reachable programmatically
+	static Literal Pointer(uintptr_t address);
 
 public:
 	bool IsNumeric() const;
 	bool IsNull() const;
+	bool IsPointer() const;
 	//! Whether this is an INTEGER literal that fits in an int64_t
 	bool TryGetInt64(int64_t &result) const;
 	//! Negates a numeric literal by toggling the leading '-'
