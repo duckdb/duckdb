@@ -565,6 +565,10 @@ auto Connection::GetFileSystem() const -> FileSystem {
 	return detail::Factory::Make<FileSystem>(fs);
 }
 
+auto Connection::CreateType(const QualifiedName &name) -> LogicalType {
+	return CreateType(name, {});
+}
+
 auto Connection::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
@@ -802,6 +806,10 @@ auto Context::GetFileSystem() const -> FileSystem {
 	duckdb_v2_file_system_handle fs = nullptr;
 	CheckedAPICall(duckdb_v2_file_system_get_from_context, handle(), &fs);
 	return detail::Factory::Make<FileSystem>(fs);
+}
+
+auto Context::CreateType(const QualifiedName &name) const -> LogicalType {
+	return CreateType(name, {});
 }
 
 auto Context::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) const -> LogicalType {
