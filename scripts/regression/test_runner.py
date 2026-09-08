@@ -2,13 +2,12 @@ import argparse
 import functools
 import math
 import os
-import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from benchmark import BenchmarkRunner, find_benchmark_cache_directory
+from benchmark import BenchmarkRunner, create_isolated_benchmark_root
 from comparison import (
     MAX_CONFIRMATION_RUNS,
     MIN_CONFIRMATION_RUNS,
@@ -122,12 +121,6 @@ def parse_arguments():
     parser.add_argument("--nofail", action="store_true", help="Report a geomean regression without failing.")
     parser.add_argument("--disable-timeout", action="store_true", help="Disable the benchmark runner timeout.")
     parser.add_argument(
-        "--benchmark-cache",
-        choices=("keep", "clear"),
-        default="keep",
-        help="Keep benchmark data or clear runner caches before running (default: keep).",
-    )
-    parser.add_argument(
         "--benchmark-argument",
         action="append",
         type=benchmark_argument,
@@ -135,22 +128,6 @@ def parse_arguments():
         help="Benchmark runner argument in NAME=VALUE form; may be specified more than once.",
     )
     return parser.parse_args()
-
-
-def clear_benchmark_caches(runner_paths: List[str]):
-    cache_paths = {find_benchmark_cache_directory(runner_path) for runner_path in runner_paths}
-    for cache_path in cache_paths:
-        shutil.rmtree(cache_path, ignore_errors=True)
-
-
-def create_isolated_benchmark_root(source_root: Path, target_root: Path):
-    target_root.mkdir()
-    for source_path in source_root.iterdir():
-        if source_path.name == "duckdb_benchmark_data":
-            continue
-        target_path = target_root / source_path.name
-        target_path.symlink_to(source_path, target_is_directory=source_path.is_dir())
-    (target_root / "duckdb_benchmark_data").mkdir()
 
 
 def within_noise(measurement: BenchmarkMeasurement) -> bool:
@@ -194,11 +171,6 @@ def run_paired_samples(
         if second_failure:
             second_failure += f"\nComparison batch {batch_index + 1} ran {first_runner.label} immediately before "
             second_failure += f"{second_runner.label}."
-            if first_runner.cache_directory == second_runner.cache_directory:
-                second_failure += (
-                    f" Both runners use the same benchmark cache, so files may have been last written by "
-                    f"{first_runner.label}."
-                )
             if second_runner is old_runner:
                 old_failure = second_failure
             else:
@@ -881,20 +853,15 @@ def main() -> int:
         print(f"Failed to find benchmark list {args.benchmarks}")
         return 1
 
-    isolated_directories = None
-    old_root_directory = None
-    new_root_directory = None
-    if args.benchmark_cache == "clear":
-        clear_benchmark_caches([args.old, args.new])
-        isolated_directories = tempfile.TemporaryDirectory(prefix="duckdb-regression-benchmarks-")
-        isolation_root = Path(isolated_directories.name)
-        source_root = Path.cwd()
-        old_root_directory = isolation_root / "base"
-        new_root_directory = isolation_root / "pr"
-        create_isolated_benchmark_root(source_root, old_root_directory)
-        create_isolated_benchmark_root(source_root, new_root_directory)
-        if args.verbose:
-            print("benchmark cache: isolated Base and PR directories")
+    isolated_directories = tempfile.TemporaryDirectory(prefix="duckdb-regression-benchmarks-")
+    isolation_root = Path(isolated_directories.name)
+    source_root = Path.cwd()
+    old_root_directory = isolation_root / "base"
+    new_root_directory = isolation_root / "pr"
+    create_isolated_benchmark_root(source_root, old_root_directory)
+    create_isolated_benchmark_root(source_root, new_root_directory)
+    if args.verbose:
+        print("benchmark cache: isolated Base and PR directories")
 
     with open(args.benchmarks, "r", encoding="utf-8") as benchmark_file:
         benchmarks = [line.strip() for line in benchmark_file if line.strip()]
@@ -907,7 +874,7 @@ def main() -> int:
         args.verbose,
         args.disable_timeout,
         args.benchmark_argument,
-        root_directory=str(old_root_directory) if old_root_directory else None,
+        root_directory=str(old_root_directory),
     )
     new_runner = BenchmarkRunner(
         args.new,
@@ -917,7 +884,7 @@ def main() -> int:
         args.verbose,
         args.disable_timeout,
         args.benchmark_argument,
-        root_directory=str(new_root_directory) if new_root_directory else None,
+        root_directory=str(new_root_directory),
     )
     rounded_samples = sum(sampling_batch_sizes(args.samples)) if args.samples is not None else None
     if args.samples is None:
@@ -969,8 +936,7 @@ def main() -> int:
     print_result(bool(execution_failures), gate_failed, args.nofail, len(query_regressions))
 
     exit_code = 1 if execution_failures or (gate_failed and not args.nofail) else 0
-    if isolated_directories:
-        isolated_directories.cleanup()
+    isolated_directories.cleanup()
     return exit_code
 
 
