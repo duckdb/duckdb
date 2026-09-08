@@ -93,8 +93,8 @@ public:
 	double GetProgressInFile(ClientContext &context) override;
 	InsertionOrderPreservingMap<Value> GetMetadata() const override;
 
-	//! Release the resources the given local state holds for the unit it scanned last
-	void FinishScan(ClientContext &context, LocalTableFunctionState &local_state);
+	//! Release the resources the given local state holds for the batch it scanned last
+	void FinishBatch(ClientContext &context, LocalTableFunctionState &local_state);
 	//! Bind the wrapped table function over this file - this sets up the columns of the reader.
 	//! When the schema of the scan is known upfront, the file is bound against that schema
 	void BindFunction(ClientContext &context, const TableFunctionFileReaderOptions &options);

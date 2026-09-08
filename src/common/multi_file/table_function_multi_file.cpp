@@ -157,11 +157,11 @@ bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTa
 		lstate.local_state = function.init_local(execution_context, init_input, global_state.get());
 	}
 	lstate.reader = shared_from_this();
-	if (function.claim_scan_unit) {
-		// the function scans the file in units - claim one, so that every unit becomes a scan of its own that the
-		// multi file reader can put back in order
+	if (function.claim_batch) {
+		// the function scans the file in batches - claim one, so that every batch becomes a scan of its own that
+		// the multi file reader can put back in order
 		TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
-		return function.claim_scan_unit(context, input);
+		return function.claim_batch(context, input);
 	}
 	return true;
 }
@@ -174,20 +174,20 @@ AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFun
 	input.async_result = AsyncResultType::IMPLICIT;
 	input.results_execution_mode = AsyncResultsExecutionMode::SYNCHRONOUS;
 	function.function(context, input, chunk);
-	if (chunk.size() == 0 && !function.claim_scan_unit) {
-		// an empty chunk signals the end of the scan for this thread - when the function scans in units it only
-		// signals the end of the current unit, and the next unit is claimed by TryInitializeScan
+	if (chunk.size() == 0 && !function.claim_batch) {
+		// an empty chunk signals the end of the scan for this thread - when the function scans in batches it only
+		// signals the end of the current batch, and the next batch is claimed by TryInitializeScan
 		exhausted = true;
 	}
 	return AsyncResult::FromChunk(chunk);
 }
 
-void TableFunctionFileReader::FinishScan(ClientContext &context, LocalTableFunctionState &local_state) {
-	if (!function.finish_scan) {
+void TableFunctionFileReader::FinishBatch(ClientContext &context, LocalTableFunctionState &local_state) {
+	if (!function.finish_batch) {
 		return;
 	}
 	TableFunctionInput input(bind_data.get(), &local_state, global_state.get());
-	function.finish_scan(context, input);
+	function.finish_batch(context, input);
 }
 
 double TableFunctionFileReader::GetProgressInFile(ClientContext &context) {
@@ -400,7 +400,7 @@ void TableFunctionMultiFileWrapper::FinishReading(ClientContext &context, Global
 	if (!lstate.reader || !lstate.local_state) {
 		return;
 	}
-	lstate.reader->Cast<TableFunctionFileReader>().FinishScan(context, *lstate.local_state);
+	lstate.reader->Cast<TableFunctionFileReader>().FinishBatch(context, *lstate.local_state);
 }
 
 shared_ptr<BaseFileReader> TableFunctionMultiFileWrapper::CreateReader(ClientContext &context, const OpenFileInfo &file,

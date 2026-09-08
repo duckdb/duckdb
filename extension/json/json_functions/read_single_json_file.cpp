@@ -67,7 +67,7 @@ public:
 	JSONScanLocalState state;
 	//! Whether we have a part of the file assigned to us that we still need to read
 	bool scan_initialized = false;
-	//! Whether our caller claims the parts of the file we read - see table_function_claim_scan_unit_t
+	//! Whether our caller claims the batches we read - see table_function_claim_batch_t
 	bool claimed_externally = false;
 };
 
@@ -180,8 +180,8 @@ static unique_ptr<LocalTableFunctionState> ReadSingleJSONFileInitLocal(Execution
 	return make_uniq<ReadSingleJSONFileLocalState>(context.client, gstate.state);
 }
 
-//! Assign the next part of the file to this thread - the JSON reader hands out one buffer at a time
-static bool ReadSingleJSONFileClaimScanUnit(ClientContext &context, TableFunctionInput &input) {
+//! Assign the next batch to this thread - the JSON reader hands out one buffer at a time
+static bool ReadSingleJSONFileClaimBatch(ClientContext &context, TableFunctionInput &input) {
 	auto &gstate = input.global_state->Cast<ReadSingleJSONFileGlobalState>();
 	auto &lstate = input.local_state->Cast<ReadSingleJSONFileLocalState>();
 	// our caller hands out the parts of the file, so we must not claim the next one ourselves
@@ -196,8 +196,8 @@ static bool ReadSingleJSONFileClaimScanUnit(ClientContext &context, TableFunctio
 	return true;
 }
 
-//! Release the part of the file this thread was reading - this also reports any errors that were found in it
-static void ReadSingleJSONFileFinishScan(ClientContext &context, TableFunctionInput &input) {
+//! Release the batch this thread was reading - this also reports any errors that were found in it
+static void ReadSingleJSONFileFinishBatch(ClientContext &context, TableFunctionInput &input) {
 	auto &lstate = input.local_state->Cast<ReadSingleJSONFileLocalState>();
 	lstate.state.GetScanState().ResetForNextBuffer();
 	lstate.scan_initialized = false;
@@ -313,8 +313,8 @@ TableFunction JSONFunctions::GetReadSingleJSONFileTableFunction(shared_ptr<JSONS
 		JSONScan::AddAutoDetectParameters(table_function);
 	}
 	table_function.combine_schema = ReadSingleJSONFileCombineSchema;
-	table_function.claim_scan_unit = ReadSingleJSONFileClaimScanUnit;
-	table_function.finish_scan = ReadSingleJSONFileFinishScan;
+	table_function.claim_batch = ReadSingleJSONFileClaimBatch;
+	table_function.finish_batch = ReadSingleJSONFileFinishBatch;
 	table_function.table_scan_progress = ReadSingleJSONFileProgress;
 	table_function.cardinality = ReadSingleJSONFileCardinality;
 	table_function.function_info = std::move(function_info);
