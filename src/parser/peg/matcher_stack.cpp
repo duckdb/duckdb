@@ -3,6 +3,17 @@
 
 namespace duckdb {
 
+MatchStack::MatchStack() {
+	frames.reserve(INITIAL_FRAME_CAPACITY);
+}
+
+MatchStack::~MatchStack() {
+	// Child processes can reference state owned by their parents.
+	while (!frames.empty()) {
+		frames.pop_back();
+	}
+}
+
 optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
 	D_ASSERT(IsEnabled(matcher, state));
 	auto token_index = state.token_iterator.Position();
@@ -61,7 +72,7 @@ MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
 
 void MatchStack::PushFrame(MatchInput input) {
 	input.state.rule = input.matcher.GetRule();
-	frames.emplace(input);
+	frames.emplace_back(input);
 }
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
@@ -77,13 +88,13 @@ void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 	frame.process = matcher.StartMatch(state);
 }
 
-void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
+bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 	if (!frame.IsInitialized()) {
 		InitializeFrame(frame);
 		D_ASSERT(frame.IsInitialized());
 	}
 	if (frame.result) {
-		return;
+		return true;
 	}
 	D_ASSERT(frame.process);
 	auto step = frame.process->Resume(frame.child_result);
@@ -91,13 +102,14 @@ void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 	auto child = step.GetChild();
 	if (!child) {
 		frame.result = step.GetResult();
-		return;
+		return true;
 	}
 	if (child->matcher.IsAtomic()) {
 		frame.child_result = ExecuteAtomicMatcher(*child);
-		return;
+		return false;
 	}
 	PushFrame(*child);
+	return false;
 }
 
 MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
@@ -118,17 +130,15 @@ MatcherResult MatchStack::Execute(MatchInput input) {
 	}
 	PushFrame(input);
 	while (!frames.empty()) {
-		auto &frame = frames.top();
-		ExecuteFrame(frame);
-		if (!frame.result) {
+		if (!ExecuteFrame(frames.back())) {
 			continue;
 		}
-		auto result = FinalizeFrame(frame);
-		frames.pop();
+		auto result = FinalizeFrame(frames.back());
+		frames.pop_back();
 		if (frames.empty()) {
 			return result;
 		}
-		auto &parent = frames.top();
+		auto &parent = frames.back();
 		D_ASSERT(!parent.child_result);
 		parent.child_result = result;
 	}
