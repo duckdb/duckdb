@@ -21,18 +21,8 @@
 
 namespace duckdb {
 
-//	Column indexes into the result struct
-enum MatchRecognizeResult : idx_t {
-	CLASSIFIER = 0,
-	MATCH_NUMBER,
-	IS_MATCH_START,
-	IS_MATCH_END,
-	MATCH_START,
-	MATCH_END,
-	IS_EXCLUDED,
-	IS_EMPTY,
-	ROW_INDEX
-};
+//! The result's list child, in the order ResultType() declares its fields
+using SpanStruct = VectorStructType<string_t, uint64_t, bool, bool, uint64_t, uint64_t, bool, bool, uint64_t>;
 
 //! One membership of a row in a match. Overlapping matches each give the rows they cover one of
 //! these, so there are as many as there are (row, match) pairs and not as many as there are rows.
@@ -97,6 +87,10 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 		}
 		classifiers.resize(payload_count);
 		excluded_rows.resize(payload_count);
+		// the name a symbol reports is the same for every row it classifies, so it is spelled once
+		for (auto &symbol : config.symbols) {
+			classifier_names.push_back(MatchRecognizeSymbolName(symbol));
+		}
 		D_ASSERT(executor.wexpr.GetReturnType().id() == LogicalTypeId::LIST);
 	}
 
@@ -122,6 +116,8 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 	//! threads do not need to coordinate.
 	vector<vector<uint8_t>> condition_values;
 
+	//! What each symbol reports as its classifier
+	vector<string> classifier_names;
 	//! Where each row's memberships start, and how many of them there are
 	vector<MatchRecognizeRowSpans> row_spans;
 	//! The arenas the memberships above live in, one per thread that wrote any
@@ -713,42 +709,36 @@ void WindowMatchRecognizeExecutor::Finalize(ExecutionContext &context, optional_
 void WindowMatchRecognizeExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                            Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gstate = sink.global_state.Cast<WindowMatchRecognizeGlobalState>();
-	auto &symbols = gstate.executor.wexpr.BindInfo()->Cast<MatchRecognizeFunctionData>().symbols;
-	// The list is built for the rows being read rather than for the whole input, so the memberships
-	// are laid out flat a chunk at a time and never all at once. Matching is over by the time anything
+	// The list is built for the rows being read rather than for the whole input, so the memberships are
+	// laid out flat a chunk at a time and never all at once. Matching is over by the time anything
 	// reads here - every thread has left Finalize - so this only reads shared state.
 	const auto count = bounds.size();
-	idx_t total = 0;
-	for (idx_t i = 0; i < count; i++) {
-		total += gstate.row_spans[row_idx + i].count;
-	}
-
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	ListVector::Reserve(result, total);
-	ListVector::SetListSize(result, total);
-	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-	auto &child = ListVector::GetChildMutable(result);
-	auto &fields = StructVector::GetEntries(child);
-
-	idx_t offset = 0;
+	auto writer = FlatVector::Writer<VectorListType<SpanStruct>>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		const auto row = row_idx + i;
 		auto &row_spans = gstate.row_spans[row];
-		list_data[i].offset = offset;
-		list_data[i].length = row_spans.count;
-		for (auto node = row_spans.first; node; node = node->next) {
+		auto node = row_spans.first;
+		for (auto &membership : writer.WriteList(row_spans.count)) {
 			auto &span = node->span;
-			fields[CLASSIFIER].SetValue(offset, span.empty ? Value(LogicalType::VARCHAR)
-			                                               : Value(MatchRecognizeSymbolName(symbols[span.symbol])));
-			fields[MATCH_NUMBER].SetValue(offset, Value::UBIGINT(span.match_number));
-			fields[IS_MATCH_START].SetValue(offset, Value::BOOLEAN(span.is_match_start));
-			fields[IS_MATCH_END].SetValue(offset, Value::BOOLEAN(row == span.match_end));
-			fields[MATCH_START].SetValue(offset, Value::UBIGINT(span.match_start));
-			fields[MATCH_END].SetValue(offset, Value::UBIGINT(span.match_end));
-			fields[IS_EXCLUDED].SetValue(offset, Value::BOOLEAN(span.excluded));
-			fields[IS_EMPTY].SetValue(offset, Value::BOOLEAN(span.empty));
-			fields[ROW_INDEX].SetValue(offset, Value::UBIGINT(row));
-			offset++;
+			membership.WriteValue([&](auto &classifier, auto &match_number, auto &is_match_start, auto &is_match_end,
+			                          auto &match_start, auto &match_end, auto &is_excluded, auto &is_empty,
+			                          auto &row_index) {
+				// an empty match covers no rows, so no row of it classified as anything
+				if (span.empty) {
+					classifier.WriteNull();
+				} else {
+					classifier.WriteValue(string_t(gstate.classifier_names[span.symbol]));
+				}
+				match_number.WriteValue(span.match_number);
+				is_match_start.WriteValue(span.is_match_start);
+				is_match_end.WriteValue(row == span.match_end);
+				match_start.WriteValue(span.match_start);
+				match_end.WriteValue(span.match_end);
+				is_excluded.WriteValue(span.excluded);
+				is_empty.WriteValue(span.empty);
+				row_index.WriteValue(row);
+			});
+			node = node->next;
 		}
 	}
 }
