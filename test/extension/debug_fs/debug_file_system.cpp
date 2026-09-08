@@ -34,12 +34,10 @@ FileCompressionType DebugFileHandle::GetFileCompressionType() {
 }
 
 #ifndef DUCKDB_NO_THREADS
-//! One read that was started asynchronously and has not been completed yet
+//! One read that was started asynchronously and has not been completed yet. Holding the request is what
+//! keeps the handle and the buffer alive until the queue gets to it.
 struct PendingDebugRead {
-	FileHandle *handle;
-	void *buffer;
-	int64_t nr_bytes;
-	idx_t location;
+	shared_ptr<const FileReadRequest> request;
 	AsyncIOCallback callback;
 	//! When this read should be completed, in milliseconds since the queue was created
 	double due_ms;
@@ -98,7 +96,11 @@ private:
 				ThreadUtil::SleepMs(LossyNumericCast<idx_t>(remaining_ms));
 			}
 			try {
-				read.handle->file_system.Read(*read.handle, read.buffer, read.nr_bytes, read.location);
+				// straight to the inner handle, the delay this read owes was already served above
+				auto &inner = *read.request->handle->Cast<DebugFileHandle>().inner;
+				auto &destination = *read.request->destination;
+				inner.file_system.Read(inner, destination.Data(), NumericCast<int64_t>(destination.Size()),
+				                       read.request->location);
 			} catch (std::exception &ex) {
 				ErrorData error(ex);
 				read.callback(&error);
@@ -241,13 +243,12 @@ void DebugFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 	ReadFinished();
 }
 
-bool DebugFileSystem::TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
-                                   AsyncIOCallback callback) {
+FileReadSubmission DebugFileSystem::TryStartRead(shared_ptr<const FileReadRequest> request, AsyncIOCallback callback) {
 #ifdef DUCKDB_NO_THREADS
-	return false;
+	return FileReadSubmission::UNSUPPORTED;
 #else
 	if (!async_reads) {
-		return false;
+		return FileReadSubmission::UNSUPPORTED;
 	}
 	if (!async_queue) {
 		const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
@@ -258,15 +259,14 @@ bool DebugFileSystem::TryStartRead(FileHandle &handle, void *buffer, int64_t nr_
 	auto delay_ms = SampleDelayMs();
 	ReadStarted();
 	async_read_count++;
-	auto &inner = *handle.Cast<DebugFileHandle>().inner;
 	// the injected latency is served by the completion thread, so the caller is free while it elapses
-	async_queue->Push(PendingDebugRead {&inner, buffer, nr_bytes, location,
+	async_queue->Push(PendingDebugRead {std::move(request),
 	                                    [this, callback](optional_ptr<ErrorData> error) {
 		                                    ReadFinished();
 		                                    callback(error);
 	                                    },
 	                                    async_queue->ElapsedMs() + delay_ms});
-	return true;
+	return FileReadSubmission::PENDING;
 #endif
 }
 

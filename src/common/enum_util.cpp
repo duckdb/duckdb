@@ -93,6 +93,7 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
@@ -2599,6 +2600,25 @@ const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value) {
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value) {
 	return static_cast<FileNameSegmentType>(StringUtil::StringToEnum(GetFileNameSegmentTypeValues(), 4, "FileNameSegmentType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFileReadSubmissionValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FileReadSubmission::UNSUPPORTED), "UNSUPPORTED" },
+		{ static_cast<uint32_t>(FileReadSubmission::COMPLETED), "COMPLETED" },
+		{ static_cast<uint32_t>(FileReadSubmission::PENDING), "PENDING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FileReadSubmission>(FileReadSubmission value) {
+	return StringUtil::EnumToString(GetFileReadSubmissionValues(), 3, "FileReadSubmission", static_cast<uint32_t>(value));
+}
+
+template<>
+FileReadSubmission EnumUtil::FromString<FileReadSubmission>(const char *value) {
+	return static_cast<FileReadSubmission>(StringUtil::StringToEnum(GetFileReadSubmissionValues(), 3, "FileReadSubmission", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileWriteModeValues() {

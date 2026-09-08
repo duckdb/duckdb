@@ -9,9 +9,11 @@
 #pragma once
 
 #include "duckdb/common/async_io_callback.hpp"
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/common/shared_ptr.hpp"
@@ -49,6 +51,30 @@ private:
 	double sum_bytes_seconds = 0;
 };
 
+//! An asynchronous read's destination, backed by the pinned buffer its handle group holds. Owning the
+//! group is what lets the read outlive the call that started it.
+class FileBufferReadDestination : public FileReadDestination {
+public:
+	DUCKDB_API FileBufferReadDestination(BufferManager &buffer_manager, idx_t nr_bytes);
+
+	data_ptr_t Data() override {
+		return data;
+	}
+	idx_t Size() const override {
+		return nr_bytes;
+	}
+
+	//! Hand the bytes over once the read has landed
+	FileBufferHandleGroup TakeGroup() {
+		return std::move(group);
+	}
+
+private:
+	idx_t nr_bytes;
+	data_ptr_t data = nullptr;
+	FileBufferHandleGroup group;
+};
+
 struct CachingFileHandle {
 public:
 	using CachedFile = ExternalFileCache::CachedFile;
@@ -66,10 +92,13 @@ public:
 	//! Read [nr_bytes] bytes at the requested [location].
 	//! Returns a buffer handle group that keeps the data pinned in memory.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
-	//! Try to read [nr_bytes] at [location] without holding the calling thread. On success [out_group] is the
-	//! destination, valid only once [callback] has fired. Returns false when the caller must use Read() instead.
-	DUCKDB_API bool TryStartRead(idx_t nr_bytes, idx_t location, FileBufferHandleGroup &out_group,
-	                             AsyncIOCallback callback);
+	//! Try to read [nr_bytes] at [location] without holding the calling thread, see FileSystem::TryStartRead.
+	//! [out_destination] holds the bytes once the read has landed, UNSUPPORTED means the caller must use Read().
+	DUCKDB_API FileReadSubmission TryStartRead(idx_t nr_bytes, idx_t location,
+	                                           shared_ptr<FileBufferReadDestination> &out_destination,
+	                                           AsyncIOCallback callback);
+	//! The bookkeeping ReadAndRecord does after a read, for one that completed asynchronously
+	DUCKDB_API void RecordAsyncRead(const TimePoint &started, const TimePoint &finished, idx_t nr_bytes);
 	//! Read [nr_bytes] bytes and sets [nr_bytes] to the actually read bytes.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Read and record time

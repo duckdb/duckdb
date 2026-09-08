@@ -162,14 +162,14 @@ void CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr
 	group.CopyTo(static_cast<data_ptr_t>(buffer), NumericCast<idx_t>(nr_bytes));
 }
 
-bool CachingFileSystemWrapper::TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
-                                            AsyncIOCallback callback) {
-	auto *caching_handle = GetCachingHandleIfPossible(handle);
+FileReadSubmission CachingFileSystemWrapper::TryStartRead(shared_ptr<const FileReadRequest> request,
+                                                          AsyncIOCallback callback) {
+	auto *caching_handle = GetCachingHandleIfPossible(*request->handle);
 	if (!caching_handle) {
-		return underlying_file_system.TryStartRead(handle, buffer, nr_bytes, location, std::move(callback));
+		return underlying_file_system.TryStartRead(std::move(request), std::move(callback));
 	}
 	// reads served through the external file cache are not asynchronous, the caller falls back to Read
-	return false;
+	return FileReadSubmission::UNSUPPORTED;
 }
 
 int64_t CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {

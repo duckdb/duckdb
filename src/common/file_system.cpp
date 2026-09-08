@@ -455,10 +455,10 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
 
-bool FileSystem::TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
-                              AsyncIOCallback callback) { // NOLINT: sink parameter, ignored by the default impl
+FileReadSubmission FileSystem::TryStartRead(shared_ptr<const FileReadRequest> request,
+                                            AsyncIOCallback callback) { // NOLINT: sink params, unused by default
 	// by default a file system has no asynchronous read path, callers fall back to the synchronous Read
-	return false;
+	return FileReadSubmission::UNSUPPORTED;
 }
 
 void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -850,17 +850,11 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
-bool FileHandle::TryStartRead(void *buffer, idx_t nr_bytes, idx_t location, AsyncIOCallback callback) {
-	return file_system.TryStartRead(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location, std::move(callback));
-}
-
-bool FileHandle::TryStartRead(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location,
-                              AsyncIOCallback callback) {
-	// tracked up front, the same as the synchronous Read at this location does
+void FileHandle::TrackBytesRead(QueryContext context, idx_t nr_bytes) {
+	// tracked up front, the same as the synchronous Read at a location does
 	if (track_io && context.GetClientContext() != nullptr) {
 		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
 	}
-	return TryStartRead(buffer, nr_bytes, location, std::move(callback));
 }
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {

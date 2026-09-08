@@ -354,25 +354,47 @@ bool CachingFileHandle::UsesUncachedReadPath() {
 	return !external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || !CanUseCache();
 }
 
-bool CachingFileHandle::TryStartRead(const idx_t nr_bytes, const idx_t location, FileBufferHandleGroup &out_group,
-                                     AsyncIOCallback callback) {
+FileBufferReadDestination::FileBufferReadDestination(BufferManager &buffer_manager, const idx_t nr_bytes)
+    : nr_bytes(nr_bytes) {
+	group = AllocateUncachedReadGroup(buffer_manager, nr_bytes, data);
+}
+
+FileReadSubmission CachingFileHandle::TryStartRead(const idx_t nr_bytes, const idx_t location,
+                                                   shared_ptr<FileBufferReadDestination> &out_destination,
+                                                   AsyncIOCallback callback) {
 	if (nr_bytes == 0) {
 		// nothing to read, the (trivial) synchronous path handles this
-		return false;
+		return FileReadSubmission::UNSUPPORTED;
 	}
 	if (!UsesUncachedReadPath()) {
 		// a cached read fans out over several cache blocks, which has no asynchronous path yet
-		return false;
+		return FileReadSubmission::UNSUPPORTED;
 	}
 	auto file_handle = GetFileHandle();
-	data_ptr_t destination;
+	auto destination = make_shared_ptr<FileBufferReadDestination>(external_file_cache.GetBufferManager(), nr_bytes);
+	auto request = make_shared_ptr<const FileReadRequest>(FileReadRequest {file_handle, destination, location});
+
 	// publish the destination before starting the read - the callback may fire inline
-	out_group = AllocateUncachedReadGroup(external_file_cache.GetBufferManager(), nr_bytes, destination);
-	if (!file_handle->TryStartRead(context, destination, nr_bytes, location, std::move(callback))) {
-		out_group = FileBufferHandleGroup();
-		return false;
+	out_destination = destination;
+	auto submission = file_handle->file_system.TryStartRead(request, std::move(callback));
+	if (submission == FileReadSubmission::UNSUPPORTED) {
+		out_destination = nullptr;
+		return submission;
 	}
-	return true;
+	file_handle->TrackBytesRead(context, nr_bytes);
+	return submission;
+}
+
+void CachingFileHandle::RecordAsyncRead(const TimePoint &started, const TimePoint &finished, const idx_t nr_bytes) {
+	auto handle = GetFileHandle();
+	auto cache_valid_until = handle->file_system.GetCacheValidUntil(*handle);
+	if (cache_valid_until) {
+		const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		if (file_handle == handle) {
+			TightenCacheDeadline(validation_info.cache_valid_until, cache_valid_until);
+		}
+	}
+	RecordReadThroughput(TimePoint::ElapsedSeconds(started, finished), nr_bytes);
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {
