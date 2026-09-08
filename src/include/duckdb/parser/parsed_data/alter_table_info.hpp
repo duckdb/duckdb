@@ -297,8 +297,7 @@ struct ChangeColumnTypeInfo : public AlterTableInfo {
 	LogicalType target_type;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
-	//! The full dotted column path as written (e.g. ["s", "a"] for "s.a"); empty when not a nested-field target.
-	//! Used only to detect (and reject) a nested-field target - 'column_name' remains the operative field.
+	//! Full dotted column path, e.g. ["s", "a"] for "s.a"
 	vector<Identifier> column_path;
 
 public:
@@ -325,8 +324,7 @@ struct SetDefaultInfo : public AlterTableInfo {
 	Identifier column_name;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
-	//! The full dotted column path as written (e.g. ["s", "a"] for "s.a"); empty when not a nested-field target.
-	//! Used only to detect (and reject) a nested-field target - 'column_name' remains the operative field.
+	//! Full dotted column path, e.g. ["s", "a"] for "s.a"
 	vector<Identifier> column_path;
 
 public:
@@ -374,8 +372,7 @@ struct SetNotNullInfo : public AlterTableInfo {
 
 	//! The column name to alter
 	Identifier column_name;
-	//! The full dotted column path as written (e.g. ["s", "a"] for "s.a"); empty when not a nested-field target.
-	//! Used only to detect (and reject) a nested-field target - 'column_name' remains the operative field.
+	//! Full dotted column path, e.g. ["s", "a"] for "s.a"
 	vector<Identifier> column_path;
 
 public:
@@ -397,8 +394,7 @@ struct DropNotNullInfo : public AlterTableInfo {
 
 	//! The column name to alter
 	Identifier column_name;
-	//! The full dotted column path as written (e.g. ["s", "a"] for "s.a"); empty when not a nested-field target.
-	//! Used only to detect (and reject) a nested-field target - 'column_name' remains the operative field.
+	//! Full dotted column path, e.g. ["s", "a"] for "s.a"
 	vector<Identifier> column_path;
 
 public:

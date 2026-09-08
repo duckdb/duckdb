@@ -1196,9 +1196,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info,
                                                           AlterTableType alter_table_type) {
-	// 'ChangeColumnType' is also called internally to implement ADD_FIELD/REMOVE_FIELD/RENAME_FIELD, whose
-	// locally-constructed ChangeColumnTypeInfo never sets 'column_path' - only reject a user-issued
-	// "ALTER ... TYPE" that directly targets a nested field.
+	// Only reject a user-issued ALTER TYPE; ADD/REMOVE/RENAME_FIELD's internal calls leave column_path empty.
 	if (alter_table_type == AlterTableType::ALTER_COLUMN_TYPE && info.column_path.size() > 1) {
 		throw NotImplementedException("Changing the type of a nested field is not yet supported");
 	}

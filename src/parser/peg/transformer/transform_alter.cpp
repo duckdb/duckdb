@@ -298,9 +298,7 @@ unique_ptr<AlterTableInfo>
 PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const bool &has_result,
                                             unique_ptr<ColumnRefExpression> nested_column_name,
                                             unique_ptr<AlterTableInfo> alter_column_entry) {
-	//! The full dotted path as written (e.g. ["s", "a"] for "s.a") - preserved on the AlterTableInfo so the
-	//! catalog entry that actually executes the ALTER (e.g. DuckTableEntry) can detect and reject a nested-field
-	//! target; this transformer only captures parse-time info, it doesn't decide what's supported.
+	//! Preserved so DuckTableEntry can detect a nested-field target; not interpreted here.
 	auto column_path = nested_column_name->ColumnNames();
 	if (alter_column_entry->alter_table_type == AlterTableType::SET_DEFAULT) {
 		auto set_default_entry = unique_ptr_cast<AlterTableInfo, SetDefaultInfo>(std::move(alter_column_entry));
