@@ -178,18 +178,16 @@ bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &respo
 
 // NOLINTNEXTLINE: taken by value so an asynchronous override can move it into its scheduler
 HTTPRequestState HTTPClient::Send(BaseRequest &request, HTTPExecutionMode mode, HTTPResponseCallback on_complete) {
-	// default: this client has no asynchronous transport, so the request is already done when it returns
+	// no asynchronous transport, so the request is already done when it returns
 	on_complete(Request(request), nullptr);
 	return HTTPRequestState::COMPLETED;
 }
 
 namespace {
 
-//! Runs one request's attempts without blocking the caller: it issues each attempt through the
-//! client, and on a retryable failure asks HTTPUtil::Wait to come back later rather than sleeping
-//! here. The retry policy is the same HTTPRetryState the synchronous path uses, so a client that
-//! defers a request keeps the retry behaviour instead of losing it.
-//! Each callback holds a reference to the driver, which is what keeps it alive across a deferral.
+//! Runs one request's attempts without blocking the caller, asking HTTPUtil::Wait to come back later
+//! rather than sleeping here. Uses the same HTTPRetryState as the synchronous path.
+//! Each callback holds a reference to the driver, which keeps it alive across a deferral.
 class AsyncRetryDriver : public enable_shared_from_this<AsyncRetryDriver> {
 public:
 	AsyncRetryDriver(HTTPUtil &http_util, BaseRequest &request, unique_ptr<HTTPClient> &client,
@@ -239,8 +237,7 @@ private:
 		}
 	}
 
-	//! Finalize turns an exhausted request into either a failed response or a throw, and a throw has
-	//! nowhere to go from a completion, so it is delivered as an error instead
+	//! A throw has nowhere to go from a completion, so Finalize's exception is delivered as an error
 	void DeliverFailure(HTTPAttempt &attempt) {
 		try {
 			Deliver(retry_state.Finalize(request, attempt), nullptr);
@@ -287,7 +284,7 @@ HTTPRequestState HTTPUtil::Send(BaseRequest &request, unique_ptr<HTTPClient> &cl
 
 // NOLINTNEXTLINE: taken by value so an asynchronous override can move it into its scheduler
 HTTPRequestState HTTPUtil::Wait(uint64_t delay_ms, std::function<void()> resume) {
-	// default: this platform has a thread to wait on, which is what the retry backoff has always done
+	// this platform has a thread to wait on
 #ifndef DUCKDB_NO_THREADS
 	if (delay_ms > 0) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
