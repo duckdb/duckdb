@@ -2,7 +2,9 @@ name: Regression
 on:
   workflow_call:
     inputs:
-      git_ref:
+      duckdb_commit:
+        type: string
+      duckdb_version:
         type: string
       base_hash:
         type: string
@@ -37,7 +39,9 @@ defaults:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  GIT_REF: ${{ inputs.git_ref != '' && inputs.git_ref || github.sha }}
+  DUCKDB_COMMIT: ${{ inputs.duckdb_commit != '' && inputs.duckdb_commit || github.sha }}
+  DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+  GIT_REF: ${{ inputs.duckdb_commit != '' && inputs.duckdb_commit || github.sha }}
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref_name, '_feature') && 'feature' || 'main') }}
   BASE_HASH: ${{ inputs.base_hash }}
 

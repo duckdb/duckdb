@@ -6,20 +6,20 @@
 
 namespace duckdb {
 
-struct ParserCache;
 class ClientContext;
+class GrammarExtension;
 
 struct CompiledGrammar {
-	friend struct ParserCache;
-
 private:
-	explicit CompiledGrammar(ParserCache &cache);
+	CompiledGrammar(const ParsedGrammar &grammar, bool has_grammar_changes);
+	static shared_ptr<CompiledGrammar>
+	Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions);
 
 public:
-	const Matcher &ProgramMatcher() {
+	const Matcher &ProgramMatcher() const {
 		return *program_matcher;
 	}
-	const Matcher &TopLevelStatementMatcher() {
+	const Matcher &TopLevelStatementMatcher() const {
 		return *top_level_statement_matcher;
 	}
 	const PEGKeywordHelper &GetKeywordHelper() const {
@@ -29,43 +29,38 @@ public:
 		return tokenizer;
 	}
 	optional_ptr<const CompiledGrammarRule> GetRule(const string &rule_name) const;
+	bool HasGrammarChanges() const {
+		return has_grammar_changes;
+	}
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
-	static shared_ptr<CompiledGrammar> Get(DatabaseInstance &db);
-
-public:
-	idx_t Version() const;
+	//! Compile the base DuckDB grammar.
+	static shared_ptr<CompiledGrammar> Create();
+	//! Compile a grammar for the selected extensions without changing the client configuration.
+	static shared_ptr<CompiledGrammar> Create(const ClientContext &context,
+	                                          const case_insensitive_set_t &active_extensions);
 
 private:
 	MatcherAllocator allocator;
 	optional_ptr<const Matcher> program_matcher;
 	optional_ptr<const Matcher> top_level_statement_matcher;
 
-	//! TODO: this should be a unique_ptr when we allow keyword overrides
+	unique_ptr<PEGKeywordHelper> owned_keyword_helper;
 	const PEGKeywordHelper &keyword_helper;
 	Tokenizer tokenizer;
 	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;
 
 private:
-	const idx_t version;
+	const bool has_grammar_changes;
 };
 
-//! Per-database cache holder for the compiled PEG root matcher and transformer factory.
-//! Both are always invalidated together, so they share one mutex and one Invalidate() call.
+//! Per-database holder for the compiled base grammar.
 struct ParserCache {
 public:
-	ParserCache();
-
-public:
-	shared_ptr<CompiledGrammar> GetMatcher(optional_ptr<ClientContext> context);
-	void Invalidate();
-
-public:
-	idx_t LatestParserVersion() const;
+	shared_ptr<CompiledGrammar> GetMatcher();
 
 private:
-	atomic<idx_t> version;
 	std::mutex mutex;
 	shared_ptr<CompiledGrammar> matcher;
 };

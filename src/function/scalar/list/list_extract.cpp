@@ -159,6 +159,9 @@ static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, Funct
 	auto child_copy = list_child_stats.Copy();
 	// list_extract always pushes a NULL, since if the offset is out of range for a list it inserts a null
 	child_copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	if (!child_stats[0].CanHaveNoNull() || !child_stats[1].CanHaveNoNull()) {
+		child_copy.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+	}
 	return child_copy.ToUnique();
 }
 

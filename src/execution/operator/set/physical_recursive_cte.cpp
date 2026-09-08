@@ -218,12 +218,33 @@ void RecursiveCTEState::CombineOutput(ColumnDataCollection &output) {
 	    collect_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 	const auto row_count = output.Count();
 	CurrentOutputTable().Combine(output);
+	// Keyed workers can resume shared appends after publishing local output.
+	if (op.using_key) {
+		InitializeSharedOutputAppend();
+	}
 	if (collect_metrics) {
 		const auto after_work = std::chrono::steady_clock::now();
 		RecordSinkMetrics(
 		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
 		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()),
 		    row_count);
+	}
+}
+
+void RecursiveCTEState::RegisterLocalPreaggregation(unique_ptr<GroupedAggregateHashTable> local_ht,
+                                                    idx_t candidate_rows, idx_t classification_work_ns,
+                                                    idx_t preaggregation_work_ns) {
+	D_ASSERT(local_ht && candidate_rows > 0 && local_ht->Count() <= candidate_rows);
+	const auto group_count = local_ht->Count();
+	{
+		lock_guard<mutex> guard(intermediate_table_lock);
+		local_preaggregate_candidate_count += candidate_rows;
+		local_preaggregates.push_back(std::move(local_ht));
+	}
+	if (metrics.Enabled()) {
+		metrics.RecordHashRows(candidate_rows);
+		GetEpochMetrics().RecordLocalKeyPreaggregationClassification(classification_work_ns);
+		GetEpochMetrics().RecordLocalKeyPreaggregation(candidate_rows, group_count, preaggregation_work_ns);
 	}
 }
 
@@ -352,11 +373,117 @@ unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientConte
 	return make_uniq<RecursiveCTEState>(context, *this);
 }
 
+enum class RecursiveCTELocalPreaggregationDecision : uint8_t { DEFER, PREAGGREGATE, DIRECT };
+
+class RecursiveCTELocalPreaggregationState {
+public:
+	RecursiveCTELocalPreaggregationState(ClientContext &context_p, const PhysicalRecursiveCTE &op_p)
+	    : context(context_p), op(op_p), payload_executor(context), hashes(LogicalType::HASH) {
+		vector<LogicalType> aggregate_input_types;
+		for (auto &payload_aggregate : op.payload_aggregates) {
+			auto &bound_aggregate = payload_aggregate->Cast<BoundAggregateExpression>();
+			for (auto &child : bound_aggregate.GetChildren()) {
+				payload_executor.AddExpression(*child);
+				aggregate_input_types.push_back(child->GetReturnType());
+			}
+			aggregates.emplace_back(bound_aggregate);
+		}
+		if (!op.key_normalizers.empty()) {
+			key_executor = make_uniq<ExpressionExecutor>(context);
+			for (auto &normalizer : op.key_normalizers) {
+				key_executor->AddExpression(*normalizer);
+			}
+			raw_keys.Initialize(Allocator::Get(context), op.distinct_types);
+		}
+		keys.Initialize(Allocator::Get(context), op.hash_key_types);
+		payload.Initialize(Allocator::Get(context), aggregate_input_types);
+		input.Initialize(Allocator::Get(context), op.internal_types);
+	}
+
+	RecursiveCTELocalPreaggregationDecision Classify(ColumnDataCollection &candidates) {
+		const auto candidate_count = candidates.Count();
+		D_ASSERT(candidate_count >= STANDARD_VECTOR_SIZE);
+		sampled_candidate_count += candidate_count;
+		ColumnDataScanState scan_state;
+		candidates.InitializeScan(scan_state);
+		while (candidates.Scan(scan_state, input)) {
+			ExtractKeys(input);
+			keys.Hash(hashes);
+			cardinality.Update(hashes);
+		}
+		const auto distinct_upper_bound =
+		    LossyNumericCast<idx_t>((1 + HyperLogLog::GetErrorRate()) * static_cast<double>(cardinality.Count()));
+		if (distinct_upper_bound < sampled_candidate_count / 4) {
+			return RecursiveCTELocalPreaggregationDecision::PREAGGREGATE;
+		}
+		// Keep sampling across vector boundaries, but bound the extra hashing for unique streams.
+		static constexpr idx_t MAX_SAMPLE_VECTORS = 8;
+		const auto sample_size = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, 16);
+		if (sampled_candidate_count >= sample_size * MAX_SAMPLE_VECTORS) {
+			return RecursiveCTELocalPreaggregationDecision::DIRECT;
+		}
+		return RecursiveCTELocalPreaggregationDecision::DEFER;
+	}
+
+	void ResetClassification() {
+		cardinality = HyperLogLog();
+		sampled_candidate_count = 0;
+	}
+
+	unique_ptr<GroupedAggregateHashTable> Preaggregate(ColumnDataCollection &candidates) {
+		auto result = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.hash_key_types,
+		                                                   op.aggregate_types, aggregates);
+		ColumnDataScanState scan_state;
+		candidates.InitializeScan(scan_state);
+		while (candidates.Scan(scan_state, input)) {
+			ExtractKeys(input);
+			if (!payload_executor.expressions.empty()) {
+				payload.Reset();
+				payload_executor.Execute(input, payload);
+			}
+			result->AddChunk(keys, payload, AggregateType::NON_DISTINCT);
+		}
+		return result;
+	}
+
+private:
+	void ExtractKeys(DataChunk &source) {
+		keys.Reset();
+		if (!key_executor) {
+			for (idx_t key_idx = 0; key_idx < op.distinct_idx.size(); key_idx++) {
+				keys.data[key_idx].Reference(source.data[op.distinct_idx[key_idx]]);
+			}
+			keys.CheckCardinality(source.size());
+			return;
+		}
+		raw_keys.Reset();
+		for (idx_t key_idx = 0; key_idx < op.distinct_idx.size(); key_idx++) {
+			raw_keys.data[key_idx].Reference(source.data[op.distinct_idx[key_idx]]);
+		}
+		raw_keys.CheckCardinality(source.size());
+		key_executor->Execute(raw_keys, keys);
+	}
+
+private:
+	ClientContext &context;
+	const PhysicalRecursiveCTE &op;
+	ExpressionExecutor payload_executor;
+	unique_ptr<ExpressionExecutor> key_executor;
+	vector<AggregateObject> aggregates;
+	DataChunk raw_keys;
+	DataChunk keys;
+	DataChunk payload;
+	DataChunk input;
+	Vector hashes;
+	HyperLogLog cardinality;
+	idx_t sampled_candidate_count = 0;
+};
+
 class RecursiveCTELocalState : public LocalSinkState {
 public:
 	RecursiveCTELocalState(ClientContext &context, const PhysicalRecursiveCTE &op)
-	    : hashes(LogicalType::HASH), partition_hashes(LogicalType::HASH), dummy_addresses(LogicalType::POINTER),
-	      new_groups(STANDARD_VECTOR_SIZE) {
+	    : context(context), op(op), hashes(LogicalType::HASH), partition_hashes(LogicalType::HASH),
+	      dummy_addresses(LogicalType::POINTER), new_groups(STANDARD_VECTOR_SIZE) {
 		if (!op.using_key) {
 			output = make_uniq<ColumnDataCollection>(context, op.GetTypes());
 			output->InitializeAppend(append_state);
@@ -366,6 +493,8 @@ public:
 		}
 	}
 
+	ClientContext &context;
+	const PhysicalRecursiveCTE &op;
 	unique_ptr<ColumnDataCollection> output;
 	ColumnDataAppendState append_state;
 	Vector hashes;
@@ -375,6 +504,80 @@ public:
 	DataChunk partition_chunk;
 	vector<SelectionVector> partition_selections;
 	vector<idx_t> partition_counts;
+	idx_t using_key_candidate_count = 0;
+	idx_t using_key_classification_work_ns = 0;
+	bool buffer_using_key_output = false;
+	bool direct_using_key_output = false;
+	unique_ptr<RecursiveCTELocalPreaggregationState> using_key_preaggregation;
+
+	void SinkUsingKeyOutput(DataChunk &chunk, RecursiveCTEState &gstate) {
+		D_ASSERT(op.using_key && !op.union_all);
+		using_key_candidate_count += chunk.size();
+		if (buffer_using_key_output) {
+			BufferUsingKeyOutput(chunk);
+			return;
+		}
+		const auto sample_size = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, 16);
+		const auto coalesce_small_chunks = chunk.size() < sample_size && (using_key_candidate_count >= sample_size ||
+		                                                                  gstate.CurrentInputCount() >= sample_size);
+		if (direct_using_key_output || !gstate.CanPreaggregateUsingKey()) {
+			if (coalesce_small_chunks) {
+				BufferUsingKeyOutput(chunk);
+			} else {
+				gstate.AppendOutput(chunk);
+			}
+			return;
+		}
+		if (using_key_candidate_count <= gstate.CurrentInputCount() && !coalesce_small_chunks) {
+			gstate.AppendOutput(chunk);
+			return;
+		}
+		BufferUsingKeyOutput(chunk);
+		if (output->Count() < sample_size) {
+			return;
+		}
+		ClassifyBufferedUsingKeyOutput();
+		if (!buffer_using_key_output) {
+			gstate.CombineOutput(*output);
+			output->ResetForReuse();
+			output->InitializeAppend(append_state);
+		}
+	}
+
+	void ClassifyBufferedUsingKeyOutput() {
+		D_ASSERT(output && output->Count() >= STANDARD_VECTOR_SIZE && !buffer_using_key_output &&
+		         !direct_using_key_output);
+		if (!using_key_preaggregation) {
+			using_key_preaggregation = make_uniq<RecursiveCTELocalPreaggregationState>(context, op);
+		}
+		const auto classification_start = std::chrono::steady_clock::now();
+		const auto decision = using_key_preaggregation->Classify(*output);
+		const auto classification_end = std::chrono::steady_clock::now();
+		using_key_classification_work_ns += NumericCast<idx_t>(
+		    std::chrono::duration_cast<std::chrono::nanoseconds>(classification_end - classification_start).count());
+		buffer_using_key_output = decision == RecursiveCTELocalPreaggregationDecision::PREAGGREGATE;
+		direct_using_key_output = decision == RecursiveCTELocalPreaggregationDecision::DIRECT;
+	}
+
+	void BufferUsingKeyOutput(DataChunk &chunk) {
+		D_ASSERT(op.using_key && !op.union_all);
+		if (!output) {
+			output = make_uniq<ColumnDataCollection>(context, op.internal_types);
+			output->InitializeAppend(append_state);
+		}
+		output->Append(append_state, chunk);
+	}
+
+	unique_ptr<GroupedAggregateHashTable> Preaggregate(idx_t &preaggregation_work_ns) {
+		D_ASSERT(output && op.using_key && !op.union_all);
+		D_ASSERT(buffer_using_key_output && using_key_preaggregation);
+		const auto preaggregation_start = std::chrono::steady_clock::now();
+		auto result = using_key_preaggregation->Preaggregate(*output);
+		const auto preaggregation_end = std::chrono::steady_clock::now();
+		preaggregation_work_ns = NumericCast<idx_t>(
+		    std::chrono::duration_cast<std::chrono::nanoseconds>(preaggregation_end - preaggregation_start).count());
+		return result;
+	}
 
 	void InitializePartitions(idx_t partition_count) {
 		if (partition_selections.size() == partition_count) {
@@ -393,6 +596,13 @@ public:
 	}
 
 	void Reset(ExecutionContext &context, GlobalSinkState &gstate) override {
+		using_key_candidate_count = 0;
+		using_key_classification_work_ns = 0;
+		buffer_using_key_output = false;
+		direct_using_key_output = false;
+		if (using_key_preaggregation) {
+			using_key_preaggregation->ResetClassification();
+		}
 		if (!output) {
 			return;
 		}
@@ -565,6 +775,60 @@ bool RecursiveCTEState::ShouldPreaggregateUsingKeyUpdates(idx_t candidate_count)
 template <bool COLLECT_METRICS>
 void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 	D_ASSERT(op.using_key);
+	if (!local_preaggregates.empty()) {
+		D_ASSERT(!op.union_all && local_preaggregate_candidate_count > 0);
+		const auto combine_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		auto epoch_ht = std::move(local_preaggregates[0]);
+		for (idx_t local_idx = 1; local_idx < local_preaggregates.size(); local_idx++) {
+			epoch_ht->Combine(*local_preaggregates[local_idx]);
+		}
+		local_preaggregates.clear();
+		auto preaggregated_candidate_count = local_preaggregate_candidate_count;
+		local_preaggregate_candidate_count = 0;
+		if constexpr (COLLECT_METRICS) {
+			const auto combine_end = std::chrono::steady_clock::now();
+			GetEpochMetrics().RecordKeyPreaggregationCombine(NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::nanoseconds>(combine_end - combine_start).count()));
+		}
+
+		const auto raw_candidate_count = intermediate_table.Count();
+		if constexpr (COLLECT_METRICS) {
+			GetEpochMetrics().RecordLocalKeyPreaggregationResidual(raw_candidate_count);
+		}
+		bool preaggregate_raw_candidates = false;
+		if (raw_candidate_count >= STANDARD_VECTOR_SIZE) {
+			const auto classification_start =
+			    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+			preaggregate_raw_candidates = ShouldPreaggregateUsingKeyUpdates(raw_candidate_count);
+			if constexpr (COLLECT_METRICS) {
+				const auto classification_end = std::chrono::steady_clock::now();
+				GetEpochMetrics().RecordKeyPreaggregationClassification(NumericCast<idx_t>(
+				    std::chrono::duration_cast<std::chrono::nanoseconds>(classification_end - classification_start)
+				        .count()));
+			}
+		}
+		if (preaggregate_raw_candidates) {
+			auto raw_ht = CreateUsingKeyHashTable();
+			const auto preaggregation_work_ns = PreaggregateUsingKeyUpdates<COLLECT_METRICS>(*raw_ht);
+			if constexpr (COLLECT_METRICS) {
+				GetEpochMetrics().RecordKeyPreaggregation(raw_candidate_count, raw_ht->Count(), preaggregation_work_ns);
+			}
+			const auto raw_combine_start =
+			    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+			epoch_ht->Combine(*raw_ht);
+			if constexpr (COLLECT_METRICS) {
+				const auto raw_combine_end = std::chrono::steady_clock::now();
+				GetEpochMetrics().RecordKeyPreaggregationCombine(NumericCast<idx_t>(
+				    std::chrono::duration_cast<std::chrono::nanoseconds>(raw_combine_end - raw_combine_start).count()));
+			}
+			preaggregated_candidate_count += raw_candidate_count;
+			intermediate_table.ResetForReuse();
+			InitializeIntermediateAppend();
+		}
+		CommitMixedUsingKeyUpdatesInternal<COLLECT_METRICS>(std::move(epoch_ht), preaggregated_candidate_count);
+		return;
+	}
 	const auto candidate_count = intermediate_table.Count();
 	bool use_preaggregation = false;
 	if (can_preaggregate_using_key && candidate_count >= STANDARD_VECTOR_SIZE) {
@@ -645,7 +909,8 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 			const auto index_start =
 			    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 			for (auto &index : partial_key_indexes) {
-				index->AddGroups(distinct_rows, new_groups, new_group_addresses, new_group_count);
+				index->AddGroups(distinct_rows, new_groups, new_group_addresses,
+				                 *FlatVector::IncrementalSelectionVector(), new_group_count);
 			}
 			if constexpr (COLLECT_METRICS) {
 				const auto index_end = std::chrono::steady_clock::now();
@@ -679,7 +944,8 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 		const auto index_start =
 		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		for (auto &index : partial_key_indexes) {
-			index->AddGroups(distinct_rows, new_groups, new_group_addresses, new_group_count);
+			index->AddGroups(distinct_rows, new_groups, new_group_addresses, *FlatVector::IncrementalSelectionVector(),
+			                 new_group_count);
 		}
 		if constexpr (COLLECT_METRICS) {
 			const auto index_end = std::chrono::steady_clock::now();
@@ -719,6 +985,133 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 }
 
 template <bool COLLECT_METRICS>
+void RecursiveCTEState::ApplyPreaggregatedUsingKeyUpdates(GroupedAggregateHashTable &epoch_ht, idx_t &delta_work_ns) {
+	AggregateHTScanState epoch_scan_state;
+	epoch_ht.InitializeScan(epoch_scan_state);
+	while (epoch_ht.ScanGroups(epoch_scan_state, distinct_rows)) {
+		if (distinct_rows.size() == 0) {
+			continue;
+		}
+		const auto snapshot_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		SnapshotPreaggregatedUsingKeyDeltaGroups(distinct_rows);
+		if constexpr (COLLECT_METRICS) {
+			const auto snapshot_end = std::chrono::steady_clock::now();
+			delta_work_ns += NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::nanoseconds>(snapshot_end - snapshot_start).count());
+		}
+	}
+
+	const auto combine_start =
+	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	ht->Combine(epoch_ht);
+	if constexpr (COLLECT_METRICS) {
+		const auto combine_end = std::chrono::steady_clock::now();
+		GetEpochMetrics().RecordKeyPreaggregationCombine(NumericCast<idx_t>(
+		    std::chrono::duration_cast<std::chrono::nanoseconds>(combine_end - combine_start).count()));
+	}
+}
+
+template <bool COLLECT_METRICS>
+void RecursiveCTEState::CommitMixedUsingKeyUpdatesInternal(unique_ptr<GroupedAggregateHashTable> epoch_ht,
+                                                           idx_t preaggregated_candidate_count) {
+	D_ASSERT(op.using_key && !op.union_all && key_delta && epoch_ht && preaggregated_candidate_count > 0);
+	auto &delta = *key_delta;
+	const auto raw_candidate_count = intermediate_table.Count();
+	const auto delta_candidate_count = raw_candidate_count + preaggregated_candidate_count;
+	idx_t delta_work_ns = 0;
+	const auto reset_start =
+	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	delta.Reset();
+	if constexpr (COLLECT_METRICS) {
+		const auto reset_end = std::chrono::steady_clock::now();
+		delta_work_ns +=
+		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(reset_end - reset_start).count());
+	}
+
+	ColumnDataScanState update_scan_state;
+	intermediate_table.InitializeScan(update_scan_state);
+	while (intermediate_table.Scan(update_scan_state, update_rows)) {
+		if constexpr (COLLECT_METRICS) {
+			metrics.RecordHashRows(update_rows.size());
+		}
+		const auto hash_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		idx_t snapshot_work_ns = 0;
+		ExtractUsingKeyKeys(update_rows);
+		if (!executor.expressions.empty()) {
+			payload_rows.Reset();
+			executor.Execute(update_rows, payload_rows);
+		}
+		ht->AddChunk(
+		    distinct_rows, payload_rows, AggregateType::NON_DISTINCT,
+		    [&](const Vector &group_addresses, const SelectionVector &new_groups, idx_t new_group_count) {
+			    const auto snapshot_start =
+			        COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+			    SnapshotUsingKeyDelta(group_addresses, new_groups, new_group_count, update_rows.size(), false);
+			    if constexpr (COLLECT_METRICS) {
+				    const auto snapshot_end = std::chrono::steady_clock::now();
+				    snapshot_work_ns = NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(snapshot_end - snapshot_start).count());
+				    delta_work_ns += snapshot_work_ns;
+			    }
+		    });
+		if constexpr (COLLECT_METRICS) {
+			const auto hash_end = std::chrono::steady_clock::now();
+			const auto hash_work_ns =
+			    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count());
+			D_ASSERT(snapshot_work_ns <= hash_work_ns);
+			GetEpochMetrics().RecordKeyedHashCommit(hash_work_ns - snapshot_work_ns);
+		}
+	}
+
+	ApplyPreaggregatedUsingKeyUpdates<COLLECT_METRICS>(*epoch_ht, delta_work_ns);
+
+	const auto finalize_start =
+	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	op.working_table->ResetForReuse();
+	op.working_table->InitializeAppend(working_append_state);
+	const auto index_work_ns = FinalizeUsingKeyDelta(!partial_key_indexes.empty(), COLLECT_METRICS);
+	intermediate_table.ResetForReuse();
+	InitializeIntermediateAppend();
+	if constexpr (COLLECT_METRICS) {
+		const auto finalize_end = std::chrono::steady_clock::now();
+		const auto finalize_work_ns = NumericCast<idx_t>(
+		    std::chrono::duration_cast<std::chrono::nanoseconds>(finalize_end - finalize_start).count());
+		D_ASSERT(index_work_ns <= finalize_work_ns);
+		delta_work_ns += finalize_work_ns - index_work_ns;
+		GetEpochMetrics().RecordKeyDelta(delta_candidate_count, delta.touched_count, delta.new_count,
+		                                 delta.changed_count, delta_work_ns);
+	}
+}
+
+template <bool COLLECT_METRICS>
+idx_t RecursiveCTEState::PreaggregateUsingKeyUpdates(GroupedAggregateHashTable &epoch_ht) {
+	idx_t preaggregation_work_ns = 0;
+	ColumnDataScanState update_scan_state;
+	intermediate_table.InitializeScan(update_scan_state);
+	while (intermediate_table.Scan(update_scan_state, update_rows)) {
+		if constexpr (COLLECT_METRICS) {
+			metrics.RecordHashRows(update_rows.size());
+		}
+		const auto hash_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		ExtractUsingKeyKeys(update_rows);
+		if (!executor.expressions.empty()) {
+			payload_rows.Reset();
+			executor.Execute(update_rows, payload_rows);
+		}
+		epoch_ht.AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
+		if constexpr (COLLECT_METRICS) {
+			const auto hash_end = std::chrono::steady_clock::now();
+			preaggregation_work_ns +=
+			    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count());
+		}
+	}
+	return preaggregation_work_ns;
+}
+
+template <bool COLLECT_METRICS>
 void RecursiveCTEState::CommitPreaggregatedUsingKeyUpdatesInternal() {
 	D_ASSERT(op.using_key && !op.union_all && key_delta);
 	auto &delta = *key_delta;
@@ -734,54 +1127,11 @@ void RecursiveCTEState::CommitPreaggregatedUsingKeyUpdatesInternal() {
 	}
 
 	auto epoch_ht = CreateUsingKeyHashTable();
-	idx_t preaggregation_work_ns = 0;
-	ColumnDataScanState update_scan_state;
-	intermediate_table.InitializeScan(update_scan_state);
-	while (intermediate_table.Scan(update_scan_state, update_rows)) {
-		if constexpr (COLLECT_METRICS) {
-			metrics.RecordHashRows(update_rows.size());
-		}
-		const auto hash_start =
-		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-		ExtractUsingKeyKeys(update_rows);
-		if (!executor.expressions.empty()) {
-			payload_rows.Reset();
-			executor.Execute(update_rows, payload_rows);
-		}
-		epoch_ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
-		if constexpr (COLLECT_METRICS) {
-			const auto hash_end = std::chrono::steady_clock::now();
-			preaggregation_work_ns +=
-			    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count());
-		}
-	}
+	const auto preaggregation_work_ns = PreaggregateUsingKeyUpdates<COLLECT_METRICS>(*epoch_ht);
 	if constexpr (COLLECT_METRICS) {
 		GetEpochMetrics().RecordKeyPreaggregation(delta_candidate_count, epoch_ht->Count(), preaggregation_work_ns);
 	}
-	AggregateHTScanState epoch_scan_state;
-	epoch_ht->InitializeScan(epoch_scan_state);
-	while (epoch_ht->ScanGroups(epoch_scan_state, distinct_rows)) {
-		if (distinct_rows.size() == 0) {
-			continue;
-		}
-		const auto snapshot_start =
-		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-		SnapshotPreaggregatedUsingKeyDeltaGroups(distinct_rows);
-		if constexpr (COLLECT_METRICS) {
-			const auto snapshot_end = std::chrono::steady_clock::now();
-			delta_work_ns += NumericCast<idx_t>(
-			    std::chrono::duration_cast<std::chrono::nanoseconds>(snapshot_end - snapshot_start).count());
-		}
-	}
-
-	const auto hash_start =
-	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-	ht->Combine(*epoch_ht);
-	if constexpr (COLLECT_METRICS) {
-		const auto hash_end = std::chrono::steady_clock::now();
-		GetEpochMetrics().RecordKeyPreaggregationCombine(
-		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count()));
-	}
+	ApplyPreaggregatedUsingKeyUpdates<COLLECT_METRICS>(*epoch_ht, delta_work_ns);
 
 	const auto finalize_start =
 	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
@@ -939,7 +1289,12 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	gstate.AppendOutput(chunk);
+	if (union_all) {
+		gstate.AppendOutput(chunk);
+		return SinkResultType::NEED_MORE_INPUT;
+	}
+	auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
+	lstate.SinkUsingKeyOutput(chunk, gstate);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -950,8 +1305,35 @@ void PhysicalRecursiveCTE::PrepareFinalize(ClientContext &context, GlobalSinkSta
 }
 
 SinkCombineResultType PhysicalRecursiveCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
-	if (!using_key) {
-		auto &gstate = input.global_state.Cast<RecursiveCTEState>();
+	auto &gstate = input.global_state.Cast<RecursiveCTEState>();
+	if (using_key) {
+		if (!union_all) {
+			auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
+			if (!lstate.buffer_using_key_output && !lstate.direct_using_key_output && lstate.output &&
+			    lstate.output->Count() >= STANDARD_VECTOR_SIZE &&
+			    lstate.using_key_candidate_count > gstate.CurrentInputCount() && gstate.CanPreaggregateUsingKey()) {
+				lstate.ClassifyBufferedUsingKeyOutput();
+			}
+			if (!lstate.buffer_using_key_output) {
+				if (gstate.GetMetrics().Enabled() && lstate.using_key_classification_work_ns > 0) {
+					gstate.GetEpochMetrics().RecordLocalKeyPreaggregationClassification(
+					    lstate.using_key_classification_work_ns);
+				}
+				if (lstate.output && lstate.output->Count() > 0) {
+					gstate.CombineOutput(*lstate.output);
+				}
+				return SinkCombineResultType::FINISHED;
+			}
+			D_ASSERT(lstate.output);
+			const auto candidate_count = lstate.output->Count();
+			D_ASSERT(candidate_count > 0 && lstate.buffer_using_key_output && gstate.CanPreaggregateUsingKey());
+			idx_t preaggregation_work_ns = 0;
+			auto local_ht = lstate.Preaggregate(preaggregation_work_ns);
+			gstate.RegisterLocalPreaggregation(std::move(local_ht), candidate_count,
+			                                   lstate.using_key_classification_work_ns, preaggregation_work_ns);
+			return SinkCombineResultType::FINISHED;
+		}
+	} else {
 		if (union_all && !gstate.UsesLocalUnionAllOutput()) {
 			return SinkCombineResultType::FINISHED;
 		}

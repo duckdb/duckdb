@@ -1,0 +1,43 @@
+# name: test/sql/alter/add_unique/test_add_unique.test
+# description: ALTER TABLE ADD UNIQUE must enforce uniqueness
+# group: [add_unique]
+
+statement ok
+CREATE TABLE t(c INT);
+
+statement ok
+INSERT INTO t VALUES (1);
+
+statement ok
+ALTER TABLE t ADD UNIQUE (c);
+
+statement error
+INSERT INTO t VALUES (1);
+----
+<REGEX>:Constraint Error.*Duplicate key "c: 1" violates unique constraint.*
+
+statement ok
+CREATE TABLE d(i INT);
+
+statement ok
+INSERT INTO d VALUES (1), (1);
+
+statement error
+ALTER TABLE d ADD UNIQUE (i);
+----
+<REGEX>:Constraint Error.*contains duplicates on indexed column.*
+
+statement ok
+CREATE TABLE r(i INT);
+
+statement ok
+BEGIN;
+
+statement ok
+ALTER TABLE r ADD UNIQUE (i);
+
+statement ok
+ROLLBACK;
+
+statement ok
+INSERT INTO r VALUES (1), (1);

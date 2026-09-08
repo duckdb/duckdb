@@ -28,6 +28,31 @@ struct SortedAggregateStateOrder {
 	OrderByNullType null_order;
 };
 
+//! Overload selection: picks the cheapest matching overload out of a function set, given the argument types of a
+//! call. Free-standing so that callers without a ClientContext - which only limits the set of implicit casts
+//! considered, can select overloads too.
+struct FunctionOverloads {
+	//! Cost of calling this overload with the given arguments, or an invalid index if it does not match
+	DUCKDB_API static optional_idx Cost(optional_ptr<ClientContext> context, const SimpleFunction &func,
+	                                    const vector<LogicalType> &arguments,
+	                                    const vector<pair<Identifier, LogicalType>> &named_arguments);
+	DUCKDB_API static optional_idx Cost(optional_ptr<ClientContext> context, const SimpleNamedParameterFunction &func,
+	                                    const vector<LogicalType> &arguments,
+	                                    const vector<pair<Identifier, LogicalType>> &);
+
+	//! All overloads that match at the lowest cost. Empty (and error set) if none match.
+	template <class T>
+	static vector<idx_t> Candidates(optional_ptr<ClientContext> context, const Identifier &name,
+	                                const FunctionSet<T> &functions, const vector<LogicalType> &arguments,
+	                                const vector<pair<Identifier, LogicalType>> &named_arguments, ErrorData &error);
+
+	//! The single best overload. Invalid (and error set) if there is no match or the choice is ambiguous.
+	template <class T>
+	static optional_idx Select(optional_ptr<ClientContext> context, const Identifier &name,
+	                           const FunctionSet<T> &functions, const vector<LogicalType> &arguments,
+	                           const vector<pair<Identifier, LogicalType>> &named_arguments, ErrorData &error);
+};
+
 //! The FunctionBinder class is responsible for binding functions
 class FunctionBinder {
 public:
@@ -45,7 +70,7 @@ public:
 	                                     const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error);
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const ScalarFunctionSet &functions,
 	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunctionFromArguments(name, functions, regular_args, {}, error);
+		return BindFunction(name, functions, regular_args, {}, error);
 	}
 
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const ScalarFunctionSet &functions,
@@ -60,7 +85,7 @@ public:
 	                                     const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error);
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const AggregateFunctionSet &functions,
 	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunctionFromArguments(name, functions, regular_args, {}, error);
+		return BindFunction(name, functions, regular_args, {}, error);
 	}
 
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const AggregateFunctionSet &functions,
@@ -76,7 +101,7 @@ public:
 
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const WindowFunctionSet &functions,
 	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunctionFromArguments(name, functions, regular_args, {}, error);
+		return BindFunction(name, functions, regular_args, {}, error);
 	}
 
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
@@ -86,7 +111,7 @@ public:
 	                                     const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error);
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
 	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunctionFromArguments(name, functions, regular_args, {}, error);
+		return BindFunction(name, functions, regular_args, {}, error);
 	}
 
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
@@ -289,20 +314,6 @@ private:
 
 	void ResolveTemplateTypes(BoundSimpleFunction &bound_function, const vector<unique_ptr<Expression>> &children);
 	void CheckTemplateTypesResolved(const BoundSimpleFunction &bound_function);
-
-	optional_idx BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments,
-	                              const vector<pair<Identifier, LogicalType>> &named_arguments);
-
-	optional_idx BindVarArgsFunctionCost(const SimpleNamedParameterFunction &func,
-	                                     const vector<LogicalType> &arguments);
-	optional_idx BindFunctionCost(const SimpleNamedParameterFunction &func, const vector<LogicalType> &arguments,
-	                              const vector<pair<Identifier, LogicalType>> &);
-
-	template <class T>
-	vector<idx_t> BindFunctionsFromArguments(const Identifier &name, const FunctionSet<T> &functions,
-	                                         const vector<LogicalType> &arguments,
-	                                         const vector<pair<Identifier, LogicalType>> &named_arguments,
-	                                         ErrorData &error);
 
 	template <class T>
 	optional_idx BindFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,

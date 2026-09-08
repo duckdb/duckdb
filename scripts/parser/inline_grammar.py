@@ -47,6 +47,12 @@ def write_keyword_map(keyword_sets):
         f.write("\tif (initialized) {\n\t\treturn;\n\t};\n")
         f.write("\tinitialized = true;\n\n")
 
+        f.write("\tauto &reserved_keyword_map = keyword_maps.reserved_keyword_map;\n")
+        f.write("\tauto &unreserved_keyword_map = keyword_maps.unreserved_keyword_map;\n")
+        f.write("\tauto &colname_keyword_map = keyword_maps.colname_keyword_map;\n")
+        f.write("\tauto &typefunc_keyword_map = keyword_maps.typefunc_keyword_map;\n")
+        f.write("\tauto &typename_keyword_map = keyword_maps.typename_keyword_map;\n\n")
+
         num_categories = len(keyword_sets)
         for i, (category, keywords) in enumerate(keyword_sets.items()):
             cpp_map_name = CPP_MAP_NAMES[category]

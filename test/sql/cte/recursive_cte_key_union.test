@@ -231,6 +231,22 @@ SELECT count(*), min(lo) FROM t;
 ----
 1	0
 
+# Preaggregated groups may be new, changed, or unchanged when combined into recurring state.
+query II rowsort
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	VALUES (1, 10), (2, 10)
+	UNION
+	SELECT CASE WHEN i % 4 = 0 THEN 3 ELSE k END,
+	       CASE WHEN i % 4 = 0 THEN 7 WHEN k = 1 THEN 5 ELSE 11 END
+	FROM t, range(current_setting('standard_vector_size')::BIGINT * 4) r(i)
+	WHERE v = 10
+)
+TABLE t;
+----
+1	5
+2	10
+3	7
+
 # Address tracking is cleared between wide and narrow epochs without retaining stale groups.
 query III
 WITH RECURSIVE t(k, v) USING KEY (k) AS (
@@ -646,7 +662,7 @@ SELECT count(*), min(lower(label)), min(v) FROM t;
 ----
 1	a	0
 
-# Preaggregation and partial-key probes share stable recurring group addresses.
+# Preaggregation keeps partial-key hashes aligned with reordered recurring group addresses.
 query III
 WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
 	SELECT i, i % 4, 2

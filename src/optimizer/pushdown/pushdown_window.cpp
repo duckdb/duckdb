@@ -79,7 +79,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 		// the filter must be on all partition bindings
 		vector<ColumnBinding> bindings;
 		ExtractFilterBindings(*filters.at(i)->filter, bindings);
-		if (CanPushdownFilter(window_exprs_partition_bindings, bindings)) {
+		if (CanPushdownFilter(window_exprs_partition_bindings, bindings) && !filters.at(i)->filter->IsVolatile()) {
 			pushdown.filters.push_back(std::move(filters.at(i)));
 		} else {
 			leftover_filters.push_back(std::move(filters.at(i)));
