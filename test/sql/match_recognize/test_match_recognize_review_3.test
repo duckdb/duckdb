@@ -362,3 +362,61 @@ FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
 )
 ----
 20
+
+# The matcher's configuration is built where the clause is bound and handed over as bind data, so the
+# window is called with the columns the conditions read and nothing else. Calling it directly is
+# still not a thing anyone can do.
+
+statement error
+SELECT "match_recognize"(x) OVER () FROM range(3) t(x)
+----
+cannot be used directly
+
+statement error
+SELECT main."match_recognize"(x) OVER (ORDER BY x) FROM range(3) t(x)
+----
+cannot be used directly
+
+query I
+SELECT parameters FROM duckdb_functions() WHERE function_name = 'match_recognize'
+----
+[columns]
+
+# the configuration survives being written out and read back
+statement ok
+CREATE VIEW mr_view AS
+    FROM (VALUES (10), (20), (30)) t(x) MATCH_RECOGNIZE (
+        ORDER BY x MEASURES sum(x) AS s, CLASSIFIER() AS c
+        ALL ROWS PER MATCH PATTERN (A B+)
+        DEFINE B AS x > FIRST(A.x) AND MATCH_NUMBER() > 0
+    );
+
+query III
+SELECT * FROM mr_view ORDER BY x
+----
+10	10	A
+20	30	B
+30	60	B
+
+query III
+SELECT * FROM mr_view ORDER BY x
+----
+10	10	A
+20	30	B
+30	60	B
+
+statement ok
+PREPARE mr_prepared AS
+    FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+        ORDER BY x MEASURES sum(x) AS s PATTERN (A+) DEFINE A AS MATCH_NUMBER() > 0
+    );
+
+query I
+EXECUTE mr_prepared
+----
+30
+
+query I
+EXECUTE mr_prepared
+----
+30

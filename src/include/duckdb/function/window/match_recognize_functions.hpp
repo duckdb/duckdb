@@ -17,7 +17,7 @@ namespace duckdb {
 
 struct MatchRecognizeFun {
 	static constexpr const char *Name = "match_recognize";
-	static constexpr const char *Parameters = "columns,conditions,pattern,symbols,after_match_variable,after_match,navigations";
+	static constexpr const char *Parameters = "columns";
 	static constexpr const char *Description = "Internal window function implementing row pattern matching for MATCH_RECOGNIZE";
 	static constexpr const char *Example = "MATCH_RECOGNIZE(PATTERN (A B) DEFINE A AS x > 0, B AS y > 0)";
 	static constexpr const char *Categories = "";

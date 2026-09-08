@@ -34,9 +34,6 @@ enum MatchRecognizeResult : idx_t {
 	ROW_INDEX
 };
 
-//	MATCH_NUMBER() is the first field of the packed column struct
-static constexpr idx_t MATCH_NUMBER_FIELD = 0;
-
 //! One membership of a row in a match. Overlapping matches each give the rows they cover one of
 //! these, so there are as many as there are (row, match) pairs and not as many as there are rows.
 struct MatchRecognizeSpan {
@@ -149,157 +146,12 @@ LogicalType WindowMatchRecognizeExecutor::ResultType() {
 //===--------------------------------------------------------------------===//
 // Binding
 //===--------------------------------------------------------------------===//
-//! Point a condition's column references at the window's argument list
-static void RebindToArguments(unique_ptr<Expression> &expr, const expression_map_t<idx_t> &argument_index,
-                              idx_t match_number_index, bool &reads_match_number) {
-	if (expr->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-		// the matcher evaluates a condition per candidate row, which a subquery cannot be reduced to
-		throw BinderException("A DEFINE condition may not contain a subquery");
-	}
-	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-		auto entry = argument_index.find(*expr);
-		if (entry == argument_index.end()) {
-			throw BinderException("A DEFINE condition may only reference columns of the MATCH_RECOGNIZE input");
-		}
-		if (entry->second == match_number_index) {
-			reads_match_number = true;
-		}
-		expr = make_uniq<BoundReferenceExpression>(expr->GetReturnType(), entry->second);
-		return;
-	}
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-		RebindToArguments(child, argument_index, match_number_index, reads_match_number);
-	});
-}
-
-//! Replace each pattern leaf's symbol name with its index
-static void ResolvePatternSymbols(unique_ptr<Expression> &pattern, const case_insensitive_map_t<idx_t> &symbol_index) {
-	if (pattern->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		auto &constant = pattern->Cast<BoundConstantExpression>();
-		if (constant.GetValue().type().id() == LogicalTypeId::VARCHAR) {
-			auto symbol = constant.GetValue().GetValue<string>();
-			auto entry = symbol_index.find(symbol);
-			if (entry == symbol_index.end()) {
-				throw InternalException("MATCH_RECOGNIZE pattern symbol %s has no condition", symbol);
-			}
-			pattern = make_uniq<BoundConstantExpression>(Value::UBIGINT(entry->second));
-		}
-		return;
-	}
-	if (pattern->GetExpressionType() == ExpressionType::ANCHOR) {
-		return;
-	}
-	switch (pattern->GetExpressionType()) {
-	case ExpressionType::ALTERNATION: {
-		auto &alternation = pattern->Cast<BoundAlternationExpression>();
-		ResolvePatternSymbols(alternation.child_left, symbol_index);
-		ResolvePatternSymbols(alternation.child_right, symbol_index);
-		break;
-	}
-	case ExpressionType::CONCATENATION:
-		for (auto &child : pattern->Cast<BoundConcatenationExpression>().children) {
-			ResolvePatternSymbols(child, symbol_index);
-		}
-		break;
-	case ExpressionType::QUANTIFIER:
-		ResolvePatternSymbols(pattern->Cast<BoundQuantifierExpression>().child, symbol_index);
-		break;
-	default:
-		break;
-	}
-}
-
 unique_ptr<FunctionData> WindowMatchRecognizeExecutor::Bind(BindWindowFunctionInput &input) {
-	auto &arguments = input.GetArguments();
-	// Everything after the columns is configuration the MATCH_RECOGNIZE binder builds, so a call that
-	// does not carry it did not come from one. Deserialization restores the bind data through the
-	// deserialize callback and never reaches here.
-	const auto configured = arguments.size() == 7 &&
-	                        arguments[3]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-	                        !arguments[3]->Cast<BoundConstantExpression>().GetValue().IsNull();
-	if (!configured) {
-		throw BinderException("%s is how the MATCH_RECOGNIZE clause is planned rather than a function to call, so it "
-		                      "cannot be used directly",
-		                      MatchRecognizeFun::Name);
-	}
-	// the casts below are only safe for the shape the MATCH_RECOGNIZE binder builds
-	const bool packed = arguments[0]->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
-	                    arguments[1]->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
-	                    (arguments[2]->GetExpressionClass() == ExpressionClass::PATTERN ||
-	                     arguments[2]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) &&
-	                    arguments[4]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-	                    arguments[5]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-	                    arguments[6]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
-	if (!packed) {
-		throw BinderException("%s was called with something other than the configuration the MATCH_RECOGNIZE clause "
-		                      "builds for it",
-		                      MatchRecognizeFun::Name);
-	}
-
-	auto bind_data = make_uniq<MatchRecognizeFunctionData>();
-	bind_data->after_match = static_cast<MatchRecognizeAfterMatch>(
-	    arguments[5]->Cast<BoundConstantExpression>().GetValue().GetValue<uint8_t>());
-	auto &skip_variable = arguments[4]->Cast<BoundConstantExpression>().GetValue();
-	if (!skip_variable.IsNull()) {
-		bind_data->after_match_variable = skip_variable.GetValue<string>();
-	}
-	for (auto &symbol : ListValue::GetChildren(arguments[3]->Cast<BoundConstantExpression>().GetValue())) {
-		bind_data->symbols.push_back(symbol.GetValue<string>());
-	}
-	bind_data->pattern = std::move(arguments[2]);
-
-	// the columns are packed in argument order, which is the order the conditions address them in
-	expression_map_t<idx_t> argument_index;
-	auto &column_pack = arguments[0]->Cast<BoundFunctionExpression>();
-	for (idx_t i = 0; i < column_pack.GetChildren().size(); i++) {
-		argument_index[*column_pack.GetChildren()[i]] = i;
-	}
-
-	// the conditions are only packed so that they get bound; they are evaluated by the matcher
-	unordered_set<idx_t> navigation_fields;
-	for (auto &navigation : ListValue::GetChildren(arguments[6]->Cast<BoundConstantExpression>().GetValue())) {
-		auto &fields = StructValue::GetChildren(navigation);
-		MatchRecognizeFunctionData::Navigation spec;
-		spec.last = fields[0].GetValue<bool>();
-		spec.symbol = fields[1].IsNull() ? string() : fields[1].GetValue<string>();
-		spec.field = NumericCast<idx_t>(fields[2].GetValue<uint64_t>());
-		spec.offset = NumericCast<idx_t>(fields[3].GetValue<uint64_t>());
-		navigation_fields.insert(spec.field);
-		bind_data->navigations.push_back(spec);
-	}
-
-	auto &condition_pack = arguments[1]->Cast<BoundFunctionExpression>();
-	for (auto &condition : condition_pack.GetChildrenMutable()) {
-		bool reads_match_number = false;
-		RebindToArguments(condition, argument_index, 0, reads_match_number);
-		bool reads_navigation = false;
-		ExpressionIterator::VisitExpression<BoundReferenceExpression>(
-		    *condition, [&](const BoundReferenceExpression &bound_ref) {
-			    reads_navigation = reads_navigation || navigation_fields.count(bound_ref.Index()) > 0;
-		    });
-		// Both kinds depend on the match being assembled, so both are settled per candidate row.
-		// Re-deciding them for a whole partition after every match would be quadratic.
-		bind_data->row_scoped.push_back(reads_navigation || reads_match_number);
-		bind_data->depends_on_match_number = bind_data->depends_on_match_number || reads_match_number;
-		bind_data->conditions.push_back(std::move(condition));
-	}
-	if (bind_data->conditions.size() != bind_data->symbols.size()) {
-		throw BinderException("MATCH_RECOGNIZE has a condition for every pattern symbol");
-	}
-
-	// the matcher compares symbols on every candidate row, so the leaves carry an index into
-	// symbols rather than the name itself
-	case_insensitive_map_t<idx_t> symbol_index;
-	for (idx_t i = 0; i < bind_data->symbols.size(); i++) {
-		symbol_index[bind_data->symbols[i]] = i;
-	}
-	ResolvePatternSymbols(bind_data->pattern, symbol_index);
-
-	auto &bound_function = input.GetBoundFunction();
-	bound_function.GetArguments().resize(1);
-	bound_function.SetReturnType(ResultType());
-
-	return std::move(bind_data);
+	// The MATCH_RECOGNIZE binder builds this function's configuration itself and hands it over as bind
+	// data, so nothing that reaches here came from a MATCH_RECOGNIZE clause.
+	throw BinderException("%s is how the MATCH_RECOGNIZE clause is planned rather than a function to call, so it "
+	                      "cannot be used directly",
+	                      MatchRecognizeFun::Name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -503,16 +355,16 @@ void WindowMatchRecognizeExecutor::Sink(ExecutionContext &context, DataChunk &si
 		return;
 	}
 
+	// the conditions read the columns the window is handed, in the order it was handed them
 	const auto count = sink_chunk.size();
-	auto &columns = StructVector::GetEntries(sink_chunk.data[gstate.executor.child_idx[0]]);
 	vector<LogicalType> column_types;
-	for (auto &column : columns) {
-		column_types.push_back(column.GetType());
+	for (auto column_idx : gstate.executor.child_idx) {
+		column_types.push_back(sink_chunk.data[column_idx].GetType());
 	}
 	DataChunk slice;
 	slice.InitializeEmpty(column_types);
-	for (idx_t col = 0; col < columns.size(); col++) {
-		slice.data[col].Reference(columns[col]);
+	for (idx_t col = 0; col < gstate.executor.child_idx.size(); col++) {
+		slice.data[col].Reference(sink_chunk.data[gstate.executor.child_idx[col]]);
 	}
 	slice.SetCardinalityUnsafe(count);
 
@@ -999,8 +851,7 @@ public:
 	RowConditions(ExecutionContext &context, WindowMatchRecognizeGlobalState &gstate,
 	              const MatchRecognizeFunctionData &config, const WindowCollection &collection)
 	    : context(context), gstate(gstate), config(config), collection(collection),
-	      columns_idx(gstate.executor.aux_idx.empty() ? 0 : gstate.executor.aux_idx[0]),
-	      executors(config.conditions.size()) {
+	      columns_idx(gstate.executor.aux_idx), executors(config.conditions.size()) {
 		for (auto &condition : config.conditions) {
 			conditions.push_back(condition->Copy());
 		}
@@ -1019,7 +870,8 @@ public:
 		}
 		// the collected column holds the constant the matcher rewrites per match, not the number
 		if (!field_plan.empty()) {
-			field_plan[MATCH_NUMBER_FIELD] = FieldPlan {FieldSource::MATCH_NUMBER, DConstants::INVALID_INDEX};
+			field_plan[MATCH_RECOGNIZE_MATCH_NUMBER_FIELD] =
+			    FieldPlan {FieldSource::MATCH_NUMBER, DConstants::INVALID_INDEX};
 		}
 		for (auto &condition : config.conditions) {
 			unordered_set<idx_t> seen;
@@ -1135,10 +987,9 @@ private:
 	};
 
 	void Initialize() {
-		auto &field_types = StructType::GetChildTypes(collection.GetTypes()[columns_idx]);
 		vector<LogicalType> types;
-		for (auto &field_type : field_types) {
-			types.push_back(field_type.second);
+		for (auto column_idx : columns_idx) {
+			types.push_back(collection.GetTypes()[column_idx]);
 		}
 		row_chunk.Initialize(context.client, types, 1);
 		// one expression is evaluated at a time here, so the result holds a single column
@@ -1157,6 +1008,7 @@ private:
 		for (idx_t i = 0; i < config.navigations.size(); i++) {
 			navigation_cursors.push_back(make_uniq<WindowCursor>(collection, columns_idx));
 		}
+		D_ASSERT(row_cursor->chunk.ColumnCount() == types.size());
 		ready = true;
 	}
 
@@ -1164,8 +1016,7 @@ private:
 	//! taken out of it here rather than referenced out of it.
 	static void CopyField(WindowCursor &cursor, idx_t field, idx_t row, Vector &target) {
 		const auto index = cursor.Seek(row);
-		auto &source = StructVector::GetEntries(cursor.chunk.data[0])[field];
-		VectorOperations::Copy(source, target, index + 1, index, 0);
+		VectorOperations::Copy(cursor.chunk.data[field], target, index + 1, index, 0);
 	}
 
 	//! The row FIRST()/LAST() navigates to, or an invalid index when the match has no such row
@@ -1193,7 +1044,8 @@ private:
 	WindowMatchRecognizeGlobalState &gstate;
 	const MatchRecognizeFunctionData &config;
 	const WindowCollection &collection;
-	idx_t columns_idx;
+	//! The collected columns the matcher reads, in the order the conditions address them
+	const vector<column_t> &columns_idx;
 	vector<unique_ptr<ExpressionExecutor>> executors;
 	vector<unique_ptr<Expression>> conditions;
 	vector<idx_t> navigation_symbols;
@@ -1348,25 +1200,19 @@ void WindowMatchRecognizeExecutor::GetData(ExecutionContext &context, DataChunk 
 }
 
 WindowFunction MatchRecognizeFun::GetFunction() {
-	// Everything after the columns is configuration that Bind() moves into the function data, so a
-	// bound call carries only the first argument. Declaring the rest optional keeps the signature
-	// resolvable both before and after that.
+	// The columns the conditions read are what this is called with; everything else about the match
+	// is configuration the MATCH_RECOGNIZE binder builds and hands over as bind data.
 	WindowFunction fun(Name, {LogicalType::ANY}, WindowMatchRecognizeExecutor::ResultType(),
 	                   ExpressionType::WINDOW_FUNCTION, WindowMatchRecognizeExecutor::Bind,
 	                   WindowMatchRecognizeExecutor::GetBounds, WindowMatchRecognizeExecutor::GetSharing,
 	                   WindowMatchRecognizeExecutor::GetGlobal, WindowMatchRecognizeExecutor::GetLocal,
 	                   WindowMatchRecognizeExecutor::Sink, WindowMatchRecognizeExecutor::Finalize,
 	                   WindowMatchRecognizeExecutor::GetData);
+	fun.SetVarArgs(LogicalType::ANY);
 
 	auto &signature = fun.GetSignature();
 	signature = FunctionSignature(vector<FunctionParameter>(), WindowMatchRecognizeExecutor::ResultType());
 	signature.AddParameter(Identifier("columns"), LogicalType::ANY);
-	signature.AddParameter(Identifier("conditions"), LogicalType::ANY, Value());
-	signature.AddParameter(Identifier("pattern"), LogicalType::ANY, Value());
-	signature.AddParameter(Identifier("symbols"), LogicalType::LIST(LogicalType::VARCHAR), Value());
-	signature.AddParameter(Identifier("after_match_variable"), LogicalType::VARCHAR, Value());
-	signature.AddParameter(Identifier("after_match"), LogicalType::UTINYINT, Value());
-	signature.AddParameter(Identifier("navigations"), LogicalType::ANY, Value());
 
 	fun.SetSerializeCallback(WindowMatchRecognizeExecutor::Serialize);
 	fun.SetDeserializeCallback(WindowMatchRecognizeExecutor::Deserialize);
