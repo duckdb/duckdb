@@ -45,4 +45,4 @@ Parser Error
 statement error
 SELECT * FROM (SELECT 1 AS a, 'x' AS b) t PIVOT (sum(a) FOR b IN (CAST(map() AS INTEGER)));
 ----
-Unimplemented type for cast
+Conversion Error: Unimplemented type for cast
