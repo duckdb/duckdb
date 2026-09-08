@@ -53,8 +53,10 @@ public:
 	//! (e.g. ProfilerPrintFormat::JSON()). ProfilerPrintFormat::Default() uses the configured default profiler format.
 	DUCKDB_API string GetProfilingInformation(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default());
 
-	//! Interrupt execution of the current query
+	//! Interrupts the current query. Async-signal-safe; does not wake a consumer waiting on a notify callback
 	DUCKDB_API void Interrupt();
+	//! Interrupts the current query and rings its notify callback. Never call it from a signal handler
+	DUCKDB_API void InterruptAndNotify();
 
 	//! Get query progress of current query
 	DUCKDB_API double GetQueryProgress();

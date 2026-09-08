@@ -20,10 +20,10 @@ namespace duckdb {
 //! available, producers parked waiting for the retention decision, execution finished or failed, or
 //! the query was interrupted.
 //!
-//! The callback runs on an engine thread, and inside a signal handler when the application
-//! interrupts from one, so it _must_ be tiny, _must not_ block, and _must never_ call back into
-//! DuckDB: participation takes this lock on every executor step, so a blocking callback deadlocks
-//! the connection.
+//! The callback runs on an engine thread or on the thread calling InterruptAndNotify, never inside
+//! a signal handler: Interrupt only sets a flag. It _must_ be tiny, _must not_ block, and _must
+//! never_ call back into DuckDB: participation takes this lock on every executor step, so a
+//! blocking callback deadlocks the connection.
 //!
 //! Notifications may collide or be merged, and carry no arguments. A receiver should always just
 //! call Poll or TryFetch, and keep calling while the answer is READY before waiting again.
@@ -47,17 +47,6 @@ public:
 		lock_guard<mutex> guard(lock);
 		Run();
 	}
-	//! Non-blocking notify for signal handlers (ClientContext::Interrupt). On contention the
-	//! notification is dropped: a contending Notify already wakes the consumer, and a contending
-	//! Clear means the result is going away
-	void TryNotify() {
-		if (!lock.try_lock()) {
-			return;
-		}
-		Run();
-		lock.unlock();
-	}
-
 	//! Mark the calling thread as the participating consumer until EndParticipation. Transitions it
 	//! causes are self-observed: it sees them in the call's return value
 	void BeginParticipation() {

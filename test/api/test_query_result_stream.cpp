@@ -251,7 +251,7 @@ TEST_CASE("An interrupt wakes a waiting consumer", "[api][query_result_stream]")
 	unique_ptr<DataChunk> chunk;
 	stream->TryFetch(chunk);
 	auto seen = channel.Count();
-	con.Interrupt();
+	con.InterruptAndNotify();
 	REQUIRE(channel.Wait(seen));
 
 	Deadline deadline;
@@ -260,6 +260,49 @@ TEST_CASE("An interrupt wakes a waiting consumer", "[api][query_result_stream]")
 		REQUIRE(!deadline.Passed());
 	}
 	REQUIRE(state == QueryResultState::ERROR);
+	REQUIRE(StringUtil::Contains(stream->GetError(), "INTERRUPT"));
+
+	con.context->ClearInterrupt();
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("Interrupt sets the flag without ringing the notify callback", "[api][query_result_stream]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// No worker threads: nothing runs, so only the interrupt itself could ring the callback
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+
+	NotifyChannel channel;
+	auto stream = OpenNotifyingStream(con, "SELECT i FROM range(1000000) t(i)", channel);
+	con.Interrupt();
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	REQUIRE(channel.Count() == 0);
+
+	unique_ptr<DataChunk> chunk;
+	REQUIRE(stream->TryFetch(chunk) == QueryResultState::ERROR);
+	REQUIRE(StringUtil::Contains(stream->GetError(), "INTERRUPT"));
+
+	con.context->ClearInterrupt();
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("InterruptAndNotify wakes a consumer waiting on an idle engine", "[api][query_result_stream]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// No worker threads: no task will reach an interrupt check, so only the interrupt itself can ring
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+
+	NotifyChannel channel;
+	auto stream = OpenNotifyingStream(con, "SELECT i FROM range(1000000) t(i)", channel);
+	auto seen = channel.Count();
+	std::thread interrupter([&con]() { con.InterruptAndNotify(); });
+	REQUIRE(channel.Wait(seen));
+	interrupter.join();
+
+	unique_ptr<DataChunk> chunk;
+	REQUIRE(stream->TryFetch(chunk) == QueryResultState::ERROR);
 	REQUIRE(StringUtil::Contains(stream->GetError(), "INTERRUPT"));
 
 	con.context->ClearInterrupt();

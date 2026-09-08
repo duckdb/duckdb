@@ -97,13 +97,10 @@ public:
 	atomic<ClientInterruptState> interrupt_state {ClientInterruptState::NOT_INTERRUPTED};
 	//! The deadline for the current query (milliseconds since epoch)
 	optional_idx query_deadline;
-	//! Notifier of the active result, rung by Interrupt (may be null). It has its own lock, because
-	//! Interrupt runs in signal handlers and must not take the context lock
+	//! Notifier of the active result, rung by InterruptAndNotify (may be null). It has its own lock:
+	//! the interrupting thread does not hold the context lock, the consumer does
 	mutex notifier_lock;
 	shared_ptr<QueryResultNotifier> active_result_notifier;
-	//! Whether the notifier slot is set. Lets Interrupt skip the try-lock entirely on connections
-	//! that never passed a notify callback
-	atomic<bool> has_result_notifier {false};
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
 	//! The logger to be used by this ClientContext
@@ -134,8 +131,12 @@ public:
 		return transaction.ActiveTransaction();
 	}
 
-	//! Interrupt execution of a query
+	//! Interrupts the running query. Async-signal-safe: sets a flag and nothing else, so a consumer waiting on a
+	//! notify callback is not woken
 	DUCKDB_API void Interrupt();
+	//! Interrupts the running query and rings its notify callback. Takes a lock and runs the callback, so never
+	//! call it from a signal handler
+	DUCKDB_API void InterruptAndNotify();
 	DUCKDB_API bool IsInterrupted() const;
 	DUCKDB_API void ClearInterrupt();
 	//! Suppress all further interrupts for the current query (called after irreversible operations like COMMIT)

@@ -346,7 +346,6 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	{
 		lock_guard<mutex> guard(notifier_lock);
 		active_result_notifier.reset();
-		has_result_notifier.store(false, std::memory_order_release);
 	}
 	if (active_query->executor) {
 		active_query->executor->CancelTasks();
@@ -694,7 +693,6 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 		result->notifier = notifier;
 		lock_guard<mutex> guard(notifier_lock);
 		active_result_notifier = std::move(notifier);
-		has_result_notifier.store(true, std::memory_order_release);
 	}
 	active_query->prepared = std::move(statement_data_p);
 	active_query->SetOpenResult(*result);
@@ -812,7 +810,6 @@ void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	// Also covers a notifier set by a query whose creation failed before it could run
 	lock_guard<mutex> guard(notifier_lock);
 	active_result_notifier.reset();
-	has_result_notifier.store(false, std::memory_order_release);
 }
 
 StatementIterator ClientContext::IterateStatements(const string &query) {
@@ -1370,15 +1367,18 @@ unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, u
 void ClientContext::Interrupt() {
 	ClientInterruptState expected = ClientInterruptState::NOT_INTERRUPTED;
 	interrupt_state.compare_exchange_strong(expected, ClientInterruptState::INTERRUPTED);
-	// Wake a waiting consumer. Interrupt runs in signal handlers (the shell's Ctrl-C), so it must
-	// never block, allocate or free: it only tries the lock, and notifies through the raw pointer
-	// while holding it, so no shared_ptr is copied and no destructor can run here. On a contended
-	// lock the notification is skipped: the query is being registered or torn down
-	if (has_result_notifier.load(std::memory_order_acquire) && notifier_lock.try_lock()) {
-		if (active_result_notifier) {
-			active_result_notifier->TryNotify();
-		}
-		notifier_lock.unlock();
+}
+
+void ClientContext::InterruptAndNotify() {
+	// The flag is set before the ring, so the woken consumer's next call observes it
+	Interrupt();
+	shared_ptr<QueryResultNotifier> notifier;
+	{
+		lock_guard<mutex> guard(notifier_lock);
+		notifier = active_result_notifier;
+	}
+	if (notifier) {
+		notifier->Notify();
 	}
 }
 

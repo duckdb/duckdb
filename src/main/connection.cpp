@@ -55,6 +55,10 @@ void Connection::Interrupt() {
 	context->Interrupt();
 }
 
+void Connection::InterruptAndNotify() {
+	context->InterruptAndNotify();
+}
+
 double Connection::GetQueryProgress() {
 	return context->GetQueryProgress().GetPercentage();
 }
