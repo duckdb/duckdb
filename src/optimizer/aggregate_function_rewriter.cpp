@@ -1,6 +1,5 @@
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -92,21 +91,17 @@ public:
 
 	unique_ptr<Expression> Rewrite(unique_ptr<Expression> &expr, vector<reference<Expression>> &bindings,
 	                               vector<unique_ptr<Expression>> &additional_expressions) override {
-		auto &catalog = Catalog::GetSystemCatalog(optimizer.context);
 		FunctionBinder function_binder(optimizer.context);
 
 		// Move the child out of AVG(x)
 		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().GetChildrenMutable()[0]);
 
 		// Replace AVG(x) with SUM(x)
-		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
-		    optimizer.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "sum"));
-		const auto &sum_fun =
-		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
+		auto sum_fun = GetBuiltinAggregateFunction(optimizer.context, "sum", {avg_child->GetReturnType()});
 		vector<unique_ptr<Expression>> args;
 		args.push_back(std::move(avg_child));
 		auto count_arg = args.back()->Copy();
-		expr = function_binder.BindAggregateFunction(sum_fun, std::move(args));
+		expr = function_binder.BindAggregateFunction(std::move(sum_fun), std::move(args));
 
 		return count_arg;
 	}

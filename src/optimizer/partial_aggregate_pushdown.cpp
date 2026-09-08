@@ -1,7 +1,5 @@
 #include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -558,20 +556,16 @@ struct DoubleEagerSide {
 
 static unique_ptr<BoundAggregateExpression> DEBindAggregate(ClientContext &context, const string &name,
                                                             vector<unique_ptr<Expression>> children) {
-	auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
-	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(name)));
 	vector<LogicalType> types;
 	for (auto &child : children) {
 		types.push_back(child->GetReturnType());
 	}
-	ErrorData error;
-	FunctionBinder function_binder(context);
-	auto best = function_binder.BindFunction(entry.name, entry.functions, types, error);
-	if (!best.IsValid()) {
+	auto func = TryGetBuiltinAggregateFunction(context, Identifier(name), types);
+	if (!func) {
 		return nullptr;
 	}
-	auto &func = entry.functions.GetFunctionByOffset(best.GetIndex());
-	return function_binder.BindAggregateFunction(func, std::move(children));
+	FunctionBinder function_binder(context);
+	return function_binder.BindAggregateFunction(std::move(func), std::move(children));
 }
 
 static unique_ptr<BoundAggregateExpression> DEBindCombineAggr(ClientContext &context,
