@@ -60,7 +60,14 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                 members = {member.name: member for member in archive.getmembers()}
                 self.assertEqual(
                     set(members),
-                    {"libduckdb.so", "libduckdb.so.1", "duckdb.h", "duckdb_extension.h"},
+                    {
+                        "libduckdb.so",
+                        "libduckdb.so.1",
+                        "duckdb.h",
+                        "duckdb_v2.h",
+                        "duckdb_extension.h",
+                        "duckdb_extension_v2.h",
+                    },
                 )
                 self.assertTrue(members["libduckdb.so"].issym())
                 self.assertEqual(members["libduckdb.so"].linkname, "libduckdb.so.1")

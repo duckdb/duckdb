@@ -17,6 +17,7 @@ const double PI = 3.141592653589793;
 
 const transaction_t SYSTEM_TRANSACTION_TIMESTAMP = 1;
 const transaction_t TRANSACTION_ID_START = 4611686018427388000ULL;                // 2^62
+const transaction_t MAX_COMMIT_ID = TRANSACTION_ID_START - 1;                     // 2^62 - 1
 const transaction_t MAX_TRANSACTION_ID = NumericLimits<transaction_t>::Maximum(); // 2^63
 const transaction_t NOT_DELETED_ID = NumericLimits<transaction_t>::Maximum() - 1; // 2^64 - 1
 const transaction_t MAXIMUM_QUERY_ID = NumericLimits<transaction_t>::Maximum();   // 2^64

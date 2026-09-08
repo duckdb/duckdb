@@ -58,29 +58,28 @@ struct UpdateInfo {
 		return reinterpret_cast<T *>(GetValues());
 	}
 
-	bool AppliesToTransaction(transaction_t start_time, transaction_t transaction_id) {
+	bool AppliesToTransaction(const SnapshotView &view) {
 		// these tuples are either committed outside this transaction's snapshot or not committed yet, use
 		// tuples stored in this version
-		if (version_number == TRANSACTION_ID_START - 1) {
+		if (version_number == MAX_COMMIT_ID) {
 			// dummy transaction number for the root element - should always match
 			return true;
 		}
-		return !VisibleToSnapshot(version_number, start_time) && version_number != transaction_id;
+		return !view.Sees(version_number.load());
 	}
 
 	//! Loop over the update chain and execute the specified callback on all UpdateInfo's that are relevant for that
 	//! transaction in-order of newest to oldest
 	template <class T>
-	static void UpdatesForTransaction(UpdateInfo &current, transaction_t start_time, transaction_t transaction_id,
-	                                  T &&callback) {
-		if (current.AppliesToTransaction(start_time, transaction_id)) {
+	static void UpdatesForTransaction(UpdateInfo &current, const SnapshotView &view, T &&callback) {
+		if (current.AppliesToTransaction(view)) {
 			callback(current);
 		}
 		auto update_ptr = current.next;
 		while (update_ptr.IsSet()) {
 			auto pin = update_ptr.Pin();
 			auto &info = Get(pin);
-			if (info.AppliesToTransaction(start_time, transaction_id)) {
+			if (info.AppliesToTransaction(view)) {
 				callback(info);
 			}
 			update_ptr = info.next;

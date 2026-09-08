@@ -1,4 +1,5 @@
 #include "duckdb/common/csv_writer.hpp"
+#include "duckdb/common/serializer/async_file_writer.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
@@ -73,6 +74,16 @@ CSVWriter::CSVWriter(WriteStream &stream, vector<Identifier> name_list, bool sha
 	}
 }
 
+CSVWriter::CSVWriter(CSVReaderOptions &options_p, AsyncFileWriter &file_writer_p, bool shared)
+    : options(options_p), writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
+                                         options.dialect_options.state_machine_options.quote.GetValue(),
+                                         options.write_newline, GetWriteCommentChar(options)),
+      async_file_writer(file_writer_p), write_stream(file_writer_p), should_initialize(true), shared(shared) {
+	if (!shared) {
+		global_write_state = make_uniq<CSVWriterState>();
+	}
+}
+
 CSVWriter::CSVWriter(CSVReaderOptions &options_p, FileSystem &fs, const string &file_path,
                      FileCompressionType compression, QueryContext context, bool shared)
     : options(options_p), writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
@@ -87,6 +98,8 @@ CSVWriter::CSVWriter(CSVReaderOptions &options_p, FileSystem &fs, const string &
 		global_write_state = make_uniq<CSVWriterState>();
 	}
 }
+
+CSVWriter::~CSVWriter() = default;
 
 void CSVWriter::Initialize(bool force) {
 	if (!force && !should_initialize) {
@@ -149,15 +162,21 @@ void CSVWriter::Flush(CSVWriterState &local_state) {
 	if (shared) {
 		lock_guard<mutex> flock(lock);
 		FlushInternal(local_state);
+		if (async_file_writer) {
+			async_file_writer->ApplyBackpressure();
+		}
 	} else {
 		FlushInternal(local_state);
+		if (async_file_writer) {
+			async_file_writer->ApplyBackpressure();
+		}
 	}
 }
 
 void CSVWriter::Flush() {
 	// Method intended for non-shared use only
 	D_ASSERT(!shared);
-	FlushInternal(*global_write_state);
+	Flush(*global_write_state);
 }
 
 void CSVWriter::Reset(optional_ptr<CSVWriterState> local_state) {
@@ -189,6 +208,7 @@ void CSVWriter::FlushInternal(CSVWriterState &local_state) {
 
 	if (written_anything && writer_options.newline_writing_mode == CSVNewLineMode::WRITE_BEFORE) {
 		write_stream.WriteData(const_data_ptr_cast(writer_options.newline.c_str()), writer_options.newline.size());
+		bytes_written += writer_options.newline.size();
 	}
 
 	written_anything = true;
@@ -225,7 +245,13 @@ static idx_t GetFileSize(unique_ptr<BufferedFileWriter> &file_writer, idx_t &byt
 idx_t CSVWriter::FileSize() {
 	if (shared) {
 		lock_guard<mutex> flock(lock);
+		if (async_file_writer) {
+			return async_file_writer->GetPhysicalFileSize();
+		}
 		return GetFileSize(file_writer, bytes_written);
+	}
+	if (async_file_writer) {
+		return async_file_writer->GetPhysicalFileSize();
 	}
 	return GetFileSize(file_writer, bytes_written);
 }

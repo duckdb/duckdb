@@ -59,6 +59,12 @@ explain SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELE
 ----
 logical_opt	<REGEX>:.*Groups: ps_suppkey, ps_partkey.*Join Type: SEMI.*l_partkey = ps_partkey.*l_suppkey = ps_suppkey.*(DELIM_GET|CTE_SCAN).*
 
+# Eliminating the generated domain join must not leave tautological filters on the lineitem scan
+query II
+explain SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELECT ps_suppkey FROM partsupp WHERE ps_partkey IN ( SELECT p_partkey FROM part WHERE p_name LIKE 'forest%') AND ps_availqty > ( SELECT 0.5 * sum(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date))) AND s_nationkey = n_nationkey AND n_name = 'CANADA' ORDER BY s_name;
+----
+logical_opt	<!REGEX>:.*(l_partkey IS NOT DISTINCT FROM l_partkey|l_suppkey IS NOT DISTINCT FROM l_suppkey).*
+
 # Reduced SQLStorm 6064: a pair-dependent predicate below a reused window CTE remains in the
 # normal decorrelation pipeline and exposes both join keys to the optimizer. MARK is retained
 # when column liveness cannot prove that conversion to SEMI is safe.
@@ -250,6 +256,544 @@ query II
 EXPLAIN SELECT x FROM range(1000000) o(x) WHERE x < 10000 AND EXISTS (SELECT 1 FROM range(10000000) l(y) WHERE y = x AND y > 0);
 ----
 logical_opt	<REGEX>:.*Join Type: RIGHT_SEMI.*x = x.*
+
+# All evidence sides in a complex marker filter should retain the selected outer domain
+statement ok
+CREATE TABLE outer_fact(id BIGINT, dim_id BIGINT, payload BIGINT);
+
+statement ok
+CREATE TABLE selected_dim(id BIGINT, selected BOOLEAN);
+
+statement ok
+CREATE TABLE evidence_a(id BIGINT);
+
+statement ok
+CREATE TABLE evidence_b(id BIGINT);
+
+statement ok
+CREATE TABLE evidence_c(id BIGINT);
+
+statement ok
+CREATE TABLE evidence_d(id BIGINT);
+
+statement ok
+CREATE TABLE evidence_a_flag(id BIGINT, selected BOOLEAN);
+
+statement ok
+CREATE TABLE evidence_b_flag(id BIGINT, selected BOOLEAN);
+
+statement ok
+CREATE TABLE evidence_c_flag(id BIGINT, selected BOOLEAN);
+
+statement ok
+INSERT INTO outer_fact VALUES (1, 10, 100), (2, 10, 200), (3, 20, 300), (4, 10, NULL), (NULL, 10, 400);
+
+statement ok
+INSERT INTO selected_dim VALUES (10, true), (20, false);
+
+statement ok
+INSERT INTO evidence_a VALUES (1), (1), (2), (3), (NULL);
+
+statement ok
+INSERT INTO evidence_b VALUES (2), (4), (NULL);
+
+statement ok
+INSERT INTO evidence_c VALUES (1), (1), (4);
+
+statement ok
+INSERT INTO evidence_d VALUES (4);
+
+statement ok
+INSERT INTO evidence_a_flag SELECT id, true FROM evidence_a;
+
+statement ok
+INSERT INTO evidence_b_flag SELECT id, true FROM evidence_b;
+
+statement ok
+INSERT INTO evidence_c_flag SELECT id, true FROM evidence_c;
+
+query II
+EXPLAIN SELECT count(*), sum(payload) FROM outer_fact o, selected_dim d WHERE o.dim_id = d.id AND d.selected AND EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND (EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) OR EXISTS (SELECT 1 FROM evidence_c c WHERE c.id = o.id));
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: SEMI.*Join Type: SEMI.*Join Type: SEMI.*
+
+query II
+SELECT count(*), sum(payload) FROM outer_fact o, selected_dim d WHERE o.dim_id = d.id AND d.selected AND EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND (EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) OR EXISTS (SELECT 1 FROM evidence_c c WHERE c.id = o.id));
+----
+2	300
+
+# Evidence-side filters do not select the outer delimiter domain
+query II
+EXPLAIN SELECT count(*), sum(payload) FROM outer_fact o WHERE EXISTS (SELECT 1 FROM evidence_a_flag a WHERE a.id = o.id AND a.selected) AND (EXISTS (SELECT 1 FROM evidence_b_flag b WHERE b.id = o.id AND b.selected) OR EXISTS (SELECT 1 FROM evidence_c_flag c WHERE c.id = o.id AND c.selected));
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query II
+SELECT count(*), sum(payload) FROM outer_fact o WHERE EXISTS (SELECT 1 FROM evidence_a_flag a WHERE a.id = o.id AND a.selected) AND (EXISTS (SELECT 1 FROM evidence_b_flag b WHERE b.id = o.id AND b.selected) OR EXISTS (SELECT 1 FROM evidence_c_flag c WHERE c.id = o.id AND c.selected));
+----
+2	300
+
+# Filters on an unrelated nullable join side do not select the delimiter domain
+query II
+EXPLAIN SELECT count(*), sum(payload) FROM outer_fact o LEFT JOIN (SELECT * FROM selected_dim WHERE selected) d ON d.id = o.dim_id WHERE EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND (EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) OR EXISTS (SELECT 1 FROM evidence_c c WHERE c.id = o.id));
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query II
+EXPLAIN SELECT count(*), sum(payload) FROM (SELECT * FROM selected_dim WHERE selected) d RIGHT JOIN outer_fact o ON d.id = o.dim_id WHERE EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND (EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) OR EXISTS (SELECT 1 FROM evidence_c c WHERE c.id = o.id));
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query II
+SELECT count(*), sum(payload) FROM outer_fact o LEFT JOIN (SELECT * FROM selected_dim WHERE selected) d ON d.id = o.dim_id WHERE EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND (EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) OR EXISTS (SELECT 1 FROM evidence_c c WHERE c.id = o.id));
+----
+2	300
+
+# Grouping preserves the lineage of a delimiter key from the preserved join side
+query II
+EXPLAIN SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM range(10000000) b(x) WHERE b.x = q.key) OR EXISTS (SELECT 1 FROM range(10000000) c(x) WHERE c.x = q.key)) FROM (SELECT o.k AS key, count(*) n FROM range(1000000) o(k) LEFT JOIN (SELECT * FROM range(10000000) d(y) WHERE y < 10) d ON d.y = o.k GROUP BY o.k) q;
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query I
+SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM range(2) b(x) WHERE b.x = q.key) OR EXISTS (SELECT 1 FROM range(2, 3) c(x) WHERE c.x = q.key)) FROM (SELECT o.k AS key, count(*) n FROM range(6) o(k) LEFT JOIN (SELECT * FROM range(6) d(y) WHERE y < 3) d ON d.y = o.k GROUP BY o.k) q;
+----
+3
+
+# A selected nullable side remains relevant when it supplies a projected delimiter key
+query II
+EXPLAIN SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM range(10000000) b(x) WHERE b.x = q.key) OR EXISTS (SELECT 1 FROM range(10000000) c(x) WHERE c.x = q.key)) FROM (SELECT o.k, d.y AS key FROM range(1000000) o(k) LEFT JOIN (SELECT * FROM range(10000000) d(y) WHERE y < 10) d ON d.y = o.k) q;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: SEMI.*Join Type: SEMI.*
+
+query I
+SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM range(2) b(x) WHERE b.x = q.key) OR EXISTS (SELECT 1 FROM range(2, 3) c(x) WHERE c.x = q.key)) FROM (SELECT o.k, d.y AS key FROM range(6) o(k) LEFT JOIN (SELECT * FROM range(6) d(y) WHERE y < 3) d ON d.y = o.k) q;
+----
+3
+
+# A scalar subquery side is relevant only when it supplies the delimiter key
+query II
+EXPLAIN SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM range(10000000) b(x) WHERE b.x = q.k) OR EXISTS (SELECT 1 FROM range(10000000) c(x) WHERE c.x = q.k)) FROM (SELECT o.k, (SELECT e.x FROM range(10000000) e(x) WHERE e.x = o.k AND e.x < 10) v FROM range(1000000) o(k)) q;
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query II
+EXPLAIN SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM range(10000000) b(x) WHERE b.x = q.v) OR EXISTS (SELECT 1 FROM range(10000000) c(x) WHERE c.x = q.v)) FROM (SELECT o.k, (SELECT e.x FROM range(10000000) e(x) WHERE e.x = o.k AND e.x < 10) v FROM range(1000000) o(k)) q;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: SEMI.*Join Type: SEMI.*
+
+query I
+SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM range(2) b(x) WHERE b.x = q.v) OR EXISTS (SELECT 1 FROM range(2, 3) c(x) WHERE c.x = q.v)) FROM (SELECT o.k, (SELECT e.x FROM range(6) e(x) WHERE e.x = o.k AND e.x < 3) v FROM range(6) o(k)) q;
+----
+3
+
+# Local correlation inside an evidence subtree does not add an outer delimiter key
+query II
+EXPLAIN SELECT count(*), sum(payload) FROM outer_fact o WHERE EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id AND EXISTS (SELECT 1 FROM evidence_c c WHERE c.id = a.id)) AND NOT EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id);
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query II
+SELECT count(*), sum(payload) FROM outer_fact o WHERE EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id AND EXISTS (SELECT 1 FROM evidence_c c WHERE c.id = a.id)) AND NOT EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id);
+----
+1	100
+
+# Local correlation on an unrelated nullable side does not add an outer delimiter key
+query II
+EXPLAIN SELECT count(*) FROM range(1000000) o(k) LEFT JOIN (SELECT * FROM range(10000000) d(y) WHERE EXISTS (SELECT 1 FROM range(10000000) e(g) WHERE e.g = d.y)) d ON d.y = o.k WHERE o.k < 10 AND EXISTS (SELECT 1 FROM range(10000000) a(x) WHERE a.x = o.k) AND NOT EXISTS (SELECT 1 FROM range(10000000) b(x) WHERE b.x = o.k) AND NOT EXISTS (SELECT 1 FROM range(10000000) c(x) WHERE c.x = o.k);
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query I
+SELECT count(*) FROM range(6) o(k) LEFT JOIN (SELECT * FROM range(6) d(y) WHERE EXISTS (SELECT 1 FROM range(6) e(g) WHERE e.g = d.y)) d ON d.y = o.k WHERE o.k < 4 AND EXISTS (SELECT 1 FROM range(6) a(x) WHERE a.x = o.k) AND NOT EXISTS (SELECT 1 FROM range(1) b(x) WHERE b.x = o.k) AND NOT EXISTS (SELECT 1 FROM range(2, 3) c(x) WHERE c.x = o.k);
+----
+2
+
+# Same-key nested evidence joins can use the ordinary SEMI/ANTI rewrite
+query II
+EXPLAIN SELECT count(*), sum(payload) FROM outer_fact o, selected_dim d WHERE o.dim_id = d.id AND d.selected AND EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND NOT EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) AND NOT EXISTS (SELECT 1 FROM evidence_d e WHERE e.id = o.id);
+----
+logical_opt	<REGEX>:.*Join Type: RIGHT_ANTI.*Join Type: ANTI.*Join Type: SEMI.*
+
+query II
+EXPLAIN SELECT count(*), sum(payload) FROM outer_fact o, selected_dim d WHERE o.dim_id = d.id AND d.selected AND EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND NOT EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) AND NOT EXISTS (SELECT 1 FROM evidence_d e WHERE e.id = o.id);
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query II
+SELECT count(*), sum(payload) FROM outer_fact o, selected_dim d WHERE o.dim_id = d.id AND d.selected AND EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND NOT EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) AND NOT EXISTS (SELECT 1 FROM evidence_d e WHERE e.id = o.id);
+----
+1	100
+
+# Aggregate FILTER and projection expressions consume marker domains outside LogicalFilter.
+query II
+EXPLAIN SELECT count(*) FILTER (WHERE
+	EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x)
+	OR EXISTS (SELECT 1 FROM range(1000000000) b(z) WHERE z = o.x)
+)
+FROM range(1000000) o(x)
+WHERE x < 10;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: SEMI.*Join Type: SEMI.*
+
+query II
+EXPLAIN SELECT x,
+	EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x)
+	OR EXISTS (SELECT 1 FROM range(1000000000) b(z) WHERE z = o.x)
+FROM range(1000000) o(x)
+WHERE x < 10;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: SEMI.*Join Type: SEMI.*
+
+# A projected marker cannot use the simple filter conversion to SEMI or ANTI.
+query II
+EXPLAIN SELECT x, EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x)
+FROM range(1000000) o(x)
+WHERE x < 10;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: SEMI.*
+
+query II
+EXPLAIN SELECT x, NOT EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x)
+FROM range(1000000) o(x)
+WHERE x < 10;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: SEMI.*
+
+# A projected marker with multiple equality keys cannot use a single-key delimiter domain
+query II
+EXPLAIN SELECT x, z,
+	EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10;
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query II
+EXPLAIN SELECT x, z,
+	EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10;
+----
+logical_opt	<REGEX>:.*Join Type: MARK.*
+
+query III
+SELECT x, z,
+	EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z)
+FROM range(2) o(x), range(2) p(z)
+ORDER BY x, z;
+----
+0	0	true
+0	1	false
+1	0	false
+1	1	true
+
+# Complex marker expressions preserve only the marker domains they reference
+query II
+EXPLAIN SELECT x, z,
+	EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z),
+	EXISTS (SELECT 1 FROM range(1000000000) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(1000000000) c(y) WHERE y = o.x)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Join Type: RIGHT_SEMI.*
+
+query II
+EXPLAIN SELECT x, z,
+	EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z),
+	EXISTS (SELECT 1 FROM range(1000000000) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(1000000000) c(y) WHERE y = o.x)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10;
+----
+logical_opt	<!REGEX>:.*Join Type: RIGHT_SEMI.*Conditions: x = y,.*z = y.*
+
+# Simple filter markers remain subject to the single-equality guard
+query II
+EXPLAIN SELECT count(*)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10
+	AND EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z)
+	AND (
+		EXISTS (SELECT 1 FROM range(1000000000) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(1000000000) c(y) WHERE y = o.x)
+	);
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Join Type: RIGHT_SEMI.*
+
+query II
+EXPLAIN SELECT count(*)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10
+	AND EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z)
+	AND (
+		EXISTS (SELECT 1 FROM range(1000000000) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(1000000000) c(y) WHERE y = o.x)
+	);
+----
+logical_opt	<!REGEX>:.*Join Type: RIGHT_SEMI.*Conditions: x = y,.*z = y.*
+
+query I
+SELECT count(*)
+FROM range(2) o(x), range(2) p(z)
+WHERE EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z)
+	AND (
+		EXISTS (SELECT 1 FROM range(1) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(2, 3) c(y) WHERE y = o.x)
+	);
+----
+1
+
+# Marker provenance is preserved through projection aliases
+query II
+EXPLAIN SELECT x, z,
+	coalesce(EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z), false)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Conditions: x = y,.*z = y.*
+
+query II
+EXPLAIN SELECT x, z, coalesce(m, false)
+FROM (
+	SELECT x, z, EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z) AS m
+	FROM range(1000000) o(x), range(1000000) p(z)
+	WHERE x < 10 AND z < 10
+) q;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Conditions: x = y,.*z = y.*
+
+query II
+EXPLAIN SELECT x, z, coalesce(m2, false)
+FROM (
+	SELECT x, z, m AS m2
+	FROM (
+		SELECT x, z, EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z) AS m
+		FROM range(1000000) o(x), range(1000000) p(z)
+		WHERE x < 10 AND z < 10
+	) q1
+) q2;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Conditions: x = y,.*z = y.*
+
+# A simple aliased marker with multiple equality keys stays on the ordinary MARK path
+query II
+EXPLAIN SELECT x, z, m
+FROM (
+	SELECT x, z, EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z) AS m
+	FROM range(1000000) o(x), range(1000000) p(z)
+	WHERE x < 10 AND z < 10
+) q;
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query IIII
+SELECT x, z,
+	EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z),
+	EXISTS (SELECT 1 FROM range(1) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(2, 3) c(y) WHERE y = o.x)
+FROM range(2) o(x), range(2) p(z)
+ORDER BY x, z;
+----
+0	0	true	true
+0	1	false	true
+1	0	false	false
+1	1	true	false
+
+query III
+SELECT x, z, coalesce(m, false)
+FROM (
+	SELECT x, z, EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z) AS m
+	FROM range(2) o(x), range(2) p(z)
+) q
+ORDER BY x, z;
+----
+0	0	true
+0	1	false
+1	0	false
+1	1	true
+
+query I
+SELECT count(*) FILTER (WHERE
+	EXISTS (SELECT 1 FROM range(3) a(y) WHERE y = o.x)
+	OR EXISTS (SELECT 1 FROM range(3, 5) b(z) WHERE z = o.x)
+)
+FROM range(6) o(x)
+WHERE x < 5;
+----
+5
+
+query II
+SELECT x,
+	EXISTS (SELECT 1 FROM range(3) a(y) WHERE y = o.x)
+	OR EXISTS (SELECT 1 FROM range(3, 5) b(z) WHERE z = o.x)
+FROM range(6) o(x)
+WHERE x < 5
+ORDER BY x;
+----
+0	true
+1	true
+2	true
+3	true
+4	true
+
+# A nested single-key NOT EXISTS should retain its selected domain
+statement ok
+CREATE TABLE selected_orders(order_id BIGINT, warehouse BIGINT, dim_id BIGINT, cost BIGINT);
+
+statement ok
+CREATE TABLE other_sales(order_id BIGINT, warehouse BIGINT);
+
+statement ok
+CREATE TABLE returned_orders(order_id BIGINT);
+
+statement ok
+INSERT INTO selected_orders VALUES (1, 1, 10, 100), (1, 2, 10, 150), (2, 1, 10, 200), (3, 1, 20, 300), (4, NULL, 10, 400), (NULL, 1, 10, 500);
+
+statement ok
+INSERT INTO other_sales VALUES (1, 1), (1, 2), (2, 2), (4, 2), (NULL, 2);
+
+statement ok
+INSERT INTO returned_orders VALUES (2), (2), (NULL);
+
+query II
+EXPLAIN SELECT count(DISTINCT order_id), sum(cost) FROM selected_orders o, selected_dim d WHERE o.dim_id = d.id AND d.selected AND EXISTS (SELECT 1 FROM other_sales s WHERE s.order_id = o.order_id AND s.warehouse <> o.warehouse) AND NOT EXISTS (SELECT 1 FROM returned_orders r WHERE r.order_id = o.order_id);
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: MARK.*Join Type: SEMI.*order_id = order_id.*
+
+query II
+SELECT count(DISTINCT order_id), sum(cost) FROM selected_orders o, selected_dim d WHERE o.dim_id = d.id AND d.selected AND EXISTS (SELECT 1 FROM other_sales s WHERE s.order_id = o.order_id AND s.warehouse <> o.warehouse) AND NOT EXISTS (SELECT 1 FROM returned_orders r WHERE r.order_id = o.order_id);
+----
+1	250
+
+statement ok
+SET disabled_optimizers='deliminator';
+
+query III
+SELECT x, z,
+	EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z)
+FROM range(2) o(x), range(2) p(z)
+ORDER BY x, z;
+----
+0	0	true
+0	1	false
+1	0	false
+1	1	true
+
+query IIII
+SELECT x, z,
+	EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z),
+	EXISTS (SELECT 1 FROM range(1) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(2, 3) c(y) WHERE y = o.x)
+FROM range(2) o(x), range(2) p(z)
+ORDER BY x, z;
+----
+0	0	true	true
+0	1	false	true
+1	0	false	false
+1	1	true	false
+
+query I
+SELECT count(*)
+FROM range(2) o(x), range(2) p(z)
+WHERE EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z)
+	AND (
+		EXISTS (SELECT 1 FROM range(1) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(2, 3) c(y) WHERE y = o.x)
+	);
+----
+1
+
+query III
+SELECT x, z, coalesce(m, false)
+FROM (
+	SELECT x, z, EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z) AS m
+	FROM range(2) o(x), range(2) p(z)
+) q
+ORDER BY x, z;
+----
+0	0	true
+0	1	false
+1	0	false
+1	1	true
+
+query I
+SELECT count(*) FILTER (WHERE
+	EXISTS (SELECT 1 FROM range(3) a(y) WHERE y = o.x)
+	OR EXISTS (SELECT 1 FROM range(3, 5) b(z) WHERE z = o.x)
+)
+FROM range(6) o(x)
+WHERE x < 5;
+----
+5
+
+query II
+SELECT x,
+	EXISTS (SELECT 1 FROM range(3) a(y) WHERE y = o.x)
+	OR EXISTS (SELECT 1 FROM range(3, 5) b(z) WHERE z = o.x)
+FROM range(6) o(x)
+WHERE x < 5
+ORDER BY x;
+----
+0	true
+1	true
+2	true
+3	true
+4	true
+
+query II
+SELECT count(*), sum(payload) FROM outer_fact o, selected_dim d WHERE o.dim_id = d.id AND d.selected AND EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND (EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) OR EXISTS (SELECT 1 FROM evidence_c c WHERE c.id = o.id));
+----
+2	300
+
+query II
+SELECT count(*), sum(payload) FROM outer_fact o WHERE EXISTS (SELECT 1 FROM evidence_a_flag a WHERE a.id = o.id AND a.selected) AND (EXISTS (SELECT 1 FROM evidence_b_flag b WHERE b.id = o.id AND b.selected) OR EXISTS (SELECT 1 FROM evidence_c_flag c WHERE c.id = o.id AND c.selected));
+----
+2	300
+
+query II
+SELECT count(*), sum(payload) FROM outer_fact o LEFT JOIN (SELECT * FROM selected_dim WHERE selected) d ON d.id = o.dim_id WHERE EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND (EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) OR EXISTS (SELECT 1 FROM evidence_c c WHERE c.id = o.id));
+----
+2	300
+
+query I
+SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM range(2) b(x) WHERE b.x = q.key) OR EXISTS (SELECT 1 FROM range(2, 3) c(x) WHERE c.x = q.key)) FROM (SELECT o.k AS key, count(*) n FROM range(6) o(k) LEFT JOIN (SELECT * FROM range(6) d(y) WHERE y < 3) d ON d.y = o.k GROUP BY o.k) q;
+----
+3
+
+query I
+SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM range(2) b(x) WHERE b.x = q.key) OR EXISTS (SELECT 1 FROM range(2, 3) c(x) WHERE c.x = q.key)) FROM (SELECT o.k, d.y AS key FROM range(6) o(k) LEFT JOIN (SELECT * FROM range(6) d(y) WHERE y < 3) d ON d.y = o.k) q;
+----
+3
+
+query I
+SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM range(2) b(x) WHERE b.x = q.v) OR EXISTS (SELECT 1 FROM range(2, 3) c(x) WHERE c.x = q.v)) FROM (SELECT o.k, (SELECT e.x FROM range(6) e(x) WHERE e.x = o.k AND e.x < 3) v FROM range(6) o(k)) q;
+----
+3
+
+query II
+SELECT count(*), sum(payload) FROM outer_fact o WHERE EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id AND EXISTS (SELECT 1 FROM evidence_c c WHERE c.id = a.id)) AND NOT EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id);
+----
+1	100
+
+query I
+SELECT count(*) FROM range(6) o(k) LEFT JOIN (SELECT * FROM range(6) d(y) WHERE EXISTS (SELECT 1 FROM range(6) e(g) WHERE e.g = d.y)) d ON d.y = o.k WHERE o.k < 4 AND EXISTS (SELECT 1 FROM range(6) a(x) WHERE a.x = o.k) AND NOT EXISTS (SELECT 1 FROM range(1) b(x) WHERE b.x = o.k) AND NOT EXISTS (SELECT 1 FROM range(2, 3) c(x) WHERE c.x = o.k);
+----
+2
+
+query II
+SELECT count(*), sum(payload) FROM outer_fact o, selected_dim d WHERE o.dim_id = d.id AND d.selected AND EXISTS (SELECT 1 FROM evidence_a a WHERE a.id = o.id) AND NOT EXISTS (SELECT 1 FROM evidence_b b WHERE b.id = o.id) AND NOT EXISTS (SELECT 1 FROM evidence_d e WHERE e.id = o.id);
+----
+1	100
+
+query II
+SELECT count(DISTINCT order_id), sum(cost) FROM selected_orders o, selected_dim d WHERE o.dim_id = d.id AND d.selected AND EXISTS (SELECT 1 FROM other_sales s WHERE s.order_id = o.order_id AND s.warehouse <> o.warehouse) AND NOT EXISTS (SELECT 1 FROM returned_orders r WHERE r.order_id = o.order_id);
+----
+1	250
+
+statement ok
+SET disabled_optimizers='';
 
 # Q 22: the selected delimiter domain should still restrict the NOT EXISTS evidence side
 query II

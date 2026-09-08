@@ -12,6 +12,20 @@
 
 namespace duckdb {
 
+static bool IsSimpleDefaultValue(const ParsedExpression &val) {
+	reference<const ParsedExpression> constant(val);
+	if (constant.get().GetExpressionClass() == ExpressionClass::CAST) {
+		//! Check if the constant is wrapped in a cast
+		auto &cast = constant.get().Cast<CastExpression>();
+		if (cast.IsTryCast()) {
+			//! To be safe, lets not accept try-cast
+			return false;
+		}
+		constant = cast.Child();
+	}
+	return constant.get().GetExpressionClass() == ExpressionClass::CONSTANT;
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTransformer &transformer,
                                                                         unique_ptr<AlterInfo> alter_options) {
 	auto result = make_uniq<AlterStatement>();
@@ -24,15 +38,17 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 		return std::move(result);
 	}
 	auto &add_column = alter_table.Cast<AddColumnInfo>();
-	if (!add_column.new_column.HasDefaultValue() ||
-	    add_column.new_column.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
+	if (!add_column.new_column.HasDefaultValue()) {
+		return std::move(result);
+	}
+	auto &column_entry = add_column.new_column;
+	if (IsSimpleDefaultValue(column_entry.DefaultValue())) {
 		return std::move(result);
 	}
 	if (add_column.if_column_not_exists) {
 		// IF NOT EXISTS is not supported by the multi-statement rewrite - keep the plain ALTER
 		return std::move(result);
 	}
-	auto &column_entry = add_column.new_column;
 	auto null_column = column_entry.Copy();
 	null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
 	auto alter_entry_data = add_column.GetAlterEntryData();
@@ -269,6 +285,13 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropColumn(
 	auto result = make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column_name->ColumnNames(), if_exists_value,
 	                                         drop_behavior_value);
 	return std::move(result);
+}
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropConstraint(PEGTransformer &transformer,
+                                                                          const optional<bool> &if_exists,
+                                                                          const Identifier &identifier,
+                                                                          const optional<bool> &drop_behavior) {
+	throw NotImplementedException("No support for that ALTER TABLE option yet!");
 }
 
 unique_ptr<AlterTableInfo>

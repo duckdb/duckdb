@@ -923,7 +923,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
 	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
-	if (!alter_info.IsAddPrimaryKey()) {
+	if (!alter_info.IsAddUniqueConstraint()) {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
@@ -972,7 +972,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto &storage = table.GetStorage();
-	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
+	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, unique_info.GetIndexConstraintType(),
 	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
 	                       index_storage_info.options);
 
@@ -1338,23 +1338,17 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 		for (auto &col : state.current_table->GetColumns().Physical()) {
 			column_ids.emplace_back(col.StorageOid());
 		}
-		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
 		auto current_row_id = storage.GetNextRowId();
 		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
-			auto row_id_writer = FlatVector::Writer<row_t>(row_id_vector, chunk.size());
-			for (idx_t r = 0; r < chunk.size(); r++) {
-				row_id_writer.WriteValue(NumericCast<row_t>(current_row_id + r));
+			// Deleted index entries are removed when the replay transaction commits. Duplicates can temporarily
+			// exist, similar to tuple WAL replay.
+			auto error = indexes.Append(nullptr, chunk, NumericCast<row_t>(current_row_id),
+			                            IndexAppendMode::INSERT_DUPLICATES, optional_idx());
+			if (error.HasError()) {
+				throw InternalException("Failed to append to index during ROW_GROUP_DATA WAL replay: %s",
+				                        error.Message());
 			}
 			current_row_id += chunk.size();
-			for (auto &index : indexes.Indexes()) {
-				if (!index.IsBound()) {
-					auto &unbound_index = index.Cast<UnboundIndex>();
-					unbound_index.BufferChunk(chunk, row_id_vector, BufferedIndexReplay::INSERT_ENTRY);
-					continue;
-				}
-				auto &bound_index = index.Cast<BoundIndex>();
-				bound_index.Append(chunk, row_id_vector);
-			}
 		}
 	}
 	storage.MergeStorage(new_row_groups, nullptr);

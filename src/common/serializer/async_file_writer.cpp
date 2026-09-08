@@ -55,14 +55,24 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
     : context(context_p), client_context(RequireClientContext(context_p)), fs(fs_p), path(path_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 
-	ManagedAsyncWriteStreamTarget &target = *this;
-	write_queue = make_uniq<ManagedAsyncWriteStreamQueue>(client_context, target);
+	try {
+		ManagedAsyncWriteStreamTarget &target = *this;
+		write_queue = make_uniq<ManagedAsyncWriteStreamQueue>(client_context, target);
+	} catch (...) {
+		auto error = std::current_exception();
+		try {
+			handle->AbortWrite();
+		} catch (...) { // NOLINT
+		}
+		handle.reset();
+		std::rethrow_exception(error);
+	}
 }
 
 AsyncFileWriter::~AsyncFileWriter() {
-	if (!closed && handle) {
+	if (!finished && handle) {
 		try {
-			Close();
+			AbortWrite();
 		} catch (...) {
 		}
 	}
@@ -90,7 +100,7 @@ void AsyncFileWriter::BatchGuard::Finish() {
 	}
 	auto &writer_ref = *writer;
 	writer = nullptr;
-	auto apply_backpressure = !writer_ref.closed;
+	auto apply_backpressure = !writer_ref.finished;
 	writer_ref.LeaveBatch();
 	if (apply_backpressure) {
 		writer_ref.ApplyBackpressure();
@@ -101,16 +111,35 @@ idx_t AsyncFileWriter::GetFileSize() {
 	return GetTotalWritten();
 }
 
+idx_t AsyncFileWriter::GetPhysicalFileSize() {
+	WaitAll();
+	return handle->GetFileSize();
+}
+
+FileCompressionType AsyncFileWriter::GetFileCompressionType() {
+	return handle->GetFileCompressionType();
+}
+
 idx_t AsyncFileWriter::GetTotalWritten() const {
 	return total_written;
 }
 
 void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
+	RethrowError();
+	try {
+		WriteDataInternal(buffer, write_size);
+	} catch (...) {
+		first_error = std::current_exception();
+		std::rethrow_exception(first_error);
+	}
+}
+
+void AsyncFileWriter::WriteDataInternal(const_data_ptr_t buffer, idx_t write_size) {
 	if (write_size == 0) {
 		return;
 	}
 	RethrowTaskError();
-	if (closed) {
+	if (finished) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 
@@ -146,11 +175,21 @@ void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 }
 
 void AsyncFileWriter::WriteData(unique_ptr<AsyncWriteBuffer> buffer) {
+	RethrowError();
+	try {
+		WriteDataInternal(std::move(buffer));
+	} catch (...) {
+		first_error = std::current_exception();
+		std::rethrow_exception(first_error);
+	}
+}
+
+void AsyncFileWriter::WriteDataInternal(unique_ptr<AsyncWriteBuffer> buffer) {
 	if (!buffer || buffer->Size() == 0) {
 		return;
 	}
 	RethrowTaskError();
-	if (closed) {
+	if (finished) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 	if (!write_queue->IsAsync()) {
@@ -164,7 +203,7 @@ void AsyncFileWriter::WriteData(unique_ptr<AsyncWriteBuffer> buffer) {
 
 void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, ScheduleMode schedule_mode) {
 	RethrowTaskError();
-	if (closed) {
+	if (finished) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 
@@ -177,7 +216,7 @@ void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, Schedul
 void AsyncFileWriter::RegisterStagedWrite(unique_ptr<AsyncWriteBuffer> buffer, idx_t offset,
                                           ScheduleMode schedule_mode) {
 	RethrowTaskError();
-	if (closed) {
+	if (finished) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 	RegisterWriteInternal(std::move(buffer), offset, schedule_mode);
@@ -288,15 +327,29 @@ void AsyncFileWriter::Write(data_ptr_t buffer, idx_t size, idx_t offset) {
 }
 
 void AsyncFileWriter::Write(data_ptr_t buffer, idx_t size) {
-	if (size == 0) {
-		return;
+	while (size > 0) {
+		auto written = handle->Write(context, buffer, size);
+		if (written <= 0) {
+			throw IOException("Failed to write to file \"%s\"", path);
+		}
+		auto written_size = NumericCast<idx_t>(written);
+		if (written_size > size) {
+			throw IOException("File write exceeded the requested size for \"%s\"", path);
+		}
+		buffer += written_size;
+		size -= written_size;
 	}
-	handle->Write(context, buffer, size);
 }
 
 void AsyncFileWriter::RethrowTaskError() {
 	if (write_queue) {
 		write_queue->RethrowTaskError();
+	}
+}
+
+void AsyncFileWriter::RethrowError() const {
+	if (first_error) {
+		std::rethrow_exception(first_error);
 	}
 }
 
@@ -334,20 +387,76 @@ void AsyncFileWriter::WaitAllInternal(BatchDrainMode batch_drain_mode) {
 }
 
 void AsyncFileWriter::Close() {
-	if (closed) {
+	if (finished) {
+		RethrowError();
 		return;
+	}
+	if (first_error) {
+		auto error = first_error;
+		try {
+			AbortWrite();
+		} catch (...) { // NOLINT
+		}
+		std::rethrow_exception(error);
 	}
 	try {
 		if (!write_queue->HasError()) {
 			SealCopiedBuffer(ScheduleMode::DEFER);
 		}
 		write_queue->Close();
-		handle->Close();
-		handle.reset();
-		closed = true;
 	} catch (...) {
-		write_queue->ReleaseMemoryReservation();
-		throw;
+		auto error = std::current_exception();
+		if (!first_error) {
+			first_error = error;
+		}
+		try {
+			AbortWrite();
+		} catch (...) { // NOLINT
+		}
+		std::rethrow_exception(error);
+	}
+	try {
+		handle->Close();
+	} catch (...) {
+		first_error = std::current_exception();
+		publication_state = FileWritePublicationState::UNKNOWN;
+		finished = true;
+		auto failed_handle = std::move(handle);
+		std::rethrow_exception(first_error);
+	}
+	publication_state = FileWritePublicationState::PUBLISHED;
+	handle.reset();
+	finished = true;
+}
+
+void AsyncFileWriter::AbortWrite() {
+	if (finished) {
+		RethrowError();
+		return;
+	}
+	finished = true;
+	copied_buffer.reset();
+
+	auto error = first_error;
+	try {
+		write_queue->AbortWrites();
+	} catch (...) {
+		if (!error) {
+			error = std::current_exception();
+		}
+	}
+	auto abort_handle = std::move(handle);
+	if (abort_handle) {
+		try {
+			abort_handle->AbortWrite();
+		} catch (...) {
+			if (!error) {
+				error = std::current_exception();
+			}
+		}
+	}
+	if (error) {
+		std::rethrow_exception(error);
 	}
 }
 

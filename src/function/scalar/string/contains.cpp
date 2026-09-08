@@ -161,7 +161,7 @@ static FilterPropagateResult ContainsFilterPrune(const FunctionStatisticsPruneIn
 	if (FindStrInStr(string_t(min), string_t(needle)) == DConstants::INVALID_INDEX) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	return haystack_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+	return haystack_stats->CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL
 	                                     : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 }
 

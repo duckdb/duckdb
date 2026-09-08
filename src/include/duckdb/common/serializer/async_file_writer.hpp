@@ -14,6 +14,8 @@
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/query_context.hpp"
 
+#include <exception>
+
 namespace duckdb {
 
 class ClientContext;
@@ -73,6 +75,8 @@ public:
 	DUCKDB_API void ApplyBackpressure();
 	//! Wait for all writes, then close the file handle.
 	DUCKDB_API void Close();
+	//! Discard pending writes, wait for running writes, and abandon the incomplete file write.
+	DUCKDB_API void AbortWrite();
 	//! Wait for all writes, then fsync the file handle.
 	DUCKDB_API void Sync();
 	//! Wait for all writes, then truncate the file to the requested logical size.
@@ -80,10 +84,23 @@ public:
 
 	//! Return the logical file size, including writes that have been registered but not drained yet.
 	DUCKDB_API idx_t GetFileSize();
+	//! Wait for registered writes, then return the current size reported by the file handle.
+	DUCKDB_API idx_t GetPhysicalFileSize();
+	//! Return the compression type resolved when the file handle was opened.
+	DUCKDB_API FileCompressionType GetFileCompressionType();
 	//! Return the logical number of bytes written, including writes that are still pending.
 	DUCKDB_API idx_t GetTotalWritten() const;
 
 private:
+	enum class FileWritePublicationState : uint8_t {
+		//! The underlying file handle has not completed a close attempt.
+		NOT_ATTEMPTED,
+		//! The underlying file handle closed successfully.
+		PUBLISHED,
+		//! The underlying file handle threw while closing, so publication is unknown.
+		UNKNOWN
+	};
+
 	using BatchDrainMode = ManagedAsyncWriteStreamQueue::BatchDrainMode;
 	using ScheduleMode = ManagedAsyncWriteStreamQueue::ScheduleMode;
 	using SchedulePolicy = ManagedAsyncWriteStreamQueue::SchedulePolicy;
@@ -97,6 +114,10 @@ private:
 	void RegisterWriteInternal(unique_ptr<AsyncWriteBuffer> buffer, idx_t offset, ScheduleMode schedule_mode);
 	//! Write caller-owned bytes through the local staging buffer when async draining is disabled.
 	void WriteDataSynchronously(data_ptr_t buffer, idx_t write_size);
+	//! Copy caller-owned bytes into the writer after public error handling has run.
+	void WriteDataInternal(const_data_ptr_t buffer, idx_t write_size);
+	//! Adopt an owned write buffer after public error handling has run.
+	void WriteDataInternal(unique_ptr<AsyncWriteBuffer> buffer);
 	//! Move any staged copied bytes into the pending write queue.
 	void SealCopiedBuffer(ScheduleMode schedule_mode = ScheduleMode::ALLOW);
 	//! Seal copied bytes, then schedule as many drain tasks as the pending queue allows.
@@ -105,6 +126,8 @@ private:
 	void BeginBatch();
 	//! Leave a registration batch without scheduling, blocking, or throwing.
 	void LeaveBatch() noexcept;
+	//! Rethrow the first terminal stream error.
+	void RethrowError() const;
 
 	//! Return the file handle's write ordering contract.
 	FileWriteMode GetWriteMode() override;
@@ -135,7 +158,11 @@ private:
 	//! Logical stream position, including copied/staged/pending bytes. Updated by the registering thread.
 	idx_t total_written = 0;
 	//! Set once the handle has been closed or detached.
-	bool closed = false;
+	bool finished = false;
+	//! Result of the underlying file handle's close attempt.
+	FileWritePublicationState publication_state = FileWritePublicationState::NOT_ATTEMPTED;
+	//! First exception escaping a public write or close operation.
+	std::exception_ptr first_error;
 };
 
 } // namespace duckdb

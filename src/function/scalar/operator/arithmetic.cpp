@@ -109,6 +109,16 @@ static Value NumericStatsValue(const LogicalType &type, hugeint_t value) {
 	return Value::Numeric(type, value);
 }
 
+static Value NumericStatsValue(const LogicalType &type, uint64_t value) {
+	D_ASSERT(type.IsNumeric());
+	return Value::Numeric(type, uhugeint_t(value));
+}
+
+static Value NumericStatsValue(const LogicalType &type, uhugeint_t value) {
+	D_ASSERT(type.IsNumeric());
+	return Value::Numeric(type, value);
+}
+
 template <class T>
 static bool WidenFloatingBounds(const LogicalType &type, Value &new_min, Value &new_max) {
 	auto min = new_min.GetValue<T>();
@@ -227,6 +237,26 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 		case PhysicalType::INT128:
 			potential_overflow =
 			    PROPAGATE::template Operation<hugeint_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::UINT8:
+			potential_overflow =
+			    PROPAGATE::template Operation<uint8_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::UINT16:
+			potential_overflow =
+			    PROPAGATE::template Operation<uint16_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::UINT32:
+			potential_overflow =
+			    PROPAGATE::template Operation<uint32_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::UINT64:
+			potential_overflow =
+			    PROPAGATE::template Operation<uint64_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::UINT128:
+			potential_overflow =
+			    PROPAGATE::template Operation<uhugeint_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
 		default:
 			return nullptr;

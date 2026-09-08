@@ -9,6 +9,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast_rules.hpp"
+#include "duckdb/function/type_constructor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -69,8 +71,18 @@ static auto SplitArguments(vector<pair<Identifier, unique_ptr<Expression>>> argu
 	return {std::move(regular_args), std::move(keyword_args)};
 }
 
-optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments,
-                                              const vector<pair<Identifier, LogicalType>> &named_arguments) {
+static int64_t ImplicitCastCost(optional_ptr<ClientContext> context, const LogicalType &source,
+                                const LogicalType &target) {
+	if (context) {
+		return CastFunctionSet::ImplicitCastCost(*context, source, target);
+	}
+	// without a context we can only consider the built-in cast rules - no registered casts are reachable
+	return CastRules::ImplicitCast(source, target);
+}
+
+optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const SimpleFunction &func,
+                                     const vector<LogicalType> &arguments,
+                                     const vector<pair<Identifier, LogicalType>> &named_arguments) {
 	const auto &sig = func.GetSignature();
 
 	// Compute total number of arguments passed
@@ -102,7 +114,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 
 		auto arg_type = i < sig.GetParameterCount() ? sig.GetParameter(i).GetType() : sig.GetVarArgs();
 
-		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], arg_type);
+		int64_t cast_cost = ImplicitCastCost(context, arguments[i], arg_type);
 		if (cast_cost >= 0) {
 			// we can implicitly cast, add the cost to the total cost
 			cost += idx_t(cast_cost);
@@ -126,7 +138,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 			// This is a named vararg argument, we can skip the parameter index check as varargs are always at the end
 			// of the argument list
 			auto &vararg_type = sig.GetVarArgs();
-			int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, named_arg.second, vararg_type);
+			int64_t cast_cost = ImplicitCastCost(context, named_arg.second, vararg_type);
 			if (cast_cost >= 0) {
 				// we can implicitly cast, add the cost to the total cost
 				cost += static_cast<idx_t>(cast_cost);
@@ -147,7 +159,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 			}
 
 			auto &param = sig.GetParameter(param_idx);
-			int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, named_arg.second, param.GetType());
+			int64_t cast_cost = ImplicitCastCost(context, named_arg.second, param.GetType());
 			if (cast_cost >= 0) {
 				cost += idx_t(cast_cost);
 			} else {
@@ -163,8 +175,9 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 	return cost;
 }
 
-optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleNamedParameterFunction &func,
-                                                     const vector<LogicalType> &arguments) {
+static optional_idx BindVarArgsFunctionCost(optional_ptr<ClientContext> context,
+                                            const SimpleNamedParameterFunction &func,
+                                            const vector<LogicalType> &arguments) {
 	if (arguments.size() < func.GetArguments().size()) {
 		// not enough arguments to fulfill the non-vararg part of the function
 		return optional_idx();
@@ -176,7 +189,7 @@ optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleNamedParameterF
 			// arguments match: do nothing
 			continue;
 		}
-		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], arg_type);
+		int64_t cast_cost = ImplicitCastCost(context, arguments[i], arg_type);
 		if (cast_cost >= 0) {
 			// we can implicitly cast, add the cost to the total cost
 			cost += idx_t(cast_cost);
@@ -188,12 +201,12 @@ optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleNamedParameterF
 	return cost;
 }
 
-optional_idx FunctionBinder::BindFunctionCost(const SimpleNamedParameterFunction &func,
-                                              const vector<LogicalType> &arguments,
-                                              const vector<pair<Identifier, LogicalType>> &) {
+optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const SimpleNamedParameterFunction &func,
+                                     const vector<LogicalType> &arguments,
+                                     const vector<pair<Identifier, LogicalType>> &) {
 	if (func.HasVarArgs()) {
 		// special case varargs function
-		return BindVarArgsFunctionCost(func, arguments);
+		return BindVarArgsFunctionCost(context, func, arguments);
 	}
 	if (func.GetArguments().size() != arguments.size()) {
 		// invalid argument count: check the next function
@@ -206,7 +219,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleNamedParameterFunction
 			has_parameter = true;
 			continue;
 		}
-		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], func.GetArguments()[i]);
+		int64_t cast_cost = ImplicitCastCost(context, arguments[i], func.GetArguments()[i]);
 		if (cast_cost >= 0) {
 			// we can implicitly cast, add the cost to the total cost
 			cost += idx_t(cast_cost);
@@ -223,17 +236,17 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleNamedParameterFunction
 }
 
 template <class T>
-vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const Identifier &name, const FunctionSet<T> &functions,
-                                                         const vector<LogicalType> &arguments,
-                                                         const vector<pair<Identifier, LogicalType>> &named_arguments,
-                                                         ErrorData &error) {
+vector<idx_t> FunctionOverloads::Candidates(optional_ptr<ClientContext> context, const Identifier &name,
+                                            const FunctionSet<T> &functions, const vector<LogicalType> &arguments,
+                                            const vector<pair<Identifier, LogicalType>> &named_arguments,
+                                            ErrorData &error) {
 	optional_idx best_function;
 	idx_t lowest_cost = NumericLimits<idx_t>::Maximum();
 	vector<idx_t> candidate_functions;
 	for (idx_t f_idx = 0; f_idx < functions.functions.size(); f_idx++) {
 		auto &func = *functions.functions[f_idx];
 		// check the arguments of the function
-		auto bind_cost = BindFunctionCost(func, arguments, named_arguments);
+		auto bind_cost = Cost(context, func, arguments, named_arguments);
 		if (!bind_cost.IsValid()) {
 			// auto casting was not possible
 			continue;
@@ -296,11 +309,10 @@ MultipleCandidateException(const Identifier &catalog_name, const Identifier &sch
 }
 
 template <class T>
-optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,
-                                                       const vector<LogicalType> &arguments,
-                                                       const vector<pair<Identifier, LogicalType>> &named_arguments,
-                                                       ErrorData &error) {
-	auto candidate_functions = BindFunctionsFromArguments(name, functions, arguments, named_arguments, error);
+optional_idx FunctionOverloads::Select(optional_ptr<ClientContext> context, const Identifier &name,
+                                       const FunctionSet<T> &functions, const vector<LogicalType> &arguments,
+                                       const vector<pair<Identifier, LogicalType>> &named_arguments, ErrorData &error) {
+	auto candidate_functions = Candidates(context, name, functions, arguments, named_arguments, error);
 	if (candidate_functions.empty()) {
 		// No candidates, return an invalid index.
 		return optional_idx();
@@ -320,6 +332,21 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 	}
 	return candidate_functions[0];
 }
+
+template <class T>
+optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,
+                                                       const vector<LogicalType> &arguments,
+                                                       const vector<pair<Identifier, LogicalType>> &named_arguments,
+                                                       ErrorData &error) {
+	return FunctionOverloads::Select(context, name, functions, arguments, named_arguments, error);
+}
+
+//! Type constructors select overloads outside of FunctionBinder, as they can be bound without a ClientContext
+template optional_idx FunctionOverloads::Select<TypeConstructor>(optional_ptr<ClientContext>, const Identifier &,
+                                                                 const FunctionSet<TypeConstructor> &,
+                                                                 const vector<LogicalType> &,
+                                                                 const vector<pair<Identifier, LogicalType>> &,
+                                                                 ErrorData &);
 
 template <class T>
 static bool AnyOverloadSupportsImplicitArgumentNames(const FunctionSet<T> &functions) {
@@ -1245,8 +1272,8 @@ FunctionBinder::BindAggregateFunction(const AggregateFunctionCatalogEntry &func,
 pair<BoundWindowFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(shared_ptr<const WindowFunction> function_p, vector<unique_ptr<Expression>> &children,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-                                optional_ptr<vector<OrderByNode>> orders,
-                                optional_ptr<vector<OrderByNode>> arg_orders) {
+                                optional_ptr<vector<LogicalType>> order_types,
+                                optional_ptr<vector<LogicalType>> arg_order_types) {
 	auto &function = *function_p;
 	// Reorder named args
 	auto argument_names = ResolveArguments(function, children, named_arguments);
@@ -1266,7 +1293,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const WindowFunction> function_p, vec
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.HasBindCallback()) {
-		BindWindowFunctionInput input(context, bound_function, children, argument_names, orders, arg_orders);
+		BindWindowFunctionInput input(context, bound_function, children, argument_names, order_types, arg_order_types);
 		bind_info = bound_function.GetBindCallback()(input);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.GetArguments().size(), children.size()));
@@ -1283,8 +1310,9 @@ FunctionBinder::ResolveFunction(shared_ptr<const WindowFunction> function_p, vec
 unique_ptr<BoundWindowExpression>
 FunctionBinder::BindWindowFunction(shared_ptr<const WindowFunction> function, vector<unique_ptr<Expression>> children,
                                    vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
-                                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders) {
-	auto [bound_function, bind_info] = ResolveFunction(std::move(function), children, keyword_args, orders, arg_orders);
+                                   vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types) {
+	auto [bound_function, bind_info] =
+	    ResolveFunction(std::move(function), children, keyword_args, order_types, arg_order_types);
 	auto return_type = bound_function.GetReturnType();
 
 	auto window = make_uniq<BoundWindowFunction>(std::move(bound_function));
@@ -1297,33 +1325,33 @@ FunctionBinder::BindWindowFunction(shared_ptr<const WindowFunction> function, ve
 unique_ptr<BoundWindowExpression>
 FunctionBinder::BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
                                    vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
-                                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders) {
+                                   vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types) {
 	return BindWindowFunction(make_shared_ptr<WindowFunction>(function), std::move(children), std::move(keyword_args),
-	                          orders, arg_orders);
+	                          order_types, arg_order_types);
 }
 
 unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(shared_ptr<const WindowFunction> function,
                                                                      vector<unique_ptr<Expression>> children,
-                                                                     vector<OrderByNode> &orders,
-                                                                     vector<OrderByNode> &arg_orders) {
+                                                                     vector<LogicalType> &order_types,
+                                                                     vector<LogicalType> &arg_order_types) {
 	vector<pair<Identifier, unique_ptr<Expression>>> empty_keyword_args;
-	return BindWindowFunction(std::move(function), std::move(children), std::move(empty_keyword_args), orders,
-	                          arg_orders);
+	return BindWindowFunction(std::move(function), std::move(children), std::move(empty_keyword_args), order_types,
+	                          arg_order_types);
 }
 
 unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(const WindowFunction &function,
                                                                      vector<unique_ptr<Expression>> children,
-                                                                     vector<OrderByNode> &orders,
-                                                                     vector<OrderByNode> &arg_orders) {
+                                                                     vector<LogicalType> &order_types,
+                                                                     vector<LogicalType> &arg_order_types) {
 	vector<pair<Identifier, unique_ptr<Expression>>> empty_keyword_args;
 	return BindWindowFunction(make_shared_ptr<WindowFunction>(function), std::move(children),
-	                          std::move(empty_keyword_args), orders, arg_orders);
+	                          std::move(empty_keyword_args), order_types, arg_order_types);
 }
 
 unique_ptr<BoundWindowExpression>
 FunctionBinder::BindWindowFunction(const WindowFunctionCatalogEntry &func,
                                    vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error,
-                                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders) {
+                                   vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types) {
 	// select the best matching overload
 	auto best_function = BindFunctionFromArguments(func.name, func.functions, arguments, error);
 	if (!best_function.IsValid()) {
@@ -1336,8 +1364,8 @@ FunctionBinder::BindWindowFunction(const WindowFunctionCatalogEntry &func,
 	// now that the overload is fixed, split the arguments into their final positional/named children
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
 
-	return BindWindowFunction(std::move(bound_function), std::move(regular_args), std::move(keyword_args), orders,
-	                          arg_orders);
+	return BindWindowFunction(std::move(bound_function), std::move(regular_args), std::move(keyword_args), order_types,
+	                          arg_order_types);
 }
 
 } // namespace duckdb

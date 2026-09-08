@@ -412,6 +412,7 @@ AggregateFunction GetGenericArgMinMaxFunction(const ArgMinMaxNullHandling null_h
 	    AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
 	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
 	AggregateFunction::WireStructStateType<STATE>(function);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return function;
 }
 
@@ -426,6 +427,7 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 	                                  AggregateFunction::StateCombine<STATE, OP>,
 	                                  AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
 	AggregateFunction::WireStructStateType<STATE>(function);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return function;
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
@@ -484,6 +486,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
 	auto function = AggregateFunction::BinaryAggregate<STATE, ARG_TYPE, BY_TYPE, ARG_TYPE, OP>(type, by_type, type);
 	function.SetBindCallback(GetBindFunction<OP>(null_handling));
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
 	function.GetSignature().GetParameter(0).SetType(type);
@@ -582,6 +585,7 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(BindAggregateFunctionInput &input)
 	auto name = function.GetName();
 	function.ReplaceImplementation(GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type, NULL_HANDLING));
 	function.SetName(std::move(name));
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	function.SetReturnType(decimal_type);
 
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
@@ -717,7 +721,6 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 
 		// Initialize the heap if necessary and add the input to the heap
 		if (!state.is_initialized) {
-			static constexpr int64_t MAX_N = 1000000;
 			const auto nidx = n_format.sel->get_index(i);
 			if (!n_format.validity.RowIsValid(nidx)) {
 				throw InvalidInputException("Invalid input for arg_min/arg_max: n value cannot be NULL");
@@ -726,8 +729,9 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 			if (nval <= 0) {
 				throw InvalidInputException("Invalid input for arg_min/arg_max: n value must be > 0");
 			}
-			if (nval >= MAX_N) {
-				throw InvalidInputException("Invalid input for arg_min/arg_max: n value must be < %d", MAX_N);
+			if (nval >= MIN_MAX_N_MAX_VALUE) {
+				throw InvalidInputException("Invalid input for arg_min/arg_max: n value must be < %d",
+				                            MIN_MAX_N_MAX_VALUE);
 			}
 			state.Initialize(aggr_input.allocator, UnsafeNumericCast<idx_t>(nval));
 		}

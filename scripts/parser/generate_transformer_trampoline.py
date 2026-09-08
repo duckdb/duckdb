@@ -952,6 +952,14 @@ class UseGramPreviewEmitter:
         for alternative in ast.alternatives:
             if isinstance(alternative, ReferenceNode) and alternative.name in self.rule_types:
                 child_cpp_types.add(self.cpp_type(alternative.name))
+        direct_string_names = [
+            alternative.name
+            for alternative in ast.alternatives
+            if isinstance(alternative, ReferenceNode)
+            and alternative.name in self.rule_types
+            and self.cpp_type(alternative.name) == "string"
+        ]
+        external_string_names = [name for name in direct_string_names if name not in self.rules]
         has_string_child_manual_transform = (
             len(child_cpp_types) == 1
             and self.cpp_type(rule_name) not in child_cpp_types
@@ -959,13 +967,6 @@ class UseGramPreviewEmitter:
             and manual_body_exists(rule_name)
         )
         if self.cpp_type(rule_name) == "Identifier":
-            direct_string_names = [
-                alternative.name
-                for alternative in ast.alternatives
-                if isinstance(alternative, ReferenceNode)
-                and alternative.name in self.rule_types
-                and self.cpp_type(alternative.name) == "string"
-            ]
             direct_conditions = [
                 "choice_result.name.empty()",
                 "choice_result.type == ParseResultType::IDENTIFIER",
@@ -990,6 +991,11 @@ class UseGramPreviewEmitter:
             lines.append("\tif (" + " || ".join(direct_conditions) + ") {")
             lines.append("\t\treturn;")
             lines.append("\t}")
+            if external_string_names:
+                external_string_conditions = [f'choice_result.name == "{name}"' for name in external_string_names]
+                lines.append("\tif (ops_entry == ops_map.end() && (" + " || ".join(external_string_conditions) + ")) {")
+                lines.append("\t\treturn;")
+                lines.append("\t}")
         if syntax_only_alternatives:
             syntax_only_conditions = [f'choice_result.name == "{name}"' for name in syntax_only_alternatives]
             lines.append("\tif (ops_entry == ops_map.end() && (" + " || ".join(syntax_only_conditions) + ")) {")

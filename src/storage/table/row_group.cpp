@@ -368,7 +368,7 @@ void CollectionScanState::Initialize(const QueryContext &context_p, const vector
 	context = context_p;
 	auto &column_ids = GetColumnIds();
 	D_ASSERT(column_scans.empty());
-	column_scans.reserve(column_scans.size());
+	column_scans.reserve(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		column_scans.emplace_back(*this);
 	}
@@ -452,7 +452,8 @@ unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_col
 unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, const LogicalType &target_type,
                                          idx_t changed_idx, ExpressionExecutor &executor,
                                          CollectionScanState &scan_state, SegmentNode<RowGroup> &node,
-                                         DataChunk &scan_chunk, TransactionData transaction) {
+                                         DataChunk &scan_chunk, TransactionData transaction,
+                                         ColumnStatistics &changed_stats) {
 	Verify();
 
 	// construct a new column data for this type
@@ -469,6 +470,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	append_types.push_back(target_type);
 	append_chunk.Initialize(Allocator::DefaultAllocator(), append_types);
 	auto &append_vector = append_chunk.data[0];
+	Vector hashes(LogicalType::HASH);
 	ScanOptions options(transaction);
 	options.insert_type = InsertedScanType::ALL_ROWS;
 	options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
@@ -482,6 +484,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		// execute the expression
 		append_chunk.Reset();
 		executor.ExecuteExpression(scan_chunk, append_vector);
+		changed_stats.UpdateDistinctStatistics(append_vector, scan_chunk.size(), hashes);
 		column_data->Append(append_state, append_vector, scan_chunk.size());
 	}
 	column_data->FinalizeAppend(nullptr, append_state);
@@ -522,7 +525,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor) {
+                                         ExpressionExecutor &executor, ColumnStatistics &new_column_stats) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -535,6 +538,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		DataChunk result_chunk;
 		result_chunk.Initialize(Allocator::DefaultAllocator(), {new_column.GetType()});
 		auto &result = result_chunk.data[0];
+		Vector hashes(LogicalType::HASH);
 
 		ColumnAppendState state;
 		added_column->InitializeAppend(state);
@@ -543,6 +547,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 			dummy_chunk.SetChildCardinality(rows_in_this_vector);
 			result_chunk.Reset();
 			executor.ExecuteExpression(dummy_chunk, result);
+			new_column_stats.UpdateDistinctStatistics(result, rows_in_this_vector, hashes);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
 		added_column->FinalizeAppend(nullptr, state);
@@ -699,18 +704,24 @@ static idx_t IntersectSelections(const SelectionVector &left, idx_t left_count, 
 	return result_count;
 }
 
+static BaseStatistics CreateRowIdStats(idx_t beg_row, idx_t end_row) {
+	D_ASSERT(end_row > beg_row);
+	auto result = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
+	result.SetHasNoNullFast();
+	NumericStats::SetMin(result, UnsafeNumericCast<row_t>(beg_row));
+	NumericStats::SetMax(result, UnsafeNumericCast<row_t>(end_row - 1));
+	return result;
+}
+
 FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
 	if (end_row <= beg_row) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
-	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
-	dummy_stats.SetHasNoNullFast();
-	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
-	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row - 1));
+	auto rowid_stats = CreateRowIdStats(beg_row, end_row);
 
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::CheckRowIdFilter");
-	return expr_filter.CheckStatistics(dummy_stats);
+	return expr_filter.CheckStatistics(rowid_stats);
 }
 
 bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start) {
@@ -727,7 +738,11 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 					throw InternalException("Multi-column filter column index out of range");
 				}
 				const auto &storage_index = (*column_ids)[column_index.GetIndex()];
-				if (storage_index.IsRowIdColumn() || storage_index.IsRowNumberColumn()) {
+				if (storage_index.IsRowIdColumn()) {
+					input_stats.push_back(CreateRowIdStats(row_start, row_start + count));
+					continue;
+				}
+				if (storage_index.IsRowNumberColumn()) {
 					supported = false;
 					break;
 				}
@@ -760,7 +775,8 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 		} else {
 			prune_result = GetColumn(base_column_index).CheckZonemap(context, base_column_index, filter);
 		}
-		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			return false;
 		}
 		if (ExpressionFilter::IsRootNonSelectivityOptionalFilter(filter)) {
@@ -790,7 +806,8 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 
 		optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 		auto prune_result = column_data.CheckZonemap(state.column_scans[column_idx], filter, current_segment);
-		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE &&
+		    prune_result != FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			continue;
 		}
 
@@ -1064,16 +1081,14 @@ ScanOptions::ScanOptions(TransactionData transaction) : transaction(transaction)
 void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType type) {
 	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
 
-	transaction_t start_ts;
-	transaction_t transaction_id;
+	VisibilityBound visibility_bound;
 	if (type == TableScanType::TABLE_SCAN_COMMITTED_ROWS) {
-		start_ts = transaction_manager.GetLastCommit() + 1;
-		transaction_id = MAX_TRANSACTION_ID;
+		visibility_bound = VisibilityBound::Through(transaction_manager.GetLastCommit());
 	} else {
-		start_ts = transaction_manager.LowestActiveStart();
-		transaction_id = transaction_manager.LowestActiveId();
+		visibility_bound = transaction_manager.LowestVisibilityBound();
 	}
-	TransactionData transaction(transaction_id, start_ts);
+	// a scan on behalf of no transaction: there are no writes of its own to see
+	TransactionData transaction(MAX_TRANSACTION_ID, visibility_bound);
 
 	ScanOptions options(transaction);
 	options.insert_type = InsertedScanType::ALL_ROWS;
@@ -1290,9 +1305,9 @@ void RowGroup::FinalizeAppend(RowGroupAppendState &state) {
 	}
 }
 
-void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+void RowGroup::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count) {
 	auto &vinfo = GetOrCreateVersionInfo();
-	vinfo.CleanupAppend(lowest_transaction, start, count);
+	vinfo.CleanupAppend(lowest_visibility_bound, start, count);
 }
 
 void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, DataChunk &update_chunk, row_t *ids,
@@ -1483,7 +1498,7 @@ idx_t RowGroup::GetCommittedRowCount() {
 	if (!vinfo) {
 		return count;
 	}
-	ScanOptions options(TransactionData(0, TRANSACTION_ID_START));
+	ScanOptions options(TransactionData(0, VisibilityBound::AllCommitted()));
 	options.insert_type = InsertedScanType::ALL_ROWS;
 	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
 	return vinfo->GetRowCount(options, count);
@@ -1689,10 +1704,6 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			result_row_group->per_column_metadata_blocks.AddColumn(reused_columns[i], extras[i]);
 		}
 		result_row_group->has_per_column_metadata_blocks = true;
-	} else if (partial_reuse) {
-		// we planned to partially re-use column metadata, but every column ended up being rewritten -
-		// downgrade to a full checkpoint as there is no column metadata to carry forward
-		result.write_action = RowGroupWriteAction::FULLY_CHECKPOINT_ROW_GROUP;
 	}
 
 	result.result_row_group = std::move(result_row_group);
@@ -1916,7 +1927,7 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) co
 	return result;
 }
 
-void RowGroup::CompressVersionInfo(transaction_t lowest_active_start) {
+void RowGroup::CompressVersionInfo(VisibilityBound lowest_visibility_bound) {
 	if (HasUnloadedDeletes()) {
 		// deletes were not loaded - they are still stored in their compact serialized form
 		return;
@@ -1925,7 +1936,7 @@ void RowGroup::CompressVersionInfo(transaction_t lowest_active_start) {
 	if (!vinfo) {
 		return;
 	}
-	vinfo->CompressVersionIds(lowest_active_start);
+	vinfo->CompressVersionIds(lowest_visibility_bound);
 }
 
 vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {
@@ -2136,7 +2147,7 @@ void VersionDeleteState::Flush() {
 	// it is possible for delete statements to delete the same tuple multiple times when combined with a USING clause
 	// in the current_info->Delete, we check which tuples are actually deleted (excluding duplicate deletions)
 	// this is returned in the actual_delete_count
-	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.transaction_id, rows, count);
+	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.GetTransactionId(), rows, count);
 	delete_count += actual_delete_count;
 	if (transaction.transaction && actual_delete_count > 0) {
 		// now push the delete into the undo buffer, but only if any deletes were actually performed

@@ -337,12 +337,14 @@ EXPLAIN ANALYZE
 WITH c AS MATERIALIZED (
   SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
 )
-SELECT count(*)
+SELECT branch, count(*), sum(v)
 FROM (
-  SELECT c.i FROM c JOIN range(10000) r(i) USING (i)
+  SELECT 1 branch, length(c.payload) v FROM c JOIN range(10000) r(i) USING (i)
   UNION ALL
-  SELECT c.i FROM c JOIN range(10000) r(i) USING (i)
-);
+  SELECT 2 branch, length(c.payload) v FROM c JOIN range(10000) r(i) USING (i)
+)
+GROUP BY branch
+ORDER BY branch;
 ----
 analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 2.*CTE Mode: DIRECT.*
 

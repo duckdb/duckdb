@@ -1,0 +1,33 @@
+# name: test/sql/storage/types/list/store_list_of_array.test
+# description: Test storing of a list of arrays
+# group: [list]
+
+load {TEST_DIR}/list_of_array.db
+
+statement ok
+CREATE TABLE arrays(id INTEGER PRIMARY KEY, values INTEGER[3][]);
+
+statement ok
+INSERT INTO arrays VALUES
+	(1, [[1, 2, 3], [4, NULL, 6]]),
+	(2, []),
+	(3, NULL),
+	(4, [NULL, [7, 8, 9]]);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+SELECT * FROM arrays ORDER BY id;
+----
+1	[[1, 2, 3], [4, NULL, 6]]
+2	[]
+3	NULL
+4	[NULL, [7, 8, 9]]
+
+query II
+SELECT * FROM arrays WHERE id = 4;
+----
+4	[NULL, [7, 8, 9]]

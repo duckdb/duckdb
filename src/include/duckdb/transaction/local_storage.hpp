@@ -94,7 +94,7 @@ public:
 	//! Whether this storage holds optimistically written (flushed) row groups
 	bool HasFlushedRowGroups() const;
 	void Rollback();
-	idx_t EstimatedSize();
+	idx_t EstimatedSize() const;
 
 	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
 	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);

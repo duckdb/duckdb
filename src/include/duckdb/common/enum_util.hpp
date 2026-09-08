@@ -222,6 +222,10 @@ enum class ExtensionInstallMode : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
 
+enum class ExtensionRepositoryAccess : uint8_t;
+
+enum class ExtensionRepositoryType : uint8_t;
+
 enum class ExtensionUpdateResultTag : uint8_t;
 
 enum class ExternalResourceOperation : uint8_t;
@@ -264,11 +268,17 @@ enum class GeometryStorageType : uint8_t;
 
 enum class GeometryType : uint8_t;
 
+enum class GrammarChangeType : uint8_t;
+
 enum class GroupByExpressionInfoType : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
+enum class HTTPClientCachePolicy : uint8_t;
+
 enum class HTTPStatusCode : uint16_t;
+
+enum class HTTPTransportReusePolicy : uint8_t;
 
 enum class IdentifierCaseMode : uint8_t;
 
@@ -277,6 +287,8 @@ enum class IndexAppendMode : uint8_t;
 enum class IndexBindState : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
+
+enum class IndexDeltaType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
 
@@ -458,7 +470,11 @@ enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
 
+enum class ResultLifetime : uint8_t;
+
 enum class ResultModifierType : uint8_t;
+
+enum class ResultOrdering : uint8_t;
 
 enum class RowGroupAppendMode : uint8_t;
 
@@ -523,6 +539,8 @@ enum class StateMemoryOwnership : uint8_t;
 enum class StatementReturnType : uint8_t;
 
 enum class StatementType : uint8_t;
+
+enum class StatisticsPropagationMode : uint8_t;
 
 enum class StatisticsType : uint8_t;
 
@@ -913,6 +931,12 @@ template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
 
 template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryAccess>(ExtensionRepositoryAccess value);
+
+template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryType>(ExtensionRepositoryType value);
+
+template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
 
 template<>
@@ -976,13 +1000,22 @@ template<>
 const char* EnumUtil::ToChars<GeometryType>(GeometryType value);
 
 template<>
+const char* EnumUtil::ToChars<GrammarChangeType>(GrammarChangeType value);
+
+template<>
 const char* EnumUtil::ToChars<GroupByExpressionInfoType>(GroupByExpressionInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
+const char* EnumUtil::ToChars<HTTPClientCachePolicy>(HTTPClientCachePolicy value);
+
+template<>
 const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
+
+template<>
+const char* EnumUtil::ToChars<HTTPTransportReusePolicy>(HTTPTransportReusePolicy value);
 
 template<>
 const char* EnumUtil::ToChars<IdentifierCaseMode>(IdentifierCaseMode value);
@@ -995,6 +1028,9 @@ const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
+
+template<>
+const char* EnumUtil::ToChars<IndexDeltaType>(IndexDeltaType value);
 
 template<>
 const char* EnumUtil::ToChars<InsertColumnOrder>(InsertColumnOrder value);
@@ -1267,7 +1303,13 @@ template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
 
 template<>
+const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value);
+
+template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
+
+template<>
+const char* EnumUtil::ToChars<ResultOrdering>(ResultOrdering value);
 
 template<>
 const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
@@ -1364,6 +1406,9 @@ const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
 
 template<>
 const char* EnumUtil::ToChars<StatementType>(StatementType value);
+
+template<>
+const char* EnumUtil::ToChars<StatisticsPropagationMode>(StatisticsPropagationMode value);
 
 template<>
 const char* EnumUtil::ToChars<StatisticsType>(StatisticsType value);
@@ -1805,6 +1850,12 @@ template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
 
 template<>
+ExtensionRepositoryAccess EnumUtil::FromString<ExtensionRepositoryAccess>(const char *value);
+
+template<>
+ExtensionRepositoryType EnumUtil::FromString<ExtensionRepositoryType>(const char *value);
+
+template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
 
 template<>
@@ -1868,13 +1919,22 @@ template<>
 GeometryType EnumUtil::FromString<GeometryType>(const char *value);
 
 template<>
+GrammarChangeType EnumUtil::FromString<GrammarChangeType>(const char *value);
+
+template<>
 GroupByExpressionInfoType EnumUtil::FromString<GroupByExpressionInfoType>(const char *value);
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
+HTTPClientCachePolicy EnumUtil::FromString<HTTPClientCachePolicy>(const char *value);
+
+template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);
+
+template<>
+HTTPTransportReusePolicy EnumUtil::FromString<HTTPTransportReusePolicy>(const char *value);
 
 template<>
 IdentifierCaseMode EnumUtil::FromString<IdentifierCaseMode>(const char *value);
@@ -1887,6 +1947,9 @@ IndexBindState EnumUtil::FromString<IndexBindState>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
+
+template<>
+IndexDeltaType EnumUtil::FromString<IndexDeltaType>(const char *value);
 
 template<>
 InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value);
@@ -2159,7 +2222,13 @@ template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
 
 template<>
+ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value);
+
+template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
+
+template<>
+ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value);
 
 template<>
 RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
@@ -2256,6 +2325,9 @@ StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value)
 
 template<>
 StatementType EnumUtil::FromString<StatementType>(const char *value);
+
+template<>
+StatisticsPropagationMode EnumUtil::FromString<StatisticsPropagationMode>(const char *value);
 
 template<>
 StatisticsType EnumUtil::FromString<StatisticsType>(const char *value);

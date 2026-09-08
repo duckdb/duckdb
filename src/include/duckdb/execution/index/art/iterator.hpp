@@ -70,16 +70,40 @@ struct RowIdSetOutput {
 	RowIdSetOutput(set<row_t> &row_ids, const idx_t capacity) : row_ids(row_ids), capacity(capacity) {
 	}
 
-	bool IsFull() const {
+	bool TryAdd(const row_t rid) {
 		D_ASSERT(row_ids.size() <= capacity);
-		return row_ids.size() >= capacity;
+		if (row_ids.size() >= capacity) {
+			return false;
+		}
+		row_ids.insert(rid);
+		return true;
 	}
 	void SetKey(const IteratorKey &, const idx_t) {
 		// No-op: we don't need keys for row ID output.
 	}
-	void Add(const row_t rid) {
-		row_ids.insert(rid);
+};
+
+//! Stores Row IDs in an unsafe_vector with sorting and deduplication.
+class RowIdVectorOutput {
+public:
+	explicit RowIdVectorOutput(idx_t capacity);
+
+	bool TryAdd(row_t row_id);
+	void SetKey(const IteratorKey &, const idx_t) {
+		// No-op: we don't need keys for row ID output.
 	}
+
+	//! Clear all collection state while retaining reusable vector storage.
+	void Reset();
+	//! Normalize and transfer ownership of the contiguous Row IDs.
+	unsafe_vector<row_t> TakeRows();
+
+private:
+	void Normalize();
+
+private:
+	unsafe_vector<row_t> row_ids;
+	const idx_t capacity;
 };
 
 //! Output policy for scanning keys and row IDs.
@@ -104,18 +128,19 @@ struct KeyRowIdOutput {
 		count = 0;
 		arena.Reset();
 	}
-	bool IsFull() const {
+	bool TryAdd(const row_t rid) {
 		D_ASSERT(count <= capacity);
-		return count >= capacity;
+		if (count >= capacity) {
+			return false;
+		}
+		keys[count] = ARTKey::CreateARTKeyFromBytes(arena, key_data, key_len);
+		row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid);
+		count++;
+		return true;
 	}
 	void SetKey(const IteratorKey &current_key, const idx_t column_key_len) {
 		key_data = current_key.Data();
 		key_len = column_key_len;
-	}
-	void Add(const row_t rid) {
-		keys[count] = ARTKey::CreateARTKeyFromBytes(arena, key_data, key_len);
-		row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid);
-		count++;
 	}
 };
 
@@ -128,7 +153,7 @@ public:
 	static constexpr uint8_t ROW_ID_SIZE = sizeof(row_t);
 
 public:
-	explicit Iterator(ART &art) : art(art), status(GateStatus::GATE_NOT_SET) {};
+	explicit Iterator(const ART &art) : art(art), status(GateStatus::GATE_NOT_SET) {};
 	//! Holds the current key leading down to the top node on the stack.
 	IteratorKey current_key;
 
@@ -151,7 +176,7 @@ public:
 
 private:
 	//! The ART.
-	ART &art;
+	const ART &art;
 	//! Stack of nodes from the root to the currently active node.
 	stack<IteratorEntry> nodes;
 	//! Last visited leaf node.

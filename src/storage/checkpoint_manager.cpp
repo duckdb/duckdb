@@ -13,10 +13,12 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -66,11 +68,12 @@ void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &option
 	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
 	transaction.SetIsCheckpointTransaction();
 	checkpoint_transaction = &transaction;
-	// used as a checkpoint identifier, so it has to be unique: the caller drained pending durability
-	// under the WAL lock it still holds, so no in-flight commit can cap this start time
-	D_ASSERT(transaction.start_time == transaction.unique_start_time);
-	options.transaction_id = transaction.start_time;
-	transaction_manager.SetActiveCheckpoint(transaction.start_time);
+	// the caller drained pending durability under the WAL lock it still holds, so no in-flight commit
+	// capped this snapshot: the checkpoint sees every published commit
+	D_ASSERT(transaction.view.visibility_bound == VisibilityBound::Before(transaction.start_time));
+	options.checkpoint_id = transaction_manager.NextCheckpointId();
+	options.visibility_bound = transaction.view.visibility_bound;
+	transaction_manager.SetActiveCheckpoint(options.checkpoint_id.GetIndex());
 }
 
 void ActiveCheckpointWrapper::Commit() {
@@ -367,7 +370,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &storage = table.GetStorage();
 		auto &table_info = storage.GetDataTableInfo();
 		auto &index_list = table_info->GetIndexes();
-		index_list.MergeCheckpointDeltas(options.transaction_id);
+		index_list.MergeCheckpointDeltas(options.checkpoint_id);
 	}
 	active_checkpoint.Commit();
 }

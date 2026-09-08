@@ -25,6 +25,7 @@ class CreateIndexScanState;
 class CollectionScanState;
 class PersistentTableData;
 class TableDataWriter;
+class IndexEntry;
 class TableIndexList;
 class TableStatistics;
 struct TableAppendState;
@@ -127,7 +128,7 @@ public:
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
-	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count);
 
 	void MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
 	                  optional_ptr<StorageCommitState> commit_state);
@@ -147,7 +148,7 @@ public:
 	//! Decides how vacuum handles this table's indexes.
 	VacuumIndexStrategy
 	GetVacuumIndexStrategy(AttachedDatabase &attached,
-	                       optional_ptr<vector<reference<BoundIndex>>> remap_indexes = nullptr) const;
+	                       optional_ptr<vector<shared_ptr<IndexEntry>>> remap_indexes = nullptr) const;
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
 	                           optional_idx checkpoint_row_group_count);

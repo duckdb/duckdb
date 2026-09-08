@@ -74,18 +74,6 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 	// Now handle type parameters
 	auto &unbound_parameters = type_expr.GetChildren();
 
-	if (!type_entry.bind_function) {
-		if (!unbound_parameters.empty()) {
-			// This type does not support type parameters
-			throw BinderException(type_expr, "Type %s does not take any type parameters", type_name);
-		}
-
-		// Otherwise, return the user type directly!
-		auto result_expr = make_uniq<BoundConstantExpression>(Value::TYPE(type_entry.user_type));
-		result_expr->SetQueryLocation(type_expr.GetQueryLocation());
-		return BindResult(std::move(result_expr));
-	}
-
 	// Bind value parameters
 	vector<TypeArgument> bound_parameters;
 
@@ -100,21 +88,25 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 			throw BinderException(type_expr, "Type parameter expression for type '%s' is not a constant", type_name);
 		}
 
+		// The location comes from the parsed parameter, not the bound one.
+		// Binding may have rewritten it into something with no corresponding source text.
+		auto location = param->GetQueryLocation();
+
 		// Shortcut for constant expressions
 		if (bound_expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 			auto &const_expr = bound_expr->Cast<BoundConstantExpression>();
-			bound_parameters.emplace_back(param->GetAlias().GetIdentifierName(), const_expr.GetValue());
+			bound_parameters.emplace_back(param->GetAlias().GetIdentifierName(), const_expr.GetValue(), location);
 			continue;
 		}
 
 		// Otherwise we need to evaluate the expression
 		auto bound_param = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
-		bound_parameters.emplace_back(param->GetAlias().GetIdentifierName(), bound_param);
+		bound_parameters.emplace_back(param->GetAlias().GetIdentifierName(), bound_param, location);
 	};
 
-	// Call the bind function
-	BindLogicalTypeInput input {context, type_entry.user_type, bound_parameters};
-	auto result_type = type_entry.bind_function(input);
+	// Select the matching constructor and call it
+	auto result_type =
+	    type_entry.constructors.Bind(context, type_entry.user_type, bound_parameters, type_expr.GetQueryLocation());
 
 	// Return the resulting type!
 	auto result_expr = make_uniq<BoundConstantExpression>(Value::TYPE(result_type));

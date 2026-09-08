@@ -10,6 +10,7 @@ add_library_unity(
   having_binder.cpp
   lateral_binder.cpp
   qualify_binder.cpp
+  scope_resolution.cpp
   index_binder.cpp
   insert_binder.cpp
   order_binder.cpp

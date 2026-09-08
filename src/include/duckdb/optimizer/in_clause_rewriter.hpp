@@ -29,6 +29,7 @@ public:
 public:
 	// Minimum number of values to use a hash join
 	static constexpr idx_t IN_CLAUSE_REWRITE_THRESHOLD = 6;
+	static bool HasRewritableInClause(const Expression &expr);
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 	unique_ptr<Expression> VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 };

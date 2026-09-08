@@ -107,6 +107,9 @@ SQLStatement:
     - RegisterExternalResourceStmt
     - DestroyExternalResourceStmt
     - ShowExternalResourcesStmt
+    - ExtensionRepositoryStatement
+    - CreateExtensionRepositoryStmt
+    - DropExtensionRepositoryStmt
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -214,6 +217,7 @@ AlterTableInfo:
   rules:
     - AlterTableOptions
     - AddColumn
+    - DropConstraint
     - DropColumn
     - SetPartitionedBy
     - ResetPartitionedBy
@@ -539,6 +543,7 @@ ColumnRefExpression:
   by_value: true
   rules:
     - NestedColumnName
+    - NestedSchemaTableColumnName
     - CatalogReservedSchemaTableColumnName
     - SchemaReservedTableColumnName
     - TableReservedColumnName
@@ -703,12 +708,16 @@ StringList:
     - DottedIdentifier
     - ColumnAliases
     - TriggerColumnList
+    - RepositoryPublicKey
     - StarSymbolColumnList
     - StarQualifierList
     - PivotGroupByList
     - UnpivotHeader
     - UnpivotHeaderSingle
     - UnpivotHeaderList
+    - OptionalParensNameList
+    - ParenthesizedNameList
+    - BareNameList
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
@@ -1017,11 +1026,13 @@ String:
     - ColumnNameKeyword
     - FuncNameKeyword
     - TypeNameKeyword
+    - TypeFuncKeyword
     - IndexName
     - Identifier
     - ExportSource
     - ReservedKeyword
     - VersionNumber
+    - RepositoryPrefix
     - LikeVariations
     - LikeToken
     - ILikeToken
@@ -1151,6 +1162,7 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - InstallAndLoad
     - ShowAllModifier
     - FunctionTypeMacro
     - FunctionTypeMacroKeyword

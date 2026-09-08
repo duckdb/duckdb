@@ -54,14 +54,63 @@ extern const row_t MAX_ROW_ID;
 //! Transaction-local row IDs start at MAX_ROW_ID
 extern const row_t MAX_ROW_ID_LOCAL;
 
-//! The transaction id, start time, and catalog-entry timestamp of the bootstrap system
-//! transaction, which precedes every real transaction. The three coincide deliberately, so that
-//! CatalogSet::UseTimestamp treats a bootstrap entry as one the system transaction created
 extern const transaction_t SYSTEM_TRANSACTION_TIMESTAMP;
 extern const transaction_t TRANSACTION_ID_START;
+//! The largest timestamp that is still a commit id, one below the first transaction id
+extern const transaction_t MAX_COMMIT_ID;
 extern const transaction_t MAX_TRANSACTION_ID;
 extern const transaction_t MAXIMUM_QUERY_ID;
 extern const transaction_t NOT_DELETED_ID;
+
+//! An exclusive bound on the transaction timeline: timestamps below it are visible. Its own type, so
+//! it cannot be swapped or assigned with a timestamp; compare with < and >= only.
+struct VisibilityBound {
+	VisibilityBound() = default;
+
+	//! Visible up to and including this timestamp
+	static VisibilityBound Through(transaction_t timestamp) {
+		return VisibilityBound(timestamp + 1);
+	}
+	//! Visible strictly before this timestamp
+	static VisibilityBound Before(transaction_t timestamp) {
+		return VisibilityBound(timestamp);
+	}
+	static VisibilityBound AllCommitted() {
+		return Through(MAX_COMMIT_ID);
+	}
+	static VisibilityBound IncludingUncommitted() {
+		return VisibilityBound(MAX_TRANSACTION_ID);
+	}
+	static VisibilityBound Min(VisibilityBound a, VisibilityBound b) {
+		return a.value < b.value ? a : b;
+	}
+
+private:
+	explicit VisibilityBound(transaction_t value_p) : value(value_p) {
+	}
+
+	friend bool operator==(VisibilityBound a, VisibilityBound b);
+	friend bool operator!=(VisibilityBound a, VisibilityBound b);
+	friend bool operator<(transaction_t timestamp, VisibilityBound bound);
+	friend bool operator>=(transaction_t timestamp, VisibilityBound bound);
+
+	transaction_t value = 0;
+};
+
+inline bool operator==(VisibilityBound a, VisibilityBound b) {
+	return a.value == b.value;
+}
+inline bool operator!=(VisibilityBound a, VisibilityBound b) {
+	return a.value != b.value;
+}
+
+//! Only < and >= exist; <= and > do not compile, so a bound stays exclusive.
+inline bool operator<(transaction_t timestamp, VisibilityBound bound) {
+	return timestamp < bound.value;
+}
+inline bool operator>=(transaction_t timestamp, VisibilityBound bound) {
+	return !(timestamp < bound);
+}
 
 extern const double PI;
 

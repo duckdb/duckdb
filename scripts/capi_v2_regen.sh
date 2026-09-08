@@ -25,5 +25,5 @@ uv run --project api_spec --group generate capigen extension_header \
 # `DUCKDB_V2_ERROR (*fn)(...)` struct members (the first pass line-breaks them,
 # the second settles them). A single pass leaves output the format hook would
 # rewrite, making pre-commit never converge.
-#uv run --project api_spec --group dev python scripts/format.py HEAD --fix --noconfirm --silent
-#uv run --project api_spec --group dev python scripts/format.py HEAD --fix --noconfirm --silent
+uv run --project api_spec --group dev python scripts/format.py HEAD --fix --noconfirm --silent
+uv run --project api_spec --group dev python scripts/format.py HEAD --fix --noconfirm --silent

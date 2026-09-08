@@ -395,7 +395,7 @@ physical_plan	<REGEX>:.*PROJECTION.*
 
 # function application conflict
 query II
-EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet' WHERE prefix(str, 'H');
+EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet' WHERE prefix(str, 'He');
 ----
 physical_plan	<REGEX>:.*PROJECTION.*
 

@@ -5,6 +5,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
+#include "duckdb/common/process_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
@@ -14,6 +15,7 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
@@ -41,26 +43,14 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 #undef FILE_CREATE // woo mingw
 #endif
 
-// includes for giving a better error message on lock conflicts
-#if defined(__linux__) || defined(__APPLE__)
-#include <pwd.h>
-#endif
-
 #if defined(__linux__)
 // See https://man7.org/linux/man-pages/man2/fallocate.2.html
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE /* See feature_test_macros(7) */
 #endif
 #include <fcntl.h>
-#include <libgen.h>
-// See e.g.:
-// https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
-#elif defined(__APPLE__)
-#include <TargetConditionals.h>
-#if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1)
-#include <libproc.h>
-#endif
 #elif defined(_WIN32)
+// for giving a better error message on lock conflicts
 #include <restartmanager.h>
 #endif
 
@@ -88,7 +78,7 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 		if (access(normalized_file.c_str(), 0) == 0) {
 			struct stat status;
 			stat(normalized_file.c_str(), &status);
-			if (S_ISFIFO(status.st_mode)) {
+			if (S_ISFIFO(status.st_mode) || S_ISCHR(status.st_mode)) {
 				return true;
 			}
 		}
@@ -279,93 +269,6 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 	return StatsFromStruct(s);
 }
 
-#if __APPLE__ && !TARGET_OS_IPHONE
-
-static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
-	if (pid == getpid()) {
-		return "Lock is already held in current process, likely another DuckDB instance";
-	}
-
-	string process_name, process_owner;
-	// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
-#ifdef PROC_PIDT_SHORTBSDINFO
-	// try to find out more about the process holding the lock
-	struct proc_bsdshortinfo proc;
-	if (proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &proc, PROC_PIDT_SHORTBSDINFO_SIZE) ==
-	    PROC_PIDT_SHORTBSDINFO_SIZE) {
-		process_name = proc.pbsi_comm; // only a short version however, let's take it in case proc_pidpath() below fails
-		// try to get actual name of conflicting process owner
-		auto pw = getpwuid(proc.pbsi_uid);
-		if (pw) {
-			process_owner = pw->pw_name;
-		}
-	}
-#else
-	return string();
-#endif
-	// try to get a better process name (full path)
-	char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
-	if (proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE) > 0) {
-		// somehow could not get the path, lets use some sensible fallback
-		process_name = full_exec_path;
-	}
-	return StringUtil::Format("Conflicting lock is held in %s%s",
-	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
-	                                                : StringUtil::Format("PID %d", pid),
-	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
-}
-
-#elif __linux__
-
-static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
-	if (pid == getpid()) {
-		return "Lock is already held in current process, likely another DuckDB instance";
-	}
-	string process_name, process_owner;
-
-	try {
-		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
-		auto cmdline = cmdline_file->ReadLine(QueryContext());
-		process_name = basename(const_cast<char *>(cmdline.c_str())); // NOLINT: old C API does not take const
-	} catch (std::exception &) {
-		// ignore
-	}
-
-	// we would like to provide a full path to the executable if possible but we might not have rights
-	{
-		char exe_target[PATH_MAX];
-		memset(exe_target, '\0', PATH_MAX);
-		auto proc_exe_link = StringUtil::Format("/proc/%d/exe", pid);
-		auto readlink_n = readlink(proc_exe_link.c_str(), exe_target, PATH_MAX);
-		if (readlink_n > 0) {
-			process_name = exe_target;
-		}
-	}
-
-	// try to find out who created that process
-	try {
-		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
-		auto uid = std::stoi(loginuid_file->ReadLine(QueryContext()));
-		auto pw = getpwuid(uid);
-		if (pw) {
-			process_owner = pw->pw_name;
-		}
-	} catch (std::exception &) {
-		// ignore
-	}
-
-	return StringUtil::Format("Conflicting lock is held in %s%s",
-	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
-	                                                : StringUtil::Format("PID %d", pid),
-	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
-}
-
-#else
-static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
-	return "";
-}
-#endif
-
 // Apply a fcntl advisory lock per flags.Lock(); throws (and closes fd) on failure. Shared
 // by OpenFile and MemoryMapFile.
 static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileOpenFlags flags) {
@@ -405,8 +308,13 @@ static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileO
 		rc = fcntl(fd, F_GETLK, &fl);
 		if (rc == -1) {
 			extended_error = strerror(errno);
+		} else if (fl.l_pid == ProcessUtil::CurrentProcessId()) {
+			extended_error = "Lock is already held in current process, likely another DuckDB instance";
 		} else {
-			extended_error = AdditionalProcessInfo(fs, fl.l_pid);
+			auto process = ProcessUtil::GetProcessDescription(fs, fl.l_pid);
+			if (!process.empty()) {
+				extended_error = "Conflicting lock is held in " + process;
+			}
 		}
 		if (flags.Lock() == FileLockType::WRITE_LOCK) {
 			// could we get a read lock?
@@ -687,6 +595,7 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto file_metadata = StatsInternal(fd, handle.GetPath());
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
 	return file_metadata;
 }
 
@@ -714,19 +623,34 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	struct stat st;
+	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+}
 
-	auto normalized_dir = ExpandPath(directory, opener);
-	if (stat(normalized_dir.c_str(), &st) != 0) {
-		/* Directory does not exist. EEXIST for race condition */
-		if (mkdir(normalized_dir.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException({{"errno", std::to_string(errno)}}, "Failed to create directory \"%s\": %s", directory,
-			                  strerror(errno));
-		}
-	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException({{"errno", std::to_string(errno)}},
-		                  "Failed to create directory \"%s\": path exists but is not a directory!", directory);
+void LocalFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
+	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
+}
+
+bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	if (options.mode == CreateDirectoryMode::RECURSIVE) {
+		return FileSystem::CreateDirectoryExtended(directory, options, opener);
 	}
+	if (options.mode != CreateDirectoryMode::SINGLE) {
+		throw InternalException("Unknown CreateDirectoryMode");
+	}
+	auto normalized_dir = ExpandPath(directory, opener);
+	if (mkdir(normalized_dir.c_str(), 0755) == 0) {
+		return true;
+	}
+	auto error = errno;
+	if (error == EEXIST) {
+		struct stat st;
+		if (stat(normalized_dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+			return false;
+		}
+	}
+	throw IOException({{"errno", std::to_string(error)}}, "Failed to create directory \"%s\": %s", directory,
+	                  strerror(error));
 }
 
 int RemoveDirectoryRecursive(const char *path) {
@@ -770,8 +694,27 @@ int RemoveDirectoryRecursive(const char *path) {
 }
 
 void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+}
+
+bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	if (options.mode == RemoveDirectoryMode::RECURSIVE) {
+		auto normalized_dir = ExpandPath(directory, opener);
+		return RemoveDirectoryRecursive(normalized_dir.c_str()) == 0;
+	}
+	if (options.mode != RemoveDirectoryMode::SINGLE) {
+		throw InternalException("Unknown RemoveDirectoryMode");
+	}
 	auto normalized_dir = ExpandPath(directory, opener);
-	RemoveDirectoryRecursive(normalized_dir.c_str());
+	if (rmdir(normalized_dir.c_str()) == 0) {
+		return true;
+	}
+	if (errno == ENOENT || errno == ENOTEMPTY || errno == EEXIST) {
+		return false;
+	}
+	throw IOException({{"errno", std::to_string(errno)}}, "Failed to remove empty directory \"%s\": %s", directory,
+	                  strerror(errno));
 }
 
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
@@ -1280,7 +1223,9 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	share_mode |= FILE_SHARE_DELETE;
 
 	if (open_write) {
-		if (flags.CreateFileIfNotExists()) {
+		if (flags.ExclusiveCreate()) {
+			creation_disposition = CREATE_NEW;
+		} else if (flags.CreateFileIfNotExists()) {
 			creation_disposition = OPEN_ALWAYS;
 		} else if (flags.OverwriteExistingFile()) {
 			creation_disposition = CREATE_ALWAYS;
@@ -1459,25 +1404,49 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	if (DirectoryExists(directory)) {
-		return;
+	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+}
+
+void LocalFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
+	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
+}
+
+bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	if (options.mode == CreateDirectoryMode::RECURSIVE) {
+		return FileSystem::CreateDirectoryExtended(directory, options, opener);
+	}
+	if (options.mode != CreateDirectoryMode::SINGLE) {
+		throw InternalException("Unknown CreateDirectoryMode");
 	}
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
-	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
-		throw IOException("Failed to create directory \"%s\": %s", abs_path, error);
+	if (!directory.empty() && CreateDirectoryW(unicode_path.c_str(), NULL)) {
+		return true;
 	}
+	auto error_code = GetLastError();
+	if (error_code == ERROR_ALREADY_EXISTS) {
+		auto attributes = GetFileAttributesW(unicode_path.c_str());
+		if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+			return false;
+		}
+	}
+	SetLastError(error_code);
+	auto error = LocalFileSystem::GetLastErrorAsString();
+	auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+	throw IOException("Failed to create directory \"%s\": %s", abs_path, error);
 }
 
 static void DeleteDirectoryRecursive(FileSystem &fs, string directory, optional_ptr<FileOpener> opener) {
-	fs.ListFiles(directory, [&](const string &fname, bool is_directory) {
-		if (is_directory) {
-			DeleteDirectoryRecursive(fs, fs.JoinPath(directory, fname), opener);
-		} else {
-			fs.RemoveFile(fs.JoinPath(directory, fname));
-		}
-	});
+	fs.ListFiles(
+	    directory,
+	    [&](const string &fname, bool is_directory) {
+		    if (is_directory) {
+			    DeleteDirectoryRecursive(fs, fs.JoinPath(directory, fname), opener);
+		    } else {
+			    fs.RemoveFile(fs.JoinPath(directory, fname), opener);
+		    }
+	    },
+	    opener.get());
 	auto unicode_path = NormalizePathAndConvertToUnicode(fs, directory, opener);
 	if (!RemoveDirectoryW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
@@ -1487,13 +1456,35 @@ static void DeleteDirectoryRecursive(FileSystem &fs, string directory, optional_
 }
 
 void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	if (FileExists(directory)) {
-		throw IOException("Attempting to delete directory \"%s\", but it is a file and not a directory!", directory);
+	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+}
+
+bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	if (options.mode == RemoveDirectoryMode::RECURSIVE) {
+		if (FileExists(directory, opener)) {
+			throw IOException("Attempting to delete directory \"%s\", but it is a file and not a directory!",
+			                  directory);
+		}
+		if (!DirectoryExists(directory, opener)) {
+			return false;
+		}
+		DeleteDirectoryRecursive(*this, directory, opener);
+		return true;
 	}
-	if (!DirectoryExists(directory)) {
-		return;
+	if (options.mode != RemoveDirectoryMode::SINGLE) {
+		throw InternalException("Unknown RemoveDirectoryMode");
 	}
-	DeleteDirectoryRecursive(*this, directory, opener);
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
+	if (RemoveDirectoryW(unicode_path.c_str())) {
+		return true;
+	}
+	auto error = GetLastError();
+	if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND || error == ERROR_DIR_NOT_EMPTY) {
+		return false;
+	}
+	auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+	throw IOException("Failed to remove empty directory \"%s\": %s", abs_path, GetLastErrorAsString());
 }
 
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
@@ -1598,6 +1589,7 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto file_metadata = StatsInternal(hFile, handle.GetPath());
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
 	return file_metadata;
 }
 
@@ -1844,11 +1836,24 @@ unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(const OpenFileInfo &
 
 #endif
 
+void LocalFileSystem::AbortFileWrite(FileHandle &handle) {
+	auto remove_path = handle.GetFlags().ExclusiveCreate();
+	auto path = handle.GetPath();
+	handle.Close();
+	if (remove_path) {
+		TryRemoveFile(path);
+	}
+}
+
 bool LocalFileSystem::CanSeek() {
 	return true;
 }
 
 FileWriteMode LocalFileSystem::GetWriteMode(FileHandle &handle) {
+	auto type = GetFileType(handle);
+	if (type == FileType::FILE_TYPE_FIFO || type == FileType::FILE_TYPE_CHARDEV) {
+		return FileWriteMode::SEQUENTIAL;
+	}
 	return FileWriteMode::POSITIONAL;
 }
 
@@ -1952,8 +1957,7 @@ void LocalFileSystem::FillFileOptions(const FileMetadata &file_metadata, unorder
 }
 
 string LocalFileSystem::GetVersionTag(FileHandle &handle) {
-	auto stats = handle.Stats();
-	return VersionTagFromMetadata(stats);
+	return handle.Stats().version_tag;
 }
 
 void LocalFileSystem::Seek(FileHandle &handle, idx_t location) {

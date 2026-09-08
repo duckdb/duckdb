@@ -131,10 +131,12 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					// there are multiple conditions: erase this condition
 					join.conditions.erase_at(i);
 					i--;
+					removed_expressions = true;
 					continue;
 				}
 				// this is the only condition and it is always true: all conditions are true
 				if (HandleJoinAlwaysMatches(join, node_ptr)) {
+					removed_expressions = true;
 					return;
 				}
 				break;
@@ -190,7 +192,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 void StatisticsPropagator::PropagateStatistics(LogicalAnyJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	// propagate the expression into the join condition
 	// note that a condition that is TRUE_OR_NULL does not always match: a NULL condition rejects the pair
-	switch (ClassifyFilter(join.condition)) {
+	PropagateExpression(join.condition);
+	switch (ClassifyFilter(*join.condition)) {
 	case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 		HandleJoinAlwaysMatches(join, node_ptr);
 		break;

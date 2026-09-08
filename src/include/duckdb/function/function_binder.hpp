@@ -28,6 +28,31 @@ struct SortedAggregateStateOrder {
 	OrderByNullType null_order;
 };
 
+//! Overload selection: picks the cheapest matching overload out of a function set, given the argument types of a
+//! call. Free-standing so that callers without a ClientContext - which only limits the set of implicit casts
+//! considered, can select overloads too.
+struct FunctionOverloads {
+	//! Cost of calling this overload with the given arguments, or an invalid index if it does not match
+	DUCKDB_API static optional_idx Cost(optional_ptr<ClientContext> context, const SimpleFunction &func,
+	                                    const vector<LogicalType> &arguments,
+	                                    const vector<pair<Identifier, LogicalType>> &named_arguments);
+	DUCKDB_API static optional_idx Cost(optional_ptr<ClientContext> context, const SimpleNamedParameterFunction &func,
+	                                    const vector<LogicalType> &arguments,
+	                                    const vector<pair<Identifier, LogicalType>> &);
+
+	//! All overloads that match at the lowest cost. Empty (and error set) if none match.
+	template <class T>
+	static vector<idx_t> Candidates(optional_ptr<ClientContext> context, const Identifier &name,
+	                                const FunctionSet<T> &functions, const vector<LogicalType> &arguments,
+	                                const vector<pair<Identifier, LogicalType>> &named_arguments, ErrorData &error);
+
+	//! The single best overload. Invalid (and error set) if there is no match or the choice is ambiguous.
+	template <class T>
+	static optional_idx Select(optional_ptr<ClientContext> context, const Identifier &name,
+	                           const FunctionSet<T> &functions, const vector<LogicalType> &arguments,
+	                           const vector<pair<Identifier, LogicalType>> &named_arguments, ErrorData &error);
+};
+
 //! The FunctionBinder class is responsible for binding functions
 class FunctionBinder {
 public:
@@ -45,7 +70,7 @@ public:
 	                                     const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error);
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const ScalarFunctionSet &functions,
 	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunctionFromArguments(name, functions, regular_args, {}, error);
+		return BindFunction(name, functions, regular_args, {}, error);
 	}
 
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const ScalarFunctionSet &functions,
@@ -60,7 +85,7 @@ public:
 	                                     const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error);
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const AggregateFunctionSet &functions,
 	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunctionFromArguments(name, functions, regular_args, {}, error);
+		return BindFunction(name, functions, regular_args, {}, error);
 	}
 
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const AggregateFunctionSet &functions,
@@ -76,7 +101,7 @@ public:
 
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const WindowFunctionSet &functions,
 	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunctionFromArguments(name, functions, regular_args, {}, error);
+		return BindFunction(name, functions, regular_args, {}, error);
 	}
 
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
@@ -86,7 +111,7 @@ public:
 	                                     const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error);
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
 	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunctionFromArguments(name, functions, regular_args, {}, error);
+		return BindFunction(name, functions, regular_args, {}, error);
 	}
 
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
@@ -188,29 +213,29 @@ public:
 
 	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(shared_ptr<const WindowFunction> function, vector<unique_ptr<Expression>> children,
-	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<OrderByNode> &orders,
-	                   vector<OrderByNode> &arg_orders);
+	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<LogicalType> &order_types,
+	                   vector<LogicalType> &arg_order_types);
 
 	//! Bind a function that does not come from a function set - the function is copied into a definition of its own
 	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
-	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<OrderByNode> &orders,
-	                   vector<OrderByNode> &arg_orders);
+	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<LogicalType> &order_types,
+	                   vector<LogicalType> &arg_order_types);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression> BindWindowFunction(shared_ptr<const WindowFunction> function,
 	                                                                vector<unique_ptr<Expression>> children,
-	                                                                vector<OrderByNode> &orders,
-	                                                                vector<OrderByNode> &arg_orders);
+	                                                                vector<LogicalType> &order_types,
+	                                                                vector<LogicalType> &arg_order_types);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression> BindWindowFunction(const WindowFunction &function,
 	                                                                vector<unique_ptr<Expression>> children,
-	                                                                vector<OrderByNode> &orders,
-	                                                                vector<OrderByNode> &arg_orders);
+	                                                                vector<LogicalType> &order_types,
+	                                                                vector<LogicalType> &arg_order_types);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(const WindowFunctionCatalogEntry &function,
 	                   vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error,
-	                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
+	                   vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types);
 
 	//! Turn a function into a BoundScalarFunction bound to the given arguments. The function is kept as the
 	//! definition of the resulting bound function - see BoundScalarFunction::GetDefinition().
@@ -260,8 +285,8 @@ public:
 	pair<BoundWindowFunction, unique_ptr<FunctionData>>
 	ResolveFunction(shared_ptr<const WindowFunction> function, vector<unique_ptr<Expression>> &children,
 	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                optional_ptr<vector<OrderByNode>> orders = nullptr,
-	                optional_ptr<vector<OrderByNode>> arg_orders = nullptr);
+	                optional_ptr<vector<LogicalType>> order_types = nullptr,
+	                optional_ptr<vector<LogicalType>> arg_order_types = nullptr);
 
 	pair<BoundWindowFunction, unique_ptr<FunctionData>> ResolveFunction(shared_ptr<const WindowFunction> function,
 	                                                                    vector<unique_ptr<Expression>> &children) {
@@ -272,9 +297,10 @@ public:
 	pair<BoundWindowFunction, unique_ptr<FunctionData>>
 	ResolveFunction(const WindowFunction &function, vector<unique_ptr<Expression>> &children,
 	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                optional_ptr<vector<OrderByNode>> orders = nullptr,
-	                optional_ptr<vector<OrderByNode>> arg_orders = nullptr) {
-		return ResolveFunction(make_shared_ptr<WindowFunction>(function), children, keyword_args, orders, arg_orders);
+	                optional_ptr<vector<LogicalType>> order_types = nullptr,
+	                optional_ptr<vector<LogicalType>> arg_order_types = nullptr) {
+		return ResolveFunction(make_shared_ptr<WindowFunction>(function), children, keyword_args, order_types,
+		                       arg_order_types);
 	}
 
 	pair<BoundWindowFunction, unique_ptr<FunctionData>> ResolveFunction(const WindowFunction &function,
@@ -288,20 +314,6 @@ private:
 
 	void ResolveTemplateTypes(BoundSimpleFunction &bound_function, const vector<unique_ptr<Expression>> &children);
 	void CheckTemplateTypesResolved(const BoundSimpleFunction &bound_function);
-
-	optional_idx BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments,
-	                              const vector<pair<Identifier, LogicalType>> &named_arguments);
-
-	optional_idx BindVarArgsFunctionCost(const SimpleNamedParameterFunction &func,
-	                                     const vector<LogicalType> &arguments);
-	optional_idx BindFunctionCost(const SimpleNamedParameterFunction &func, const vector<LogicalType> &arguments,
-	                              const vector<pair<Identifier, LogicalType>> &);
-
-	template <class T>
-	vector<idx_t> BindFunctionsFromArguments(const Identifier &name, const FunctionSet<T> &functions,
-	                                         const vector<LogicalType> &arguments,
-	                                         const vector<pair<Identifier, LogicalType>> &named_arguments,
-	                                         ErrorData &error);
 
 	template <class T>
 	optional_idx BindFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,

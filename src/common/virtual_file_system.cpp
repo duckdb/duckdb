@@ -202,16 +202,27 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 		return nullptr;
 	}
 
-	// Evaluate and apply compression option then.
-	const auto context = !flags.MultiClientAccess() ? FileOpener::TryGetClientContext(opener) : QueryContext();
-	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
-		file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
-	} else {
-		auto compression_filesystem = FindCompressionFileSystem(*registry, compression, file.path);
-		if (compression_filesystem) {
-			file_handle =
-			    compression_filesystem->OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
+	try {
+		// Evaluate and apply compression option then.
+		const auto context = !flags.MultiClientAccess() ? FileOpener::TryGetClientContext(opener) : QueryContext();
+		if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
+			file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
+		} else {
+			auto compression_filesystem = FindCompressionFileSystem(*registry, compression, file.path);
+			if (compression_filesystem) {
+				file_handle =
+				    compression_filesystem->OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
+			}
 		}
+	} catch (...) {
+		auto error = std::current_exception();
+		if (flags.OpenForWriting() && file_handle) {
+			try {
+				file_handle->AbortWrite();
+			} catch (...) { // NOLINT
+			}
+		}
+		std::rethrow_exception(error);
 	}
 	return file_handle;
 }
@@ -261,11 +272,25 @@ bool VirtualFileSystem::DirectoryExists(const string &directory, optional_ptr<Fi
 	return FindFileSystem(directory, opener).DirectoryExists(directory, opener);
 }
 void VirtualFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	FindFileSystem(directory, opener).CreateDirectory(directory, opener);
+	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+}
+
+bool VirtualFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+                                                optional_ptr<FileOpener> opener) {
+	return FindFileSystem(directory, opener).CreateDirectoryExtended(directory, options, opener);
+}
+
+void VirtualFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
+	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
 }
 
 void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	FindFileSystem(directory, opener).RemoveDirectory(directory, opener);
+	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+}
+
+bool VirtualFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                                optional_ptr<FileOpener> opener) {
+	return FindFileSystem(directory, opener).RemoveDirectoryExtended(directory, options, opener);
 }
 
 bool VirtualFileSystem::ListFilesExtended(const string &directory,

@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
@@ -18,6 +19,30 @@ TriggerCatalogEntry::TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &s
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
 	this->tags = info.tags;
+}
+
+unique_ptr<CatalogEntry> TriggerCatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &alter_info) {
+	if (alter_info.type != AlterType::ALTER_TABLE) {
+		return CatalogEntry::AlterEntry(transaction, alter_info);
+	}
+	auto &table_info = alter_info.Cast<AlterTableInfo>();
+	if (table_info.alter_table_type != AlterTableType::RENAME_COLUMN) {
+		return CatalogEntry::AlterEntry(transaction, alter_info);
+	}
+	auto &rename_info = alter_info.Cast<RenameColumnInfo>();
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateTriggerInfo>();
+	bool updated = false;
+	for (auto &col : cast_info.columns) {
+		if (col == rename_info.old_name) {
+			col = rename_info.new_name;
+			updated = true;
+		}
+	}
+	if (!updated) {
+		return nullptr;
+	}
+	return make_uniq<TriggerCatalogEntry>(catalog, schema, cast_info);
 }
 
 unique_ptr<CatalogEntry> TriggerCatalogEntry::Copy(ClientContext &context) const {

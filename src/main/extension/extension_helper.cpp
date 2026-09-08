@@ -12,6 +12,7 @@
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/main/settings.hpp"
 
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
@@ -226,6 +227,13 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, 
 	return base_error;
 }
 
+// autoloading only ever targets core extensions, so it trusts the core keys exclusively
+static ExtensionLoadOptions AutoLoadOptions(const string &extension_name) {
+	ExtensionLoadOptions options(extension_name);
+	options.core_only = true;
+	return options;
+}
+
 bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept {
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
@@ -238,7 +246,7 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
 		}
-		ExtensionHelper::LoadExternalExtension(context, {extension_name});
+		ExtensionHelper::LoadExternalExtension(context, AutoLoadOptions(extension_name));
 		return true;
 	} catch (...) {
 		return false;
@@ -268,7 +276,7 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
 		}
 		if (Settings::Get<AutoloadKnownExtensionsSetting>(instance)) {
-			ExtensionHelper::LoadExternalExtension(instance, fs, {extension_name});
+			ExtensionHelper::LoadExternalExtension(instance, fs, AutoLoadOptions(extension_name));
 			return true;
 		}
 		return false;
@@ -283,7 +291,7 @@ bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, 
 	}
 	try {
 		auto &fs = FileSystem::GetFileSystem(instance);
-		ExtensionHelper::LoadExternalExtension(instance, fs, {extension_name});
+		ExtensionHelper::LoadExternalExtension(instance, fs, AutoLoadOptions(extension_name));
 		return true;
 	} catch (...) {
 		return false;
@@ -335,7 +343,12 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 		return result;
 	}
 
+	// update the extension from the repository it was installed from, so that it is verified against the same keys
 	auto repository_from_info = ExtensionRepository::GetRepositoryByUrl(extension_install_info->repository_url);
+	repository_from_info.type = extension_install_info->repository_type;
+	if (!extension_install_info->repository_name.empty()) {
+		repository_from_info.name = extension_install_info->repository_name;
+	}
 	result.repository = repository_from_info.ToReadableString();
 
 	// Force install the full url found in this file, enabling etags to ensure efficient updating
@@ -432,7 +445,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 			ExtensionHelper::InstallExtension(db, fs, extension_name, options);
 		}
 #endif
-		ExtensionHelper::LoadExternalExtension(db, fs, {extension_name});
+		ExtensionHelper::LoadExternalExtension(db, fs, AutoLoadOptions(extension_name));
 		DUCKDB_LOG_INFO(db, "Loaded extension '%s'", extension_name);
 	} catch (std::exception &e) {
 		ErrorData error(e);
@@ -886,6 +899,63 @@ const vector<string> ExtensionHelper::GetPublicKeys(bool allow_community_extensi
 		}
 	}
 	return keys;
+}
+
+vector<string> ExtensionHelper::GetTrustedPublicKeys(DatabaseInstance &db, ExtensionRepositoryType repository_type,
+                                                     const string &repository_name) {
+	vector<string> keys;
+	switch (repository_type) {
+	case ExtensionRepositoryType::COMMUNITY:
+		if (!Settings::Get<AllowCommunityExtensionsSetting>(db)) {
+			return keys;
+		}
+		for (idx_t i = 0; community_public_keys[i]; i++) {
+			keys.emplace_back(community_public_keys[i]);
+		}
+		return keys;
+	case ExtensionRepositoryType::USER_PROVIDED: {
+		// when adding repositories has been forbidden, the user repositories are distrusted entirely: their keys are
+		// no longer trusted, so extensions installed from them can no longer be loaded. Note that 'undecided' still
+		// trusts existing repositories - only 'forbidden' distrusts them
+		if (ExtensionRepositoryManager::GetAccess(db) == ExtensionRepositoryAccess::FORBIDDEN) {
+			return keys;
+		}
+		// only the keys of the repository the extension came from are trusted
+		ExtensionRepository repository;
+		auto &fs = FileSystem::GetLocal(db);
+		if (ExtensionRepositoryManager::TryGetRepository(db, fs, repository_name, repository)) {
+			for (auto &public_key : repository.public_keys) {
+				keys.push_back(ExtensionRepositoryManager::ToPEMPublicKey(public_key));
+			}
+		}
+		return keys;
+	}
+	default:
+		// the core signing keys - note that these are the only keys that are ever trusted for extensions that come
+		// from the repositories maintained by DuckDB, or from any other origin we don't know
+		for (idx_t i = 0; public_keys[i]; i++) {
+			keys.emplace_back(public_keys[i]);
+		}
+		return keys;
+	}
+}
+
+ExtensionRepositoryType ExtensionHelper::ResolveTrustedSignatureOrigin(bool has_from_clause, bool core_only,
+                                                                       ExtensionRepositoryType recorded_origin) {
+	if (has_from_clause) {
+		// an explicit FROM names the origin, so its keys are the ones to trust
+		return recorded_origin;
+	}
+	if (core_only) {
+		// autoloading only ever targets core extensions - not even community keys are trusted
+		return ExtensionRepositoryType::CORE;
+	}
+	// a plain bare load trusts the fixed core and community keys: a community extension keeps its community keys, every
+	// other origin (including a user-provided repository) is verified against the core keys, never its own
+	if (recorded_origin == ExtensionRepositoryType::COMMUNITY) {
+		return ExtensionRepositoryType::COMMUNITY;
+	}
+	return ExtensionRepositoryType::CORE;
 }
 
 } // namespace duckdb

@@ -1367,86 +1367,18 @@ static unique_ptr<ExpressionFilter> CreateSelectivityOptionalExpressionFilter(un
                                                                               const LogicalType &column_type,
                                                                               SelectivityOptionalFilterType type);
 
-static LogicalType GetRuntimeFilterInputType(const JoinFilterPushdownColumn &column, const LogicalType &runtime_type) {
-	if (column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION && !column.runtime_filter_casts.empty()) {
-		return column.runtime_filter_casts.back().target_type;
-	}
-	return runtime_type;
-}
-
 struct RuntimeFilterInput {
 	unique_ptr<Expression> expression;
 	bool preserves_cast_errors;
 };
 
-static bool RuntimeFilterCastCanFail(const LogicalType &source_type, const LogicalType &target_type) {
-	if (source_type == target_type) {
-		return false;
-	}
-	if (source_type.id() == LogicalTypeId::VARIANT || target_type.id() == LogicalTypeId::VARIANT ||
-	    !source_type.IsIntegral() || !target_type.IsIntegral()) {
-		return true;
-	}
-
-	const auto source_size = GetTypeIdSize(source_type.InternalType());
-	const auto target_size = GetTypeIdSize(target_type.InternalType());
-	if (source_size > target_size) {
-		return true;
-	}
-	if (source_type.IsSigned() == target_type.IsSigned()) {
-		return false;
-	}
-	if (source_type.IsSigned()) {
-		return true;
-	}
-	return source_size >= target_size;
-}
-
-static bool RuntimeFilterUsesTryCast(const JoinFilterPushdownColumn &column) {
-	auto source_type = column.storage_type;
-	for (auto &cast : column.runtime_filter_casts) {
-		if (cast.mode == RuntimeFilterCastMode::TRY_CAST || RuntimeFilterCastCanFail(source_type, cast.target_type)) {
-			return true;
-		}
-		source_type = cast.target_type;
-	}
-	return false;
-}
-
-static bool RequiresRuntimeFilterExpressionReconstruction(const JoinFilterPushdownColumn &column,
-                                                          const LogicalType &runtime_type) {
-	if (column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION) {
-		return false;
-	}
-	auto source_type = column.storage_type;
-	for (auto &cast : column.runtime_filter_casts) {
-		if (RuntimeFilterCastCanFail(source_type, cast.target_type)) {
-			return true;
-		}
-		source_type = cast.target_type;
-	}
-	D_ASSERT(source_type == GetRuntimeFilterInputType(column, runtime_type));
-	return false;
-}
-
 static RuntimeFilterInput CreateRuntimeFilterInputExpression(ClientContext &context,
                                                              const JoinFilterPushdownColumn &column,
                                                              const LogicalType &runtime_type) {
-	D_ASSERT(column.storage_type.IsValid());
-	unique_ptr<Expression> input = make_uniq<BoundReferenceExpression>(column.storage_type, idx_t(0));
-	auto source_type = column.storage_type;
 	bool preserves_cast_errors = false;
-	for (auto &cast : column.runtime_filter_casts) {
-		const auto cast_can_fail = RuntimeFilterCastCanFail(source_type, cast.target_type);
-		const auto is_try_cast = cast.mode == RuntimeFilterCastMode::TRY_CAST || cast_can_fail;
-		if (source_type != cast.target_type) {
-			input = BoundCastExpression::AddCastToType(context, std::move(input), cast.target_type, is_try_cast);
-		}
-		preserves_cast_errors |= cast.mode == RuntimeFilterCastMode::DEFAULT_CAST && cast_can_fail;
-		source_type = cast.target_type;
-	}
-	D_ASSERT(source_type == GetRuntimeFilterInputType(column, runtime_type));
-	return {std::move(input), preserves_cast_errors};
+	auto expression = RuntimeFilterCastUtil::CreateRuntimeFilterInputExpression(context, column, preserves_cast_errors);
+	D_ASSERT(expression->GetReturnType() == RuntimeFilterCastUtil::GetRuntimeFilterInputType(column, runtime_type));
+	return {std::move(expression), preserves_cast_errors};
 }
 
 static unique_ptr<Expression> PreserveRuntimeFilterCastErrors(unique_ptr<Expression> filter_expr,
@@ -1547,7 +1479,7 @@ static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &conte
                                                             float selectivity_threshold, idx_t n_vectors_to_check) {
 	const auto key_name = ht.conditions[0].GetRHS().ToString();
 	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
-	auto filter_input_type = GetRuntimeFilterInputType(deferred.column, key_type);
+	auto filter_input_type = RuntimeFilterCastUtil::GetRuntimeFilterInputType(deferred.column, key_type);
 	auto input = CreateRuntimeFilterInputExpression(context, deferred.column, key_type);
 	const auto filters_null_values = !input.preserves_cast_errors && !ht.NullValuesAreEqual(0);
 	vector<unique_ptr<Expression>> children;
@@ -1609,7 +1541,7 @@ static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable 
 		           {{"kind", GetRuntimeFilterTypeName(deferred.type)},
 		            {"storage_type", deferred.column.storage_type.ToString()},
 		            {"reconstruction_mode", GetRuntimeFilterReconstructionModeName(deferred.column.mode)},
-		            {"uses_try_cast", to_string(RuntimeFilterUsesTryCast(deferred.column))}});
+		            {"uses_try_cast", to_string(RuntimeFilterCastUtil::RuntimeFilterUsesTryCast(deferred.column))}});
 	}
 	gstate.deferred_runtime_filters.clear();
 }
@@ -1684,7 +1616,8 @@ bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilt
 		return false;
 	}
 
-	const auto reconstruct_expression = RequiresRuntimeFilterExpressionReconstruction(column, runtime_type);
+	const auto reconstruct_expression =
+	    RuntimeFilterCastUtil::RequiresRuntimeFilterExpressionReconstruction(column, runtime_type);
 	auto filter_input_type = column.storage_type;
 	unique_ptr<Expression> filter_input;
 	unique_ptr<Expression> null_check_input;
@@ -1787,7 +1720,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			auto min_val = min_val_before_cast;
 			auto max_val = max_val_before_cast;
 			const bool reconstruct_filter_expression =
-			    RequiresRuntimeFilterExpressionReconstruction(pushdown_column, min_val_before_cast.type());
+			    RuntimeFilterCastUtil::RequiresRuntimeFilterExpressionReconstruction(pushdown_column,
+			                                                                         min_val_before_cast.type());
 
 			// Cast to storage type, skip if fails
 			if (pushdown_column.storage_type.IsValid() && !reconstruct_filter_expression) {
@@ -1808,7 +1742,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			}
 
 			auto condition_type = min_val.type();
-			auto runtime_filter_input_type = GetRuntimeFilterInputType(pushdown_column, condition_type);
+			auto runtime_filter_input_type =
+			    RuntimeFilterCastUtil::GetRuntimeFilterInputType(pushdown_column, condition_type);
 			bool can_emit_runtime_filters = pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
 			if (can_emit_runtime_filters && ht) {
 				can_emit_runtime_filters = runtime_filter_input_type == ht->conditions[0].GetLHS().GetReturnType();

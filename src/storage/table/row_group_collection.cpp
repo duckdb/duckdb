@@ -6,7 +6,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -48,7 +47,7 @@ static bool CanRebuildExistingIndexesAfterVacuum(DataTableInfo &info, AttachedDa
 //! Returns true if checkpoint vacuum can incrementally remap every index: rowid gaps are persistable and
 //! every index is a bound ART without legacy-encoded geometry keys. If set, remap_indexes is filled with the indexes.
 static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached,
-                           optional_ptr<vector<reference<BoundIndex>>> remap_indexes) {
+                           optional_ptr<vector<shared_ptr<IndexEntry>>> remap_indexes) {
 	if (remap_indexes) {
 		remap_indexes->clear();
 	}
@@ -56,25 +55,24 @@ static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached
 		return false;
 	}
 	bool any_index = false;
-	for (auto &entry : table_info.GetIndexes().IndexEntries()) {
+	for (auto entry : table_info.GetIndexes().IndexEntries()) {
 		any_index = true;
-		auto &index = *entry.index;
-		if (!index.IsBound() || index.GetIndexType() != ART::TYPE_NAME) {
+		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
 			if (remap_indexes) {
 				remap_indexes->clear();
 			}
 			return false;
 		}
-		auto &art = index.Cast<ART>();
+		const auto art = entry->GetReadHandle<ART>();
 		// Remap regenerates keys from column values, which cannot reproduce legacy-encoded geometry keys.
-		if (art.HasLegacyGeometryKeys()) {
+		if (art->HasLegacyGeometryKeys()) {
 			if (remap_indexes) {
 				remap_indexes->clear();
 			}
 			return false;
 		}
 		if (remap_indexes) {
-			remap_indexes->push_back(art);
+			remap_indexes->push_back(entry);
 		}
 	}
 	return any_index;
@@ -82,7 +80,7 @@ static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached
 
 VacuumIndexStrategy
 RowGroupCollection::GetVacuumIndexStrategy(AttachedDatabase &attached,
-                                           optional_ptr<vector<reference<BoundIndex>>> remap_indexes) const {
+                                           optional_ptr<vector<shared_ptr<IndexEntry>>> remap_indexes) const {
 	if (CanVacuumRemap(*info, attached, remap_indexes)) {
 		return VacuumIndexStrategy::REMAP;
 	}
@@ -614,8 +612,8 @@ bool RowGroupCollection::CanFetch(TransactionData transaction, const row_t row_i
 // Append
 //===--------------------------------------------------------------------===//
 TableAppendState::TableAppendState()
-    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0),
-      hashes(LogicalType::HASH) {
+    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr),
+      transaction(TransactionData::Unversioned()), hashes(LogicalType::HASH) {
 }
 
 TableAppendState::~TableAppendState() {
@@ -669,7 +667,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 }
 
 void RowGroupCollection::InitializeAppend(TableAppendState &state) {
-	TransactionData tdata(0, 0);
+	auto tdata = TransactionData::Unversioned();
 	InitializeAppend(tdata, state);
 }
 
@@ -821,7 +819,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 	D_ASSERT(next_row_id.load() >= total_rows.load());
 }
 
-void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+void RowGroupCollection::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count) {
 	auto row_groups = GetRowGroups();
 	auto row_group = row_groups->GetSegment(start);
 	D_ASSERT(row_group);
@@ -832,7 +830,7 @@ void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t s
 		idx_t start_in_row_group = current_row - row_group->GetRowStart();
 		idx_t append_count = MinValue<idx_t>(current_row_group.count - start_in_row_group, remaining);
 
-		current_row_group.CleanupAppend(lowest_transaction, start_in_row_group, append_count);
+		current_row_group.CleanupAppend(lowest_visibility_bound, start_in_row_group, append_count);
 
 		current_row += append_count;
 		remaining -= append_count;
@@ -1009,131 +1007,11 @@ void RowGroupCollection::Update(TransactionData transaction, DuckTableEntry &tab
 	} while (pos < updates.size());
 }
 
-struct IndexRemovalTargets {
-	optional_ptr<BoundIndex> append_target;
-	optional_ptr<BoundIndex> remove_target;
-	optional_ptr<BoundIndex> conditional_remove_target;
-	optional_ptr<BoundIndex> conditional_append_target;
-};
-
-void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType removal_type,
-                                            IndexRemovalTargets &targets) {
-	auto &main_index = entry.index->Cast<BoundIndex>();
-
-	// create "removed_data_during_checkpoint" if it does not exist
-	if (!entry.removed_data_during_checkpoint) {
-		entry.removed_data_during_checkpoint = main_index.CreateDeltaIndex(DeltaIndexType::REMOVED_DURING_CHECKPOINT);
-	}
-	if (removal_type == IndexRemovalType::MAIN_INDEX_ONLY || removal_type == IndexRemovalType::MAIN_INDEX) {
-		// removing from main index - but we cannot remove directly due to the concurrent checkpoint
-		// add removal to delta index
-		if (entry.added_data_during_checkpoint) {
-			// if we have also added data during this checkpoint - we might need to remove from there instead
-			// we FIRST try to remove from "added_data_during_checkpoint"
-			// any rows that are not there we add to "removed_data_during_checkpoint"
-			targets.conditional_remove_target = entry.added_data_during_checkpoint.get();
-			targets.conditional_append_target = entry.removed_data_during_checkpoint.get();
-		} else {
-			// add removed rows to "removed_data_during_checkpoint"
-			targets.conditional_append_target = entry.removed_data_during_checkpoint.get();
-		}
-		if (removal_type == IndexRemovalType::MAIN_INDEX) {
-			// we also need to append to "deleted_rows_in_use"
-			if (!entry.deleted_rows_in_use) {
-				// create "deleted_rows_in_use" if it does not exist yet
-				entry.deleted_rows_in_use = main_index.CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE);
-			}
-			targets.append_target = entry.deleted_rows_in_use;
-		}
-		return;
-	}
-	if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX_ONLY ||
-	    removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
-		// revert adding to main index
-		if (entry.added_data_during_checkpoint) {
-			// we have added data during this checkpoint as well, remove might have EITHER:
-			// (1) added to "removed_data_during_checkpoint"
-			// (2) removed data from "added_data_during_checkpoint"
-			// revert by first trying to remove from "removed_data_during_checkpoint"
-			// any rows that were not removed are re-added back to "added_data_during_checkpoint"
-			targets.conditional_remove_target = entry.removed_data_during_checkpoint.get();
-			targets.conditional_append_target = entry.added_data_during_checkpoint.get();
-		} else {
-			targets.conditional_remove_target = entry.removed_data_during_checkpoint.get();
-		}
-		if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
-			// we also need to remove from "deleted_rows_in_use"
-			targets.remove_target = entry.deleted_rows_in_use.get();
-		}
-	}
-}
-void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, IndexRemovalTargets &targets,
-                            optional_idx active_checkpoint) {
-	auto &main_index = entry.index->Cast<BoundIndex>();
-
-	// not all indexes require delta indexes - this is tracked through BoundIndex::RequiresTransactionality
-	// if an index does not require this we skip creating to and appending to "deleted_rows_in_use"
-	bool supports_delta_indexes = main_index.SupportsDeltaIndexes();
-	if (removal_type != IndexRemovalType::DELETED_ROWS_IN_USE && active_checkpoint.IsValid() &&
-	    supports_delta_indexes) {
-		// there's an ongoing checkpoint - check if we need to use delta indexes or if we can write to the main index
-		if (!entry.last_written_checkpoint.IsValid() ||
-		    entry.last_written_checkpoint.GetIndex() != active_checkpoint.GetIndex()) {
-			// there's an on-going checkpoint and we haven't flushed the index yet
-			// we can't modify the index in-place and need to modify the deltas - get the appropriate deltas to target
-			GetIndexRemovalTargetsActiveCheckpoint(entry, removal_type, targets);
-			return;
-		}
-	}
-
-	switch (removal_type) {
-	case IndexRemovalType::MAIN_INDEX_ONLY:
-		// directly remove from main index without appending to delta indexes
-		targets.remove_target = main_index;
-		break;
-	case IndexRemovalType::REVERT_MAIN_INDEX_ONLY:
-		// revert main index only append - just add back to index
-		targets.append_target = main_index;
-		break;
-	case IndexRemovalType::MAIN_INDEX:
-		// regular removal from main index - add rows to delta index if required
-		if (supports_delta_indexes) {
-			if (!entry.deleted_rows_in_use) {
-				// create "deleted_rows_in_use" if it does not exist yet
-				entry.deleted_rows_in_use = main_index.CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE);
-			}
-			targets.append_target = entry.deleted_rows_in_use;
-		}
-		targets.remove_target = main_index;
-		break;
-	case IndexRemovalType::REVERT_MAIN_INDEX:
-		// revert regular append to main index - remove from deleted_rows_in_use if we appended there before
-		targets.append_target = main_index;
-		if (supports_delta_indexes) {
-			targets.remove_target = entry.deleted_rows_in_use;
-		}
-		break;
-	case IndexRemovalType::DELETED_ROWS_IN_USE:
-		// remove from removal index if we appended any rows
-		if (supports_delta_indexes) {
-			targets.remove_target = entry.deleted_rows_in_use;
-		}
-		break;
-	default:
-		throw InternalException("Unsupported IndexRemovalType");
-	}
-}
-
 void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes,
                                            Vector &row_identifiers, idx_t count, IndexRemovalType removal_type,
                                            optional_idx active_checkpoint) {
 	// Collect all Indexed columns on the table.
-	unordered_set<column_t> indexed_column_id_set;
-
-	for (auto &index : indexes.Indexes()) {
-		auto &set = index.GetColumnIdSet();
-		indexed_column_id_set.insert(set.begin(), set.end());
-	}
+	auto indexed_column_id_set = indexes.GetIndexedColumns();
 
 	// Sorted so that the fetched columns align with the ascending physical order used when
 	// referencing them into result_chunk below.
@@ -1151,7 +1029,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 
 	ColumnFetchState state;
 	state.fetch_type = FetchType::FORCE_FETCH;
-	TransactionData commit_transaction(MAX_TRANSACTION_ID, TRANSACTION_ID_START - 1);
+	TransactionData commit_transaction(MAX_TRANSACTION_ID, VisibilityBound::Before(MAX_COMMIT_ID));
 	Fetch(commit_transaction, fetch_chunk, column_ids, row_identifiers, count, state);
 
 	// Used for index value removal.
@@ -1174,63 +1052,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		result_chunk.data[j].Reference(Value(types[j]), count_t(fetch_chunk.size()));
 	}
 
-	for (auto &entry : indexes.IndexEntries()) {
-		auto &index = *entry.index;
-		if (index.IsBound()) {
-			lock_guard<mutex> guard(entry.lock);
-
-			// check which indexes we should append to or remove from
-			// note that this method might also involve appending to indexes
-			// the reason for that is that we have "delta" indexes that we must fill with data we are removing
-			// OR because we are actually reverting a previous removal
-			IndexRemovalTargets targets;
-			GetIndexRemovalTargets(entry, removal_type, targets, active_checkpoint);
-
-			bool removal_succeeded = false;
-			if (targets.conditional_remove_target) {
-				// if we have an conditional remove target, we first try to remove the chunk from there
-				idx_t delete_count = targets.conditional_remove_target->TryDelete(result_chunk, row_identifiers);
-				if (delete_count > 0) {
-					if (delete_count != result_chunk.size()) {
-						// it should not be possible to get here
-						// what this means is that we removed SOME rows from the "initial_remove_target" - but not all
-						// "initial_remove_target" contains rows that were INSERTED during the checkpoint
-						// the regular remove target contains rows that were ALREADY THERE during the checkpoint
-						// "RemoveFromIndexes" works on a per-row-group basis
-						// when appending during a checkpoint, we always insert new row groups for new data
-						// so the two groups of data should always be separate
-						throw InternalException("RowGroupCollection::RemoveFromIndexes - partially deleted from the "
-						                        "initial removal target");
-					}
-					removal_succeeded = true;
-				}
-			}
-			if (targets.conditional_append_target && !removal_succeeded) {
-				// for any rows that were not removed - append them to the conditional append target instead
-				IndexAppendInfo append_info;
-				auto error = targets.conditional_append_target->Append(result_chunk, row_identifiers, append_info);
-				if (error.HasError()) {
-					throw InternalException("Failed to append to %s: %s", targets.conditional_append_target->name,
-					                        error.Message());
-				}
-			}
-			// perform the targeted append / removal
-			if (targets.append_target) {
-				IndexAppendInfo append_info;
-				auto error = targets.append_target->Append(result_chunk, row_identifiers, append_info);
-				if (error.HasError()) {
-					throw InternalException("Failed to append to %s: %s", targets.append_target->name, error.Message());
-				}
-			}
-			if (targets.remove_target) {
-				targets.remove_target->Delete(result_chunk, row_identifiers);
-			}
-			continue;
-		}
-		// Buffer the delete: result_chunk is in table layout with all indexed columns populated.
-		auto &unbound_index = index.Cast<UnboundIndex>();
-		unbound_index.BufferChunk(result_chunk, row_identifiers, BufferedIndexReplay::DEL_ENTRY);
-	}
+	indexes.RemoveFromIndexes(result_chunk, row_identifiers, removal_type, active_checkpoint);
 }
 
 void RowGroupCollection::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, Vector &row_ids,
@@ -1347,8 +1169,8 @@ private:
 //! TableIndexList::InitializeIndexChunk, followed by the old and new rowid.
 class VacuumIndexRemapper {
 public:
-	VacuumIndexRemapper(const vector<reference<BoundIndex>> &indexes, RowGroupCollection &collection)
-	    : indexes(indexes), table_types(collection.GetTypes()) {
+	VacuumIndexRemapper(const vector<shared_ptr<IndexEntry>> &entries, RowGroupCollection &collection)
+	    : index_entries(entries), table_types(collection.GetTypes()) {
 		DataChunk index_chunk;
 		TableIndexList::InitializeIndexChunk(index_chunk, table_types, mapped_column_ids, collection.GetTableInfo());
 		old_rowid_idx = mapped_column_ids.size();
@@ -1387,43 +1209,26 @@ public:
 		if (buffer->Count() == 0) {
 			return;
 		}
-		DataChunk scan_chunk;
-		buffer->InitializeScanChunk(scan_chunk);
-		DataChunk table_chunk;
-		table_chunk.InitializeEmpty(table_types);
+		for (const auto &entry : index_entries) {
+			// IndexEntry invokes this scan once to delete old rowids and once to append new rowids.
+			entry->RemapRowIds([&](const IndexRemapApply &apply) {
+				DataChunk scan_chunk;
+				buffer->InitializeScanChunk(scan_chunk);
+				DataChunk table_chunk;
+				table_chunk.InitializeEmpty(table_types);
 
-		// Reference the buffered key columns into the table-shaped chunk. Non-indexed columns stay
-		// unreferenced: index expressions only read the index's own columns (see ApplyBufferedReplays).
-		auto reference_table_chunk = [&]() {
-			for (idx_t col_idx = 0; col_idx < mapped_column_ids.size(); col_idx++) {
-				const auto col_id = mapped_column_ids[col_idx].GetPrimaryIndex();
-				table_chunk.data[col_id].Reference(scan_chunk.data[col_idx]);
-			}
-		};
-
-		for (auto &index_ref : indexes) {
-			auto &index = index_ref.get();
-			IndexLock index_lock;
-			index.InitializeLock(index_lock);
-
-			// Delete old rowids first to avoid same-key rowid collisions within the task.
-			ColumnDataScanState scan_state;
-			buffer->InitializeScan(scan_state);
-			while (buffer->Scan(scan_state, scan_chunk)) {
-				reference_table_chunk();
-				index.Delete(index_lock, table_chunk, scan_chunk.data[old_rowid_idx]);
-			}
-
-			// Remapping must not re-run uniqueness checks for already-validated rows.
-			buffer->InitializeScan(scan_state);
-			while (buffer->Scan(scan_state, scan_chunk)) {
-				reference_table_chunk();
-				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
-				auto error = index.Append(index_lock, table_chunk, scan_chunk.data[new_rowid_idx], append_info);
-				if (error.HasError()) {
-					error.Throw();
+				ColumnDataScanState scan_state;
+				buffer->InitializeScan(scan_state);
+				while (buffer->Scan(scan_state, scan_chunk)) {
+					// Reference the buffered key columns into the table-shaped chunk. Non-indexed columns stay
+					// unreferenced: index expressions only read the index's own columns (see ApplyBufferedReplays).
+					for (idx_t col_idx = 0; col_idx < mapped_column_ids.size(); col_idx++) {
+						const auto col_id = mapped_column_ids[col_idx].GetPrimaryIndex();
+						table_chunk.data[col_id].Reference(scan_chunk.data[col_idx]);
+					}
+					apply(table_chunk, scan_chunk.data[old_rowid_idx], scan_chunk.data[new_rowid_idx]);
 				}
-			}
+			});
 		}
 	}
 
@@ -1457,8 +1262,8 @@ private:
 	}
 
 private:
-	//! The indexes to remap.
-	const vector<reference<BoundIndex>> &indexes;
+	//! The stable index entries selected for row ID remapping.
+	vector<shared_ptr<IndexEntry>> index_entries;
 	const vector<LogicalType> &table_types;
 	//! Buffer slot -> table column id for the indexed key columns.
 	vector<StorageIndex> mapped_column_ids;
@@ -1481,7 +1286,7 @@ struct VacuumState {
 	//! How vacuum handles the table's indexes when it changes rowids.
 	VacuumIndexStrategy index_strategy = VacuumIndexStrategy::KEEP_ROW_IDS;
 	//! The indexes to remap, populated only when index_strategy == REMAP.
-	vector<reference<BoundIndex>> remap_indexes;
+	vector<shared_ptr<IndexEntry>> remap_indexes;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
@@ -1905,7 +1710,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	InitializeVacuumState(checkpoint_state, vacuum_state, writer.GetRowGroupCount());
 
 	auto &transaction_manager = DuckTransactionManager::Get(GetAttached());
-	auto lowest_active_start = transaction_manager.LowestActiveStart();
+	auto lowest_visibility_bound = transaction_manager.LowestVisibilityBound();
 	try {
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
@@ -1929,7 +1734,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
 			}
 			// the row group is kept as-is: try to compress its version information
-			row_group.CompressVersionInfo(lowest_active_start);
+			row_group.CompressVersionInfo(lowest_visibility_bound);
 			if (writer.GetCheckpointOptions().type != CheckpointType::VACUUM_ONLY) {
 				DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx,
 				           row_group, vacuum_state.row_start);
@@ -2394,7 +2199,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto result_row_groups = result->GetRowGroups();
 	for (auto &node : row_groups->SegmentNodes()) {
 		auto &current_row_group = node.GetNode();
-		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor);
+		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor, new_column_stats);
 		// merge in the statistics
 		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 
@@ -2467,8 +2272,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 
 	for (auto &node : row_groups->SegmentNodes()) {
 		auto &current_row_group = node.GetNode();
-		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
-		                                                 scan_state.table_state, node, scan_chunk, transaction);
+		auto new_row_group =
+		    current_row_group.AlterType(*result, target_type, changed_idx, executor, scan_state.table_state, node,
+		                                scan_chunk, transaction, changed_stats);
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result_row_groups->AppendSegment(std::move(new_row_group), node.GetRowStart());
 	}

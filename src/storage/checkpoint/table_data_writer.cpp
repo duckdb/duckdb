@@ -195,7 +195,6 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	if (!v1_0_0_storage) {
 		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
-	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
 
 	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 

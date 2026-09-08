@@ -202,7 +202,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const Identifier &n
 	CheckCatalogEntryInvariants(*value, name);
 
 	// Mark this entry as being created by the current active transaction
-	value->timestamp = transaction.transaction_id;
+	value->timestamp = transaction.GetTransactionId();
 	value->set = this;
 	catalog.GetDependencyManager()->AddObject(transaction, *value, dependencies);
 
@@ -289,7 +289,7 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 	// Add a RENAMED_ENTRY before adding a DELETED_ENTRY, this makes it so that when this is committed
 	// we know that this was not a DROP statement.
 	auto renamed_tombstone = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, old.ParentCatalog(), original_name);
-	renamed_tombstone->timestamp = transaction.transaction_id;
+	renamed_tombstone->timestamp = transaction.GetTransactionId();
 	renamed_tombstone->deleted = false;
 	renamed_tombstone->set = this;
 	if (!CreateEntryInternal(transaction, original_name, std::move(renamed_tombstone), read_lock,
@@ -303,7 +303,7 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 	// Add the renamed entry
 	// Start this off with a RENAMED_ENTRY node, for commit/cleanup/rollback purposes
 	auto renamed_node = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, catalog, new_name);
-	renamed_node->timestamp = transaction.transaction_id;
+	renamed_node->timestamp = transaction.GetTransactionId();
 	renamed_node->deleted = false;
 	renamed_node->set = this;
 	return CreateEntryInternal(transaction, new_name, std::move(renamed_node), read_lock);
@@ -360,7 +360,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 	entry = GetEntryInternal(transaction, name);
 
 	// Mark this entry as being created by this transaction
-	value->timestamp = transaction.transaction_id;
+	value->timestamp = transaction.GetTransactionId();
 	value->set = this;
 	// Preserve the oid across the alter: an altered entry is the same logical object as before
 	value->oid = entry->oid;
@@ -431,7 +431,7 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const Identif
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the tombstone node
 	auto value = make_uniq<InCatalogEntry>(CatalogType::DELETED_ENTRY, entry->ParentCatalog(), entry->name);
-	value->timestamp = transaction.transaction_id;
+	value->timestamp = transaction.GetTransactionId();
 	value->set = this;
 	value->deleted = true;
 	auto value_ptr = value.get();
@@ -465,9 +465,10 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, CatalogEnt
 
 	// Make sure that we don't see any uncommitted changes
 	auto transaction_id = MAX_TRANSACTION_ID;
+	D_ASSERT(IsCommitted(commit_id));
 	// This will allow us to see all committed changes made before this COMMIT happened
-	auto tx_start_time = commit_id + 1;
-	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id, tx_start_time);
+	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id,
+	                                      VisibilityBound::Through(commit_id));
 
 	D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);
 	auto &dep = entry.Cast<DependencyEntry>();
@@ -476,17 +477,18 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, CatalogEnt
 
 //! Verify that no dependencies creations were committed since our transaction started, that reference the entry we're
 //! dropping
-void CatalogSet::CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry) {
+void CatalogSet::CommitDrop(transaction_t commit_id, VisibilityBound visibility_bound, CatalogEntry &entry) {
 	auto &duck_catalog = GetCatalog();
 
 	entry.OnDrop();
 	// Make sure that we don't see any uncommitted changes
 	auto transaction_id = MAX_TRANSACTION_ID;
+	D_ASSERT(IsCommitted(commit_id));
 	// This will allow us to see all committed changes made before this COMMIT happened
-	auto tx_start_time = commit_id;
-	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id, tx_start_time);
+	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id,
+	                                      VisibilityBound::Before(commit_id));
 
-	duck_catalog.GetDependencyManager()->VerifyCommitDrop(commit_transaction, start_time, entry);
+	duck_catalog.GetDependencyManager()->VerifyCommitDrop(commit_transaction, visibility_bound, entry);
 }
 
 DuckCatalog &CatalogSet::GetCatalog() {
@@ -510,35 +512,22 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 bool CatalogSet::CreatedByOtherActiveTransaction(CatalogTransaction transaction, transaction_t timestamp) {
 	// True if this transaction is not committed yet and the entry was made by another active (not committed)
 	// transaction
-	return (timestamp >= TRANSACTION_ID_START && timestamp != transaction.transaction_id);
+	return !IsCommitted(timestamp) && timestamp != transaction.GetTransactionId();
 }
 
 bool CatalogSet::CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp) {
-	// the entry is committed but not usable by this transaction, so it is not our source of truth
-	return IsCommitted(timestamp) && !UseTimestamp(transaction, timestamp);
+	// the entry is committed but not visible to this transaction, so it is not our source of truth
+	return IsCommitted(timestamp) && !transaction.view.Sees(timestamp);
 }
 
 bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t timestamp) {
 	// a version conflicts exactly when it is not visible to the transaction: it is either another
 	// active transaction's uncommitted version, or committed outside this transaction's snapshot
-	return !UseTimestamp(transaction, timestamp);
-}
-
-bool CatalogSet::IsCommitted(transaction_t timestamp) {
-	//! FIXME: `transaction_t` itself should be a class that has these methods
-	return timestamp < TRANSACTION_ID_START;
+	return !transaction.view.Sees(timestamp);
 }
 
 bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t timestamp) {
-	if (timestamp == transaction.transaction_id) {
-		// we created this version
-		return true;
-	}
-	if (VisibleToSnapshot(timestamp, transaction.start_time)) {
-		// this version is part of the transaction's snapshot
-		return true;
-	}
-	return false;
+	return transaction.view.Sees(timestamp);
 }
 
 CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current) {
@@ -562,7 +551,7 @@ CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction,
 CatalogEntry &CatalogSet::GetCommittedEntry(CatalogEntry &current) {
 	reference<CatalogEntry> entry(current);
 	while (entry.get().HasChild()) {
-		if (IsCommitted(entry.get().timestamp)) {
+		if (IsCommitted(entry.get().timestamp.load())) {
 			// this entry is committed: use it
 			break;
 		}
@@ -740,6 +729,29 @@ void CatalogSet::ScanWithReturn(CatalogTransaction transaction, const std::funct
 			if (!callback(entry_for_transaction)) {
 				return;
 			}
+		}
+	}
+}
+
+optional_ptr<CatalogEntry> CatalogSet::GetHeadEntry(const Identifier &name) {
+	lock_guard<mutex> lock(catalog_lock);
+	return map.GetEntry(name);
+}
+
+void CatalogSet::ScanWithConflictDetection(CatalogTransaction transaction,
+                                           const std::function<void(CatalogEntry &)> &scan_callback,
+                                           const std::function<void(CatalogEntry &)> &conflict_callback) {
+	unique_lock<mutex> lock(catalog_lock);
+	CreateDefaultEntries(transaction, lock);
+
+	for (auto &kv : map.Entries()) {
+		auto &entry = *kv.second;
+		if (HasConflict(transaction, entry.timestamp) && !entry.deleted) {
+			conflict_callback(entry);
+		}
+		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);
+		if (!entry_for_transaction.deleted) {
+			scan_callback(entry_for_transaction);
 		}
 	}
 }

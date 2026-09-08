@@ -148,7 +148,7 @@ protected:
 	atomic<WALInitState> init_state;
 	optional_idx checkpoint_iteration;
 
-	//! Group-sync state (guarded by sync_lock, which is independent of the WAL lock)
+	//! Shared-sync state (guarded by sync_lock, which is independent of the WAL lock)
 	mutex sync_lock;
 	std::condition_variable sync_cv;
 	//! Sync offsets are LOGICAL (BufferedFileWriter::GetTotalWritten), not file positions: a

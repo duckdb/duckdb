@@ -1,4 +1,4 @@
-#include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/main/capi_v2/capi_v2_result_internal.hpp"
 
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/box_renderer_context.hpp"
@@ -11,142 +11,6 @@
 
 namespace duckdb::capiv2 {
 namespace {
-
-struct ResultWrapperV2 {
-	enum class State : uint8_t { PENDING, STREAMING, FINISHED, CANCELLED, ERRORED };
-
-	~ResultWrapperV2() {
-		// Finalize() (engine cleanup) runs in duckdb_v2_result_destroy, not here:
-		// a destructor must not drive locked engine state behind a catch-all.
-		pending.reset();
-		result.reset();
-		ReleaseBusySlot();
-	}
-
-	State state = State::PENDING;
-	//! Live while state == PENDING.
-	unique_ptr<PendingQueryResult> pending;
-	//! Live while state == STREAMING.
-	unique_ptr<QueryResult> result;
-
-	//! Keeps the ClientContext alive for starting subsequent fragments and
-	//! preserves the guarantee that an undrained result survives disconnect:
-	//! the connection handle (a bare Connection *) may be destroyed while a
-	//! result is live, but the context it shared with us stays alive here.
-	shared_ptr<ClientContext> context;
-	//! The preprocessed statement group; fragment_index points at the next
-	//! fragment to start, fragment_count remembers the group size after
-	//! fragments is cleared on terminal transitions.
-	vector<unique_ptr<SQLStatement>> fragments;
-	idx_t fragment_index = 0;
-	idx_t fragment_count = 0;
-	//! Positional parameter values for this execution, keyed by binding identifier
-	//! ("1".."N"). Empty for an unparameterized statement (StartNextFragment takes
-	//! the no-values path). Applied only to the first fragment (a parameterized
-	//! statement does not expand into a group).
-	identifier_map_t<BoundParameterData> param_values;
-	//! True while the currently executing fragment is the principal one
-	//! (its chunks are surfaced; other fragments' output is discarded).
-	bool principal_active = false;
-	//! True once a row-producing fragment has been selected as principal.
-	bool principal_seen = false;
-	//! True once the principal fragment's metadata has been captured.
-	bool metadata_available = false;
-	//! True when statement_execute injected its own wrapping transaction for
-	//! this group (autocommit input that preprocessing expanded and wrapped
-	//! in BEGIN ... COMMIT). Distinguishes a bridge-owned transaction, which
-	//! must be rolled back on incomplete destroy, from a user-managed one,
-	//! which must not be touched. Captured at query time because the engine's
-	//! auto_rollback flag is not reliably observable from the bridge's
-	//! fragment execution path.
-	bool owns_wrapping_transaction = false;
-
-	//! The owning connection's busy slot; released on terminal transition
-	//! or destroy, whichever comes first.
-	shared_ptr<ConnectionBusySlotV2> busy_slot;
-
-	//! Principal fragment's metadata, valid once metadata_available.
-	vector<LogicalType> types;
-	vector<Identifier> names;
-	StatementType statement_type = StatementType::INVALID_STATEMENT;
-	StatementProperties properties;
-
-	//! Sticky error, recorded when state == ERRORED.
-	ErrorData error;
-
-	//! Mirrors ClientContext::Query's error handling for expanded groups
-	//! (client_context.cpp, chain-append loop): when the group cannot
-	//! complete, roll back the transaction statement_execute injected to wrap
-	//! it. A no-op for non-expanded statements, for groups that ran inside a
-	//! user-managed transaction (which the bridge never wraps), and when the
-	//! transaction is already gone.
-	void RollbackIncompleteGroup() {
-		if (!owns_wrapping_transaction || !context) {
-			return;
-		}
-		if (context->transaction.HasActiveTransaction()) {
-			// Mirrors Connection::Rollback (Query("ROLLBACK") + throw on error),
-			// driven through the retained context so it works after disconnect.
-			auto result = context->Query("ROLLBACK", QueryResultOutputType::FORCE_MATERIALIZED);
-			if (result->HasError()) {
-				result->ThrowError();
-			}
-		}
-	}
-
-	//! Close() the live engine result so an abandoned active query is cleaned
-	//! up (freeing the executor, which breaks the ClientContext ref cycle),
-	//! then roll back an injected group transaction. May throw; the terminal
-	//! states leave pending/result null, so this is then a no-op.
-	void Finalize() {
-		if (pending) {
-			pending->Close();
-		} else if (result && result->GetResultType() == QueryResultType::STREAM_RESULT) {
-			result->Cast<StreamQueryResult>().Close();
-		}
-		RollbackIncompleteGroup();
-	}
-
-	//! Frees the connection for its next query. Only the current owner can
-	//! release the slot, so a release after the connection moved on is a
-	//! no-op.
-	void ReleaseBusySlot() {
-		if (busy_slot) {
-			void *expected = this;
-			busy_slot->owner.compare_exchange_strong(expected, nullptr);
-			busy_slot.reset();
-		}
-	}
-
-	// State-machine entry points; defined in query_result-v2.cpp. All of
-	// them throw DuckDB exceptions on failure (callers wrap in
-	// WithErrorHandler) and record sticky errors before throwing.
-
-	//! Adopts an already-produced pending query into the state machine: the single
-	//! seam both the stateless (fragment) and prepared paths reach. When is_principal,
-	//! captures its metadata and surfaces its chunks. Throws on a pending prepare error.
-	void BeginPending(unique_ptr<PendingQueryResult> pending, bool is_principal);
-	//! Starts the pending query for the next fragment, selecting it as
-	//! principal per the engine-mirrored rule and adopting it via BeginPending.
-	//! Throws on prepare errors.
-	void StartNextFragment();
-	//! Drives one unit of work; never blocks. On CHUNK, out_chunk holds the
-	//! produced chunk; on every other status it is reset.
-	DUCKDB_V2_RESULT_STEP_STATUS Step(unique_ptr<DataChunk> &out_chunk);
-	//! Blocks until Step can make progress. No-op on terminal states.
-	void Wait();
-	//! Blocking convenience: steps/waits until a chunk is produced (returned)
-	//! or the stream ends (nullptr). Cancellation throws InterruptException.
-	unique_ptr<DataChunk> FetchChunkBlocking();
-	//! Throws unless the principal fragment's metadata is available.
-	void RequireMetadata() const;
-
-private:
-	//! Shared error sink: interrupts become the sticky CANCELLED state
-	//! (returned as a status), everything else becomes the sticky ERRORED
-	//! state and throws.
-	DUCKDB_V2_RESULT_STEP_STATUS HandleExecutionError(ErrorData error_data);
-};
 
 // Map duckdb::StatementReturnType to DUCKDB_V2_RESULT_TYPE. Values are
 // numerically identical by §4 of the V2 conventions (numeric enum-id
@@ -165,6 +29,8 @@ DUCKDB_V2_RESULT_TYPE MapResultType(StatementReturnType t) {
 	D_ASSERT(false); // unmapped StatementReturnType variant
 	return DUCKDB_V2_RESULT_TYPE_QUERY_RESULT;
 }
+
+} // anonymous namespace
 
 // ---------------------------------------------------------------------------
 // ResultWrapperV2 state machine
@@ -482,13 +348,38 @@ unique_ptr<DataChunk> ResultWrapperV2::FetchChunkBlocking() {
 	}
 }
 
-} // anonymous namespace
-
 auto Convert(ResultWrapperV2 *wrapper) -> duckdb_v2_result_handle {
 	return reinterpret_cast<duckdb_v2_result_handle>(wrapper);
 }
 auto Convert(duckdb_v2_result_handle handle) -> ResultWrapperV2 * {
 	return reinterpret_cast<ResultWrapperV2 *>(handle);
+}
+
+auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, PreparedStatement &prepared,
+                                identifier_map_t<BoundParameterData> &values) -> duckdb_v2_result_handle {
+	auto wrapper = make_uniq<ResultWrapperV2>();
+	// One live result per connection, claimed the way statement_execute claims it and
+	// before PendingQuery runs, which would otherwise cancel the live stream.
+	auto busy_slot = GetBusySlot(*context);
+	void *expected = nullptr;
+	if (!busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {
+		throw ResourceInUseException("connection has a live result; drain, destroy, or interrupt it before starting "
+		                             "a new query (or open another connection)");
+	}
+	// On any failure below, the wrapper's destructor releases the slot.
+	wrapper->busy_slot = std::move(busy_slot);
+	wrapper->busy_slot->cancel_requested.store(false, std::memory_order_relaxed);
+	wrapper->context = context;
+	// A prepared statement is always one engine statement: preprocessing, expansion and
+	// the wrapping transaction all happened at prepare time, so this bypasses the fragment
+	// machinery and is always principal. fragment_count is 1 for metadata symmetry only.
+	wrapper->fragment_count = 1;
+	wrapper->BeginPending(prepared.PendingQuery(values, /*allow_stream_result=*/true), true);
+	// The engine runs a prepared statement through an internal EXECUTE, whose statement type
+	// would otherwise be what the result reports. Report the type of the statement that was
+	// prepared instead, so a prepared result is indistinguishable from a stateless one.
+	wrapper->statement_type = prepared.GetStatementType();
+	return Convert(wrapper.release());
 }
 
 } // namespace duckdb::capiv2
@@ -503,15 +394,16 @@ DUCKDB_V2_ERROR duckdb_v2_statement_execute(duckdb_v2_connection_handle conn, du
                                             const duckdb_v2_identifier_t *parameter_names,
                                             const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
                                             duckdb_v2_result_handle *out_result, duckdb_v2_error_info_handle *err) {
+	// The refusals here never reach the engine and leave the statement intact
+	// (the spec commits to this).
+	DUCKDB_CHECK_ARG(out_result);
+	*out_result = nullptr;
+	DUCKDB_CHECK_ARG(conn);
+	DUCKDB_CHECK_ARG(statement);
+	if (parameter_count > 0 && !parameter_values) {
+		return NullArgumentError(err, __func__, "parameter_values");
+	}
 	return WithErrorHandler(err, [&]() {
-		if (out_result) {
-			*out_result = nullptr;
-		}
-		// The refusals below never reach the engine and leave the statement intact
-		// (the spec commits to this).
-		if (!conn || !statement || !out_result || (parameter_count > 0 && !parameter_values)) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_statement_execute");
-		}
 		auto *connection = Convert(conn);
 		auto wrapper = duckdb::make_uniq<ResultWrapperV2>();
 		// One live result per connection. The busy slot lives in the context's
@@ -583,10 +475,9 @@ DUCKDB_V2_ERROR duckdb_v2_statement_execute(duckdb_v2_connection_handle conn, du
 
 DUCKDB_V2_ERROR duckdb_v2_result_drain(duckdb_v2_result_handle result, idx_t *out_rows_changed,
                                        duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_rows_changed);
 	return WithErrorHandler(err, [&]() {
-		if (!result || !out_rows_changed) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_drain");
-		}
 		auto *wrapper = Convert(result);
 		// Drain to completion: side effects are applied, rows of a
 		// row-producing result are discarded. CHANGED_ROWS results stream a
@@ -610,16 +501,14 @@ DUCKDB_V2_ERROR duckdb_v2_result_render_box(duckdb_v2_result_handle *result, idx
                                             idx_t max_col_width, duckdb_v2_str null_value, idx_t render_mode,
                                             idx_t limit, duckdb_v2_text_sink_fn sink, void *user_data,
                                             duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(*result);
+	DUCKDB_CHECK_ARG(sink);
+	// Validate the by-value arguments before consuming the result, so an
+	// argument rejection leaves the caller's result intact (as the null-arg
+	// rejections above do).
+	DUCKDB_CHECK_ARG(null_value);
 	return WithErrorHandler(err, [&]() {
-		if (!result || !*result || !sink) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_render_box");
-		}
-		// Validate the by-value arguments before consuming the result, so an
-		// argument rejection leaves the caller's result intact (as the null-arg
-		// rejection above does).
-		if (!null_value.ptr && null_value.len > 0) {
-			throw duckdb::InvalidInputException("null_value: null pointer with nonzero length");
-		}
 		if (render_mode > 1) {
 			throw duckdb::InvalidInputException("render_mode must be 0 (rows) or 1 (columns)");
 		}
@@ -701,11 +590,11 @@ DUCKDB_V2_ERROR duckdb_v2_result_destroy(duckdb_v2_result_handle *result) {
 
 DUCKDB_V2_ERROR duckdb_v2_result_step(duckdb_v2_result_handle result, duckdb_v2_data_chunk_handle *out_chunk,
                                       DUCKDB_V2_RESULT_STEP_STATUS *out_status, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_chunk);
+	DUCKDB_CHECK_ARG(out_status);
+	*out_chunk = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!result || !out_chunk || !out_status) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_step");
-		}
-		*out_chunk = nullptr;
 		auto *wrapper = Convert(result);
 		duckdb::unique_ptr<duckdb::DataChunk> chunk;
 		auto status = wrapper->Step(chunk);
@@ -718,11 +607,10 @@ DUCKDB_V2_ERROR duckdb_v2_result_step(duckdb_v2_result_handle result, duckdb_v2_
 
 DUCKDB_V2_ERROR duckdb_v2_result_fetch_chunk(duckdb_v2_result_handle result, duckdb_v2_data_chunk_handle *out_chunk,
                                              duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_chunk);
+	*out_chunk = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!result || !out_chunk) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_fetch_chunk");
-		}
-		*out_chunk = nullptr;
 		auto *wrapper = Convert(result);
 		auto chunk = wrapper->FetchChunkBlocking();
 		if (chunk) {
@@ -732,12 +620,8 @@ DUCKDB_V2_ERROR duckdb_v2_result_fetch_chunk(duckdb_v2_result_handle result, duc
 }
 
 DUCKDB_V2_ERROR duckdb_v2_result_wait(duckdb_v2_result_handle result, duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (!result) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_wait");
-		}
-		Convert(result)->Wait();
-	});
+	DUCKDB_CHECK_ARG(result);
+	return WithErrorHandler(err, [&]() { Convert(result)->Wait(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -746,10 +630,10 @@ DUCKDB_V2_ERROR duckdb_v2_result_wait(duckdb_v2_result_handle result, duckdb_v2_
 
 DUCKDB_V2_ERROR duckdb_v2_result_get_result_type(duckdb_v2_result_handle result, DUCKDB_V2_RESULT_TYPE *out_type,
                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_type);
+
 	return WithErrorHandler(err, [&]() {
-		if (!result || !out_type) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_get_result_type");
-		}
 		auto *r = Convert(result);
 		r->RequireMetadata();
 		*out_type = MapResultType(r->properties.return_type);
@@ -758,10 +642,10 @@ DUCKDB_V2_ERROR duckdb_v2_result_get_result_type(duckdb_v2_result_handle result,
 
 DUCKDB_V2_ERROR duckdb_v2_result_get_statement_type(duckdb_v2_result_handle result, DUCKDB_V2_STATEMENT_TYPE *out_type,
                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_type);
+
 	return WithErrorHandler(err, [&]() {
-		if (!result || !out_type) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_get_statement_type");
-		}
 		auto *r = Convert(result);
 		r->RequireMetadata();
 		*out_type = static_cast<DUCKDB_V2_STATEMENT_TYPE>(r->statement_type);
@@ -770,14 +654,12 @@ DUCKDB_V2_ERROR duckdb_v2_result_get_statement_type(duckdb_v2_result_handle resu
 
 DUCKDB_V2_ERROR duckdb_v2_result_get_schema(duckdb_v2_result_handle result, duckdb_v2_schema_handle *out_schema,
                                             duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (out_schema) {
-			*out_schema = nullptr;
-		}
+	DUCKDB_CHECK_ARG(out_schema);
+	*out_schema = nullptr;
 
-		if (!result || !out_schema) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_get_schema");
-		}
+	DUCKDB_CHECK_ARG(result);
+
+	return WithErrorHandler(err, [&]() {
 		auto *r = Convert(result);
 		r->RequireMetadata();
 		auto schema = duckdb::make_uniq<CV2Schema>();

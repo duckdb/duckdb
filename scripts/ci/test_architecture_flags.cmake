@@ -27,7 +27,9 @@ assert_architecture_flags(linux_amd64_extension Linux x86_64 Clang EXTENSION "" 
 assert_architecture_flags(linux_arm64 Linux aarch64 GNU CLI "" "" FALSE FALSE
   "-march=armv8-a;-mtune=generic")
 assert_architecture_flags(windows_amd64_clang_cl Windows AMD64 Clang CLI "" "" FALSE FALSE
-  "-march=x86-64-v3;-mtune=generic")
+  "-march=haswell;-mtune=generic")
+assert_architecture_flags(windows_amd64_mingw Windows unknown GNU EXTENSION windows_amd64_mingw "" FALSE FALSE
+  "-march=haswell;-mtune=generic")
 assert_architecture_flags(windows_arm64_clang_cl Windows ARM64 Clang EXTENSION "" "" FALSE FALSE
   "-march=armv8-a;-mtune=generic")
 assert_architecture_flags(windows_msvc_baseline Windows AMD64 MSVC CLI "" "" FALSE FALSE "")

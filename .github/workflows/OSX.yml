@@ -2,43 +2,30 @@ name: OSX
 on:
   workflow_call:
     inputs:
-      override_git_describe:
+      duckdb_version:
         type: string
-      git_ref:
+      duckdb_commit:
+        type: string
+      runner_macos_arm64:
         type: string
       skip_tests:
         type: boolean
       run_all:
         type: boolean
-  push:
-    branches-ignore:
-      - 'main'
-      - 'feature'
-      - 'v*.*-*'
-      - 'gh-readonly-queue/**'
-    paths:
-      - '**'
-      - '!**.md'
-      - '!test/configs/**'
-      - '!tools/**'
-      - 'tools/shell/**'
-      - '!.github/patches/duckdb-wasm/**'
-      - '!.github/workflows/**'
-      - '.github/workflows/OSX.yml'
-
 
 concurrency:
-  group: osx-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  group: osx-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.duckdb_version }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+  DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+  DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
 
 jobs:
   xcode-debug:
     name: OSX Debug
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner_macos_arm64 || 'macos-latest' }}
 
     env:
       TREAT_WARNINGS_AS_ERRORS: 1
@@ -50,7 +37,7 @@ jobs:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+        ref: ${{ inputs.duckdb_commit }}
 
     - uses: actions/setup-python@v6
       with:
@@ -80,7 +67,7 @@ jobs:
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner_macos_arm64 || 'macos-latest' }}
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -92,7 +79,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ inputs.duckdb_commit }}
 
       - uses: actions/setup-python@v6
         with:
@@ -105,10 +92,13 @@ jobs:
 
       - name: Install pytest
         run: |
-          python3 scripts/ci/retry.py -- python -m pip install pytest
+          python3 scripts/ci/retry.py -- python -m pip install --break-system-packages pytest
 
       - name: Build
         run: python3 scripts/ci/retry.py -- make
+
+      - name: Bundle static libraries
+        run: make gather-libs
 
       - name: CLI check
         run: |
@@ -123,6 +113,7 @@ jobs:
 
         #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
       - name: Sign Binaries
+        if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
         shell: bash
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
@@ -157,16 +148,36 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          mkdir build/release_arm64 build/release_amd64
+          mkdir -p build/release_arm64/libs build/release_amd64/libs
           lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb
           lipo -extract x86_64 -output build/release_amd64/duckdb build/release/duckdb
+
+          for library in build/release/libs/*.a; do
+            library_name="$(basename "$library")"
+            lipo -extract arm64 -output "build/release_arm64/libs/$library_name" "$library"
+            lipo "build/release_arm64/libs/$library_name" -verify_arch arm64
+            lipo -extract x86_64 -output "build/release_amd64/libs/$library_name" "$library"
+            lipo "build/release_amd64/libs/$library_name" -verify_arch x86_64
+          done
 
           make cli-release-artifact ARTIFACT_SUFFIX=osx-universal CLI_BINARY=build/release/duckdb
           make cli-release-artifact ARTIFACT_SUFFIX=osx-arm64 CLI_BINARY=build/release_arm64/duckdb
           make cli-release-artifact ARTIFACT_SUFFIX=osx-amd64 CLI_BINARY=build/release_amd64/duckdb
           make shared-libs-release-artifact ARTIFACT_SUFFIX=osx-universal SHARED_LIBRARIES="build/release/src/libduckdb*.dylib"
+          zip -r -j static-libs-osx-arm64.zip \
+            src/include/duckdb.h \
+            src/include/duckdb_v2.h \
+            src/include/duckdb_extension.h \
+            src/include/duckdb_extension_v2.h \
+            build/release_arm64/libs/
+          zip -r -j static-libs-osx-amd64.zip \
+            src/include/duckdb.h \
+            src/include/duckdb_v2.h \
+            src/include/duckdb_extension.h \
+            src/include/duckdb_extension_v2.h \
+            build/release_amd64/libs/
 
-          ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-osx-universal.tar.gz duckdb-cli-osx-arm64.tar.gz duckdb-cli-osx-amd64.tar.gz duckdb-shared-libs-osx-universal.tar.gz
+          ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-osx-universal.tar.gz duckdb-cli-osx-arm64.tar.gz duckdb-cli-osx-amd64.tar.gz duckdb-shared-libs-osx-universal.tar.gz static-libs-osx-arm64.zip static-libs-osx-amd64.zip
 
       - uses: actions/upload-artifact@v7
         with:
@@ -187,6 +198,16 @@ jobs:
         with:
           path: duckdb-shared-libs-osx-universal.tar.gz
           archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-osx-arm64
+          path: static-libs-osx-arm64.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-osx-amd64
+          path: static-libs-osx-amd64.zip
 
       - name: Unit Test
         shell: bash
