@@ -36,11 +36,74 @@ enum MatchRecognizeResult : idx_t {
 //	MATCH_NUMBER() is the first field of the packed column struct
 static constexpr idx_t MATCH_NUMBER_FIELD = 0;
 
+//! One membership of a row in a match. Overlapping matches each give the rows they cover one of
+//! these, so there are as many as there are (row, match) pairs and not as many as there are rows.
+struct MatchRecognizeSpan {
+	idx_t symbol;
+	idx_t match_number;
+	idx_t match_start;
+	idx_t match_end;
+	bool is_match_start;
+	bool excluded;
+	//! An empty match covers no rows at all; this span only marks where it happened
+	bool empty;
+};
+
+//! The memberships of one row, in the order the matches were found
+struct MatchRecognizeRowSpans {
+	struct Node {
+		MatchRecognizeSpan span;
+		Node *next;
+	};
+
+	Node *first = nullptr;
+	Node *last = nullptr;
+	idx_t count = 0;
+};
+
+//! Appends memberships on behalf of one thread. The rows of a partition belong to the thread that
+//! took it, so only the blocks are its own business; they are handed to the state it writes into
+//! once it is done, which is before anything reads them back.
+//!
+//! The blocks come from the buffer manager's allocator, so that storage which grows with the
+//! memberships rather than with the rows grows against the memory limit and not outside it.
+struct MatchRecognizeSpanWriter {
+	//! Big enough that a block is taken rarely, small enough that a pattern matching almost nothing
+	//! does not reserve much for it
+	static constexpr idx_t BLOCK_SPANS = 2048;
+
+	explicit MatchRecognizeSpanWriter(ClientContext &client)
+	    : allocator(BufferManager::GetBufferManager(client).GetBufferAllocator()) {
+	}
+
+	void Append(MatchRecognizeRowSpans &row, const MatchRecognizeSpan &span) {
+		if (next == end) {
+			blocks.push_back(allocator.Allocate(BLOCK_SPANS * sizeof(MatchRecognizeRowSpans::Node)));
+			next = reinterpret_cast<MatchRecognizeRowSpans::Node *>(blocks.back().get());
+			end = next + BLOCK_SPANS;
+		}
+		auto node = next++;
+		node->span = span;
+		node->next = nullptr;
+		if (row.count++ == 0) {
+			row.first = node;
+		} else {
+			row.last->next = node;
+		}
+		row.last = node;
+	}
+
+	Allocator &allocator;
+	vector<AllocatedData> blocks;
+	MatchRecognizeRowSpans::Node *next = nullptr;
+	MatchRecognizeRowSpans::Node *end = nullptr;
+};
+
 struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 	WindowMatchRecognizeGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
 	                                const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
-	      result_vec(executor.wexpr.GetReturnType(), payload_count), spans(payload_count) {
+	      row_spans(payload_count) {
 		auto &config = executor.wexpr.BindInfo()->Cast<MatchRecognizeFunctionData>();
 		condition_values.resize(config.conditions.size());
 		for (auto &values : condition_values) {
@@ -48,51 +111,16 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 		}
 		classifiers.resize(payload_count);
 		excluded_rows.resize(payload_count);
-		D_ASSERT(result_vec.GetType().id() == LogicalTypeId::LIST);
+		D_ASSERT(executor.wexpr.GetReturnType().id() == LogicalTypeId::LIST);
 	}
 
-	//! One row of the result list
-	struct Span {
-		idx_t symbol;
-		idx_t match_number;
-		bool is_match_start;
-		idx_t match_start;
-		idx_t match_end;
-		bool excluded;
-		//! An empty match covers no rows at all; this span only marks where it happened
-		bool empty;
-	};
-
-	//! Build the list vector the operator reads from the spans collected during matching
-	void MaterializeSpans(const vector<string> &symbols) {
-		idx_t total = 0;
-		for (auto &row : spans) {
-			total += row.size();
+	//! Take over the blocks a thread filled, so that they outlive the walk that wrote them
+	void KeepSpans(MatchRecognizeSpanWriter &writer) {
+		lock_guard<mutex> guard(state_lock);
+		for (auto &block : writer.blocks) {
+			span_blocks.push_back(std::move(block));
 		}
-		ListVector::Reserve(result_vec, total);
-		ListVector::SetListSize(result_vec, total);
-		auto list_data = FlatVector::GetDataMutable<list_entry_t>(result_vec);
-		auto &child = ListVector::GetChildMutable(result_vec);
-		auto &fields = StructVector::GetEntries(child);
-
-		idx_t offset = 0;
-		for (idx_t row = 0; row < spans.size(); row++) {
-			list_data[row].offset = offset;
-			list_data[row].length = spans[row].size();
-			for (auto &span : spans[row]) {
-				fields[CLASSIFIER].SetValue(offset, span.empty ? Value(LogicalType::VARCHAR)
-				                                               : Value(MatchRecognizeSymbolName(symbols[span.symbol])));
-				fields[MATCH_NUMBER].SetValue(offset, Value::UBIGINT(span.match_number));
-				fields[IS_MATCH_START].SetValue(offset, Value::BOOLEAN(span.is_match_start));
-				fields[IS_MATCH_END].SetValue(offset, Value::BOOLEAN(row == span.match_end));
-				fields[MATCH_START].SetValue(offset, Value::UBIGINT(span.match_start));
-				fields[MATCH_END].SetValue(offset, Value::UBIGINT(span.match_end));
-				fields[IS_EXCLUDED].SetValue(offset, Value::BOOLEAN(span.excluded));
-				fields[IS_EMPTY].SetValue(offset, Value::BOOLEAN(span.empty));
-				fields[ROW_INDEX].SetValue(offset, Value::UBIGINT(row));
-				offset++;
-			}
-		}
+		writer.blocks.clear();
 	}
 
 	mutex state_lock;
@@ -101,7 +129,6 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 	//! Partitions are independent, so the threads that reach Finalize share them out
 	vector<pair<idx_t, idx_t>> partitions;
 	atomic<idx_t> next_partition {0};
-	atomic<idx_t> completed_partitions {0};
 	//! The variable that classified each row, written only by the thread that owns the partition
 	vector<idx_t> classifiers;
 	//! Whether the pattern matched each row inside a {- -}, written alongside the classifier above
@@ -112,8 +139,10 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 	//! threads do not need to coordinate.
 	vector<vector<uint8_t>> condition_values;
 
-	Vector result_vec;
-	vector<vector<Span>> spans;
+	//! Where each row's memberships start, and how many of them there are
+	vector<MatchRecognizeRowSpans> row_spans;
+	//! The blocks the memberships above live in
+	vector<AllocatedData> span_blocks;
 };
 
 LogicalType WindowMatchRecognizeExecutor::ResultType() {
@@ -711,17 +740,22 @@ enum class PatternMemo : uint8_t {
 //! backtracking is exponential, and it holds only while the conditions answer the same way each time
 //! that pair is reached. A condition that navigates the match being assembled reads the rows matched
 //! before the one it tests, so two ways of reaching the same pair can disagree and the record has to
-//! go. What is left there is the epoch below, which only ever spans a stretch of the walk that
-//! matched no row at all: within one the history cannot differ, so it still cuts the loops a
-//! nullable repetition would otherwise spin in forever.
+//! go.
+//!
+//! What is left there is cycle detection rather than memoisation: a walk may not reach the same
+//! instruction twice without matching a row in between, because everything it could do the second
+//! time it already did the first. That is a property of the path being walked, not of the search as
+//! a whole, so the marks belong to the backtracking state. They are kept in an undo log: taking an
+//! alternative back off the stack restores the marks to what they were on the path that reached it,
+//! and matching a row opens a scope of its own that the marks left behind cannot answer for.
 struct PatternMatcher {
 	PatternMatcher(ClientContext &context_p, const PatternProgram &program_p, const SymbolMatcher &symbol_matches_p,
 	               vector<idx_t> &classifiers_p, vector<uint8_t> &excluded_rows_p, PatternMemo memo_p)
 	    : context(context_p), program(program_p), symbol_matches(symbol_matches_p), classifiers(classifiers_p),
 	      excluded_rows(excluded_rows_p), memo(memo_p), row_count(classifiers_p.size()) {
 		if (memo == PatternMemo::HISTORY) {
-			// no row is matched within an epoch, so every state it records sits at the same row and one
-			// record per instruction is enough
+			// no row is matched within a scope, so every state it marks sits at the same row and one
+			// mark per instruction is enough
 			history_marks.assign(program.code.size(), 0);
 			return;
 		}
@@ -740,23 +774,32 @@ struct PatternMatcher {
 	//! A partition is matched within its own bounds, and the anchors and row offsets a record was
 	//! taken under only hold there, so nothing is carried over from the one before
 	void BeginPartition() {
+		if (memo == PatternMemo::HISTORY) {
+			// every attempt opens a scope of its own below, and a mark only outlives the walk that took it
+			return;
+		}
 		NextEpoch();
 	}
 
 	//! Match starting at `start`, within the partition [`partition_start`, `input_size`)
 	bool Match(idx_t start, idx_t partition_start, idx_t input_size) {
-		if (memo != PatternMemo::PARTITION) {
+		if (memo == PatternMemo::ATTEMPT) {
 			NextEpoch();
 		}
 		attempt_marks.clear();
 		pending.clear();
-		pending.push_back(PendingState {0, start, history_epoch});
+		// the marks of the attempt before this one belong to walks that are over
+		UnwindHistory(0);
+		pending.push_back(PendingState {0, start, NextScope(), 0});
 		while (!pending.empty()) {
 			auto state = pending.back();
 			pending.pop_back();
 			auto pc = state.pc;
 			auto offset = state.offset;
-			auto walk = state.epoch;
+			// this alternative was left behind on a path that has since walked on; the marks it may
+			// read are the ones that path had taken when it was pushed
+			UnwindHistory(state.trail_size);
+			auto walk = state.scope;
 			while (true) {
 				// a walk can be long, and a pattern that has to try again for every row longer still
 				if (++steps >= INTERRUPT_INTERVAL) {
@@ -782,7 +825,7 @@ struct PatternMatcher {
 					continue;
 				}
 				if (instruction.op == PatternOp::SPLIT) {
-					pending.push_back(PendingState {instruction.alternative, offset, walk});
+					pending.push_back(PendingState {instruction.alternative, offset, walk, history_trail.size()});
 					pc = instruction.target;
 					continue;
 				}
@@ -807,9 +850,7 @@ struct PatternMatcher {
 				pc++;
 				offset++;
 				// the walk now carries one more matched row, which is a history of its own
-				if (memo == PatternMemo::HISTORY) {
-					walk = NextEpoch();
-				}
+				walk = NextScope();
 			}
 		}
 		return false;
@@ -819,21 +860,25 @@ struct PatternMatcher {
 	idx_t match_end = 0;
 
 private:
-	//! A state still to be walked. Its epoch names the rows matched to reach it, so the records it
-	//! reads are only the ones taken under the same history.
+	//! A state still to be walked. Its scope names the stretch of the walk that reached it and
+	//! matched no row, and `trail_size` the marks that stretch had taken by then.
 	struct PendingState {
 		idx_t pc;
 		idx_t offset;
-		uint32_t epoch;
+		idx_t scope;
+		idx_t trail_size;
 	};
 
 	//! Record that this state is being walked, or report that it already was
-	bool Visit(idx_t pc, idx_t offset, uint32_t walk) {
+	bool Visit(idx_t pc, idx_t offset, idx_t walk) {
 		if (memo == PatternMemo::HISTORY) {
-			if (history_marks[pc] == walk) {
+			auto &mark = history_marks[pc];
+			if (mark == walk) {
 				return false;
 			}
-			history_marks[pc] = walk;
+			// what the mark said before is what an alternative pushed before now has to see again
+			history_trail.push_back(HistoryMark {pc, mark});
+			mark = walk;
 			return true;
 		}
 		const auto slot_index = pc * (row_count + 1) + offset;
@@ -851,25 +896,27 @@ private:
 	//! Retire every record taken so far. Stepping a counter does that without touching the records
 	//! themselves; only a counter that wrapped back onto a value they could still hold needs the
 	//! array cleared.
-	uint32_t NextEpoch() {
-		if (memo != PatternMemo::HISTORY) {
-			if (++epoch == 0) {
-				ClearExplored();
-				epoch = 1;
-			}
-			return epoch;
+	void NextEpoch() {
+		if (++epoch == 0) {
+			ClearExplored();
+			epoch = 1;
 		}
-		if (++history_epoch != 0) {
-			return history_epoch;
+	}
+
+	//! Open the stretch of the walk that starts where the last row was matched. Scope 0 is the one no
+	//! mark was ever taken in, so counting up hands out an identity nothing can already be holding
+	//! and a 64 bit counter never comes back round to one that is.
+	idx_t NextScope() {
+		return memo == PatternMemo::HISTORY ? ++history_scope : 0;
+	}
+
+	//! Put the marks back the way the path being resumed left them
+	void UnwindHistory(idx_t trail_size) {
+		while (history_trail.size() > trail_size) {
+			auto &entry = history_trail.back();
+			history_marks[entry.pc] = entry.scope;
+			history_trail.pop_back();
 		}
-		std::fill(history_marks.begin(), history_marks.end(), 0);
-		// the states still to be walked were recorded under identities that are about to be handed
-		// out again, so they are given ones that cannot be
-		history_epoch = 0;
-		for (auto &state : pending) {
-			state.epoch = ++history_epoch;
-		}
-		return ++history_epoch;
 	}
 
 	void ClearExplored() {
@@ -892,10 +939,16 @@ private:
 	idx_t explored_size = 0;
 	//! Records matching this belong to the current partition or attempt
 	uint8_t epoch = 0;
-	//! One record per instruction, for the epoch that spans a stretch of the walk matching no row.
-	//! No row is matched within one, so every state it records sits at the same row.
-	vector<uint32_t> history_marks;
-	uint32_t history_epoch = 0;
+	//! One mark per instruction, naming the scope the walk last visited it in. No row is matched
+	//! within a scope, so every state it marks sits at the same row.
+	vector<idx_t> history_marks;
+	idx_t history_scope = 0;
+	//! What a mark said before the walk overwrote it, so that backtracking can put it back
+	struct HistoryMark {
+		idx_t pc;
+		idx_t scope;
+	};
+	vector<HistoryMark> history_trail;
 	//! The records this attempt wrote into the partition-wide memo, undone if it finds a match
 	vector<idx_t> attempt_marks;
 	vector<PendingState> pending;
@@ -1143,6 +1196,7 @@ private:
 static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobalState &gstate,
                            const MatchRecognizeFunctionData &config) {
 	auto &classifiers = gstate.classifiers;
+	MatchRecognizeSpanWriter writer(context.client);
 	RowConditions row_conditions(context, gstate, config);
 	SymbolMatcher symbol_matches = [&](idx_t index, idx_t row) {
 		return row_conditions.Matches(index, row);
@@ -1193,8 +1247,7 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 			// scan has to step past it rather than skip, or it would never move.
 			if (matcher.match_end <= row) {
 				match_number++;
-				gstate.spans[row].push_back(
-				    WindowMatchRecognizeGlobalState::Span {0, match_number, true, row, row, false, true});
+				writer.Append(gstate.row_spans[row], MatchRecognizeSpan {0, match_number, row, row, true, false, true});
 				row++;
 				continue;
 			}
@@ -1203,18 +1256,16 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 			match_number++;
 
 			for (idx_t match_row = row; match_row <= match_end; match_row++) {
-				gstate.spans[match_row].push_back(
-				    WindowMatchRecognizeGlobalState::Span {classifiers[match_row], match_number, match_row == row, row,
-				                                           match_end, gstate.excluded_rows[match_row] != 0, false});
+				writer.Append(gstate.row_spans[match_row],
+				              MatchRecognizeSpan {classifiers[match_row], match_number, row, match_end,
+				                                  match_row == row, gstate.excluded_rows[match_row] != 0, false});
 			}
 			row = SkipTo(config, row_conditions.SkipSymbol(), row, match_end, classifiers);
 		}
-
-		// the thread that finishes the last partition publishes the result
-		if (++gstate.completed_partitions == gstate.partitions.size()) {
-			gstate.MaterializeSpans(config.symbols);
-		}
 	}
+
+	// the memberships have to outlive this walk, which the blocks they sit in do not
+	gstate.KeepSpans(writer);
 }
 
 void WindowMatchRecognizeExecutor::Finalize(ExecutionContext &context, optional_ptr<WindowCollection> collection,
@@ -1232,9 +1283,44 @@ void WindowMatchRecognizeExecutor::Finalize(ExecutionContext &context, optional_
 void WindowMatchRecognizeExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                            Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gstate = sink.global_state.Cast<WindowMatchRecognizeGlobalState>();
-	// the spans were materialised in Finalize, which every thread has left by the time any of them
-	// reads here, so this only reads shared state and does not have to be serialised
-	result.Slice(gstate.result_vec, row_idx, row_idx + bounds.size());
+	auto &symbols = gstate.executor.wexpr.BindInfo()->Cast<MatchRecognizeFunctionData>().symbols;
+	// The list is built for the rows being read rather than for the whole input, so the memberships
+	// are laid out flat a chunk at a time and never all at once. Matching is over by the time anything
+	// reads here - every thread has left Finalize - so this only reads shared state.
+	const auto count = bounds.size();
+	idx_t total = 0;
+	for (idx_t i = 0; i < count; i++) {
+		total += gstate.row_spans[row_idx + i].count;
+	}
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	ListVector::Reserve(result, total);
+	ListVector::SetListSize(result, total);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto &child = ListVector::GetChildMutable(result);
+	auto &fields = StructVector::GetEntries(child);
+
+	idx_t offset = 0;
+	for (idx_t i = 0; i < count; i++) {
+		const auto row = row_idx + i;
+		auto &row_spans = gstate.row_spans[row];
+		list_data[i].offset = offset;
+		list_data[i].length = row_spans.count;
+		for (auto node = row_spans.first; node; node = node->next) {
+			auto &span = node->span;
+			fields[CLASSIFIER].SetValue(offset, span.empty ? Value(LogicalType::VARCHAR)
+			                                               : Value(MatchRecognizeSymbolName(symbols[span.symbol])));
+			fields[MATCH_NUMBER].SetValue(offset, Value::UBIGINT(span.match_number));
+			fields[IS_MATCH_START].SetValue(offset, Value::BOOLEAN(span.is_match_start));
+			fields[IS_MATCH_END].SetValue(offset, Value::BOOLEAN(row == span.match_end));
+			fields[MATCH_START].SetValue(offset, Value::UBIGINT(span.match_start));
+			fields[MATCH_END].SetValue(offset, Value::UBIGINT(span.match_end));
+			fields[IS_EXCLUDED].SetValue(offset, Value::BOOLEAN(span.excluded));
+			fields[IS_EMPTY].SetValue(offset, Value::BOOLEAN(span.empty));
+			fields[ROW_INDEX].SetValue(offset, Value::UBIGINT(row));
+			offset++;
+		}
+	}
 }
 
 WindowFunction MatchRecognizeFun::GetFunction() {
