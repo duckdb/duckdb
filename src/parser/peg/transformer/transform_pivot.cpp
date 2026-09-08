@@ -279,6 +279,16 @@ vector<string> PEGTransformerFactory::TransformUnpivotHeaderList(PEGTransformer 
 	return IdentifiersToStrings(col_id_or_string);
 }
 
+vector<string> PEGTransformerFactory::TransformParenthesizedNameList(PEGTransformer &transformer,
+                                                                     const vector<Identifier> &col_id_or_string) {
+	return IdentifiersToStrings(col_id_or_string);
+}
+
+vector<string> PEGTransformerFactory::TransformBareNameList(PEGTransformer &transformer,
+                                                            const vector<Identifier> &col_id_or_string) {
+	return IdentifiersToStrings(col_id_or_string);
+}
+
 bool PEGTransformerFactory::TransformIncludeNulls(PEGTransformer &transformer) {
 	return true;
 }
@@ -456,12 +466,12 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUnpivotStatement
 
 UnpivotNameValues PEGTransformerFactory::TransformIntoNameValues(PEGTransformer &transformer,
                                                                  const Identifier &col_id_or_string,
-                                                                 const vector<Identifier> &identifier) {
+                                                                 const vector<string> &optional_parens_name_list) {
 	UnpivotNameValues result;
 	PivotColumn column;
 	column.unpivot_names.push_back(Identifier(col_id_or_string));
 	result.column = std::move(column);
-	result.unpivot_names = identifier;
+	result.unpivot_names = StringsToIdentifiers(optional_parens_name_list);
 	return result;
 }
 } // namespace duckdb

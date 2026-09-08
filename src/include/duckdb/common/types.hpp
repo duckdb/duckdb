@@ -544,7 +544,7 @@ struct MapType {
 };
 
 struct UnionType {
-	DUCKDB_API static const idx_t MAX_UNION_MEMBERS = 256;
+	DUCKDB_API static const idx_t MAX_UNION_MEMBERS = 255;
 	DUCKDB_API static idx_t GetMemberCount(const LogicalType &type);
 	DUCKDB_API static const LogicalType &GetMemberType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const Identifier &GetMemberName(const LogicalType &type, idx_t index);

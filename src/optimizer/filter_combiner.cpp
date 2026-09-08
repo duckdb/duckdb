@@ -346,7 +346,7 @@ static bool TypeSupportsConstantFilter(const LogicalType &type) {
 
 static bool TypeSupportsMultiColumnComparison(const LogicalType &type) {
 	auto physical = type.InternalType();
-	return TypeIsNumeric(physical) || physical == PhysicalType::BOOL;
+	return TypeIsNumeric(physical) || physical == PhysicalType::VARCHAR || physical == PhysicalType::BOOL;
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &table_filters,
@@ -455,8 +455,30 @@ static bool IsDirectNumericColumnComparison(const Expression &expr, const vector
 	       TypeSupportsMultiColumnComparison(right.GetReturnType());
 }
 
+static bool IsMonotoneIntervalColumn(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION || expr.GetReturnType() != LogicalType::INTERVAL) {
+		return false;
+	}
+	const auto &function = expr.Cast<BoundFunctionExpression>();
+	return function.GetChildren().size() == 1 &&
+	       function.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       function.Function().GetStability() == FunctionStability::CONSISTENT &&
+	       IsKnownMonotonic(function.Function().GetArgProperties(0).monotonicity);
+}
+
+static bool IsMonotoneIntervalColumnComparison(const Expression &expr, const vector<ColumnBinding> &bindings) {
+	if (bindings.size() != 2 || bindings[0] == bindings[1] || !BoundComparisonExpression::IsComparison(expr)) {
+		return false;
+	}
+	const auto &comparison = expr.Cast<BoundFunctionExpression>();
+	return SupportedFilterComparison(comparison.GetExpressionType()) &&
+	       IsMonotoneIntervalColumn(BoundComparisonExpression::Left(comparison)) &&
+	       IsMonotoneIntervalColumn(BoundComparisonExpression::Right(comparison));
+}
+
 static bool CanPushdownMultiColumnExpression(const Expression &expr, const vector<ColumnBinding> &bindings) {
-	return IsDirectNumericColumnComparison(expr, bindings) || IsColumnConstantOr(expr);
+	return IsDirectNumericColumnComparison(expr, bindings) || IsMonotoneIntervalColumnComparison(expr, bindings) ||
+	       IsColumnConstantOr(expr);
 }
 
 static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(LogicalGet &get, const Expression &expr,
@@ -478,8 +500,11 @@ static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(Logical
 	vector<ProjectionIndex> column_indexes;
 	column_indexes.reserve(distinct_bindings.size());
 	for (const auto &binding : distinct_bindings) {
-		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size() ||
-		    get.GetColumnIds()[binding.column_index].IsVirtualColumn()) {
+		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size()) {
+			return nullptr;
+		}
+		auto &column_id = get.GetColumnIds()[binding.column_index];
+		if (column_id.IsVirtualColumn() && !column_id.IsRowIdColumn()) {
 			return nullptr;
 		}
 		column_indexes.emplace_back(binding.column_index);
