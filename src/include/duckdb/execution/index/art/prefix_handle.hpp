@@ -16,6 +16,14 @@ namespace duckdb {
 
 class ARTKey;
 
+//! A newly allocated prefix chain with a pinned final child location.
+struct PrefixChain {
+	//! Pointer value identifying the first prefix.
+	NodePtr root;
+	//! Pins the final prefix containing the child pointer to fill.
+	NodePtrHandle tail;
+};
+
 //! PrefixHandle owns the pin for a mutable prefix node.
 class PrefixHandle {
 public:
@@ -33,9 +41,8 @@ public:
 	PrefixHandle &operator=(PrefixHandle &&) = default;
 
 public:
-	//! Create a non-empty prefix chain at node and return a pinned handle to its final child location.
-	//! The caller must keep node's storage valid for the duration of the call.
-	static NodePtrHandle New(ART &art, NodePtr &node, const ARTKey &key, const idx_t depth, const idx_t count);
+	//! Create a non-empty prefix chain and return its root pointer and pinned final child location.
+	static PrefixChain New(ART &art, const ARTKey &key, const idx_t depth, const idx_t count);
 
 	//! Create a new deprecated prefix node and return a handle to it.
 	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node);

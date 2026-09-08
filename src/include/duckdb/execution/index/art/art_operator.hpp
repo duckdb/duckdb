@@ -389,8 +389,9 @@ private:
 		if (depth + 1 < key.len) {
 			// Outside of gates, we create a prefix for the inlined leaf.
 			auto count = key.len - depth - 1;
-			auto tail = PrefixHandle::New(art, leaf, key, depth + 1, count);
-			Leaf::New(tail.Get(), row_id.GetRowId());
+			auto chain = PrefixHandle::New(art, key, depth + 1, count);
+			Leaf::New(chain.tail.Get(), row_id.GetRowId());
+			leaf = chain.root;
 		} else {
 			Leaf::New(leaf, row_id.GetRowId());
 		}

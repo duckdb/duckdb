@@ -82,11 +82,12 @@ PrefixHandle PrefixHandle::NewInternal(ART &art, NodePtr &node, const_data_ptr_t
 	return prefix;
 }
 
-NodePtrHandle PrefixHandle::New(ART &art, NodePtr &node, const ARTKey &key, const idx_t depth, const idx_t count) {
+PrefixChain PrefixHandle::New(ART &art, const ARTKey &key, const idx_t depth, const idx_t count) {
 	D_ASSERT(count > 0);
 
+	NodePtr root;
 	auto first_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count));
-	auto prefix = NewInternal(art, node, key.data, first_count, depth);
+	auto prefix = NewInternal(art, root, key.data, first_count, depth);
 	auto tail = std::move(prefix).IntoChild(art);
 
 	idx_t offset = first_count;
@@ -97,7 +98,7 @@ NodePtrHandle PrefixHandle::New(ART &art, NodePtr &node, const ARTKey &key, cons
 
 		offset += this_count;
 	}
-	return tail;
+	return {root, std::move(tail)};
 }
 
 void Prefix::Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte,
