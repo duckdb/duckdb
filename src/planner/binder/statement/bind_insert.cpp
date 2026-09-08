@@ -43,7 +43,7 @@ void Binder::CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result
 		string msg = StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
 		                                                  : "Column name/value mismatch for insert on %s: "
 		                                                    "expected %lld columns but %lld values were supplied",
-		                                tname, expected_columns, result_columns);
+		                                tname.GetIdentifierName(), expected_columns, result_columns);
 		throw BinderException(msg);
 	}
 }
