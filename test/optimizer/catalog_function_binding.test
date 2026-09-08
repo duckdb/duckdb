@@ -197,3 +197,65 @@ physical_plan	<REGEX>:.*prefix\(s, 'abc'\).*
 
 statement ok
 DROP MACRO prefix
+
+# the rewrites only ever look in the system catalog, so they never trigger extension loading
+
+statement ok
+SET autoinstall_known_extensions = false
+
+statement ok
+SET autoload_known_extensions = false
+
+query I
+SELECT count(*) FROM duckdb_extensions() WHERE loaded AND extension_name = 'icu'
+----
+0
+
+query I
+SELECT s LIKE 'abc%' FROM strings ORDER BY ALL
+----
+0
+1
+NULL
+
+query I
+SELECT s LIKE '%b%' FROM strings ORDER BY ALL
+----
+1
+1
+NULL
+
+query I
+SELECT i * 0 FROM integers ORDER BY ALL
+----
+0
+0
+0
+NULL
+
+query II
+SELECT g, avg(i) FROM integers GROUP BY g ORDER BY ALL
+----
+1	1.0
+2	3.0
+
+query III
+SELECT g, i, sum(i) FROM integers GROUP BY ROLLUP(g, i) ORDER BY ALL
+----
+1	1	1
+1	NULL	1
+1	NULL	NULL
+2	3	6
+2	NULL	6
+NULL	NULL	7
+
+query I
+SELECT count(*) FROM duckdb_extensions() WHERE loaded AND extension_name = 'icu'
+----
+0
+
+statement ok
+RESET autoload_known_extensions
+
+statement ok
+RESET autoinstall_known_extensions
