@@ -186,6 +186,21 @@ HTTPRequestState HTTPClient::Send(BaseRequest &request, HTTPExecutionMode mode, 
 
 namespace {
 
+//! Mark when a request goes on the wire. Paired with EndRequestTiming, which every path must reach
+//! before it logs, otherwise the log reports no start time and no duration at all.
+void BeginRequestTiming(BaseRequest &request) {
+	// timings are only collected when they will be logged
+	if (request.params.logger) {
+		request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
+	}
+	request.request_system_start = Timestamp::GetCurrentTimestamp();
+	request.request_monotonic_start = TimePoint::Tick();
+}
+
+void EndRequestTiming(BaseRequest &request) {
+	request.request_monotonic_end = TimePoint::Tick();
+}
+
 //! Runs one request's attempts without blocking the caller, asking HTTPUtil::Wait to come back later
 //! rather than sleeping here. Uses the same HTTPRetryState as the synchronous path.
 //! Each callback holds a reference to the driver, which keeps it alive across a deferral.
@@ -206,6 +221,8 @@ public:
 private:
 	void Attempt() {
 		auto self = shared_from_this();
+		// the span runs across the deferral, so it is opened here and closed by the completion
+		BeginRequestTiming(request);
 		// the returned state is not needed: an attempt that finished inline has already called back
 		client->Send(request, HTTPExecutionMode::DEFERRABLE,
 		             [self](unique_ptr<HTTPResponse> response, ErrorData error) {
@@ -219,6 +236,7 @@ private:
 		if (error.HasError()) {
 			attempt.exception_error = error.RawMessage();
 		}
+		EndRequestTiming(request);
 		http_util.LogRequest(request, attempt.response.get());
 
 		uint64_t delay_ms = 0;
@@ -455,26 +473,21 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequestOnce(BaseRequest &request, HTTPCli
                                                    HTTPClientCachePolicy &retry_cache_policy) {
 	retry_cache_policy = initial_cache_policy;
 
-	// When logging is enabled, we collect request timings
-	if (request.params.logger) {
-		request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
-	}
+	BeginRequestTiming(request);
 
 	unique_ptr<HTTPResponse> response;
 	try {
-		request.request_system_start = Timestamp::GetCurrentTimestamp();
-		request.request_monotonic_start = TimePoint::Tick();
 		response = client.Request(request);
 	} catch (...) {
 		retry_cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
-		request.request_monotonic_end = TimePoint::Tick();
+		EndRequestTiming(request);
 		LogRequest(request, nullptr);
 		throw;
 	}
 	if (!response || response->HasRequestError()) {
 		retry_cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
 	}
-	request.request_monotonic_end = TimePoint::Tick();
+	EndRequestTiming(request);
 	LogRequest(request, response ? response.get() : nullptr);
 	return response;
 }

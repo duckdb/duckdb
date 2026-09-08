@@ -596,3 +596,24 @@ TEST_CASE("HTTP throttle retries follow the platform's ability to wait", "[api]"
 	ImmediateUtil immediate;
 	REQUIRE(CountThrottledRetries(immediate) == 1);
 }
+
+TEST_CASE("HTTP timing of a deferred request spans the deferral", "[api]") {
+	// succeeds on the first attempt, so the whole span is the one deferral the test controls
+	NonBlockingUtil http_util(0, HTTPStatusCode::OK_200);
+	HTTPParams params(http_util);
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, params, nullptr, nullptr);
+	unique_ptr<HTTPClient> client;
+
+	auto before = TimePoint::Tick();
+	http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
+	               [](unique_ptr<HTTPResponse> response, ErrorData error) {});
+
+	// the transport takes its time, which is exactly what the sync path could never measure
+	std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	http_util.Complete();
+
+	// the span opened at dispatch and closed at completion, so it contains the wait
+	REQUIRE(TimePoint::ElapsedMillis(before, request.request_monotonic_start) >= 0);
+	REQUIRE(TimePoint::ElapsedMillis(request.request_monotonic_start, request.request_monotonic_end) >= 10);
+}
