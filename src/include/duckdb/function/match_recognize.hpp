@@ -22,10 +22,6 @@ constexpr const char *MATCH_RECOGNIZE_DEFINE_PREFIX = "__mr_define_";
 //! it attempts, which is what lets a DEFINE depend on the match being assembled.
 constexpr const char *MATCH_RECOGNIZE_MATCH_NUMBER_COLUMN = "__mr_match_number";
 
-//! Where that column sits among the ones the matcher is handed per row: first, so that the matcher
-//! can rewrite it without looking it up
-constexpr const idx_t MATCH_RECOGNIZE_MATCH_NUMBER_FIELD = 0;
-
 //! RUNNING and FINAL are carried from the parser to the binder as these markers, which wrap the
 //! measure they applied to and are unwrapped once the frame has been decided.
 constexpr const char *MATCH_RECOGNIZE_RUNNING_MARKER = "__mr_running";
@@ -112,6 +108,9 @@ struct MatchRecognizeFunctionData : FunctionData {
 	vector<string> symbols;
 	//! Whether any condition reads MATCH_NUMBER(), which is what forces re-evaluation per match
 	bool depends_on_match_number = false;
+	//! Where the number of the match being assembled sits among the values a condition reads. The
+	//! matcher supplies it rather than the plan, so it comes after the columns it is handed.
+	idx_t match_number_field = 0;
 	//! FIRST()/LAST() calls, resolved against the match being assembled
 	struct Navigation {
 		bool last;
@@ -140,6 +139,7 @@ struct MatchRecognizeFunctionData : FunctionData {
 		}
 		res->symbols = symbols;
 		res->depends_on_match_number = depends_on_match_number;
+		res->match_number_field = match_number_field;
 		res->navigations = navigations;
 		res->row_scoped = row_scoped;
 		res->after_match = after_match;
@@ -158,8 +158,8 @@ struct MatchRecognizeFunctionData : FunctionData {
 		}
 		return other.pattern->Equals(*pattern) && Expression::ListEquals(conditions, other.conditions) &&
 		       other.symbols == symbols && other.depends_on_match_number == depends_on_match_number &&
-		       other.row_scoped == row_scoped && other.after_match == after_match &&
-		       other.after_match_variable == after_match_variable;
+		       other.match_number_field == match_number_field && other.row_scoped == row_scoped &&
+		       other.after_match == after_match && other.after_match_variable == after_match_variable;
 	}
 };
 

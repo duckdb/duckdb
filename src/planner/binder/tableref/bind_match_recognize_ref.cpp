@@ -139,10 +139,15 @@ struct HoistedInputRefs {
 //! Every other reference is the input's, so it is computed against the input - which is also what
 //! makes a reference the input finds ambiguous say so, rather than quietly taking the first of them.
 static void HoistInputReferences(unique_ptr<ParsedExpression> &expr, const case_insensitive_set_t &symbols,
-                                 HoistedInputRefs &refs) {
+                                 const case_insensitive_set_t &aliases, HoistedInputRefs &refs) {
 	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr->Cast<ColumnRefExpression>();
-		if (!symbols.count(colref.ColumnNames()[0].GetIdentifierName())) {
+		auto &names = colref.ColumnNames();
+		// alias.<name> is how a select list spells a reference to one of its own aliases, so that is
+		// this clause's name too rather than something to compute against the input
+		const auto is_alias = names.size() == 2 && StringUtil::CIEquals("alias", names[0].GetIdentifierName()) &&
+		                      aliases.count(names[1].GetIdentifierName()) > 0;
+		if (!is_alias && !symbols.count(names[0].GetIdentifierName())) {
 			auto alias = expr->GetAlias();
 			expr = make_uniq<ColumnRefExpression>(Identifier(refs.Hoist(colref)));
 			expr->SetAlias(std::move(alias));
@@ -150,7 +155,7 @@ static void HoistInputReferences(unique_ptr<ParsedExpression> &expr, const case_
 		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { HoistInputReferences(child, symbols, refs); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { HoistInputReferences(child, symbols, aliases, refs); });
 }
 
 //! Pattern leaves only have to carry the symbol they name; there is no column behind them
@@ -301,7 +306,6 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	GeneratedNames names(std::move(input_names));
 	const string state_column = names.Reserve("__pattern_window");
 	const string spans_column = names.Reserve(state_column + "_spans");
-	const string match_number_column = names.Reserve(MATCH_RECOGNIZE_MATCH_NUMBER_COLUMN);
 	HoistedInputRefs input_refs(names);
 
 	// a condition may name any pattern variable, so the whole namespace has to be known before the
@@ -330,20 +334,33 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		partition_names.push_back(expr->GetName());
 	}
 
+	const case_insensitive_set_t no_aliases;
+
 	// Every clause here is evaluated above a subquery of the input, so a reference that means
 	// anything to the input rather than to this clause is computed against the input itself and read
 	// back by name.
 	for (auto &expr : ref.config->partition_expressions) {
-		HoistInputReferences(expr, qualifying_symbols, input_refs);
+		HoistInputReferences(expr, qualifying_symbols, no_aliases, input_refs);
 	}
 	for (auto &order : ref.config->order_by_expressions) {
-		HoistInputReferences(order.expression, qualifying_symbols, input_refs);
+		HoistInputReferences(order.expression, qualifying_symbols, no_aliases, input_refs);
 	}
 	for (auto &expr : ref.config->defines_expression_list) {
-		HoistInputReferences(expr, qualifying_symbols, input_refs);
+		HoistInputReferences(expr, qualifying_symbols, no_aliases, input_refs);
+	}
+	// A measure may name one written before it, which is this clause's own name rather than the
+	// input's, so it is not computed down there. A column of the input by the same name still wins,
+	// and is resolved where the measures are.
+	case_insensitive_set_t measure_alias_names;
+	for (auto &expr : ref.config->measures_expression_list) {
+		measure_alias_names.insert(expr->GetAlias().GetIdentifierName());
+	}
+	auto measure_names = qualifying_symbols;
+	for (auto &alias : measure_alias_names) {
+		measure_names.insert(alias);
 	}
 	for (auto &expr : ref.config->measures_expression_list) {
-		HoistInputReferences(expr, qualifying_symbols, input_refs);
+		HoistInputReferences(expr, measure_names, measure_alias_names, input_refs);
 	}
 
 	// The hoisted references sit in a projection of their own, directly over the input. Everything
@@ -445,9 +462,11 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	                                      names,
 	                                      navigations};
 
-	// MATCH_NUMBER() reads this column; the matcher rewrites it for every match it attempts
-	auto match_number_ref =
-	    inputs.ProjectAs(make_uniq<BoundConstantExpression>(Value::UBIGINT(0)), match_number_column);
+	// MATCH_NUMBER() is the one thing a condition reads that the plan does not supply: the matcher
+	// writes it per attempt. Which field it lands in is only known once the columns are, so what the
+	// conditions get until then is this placeholder.
+	unique_ptr<Expression> match_number_ref =
+	    make_uniq<BoundReferenceExpression>(LogicalType::UBIGINT, DConstants::INVALID_INDEX);
 
 	case_insensitive_set_t pattern_symbols;
 	vector<string> define_symbols;
@@ -584,13 +603,10 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		RemapToProjection(order.expression, inputs, input_columns);
 	}
 
-	// What the matcher reads per row is what the window hands it. The first of them is the number of
-	// the match being assembled, which the matcher rewrites per attempt rather than reading from the
-	// plan; the rest are the columns the conditions read.
+	// What the matcher reads per row is the columns the window hands it, in the order the conditions
+	// address them.
 	vector<unique_ptr<Expression>> children;
 	expression_map_t<idx_t> child_index;
-	children.push_back(match_number_ref->Copy());
-	child_index[*children.back()] = MATCH_RECOGNIZE_MATCH_NUMBER_FIELD;
 
 	// a navigated column is one the matcher fills in per row, so where it sits among the ones it is
 	// handed is what the navigation descriptor names
@@ -607,13 +623,21 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	for (auto &condition : define_conditions) {
 		RebindToMatcherInputs(condition, children, child_index);
+	}
+	// the matcher's own field comes after the ones the plan supplies
+	match_data->match_number_field = children.size();
+	for (auto &condition : define_conditions) {
 		// Both kinds depend on the match being assembled, so both are settled per candidate row.
 		// Re-deciding them for a whole partition after every match would be quadratic.
 		bool reads_match_number = false;
 		bool reads_navigation = false;
-		ExpressionIterator::VisitExpression<BoundReferenceExpression>(
-		    *condition, [&](const BoundReferenceExpression &bound_ref) {
-			    reads_match_number = reads_match_number || bound_ref.Index() == MATCH_RECOGNIZE_MATCH_NUMBER_FIELD;
+		ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
+		    condition, [&](BoundReferenceExpression &bound_ref, unique_ptr<Expression> &) {
+			    if (bound_ref.Index() == DConstants::INVALID_INDEX) {
+				    bound_ref.IndexMutable() = match_data->match_number_field;
+				    reads_match_number = true;
+				    return;
+			    }
 			    reads_navigation = reads_navigation || navigation_fields.count(bound_ref.Index()) > 0;
 		    });
 		match_data->row_scoped.push_back(reads_navigation || reads_match_number);
@@ -735,6 +759,13 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	// by one of its own, which is what the projections below the output refer to it by. Keeping the
 	// two apart is what lets a measure be called after a column of the input without the reference
 	// finding that column instead.
+	// a measure may name one written before it, which is what the alias map below is for
+	for (idx_t i = 0; i < ref.config->measures_expression_list.size(); i++) {
+		auto &expr = ref.config->measures_expression_list[i];
+		measures.bind_state.alias_map[expr->GetAlias()] = i;
+		measures.bind_state.original_expressions.push_back(expr->Copy());
+	}
+
 	vector<Identifier> measure_aliases;
 	vector<string> measure_columns;
 	{
@@ -745,6 +776,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 			measure_aliases.push_back(expr->GetAlias());
 			measure_columns.push_back(names.Reserve("__mr_measure_" + to_string(measure_columns.size())));
 			auto bound = measure_expression_binder.Bind(expr);
+			// one more measure is now there to be named by the ones after it
+			measures.bound_column_count++;
 			bound->SetAlias(Identifier(measure_columns.back()));
 			measures.names.emplace_back(measure_columns.back());
 			measures.types.push_back(bound->GetReturnType());

@@ -478,6 +478,17 @@ BindResult MatchRecognizeMeasureBinder::BindExpression(unique_ptr<ParsedExpressi
 			    running);
 			return BindGenerated(expr_ptr, depth, root_expression);
 		}
+		if (ClaimsAlias(colref)) {
+			// A measure may name an earlier measure, the way a select list may name an earlier column,
+			// and a column of the input takes precedence over one. Which of the two this is only shows
+			// once it has been bound - and if it is the column, binding it again below costs nothing
+			// because a column reference leaves nothing behind.
+			auto probe = expr_ptr->Copy();
+			auto bound = SelectBinder::BindExpression(probe, depth, root_expression);
+			if (bound.HasError() || bound.expression->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				return bound;
+			}
+		}
 		// an empty match covers no rows, so a column of the input has no row here to be read from
 		expr_ptr = OnlyWhenMatched(state, std::move(expr_ptr));
 		return BindGenerated(expr_ptr, depth, root_expression);

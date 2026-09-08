@@ -194,6 +194,7 @@ void WindowMatchRecognizeExecutor::Serialize(Serializer &serializer, const optio
 	serializer.WriteProperty(103, "after_match", config.after_match);
 	serializer.WriteProperty(104, "after_match_variable", config.after_match_variable);
 	serializer.WriteProperty(105, "depends_on_match_number", config.depends_on_match_number);
+	serializer.WritePropertyWithDefault<idx_t>(108, "match_number_field", config.match_number_field);
 	serializer.WriteProperty(106, "row_scoped", config.row_scoped);
 	serializer.WriteList(107, "navigations", config.navigations.size(), [&](Serializer::List &list, idx_t i) {
 		auto &navigation = config.navigations[i];
@@ -216,6 +217,7 @@ unique_ptr<FunctionData> WindowMatchRecognizeExecutor::Deserialize(Deserializer 
 	deserializer.ReadProperty(103, "after_match", result->after_match);
 	deserializer.ReadProperty(104, "after_match_variable", result->after_match_variable);
 	deserializer.ReadProperty(105, "depends_on_match_number", result->depends_on_match_number);
+	result->match_number_field = deserializer.ReadPropertyWithDefault<idx_t>(108, "match_number_field");
 	deserializer.ReadProperty(106, "row_scoped", result->row_scoped);
 	deserializer.ReadList(107, "navigations", [&](Deserializer::List &list, idx_t i) {
 		list.ReadObject([&](Deserializer &child) {
@@ -421,10 +423,8 @@ public:
 			field_plan[config.navigations[i].field] = FieldPlan {FieldSource::NAVIGATION, i};
 		}
 		// the collected column holds the constant the matcher rewrites per match, not the number
-		if (!field_plan.empty()) {
-			field_plan[MATCH_RECOGNIZE_MATCH_NUMBER_FIELD] =
-			    FieldPlan {FieldSource::MATCH_NUMBER, DConstants::INVALID_INDEX};
-		}
+		field_plan.resize(MaxValue<idx_t>(field_plan.size(), config.match_number_field + 1));
+		field_plan[config.match_number_field] = FieldPlan {FieldSource::MATCH_NUMBER, DConstants::INVALID_INDEX};
 		for (auto &condition : config.conditions) {
 			unordered_set<idx_t> seen;
 			vector<idx_t> fields;
@@ -543,6 +543,9 @@ private:
 		for (auto column_idx : columns_idx) {
 			types.push_back(collection.GetTypes()[column_idx]);
 		}
+		// the matcher rewrites the number of the match it is assembling, so the plan supplies no
+		// column for it and it sits after the ones the plan does supply
+		types.resize(MaxValue<idx_t>(types.size(), config.match_number_field + 1), LogicalType::UBIGINT);
 		row_chunk.Initialize(context.client, types, 1);
 		// one expression is evaluated at a time here, so the result holds a single column
 		row_result.Initialize(context.client, vector<LogicalType> {LogicalType::BOOLEAN}, 1);
@@ -556,11 +559,13 @@ private:
 		}
 		field_plan.resize(MaxValue<idx_t>(field_plan.size(), types.size()));
 
-		row_cursor = make_uniq<WindowCursor>(collection, columns_idx);
-		for (idx_t i = 0; i < config.navigations.size(); i++) {
-			navigation_cursors.push_back(make_uniq<WindowCursor>(collection, columns_idx));
+		if (!columns_idx.empty()) {
+			row_cursor = make_uniq<WindowCursor>(collection, columns_idx);
+			for (idx_t i = 0; i < config.navigations.size(); i++) {
+				navigation_cursors.push_back(make_uniq<WindowCursor>(collection, columns_idx));
+			}
+			D_ASSERT(row_cursor->chunk.ColumnCount() == columns_idx.size());
 		}
-		D_ASSERT(row_cursor->chunk.ColumnCount() == types.size());
 		ready = true;
 	}
 
