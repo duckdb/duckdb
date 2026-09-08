@@ -1180,6 +1180,8 @@ def write_cpp(all_implementations, all_registrations):
     content = (
         GENERATED_HEADER
         + '#include "duckdb/parser/peg/transformer/peg_transformer.hpp"\n'
+        + '#include "duckdb/parser/expression/star_expression.hpp"\n'
+        + '#include "duckdb/parser/expression/columnref_expression.hpp"\n'
         + "\nnamespace duckdb {\n\n"
         + "\n".join(all_implementations)
         + "\n"
