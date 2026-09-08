@@ -524,8 +524,6 @@ enum class SinkNextBatchType : uint8_t;
 
 enum class SinkResultType : uint8_t;
 
-enum class SkippedTo : uint8_t;
-
 enum class SortKeyType : uint8_t;
 
 enum class SourceBatchIndexState : uint8_t;
@@ -1382,9 +1380,6 @@ const char* EnumUtil::ToChars<SinkNextBatchType>(SinkNextBatchType value);
 
 template<>
 const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
-
-template<>
-const char* EnumUtil::ToChars<SkippedTo>(SkippedTo value);
 
 template<>
 const char* EnumUtil::ToChars<SortKeyType>(SortKeyType value);
@@ -2301,9 +2296,6 @@ SinkNextBatchType EnumUtil::FromString<SinkNextBatchType>(const char *value);
 
 template<>
 SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
-
-template<>
-SkippedTo EnumUtil::FromString<SkippedTo>(const char *value);
 
 template<>
 SortKeyType EnumUtil::FromString<SortKeyType>(const char *value);

@@ -126,7 +126,6 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_byte_skipper.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
@@ -5723,25 +5722,6 @@ const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value) {
 template<>
 SinkResultType EnumUtil::FromString<SinkResultType>(const char *value) {
 	return static_cast<SinkResultType>(StringUtil::StringToEnum(GetSinkResultTypeValues(), 3, "SinkResultType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetSkippedToValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(SkippedTo::CANDIDATE_FOUND), "CANDIDATE_FOUND" },
-		{ static_cast<uint32_t>(SkippedTo::CANDIDATE_NOT_FOUND), "CANDIDATE_NOT_FOUND" },
-		{ static_cast<uint32_t>(SkippedTo::TAIL), "TAIL" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<SkippedTo>(SkippedTo value) {
-	return StringUtil::EnumToString(GetSkippedToValues(), 3, "SkippedTo", static_cast<uint32_t>(value));
-}
-
-template<>
-SkippedTo EnumUtil::FromString<SkippedTo>(const char *value) {
-	return static_cast<SkippedTo>(StringUtil::StringToEnum(GetSkippedToValues(), 3, "SkippedTo", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSortKeyTypeValues() {
