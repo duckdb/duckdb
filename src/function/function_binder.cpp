@@ -1154,16 +1154,15 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const Scala
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &function,
                                                           vector<unique_ptr<Expression>> children, bool is_operator,
                                                           optional_ptr<Binder> binder) {
-	return BindScalarFunction(BoundScalarFunction::CopyStandaloneDefinition(function), std::move(children), {},
-	                          is_operator, binder);
+	return BindScalarFunction(make_shared_ptr<ScalarFunction>(function), std::move(children), {}, is_operator, binder);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &function,
                                                           vector<unique_ptr<Expression>> children,
                                                           vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                                           bool is_operator, optional_ptr<Binder> binder) {
-	return BindScalarFunction(BoundScalarFunction::CopyStandaloneDefinition(function), std::move(children),
-	                          std::move(keyword_args), is_operator, binder);
+	return BindScalarFunction(make_shared_ptr<ScalarFunction>(function), std::move(children), std::move(keyword_args),
+	                          is_operator, binder);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const ScalarFunction> function,
@@ -1243,7 +1242,7 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(const
                                                                            vector<unique_ptr<Expression>> children,
                                                                            unique_ptr<Expression> filter,
                                                                            AggregateType aggr_type) {
-	return BindAggregateFunction(BoundAggregateFunction::CopyStandaloneDefinition(function), std::move(children), {},
+	return BindAggregateFunction(make_shared_ptr<AggregateFunction>(function), std::move(children), {},
 	                             std::move(filter), aggr_type);
 }
 
@@ -1251,7 +1250,7 @@ unique_ptr<BoundAggregateExpression>
 FunctionBinder::BindAggregateFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> children,
                                       vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                       unique_ptr<Expression> filter, AggregateType aggr_type) {
-	return BindAggregateFunction(BoundAggregateFunction::CopyStandaloneDefinition(function), std::move(children),
+	return BindAggregateFunction(make_shared_ptr<AggregateFunction>(function), std::move(children),
 	                             std::move(keyword_args), std::move(filter), aggr_type);
 }
 

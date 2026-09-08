@@ -21,7 +21,6 @@
 
 namespace duckdb {
 class BaseStatistics;
-class BoundExpressionSQLExportState;
 class FunctionBinder;
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
@@ -594,11 +593,6 @@ public:
 	}
 
 private:
-	static shared_ptr<const ScalarFunction> CopyStandaloneDefinition(const ScalarFunction &function);
-
-	bool HasSQLAddressableDefinition() const {
-		return definition && definition->IsSQLAddressable();
-	}
 	void SetLogicalArguments(vector<LogicalType> arguments_p) {
 		logical_arguments = std::move(arguments_p);
 	}
@@ -609,7 +603,7 @@ private:
 	vector<LogicalType> logical_arguments;
 	LogicalType logical_return_type;
 
-	friend class BoundExpressionSQLExportState;
+	friend class FunctionSerializer;
 	friend class FunctionBinder;
 };
 

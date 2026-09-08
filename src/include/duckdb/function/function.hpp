@@ -28,13 +28,11 @@ class Transaction;
 
 class AggregateFunction;
 class AggregateFunctionSet;
-class AggregateFunctionCatalogEntry;
 class CopyFunction;
 class PragmaFunction;
 class PragmaFunctionSet;
 class ScalarFunctionSet;
 class ScalarFunction;
-class ScalarFunctionCatalogEntry;
 class TableFunctionSet;
 class TableFunction;
 class SimpleFunction;
@@ -378,23 +376,6 @@ private:
 	Identifier catalog_name;
 	//! Optional schema name of the function
 	Identifier schema_name;
-	//! Catalog definitions and their trusted copies are addressable; standalone binding clears this property.
-	bool sql_addressable = false;
-
-	void MarkSQLAddressable() {
-		sql_addressable = true;
-	}
-	void ClearSQLAddressable() {
-		sql_addressable = false;
-	}
-	bool IsSQLAddressable() const {
-		return sql_addressable;
-	}
-
-	friend class AggregateFunctionCatalogEntry;
-	friend class BoundAggregateFunction;
-	friend class BoundScalarFunction;
-	friend class ScalarFunctionCatalogEntry;
 };
 
 class SimpleFunction : public Function {

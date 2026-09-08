@@ -19,7 +19,6 @@
 namespace duckdb {
 
 class BufferManager;
-class BoundExpressionSQLExportState;
 class FunctionBinder;
 class InterruptState;
 class BoundAggregateFunction;
@@ -886,11 +885,6 @@ public:
 	}
 
 private:
-	static shared_ptr<const AggregateFunction> CopyStandaloneDefinition(const AggregateFunction &function);
-
-	bool HasSQLAddressableDefinition() const {
-		return definition && definition->IsSQLAddressable();
-	}
 	void SetLogicalArguments(vector<LogicalType> arguments_p) {
 		logical_arguments = std::move(arguments_p);
 	}
@@ -901,7 +895,7 @@ private:
 	vector<LogicalType> logical_arguments;
 	LogicalType logical_return_type;
 
-	friend class BoundExpressionSQLExportState;
+	friend class FunctionSerializer;
 	friend class FunctionBinder;
 };
 

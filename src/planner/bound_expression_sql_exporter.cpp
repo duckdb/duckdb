@@ -1,7 +1,6 @@
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 
-#include "duckdb/common/type_visitor.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
@@ -27,12 +26,9 @@ namespace duckdb {
 
 using BoundExpressionSQLExportResult = LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>;
 
-static LogicalPlanVerificationPath ChildPath(const LogicalPlanVerificationPath &path, idx_t child_index) {
-	auto child_path = path;
-	child_path.components.push_back(
-	    LogicalPlanVerificationPathComponent {LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, child_index});
-	return child_path;
-}
+using SQLExportHelpers::ChildPath;
+using SQLExportHelpers::IsSQLRepresentableType;
+using SQLExportHelpers::IsValidIdentifier;
 
 static bool IsExpressionRootPath(const LogicalPlanVerificationPath &path) {
 	if (!path.IsValid()) {
@@ -52,13 +48,9 @@ static bool IsExpressionRootPath(const LogicalPlanVerificationPath &path) {
 static LogicalPlanVerificationIssue
 InternalInvariant(optional<LogicalPlanVerificationPath> path, string message,
                   optional<LogicalPlanVerificationConstructIdentity> construct = {}) {
-	LogicalPlanVerificationIssue issue;
-	issue.code = LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT;
-	issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
-	issue.path = std::move(path);
-	issue.construct = std::move(construct);
-	issue.message = std::move(message);
-	return issue;
+	return SQLExportHelpers::MakeIssue(LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT,
+	                                   LogicalPlanVerificationPhase::EXPRESSION_EXPORT, std::move(path),
+	                                   std::move(construct), std::move(message));
 }
 
 static LogicalPlanVerificationIssue InternalExpressionInvariant(const LogicalPlanVerificationPath &path,
@@ -69,64 +61,31 @@ static LogicalPlanVerificationIssue InternalExpressionInvariant(const LogicalPla
 
 static LogicalPlanVerificationIssue UnsupportedExpression(const LogicalPlanVerificationPath &path,
                                                           ExpressionClass expression_class) {
-	LogicalPlanVerificationIssue issue;
-	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION;
-	issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
-	issue.path = path;
-	issue.construct = LogicalPlanVerificationConstructIdentity::Expression(expression_class);
-	issue.message = "The bound expression class does not have a SQL AST representation in this exporter";
-	return issue;
+	return SQLExportHelpers::MakeIssue(
+	    LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION, LogicalPlanVerificationPhase::EXPRESSION_EXPORT, path,
+	    LogicalPlanVerificationConstructIdentity::Expression(expression_class),
+	    "The bound expression class does not have a SQL AST representation in this exporter");
 }
 
 static LogicalPlanVerificationIssue UnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
                                                        string message) {
-	LogicalPlanVerificationIssue issue;
-	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE;
-	issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
-	issue.path = path;
-	issue.construct = LogicalPlanVerificationConstructIdentity::ExportFeature(std::move(feature));
-	issue.message = std::move(message);
-	return issue;
+	return SQLExportHelpers::MakeIssue(
+	    LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, LogicalPlanVerificationPhase::EXPRESSION_EXPORT,
+	    path, LogicalPlanVerificationConstructIdentity::ExportFeature(std::move(feature)), std::move(message));
 }
 
 static LogicalPlanVerificationIssue UnsupportedFunction(const LogicalPlanVerificationPath &path,
                                                         LogicalPlanVerificationFunctionIdentity identity,
                                                         string message) {
-	LogicalPlanVerificationIssue issue;
-	issue.code = LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION;
-	issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
-	issue.path = path;
-	issue.construct = LogicalPlanVerificationConstructIdentity::Function(std::move(identity));
-	issue.message = std::move(message);
-	return issue;
+	return SQLExportHelpers::MakeIssue(
+	    LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, LogicalPlanVerificationPhase::EXPRESSION_EXPORT, path,
+	    LogicalPlanVerificationConstructIdentity::Function(std::move(identity)), std::move(message));
 }
 
 static BoundExpressionSQLExportResult Failure(LogicalPlanVerificationIssue issue) {
 	vector<LogicalPlanVerificationIssue> issues;
 	issues.push_back(std::move(issue));
 	return BoundExpressionSQLExportResult::Failure(std::move(issues));
-}
-
-static bool IsValidIdentifier(const Identifier &identifier) {
-	auto &name = identifier.GetIdentifierName();
-	return !name.empty() && name.find('\0') == string::npos && Value::StringIsValid(name);
-}
-
-static bool IsSQLRepresentableType(const LogicalType &type) {
-	if (!type.IsComplete()) {
-		return false;
-	}
-	static const auto admitted_ids = [] {
-		// SQL export follows AllTypes' value-type coverage, with SQLNULL included and TUPLE excluded.
-		unordered_set<LogicalTypeId> ids {LogicalTypeId::SQLNULL};
-		for (auto &sql_type : LogicalType::AllTypes()) {
-			if (sql_type.id() != LogicalTypeId::TUPLE) {
-				ids.insert(sql_type.id());
-			}
-		}
-		return ids;
-	}();
-	return !TypeVisitor::Contains(type, [](const LogicalType &entry) { return admitted_ids.count(entry.id()) == 0; });
 }
 
 static bool ChildrenAreConsistentWithArguments(const vector<unique_ptr<Expression>> &children,
@@ -154,17 +113,6 @@ static LogicalPlanVerificationFunctionIdentity DefinitionFunctionIdentity(const 
 	identity.arguments = arguments;
 	identity.return_type = return_type;
 	return identity;
-}
-
-template <class FUNCTION>
-static LogicalPlanVerificationIssue UnaddressableFunction(const LogicalPlanVerificationPath &path,
-                                                          const FUNCTION &function) {
-	auto identity = DefinitionFunctionIdentity(*function.GetDefinition(), function.GetLogicalArguments(),
-	                                           function.GetLogicalReturnType());
-	if (!identity.IsValid()) {
-		return UnsupportedFeature(path, "function_identity", "The function has no representable SQL identity");
-	}
-	return UnsupportedFunction(path, std::move(identity), "The retained function definition is not SQL-addressable");
 }
 
 class BoundExpressionSQLExportState {
@@ -559,17 +507,17 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound scalar function has no retained definition"));
 		}
-		if (!function.HasSQLAddressableDefinition()) {
-			return Failure(UnaddressableFunction(path, function));
-		}
 		auto identity =
 		    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 		if (!identity.IsValid()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound scalar function identity is incomplete"));
 		}
-		QualifiedName name(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
-		if (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()) ||
+		const bool qualified = !definition->GetCatalogName().empty() && !definition->GetSchemaName().empty();
+		QualifiedName name =
+		    qualified ? QualifiedName(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName())
+		              : QualifiedName(definition->GetName());
+		if ((qualified && (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()))) ||
 		    !IsValidIdentifier(name.Name()) || !IsSQLRepresentableType(expression.GetReturnType())) {
 			return Failure(UnsupportedFunction(path, std::move(identity),
 			                                   "The retained scalar function definition is not representable as SQL"));
@@ -600,7 +548,9 @@ private:
 		}
 		unique_ptr<ParsedExpression> result =
 		    make_uniq<FunctionExpression>(name, std::move(children), nullptr, nullptr, false, false, false);
-		if (definition->HasBindCallback() && definition->GetReturnType() != function.GetLogicalReturnType()) {
+		// Aggregate-state schemas are inferred from the arguments, not expressible as SQL cast targets.
+		if (!function.GetLogicalReturnType().IsAggregateState() && definition->HasBindCallback() &&
+		    definition->GetReturnType() != function.GetLogicalReturnType()) {
 			result = make_uniq<CastExpression>(function.GetLogicalReturnType(), std::move(result));
 		}
 		return BoundExpressionSQLExportResult::Success(std::move(result));
@@ -624,17 +574,17 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function has no retained definition"));
 		}
-		if (!function.HasSQLAddressableDefinition()) {
-			return Failure(UnaddressableFunction(path, function));
-		}
 		auto identity =
 		    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 		if (!identity.IsValid()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function identity is incomplete"));
 		}
-		QualifiedName name(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
-		if (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()) ||
+		const bool qualified = !definition->GetCatalogName().empty() && !definition->GetSchemaName().empty();
+		QualifiedName name =
+		    qualified ? QualifiedName(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName())
+		              : QualifiedName(definition->GetName());
+		if ((qualified && (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()))) ||
 		    !IsValidIdentifier(name.Name()) || !IsSQLRepresentableType(expression.GetReturnType())) {
 			return Failure(UnsupportedFunction(
 			    path, std::move(identity), "The retained aggregate function definition is not representable as SQL"));
@@ -716,7 +666,8 @@ private:
 		unique_ptr<ParsedExpression> result = make_uniq<FunctionExpression>(
 		    name, std::move(arguments), std::move(filter), std::move(order_bys), expression.IsDistinct(), false,
 		    expression.StateExportMode() == AggregateStateExportMode::STATE_EXPORT);
-		if (expression.StateExportMode() == AggregateStateExportMode::NONE && definition->HasBindCallback() &&
+		if (expression.StateExportMode() == AggregateStateExportMode::NONE &&
+		    !function.GetLogicalReturnType().IsAggregateState() && definition->HasBindCallback() &&
 		    definition->GetReturnType() != function.GetLogicalReturnType()) {
 			result = make_uniq<CastExpression>(function.GetLogicalReturnType(), std::move(result));
 		}

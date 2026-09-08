@@ -23,7 +23,6 @@ shared_ptr<const ScalarFunction> ScalarFunctionCatalogEntry::FinalizeFunction(Sc
 	result->SetName(name);
 	result->SetCatalogName(catalog.GetAttached().GetName());
 	result->SetSchemaName(schema.name);
-	result->MarkSQLAddressable();
 	return result;
 }
 

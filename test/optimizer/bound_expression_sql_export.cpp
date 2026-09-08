@@ -1,5 +1,7 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/planner/sql_export_helpers.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -56,6 +58,7 @@
 #include "duckdb/planner/expression/legacy_bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include <cstring>
 
 using namespace duckdb;
@@ -843,10 +846,7 @@ TEST_CASE("Incremental scalar registration preserves live SQL identity", "[bound
 	children.push_back(Constant(Value::INTEGER(-7)));
 	auto bound = standalone.Bind(*source.context, std::move(children));
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*source.context, *bound) == Value::INTEGER(-7));
-	LogicalPlanVerificationPath path;
-	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-	RequireIssue(BoundExpressionSQLExporter::Export(*bound, context),
-	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+	RequireRoundTrip(target, *bound, context, string(), "incremental_sql_identity(-7::INTEGER)");
 	source.Rollback();
 }
 
@@ -865,33 +865,25 @@ TEST_CASE("SQL export excludes internal types recursively", "[bound_expression_s
 }
 
 TEST_CASE("SQL export type admission follows DuckDB value types", "[bound_expression_sql_export]") {
-	auto sql_types = LogicalType::AllTypes();
+	auto types = LogicalType::AllTypes();
+	for (idx_t value = 0; value <= NumericLimits<uint8_t>::Maximum(); value++) {
+		auto id = static_cast<LogicalTypeId>(value);
+		bool admitted = id == LogicalTypeId::SQLNULL;
+		for (auto &type : types) {
+			admitted |= type.id() == id && id != LogicalTypeId::TUPLE;
+		}
+		REQUIRE(SQLExportHelpers::IsSQLExportType(id) == admitted);
+	}
+	types.push_back(LogicalType::SQLNULL);
+	types.push_back(LogicalType::POINTER);
+	types.push_back(LogicalType::ANY);
+	types.push_back(LogicalType::INVALID);
 	auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(0));
 	LogicalPlanVerificationPath path;
 	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-	idx_t constructed = 0;
-	for (idx_t value = 0; value <= NumericLimits<uint8_t>::Maximum(); value++) {
-		auto id = static_cast<LogicalTypeId>(value);
-		LogicalType type;
-		try {
-			type = LogicalType(id);
-		} catch (InternalException &) {
-			continue;
-		} catch (NotImplementedException &) {
-			continue;
-		}
-		constructed++;
-		bool admitted = id == LogicalTypeId::SQLNULL;
-		for (auto &sql_type : sql_types) {
-			if (sql_type.id() == id) {
-				type = sql_type;
-				admitted = id != LogicalTypeId::TUPLE;
-				break;
-			}
-		}
-		admitted = admitted && type.IsComplete();
+	for (auto &type : types) {
+		const bool admitted = SQLExportHelpers::IsSQLExportType(type.id()) && type.IsComplete();
 		for (auto &candidate : vector<LogicalType> {type, LogicalType::LIST(type)}) {
-			INFO(value);
 			BoundColumnRefExpression expression(candidate, binding);
 			auto context = ResolveBinding(binding, {Identifier("value")}, candidate);
 			auto result = BoundExpressionSQLExporter::Export(expression, context);
@@ -904,11 +896,13 @@ TEST_CASE("SQL export type admission follows DuckDB value types", "[bound_expres
 			}
 		}
 	}
-	REQUIRE(constructed > 0);
+#ifndef DUCKDB_CRASH_ON_ASSERT
+	// Invalid LogicalType construction aborts instead of throwing in crash-on-assert configurations.
 	REQUIRE_THROWS(LogicalType(static_cast<LogicalTypeId>(255)));
+#endif
 }
 
-TEST_CASE("SQL export must precede binary serializer plan verification",
+TEST_CASE("SQL export composes with binary serializer plan verification",
           "[bound_expression_sql_export][serialization]") {
 	DuckDB db;
 	Connection connection(db);
@@ -930,8 +924,7 @@ TEST_CASE("SQL export must precede binary serializer plan verification",
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *restored) == Value::INTEGER(7));
 	LogicalPlanVerificationPath path;
 	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-	RequireIssue(BoundExpressionSQLExporter::Export(*restored, context),
-	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+	RequireRoundTrip(connection, *restored, context, string(), "abs(-7::INTEGER)");
 	connection.Rollback();
 }
 
@@ -990,8 +983,8 @@ TEST_CASE("Bound expression SQL export supports represented catalog bind state",
 	REQUIRE(scalar_result.GetValue()->Cast<FunctionExpression>().GetQualifiedName() ==
 	        QualifiedName(Identifier::SystemCatalog(), schema_name, Identifier("ordinary_bound_scalar")));
 	auto serialized_scalar = BinaryRoundTrip(*connection.context, *ordinary_scalar);
-	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_scalar, context),
-	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, root_path);
+	RequireRoundTrip(connection, *serialized_scalar, context, string(),
+	                 schema_name.GetIdentifierName() + ".ordinary_bound_scalar(7, 99)");
 	RequireRoundTrip(connection, *ordinary_scalar, context, string(),
 	                 schema_name.GetIdentifierName() + ".ordinary_bound_scalar(7, 99)");
 
@@ -1003,8 +996,8 @@ TEST_CASE("Bound expression SQL export supports represented catalog bind state",
 	REQUIRE(aggregate_result.GetValue()->Cast<FunctionExpression>().GetQualifiedName() ==
 	        QualifiedName(Identifier::SystemCatalog(), schema_name, Identifier("ordinary_bound_sum")));
 	auto serialized_aggregate = BinaryRoundTrip(*connection.context, *ordinary_aggregate);
-	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_aggregate, context),
-	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, root_path);
+	RequireRoundTrip(connection, *serialized_aggregate, context, string(),
+	                 schema_name.GetIdentifierName() + ".ordinary_bound_sum(7)");
 	RequireRoundTrip(connection, *ordinary_aggregate, context, string(),
 	                 schema_name.GetIdentifierName() + ".ordinary_bound_sum(7)");
 
@@ -1033,6 +1026,46 @@ TEST_CASE("Bound expression SQL export supports represented catalog bind state",
 	standalone_bound->Cast<BoundAggregateExpression>().GetChildrenMutable()[0].reset();
 	RequireIssue(BoundExpressionSQLExporter::Export(*standalone_bound, context),
 	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, root_path);
+	connection.Rollback();
+}
+
+TEST_CASE("Function deserialization restores enclosing context after callback exceptions",
+          "[bound_expression_sql_export][serialization]") {
+	DuckDB db;
+	Connection connection(db);
+	ExtensionLoader loader(*db.instance, "sql_export_deserialization_context");
+	ScalarFunction function("throwing_deserializer", {LogicalType::INTEGER}, LogicalType::INTEGER,
+	                        ScalarFunction::NopFunction);
+	function.SetSerializeCallback([](Serializer &, const optional_ptr<FunctionData>, const BoundScalarFunction &) {});
+	function.SetDeserializeCallback([](Deserializer &deserializer, BoundScalarFunction &) -> unique_ptr<FunctionData> {
+		REQUIRE(deserializer.Get<const LogicalType &>() == LogicalType::INTEGER);
+		auto &children = deserializer.Get<const const_expression_list_t &>();
+		REQUIRE(children.size() == 1);
+		REQUIRE(children[0].get().GetReturnType() == LogicalType::INTEGER);
+		throw InvalidInputException("Synthetic deserialization failure");
+	});
+	loader.RegisterFunction(std::move(function));
+	connection.BeginTransaction();
+	auto plan = BindExportQuery(connection, "SELECT throwing_deserializer(7::INTEGER)");
+	auto expression = FindExpression(*plan, [](const Expression &candidate) {
+		return candidate.GetExpressionType() == ExpressionType::BOUND_FUNCTION;
+	});
+	REQUIRE(expression);
+	MemoryStream stream(Allocator::Get(*connection.context));
+	BinarySerializer::Serialize(*expression, stream);
+	stream.Rewind();
+	BinaryDeserializer deserializer(stream);
+	bound_parameter_map_t parameters;
+	deserializer.Set<ClientContext &>(*connection.context);
+	deserializer.Set<bound_parameter_map_t &>(parameters);
+	const LogicalType enclosing_type = LogicalType::VARCHAR;
+	auto enclosing_child = Constant(Value::BIGINT(42));
+	const const_expression_list_t enclosing_children {*enclosing_child};
+	deserializer.Set<const LogicalType &>(enclosing_type);
+	deserializer.Set<const const_expression_list_t &>(enclosing_children);
+	REQUIRE_THROWS_AS(deserializer.Deserialize<Expression>(), InvalidInputException);
+	REQUIRE(&deserializer.Get<const LogicalType &>() == &enclosing_type);
+	REQUIRE(&deserializer.Get<const const_expression_list_t &>() == &enclosing_children);
 	connection.Rollback();
 }
 
@@ -1073,10 +1106,6 @@ TEST_CASE("Standalone function binding does not autoload catalog collisions",
 	scalar_children.push_back(Constant(Value::INTEGER(7)));
 	auto scalar = standalone_scalar.Bind(*connection.context, std::move(scalar_children));
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *scalar) == Value::INTEGER(7));
-	auto scalar_export = BoundExpressionSQLExporter::Export(*scalar, context);
-	LogicalPlanVerificationPath path;
-	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-	RequireIssue(scalar_export, LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto standalone_aggregate = SyntheticSum(Identifier("count_if"), 0);
 	standalone_aggregate.SetCatalogName(Identifier::SystemCatalog());
@@ -1086,15 +1115,13 @@ TEST_CASE("Standalone function binding does not autoload catalog collisions",
 	auto aggregate = standalone_aggregate.Bind(*connection.context, std::move(aggregate_children));
 	REQUIRE(aggregate->Function().GetName() == "count_if");
 	REQUIRE(EvaluateAggregate(*aggregate) == Value::BIGINT(7));
-	auto aggregate_export = BoundExpressionSQLExporter::Export(*aggregate, context);
-	RequireIssue(aggregate_export, LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	connection.Commit();
 	require_core_functions_absent();
 }
 #endif
 
-TEST_CASE("Bound expression SQL export rejects standalone catalog name collisions", "[bound_expression_sql_export]") {
+TEST_CASE("Bound expression SQL export trusts native function definitions", "[bound_expression_sql_export]") {
 	DuckDB db;
 	Connection connection(db);
 	connection.BeginTransaction();
@@ -1110,8 +1137,8 @@ TEST_CASE("Bound expression SQL export rejects standalone catalog name collision
 	scalar_children.push_back(Constant(Value::INTEGER(-7)));
 	auto scalar = standalone_scalar.Bind(*connection.context, std::move(scalar_children));
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *scalar) == Value::INTEGER(-7));
-	RequireIssue(BoundExpressionSQLExporter::Export(*scalar, context),
-	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+	// A deliberately misleading native definition is unsupported caller misuse, not an authentication test.
+	REQUIRE_NOTHROW(BoundExpressionSQLExporter::Export(*scalar, context));
 
 	auto &catalog = Catalog::GetSystemCatalog(*connection.context);
 	auto &abs_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
@@ -1133,8 +1160,22 @@ TEST_CASE("Bound expression SQL export rejects standalone catalog name collision
 	vector<unique_ptr<Expression>> copied_children;
 	copied_children.push_back(Constant(Value::INTEGER(-7)));
 	auto copied_scalar = abs_definition->Bind(*connection.context, std::move(copied_children));
-	RequireIssue(BoundExpressionSQLExporter::Export(*copied_scalar, context),
-	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+	RequireRoundTrip(connection, *copied_scalar, context, string(), "abs(-7::INTEGER)");
+	for (bool has_catalog : {false, true}) {
+		for (bool has_schema : {false, true}) {
+			auto definition = make_shared_ptr<ScalarFunction>(*abs_definition);
+			definition->SetCatalogName(has_catalog ? Identifier::SystemCatalog() : Identifier());
+			definition->SetSchemaName(has_schema ? Identifier::DefaultSchema() : Identifier());
+			auto bound = bind_scalar_definition(std::move(definition));
+			auto exported = BoundExpressionSQLExporter::Export(*bound, context);
+			REQUIRE(exported.IsSuccess());
+			auto &name = exported.GetValue()->Cast<FunctionExpression>().GetQualifiedName();
+			REQUIRE(name.Name() == Identifier("abs"));
+			REQUIRE(name.Catalog() == (has_catalog && has_schema ? Identifier::SystemCatalog() : Identifier()));
+			REQUIRE(name.Schema() == (has_catalog && has_schema ? Identifier::DefaultSchema() : Identifier()));
+			RequireRoundTrip(connection, *bound, context, string(), "abs(-7::INTEGER)");
+		}
+	}
 
 	// Shared-pointer binding trusts definition copies to preserve the catalog function's semantics.
 	vector<pair<string, shared_ptr<const ScalarFunction>>> scalar_copies;
@@ -1165,8 +1206,7 @@ TEST_CASE("Bound expression SQL export rejects standalone catalog name collision
 		vector<unique_ptr<Expression>> children;
 		children.push_back(Constant(Value::INTEGER(-7)));
 		auto standalone_copy = entry.second->Bind(*connection.context, std::move(children));
-		RequireIssue(BoundExpressionSQLExporter::Export(*standalone_copy, context),
-		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		RequireRoundTrip(connection, *standalone_copy, context, string(), "abs(-7::INTEGER)");
 	}
 
 	auto standalone_aggregate = SyntheticSum(Identifier("sum"), 1);
@@ -1176,8 +1216,7 @@ TEST_CASE("Bound expression SQL export rejects standalone catalog name collision
 	aggregate_children.push_back(Constant(Value::INTEGER(7)));
 	auto aggregate = standalone_aggregate.Bind(*connection.context, std::move(aggregate_children));
 	REQUIRE(EvaluateAggregate(*aggregate) == Value::BIGINT(8));
-	RequireIssue(BoundExpressionSQLExporter::Export(*aggregate, context),
-	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+	REQUIRE_NOTHROW(BoundExpressionSQLExporter::Export(*aggregate, context));
 	auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
 	    *connection.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier("sum")));
 	auto sum_definition = sum_entry.functions.GetFunctionByArguments(*connection.context, {LogicalType::INTEGER});
@@ -1205,8 +1244,7 @@ TEST_CASE("Bound expression SQL export rejects standalone catalog name collision
 	copied_aggregate_children.push_back(Constant(Value::INTEGER(7)));
 	auto copied_aggregate = sum_definition->Bind(*connection.context, std::move(copied_aggregate_children));
 	REQUIRE(EvaluateAggregate(*copied_aggregate) == Value::HUGEINT(hugeint_t(7)));
-	RequireIssue(BoundExpressionSQLExporter::Export(*copied_aggregate, context),
-	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+	RequireRoundTrip(connection, *copied_aggregate, context, string(), "sum(7::INTEGER)");
 
 	vector<pair<string, shared_ptr<const AggregateFunction>>> aggregate_copies;
 	aggregate_copies.emplace_back("copy construction", make_shared_ptr<AggregateFunction>(*sum_definition));
@@ -1233,8 +1271,7 @@ TEST_CASE("Bound expression SQL export rejects standalone catalog name collision
 		vector<unique_ptr<Expression>> children;
 		children.push_back(Constant(Value::INTEGER(7)));
 		auto standalone_copy = entry.second->Bind(*connection.context, std::move(children));
-		RequireIssue(BoundExpressionSQLExporter::Export(*standalone_copy, context),
-		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		RequireRoundTrip(connection, *standalone_copy, context, string(), "sum(7::INTEGER)");
 	}
 	connection.Rollback();
 }
@@ -1437,20 +1474,6 @@ TEST_CASE("Bound expression SQL export reconstructs optimizer-produced scalar fu
 	INFO(struct_result.GetIssues()[0].message);
 	REQUIRE(struct_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
 
-	ScalarFunction opaque_function(Identifier("opaque_scalar"), {LogicalType::INTEGER}, LogicalType::INTEGER,
-	                               ScalarFunction::NopFunction);
-	opaque_function.SetCatalogName(Identifier("synthetic_catalog"));
-	opaque_function.SetSchemaName(Identifier("synthetic_schema"));
-	vector<unique_ptr<Expression>> opaque_children;
-	opaque_children.push_back(Constant(Value::INTEGER(1)));
-	BoundFunctionExpression opaque_expression(BoundScalarFunction(opaque_function), std::move(opaque_children),
-	                                          make_uniq<OpaqueSQLFunctionData>());
-	BoundExpressionSQLExportContext opaque_context;
-	auto opaque_result = BoundExpressionSQLExporter::Export(opaque_expression, opaque_context);
-	LogicalPlanVerificationPath opaque_path;
-	opaque_path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-	RequireIssue(opaque_result, LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, opaque_path);
-
 	auto random_plan = OptimizeExportQuery(connection, "SELECT random()");
 	auto random_expression = FindExpression(*random_plan, [](const Expression &expression) {
 		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
@@ -1591,8 +1614,7 @@ TEST_CASE("Bound expression SQL export validates structural expression state", "
 	connection.Rollback();
 }
 
-TEST_CASE("Binary function round trips preserve execution but not SQL export identity",
-          "[bound_expression_sql_export][serialization]") {
+TEST_CASE("Binary function round trips recover represented SQL calls", "[bound_expression_sql_export][serialization]") {
 	DuckDB db;
 	Connection connection(db);
 	connection.BeginTransaction();
@@ -1611,11 +1633,7 @@ TEST_CASE("Binary function round trips preserve execution but not SQL export ide
 		REQUIRE(restored->GetReturnType() == expression->GetReturnType());
 		REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *restored) ==
 		        ExpressionExecutor::EvaluateScalar(*connection.context, *expression));
-		// Dynamic binary functions may have no complete logical signature to include in a diagnostic.
-		auto expected_code = restored->Cast<BoundFunctionExpression>().Function().GetLogicalReturnType().IsComplete()
-		                         ? LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION
-		                         : LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE;
-		RequireIssue(BoundExpressionSQLExporter::Export(*restored, {}), expected_code, path);
+		RequireRoundTrip(connection, *restored, {}, string(), sql);
 	}
 	for (auto window : {false, true}) {
 		auto plan = BindExportQuery(connection, "SELECT quantile_cont(i, 0.5)" + string(window ? " OVER ()" : "") +
@@ -1628,8 +1646,9 @@ TEST_CASE("Binary function round trips preserve execution but not SQL export ide
 		auto restored = BinaryRoundTrip(*connection.context, *expression);
 		REQUIRE(restored->GetReturnType() == LogicalType::DOUBLE);
 		if (!window) {
-			RequireIssue(BoundExpressionSQLExporter::Export(*restored, {}),
-			             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+			auto source = CreateSyntheticSQLSource(*restored);
+			RequireRoundTrip(connection, *restored, source.context, source.from_clause,
+			                 "quantile_cont(v.exported_0, 0.5)");
 		}
 	}
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_serializer=true"));
@@ -1680,7 +1699,7 @@ TEST_CASE("Rewritten scalar calls fail SQL export as unsupported", "[bound_expre
 	RequireIssue(BoundExpressionSQLExporter::Export(*filter, context),
 	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	RequireIssue(BoundExpressionSQLExporter::Export(*restored, context),
-	             LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
+	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_serializer=true"));
 	auto result = connection.Query("SELECT [x + c FOR x, i IN l IF i > 2] FROM lists");
 	REQUIRE_FALSE(result->HasError());
@@ -1722,6 +1741,13 @@ TEST_CASE("Live optimized decimal sum exports its logical result", "[bound_expre
 	REQUIRE(result->GetTypes() == vector<LogicalType> {LogicalType::DECIMAL(38, 2)});
 	REQUIRE(result->GetValue(0, 0) == Value::DECIMAL(hugeint_t(375), 38, 2));
 	RequireRoundTrip(connection, *aggregate.Copy(), context, " FROM decimal_values", "sum(i)");
+	auto restored = BinaryRoundTrip(*connection.context, aggregate);
+	auto &restored_aggregate = restored->Cast<BoundAggregateExpression>();
+	REQUIRE(restored_aggregate.Function().GetName() == "sum_no_overflow");
+	REQUIRE(restored_aggregate.Function().GetDefinition()->GetName() == "sum");
+	REQUIRE(restored_aggregate.Function().GetLogicalArguments() == aggregate.Function().GetLogicalArguments());
+	REQUIRE(restored_aggregate.Function().GetLogicalReturnType() == LogicalType::DECIMAL(38, 2));
+	RequireRoundTrip(connection, restored_aggregate, context, " FROM decimal_values", "sum(i)");
 	connection.Rollback();
 }
 
@@ -1828,12 +1854,6 @@ TEST_CASE("Bound expression SQL export preserves explicit string_agg separators"
 			REQUIRE(restored_aggregate.Function().GetArguments().size() == 2);
 			auto exported = BoundExpressionSQLExporter::Export(*restored, context);
 			REQUIRE(exported.IsValid());
-			if (serialize) {
-				LogicalPlanVerificationPath path;
-				path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-				RequireIssue(exported, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
-				continue;
-			}
 			REQUIRE(exported.IsSuccess());
 			auto sql = exported.GetValue()->ToString();
 			auto oracle = call;
@@ -1860,7 +1880,7 @@ TEST_CASE("Bound expression SQL export preserves explicit string_agg separators"
 	connection.Rollback();
 }
 
-TEST_CASE("Binary compatibility targets do not retain logical SQL identity",
+TEST_CASE("SQL export recovers calls from supported binary compatibility targets",
           "[bound_expression_sql_export][serialization]") {
 	DuckDB db;
 	Connection connection(db);
@@ -1881,15 +1901,14 @@ TEST_CASE("Binary compatibility targets do not retain logical SQL identity",
 		    BinaryRoundTrip(*connection.context, *expression, StorageCompatibility::FromIndex(StorageVersion::V2_0_0));
 		LogicalPlanVerificationPath current_path;
 		current_path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-		RequireIssue(BoundExpressionSQLExporter::Export(*current, source.context),
-		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, current_path);
+		RequireRoundTrip(connection, *current, source.context, source.from_clause,
+		                 StringUtil::Replace(call, "(i", "(v.exported_0"));
 		auto legacy =
 		    BinaryRoundTrip(*connection.context, *expression, StorageCompatibility::FromIndex(StorageVersion::V1_5_0));
 		REQUIRE(legacy->GetReturnType() == expression->GetReturnType());
 		LogicalPlanVerificationPath path;
 		path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-		RequireIssue(BoundExpressionSQLExporter::Export(*legacy, source.context),
-		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		REQUIRE(BoundExpressionSQLExporter::Export(*legacy, source.context).IsSuccess());
 	}
 	REQUIRE_NO_FAIL(connection.Query("SET storage_compatibility_version='v1.5.0'"));
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_serializer=true"));
@@ -1987,11 +2006,13 @@ TEST_CASE("Bound expression SQL export preserves aggregate modifiers", "[bound_e
 	auto &serialized_sum_bound = serialized_sum->Cast<BoundAggregateExpression>();
 	REQUIRE(serialized_sum_bound.Function().GetName() == "sum_no_overflow");
 	REQUIRE(serialized_sum_bound.Function().GetDefinition());
-	REQUIRE(serialized_sum_bound.Function().GetDefinition()->GetName() == "sum_no_overflow");
+	REQUIRE(serialized_sum_bound.Function().GetDefinition()->GetName() == "sum");
 	auto post_serialization = BoundExpressionSQLExporter::Export(serialized_sum_bound, optimized_sum_context);
 	LogicalPlanVerificationPath serialized_path;
 	serialized_path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-	RequireIssue(post_serialization, LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, serialized_path);
+	REQUIRE(post_serialization.IsSuccess());
+	RequireRoundTrip(connection, serialized_sum_bound, optimized_sum_context, " FROM aggregate_values AS v",
+	                 "sum(v.i)");
 	auto rebound_sum =
 	    connection.Query("SELECT " + pre_serialization.GetValue()->ToString() + " FROM aggregate_values AS v");
 	REQUIRE_FALSE(rebound_sum->HasError());
@@ -2044,8 +2065,8 @@ TEST_CASE("Bound expression SQL export preserves aggregate modifiers", "[bound_e
 	REQUIRE(serialized_quantile_bound.BindInfo());
 	REQUIRE(serialized_quantile_bound.Function().GetDefinition());
 	REQUIRE(serialized_quantile_bound.Function().GetDefinition()->GetName() == "quantile_cont");
-	RequireIssue(BoundExpressionSQLExporter::Export(serialized_quantile_bound, quantile_source.context),
-	             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, serialized_path);
+	RequireRoundTrip(connection, serialized_quantile_bound, quantile_source.context, quantile_source.from_clause,
+	                 "quantile_cont(v.exported_0, 0.5)");
 
 	auto state = check_aggregate("SELECT sum(i) EXPORT_STATE FROM aggregate_values", "sum(v.i) EXPORT_STATE",
 	                             Identifier("sum"), false);
@@ -2063,8 +2084,8 @@ TEST_CASE("Bound expression SQL export preserves aggregate modifiers", "[bound_e
 	BoundExpressionSQLExportContext count_context;
 	auto count_result = BoundExpressionSQLExporter::Export(*count, count_context);
 	REQUIRE(count_result.IsValid());
-	REQUIRE(count_result.HasError());
-	REQUIRE(count_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
+	REQUIRE(count_result.IsSuccess());
+	RequireRoundTrip(connection, *count, count_context, " FROM count_values", "count(*)");
 	auto serialized_count = BinaryRoundTrip(*connection.context, *count);
 	REQUIRE(serialized_count->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 	auto &serialized_count_bound = serialized_count->Cast<BoundAggregateExpression>();
@@ -2072,8 +2093,8 @@ TEST_CASE("Bound expression SQL export preserves aggregate modifiers", "[bound_e
 	REQUIRE(serialized_count_bound.Function().GetDefinition());
 	REQUIRE(serialized_count_bound.Function().GetDefinition()->GetName() == "count_star");
 	auto serialized_count_result = BoundExpressionSQLExporter::Export(serialized_count_bound, count_context);
-	REQUIRE(serialized_count_result.HasError());
-	REQUIRE(serialized_count_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
+	REQUIRE(serialized_count_result.IsSuccess());
+	RequireRoundTrip(connection, serialized_count_bound, count_context, " FROM count_values", "count(*)");
 	connection.Rollback();
 }
 
@@ -2294,4 +2315,256 @@ TEST_CASE("Bound expression SQL export owns outputs and propagates resolver exce
 		throw InvalidInputException("synthetic resolver failure");
 	};
 	REQUIRE_THROWS_AS(BoundExpressionSQLExporter::Export(expression, throwing_context), InvalidInputException);
+}
+
+TEST_CASE("Optimized expression SQL export covers complete AVG and LIKE rewrites",
+          "[bound_expression_sql_export][optimizer][serialization]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	struct Case {
+		string query;
+		vector<Identifier> required_functions;
+	};
+	vector<Case> cases {
+	    {"SELECT avg(i) FROM (VALUES (1),(2),(NULL)) t(i)", {"sum", "count", "/"}},
+	    {"SELECT sum(i + 1) FROM (VALUES (1),(2),(NULL)) t(i)", {"sum", "count"}},
+	    {"SELECT count(i) FROM (VALUES (1),(2),(NULL)) t(i)", {"count"}},
+	    {"SELECT count(*) FROM (VALUES (1),(2)) t(i)", {"count_star"}},
+	    {"SELECT sum(i), avg(i), count(DISTINCT i) FROM (VALUES (1),(2),(2),(NULL)) t(i)", {"sum", "count", "/"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE 'a%'", {"prefix"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE '%a'", {"suffix"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE '%a%'", {"contains"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s NOT LIKE 'a%'", {"prefix"}},
+	};
+	for (auto &entry : cases) {
+		INFO(entry.query);
+		auto plan = OptimizeExportQuery(connection, entry.query);
+		vector<Identifier> functions;
+		std::function<void(const Expression &)> visit_expression = [&](const Expression &expression) {
+			if (expression.GetExpressionType() == ExpressionType::BOUND_FUNCTION ||
+			    expression.GetExpressionType() == ExpressionType::BOUND_AGGREGATE) {
+				vector<SQLBindingEntry> bindings;
+				CollectSQLBindings(expression, bindings);
+				SyntheticSQLSource source;
+				if (!bindings.empty()) {
+					source = CreateSyntheticSQLSource(expression);
+				}
+				auto result = BoundExpressionSQLExporter::Export(expression, source.context);
+				if (result.HasError()) {
+					INFO("issue code=" << static_cast<idx_t>(result.GetIssues()[0].code));
+					FAIL(result.GetIssues()[0].message);
+				}
+				REQUIRE(result.IsValid());
+				REQUIRE(result.IsSuccess());
+				REQUIRE(result.GetValue());
+				auto sql = "SELECT " + result.GetValue()->ToString() + source.from_clause;
+				auto rebound = connection.Query(sql);
+				REQUIRE_NO_FAIL(*rebound);
+				REQUIRE(rebound->GetTypes() == vector<LogicalType> {expression.GetReturnType()});
+				auto restored = BinaryRoundTrip(*connection.context, expression);
+				auto restored_export = BoundExpressionSQLExporter::Export(*restored, source.context);
+				REQUIRE(restored_export.IsSuccess());
+				auto restored_result =
+				    connection.Query("SELECT " + restored_export.GetValue()->ToString() + source.from_clause);
+				REQUIRE_NO_FAIL(*restored_result);
+				REQUIRE(restored_result->Equals(*rebound, false));
+				functions.push_back(
+				    expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION
+				        ? expression.Cast<BoundFunctionExpression>().Function().GetDefinition()->GetName()
+				        : expression.Cast<BoundAggregateExpression>().Function().GetDefinition()->GetName());
+			}
+			ExpressionIterator::EnumerateChildren(expression, visit_expression);
+		};
+		std::function<void(const LogicalOperator &)> visit_operator = [&](const LogicalOperator &op) {
+			LogicalOperatorVisitor::EnumerateExpressions(
+			    op, [&](const unique_ptr<Expression> *expression) { visit_expression(**expression); });
+			for (auto &child : op.children) {
+				visit_operator(*child);
+			}
+		};
+		visit_operator(*plan);
+		for (auto &required : entry.required_functions) {
+			INFO(required);
+			REQUIRE(std::find(functions.begin(), functions.end(), required) != functions.end());
+		}
+		auto optimized = connection.Query(entry.query);
+		REQUIRE_NO_FAIL(*optimized);
+		REQUIRE_NO_FAIL(connection.Query("PRAGMA disable_optimizer"));
+		auto baseline = connection.Query(entry.query);
+		REQUIRE_NO_FAIL(*baseline);
+		REQUIRE(optimized->Equals(*baseline, true));
+		REQUIRE_NO_FAIL(connection.Query("PRAGMA enable_optimizer"));
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("SQL export covers functions introduced by aggregate and TopN rewrites",
+          "[bound_expression_sql_export][optimizer][serialization]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	REQUIRE_NO_FAIL(
+	    connection.Query("CREATE TEMP TABLE reuse_owner AS FROM (VALUES (1,10),(2,20),(3,30),(4,40)) t(k,dim_id)"));
+	REQUIRE_NO_FAIL(connection.Query(
+	    "CREATE TEMP TABLE reuse_dim AS FROM (VALUES (10,'x'),(20,'b'),(30,'x'),(40,'d')) t(id,label)"));
+	REQUIRE_NO_FAIL(connection.Query(
+	    "CREATE TEMP TABLE reuse_fact AS FROM (VALUES (1,10),(1,20),(2,5),(3,40),(3,50),(4,NULL)) t(k,v)"));
+	struct Case {
+		string optimizer;
+		string query;
+		Identifier introduced_function;
+	};
+	string fact_values;
+	for (idx_t index = 0; index < 120; index++) {
+		if (index > 0) {
+			fact_values += ",";
+		}
+		fact_values += "(" + to_string(index % 3) + "," + to_string(index % 7) + ")";
+	}
+	vector<Case> cases {{"grouping_sets",
+	                     "SELECT i,j,sum(k) FROM (VALUES (1,1,2),(1,2,3),(2,1,4),(2,2,5)) t(i,j,k) "
+	                     "GROUP BY ROLLUP(i,j) ORDER BY ALL",
+	                     "combine_aggr"},
+	                    {"grouping_sets",
+	                     "SELECT i,sum(j) FROM (VALUES (1,2),(1,3),(2,4),(2,5)) t(i,j) "
+	                     "GROUP BY GROUPING SETS ((i),()) ORDER BY ALL",
+	                     "combine_aggr"},
+	                    {"partial_aggregate_pushdown",
+	                     "SELECT d.a,d.b,d.c,d.d,sum(f.v) FROM (VALUES " + fact_values +
+	                         ") f(k,v) "
+	                         "JOIN (VALUES (0,1,2,3,4),(1,5,6,7,8),(2,9,10,11,12)) d(k,a,b,c,d) USING(k) "
+	                         "GROUP BY d.a,d.b,d.c,d.d ORDER BY ALL",
+	                     "combine_aggr"},
+	                    {"top_n_window_elimination",
+	                     "SELECT i FROM (VALUES (1,1),(1,2),(2,3),(2,4)) t(g,i) "
+	                     "QUALIFY row_number() OVER (PARTITION BY g ORDER BY i) <= 1 ORDER BY ALL",
+	                     "min"},
+	                    {"aggregate_reuse",
+	                     "SELECT o.k,d.label,sum(f.v) FROM reuse_owner o JOIN reuse_dim d ON o.dim_id=d.id "
+	                     "JOIN reuse_fact f USING(k) WHERE o.k IN "
+	                     "(SELECT k FROM reuse_fact GROUP BY k HAVING sum(v)>25) GROUP BY o.k,d.label ORDER BY ALL",
+	                     "combine_aggr"},
+	                    {"join_filter_pushdown",
+	                     "SELECT f.v FROM reuse_fact f JOIN reuse_owner o USING(k) WHERE o.dim_id>10 ORDER BY ALL",
+	                     "min"},
+	                    {"unused_columns", "SELECT 42 FROM (SELECT sum(i) FROM (VALUES (1),(2)) t(i))", "count_star"}};
+	auto collect = [](const LogicalOperator &plan) {
+		vector<reference<const Expression>> expressions;
+		std::function<void(const Expression &)> visit_expression = [&](const Expression &expression) {
+			if (expression.GetExpressionType() == ExpressionType::BOUND_FUNCTION ||
+			    expression.GetExpressionType() == ExpressionType::BOUND_AGGREGATE) {
+				expressions.emplace_back(expression);
+			}
+			ExpressionIterator::EnumerateChildren(expression, visit_expression);
+		};
+		std::function<void(const LogicalOperator &)> visit_operator = [&](const LogicalOperator &op) {
+			LogicalOperatorVisitor::EnumerateExpressions(
+			    op, [&](const unique_ptr<Expression> *expression) { visit_expression(**expression); });
+			// Runtime-filter aggregates live outside the operator's ordinary expression list.
+			if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+				auto &join = op.Cast<LogicalComparisonJoin>();
+				if (join.filter_pushdown) {
+					for (auto &aggregate : join.filter_pushdown->min_max_aggregates) {
+						visit_expression(*aggregate);
+					}
+				}
+			}
+			for (auto &child : op.children) {
+				visit_operator(*child);
+			}
+		};
+		visit_operator(plan);
+		return expressions;
+	};
+	auto count_function = [&](const LogicalOperator &plan, const Identifier &name) {
+		idx_t count = 0;
+		for (auto &reference : collect(plan)) {
+			auto &expression = reference.get();
+			auto function_name = expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE
+			                         ? expression.Cast<BoundAggregateExpression>().Function().GetDefinition()->GetName()
+			                         : expression.Cast<BoundFunctionExpression>().Function().GetDefinition()->GetName();
+			count += function_name == name;
+		}
+		return count;
+	};
+	for (auto &entry : cases) {
+		INFO(entry.optimizer);
+		auto plan = OptimizeExportQuery(connection, entry.query);
+		REQUIRE(count_function(*plan, entry.introduced_function) > 0);
+		REQUIRE_NO_FAIL(connection.Query("SET disabled_optimizers='" + entry.optimizer + "'"));
+		auto disabled_plan = OptimizeExportQuery(connection, entry.query);
+		REQUIRE(count_function(*disabled_plan, entry.introduced_function) == 0);
+		auto baseline = connection.Query(entry.query);
+		REQUIRE_NO_FAIL(*baseline);
+		REQUIRE_NO_FAIL(connection.Query("SET disabled_optimizers=''"));
+		auto optimized = connection.Query(entry.query);
+		REQUIRE_NO_FAIL(*optimized);
+		REQUIRE(optimized->Equals(*baseline));
+		auto expressions = collect(*plan);
+		for (auto &reference : expressions) {
+			auto &expression = reference.get();
+			vector<SQLBindingEntry> bindings;
+			CollectSQLBindings(expression, bindings);
+			BoundExpressionSQLExportContext context;
+			context.resolve_binding = [bindings](const ColumnBinding &binding) -> optional<ResolvedSQLColumnReference> {
+				for (auto &entry : bindings) {
+					if (entry.binding == binding) {
+						return ResolvedSQLColumnReference {{entry.name}, entry.type};
+					}
+				}
+				return {};
+			};
+			string from_clause;
+			for (auto &binding : bindings) {
+				unique_ptr<ParsedExpression> value;
+				if (binding.type.IsAggregateState()) {
+					for (auto &candidate : expressions) {
+						if (candidate.get().GetReturnType() != binding.type ||
+						    candidate.get().GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
+							continue;
+						}
+						vector<SQLBindingEntry> inputs;
+						CollectSQLBindings(candidate, inputs);
+						bool has_state_input = false;
+						for (auto &input : inputs) {
+							has_state_input |= input.type.IsAggregateState();
+						}
+						if (has_state_input) {
+							continue;
+						}
+						auto fixture = candidate.get().Copy();
+						ExpressionIterator::VisitExpressionClassMutable(
+						    fixture, ExpressionClass::BOUND_COLUMN_REF,
+						    [](unique_ptr<Expression> &column) { column = Constant(Value(column->GetReturnType())); });
+						auto exported = BoundExpressionSQLExporter::Export(*fixture, {});
+						REQUIRE(exported.IsSuccess());
+						value = std::move(exported.GetValue());
+						break;
+					}
+					REQUIRE(value);
+				} else {
+					value = make_uniq<CastExpression>(binding.type, make_uniq<ConstantExpression>(Value()));
+				}
+				from_clause += from_clause.empty() ? " FROM (SELECT " : ", ";
+				from_clause += value->ToString() + " AS " + SQLIdentifier(binding.name);
+			}
+			if (!from_clause.empty()) {
+				from_clause += ") AS inputs";
+			}
+			auto exported = BoundExpressionSQLExporter::Export(expression, context);
+			REQUIRE(exported.IsSuccess());
+			auto result = connection.Query("SELECT " + exported.GetValue()->ToString() + " AS exported" + from_clause);
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->GetTypes() == vector<LogicalType> {expression.GetReturnType()});
+			auto restored = BinaryRoundTrip(*connection.context, expression);
+			auto restored_export = BoundExpressionSQLExporter::Export(*restored, context);
+			REQUIRE(restored_export.IsSuccess());
+			auto restored_result =
+			    connection.Query("SELECT " + restored_export.GetValue()->ToString() + " AS exported" + from_clause);
+			REQUIRE_NO_FAIL(*restored_result);
+			REQUIRE(restored_result->Equals(*result));
+		}
+	}
+	connection.Rollback();
 }

@@ -33,8 +33,7 @@ struct BoundExpressionSQLExportContext {
 	BoundExpressionSQLBindingResolver resolve_binding;
 };
 
-//! Reconstructs logical SQL from live bound expressions, independently of physical specialization.
-//! Binary function serialization does not preserve logical SQL identity; restored catalog calls are unsupported.
+//! Reconstructs logical SQL from valid bound expressions, independently of physical specialization.
 class BoundExpressionSQLExporter {
 public:
 	DUCKDB_API static LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>

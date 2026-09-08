@@ -108,14 +108,7 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &cont
 
 BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function)
     // the function does not come from a function set - copy it into a definition of its own
-    : BoundAggregateFunction(CopyStandaloneDefinition(function)) {
-}
-
-shared_ptr<const AggregateFunction>
-BoundAggregateFunction::CopyStandaloneDefinition(const AggregateFunction &function) {
-	auto result = make_shared_ptr<AggregateFunction>(function);
-	result->ClearSQLAddressable();
-	return std::move(result);
+    : BoundAggregateFunction(make_shared_ptr<AggregateFunction>(function)) {
 }
 
 BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunction> function_p)
