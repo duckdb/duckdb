@@ -5,7 +5,9 @@
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/query_result_stream.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -57,6 +59,32 @@ bool NO_FAIL(QueryResult &result) {
 		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
 	}
 	return !result.HasError();
+}
+
+duckdb::unique_ptr<duckdb::QueryResultStream> OpenStream(duckdb::Connection &con, const string &query) {
+	return duckdb::make_uniq<duckdb::QueryResultStream>(con.Submit(query));
+}
+
+duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream &stream) {
+	auto statement_type = stream.GetStatementType();
+	auto properties = stream.GetStatementProperties();
+	auto names = stream.GetNames();
+	auto client_properties = stream.GetClientProperties();
+	auto collection =
+	    duckdb::make_uniq<duckdb::ColumnDataCollection>(duckdb::Allocator::DefaultAllocator(), stream.GetTypes());
+	duckdb::ColumnDataAppendState append_state;
+	collection->InitializeAppend(append_state);
+	while (auto chunk = stream.Fetch()) {
+		if (chunk->size() == 0) {
+			break;
+		}
+		collection->Append(append_state, *chunk);
+	}
+	if (stream.HasError()) {
+		return duckdb::make_uniq<duckdb::QueryResult>(stream.GetErrorObject());
+	}
+	return duckdb::make_uniq<duckdb::QueryResult>(statement_type, properties, names, std::move(collection),
+	                                              client_properties);
 }
 
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
@@ -650,12 +678,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 	return result;
 }
 
-bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {
-	if (result_.GetResultType() == QueryResultType::STREAM_RESULT) {
-		fprintf(stderr, "Unexpected stream query result in CHECK_COLUMN\n");
-		return false;
-	}
-	auto &result = (MaterializedQueryResult &)result_;
+bool CHECK_COLUMN(QueryResult &result, size_t column_number, vector<duckdb::Value> values) {
 	if (result.HasError()) {
 		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
 		return false;
@@ -700,27 +723,16 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 }
 
 bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
-	if (result->GetResultType() == QueryResultType::STREAM_RESULT) {
-		auto &stream = (StreamQueryResult &)*result;
-		result = stream.Materialize();
-	}
 	return CHECK_COLUMN(*result, column_number, values);
 }
 
-bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::MaterializedQueryResult> &result, size_t column_number,
-                  vector<duckdb::Value> values) {
-	return CHECK_COLUMN((QueryResult &)*result, column_number, values);
-}
-
 string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
-	D_ASSERT(result.GetResultType() == QueryResultType::MATERIALIZED_RESULT);
-	auto &materialized = (MaterializedQueryResult &)result;
-	if (materialized.HasError()) {
-		fprintf(stderr, "Query failed with message: %s\n", materialized.GetError().c_str());
-		return materialized.GetError();
+	if (result.HasError()) {
+		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
+		return result.GetError();
 	}
 	string error;
-	if (!compare_result(csv, materialized.Collection(), materialized.GetTypes(), header, error)) {
+	if (!compare_result(csv, result.Collection(), result.GetTypes(), header, error)) {
 		return error;
 	}
 	return "";

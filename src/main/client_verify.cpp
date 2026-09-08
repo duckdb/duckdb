@@ -74,7 +74,7 @@ static void ReplaceStatement(unique_ptr<SQLStatement> &statement, unique_ptr<SQL
 }
 
 void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
-                                          PendingQueryParameters query_parameters) {
+                                          SubmitParameters query_parameters) {
 	auto verification = Settings::Get<DebugVerifyStatementSetting>(*this);
 	if (verification == DebugStatementVerification::COPY_STATEMENT) {
 		if (statement->type == StatementType::LOGICAL_PLAN_STATEMENT) {

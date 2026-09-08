@@ -719,7 +719,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	result.plan = std::move(insert);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.complete_on_return = true;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

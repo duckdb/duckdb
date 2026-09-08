@@ -2,7 +2,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/common/helper.hpp"
 
 namespace duckdb {
@@ -27,6 +27,12 @@ idx_t SimpleBufferedData::PeakBufferedBytes() {
 bool SimpleBufferedData::HasBlockedSink() {
 	annotated_lock_guard<annotated_mutex> lock(glock);
 	return !blocked_sinks.empty();
+}
+
+bool SimpleBufferedData::HasObservableChunk() {
+	annotated_lock_guard<annotated_mutex> lock(glock);
+	// Readiness is the chunk queue, never the byte count: chunks with rows but zero data bytes exist
+	return !unread_chunks.empty();
 }
 
 void SimpleBufferedData::CollectRestartableSinks(annotated_lock_guard<annotated_mutex> &lock,
@@ -117,16 +123,24 @@ bool SimpleBufferedData::AppendOrBlock(DataChunk &to_append, const InterruptStat
 	// Copied outside the lock: both outcomes need the copy, and parallel producers copy concurrently
 	auto copy = CopyForBuffering(to_append);
 	const idx_t chunk_data_size = copy->GetDataSize();
-	annotated_lock_guard<annotated_mutex> lock(glock);
-	// The buffer admits a chunk that fits, and always one chunk when empty
-	if (buffered_count > 0 && buffered_count + chunk_data_size > BufferSize()) {
-		// Park holding the finished copy. Restart selection deposits it at wake time
-		blocked_sinks.push(BlockedSink {blocked_sink, chunk_data_size, std::move(copy)});
-		return true;
+	shared_ptr<QueryResultNotifier> notifier;
+	{
+		annotated_lock_guard<annotated_mutex> lock(glock);
+		// The buffer admits a chunk that fits, and always one chunk when empty
+		if (buffered_count > 0 && buffered_count + chunk_data_size > BufferSize()) {
+			// Park holding the finished copy. Restart selection deposits it at wake time
+			blocked_sinks.push(BlockedSink {blocked_sink, chunk_data_size, std::move(copy)});
+			return true;
+		}
+		if (unread_chunks.empty()) {
+			// The chunk is queued before the signal below, so a woken consumer always finds it
+			notifier = result_notifier;
+		}
+		unread_chunks.push(BufferedChunk {std::move(copy), chunk_data_size});
+		buffered_count += chunk_data_size;
+		peak_buffered_bytes = MaxValue<idx_t>(peak_buffered_bytes, buffered_count);
 	}
-	unread_chunks.push(BufferedChunk {std::move(copy), chunk_data_size});
-	buffered_count += chunk_data_size;
-	peak_buffered_bytes = MaxValue<idx_t>(peak_buffered_bytes, buffered_count);
+	Signal(notifier);
 	return false;
 }
 

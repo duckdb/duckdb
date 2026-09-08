@@ -11,12 +11,10 @@
 #include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
-#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/query_result_stream.hpp"
 #include "duckdb/main/relation.hpp"
-#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
@@ -74,22 +72,11 @@ public:
 	//! Force parallel execution, even for smaller tables. Should only be used in testing.
 	DUCKDB_API void ForceParallelism();
 
-	//! Issues a query to the database and returns a QueryResult. This result can be either a StreamQueryResult or a
-	//! MaterializedQueryResult. The result can be stepped through with calls to Fetch(). Note that there can only be
-	//! one active StreamQueryResult per Connection object. Calling SendQuery() will invalidate any previously existing
-	//! StreamQueryResult.
-	DUCKDB_API unique_ptr<QueryResult>
-	SendQuery(const string &query, QueryParameters query_parameters = QueryResultOutputType::ALLOW_STREAMING);
-	DUCKDB_API unique_ptr<QueryResult>
-	SendQuery(unique_ptr<SQLStatement> statement,
-	          QueryParameters query_parameters = QueryResultOutputType::ALLOW_STREAMING);
-	//! Issues a query to the database and materializes the result (if necessary). Always returns a
-	//! MaterializedQueryResult.
-	DUCKDB_API unique_ptr<MaterializedQueryResult> Query(const string &query);
-	//! Issues a query to the database and materializes the result (if necessary). Always returns a
-	//! MaterializedQueryResult.
-	DUCKDB_API unique_ptr<MaterializedQueryResult>
-	Query(unique_ptr<SQLStatement> statement, QueryResultMemoryType memory_type = QueryResultMemoryType::IN_MEMORY);
+	//! Issues a query to the database and runs it to completion, returning a handle whose result is
+	//! retained: it can be read repeatedly and at random.
+	DUCKDB_API unique_ptr<QueryResult> Query(const string &query);
+	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement,
+	                                         QueryResultMemoryType memory_type = QueryResultMemoryType::IN_MEMORY);
 	// prepared statements
 	template <typename... ARGS>
 	unique_ptr<QueryResult> Query(const string &query, ARGS... args) {
@@ -97,27 +84,23 @@ public:
 		return QueryParamsRecursive(query, values, args...);
 	}
 
-	//! Issues a query to the database and returns a Pending Query Result. Note that "query" may only contain
-	//! a single statement.
-	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
-	//! Issues a query to the database and returns a Pending Query Result
-	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(unique_ptr<SQLStatement> statement,
-	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
-	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(unique_ptr<SQLStatement> statement, identifier_map_t<BoundParameterData> &named_values,
-	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
-	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, identifier_map_t<BoundParameterData> &named_values,
-	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
-	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, vector<Value> &values,
-	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, PendingQueryParameters parameters);
-	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
-	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
+	//! Submits a query to the database and returns its handle, without running it. Nothing is produced
+	//! until the consumer chooses: opening a QueryResultStream on the handle drains, and a retained-side
+	//! call on the handle retains. Note that "query" may only contain a single statement.
+	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, QueryParameters query_parameters = {});
+	//! Submits a query to the database and returns its handle
+	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
+	                                          QueryParameters query_parameters = {});
+	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
+	                                          identifier_map_t<BoundParameterData> &named_values,
+	                                          QueryParameters query_parameters = {});
+	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, identifier_map_t<BoundParameterData> &named_values,
+	                                          QueryParameters query_parameters = {});
+	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, vector<Value> &values,
+	                                          QueryParameters query_parameters = {});
+	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, SubmitParameters parameters);
+	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement, vector<Value> &values,
+	                                          QueryParameters query_parameters = {});
 
 	//! Prepare the specified query, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);

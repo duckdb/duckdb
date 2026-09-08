@@ -8,18 +8,27 @@
 
 #pragma once
 
+#include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_properties.hpp"
+#include "duckdb/main/query_result_notifier.hpp"
 
 namespace duckdb {
 class BoxRendererContext;
 struct BoxRendererConfig;
+class BufferedData;
+class ClientContext;
+class ClientContextLock;
+class ColumnDataRowCollection;
+class PreparedStatementData;
 
-enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT, ARROW_RESULT };
+enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, ARROW_RESULT };
 
 class BaseQueryResult {
 public:
@@ -31,7 +40,7 @@ public:
 	DUCKDB_API virtual ~BaseQueryResult();
 
 public:
-	//! Returns the type of the result (MATERIALIZED or STREAMING)
+	//! Returns the type of the result (MATERIALIZED or ARROW)
 	DUCKDB_API QueryResultType GetResultType() const;
 	//! Returns the type of the statement that created this result
 	DUCKDB_API StatementType GetStatementType() const;
@@ -53,7 +62,7 @@ public:
 	DUCKDB_API const ErrorData &GetErrorObject() const;
 
 private:
-	//! The type of the result (MATERIALIZED or STREAMING)
+	//! The type of the result (MATERIALIZED or ARROW). Will be removed.
 	QueryResultType type;
 	//! The type of the statement that created this result
 	StatementType statement_type;
@@ -69,15 +78,28 @@ private:
 	ErrorData error;
 };
 
-//! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the
-//! result contains the entire result set, or a StreamQueryResult in which case the Fetch method can be called to
-//! incrementally fetch data from the database.
+//! A query result. Calling Materialize, Collection, TakeCollection, Fetch, RowCount, and GetValue will materialize the
+//! result's data into a ColumnDataCollection. If instead the caller wants a streaming interface, it can be moved into
+//! a QueryResultStream.
 class QueryResult : public BaseQueryResult {
+	friend class BufferedData;
+	friend class ClientContext;
+	friend class QueryResultStream;
+
 public:
-	//! Creates a successful query result with the specified names and types
+	//! Creates the handle of a freshly submitted query
+	DUCKDB_API QueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
+	                       vector<LogicalType> types, ClientProperties client_properties,
+	                       shared_ptr<BufferedData> buffer);
+	//! Creates a detached result over an existing collection
+	DUCKDB_API QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names,
+	                       unique_ptr<ColumnDataCollection> collection, ClientProperties client_properties);
+	//! Creates an unsuccessful query result with error condition
+	DUCKDB_API explicit QueryResult(ErrorData error);
+	//! Creates a successful query result of a subclass with the specified names and types
 	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
 	                       vector<LogicalType> types, vector<Identifier> names, ClientProperties client_properties);
-	//! Creates an unsuccessful query result with error condition
+	//! Creates an unsuccessful query result of a subclass
 	DUCKDB_API QueryResult(QueryResultType type, ErrorData error);
 	DUCKDB_API ~QueryResult() override;
 
@@ -109,16 +131,47 @@ public:
 	static void DeduplicateColumns(vector<string> &names);
 
 public:
+	//! Returns the query's current state. Does not participate in execution.
+	DUCKDB_API QueryResultState Poll();
+	//! Executes a single task of the query on the calling thread. Once it returns READY, all tasks are done and the
+	//! caller should consume the result.
+	DUCKDB_API QueryResultState ExecuteTask();
+	//! Blocks until a task is runnable or the engine is waiting on the caller. Runs no task.
+	DUCKDB_API void WaitForTask();
+	//! Non-blocking. Tells the engine to fully materialize the result into a CDC. Call Collection(), Fetch[Raw](), or
+	//! ExecuteTask() to execute tasks, or (if multithreaded) either Poll or wait on a notification.
+	DUCKDB_API void Materialize();
+	//! Blocking. Tells the engine to fully materialize the result into a CDC. Participates in execution of the query.
+	DUCKDB_API void Complete();
+	//! Blocking. Same as Complete(), but will return a reference to the CDC when done.
+	DUCKDB_API ColumnDataCollection &Collection();
+	//! Blocking. Same as Collection() but takes ownership of the collection. The QueryResult is empty afterward.
+	DUCKDB_API unique_ptr<ColumnDataCollection> TakeCollection();
+	//! Gets the value of the field at [ column_idx, row_idx ]. Very slow, scanning the collection is much faster.
+	//! Will materialize the full result into a CDC if it hadn't yet.
+	DUCKDB_API Value GetValue(idx_t column_idx, idx_t row_idx);
+	template <class T>
+	T GetValue(idx_t column, idx_t index) {
+		auto value = GetValue(column, index);
+		return (T)value.GetValue<int64_t>();
+	}
+	//! Get the rowcount of the result. Will materialize the full result into a CDC if it hadn't yet.
+	DUCKDB_API idx_t RowCount();
+	//! Ends the query if it is still open. Idempotent.
+	DUCKDB_API void Close();
+	//! Whether this result is still the connection's open result.
+	DUCKDB_API bool IsOpen();
+
 	//! Returns the name of the column for the given index
 	DUCKDB_API const Identifier &ColumnName(idx_t index) const;
-	//! Fetches a DataChunk of normalized (flat) vectors from the query result.
-	//! Returns nullptr if there are no more results to fetch.
+	//! A cursor over the collection: fetches the next chunk of normalized (flat) vectors, or null
+	//! at the end. Will materialize the full result into a CDC if it hadn't yet.
 	DUCKDB_API unique_ptr<DataChunk> Fetch();
 	//! Fetches a DataChunk from the query result. The vectors are not normalized and hence any vector types can be
-	//! returned.
+	//! returned. Will materialize the full result into a CDC if it hadn't yet.
 	DUCKDB_API unique_ptr<DataChunk> FetchRaw();
 	//! Converts the QueryResult to a string
-	DUCKDB_API virtual string ToString() = 0;
+	DUCKDB_API virtual string ToString();
 	//! Converts the QueryResult to a box-rendered string
 	DUCKDB_API virtual string ToBox(BoxRendererContext &context, const BoxRendererConfig &config);
 	//! Prints the QueryResult to the console
@@ -127,7 +180,7 @@ public:
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other, bool compare_names = true);
 
-	bool TryFetch(unique_ptr<DataChunk> &result, ErrorData &error) {
+	bool TryFetchOrError(unique_ptr<DataChunk> &result, ErrorData &error) {
 		try {
 			result = Fetch();
 			return !HasError();
@@ -140,8 +193,47 @@ public:
 		}
 	}
 
+	//! False for a detached result and for an error result, which never had a buffer
+	bool HasBufferedData() const {
+		return buffer != nullptr;
+	}
+	//! Test helper: the buffer created for this query.
+	BufferedData &GetBufferedData() const {
+		D_ASSERT(buffer);
+		return *buffer;
+	}
+
 protected:
-	DUCKDB_API virtual unique_ptr<DataChunk> FetchInternal() = 0;
+	DUCKDB_API virtual unique_ptr<DataChunk> FetchInternal();
+
+private:
+	unique_ptr<ClientContextLock> LockContext();
+	void CheckExecutableInternal(ClientContextLock &lock);
+	bool IsOpenInternal(ClientContextLock &lock);
+	//! Records that this result is no longer the connection's active query, the way an interrupt is
+	//! recorded, and reports it as an error state
+	QueryResultState Cancelled();
+	void CompleteInternal(ClientContextLock &lock);
+	void HandleFetchFailure(ClientContextLock &lock, ErrorData error);
+	//! Ends the query and records a commit failure on this result without throwing
+	void EndQuery(ClientContextLock &lock, bool invalidate_transaction = false);
+	[[noreturn]] void ThrowNoCollection() const;
+
+private:
+	//! The client context this result belongs to. Null once the query has ended
+	shared_ptr<ClientContext> context;
+	//! The buffer created for this query at submission. It carries the retention decision and, for
+	//! a stream, the chunks (null for a detached or an error result)
+	shared_ptr<BufferedData> buffer;
+	//! Fired when this result's observable state may have changed (may be null)
+	shared_ptr<QueryResultNotifier> notifier;
+	//! The retained storage (may be null)
+	unique_ptr<ColumnDataCollection> collection;
+	//! Row collection, only created if GetValue is called
+	unique_ptr<ColumnDataRowCollection> row_collection;
+	//! Scan state for Fetch calls
+	ColumnDataScanState scan_state;
+	bool scan_initialized = false;
 
 private:
 	class QueryResultIterator;

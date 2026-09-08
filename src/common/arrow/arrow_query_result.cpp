@@ -27,6 +27,10 @@ string ArrowQueryResult::ToString() {
 	return "";
 }
 
+string ArrowQueryResult::ToBox(BoxRendererContext &context, const BoxRendererConfig &config) {
+	return ToString();
+}
+
 vector<unique_ptr<ArrowArrayWrapper>> ArrowQueryResult::ConsumeArrays() {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to fetch ArrowArrays from an unsuccessful query result: Error %s",

@@ -73,9 +73,8 @@ class ClientContext;
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
-	    : requires_valid_transaction(true), output_type(QueryResultOutputType::FORCE_MATERIALIZED),
-	      bound_all_parameters(true), return_type(StatementReturnType::QUERY_RESULT), parameter_count(0),
-	      always_require_rebind(false) {
+	    : requires_valid_transaction(true), complete_on_return(true), bound_all_parameters(true),
+	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
 	}
 
 	struct CatalogIdentity {
@@ -103,8 +102,9 @@ struct StatementProperties {
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
 	//! exception of ROLLBACK
 	bool requires_valid_transaction;
-	//! Whether or not the result can be streamed to the client
-	QueryResultOutputType output_type;
+	//! Whether the statement must run to completion before the call that returns its result does:
+	//! its side effects cannot wait for a consumer, so its result is never streamed
+	bool complete_on_return;
 	//! Whether or not all parameters have successfully had their types determined
 	bool bound_all_parameters;
 	//! What type of data the statement returns

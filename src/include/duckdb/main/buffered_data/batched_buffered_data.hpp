@@ -19,7 +19,7 @@
 
 namespace duckdb {
 
-class StreamQueryResult;
+class QueryResult;
 
 class InProgressBatch {
 public:
@@ -51,6 +51,9 @@ public:
 	bool HasBlockedSink() override {
 		annotated_lock_guard<annotated_mutex> lock(glock);
 		return !blocked_sinks.empty();
+	}
+	bool HasObservableChunk() override {
+		return !BufferIsEmpty();
 	}
 	void UnblockSinks() override;
 	void AssertNoBlockedSinks() override;

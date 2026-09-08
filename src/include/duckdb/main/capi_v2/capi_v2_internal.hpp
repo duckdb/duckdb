@@ -21,8 +21,6 @@
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/parse_iterator.hpp"
-#include "duckdb/main/pending_query_result.hpp"
-#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/sql_statement.hpp"

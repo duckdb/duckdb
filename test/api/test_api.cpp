@@ -19,7 +19,7 @@ TEST_CASE("Test comment in CPP API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	con.SendQuery("--ups");
+	con.Query("--ups");
 	//! Should not crash
 	REQUIRE(1);
 }
@@ -119,12 +119,13 @@ TEST_CASE("Test closing result after database is gone", "[api]") {
 	db = make_uniq<DuckDB>(nullptr);
 	conn = make_uniq<Connection>(*db);
 	// check that the connection works
-	auto streaming_result = conn->SendQuery("SELECT 42");
+	auto stream = OpenStream(*conn, "SELECT 42");
 	// destroy the database
 	db.reset();
 	conn.reset();
+	auto streaming_result = DrainStream(*stream);
 	REQUIRE(CHECK_COLUMN(streaming_result, 0, {42}));
-	streaming_result.reset();
+	stream.reset();
 }
 
 TEST_CASE("Test closing database with open prepared statements", "[api]") {
@@ -230,13 +231,6 @@ TEST_CASE("Test multiple result sets", "[api]") {
 	result = std::move(result->next);
 	REQUIRE(CHECK_COLUMN(result, 0, {84}));
 	REQUIRE(!result->next);
-
-	// also with stream api
-	result = con.SendQuery("SELECT 42; SELECT 84");
-	REQUIRE(CHECK_COLUMN(result, 0, {42}));
-	result = std::move(result->next);
-	REQUIRE(CHECK_COLUMN(result, 0, {84}));
-	REQUIRE(!result->next);
 }
 
 TEST_CASE("Test streaming API errors", "[api]") {
@@ -244,60 +238,42 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// multiple streaming result
-	result = con.SendQuery("SELECT 42;");
-	result2 = con.SendQuery("SELECT 42;");
-	// "result" is invalidated
-	REQUIRE_THROWS(CHECK_COLUMN(result, 0, {42}));
-	// "result2" we can read
+	const string failing_query =
+	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);";
+
+	// a second stream invalidates the first
+	auto stream = OpenStream(con, "SELECT 42;");
+	auto stream2 = OpenStream(con, "SELECT 42;");
+	REQUIRE_THROWS(stream->Fetch());
+	result2 = DrainStream(*stream2);
 	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
 
-	// streaming result followed by non-streaming result
-	result = con.SendQuery("SELECT 42;");
+	// stream followed by a retained result
+	stream = OpenStream(con, "SELECT 42;");
 	result2 = con.Query("SELECT 42;");
-	// "result" is invalidated
-	REQUIRE_THROWS(CHECK_COLUMN(result, 0, {42}));
-	// "result2" we can read
+	REQUIRE_THROWS(stream->Fetch());
 	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
 
 	// error in binding
-	result = con.SendQuery("SELECT * FROM nonexistanttable");
+	result = con.Query("SELECT * FROM nonexistanttable");
 	REQUIRE(!result->ToString().empty());
 	REQUIRE(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 	REQUIRE_FAIL(result);
 
 	// error in stream that only happens after fetching
-	result = con.SendQuery(
-	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
-	while (!result->HasError()) {
-		auto chunk = result->Fetch();
+	stream = OpenStream(con, failing_query);
+	while (!stream->HasError()) {
+		auto chunk = stream->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
 	}
-	REQUIRE(!result->ToString().empty());
-	REQUIRE_FAIL(result);
+	REQUIRE(stream->HasError());
 
-	// same query but call Materialize
-	result = con.SendQuery(
-	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
+	// same query, retained instead of streamed
+	result = con.Submit(failing_query);
+	result->Complete();
 	REQUIRE(!result->ToString().empty());
-	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-	result = ((StreamQueryResult &)*result).Materialize();
-	REQUIRE_FAIL(result);
-
-	// same query but call materialize after fetching
-	result = con.SendQuery(
-	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
-	while (!result->HasError()) {
-		auto chunk = result->Fetch();
-		if (!chunk || chunk->size() == 0) {
-			break;
-		}
-	}
-	REQUIRE(!result->ToString().empty());
-	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 }
 
@@ -311,23 +287,24 @@ TEST_CASE("Test fetch API", "[api]") {
 	result = con.Query("SELECT 'hello'::INT");
 	REQUIRE_THROWS(result->Fetch());
 
-	result = con.SendQuery("CREATE TABLE test (a INTEGER);");
+	result = con.Query("CREATE TABLE test (a INTEGER);");
 
 	result = con.Query("select a from test where 1 <> 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
-	result = con.SendQuery("INSERT INTO test VALUES (42)");
-	result = con.SendQuery("SELECT a from test");
+	result = con.Query("INSERT INTO test VALUES (42)");
+	result = con.Query("SELECT a from test");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 
 	auto materialized_result = con.Query("select a from test");
 	REQUIRE(CHECK_COLUMN(materialized_result, 0, {42}));
 
-	// override fetch result
-	result = con.SendQuery("SELECT a from test");
-	result = con.SendQuery("SELECT a from test");
-	result = con.SendQuery("SELECT a from test");
-	result = con.SendQuery("SELECT a from test");
+	// override the open stream
+	auto stream = OpenStream(con, "SELECT a from test");
+	stream = OpenStream(con, "SELECT a from test");
+	stream = OpenStream(con, "SELECT a from test");
+	stream = OpenStream(con, "SELECT a from test");
+	result = DrainStream(*stream);
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }
 
@@ -335,13 +312,13 @@ TEST_CASE("Test fetch API not to completion", "[api]") {
 	auto db = make_uniq<DuckDB>(nullptr);
 	auto conn = make_uniq<Connection>(*db);
 	// remove connection with active stream result
-	auto result = conn->SendQuery("SELECT 42");
+	auto stream = OpenStream(*conn, "SELECT 42");
 	// close the connection
 	conn.reset();
 	// now try to fetch a chunk, this should not return a nullptr
-	auto chunk = result->Fetch();
+	auto chunk = stream->Fetch();
 	REQUIRE(chunk);
-	// Only if we would call Fetch again would we Close the QueryResult
+	// Only if we would call Fetch again would we close the stream
 	// this is testing that it can get cleaned up without this.
 
 	db.reset();
@@ -352,49 +329,46 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	auto conn = make_uniq<Connection>(*db);
 
 	// remove connection with active stream result
-	auto result = conn->SendQuery("SELECT 42");
+	auto stream = OpenStream(*conn, "SELECT 42");
 	// close the connection
 	conn.reset();
 	// now try to fetch a chunk, this should not return a nullptr
-	auto chunk = result->Fetch();
+	auto chunk = stream->Fetch();
 	REQUIRE(chunk);
 
 	// now close the entire database
 	conn = make_uniq<Connection>(*db);
-	result = conn->SendQuery("SELECT 42");
+	stream = OpenStream(*conn, "SELECT 42");
 
 	db.reset();
 	// fetch should not fail
-	chunk = result->Fetch();
+	chunk = stream->Fetch();
 	REQUIRE(chunk);
 	// new queries on the connection should not fail either
-	REQUIRE_NO_FAIL(conn->SendQuery("SELECT 42"));
+	REQUIRE_NO_FAIL(conn->Query("SELECT 42"));
 
-	// override fetch result
+	// override the open stream
 	db = make_uniq<DuckDB>(nullptr);
 	conn = make_uniq<Connection>(*db);
-	auto result1 = conn->SendQuery("SELECT 42");
-	auto result2 = conn->SendQuery("SELECT 84");
-	REQUIRE_NO_FAIL(*result1);
-	REQUIRE_NO_FAIL(*result2);
+	auto stream1 = OpenStream(*conn, "SELECT 42");
+	auto stream2 = OpenStream(*conn, "SELECT 84");
+	REQUIRE(!stream1->HasError());
+	REQUIRE(!stream2->HasError());
 
-	// result1 should be closed now
-	REQUIRE_THROWS(result1->Fetch());
-	// result2 should work
-	REQUIRE(result2->Fetch());
+	// stream1 should be closed now
+	REQUIRE_THROWS(stream1->Fetch());
+	// stream2 should work
+	REQUIRE(stream2->Fetch());
 
-	// test materialize
-	result1 = conn->SendQuery("SELECT 42");
-	REQUIRE(result1->GetResultType() == QueryResultType::STREAM_RESULT);
-	auto materialized = ((StreamQueryResult &)*result1).Materialize();
-	result2 = conn->SendQuery("SELECT 84");
-
-	// we can read materialized still, even after opening a new result
+	// a retained result stays readable after another query starts
+	auto materialized = conn->Query("SELECT 42");
+	auto result2 = conn->Query("SELECT 84");
 	REQUIRE(CHECK_COLUMN(materialized, 0, {42}));
 	REQUIRE(CHECK_COLUMN(result2, 0, {84}));
 }
 
-static void VerifyStreamResult(duckdb::unique_ptr<QueryResult> result) {
+template <class T>
+static void VerifyStreamResult(duckdb::unique_ptr<T> result) {
 	REQUIRE(result->GetTypes()[0] == LogicalType::INTEGER);
 	size_t current_row = 0;
 	int current_expected_value = 0;
@@ -430,14 +404,12 @@ TEST_CASE("Test fetch API with big results", "[api][.]") {
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 
 	// stream the results using the Fetch() API
-	auto result = con.SendQuery("SELECT CAST(a AS INTEGER) FROM test ORDER BY a");
-	VerifyStreamResult(std::move(result));
-	// we can also stream a materialized result
-	auto materialized = con.Query("SELECT CAST(a AS INTEGER) FROM test ORDER BY a");
-	VerifyStreamResult(std::move(materialized));
-	// return multiple results using the stream API
-	result = con.SendQuery("SELECT CAST(a AS INTEGER) FROM test ORDER BY a; SELECT CAST(a AS INTEGER) FROM test ORDER "
-	                       "BY a; SELECT CAST(a AS INTEGER) FROM test ORDER BY a;");
+	VerifyStreamResult(OpenStream(con, "SELECT CAST(a AS INTEGER) FROM test ORDER BY a"));
+	// we can also cursor over a retained result
+	VerifyStreamResult(con.Query("SELECT CAST(a AS INTEGER) FROM test ORDER BY a"));
+	// return multiple results from one query
+	auto result = con.Query("SELECT CAST(a AS INTEGER) FROM test ORDER BY a; SELECT CAST(a AS INTEGER) FROM test ORDER "
+	                        "BY a; SELECT CAST(a AS INTEGER) FROM test ORDER BY a;");
 	auto next = std::move(result->next);
 	while (next) {
 		auto nextnext = std::move(next->next);
@@ -456,16 +428,17 @@ TEST_CASE("Test TryFlushCachingOperators interrupted ExecutePushInternal", "[api
 
 	// Use PhysicalCrossProduct with a very low amount of produced tuples, this caches the result in the
 	// CachingOperatorState This gets flushed with FinalExecute in PipelineExecutor::TryFlushCachingOperator
-	auto pending_query = con.PendingQuery("select unnest(range(a.a)) from tbl a, tbl b;");
+	auto pending_query = con.Submit("select unnest(range(a.a)) from tbl a, tbl b;");
 
 	// Through `unnest(range(a.a.))` this FinalExecute multiple chunks, more than the ExecutionBudget can handle with
 	// PROCESS_PARTIAL
 	pending_query->ExecuteTask();
 
 	// query the connection as normal after
-	auto res = pending_query->Execute();
+	auto &res = pending_query;
+	res->Complete();
 	REQUIRE(!res->HasError());
-	auto &materialized_res = res->Cast<MaterializedQueryResult>();
+	auto &materialized_res = *res;
 	idx_t initial_tuples = 2 * 2;
 	REQUIRE(materialized_res.RowCount() == initial_tuples * 100000);
 	for (idx_t i = 0; i < initial_tuples; i++) {
@@ -481,7 +454,7 @@ TEST_CASE("Test streaming query during stack unwinding", "[api]") {
 	Connection con(db);
 
 	try {
-		auto result = con.SendQuery("SELECT * FROM range(1000000)");
+		auto stream = OpenStream(con, "SELECT * FROM range(1000000)");
 
 		throw std::runtime_error("hello");
 	} catch (...) {
@@ -660,12 +633,12 @@ TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0 (c0 int);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (1);"));
 
-	result = con.SendQuery(
+	result = con.Query(
 	    "INSERT INTO t0(VALUES('\\x15\\x00\\x00\\x00\\x00@\\x01\\x0A\\x27:!\\x0A\\x00\\x00x12e\"\\x00'::BLOB));");
 	//! Should not terminate the process
 	REQUIRE_FAIL(result);
 
-	result = con.SendQuery("SELECT MIN(c0) FROM t0;");
+	result = con.Query("SELECT MIN(c0) FROM t0;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
@@ -699,7 +672,7 @@ TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE T1 AS SELECT record_nb, 0.0 x_1, 1.0 y_1 FROM T0"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE T2 AS SELECT record_nb, 0.0 x_2, 1.0 y_2 FROM T0"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE T3 AS SELECT record_nb, 0.0 x_3, 1.0 y_3 FROM T0"));
-	auto result = con.SendQuery(R"(
+	auto stream = OpenStream(con, R"(
         SELECT T0.record_nb,
             T1.x_1 x_1,
             T1.y_1 y_1,
@@ -715,7 +688,7 @@ TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.
 
 	idx_t count = 0;
 	while (true) {
-		auto chunk = result->Fetch();
+		auto chunk = stream->Fetch();
 		if (!chunk) {
 			break;
 		}
@@ -734,8 +707,8 @@ TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	con.SendQuery("CREATE TABLE t0(c0 INT);");
-	con.SendQuery("ALTER TABLE t0 ADD c1 TIMESTAMP_SEC;");
+	con.Query("CREATE TABLE t0(c0 INT);");
+	con.Query("ALTER TABLE t0 ADD c1 TIMESTAMP_SEC;");
 }
 
 TEST_CASE("Test loading database with enable_external_access set to false", "[api]") {
@@ -818,9 +791,8 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 
 	// Send query with in-memory result
 	QueryParameters parameters;
-	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	parameters.memory_type = QueryResultMemoryType::IN_MEMORY;
-	auto result = con->SendQuery("SELECT 42;", parameters);
+	auto result = con->context->Query("SELECT 42;", parameters);
 
 	// Query result is accessible
 	REQUIRE_NOTHROW(result->ToString());
@@ -836,7 +808,7 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	db = make_uniq<DuckDB>(nullptr);
 	con = make_uniq<Connection>(*db);
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
-	result = con->SendQuery("SELECT 42;", parameters);
+	result = con->context->Query("SELECT 42;", parameters);
 
 	// Query result is accessible
 	REQUIRE_NOTHROW(result->ToString());
@@ -851,8 +823,8 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	// And again with order preservation disabled
 	db = make_uniq<DuckDB>(nullptr);
 	con = make_uniq<Connection>(*db);
-	result = con->SendQuery("SET preserve_insertion_order=false;");
-	result = con->SendQuery("SELECT 42;", parameters);
+	result = con->Query("SET preserve_insertion_order=false;");
+	result = con->context->Query("SELECT 42;", parameters);
 
 	// Query result is accessible
 	REQUIRE_NOTHROW(result->ToString());

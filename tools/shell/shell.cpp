@@ -52,6 +52,7 @@
 #include <assert.h>
 
 #include "duckdb/common/time_point.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -843,7 +844,7 @@ void ShellState::SetTextMode() {
 
 SuccessState ShellState::RenderQuery(ShellRenderer &renderer, const string &query, PagerMode pager_overwrite) {
 	auto &con = *conn;
-	auto result = con.SendQuery(query);
+	auto result = con.Query(query);
 	if (result->HasError()) {
 		PrintDatabaseError(result->GetError());
 		return SuccessState::FAILURE;
@@ -953,15 +954,13 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	auto &con = *conn;
 	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
-	if (renderer->RequireMaterializedResult()) {
+	unique_ptr<duckdb::QueryResultStream> stream;
+	const bool render_materialized = renderer->RequireMaterializedResult();
+	if (render_materialized) {
 		// we need to materialize the result prior to rendering
-		duckdb::QueryParameters parameters;
-		parameters.output_type = duckdb::QueryResultOutputType::FORCE_MATERIALIZED;
-		parameters.memory_type = duckdb::QueryResultMemoryType::BUFFER_MANAGED;
-		result = con.SendQuery(std::move(statement), parameters);
+		result = con.Query(std::move(statement), duckdb::QueryResultMemoryType::BUFFER_MANAGED);
 	} else {
-		// for row-wise rendering we can use streaming results
-		result = con.SendQuery(std::move(statement));
+		result = con.Submit(std::move(statement));
 	}
 	auto &res = *result;
 	if (res.HasError()) {
@@ -969,6 +968,18 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::FAILURE;
 	}
 	auto &properties = res.GetStatementProperties();
+	// Row-wise rendering drains the result as it is produced; everything else is retained
+	const bool render_streaming = !render_materialized &&
+	                              properties.return_type == duckdb::StatementReturnType::QUERY_RESULT &&
+	                              !properties.complete_on_return;
+	if (!render_materialized && !render_streaming) {
+		// the statement is not rendered row by row, but its side effects must still happen
+		res.Complete();
+		if (res.HasError()) {
+			PrintDatabaseError(res.GetError());
+			return SuccessState::FAILURE;
+		}
+	}
 	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
 		auto result_chunk = res.Fetch();
 		if (result_chunk && result_chunk->size() == 1) {
@@ -987,8 +998,10 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// only SELECT statements return results that need to be rendered
 		return SuccessState::SUCCESS;
 	}
-	if (res.GetResultType() == duckdb::QueryResultType::MATERIALIZED_RESULT) {
-		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
+	if (render_streaming) {
+		stream = duckdb::make_uniq<duckdb::QueryResultStream>(std::move(result));
+	} else {
+		last_result = std::move(result);
 	}
 	// A bareword "SHOW name" is optimistically routed to the describe renderer, but it may have resolved to a setting
 	// value rather than a table describe. Only a describe-shaped result can be rendered in describe mode - fall back to
@@ -998,7 +1011,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		renderer = GetRenderer();
 	}
 	// analyze the query result so we know how long/wide the result will be
-	auto render_state = RenderQueryResult(*renderer, res);
+	auto render_state = stream ? RenderQueryResult(*renderer, *stream) : RenderQueryResult(*renderer, res);
 	return render_state;
 }
 
@@ -3276,7 +3289,7 @@ static char *linenoise_format(const char *zLine) {
 			return nullptr;
 		}
 		vector<duckdb::Value> params = {duckdb::Value(string(zLine))};
-		auto result = prepared->Execute(params, /*allow_stream_result=*/false);
+		auto result = prepared->Execute(params);
 		if (result->HasError()) {
 			return nullptr;
 		}

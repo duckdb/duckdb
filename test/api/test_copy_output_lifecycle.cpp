@@ -344,9 +344,9 @@ TEST_CASE("Abandoning multi-chunk COPY statistics preserves finalized files", "[
 	RemoveDirectoryIfPresent(fs, output);
 
 	auto result =
-	    connection.SendQuery(StringUtil::Format("COPY (SELECT i AS p, 42 AS v FROM range(%d) t(i)) TO '%s' "
-	                                            "(FORMAT copy_lifecycle_abandon_stats, PARTITION_BY (p), RETURN_STATS)",
-	                                            STANDARD_VECTOR_SIZE + 1, output));
+	    connection.Query(StringUtil::Format("COPY (SELECT i AS p, 42 AS v FROM range(%d) t(i)) TO '%s' "
+	                                        "(FORMAT copy_lifecycle_abandon_stats, PARTITION_BY (p), RETURN_STATS)",
+	                                        STANDARD_VECTOR_SIZE + 1, output));
 	REQUIRE_NO_FAIL(*result);
 	auto first_chunk = result->Fetch();
 	REQUIRE(first_chunk);

@@ -31,7 +31,7 @@ BoundStatement Binder::Bind(ExternalResourceStatement &stmt) {
 		select_statement.node = std::move(select_node);
 
 		auto show_result = Bind(select_statement);
-		GetStatementProperties().output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+		GetStatementProperties().complete_on_return = true;
 		return show_result;
 	}
 
@@ -71,7 +71,7 @@ BoundStatement Binder::Bind(ExternalResourceStatement &stmt) {
 	result.plan = make_uniq<LogicalExternalResource>(std::move(data));
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.complete_on_return = true;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

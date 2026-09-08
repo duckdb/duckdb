@@ -7,6 +7,7 @@
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/settings.hpp"
@@ -277,6 +278,20 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 void Executor::CancelTasks() {
 	task.reset();
+	{
+		lock_guard<mutex> guard(result_buffer_lock);
+		result_buffer.reset();
+	}
+	shared_ptr<QueryResultNotifier> notifier;
+	{
+		lock_guard<mutex> guard(result_notifier_lock);
+		notifier = std::move(result_notifier);
+	}
+	if (notifier) {
+		// Workers can still ring notifications while the query is torn down. Clear silences every
+		// reference to the notifier
+		notifier->Clear();
+	}
 	reference_map_t<Task, shared_ptr<Task>> to_destroy;
 	{
 		lock_guard<mutex> elock(executor_lock);
@@ -419,8 +434,8 @@ void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	// Save the reference before move — evaluation order of operator[] key and assignment value is unspecified pre-C++17
 	auto &task_ref = *task_p;
 	to_be_rescheduled_tasks[task_ref] = std::move(task_p);
-	// Only a result-sink park needs the consumer, so only a streaming plan wakes the waiting consumer
-	if (HasStreamingResultCollector()) {
+	// Only a result-sink park needs the consumer, so only a store that can park wakes it
+	if (ResultStoreCanPark()) {
 		task_reschedule.notify_all();
 	}
 }
@@ -429,10 +444,10 @@ bool Executor::ExecutionIsFinished() {
 	return completed_pipelines >= total_pipelines || HasError();
 }
 
-PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
+QueryResultState Executor::ExecuteTask(bool dry_run) {
 	// Only executor should return NO_TASKS_AVAILABLE
-	D_ASSERT(execution_result != PendingExecutionResult::NO_TASKS_AVAILABLE);
-	if (execution_result != PendingExecutionResult::RESULT_NOT_READY && ExecutionIsFinished()) {
+	D_ASSERT(execution_result != QueryResultState::NO_TASKS_AVAILABLE);
+	if (execution_result != QueryResultState::NOT_READY && ExecutionIsFinished()) {
 		return execution_result;
 	}
 	// check if there are any incomplete pipelines
@@ -454,13 +469,13 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 			// there are no tasks to be scheduled and there are tasks blocked
 			lock_guard<mutex> l(executor_lock);
 			if (to_be_rescheduled_tasks.empty()) {
-				return PendingExecutionResult::NO_TASKS_AVAILABLE;
+				return QueryResultState::NO_TASKS_AVAILABLE;
 			}
 			// At least one task is blocked
 			if (ResultCollectorIsBlocked()) {
-				return PendingExecutionResult::RESULT_READY;
+				return QueryResultState::READY;
 			}
-			return PendingExecutionResult::BLOCKED;
+			return QueryResultState::BLOCKED;
 		}
 
 		if (current_task) {
@@ -488,9 +503,9 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 				TaskScheduler::GetScheduler(context).ScheduleTask(token, task);
 				task.reset();
 			}
-			return PendingExecutionResult::RESULT_NOT_READY;
+			return QueryResultState::NOT_READY;
 		}
-		execution_result = PendingExecutionResult::EXECUTION_ERROR;
+		execution_result = QueryResultState::ERROR;
 
 		// an exception has occurred executing one of the pipelines
 		// we need to cancel all tasks associated with this executor
@@ -504,10 +519,10 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 	NextExecutor();
 	if (HasError()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
-		execution_result = PendingExecutionResult::EXECUTION_ERROR;
+		execution_result = QueryResultState::ERROR;
 		ThrowException();
 	} // LCOV_EXCL_STOP
-	execution_result = PendingExecutionResult::EXECUTION_FINISHED;
+	execution_result = QueryResultState::FINISHED;
 	return execution_result;
 }
 
@@ -524,7 +539,7 @@ void Executor::Reset() {
 	pipelines.clear();
 	events.clear();
 	to_be_rescheduled_tasks.clear();
-	execution_result = PendingExecutionResult::RESULT_NOT_READY;
+	execution_result = QueryResultState::NOT_READY;
 }
 
 shared_ptr<Pipeline> Executor::CreateChildPipeline(Pipeline &current, PhysicalOperator &op) {
@@ -561,6 +576,8 @@ void Executor::PushError(ErrorData exception) {
 		pipeline->FinishSourceAndPreventBlocking(context);
 		pipeline->PreventSinkBlocking();
 	}
+	// An error flips ExecutionIsFinished. Wake a consumer waiting on the notification
+	NotifyResultTerminal();
 }
 
 bool Executor::HasError() {
@@ -614,20 +631,71 @@ bool Executor::HasStreamingResultCollector() {
 	return result_collector.IsStreaming();
 }
 
-bool Executor::ResultCollectorIsBlocked() {
-	// A sink retained by the plan never parks, so the materialized hot path skips the lock
+void Executor::SetResultBuffer(shared_ptr<BufferedData> result_buffer_p) {
+	lock_guard<mutex> guard(result_buffer_lock);
+	result_buffer = std::move(result_buffer_p);
+}
+
+shared_ptr<BufferedData> Executor::GetResultBuffer() {
+	lock_guard<mutex> guard(result_buffer_lock);
+	return result_buffer;
+}
+
+void Executor::SetResultNotifier(shared_ptr<QueryResultNotifier> result_notifier_p) {
+	lock_guard<mutex> guard(result_notifier_lock);
+	result_notifier = std::move(result_notifier_p);
+}
+
+shared_ptr<QueryResultNotifier> Executor::GetResultNotifier() {
+	lock_guard<mutex> guard(result_notifier_lock);
+	return result_notifier;
+}
+
+void Executor::CompletePipeline() {
+	auto completed = ++completed_pipelines;
+	// The last completion flips ExecutionIsFinished, the transition a notified consumer waits for.
+	// The notify must not hang off task destruction: the last task reference can die on a consumer
+	// thread that restarted a blocked sink
+	if (completed >= total_pipelines) {
+		NotifyResultTerminal();
+	}
+}
+
+void Executor::NotifyResultTerminal() {
+	auto notifier = GetResultNotifier();
+	if (notifier) {
+		notifier->Notify();
+	}
+}
+
+bool Executor::ResultStoreCanPark() {
 	if (!HasStreamingResultCollector()) {
 		return false;
 	}
+	auto buffer = GetResultBuffer();
+	// The store was settled on retained at submission: producers append and never park
+	return !buffer || buffer->Lifetime() != ResultLifetime::RETAINED;
+}
+
+bool Executor::ResultCollectorIsBlocked() {
+	// A store that cannot park never waits on the consumer, so the retained hot path skips the rest
+	if (!ResultStoreCanPark()) {
+		return false;
+	}
+	auto buffer = GetResultBuffer();
+	if (buffer) {
+		return buffer->HasParkedProducer();
+	}
 	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
 	// The sink state is published by a pipeline initialize task on a worker, under the
-	// operator lock. Read it under the same lock, or the client can observe the pointer
-	// before the pointee is visible
+	// operator lock. Read it under the same lock, or readiness is reported before GetResult
+	// has a state to fetch from
 	lock_guard<mutex> guard(result_collector.lock);
 	if (!result_collector.sink_state) {
 		return false;
 	}
-	return result_collector.HasBlockedResultProducer(*result_collector.sink_state);
+	// A custom streaming collector has no parked-producer notion, and must never be waited on forever
+	return result_collector.IsStreaming();
 }
 
 unique_ptr<QueryResult> Executor::GetResult() {

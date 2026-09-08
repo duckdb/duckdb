@@ -61,7 +61,7 @@ void TestResultHelper::SortQueryResult(SortStyle sort_style, vector<string> &res
 }
 
 bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &context,
-                                        duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
+                                        duckdb::unique_ptr<QueryResult> owned_result) {
 	auto &result = *owned_result;
 	auto &runner = query.runner;
 	auto expected_column_count = query.expected_column_count;
@@ -284,7 +284,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 }
 
 bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteContext &context,
-                                            duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
+                                            duckdb::unique_ptr<QueryResult> owned_result) {
 	auto &result = *owned_result;
 	bool error = result.HasError();
 	SQLLogicTestLogger logger(context, statement);
@@ -431,8 +431,7 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 }
 
 // standard result conversion: one line per value
-void TestResultHelper::DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test,
-                                           vector<string> &out_result) {
+void TestResultHelper::DuckDBConvertResult(QueryResult &result, bool original_sqlite_test, vector<string> &out_result) {
 	size_t r, c;
 	idx_t row_count = result.RowCount();
 	idx_t column_count = result.ColumnCount();
@@ -476,7 +475,7 @@ bool TestResultHelper::ResultIsFile(string result) {
 	return StringUtil::StartsWith(result, "<FILE>:");
 }
 
-bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string lvalue_str,
+bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, QueryResult &result, string lvalue_str,
                                      string rvalue_str, idx_t current_row, idx_t current_column, vector<string> &values,
                                      idx_t expected_column_count, bool row_wise, vector<string> &result_values,
                                      bool print_error) {

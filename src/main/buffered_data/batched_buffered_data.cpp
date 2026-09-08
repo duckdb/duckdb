@@ -1,7 +1,7 @@
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/stack.hpp"
 
@@ -16,35 +16,43 @@ bool BatchedBufferedData::AppendOrBlock(DataChunk &to_append, idx_t batch, const
 	// Copied outside the lock: both outcomes need the copy, and parallel producers copy concurrently
 	auto copy = CopyForBuffering(to_append);
 	const idx_t chunk_data_size = copy->GetDataSize();
-	annotated_lock_guard<annotated_mutex> lock(glock);
-	D_ASSERT(batch >= min_batch);
-	max_seen_chunk_bytes = MaxValue<idx_t>(max_seen_chunk_bytes, chunk_data_size);
-	if (ShouldBlockBatch(lock, batch, chunk_data_size)) {
-		// Park holding the finished copy. Restart selection deposits it at wake time
-		auto entry = blocked_sinks.emplace(batch, BlockedSink {blocked_sink, chunk_data_size, std::move(copy)});
-		(void)entry;
-		D_ASSERT(entry.second);
-		return true;
-	}
-	auto is_minimum = IsMinimumBatchIndex(lock, batch);
-	if (is_minimum) {
-		for (auto &it : buffer) {
-			auto batch_index = it.first;
-			if (batch_index >= min_batch) {
-				break;
-			}
-			// There should not be any batches in the buffer that are lower or equal to the minimum batch index
-			throw InternalException("Batches remaining in buffer");
+	shared_ptr<QueryResultNotifier> notifier;
+	{
+		annotated_lock_guard<annotated_mutex> lock(glock);
+		D_ASSERT(batch >= min_batch);
+		max_seen_chunk_bytes = MaxValue<idx_t>(max_seen_chunk_bytes, chunk_data_size);
+		if (ShouldBlockBatch(lock, batch, chunk_data_size)) {
+			// Park holding the finished copy. Restart selection deposits it at wake time
+			auto entry = blocked_sinks.emplace(batch, BlockedSink {blocked_sink, chunk_data_size, std::move(copy)});
+			(void)entry;
+			D_ASSERT(entry.second);
+			return true;
 		}
-		read_queue.push(BufferedChunk {std::move(copy), chunk_data_size});
-		read_queue_byte_count += chunk_data_size;
-	} else {
-		auto &in_progress_batch = buffer[batch];
-		in_progress_batch.completed = false;
-		in_progress_batch.chunk_refs.push_back(BufferedChunk {std::move(copy), chunk_data_size});
-		buffer_byte_count += chunk_data_size;
+		auto is_minimum = IsMinimumBatchIndex(lock, batch);
+		if (is_minimum) {
+			for (auto &it : buffer) {
+				auto batch_index = it.first;
+				if (batch_index >= min_batch) {
+					break;
+				}
+				// There should not be any batches in the buffer that are lower or equal to the minimum batch index
+				throw InternalException("Batches remaining in buffer");
+			}
+			if (read_queue.empty()) {
+				// The chunk is queued before the signal below, so a woken consumer always finds it
+				notifier = result_notifier;
+			}
+			read_queue.push(BufferedChunk {std::move(copy), chunk_data_size});
+			read_queue_byte_count += chunk_data_size;
+		} else {
+			auto &in_progress_batch = buffer[batch];
+			in_progress_batch.completed = false;
+			in_progress_batch.chunk_refs.push_back(BufferedChunk {std::move(copy), chunk_data_size});
+			buffer_byte_count += chunk_data_size;
+		}
+		peak_buffered_bytes = MaxValue<idx_t>(peak_buffered_bytes, read_queue_byte_count + buffer_byte_count);
 	}
-	peak_buffered_bytes = MaxValue<idx_t>(peak_buffered_bytes, read_queue_byte_count + buffer_byte_count);
+	Signal(notifier);
 	return false;
 }
 
@@ -174,6 +182,7 @@ void BatchedBufferedData::MoveCompletedBatches(annotated_lock_guard<annotated_mu
 
 void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 	vector<pair<idx_t, BlockedSink>> to_unblock;
+	shared_ptr<QueryResultNotifier> notifier;
 	{
 		annotated_lock_guard<annotated_mutex> lock(glock);
 
@@ -184,6 +193,7 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 			return;
 		}
 		min_batch = new_min_batch;
+		const bool was_empty = read_queue.empty();
 		MoveCompletedBatches(lock);
 		// The move conserves the byte total, so only the newly minimum batch's sink can
 		// have a changed block decision: it now falls under the read queue rule
@@ -193,8 +203,15 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 			to_unblock.emplace_back(entry->first, std::move(entry->second));
 			blocked_sinks.erase(entry);
 		}
+		// Re-checked after the deposit above: a wake deposit also turns the read queue non-empty
+		if (was_empty && !read_queue.empty()) {
+			notifier = result_notifier;
+		}
 	}
+	// The sinks restart before the signal: the notifier runs user code, and a throw from it must
+	// not lose sinks that are already off the blocked list
 	InvokeUnblocks(to_unblock);
+	Signal(notifier);
 }
 
 void BatchedBufferedData::CompleteBatch(idx_t batch) {

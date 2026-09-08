@@ -16,16 +16,16 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
-#include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/enums/result_lifetime.hpp"
-#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/thread_annotation.hpp"
+#include "duckdb/main/query_result_notifier.hpp"
 
 namespace duckdb {
 
-class StreamQueryResult;
+class QueryResult;
 class ClientContextLock;
 
 //! A blocked sink. Holds the InterruptState and owns the finished copy of the chunk it could not append.
@@ -68,18 +68,24 @@ public:
 	bool HasParkedProducer();
 	//! Blocking call that executes tasks on the calling thread until a chunk is buffered or execution reaches a
 	//! terminal state.
-	StreamExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock);
+	QueryResultState ReplenishBuffer(QueryResult &result, ClientContextLock &context_lock);
 	//! One blocking replenish step: run executor tasks until a chunk is poppable
-	StreamExecutionResult ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock);
+	QueryResultState ExecuteTaskInternal(QueryResult &result, ClientContextLock &context_lock);
+	//! Non-blocking. Reports the observable state without running tasks
+	QueryResultState Pulse(QueryResult &result, ClientContextLock &context_lock);
 	virtual unique_ptr<DataChunk> Scan() = 0;
 	virtual void UnblockSinks() = 0;
 	shared_ptr<ClientContext> GetContext() {
 		return context.lock();
 	}
+	//! Set the notifier rung when the buffer turns non-empty and when a producer parks undecided
+	void SetResultNotifier(shared_ptr<QueryResultNotifier> notifier_p) DUCKDB_EXCLUDES(glock);
 	//! The highest number of bytes the buffer ever held.
 	virtual idx_t PeakBufferedBytes() = 0;
 	//! Whether a producer is parked for space. A parked producer implies a poppable chunk.
 	virtual bool HasBlockedSink() = 0;
+	//! Whether a chunk is ready for the consumer to pop.
+	virtual bool HasObservableChunk() = 0;
 	//! Debug assert that no blocked sinks exist.
 	virtual void AssertNoBlockedSinks() = 0;
 	//! An owned, exactly-sized copy: the producer reuses its output chunk, and the copy's GetDataSize is what the
@@ -114,7 +120,12 @@ public:
 	}
 
 protected:
-	static StreamExecutionResult MapExecutionResult(PendingExecutionResult execution_result);
+	//! Fire the notifier captured at a transition. The caller holds no engine lock: the callback is
+	//! user code
+	static void Signal(const shared_ptr<QueryResultNotifier> &notifier);
+	//! Record on the result that it is no longer the connection's active query, and report it as an
+	//! error state
+	static QueryResultState Cancelled(QueryResult &result);
 	//! Whether the blocking replenish can stop: a chunk is poppable, and the buffer will
 	//! not accept more input right now
 	virtual bool ReplenishSatisfied() = 0;
@@ -133,6 +144,9 @@ protected:
 	atomic<ResultLifetime> lifetime;
 	//! Producers parked with their first chunk unconsumed, until the retention is decided
 	vector<InterruptState> undecided_sinks DUCKDB_GUARDED_BY(glock);
+	//! Rung when the buffer turns non-empty and when the first producer parks undecided (may be
+	//! null). Captured under glock at the transition, called after glock is released
+	shared_ptr<QueryResultNotifier> result_notifier DUCKDB_GUARDED_BY(glock);
 };
 
 } // namespace duckdb

@@ -6,7 +6,6 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
@@ -199,8 +198,41 @@ void Command::RestartDatabase(ExecuteContext &context, reference<Connection> &co
 	}
 }
 
-unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
-                                                          string file_name, idx_t query_line) const {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+//! Drain a submitted query through the non-blocking consumer API, so the alternative-verify job
+//! exercises the stream end to end
+static unique_ptr<QueryResult> DrainStream(unique_ptr<QueryResult> handle) {
+	auto statement_type = handle->GetStatementType();
+	auto properties = handle->GetStatementProperties();
+	auto names = handle->GetNames();
+	auto client_properties = handle->client_properties;
+	QueryResultStream stream(std::move(handle));
+	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), stream.GetTypes());
+	ColumnDataAppendState append_state;
+	collection->InitializeAppend(append_state);
+	while (true) {
+		unique_ptr<DataChunk> chunk;
+		auto state = stream.TryFetch(chunk);
+		if (state == QueryResultState::READY) {
+			collection->Append(append_state, *chunk);
+			continue;
+		}
+		if (IsTerminal(state)) {
+			break;
+		}
+		if (stream.ExecuteTask() == QueryResultState::BLOCKED) {
+			stream.WaitForTask();
+		}
+	}
+	if (stream.HasError()) {
+		return make_uniq<QueryResult>(stream.GetErrorObject());
+	}
+	return make_uniq<QueryResult>(statement_type, properties, names, std::move(collection), client_properties);
+}
+#endif
+
+unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
+                                              string file_name, idx_t query_line) const {
 	query_break(query_line);
 
 	if (TestConfiguration::TestForceReload() && TestConfiguration::TestForceStorage()) {
@@ -208,27 +240,32 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	}
 
 	QueryParameters parameters;
-	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 
 	try {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
-		parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
 		auto ccontext = connection.get().context;
-		auto result = ccontext->Query(context.sql_query, parameters);
-		if (result->GetResultType() == QueryResultType::STREAM_RESULT) {
-			auto &stream_result = result->Cast<StreamQueryResult>();
-			return stream_result.Materialize();
-		} else {
-			D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
-			return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+		// Parsed once: a submission takes a single statement, and re-running the text to find out
+		// would execute it twice
+		auto statements = connection.get().ExtractStatements(context.sql_query);
+		if (statements.size() != 1) {
+			return ccontext->Query(context.sql_query, parameters);
 		}
+		auto handle = ccontext->Submit(std::move(statements[0]), parameters);
+		if (handle->HasError()) {
+			return handle;
+		}
+		auto &properties = handle->GetStatementProperties();
+		if (properties.complete_on_return || properties.return_type != StatementReturnType::QUERY_RESULT) {
+			handle->Complete();
+			return handle;
+		}
+		return DrainStream(std::move(handle));
 #else
-		auto res = connection.get().context->Query(context.sql_query, parameters);
-		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(res));
+		return connection.get().context->Query(context.sql_query, parameters);
 #endif
 	} catch (std::exception &ex) {
-		return make_uniq<MaterializedQueryResult>(ErrorData(ex));
+		return make_uniq<QueryResult>(ErrorData(ex));
 	}
 }
 

@@ -9,11 +9,12 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/query_result_notifier.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/execution/progress_data.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -21,6 +22,7 @@
 #include <condition_variable>
 
 namespace duckdb {
+class BufferedData;
 class ClientContext;
 class DataChunk;
 class PhysicalOperator;
@@ -60,7 +62,7 @@ public:
 	bool HasTaskInProgress() const {
 		return task != nullptr;
 	}
-	PendingExecutionResult ExecuteTask(bool dry_run = false);
+	QueryResultState ExecuteTask(bool dry_run = false);
 	void WaitForTask();
 	void SignalTaskRescheduled(lock_guard<mutex> &);
 
@@ -94,9 +96,7 @@ public:
 	//! Returns the progress of the pipelines
 	idx_t GetPipelinesProgress(ProgressData &progress);
 
-	void CompletePipeline() {
-		completed_pipelines++;
-	}
+	void CompletePipeline();
 	ProducerToken &GetToken() {
 		return *producer;
 	}
@@ -120,6 +120,15 @@ public:
 	}
 	void UnregisterTask();
 
+	//! Set the buffer of the result this query produces. Called at submission, before execution starts
+	void SetResultBuffer(shared_ptr<BufferedData> result_buffer_p);
+	shared_ptr<BufferedData> GetResultBuffer();
+	//! Set the notifier of the result this query produces (may be null)
+	void SetResultNotifier(shared_ptr<QueryResultNotifier> result_notifier_p);
+	shared_ptr<QueryResultNotifier> GetResultNotifier();
+	//! Run the notify callback because execution finished or failed
+	void NotifyResultTerminal();
+
 	idx_t GetTotalPipelines() const {
 		return total_pipelines;
 	}
@@ -132,6 +141,9 @@ private:
 	//! Whether a producer is parked on the result sink's buffer. A parked producer
 	//! implies a poppable chunk, and only consumption restarts it
 	bool ResultCollectorIsBlocked();
+	//! Whether this query's store can park a producer for the consumer at all. A store settled on
+	//! retained never parks, so the retained hot path skips the readiness checks
+	bool ResultStoreCanPark();
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
@@ -180,7 +192,7 @@ private:
 	bool cancelled;
 
 	//! The last pending execution result (if any)
-	PendingExecutionResult execution_result;
+	QueryResultState execution_result;
 	//! The current task in process (if any)
 	shared_ptr<Task> task;
 
@@ -191,6 +203,16 @@ private:
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
+	//! Leaf lock for the result buffer slot. It must not share executor_lock, which is held while
+	//! readiness is checked
+	mutex result_buffer_lock;
+	//! The buffer of the result this query produces, or null for a query that has none
+	shared_ptr<BufferedData> result_buffer;
+	//! Leaf lock for the notifier slot. PushError can run while a thread holds executor_lock during
+	//! event scheduling, so the slot must not share that lock
+	mutex result_notifier_lock;
+	//! Rung on the terminal transitions, for a retained result as well (may be null)
+	shared_ptr<QueryResultNotifier> result_notifier;
 
 	//! Total time blocked while waiting on tasks, in microseconds
 	atomic<idx_t> blocked_thread_time;

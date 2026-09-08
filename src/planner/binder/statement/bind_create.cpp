@@ -842,7 +842,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 	auto catalog_type = stmt.info->type;
 	auto return_type = StatementReturnType::NOTHING;
-	auto output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	auto &properties = GetStatementProperties();
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
@@ -1094,7 +1093,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 
 	properties.return_type = return_type;
-	properties.output_type = output_type;
+	properties.complete_on_return = true;
 
 	return result;
 }
