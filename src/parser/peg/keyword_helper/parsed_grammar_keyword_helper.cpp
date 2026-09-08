@@ -46,7 +46,8 @@ static void PopulateKeywordMap(const ParsedGrammar &grammar, const string &root_
 	active_rules.erase(rule_name);
 }
 
-ParsedGrammarKeywordHelper::ParsedGrammarKeywordHelper(const ParsedGrammar &grammar) {
+static DefaultKeywordMaps BuildKeywordMaps(const ParsedGrammar &grammar) {
+	DefaultKeywordMaps keyword_maps;
 	unordered_map<string, reference<case_insensitive_set_t>> mapping {
 	    {"ReservedKeyword", keyword_maps.reserved_keyword_map},
 	    {"UnreservedKeyword", keyword_maps.unreserved_keyword_map},
@@ -58,14 +59,19 @@ ParsedGrammarKeywordHelper::ParsedGrammarKeywordHelper(const ParsedGrammar &gram
 		case_insensitive_set_t active_rules;
 		PopulateKeywordMap(grammar, entry.first, entry.first, entry.second.get(), active_rules);
 	}
+	return keyword_maps;
+}
+
+ParsedGrammarKeywordHelper::ParsedGrammarKeywordHelper(const ParsedGrammar &grammar)
+    : keyword_maps(BuildKeywordMaps(grammar)), literal_table(grammar, keyword_maps) {
 }
 
 bool ParsedGrammarKeywordHelper::KeywordCategoryType(const string &text, PEGKeywordCategory category) const {
-	return keyword_maps.IsKeywordOfCategory(text, category);
+	return literal_table.Lookup(text).HasCategory(category);
 }
 
 bool ParsedGrammarKeywordHelper::IsKeyword(const string &text) const {
-	return keyword_maps.IsKeyword(text);
+	return literal_table.Lookup(text).IsKeyword();
 }
 
 vector<ParserKeyword> ParsedGrammarKeywordHelper::KeywordList() const {

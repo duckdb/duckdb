@@ -64,6 +64,7 @@ public:
 
 private:
 	friend class MatcherFactory;
+	friend class GrammarLiteralTable;
 	friend struct CompiledGrammar;
 	friend class PEGTransformerFactory;
 	friend class GrammarChange;

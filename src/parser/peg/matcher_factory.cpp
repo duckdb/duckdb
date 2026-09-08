@@ -257,7 +257,7 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 }
 
 unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, const KeywordInfo &info) const {
-	return make_uniq<KeywordMatcher>(keyword, info);
+	return make_uniq<KeywordMatcher>(keyword, info, compiled.GetKeywordHelper());
 }
 
 unique_ptr<ListMatcher> MatcherFactory::CreateList() const {

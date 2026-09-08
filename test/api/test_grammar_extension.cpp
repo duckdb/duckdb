@@ -6,6 +6,7 @@
 #include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/keyword_helper/default_keyword_maps.hpp"
 #include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
@@ -16,6 +17,110 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 
 using namespace duckdb;
+
+TEST_CASE("Grammar literal IDs include category-only words and overlapping categories", "[api][grammar_extension]") {
+	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SELECT' / 'select' / '('");
+	DefaultKeywordMaps categories;
+	categories.reserved_keyword_map.insert("SELECT");
+	categories.typefunc_keyword_map.insert("category_only");
+	categories.typename_keyword_map.insert("CATEGORY_ONLY");
+	GrammarLiteralTable table(grammar, categories);
+	REQUIRE(sizeof(LiteralInfo) == sizeof(uint32_t));
+	REQUIRE(table.Lookup("select") == table.Lookup("SELECT"));
+	REQUIRE(table.Lookup("SELECT").LiteralId() != 0);
+	REQUIRE(table.Lookup("SELECT").HasCategory(PEGKeywordCategory::KEYWORD_RESERVED));
+	REQUIRE(table.Lookup("(").LiteralId() != 0);
+	REQUIRE_FALSE(table.Lookup("(").IsKeyword());
+	REQUIRE(table.Lookup("category_only").LiteralId() != 0);
+	REQUIRE(table.Lookup("category_only").HasCategory(PEGKeywordCategory::KEYWORD_TYPE_FUNC));
+	REQUIRE(table.Lookup("category_only").HasCategory(PEGKeywordCategory::KEYWORD_TYPE_NAME));
+	REQUIRE_FALSE(table.Lookup("category_only").HasCategory(PEGKeywordCategory::KEYWORD_RESERVED));
+	REQUIRE_FALSE(table.Lookup("category_only").HasCategory(PEGKeywordCategory::KEYWORD_NONE));
+	REQUIRE(table.Lookup("missing").LiteralId() == 0);
+	REQUIRE_FALSE(table.Lookup("missing").IsKeyword());
+}
+
+TEST_CASE("Token literal caches follow grammar identity and token edits", "[api][grammar_extension]") {
+	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SELECT'");
+	DefaultKeywordMaps first_categories;
+	first_categories.reserved_keyword_map.insert("SELECT");
+	DefaultKeywordMaps second_categories;
+	second_categories.unreserved_keyword_map.insert("SELECT");
+	second_categories.typename_keyword_map.insert("extension_word");
+	GrammarLiteralTable first(grammar, first_categories);
+	optional<GrammarLiteralTable> second;
+	second.emplace(grammar, second_categories);
+	vector<MatcherToken> tokens {MatcherToken("select", 0, TokenType::KEYWORD),
+	                             MatcherToken("extension_word", 7, TokenType::IDENTIFIER)};
+	TokenIterator iterator(tokens);
+	REQUIRE(iterator.CurrentLiteralInfo(first).HasCategory(PEGKeywordCategory::KEYWORD_RESERVED));
+	TokenIterator branch(iterator);
+	branch.Advance();
+	branch.SetPreviousTokenType(TokenType::COLUMN_NAME);
+	REQUIRE(iterator.CurrentLiteralInfo(first).HasCategory(PEGKeywordCategory::KEYWORD_RESERVED));
+	REQUIRE(iterator.CurrentLiteralInfo(*second).HasCategory(PEGKeywordCategory::KEYWORD_UNRESERVED));
+	REQUIRE_FALSE(iterator.CurrentLiteralInfo(*second).HasCategory(PEGKeywordCategory::KEYWORD_RESERVED));
+	REQUIRE(branch.CurrentLiteralInfo(first).LiteralId() == 0);
+	REQUIRE(branch.CurrentLiteralInfo(*second).HasCategory(PEGKeywordCategory::KEYWORD_TYPE_NAME));
+	REQUIRE(branch.CurrentLiteralInfo(first).LiteralId() == 0);
+	iterator.CurrentLiteralInfo(*second);
+	auto old_cache_id = second->CacheId();
+	second.reset();
+	second.emplace(grammar, first_categories);
+	REQUIRE(second->CacheId() != old_cache_id);
+	REQUIRE(iterator.CurrentLiteralInfo(*second).HasCategory(PEGKeywordCategory::KEYWORD_RESERVED));
+	tokens[0].text = "extension_word";
+	TokenIterator edited(tokens);
+	REQUIRE(edited.CurrentLiteralInfo(*second).LiteralId() == 0);
+	branch.Advance();
+	REQUIRE(branch.CurrentLiteralInfo(first).LiteralId() == 0);
+}
+
+class LiteralTestKeywordHelper final : public PEGKeywordHelper {
+public:
+	bool KeywordCategoryType(const string &text, PEGKeywordCategory category) const override {
+		return IsKeyword(text) && allow_identifier && category == PEGKeywordCategory::KEYWORD_UNRESERVED;
+	}
+	bool IsKeyword(const string &text) const override {
+		return StringUtil::CIEquals(text, "custom_word");
+	}
+	vector<ParserKeyword> KeywordList() const override {
+		return {};
+	}
+
+	bool allow_identifier = false;
+};
+
+static bool MatchLiteralTestToken(const Matcher &matcher, const string &text) {
+	vector<MatcherToken> tokens {MatcherToken(text, 0, TokenType::IDENTIFIER)};
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_token_index = 0;
+	MatchContext context(suggestions, allocator, max_token_index);
+	MatchState state(iterator, context);
+	return matcher.MatchParseResult(state).IsSuccess();
+}
+
+TEST_CASE("Custom keyword helpers and standalone literal matchers keep their semantics", "[api][grammar_extension]") {
+	LiteralTestKeywordHelper helper;
+	REQUIRE_FALSE(helper.GetLiteralTable());
+	IdentifierMatcher identifier(SuggestionState::SUGGEST_COLUMN_NAME, helper);
+	REQUIRE_FALSE(MatchLiteralTestToken(identifier, "CUSTOM_WORD"));
+	helper.allow_identifier = true;
+	REQUIRE(MatchLiteralTestToken(identifier, "CUSTOM_WORD"));
+	KeywordMatcher standalone("custom_word", KeywordInfo());
+	KeywordMatcher custom_helper("custom_word", KeywordInfo(), helper);
+	REQUIRE(MatchLiteralTestToken(standalone, "CUSTOM_WORD"));
+	REQUIRE(MatchLiteralTestToken(custom_helper, "CUSTOM_WORD"));
+	REQUIRE_FALSE(MatchLiteralTestToken(custom_helper, "another_word"));
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	KeywordMatcher unregistered("unregistered_literal_test_word", KeywordInfo(), grammar->GetKeywordHelper());
+	REQUIRE(MatchLiteralTestToken(unregistered, "UNREGISTERED_LITERAL_TEST_WORD"));
+	REQUIRE_FALSE(MatchLiteralTestToken(unregistered, "another_word"));
+}
 
 static unique_ptr<TransformResultValue> TransformGrammarExtensionTestAtom(PEGTransformer &, ParseResult &) {
 	auto statement = make_uniq<SelectStatement>();
@@ -118,6 +223,30 @@ static void RegisterGrammarExtensionTestSyntax(DatabaseInstance &db) {
 
 static void ActivateGrammarExtensionTestSyntax(Connection &con) {
 	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['extension_test_value', 'extension_test_atom']"));
+}
+
+TEST_CASE("Literal caches respect active grammar extensions", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto base = CompiledGrammar::Get(*con.context);
+	auto base_table = base->GetKeywordHelper().GetLiteralTable();
+	REQUIRE(base_table);
+	vector<MatcherToken> tokens {MatcherToken("answer", 0, TokenType::IDENTIFIER)};
+	TokenIterator iterator(tokens);
+	REQUIRE(iterator.CurrentLiteralInfo(*base_table).LiteralId() == 0);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
+	ActivateGrammarExtensionTestSyntax(con);
+	auto extended = CompiledGrammar::Get(*con.context);
+	auto extended_table = extended->GetKeywordHelper().GetLiteralTable();
+	REQUIRE(extended_table);
+	REQUIRE(extended_table->CacheId() != base_table->CacheId());
+	REQUIRE(iterator.CurrentLiteralInfo(*extended_table).HasCategory(PEGKeywordCategory::KEYWORD_UNRESERVED));
+	REQUIRE(iterator.CurrentLiteralInfo(*base_table).LiteralId() == 0);
+	KeywordMatcher keyword("ANSWER", KeywordInfo(), extended->GetKeywordHelper());
+	REQUIRE(MatchLiteralTestToken(keyword, "answer"));
+	REQUIRE_FALSE(MatchLiteralTestToken(keyword, "missing"));
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = []"));
+	REQUIRE(CompiledGrammar::Get(*con.context) == base);
 }
 
 static void CheckGrammarExtensionTestSyntax(Connection &con) {
