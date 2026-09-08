@@ -12,7 +12,7 @@ public:
 	explicit RepeatMatcher(Matcher &element_p) : Matcher(TYPE), element(element_p) {
 	}
 
-	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override;
+	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state, ArenaAllocator &allocator) const override;
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		element.AddSuggestion(state);

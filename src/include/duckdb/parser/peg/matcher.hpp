@@ -28,7 +28,7 @@ class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
-class MatchProcessAllocator;
+class ArenaAllocator;
 
 enum class SuggestionState : uint8_t {
 	SUGGEST_KEYWORD,
@@ -182,7 +182,7 @@ struct MatchState {
 	}
 
 	template <class RESULT, class... ARGS>
-	MatcherResult AllocateParseResult(ARGS &&... args);
+	MatcherResult AllocateParseResult(ARGS &&...args);
 
 	void UpdateMaxTokenIndex() {
 		if (token_iterator.Position() > context.max_token_index) {
@@ -268,7 +268,7 @@ public:
 	//! Match and construct the parse result
 	MatcherResult MatchParseResult(MatchState &state) const;
 	//! Create matcher-local state with allocator.Make<PROCESS>() for either execution driver.
-	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const = 0;
+	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state, ArenaAllocator &allocator) const = 0;
 	virtual bool IsAtomic() const {
 		return false;
 	}
@@ -338,7 +338,7 @@ public:
 	bool IsAtomic() const final {
 		return true;
 	}
-	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const final;
+	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state, ArenaAllocator &allocator) const final;
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
 };
 
@@ -372,7 +372,7 @@ private:
 };
 
 template <class RESULT, class... ARGS>
-MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
+MatcherResult MatchState::AllocateParseResult(ARGS &&...args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}

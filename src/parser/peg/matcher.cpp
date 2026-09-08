@@ -18,25 +18,7 @@
 
 namespace duckdb {
 
-//! Destroy the recursive process before restoring its storage for the next sibling.
-class RecursiveMatchScope {
-public:
-	explicit RecursiveMatchScope(MatchProcessAllocator &allocator_p)
-	    : allocator(allocator_p), position(allocator_p.GetPosition()) {
-	}
-	RecursiveMatchScope(const RecursiveMatchScope &) = delete;
-	RecursiveMatchScope &operator=(const RecursiveMatchScope &) = delete;
-
-	~RecursiveMatchScope() {
-		allocator.Rewind(position);
-	}
-
-private:
-	MatchProcessAllocator &allocator;
-	MatchProcessAllocator::Position position;
-};
-
-static MatcherResult ExecuteRecursive(MatchInput input, MatchProcessAllocator &allocator) {
+static MatcherResult ExecuteRecursive(MatchInput input, ArenaAllocator &allocator) {
 	auto &matcher = input.matcher;
 	auto &state = input.state;
 	state.rule = matcher.GetRule();
@@ -48,7 +30,6 @@ static MatcherResult ExecuteRecursive(MatchInput input, MatchProcessAllocator &a
 		}
 	}
 
-	RecursiveMatchScope scope(allocator);
 	auto process = matcher.StartMatch(state, allocator);
 	optional<MatcherResult> child_result;
 	while (true) {
@@ -71,8 +52,7 @@ MatcherResult Matcher::MatchParseResult(MatchState &state) const {
 		return stack.Execute(input);
 	}
 	ArenaAllocator arena(Allocator::DefaultAllocator());
-	MatchProcessAllocator allocator(arena);
-	return ExecuteRecursive(input, allocator);
+	return ExecuteRecursive(input, arena);
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {

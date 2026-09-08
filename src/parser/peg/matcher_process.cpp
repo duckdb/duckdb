@@ -1,47 +1,11 @@
 #include "duckdb/parser/peg/matcher.hpp"
-#include "duckdb/parser/peg/match_process_allocator.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/parser/peg/matcher/choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher/optional_matcher.hpp"
 #include "duckdb/parser/peg/matcher/repeat_matcher.hpp"
 
 namespace duckdb {
-
-MatchProcessAllocator::Segment &MatchProcessAllocator::AllocateSegment(idx_t size) {
-	auto capacity = MaxValue(SEGMENT_CAPACITY, size);
-	auto data = arena.AllocateAligned(capacity);
-	return *arena.Make<Segment>(data, capacity);
-}
-
-data_ptr_t MatchProcessAllocator::Allocate(idx_t size, idx_t alignment) {
-	D_ASSERT(size > 0 && alignment > 0);
-	D_ASSERT((alignment & (alignment - 1)) == 0);
-	if (size > NumericLimits<idx_t>::Maximum() - (alignment - 1)) {
-		throw OutOfMemoryException("Matcher process allocation is too large");
-	}
-	const auto required = size + alignment - 1;
-	if (!position.segment) {
-		if (!first_segment) {
-			first_segment = AllocateSegment(required);
-		}
-		position = {first_segment, 0};
-	}
-	while (true) {
-		auto &segment = *position.segment;
-		D_ASSERT(position.offset <= segment.capacity);
-		auto data = segment.data + position.offset;
-		auto padding = (alignment - reinterpret_cast<uintptr_t>(data) % alignment) % alignment;
-		auto available = segment.capacity - position.offset;
-		if (padding <= available && size <= available - padding) {
-			position.offset += padding + size;
-			return data + padding;
-		}
-		if (!segment.next) {
-			segment.next = AllocateSegment(required);
-		}
-		position = {segment.next, 0};
-	}
-}
 
 MatchStep MatchStep::Child(MatchInput input) {
 	return MatchStep(input, nullopt);
@@ -79,8 +43,8 @@ private:
 	bool completed = false;
 };
 
-arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
-	return allocator.Make<AtomicMatchProcess>(*this, state);
+arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state, ArenaAllocator &allocator) const {
+	return arena_ptr<MatchProcess>(allocator.Make<AtomicMatchProcess>(*this, state));
 }
 
 class ListMatchProcess : public MatchProcess {
@@ -152,8 +116,8 @@ private:
 	bool awaiting_child = false;
 };
 
-arena_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
-	return allocator.Make<ListMatchProcess>(*this, state);
+arena_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state, ArenaAllocator &allocator) const {
+	return arena_ptr<MatchProcess>(allocator.Make<ListMatchProcess>(*this, state));
 }
 
 class ChoiceMatchProcess : public MatchProcess {
@@ -197,8 +161,8 @@ private:
 	bool awaiting_child = false;
 };
 
-arena_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
-	return allocator.Make<ChoiceMatchProcess>(*this, state);
+arena_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state, ArenaAllocator &allocator) const {
+	return arena_ptr<MatchProcess>(allocator.Make<ChoiceMatchProcess>(*this, state));
 }
 
 class OptionalMatchProcess : public MatchProcess {
@@ -236,8 +200,8 @@ private:
 	bool awaiting_child = false;
 };
 
-arena_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
-	return allocator.Make<OptionalMatchProcess>(*this, state);
+arena_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state, ArenaAllocator &allocator) const {
+	return arena_ptr<MatchProcess>(allocator.Make<OptionalMatchProcess>(*this, state));
 }
 
 class RepeatMatchProcess : public MatchProcess {
@@ -289,8 +253,8 @@ private:
 	bool awaiting_child = false;
 };
 
-arena_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
-	return allocator.Make<RepeatMatchProcess>(*this, state);
+arena_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state, ArenaAllocator &allocator) const {
+	return arena_ptr<MatchProcess>(allocator.Make<RepeatMatchProcess>(*this, state));
 }
 
 } // namespace duckdb
