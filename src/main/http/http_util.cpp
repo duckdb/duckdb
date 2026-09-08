@@ -206,9 +206,9 @@ void EndRequestTiming(BaseRequest &request) {
 //! Each callback holds a reference to the driver, which keeps it alive across a deferral.
 class AsyncRetryDriver : public enable_shared_from_this<AsyncRetryDriver> {
 public:
-	AsyncRetryDriver(HTTPUtil &http_util, BaseRequest &request, unique_ptr<HTTPClient> &client,
+	AsyncRetryDriver(HTTPUtil &http_util, BaseRequest &request, shared_ptr<HTTPClient> client_p,
 	                 HTTPResponseCallback on_complete)
-	    : http_util(http_util), request(request), client(client), on_complete(std::move(on_complete)) {
+	    : http_util(http_util), request(request), client(std::move(client_p)), on_complete(std::move(on_complete)) {
 	}
 
 	//! Issue the request, reporting whether everything resolved before returning
@@ -278,7 +278,8 @@ private:
 private:
 	HTTPUtil &http_util;
 	BaseRequest &request;
-	unique_ptr<HTTPClient> &client;
+	//! Held, not borrowed, so a retry replacing it never writes into the caller's pointer
+	shared_ptr<HTTPClient> client;
 	HTTPResponseCallback on_complete;
 	HTTPRetryState retry_state;
 	//! Whether the completion has been invoked - written by whichever thread completes the request
@@ -301,7 +302,9 @@ HTTPRequestState HTTPUtil::Send(BaseRequest &request, unique_ptr<HTTPClient> &cl
 			    "HTTPClient is not been setup yet (possibly due to configuration), no HTTP request can be performed");
 		}
 	}
-	auto driver = make_shared_ptr<AsyncRetryDriver>(*this, request, client, std::move(on_complete));
+	// the request takes the client over, and shares it so the transport can outlive our reference
+	shared_ptr<HTTPClient> owned_client = std::move(client);
+	auto driver = make_shared_ptr<AsyncRetryDriver>(*this, request, std::move(owned_client), std::move(on_complete));
 	return driver->Start();
 }
 

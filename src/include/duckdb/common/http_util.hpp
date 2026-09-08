@@ -13,6 +13,7 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/time_point.hpp"
 #include <exception>
@@ -318,7 +319,10 @@ enum class HTTPRequestState : uint8_t {
 //! For a GET with a content_handler the body has already been streamed, so [response] carries status and headers.
 using HTTPResponseCallback = std::function<void(unique_ptr<HTTPResponse> response, ErrorData error)>;
 
-class HTTPClient {
+//! Shared rather than unique because a deferred request outlives the call that made it: the transport
+//! keeps its own reference across the completion, so releasing the request's does not destroy the
+//! client while its own callback is still running.
+class HTTPClient : public enable_shared_from_this<HTTPClient> {
 public:
 	HTTPClient() = default;
 	explicit HTTPClient(const string &proto_host_port) : base_url(proto_host_port) {
@@ -340,6 +344,8 @@ public:
 	//! Perform [request], delivering the result through [on_complete] rather than returning it.
 	//! Returns PENDING only when [mode] is DEFERRABLE and the request was handed off.
 	//! The default performs the synchronous request, so a backend without an async transport needs no change.
+	//! A backend that does defer must keep itself alive across the completion - capture shared_from_this()
+	//! in whatever it schedules - because the request releases its own reference from inside that callback.
 	DUCKDB_API virtual HTTPRequestState Send(BaseRequest &request, HTTPExecutionMode mode,
 	                                         HTTPResponseCallback on_complete);
 
@@ -446,7 +452,9 @@ public:
 	//! SendRequest, delivering the result through [on_complete] instead of returning it.
 	//! BLOCKING goes through SendRequest, so an implementation overriding that one keeps its behaviour.
 	//! DEFERRABLE retries here, driving HTTPClient::Send one attempt at a time, so a client that defers
-	//! keeps the retry policy. [request] and [client] must stay alive until the completion fires.
+	//! keeps the retry policy. It takes [client] over and leaves the caller's pointer empty, so no
+	//! completion writes back into it when a retry replaces the client. [request] must stay alive until
+	//! the completion fires.
 	//! The completion may fire on another thread, so a caller that suspends on PENDING must arbitrate
 	//! between suspending and being resumed itself - see AsyncExecutionTask for the pattern.
 	DUCKDB_API virtual HTTPRequestState Send(BaseRequest &request, unique_ptr<HTTPClient> &client,

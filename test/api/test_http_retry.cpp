@@ -488,20 +488,31 @@ TEST_CASE("HTTP retry policy still retries an idempotent request of the same sha
 
 namespace {
 
+class ThreadedUtil;
+
 //! A client whose transport completes on another thread, which is what makes the state a request
-//! reports on the way out racy: the completion can land while Send is still unwinding
+//! reports on the way out racy: the completion can land while Send is still unwinding.
+//! It keeps itself alive across that completion, which is what a deferring backend has to do - the
+//! request releases its own reference from inside the callback.
 class ThreadedClient : public StubClient {
 public:
-	HTTPRequestState Send(BaseRequest &request, HTTPExecutionMode mode, HTTPResponseCallback on_complete) override {
-		if (mode == HTTPExecutionMode::BLOCKING) {
-			return HTTPClient::Send(request, mode, std::move(on_complete));
-		}
-		worker = std::thread([callback = std::move(on_complete)]() {
-			auto response = make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
-			response->success = true;
-			callback(std::move(response), ErrorData());
-		});
-		return HTTPRequestState::PENDING;
+	explicit ThreadedClient(ThreadedUtil &util) : util(util) {
+	}
+
+	HTTPRequestState Send(BaseRequest &request, HTTPExecutionMode mode, HTTPResponseCallback on_complete) override;
+
+private:
+	ThreadedUtil &util;
+};
+
+class ThreadedUtil : public HTTPUtil {
+public:
+	~ThreadedUtil() override {
+		Join();
+	}
+
+	unique_ptr<HTTPClient> InitializeClient(HTTPParams &, const string &) override {
+		return make_uniq<ThreadedClient>(*this);
 	}
 
 	void Join() {
@@ -510,20 +521,32 @@ public:
 		}
 	}
 
-private:
+	//! The thread belongs to the platform, not to the client, the way a real event loop does
 	std::thread worker;
+	//! Watches the client without holding it up, so the transport can check it outlived the callback
+	weak_ptr<HTTPClient> client_watch;
+	bool alive_after_completion = false;
 };
 
-class ThreadedUtil : public HTTPUtil {
-public:
-	unique_ptr<HTTPClient> InitializeClient(HTTPParams &, const string &) override {
-		auto result = make_uniq<ThreadedClient>();
-		last_client = result.get();
-		return std::move(result);
+HTTPRequestState ThreadedClient::Send(BaseRequest &request, HTTPExecutionMode mode, HTTPResponseCallback on_complete) {
+	if (mode == HTTPExecutionMode::BLOCKING) {
+		return HTTPClient::Send(request, mode, std::move(on_complete));
 	}
-
-	optional_ptr<ThreadedClient> last_client;
-};
+	// the reference that keeps this client alive until the completion has returned
+	auto self = shared_from_this();
+	auto &platform = util;
+	platform.client_watch = self;
+	platform.worker = std::thread([self, &platform, callback = std::move(on_complete)]() mutable {
+		auto response = make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
+		response->success = true;
+		callback(std::move(response), ErrorData());
+		// done with the request, so let it go the way a transport does once it has delivered
+		callback = nullptr;
+		// that dropped the request's reference to us, and only [self] is still holding us up
+		platform.alive_after_completion = !platform.client_watch.expired();
+	});
+	return HTTPRequestState::PENDING;
+}
 
 } // namespace
 
@@ -539,11 +562,13 @@ TEST_CASE("HTTP request completing on another thread is delivered exactly once",
 		atomic<idx_t> completions {0};
 		auto state = http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
 		                            [&](unique_ptr<HTTPResponse> response, ErrorData error) { completions++; });
-		http_util.last_client->Join();
+		http_util.Join();
 
 		// whichever side won the race, the completion runs once and the state is one of the two answers
 		REQUIRE(completions == 1);
 		REQUIRE((state == HTTPRequestState::PENDING || state == HTTPRequestState::COMPLETED));
+		// and the transport was not destroyed by the completion it delivered
+		REQUIRE(http_util.alive_after_completion);
 	}
 }
 
