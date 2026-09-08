@@ -157,6 +157,8 @@ public:
 	void ScheduleFileOpen(std::function<void()> open_fn);
 	//! Whether another file-open may be scheduled without exceeding the open-ahead window
 	bool CanScheduleOpen() const;
+	//! Run one queued async task inline, returns false when none is queued
+	bool TryRunPendingTask();
 
 private:
 	//! Settles the reservation taken by TryReserveSlot

@@ -299,6 +299,15 @@ bool ScanReadAhead::CanScheduleOpen() const {
 	return pending_opens->load() < open_window;
 }
 
+bool ScanReadAhead::TryRunPendingTask() {
+	shared_ptr<Task> task;
+	if (!executor->GetTask(task)) {
+		return false;
+	}
+	task->Execute(TaskExecutionMode::PROCESS_ALL);
+	return true;
+}
+
 void ScanReadAhead::ThrowIfError() {
 	if (executor->HasError()) {
 		executor->ThrowError();

@@ -507,6 +507,23 @@ public:
 		}
 	}
 
+	//! Wait for the front file's async open. Parallel lock should be locked when calling, it is held on return.
+	static void WaitForAsyncOpen(ClientContext &context, MultiFileGlobalState &gstate,
+	                             unique_lock<mutex> &parallel_lock) {
+		D_ASSERT(parallel_lock.owns_lock());
+		auto &read_ahead = *gstate.read_ahead;
+		while (HasFilesToRead(gstate, parallel_lock) && !gstate.error_opening_file &&
+		       gstate.readers[gstate.file_index]->file_state == MultiFileFileState::OPENING) {
+			parallel_lock.unlock();
+			// the open may be queued behind other async work or the async pool may be gone, so run tasks inline
+			if (!read_ahead.TryRunPendingTask()) {
+				context.InterruptCheck();
+				TaskScheduler::YieldThread();
+			}
+			parallel_lock.lock();
+		}
+	}
+
 	static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate,
 	                                  MultiFileGlobalState &gstate) {
 		auto &job = *lstate.job;
@@ -651,7 +668,11 @@ public:
 
 			// Check if the current file is being opened, in that case we need to wait for it.
 			if (current_reader_data.file_state == MultiFileFileState::OPENING) {
-				WaitForFile(gstate.file_index, gstate, parallel_lock);
+				if (gstate.read_ahead) {
+					WaitForAsyncOpen(context, gstate, parallel_lock);
+				} else {
+					WaitForFile(gstate.file_index, gstate, parallel_lock);
+				}
 			}
 		}
 	}
