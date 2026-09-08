@@ -13,37 +13,37 @@ CREATE TABLE parent(i INTEGER PRIMARY KEY)
 statement error
 ALTER TABLE test ADD COLUMN not_null_col INTEGER NOT NULL
 ----
-Parser Error: Adding columns with constraints not yet supported
+Parser Error: Adding columns with NOT NULL constraints is not supported yet
 
 statement error
 ALTER TABLE test ADD COLUMN unique_col INTEGER UNIQUE
 ----
-Parser Error: Adding columns with constraints not yet supported
+Parser Error: Adding columns with UNIQUE constraints is not supported yet
 
 statement error
 ALTER TABLE test ADD COLUMN primary_key_col INTEGER PRIMARY KEY
 ----
-Parser Error: Adding columns with constraints not yet supported
+Parser Error: Adding columns with PRIMARY KEY constraints is not supported yet
 
 statement error
 ALTER TABLE test ADD COLUMN check_col INTEGER CHECK (check_col > 0)
 ----
-Parser Error: Adding columns with constraints not yet supported
+Parser Error: Adding columns with CHECK constraints is not supported yet
 
 statement error
 ALTER TABLE test ADD COLUMN foreign_key_col INTEGER REFERENCES parent(i)
 ----
-Parser Error: Adding columns with constraints not yet supported
+Parser Error: Adding columns with FOREIGN KEY constraints is not supported yet
 
 statement error
 ALTER TABLE test ADD COLUMN deferred_unique_col INTEGER UNIQUE DEFERRED
 ----
-Parser Error: Adding columns with constraints not yet supported
+Parser Error: Adding columns with UNIQUE constraints is not supported yet
 
 statement error
 ALTER TABLE test ADD COLUMN deferred_primary_key_col INTEGER PRIMARY KEY DEFERRED
 ----
-Parser Error: Adding columns with constraints not yet supported
+Parser Error: Adding columns with PRIMARY KEY constraints is not supported yet
 
 query I
 SELECT count(*) FROM pragma_table_info('test')

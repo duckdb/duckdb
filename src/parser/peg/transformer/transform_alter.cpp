@@ -265,13 +265,17 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 					throw ParserException("Cannot define a default value twice");
 				}
 				new_column.default_value = std::move(constraint.expression);
-			} else if ((constraint.constraint_name == "NotNullConstraint" &&
-			            constraint.constraint_type_info.type == ConstraintType::NOT_NULL) ||
-			           constraint.constraint_name == "UniqueConstraint" ||
-			           constraint.constraint_name == "PrimaryKeyConstraint" ||
-			           constraint.constraint_name == "CheckConstraint" ||
-			           constraint.constraint_name == "ForeignKeyConstraint") {
-				throw ParserException("Adding columns with constraints not yet supported");
+			} else if (constraint.constraint_name == "NotNullConstraint" &&
+			           constraint.constraint_type_info.type == ConstraintType::NOT_NULL) {
+				throw ParserException("Adding columns with NOT NULL constraints is not supported yet");
+			} else if (constraint.constraint_name == "UniqueConstraint") {
+				throw ParserException("Adding columns with UNIQUE constraints is not supported yet");
+			} else if (constraint.constraint_name == "PrimaryKeyConstraint") {
+				throw ParserException("Adding columns with PRIMARY KEY constraints is not supported yet");
+			} else if (constraint.constraint_name == "CheckConstraint") {
+				throw ParserException("Adding columns with CHECK constraints is not supported yet");
+			} else if (constraint.constraint_name == "ForeignKeyConstraint") {
+				throw ParserException("Adding columns with FOREIGN KEY constraints is not supported yet");
 			}
 		}
 	}
