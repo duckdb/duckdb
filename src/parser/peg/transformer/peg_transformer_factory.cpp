@@ -2,6 +2,7 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/common/query_location.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/sql_statement.hpp"
@@ -253,6 +254,33 @@ QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input)
 	} else {
 		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
 	}
+}
+
+QualifiedColumnName PEGTransformerFactory::StringToQualifiedColumnName(const vector<string> &input) {
+	if (input.empty()) {
+		throw InternalException("QualifiedColumnName cannot be made with an empty input.");
+	}
+	auto identifiers = StringsToIdentifiers(input);
+	if (identifiers.size() == 1) {
+		return QualifiedColumnName(std::move(identifiers[0]));
+	} else if (identifiers.size() == 2) {
+		return QualifiedColumnName(std::move(identifiers[0]), std::move(identifiers[1]));
+	} else if (identifiers.size() == 3) {
+		QualifiedColumnName result;
+		result.schema = std::move(identifiers[0]);
+		result.table = std::move(identifiers[1]);
+		result.column = std::move(identifiers[2]);
+		return result;
+	} else if (identifiers.size() == 4) {
+		QualifiedColumnName result;
+		result.catalog = std::move(identifiers[0]);
+		result.schema = std::move(identifiers[1]);
+		result.table = std::move(identifiers[2]);
+		result.column = std::move(identifiers[3]);
+		return result;
+	}
+	throw ParserException("Expected at most 4 entries (catalog.schema.table.column), but found %zu entries (input: %s)",
+	                      input.size(), StringUtil::Join(input, "."));
 }
 
 LogicalType PEGTransformerFactory::GetIntervalTargetType(DatePartSpecifier date_part) {

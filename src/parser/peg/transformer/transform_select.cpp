@@ -1596,8 +1596,8 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransform
 }
 
 vector<string> PEGTransformerFactory::TransformPivotGroupByList(PEGTransformer &transformer,
-                                                                const vector<Identifier> &col_id_or_string) {
-	return IdentifiersToStrings(col_id_or_string);
+                                                                const vector<string> &optional_parens_name_list) {
+	return optional_parens_name_list;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPivotHeader(PEGTransformer &transformer,

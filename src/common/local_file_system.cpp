@@ -376,10 +376,8 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		// need Read or Write
 		D_ASSERT(flags.OpenForWriting());
 		open_flags |= O_CLOEXEC;
-		if (flags.CreateFileIfNotExists()) {
+		if (flags.CreateFileIfNotExists() || flags.OverwriteExistingFile()) {
 			open_flags |= O_CREAT;
-		} else if (flags.OverwriteExistingFile()) {
-			open_flags |= O_CREAT | O_TRUNC;
 		}
 		if (flags.OpenForAppending()) {
 			open_flags |= O_APPEND;
@@ -439,6 +437,9 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	TryAcquireFileLock(*this, fd, path, flags);
 
 	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags, FileOpener::TryGetDatabase(opener));
+	if (flags.OverwriteExistingFile() && StatsInternal(fd, path).file_type == FileType::FILE_TYPE_REGULAR) {
+		Truncate(*file_handle, 0);
+	}
 	if (opener) {
 		file_handle->TryAddLogger(*opener);
 		DUCKDB_LOG_FILE_SYSTEM_OPEN((*file_handle));

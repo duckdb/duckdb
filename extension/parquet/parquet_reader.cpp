@@ -1734,6 +1734,20 @@ static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expre
 		return true;
 	}
 
+	// Handle MAP value extraction.
+	if (leaf_reader->Type().id() == LogicalTypeId::MAP && function.Function().GetName() == "map_extract_value") {
+		auto &entry_reader = leaf_reader->Cast<ListColumnReader>().GetChildReader();
+		if (entry_reader.Type().id() != LogicalTypeId::STRUCT) {
+			return false;
+		}
+		auto &struct_reader = entry_reader.Cast<StructColumnReader>();
+		if (struct_reader.child_readers.size() != 2 || !struct_reader.child_readers[1]) {
+			return false;
+		}
+		leaf_reader = struct_reader.child_readers[1].get();
+		return true;
+	}
+
 	// Handle STRUCT type.
 	if (leaf_reader->Type().id() == LogicalTypeId::STRUCT) {
 		idx_t child_idx;
