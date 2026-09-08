@@ -379,8 +379,10 @@ ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 }
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
-	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
-	                                                       expression->Copy());
+	auto result = make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
+	                                                              expression->Copy());
+	result->Cast<ChangeColumnTypeInfo>().column_path = column_path;
+	return result;
 }
 
 string ChangeColumnTypeInfo::ToString() const {
@@ -426,8 +428,10 @@ SetDefaultInfo::~SetDefaultInfo() {
 }
 
 unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name,
-	                                                 expression ? expression->Copy() : nullptr);
+	auto result = make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name,
+	                                                        expression ? expression->Copy() : nullptr);
+	result->Cast<SetDefaultInfo>().column_path = column_path;
+	return result;
 }
 
 string SetDefaultInfo::ToString() const {
@@ -462,7 +466,9 @@ SetNotNullInfo::~SetNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
+	auto result = make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
+	result->Cast<SetNotNullInfo>().column_path = column_path;
+	return result;
 }
 
 string SetNotNullInfo::ToString() const {
@@ -492,7 +498,9 @@ DropNotNullInfo::~DropNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
-	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
+	auto result = make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
+	result->Cast<DropNotNullInfo>().column_path = column_path;
+	return result;
 }
 
 string DropNotNullInfo::ToString() const {
