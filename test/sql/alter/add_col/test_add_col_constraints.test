@@ -2,8 +2,6 @@
 # description: Test unsupported constraints on ALTER TABLE ADD COLUMN
 # group: [add_col]
 
-#FIXME: Once all these cases are supported, we can remove this test :-)
-
 statement ok
 CREATE TABLE test(i INTEGER)
 

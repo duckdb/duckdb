@@ -58,9 +58,7 @@ unique_ptr<Constraint> UniqueConstraint::Copy() const {
 		return make_uniq<UniqueConstraint>(columns, is_primary_key, timing);
 	}
 
-	auto result =
-	    make_uniq<UniqueConstraint>(index, columns.empty() ? Identifier() : columns[0], is_primary_key, timing);
-	return std::move(result);
+	return make_uniq<UniqueConstraint>(index, columns.empty() ? Identifier() : columns[0], is_primary_key, timing);
 }
 
 bool UniqueConstraint::IsPrimaryKey() const {

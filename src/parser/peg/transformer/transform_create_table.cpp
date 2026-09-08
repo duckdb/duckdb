@@ -361,8 +361,7 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopCheckConstraint(PEGTra
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopPrimaryKeyConstraint(
     PEGTransformer &transformer, const vector<string> &column_id_list, const optional<bool> &deferred_constraint) {
 	auto timing = deferred_constraint.value_or(false) ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
-	auto result = make_uniq<UniqueConstraint>(StringsToIdentifiers(column_id_list), true, timing);
-	return std::move(result);
+	return make_uniq<UniqueConstraint>(StringsToIdentifiers(column_id_list), true, timing);
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTransformer &transformer,
