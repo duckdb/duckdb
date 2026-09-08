@@ -28,6 +28,8 @@ struct MultiFileReaderInterface {
 	virtual ~MultiFileReaderInterface();
 
 	virtual void InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list);
+	//! Set the default multi-file options of this reader - called before any option is parsed
+	virtual void InitializeFileOptions(MultiFileOptions &file_options);
 	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                            optional_ptr<TableFunctionInfo> info) = 0;
 	virtual bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
@@ -41,6 +43,10 @@ struct MultiFileReaderInterface {
 	                                                         unique_ptr<BaseFileReaderOptions> options) = 0;
 	virtual void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                        MultiFileBindData &bind_data) = 0;
+	//! Combine the schemas of a set of files that were bound individually into a single schema
+	//! The default implementation combines the return types of the files by name
+	virtual void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data,
+	                            vector<LogicalType> &return_types, vector<Identifier> &names);
 	virtual void FinalizeBindData(MultiFileBindData &multi_file_data);
 	virtual void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
 	virtual optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
@@ -219,6 +225,7 @@ public:
 		auto glob_input = multi_file_reader->GetGlobInput(*interface);
 
 		MultiFileOptions file_options;
+		interface->InitializeFileOptions(file_options);
 		for (auto &kv : input.named_parameters) {
 			if (kv.first == "allow_empty") {
 				multi_file_reader->ParseOption(kv.first, kv.second, file_options, context);
@@ -250,7 +257,15 @@ public:
 	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
 	                                                  vector<Identifier> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
-		auto interface = OP::CreateInterface(context);
+		return MultiFileBindCopyInterface(context, input, expected_names, expected_types, OP::CreateInterface(context));
+	}
+
+	//! Bind a COPY using an explicitly provided interface - used by wrappers that construct the interface themselves
+	static unique_ptr<FunctionData> MultiFileBindCopyInterface(ClientContext &context, CopyFromFunctionBindInput &input,
+	                                                           vector<Identifier> &expected_names,
+	                                                           vector<LogicalType> &expected_types,
+	                                                           unique_ptr<MultiFileReaderInterface> interface_p) {
+		auto interface = std::move(interface_p);
 		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
 		vector<string> paths = {input.info.file_path};
 		auto glob_input = multi_file_reader->GetGlobInput(*interface);
@@ -260,6 +275,7 @@ public:
 
 		auto options = interface->InitializeOptions(context, nullptr);
 		MultiFileOptions file_options;
+		interface->InitializeFileOptions(file_options);
 		file_options.auto_detect_hive_partitioning = false;
 
 		for (auto &[option_name, option_values] : input.info.options) {

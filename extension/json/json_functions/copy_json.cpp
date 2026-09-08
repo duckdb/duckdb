@@ -17,6 +17,7 @@
 #include "json_scan.hpp"
 #include "json_transform.hpp"
 #include "json_multi_file_info.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
@@ -343,6 +344,20 @@ CopyFunction JSONFunctions::GetGeoJSONCopyFunction() {
 	function.copy_from_bind = MultiFileFunction<JSONMultiFileInfo>::MultiFileBindCopy;
 	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
 	    JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
+
+	return function;
+}
+
+//! The COPY function of read_json_new - reading is done by the multi-file wrapper around read_single_json_file,
+//! writing is shared with the regular JSON copy function
+CopyFunction JSONFunctions::GetJSONNewCopyFunction() {
+	CopyFunction function("json_new");
+	function.extension = "json";
+
+	function.plan = CopyToJSONPlan;
+
+	function.copy_from_bind = TableFunctionMultiFileWrapper::MultiFileBindCopy;
+	function.copy_from_function = JSONFunctions::GetReadJSONNewTableFunction();
 
 	return function;
 }

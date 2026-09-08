@@ -126,6 +126,15 @@ struct TableFunctionBindInput {
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
 	optional_ptr<unique_ptr<LogicalOperator>> input_plan;
+	//! (Optional) The schema this bind is expected to produce. This is set when binding a single file of a
+	//! multi-file scan whose schema was determined by combining the schemas of several files - the bind should
+	//! read the file using this schema instead of determining a schema of its own
+	optional_ptr<const vector<Identifier>> expected_names;
+	optional_ptr<const vector<LogicalType>> expected_types;
+
+	bool HasExpectedSchema() const {
+		return expected_names && expected_types;
+	}
 };
 
 struct TableFunctionInitInput {
@@ -171,6 +180,16 @@ struct TableFunctionInitInput {
 		// Fewer columns need to be projected out than that we scan.
 		return true;
 	}
+};
+
+//! Input for combining the schemas of several files that were bound individually into one schema
+struct TableFunctionCombineSchemaInput {
+	explicit TableFunctionCombineSchemaInput(const vector<reference<const FunctionData>> &bind_data_p)
+	    : bind_data(bind_data_p) {
+	}
+
+	//! The bind data of each of the files whose schemas are being combined - in file order
+	const vector<reference<const FunctionData>> &bind_data;
 };
 
 struct TableFunctionInput {
@@ -360,6 +379,10 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef bool (*table_function_pushdown_expression_t)(ClientContext &context, const LogicalGet &get, Expression &expr);
+//! Combines the schemas of several individually bound files into one - returns false if the schemas could not be
+//! combined, in which case the caller falls back to combining the return types
+typedef bool (*table_function_combine_schema_t)(ClientContext &context, TableFunctionCombineSchemaInput &input,
+                                                vector<LogicalType> &return_types, vector<Identifier> &names);
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
 
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -480,6 +503,9 @@ public:
 	table_function_pushdown_complex_filter_t pushdown_complex_filter;
 	//! (Optional) whether or not this table function supports pushing down an expression into a TableFilter
 	table_function_pushdown_expression_t pushdown_expression;
+	//! (Optional) combines the schemas of several files that were bound individually into a single schema
+	//! Used when this function reads a single file and is wrapped into a multi-file function
+	table_function_combine_schema_t combine_schema;
 	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)

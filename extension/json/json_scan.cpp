@@ -9,10 +9,14 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "json_multi_file_info.hpp"
+#include "json_structure.hpp"
 
 namespace duckdb {
 
 JSONScanData::JSONScanData() {
+}
+
+JSONScanData::~JSONScanData() {
 }
 
 void JSONScanData::InitializeFormats() {

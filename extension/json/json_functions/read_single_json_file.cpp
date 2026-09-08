@@ -3,6 +3,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
+#include "json_structure.hpp"
 
 namespace duckdb {
 
@@ -68,10 +69,20 @@ static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, T
 		}
 		throw NotImplementedException("Unimplemented option %s", kv.first);
 	}
+	if (input.HasExpectedSchema()) {
+		// the schema was determined by combining the schemas of several files - read this file using that schema
+		// instead of auto-detecting a schema for this file alone
+		options.name_list = *input.expected_names;
+		options.sql_type_list = *input.expected_types;
+	}
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("read_single_json_file requires a non-NULL file name");
 	}
 	result->file = OpenFileInfo(StringValue::Get(input.inputs[0]));
+
+	// keep the detected structure around - it is used to combine the schema of this file with that of other files
+	// when this function is wrapped into a multi-file function. This is only needed when the columns are not known
+	result->keep_structure = options.name_list.empty();
 
 	SimpleMultiFileList file_list(vector<OpenFileInfo> {result->file});
 	vector<shared_ptr<BaseUnionData>> union_readers;
@@ -151,6 +162,48 @@ static void ReadSingleJSONFileFunction(ClientContext &context, TableFunctionInpu
 	}
 }
 
+//! Combine the schemas of several JSON files by merging the structures that were detected for them - this gives the
+//! same schema as running the auto-detection over all of the files at once
+static bool ReadSingleJSONFileCombineSchema(ClientContext &context, TableFunctionCombineSchemaInput &input,
+                                            vector<LogicalType> &return_types, vector<Identifier> &names) {
+	JSONStructureNode merged;
+	optional_ptr<const ReadSingleJSONFileData> first_file;
+	for (auto &bind_data : input.bind_data) {
+		auto &json_data = bind_data.get().Cast<ReadSingleJSONFileData>();
+		if (!json_data.structure) {
+			// the schema of this file was not auto-detected - fall back to combining the types
+			return false;
+		}
+		JSONStructure::MergeNodes(merged, *json_data.structure);
+		if (!first_file) {
+			first_file = json_data;
+		}
+	}
+	if (!first_file) {
+		return false;
+	}
+	// derive the columns from the merged structure - the record type is re-detected on the combined structure
+	auto options = first_file->options;
+	if (first_file->record_type_auto_detected) {
+		options.record_type = JSONRecordType::AUTO_DETECT;
+	}
+	vector<JSONFeatureColumn> feature_columns;
+	JSONScan::StructureToColumns(context, options, merged, feature_columns, return_types, names);
+
+	// the combined schema is used to read every file, so its column names double as the JSON keys that are read.
+	// Columns that are duplicates for us (e.g. "id" and "Id") have to be renamed, which loses the key - leave those
+	// to the generic schema combining, which reads every file using the names that file bound to
+	identifier_set_t unique_names;
+	for (auto &name : names) {
+		if (!unique_names.insert(name).second) {
+			return_types.clear();
+			names.clear();
+			return false;
+		}
+	}
+	return true;
+}
+
 static double ReadSingleJSONFileProgress(ClientContext &context, const FunctionData *bind_data,
                                          const GlobalTableFunctionState *global_state) {
 	if (!global_state) {
@@ -173,6 +226,7 @@ TableFunction JSONFunctions::GetReadSingleJSONFileTableFunction(shared_ptr<JSONS
 	JSONScan::TableFunctionDefaults(table_function);
 	JSONScan::AddReadJSONParameters(table_function);
 	JSONScan::AddAutoDetectParameters(table_function);
+	table_function.combine_schema = ReadSingleJSONFileCombineSchema;
 	table_function.table_scan_progress = ReadSingleJSONFileProgress;
 	table_function.cardinality = ReadSingleJSONFileCardinality;
 	table_function.function_info = std::move(function_info);
@@ -190,12 +244,27 @@ TableFunctionSet JSONFunctions::GetReadSingleJSONFileFunction() {
 	return function_set;
 }
 
+TableFunction JSONFunctions::GetReadJSONNewTableFunction() {
+	auto single_file_function = GetReadSingleJSONFileTableFunction(ReadJSONScanInfo());
+	TableFunctionMultiFileSettings settings;
+	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "json");
+	settings.reader_type = "JSON";
+	// like read_json, the schema is determined by combining the schemas of up to 32 files
+	settings.maximum_sample_files = 32;
+	return TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), "read_json_new",
+	                                                     std::move(settings));
+}
+
 TableFunctionSet JSONFunctions::GetReadJSONNewFunction() {
 	// wrap the single-file JSON reader into a multi-file table function
 	auto single_file_function = GetReadSingleJSONFileTableFunction(ReadJSONScanInfo());
+	TableFunctionMultiFileSettings settings;
+	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "json");
+	settings.reader_type = "JSON";
+	// like read_json, the schema is determined by combining the schemas of up to 32 files
+	settings.maximum_sample_files = 32;
 	return TableFunctionMultiFileWrapper::CreateFunctionSet(std::move(single_file_function), "read_json_new",
-	                                                        FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "json"),
-	                                                        "JSON");
+	                                                        std::move(settings));
 }
 
 } // namespace duckdb

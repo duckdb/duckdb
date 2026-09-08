@@ -10,6 +10,11 @@ unique_ptr<MultiFileReaderInterface> JSONMultiFileInfo::CreateInterface(ClientCo
 	return make_uniq<JSONMultiFileInfo>();
 }
 
+void JSONMultiFileInfo::InitializeFileOptions(MultiFileOptions &file_options) {
+	// read_json determines the schema by combining the schemas of up to 32 files
+	file_options.maximum_sample_files = 32;
+}
+
 unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientContext &context,
                                                                        optional_ptr<TableFunctionInfo> info) {
 	auto reader_options = make_uniq<JSONFileReaderOptions>();
@@ -348,9 +353,11 @@ void JSONScan::FinalizeBind(JSONScanData &json_data, vector<Identifier> &names) 
 	if (!options.auto_detect) {
 		return;
 	}
-	// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
-	// We rename them so we can parse the file anyway. Note that we can't change json_data.key_names,
-	// because the JSON reader gets columns by exact name, not position
+	// Note that we can't change json_data.key_names, because the JSON reader gets columns by exact name, not position
+	DeduplicateColumnNames(names);
+}
+
+void JSONScan::DeduplicateColumnNames(vector<Identifier> &names) {
 	identifier_map_t<idx_t> name_collision_count;
 	for (auto &col_name : names) {
 		// Taken from CSV header_detection.cpp
@@ -365,6 +372,8 @@ void JSONScan::FinalizeBind(JSONScanData &json_data, vector<Identifier> &names) 
 void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
                                    MultiFileBindData &bind_data) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
+	// "maximum_sample_files" is a multi file option - the JSON auto-detection samples that many files
+	json_data.options.maximum_sample_files = bind_data.file_options.maximum_sample_files;
 
 	JSONScan::BindSchema(context, json_data, *bind_data.file_list, bind_data.union_readers,
 	                     bind_data.file_options.union_by_name, return_types, names);

@@ -21,6 +21,7 @@ public:
 struct JSONMultiFileInfo : MultiFileReaderInterface {
 	static unique_ptr<MultiFileReaderInterface> CreateInterface(ClientContext &context);
 
+	void InitializeFileOptions(MultiFileOptions &file_options) override;
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
 	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,

@@ -18,24 +18,42 @@ namespace duckdb {
 class TableFunctionFileReaderOptions : public BaseFileReaderOptions {
 public:
 	named_parameter_map_t named_parameters;
+	//! The schema the files are expected to produce - set by COPY, which takes its columns from the target table
+	vector<Identifier> expected_names;
+	vector<LogicalType> expected_types;
 };
 
 //! Bind data of a multi-file function that wraps a single-file table function
 struct TableFunctionMultiFileData : public TableFunctionData {
 	TableFunctionFileReaderOptions options;
+	//! The per-file cardinality estimate, kept when the readers used to combine the schemas are released
+	optional_idx cardinality;
+
+	//! Whether the schema every file is read with is known upfront - either because it was combined from several
+	//! files, or because COPY took it from the target table
+	bool HasExpectedSchema() const {
+		return !options.expected_names.empty();
+	}
+};
+
+//! Settings of a multi-file wrapper - how the wrapped single-file function is exposed as a multi-file function
+struct TableFunctionMultiFileSettings {
+	//! How the file paths passed to the function are globbed
+	FileGlobInput glob_input = FileGlobOptions::DISALLOW_EMPTY;
+	//! How the files are referred to in error messages (e.g. "Parquet", "JSON") - defaults to the function name
+	string reader_type;
+	//! How many files are sampled by default to determine the schema
+	idx_t maximum_sample_files = 1;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped
 struct TableFunctionMultiFileInfo : public TableFunctionInfo {
-	TableFunctionMultiFileInfo(TableFunction function_p, FileGlobInput glob_input_p, string reader_type_p)
-	    : function(std::move(function_p)), glob_input(std::move(glob_input_p)), reader_type(std::move(reader_type_p)) {
+	TableFunctionMultiFileInfo(TableFunction function_p, TableFunctionMultiFileSettings settings_p)
+	    : function(std::move(function_p)), settings(std::move(settings_p)) {
 	}
 
 	TableFunction function;
-	//! How the file paths passed to the function are globbed
-	FileGlobInput glob_input;
-	//! How the files are referred to in error messages (e.g. "Parquet", "JSON")
-	string reader_type;
+	TableFunctionMultiFileSettings settings;
 };
 
 //! Union data of a wrapped single-file table function
@@ -45,6 +63,8 @@ public:
 	}
 
 	optional_idx cardinality;
+	//! The bind data of the wrapped function for this file - used to combine the schemas of several files
+	shared_ptr<FunctionData> bind_data;
 
 	optional_idx TryGetCardinalityEstimate() const override {
 		return cardinality;
@@ -71,8 +91,10 @@ public:
 	double GetProgressInFile(ClientContext &context) override;
 	InsertionOrderPreservingMap<Value> GetMetadata() const override;
 
-	//! Bind the wrapped table function over this file - this sets up the columns of the reader
-	void BindFunction(ClientContext &context);
+	//! Bind the wrapped table function over this file - this sets up the columns of the reader.
+	//! When the schema of the scan is known upfront, the file is bound against that schema
+	void BindFunction(ClientContext &context, const vector<Identifier> &expected_names,
+	                  const vector<LogicalType> &expected_types);
 	//! The cardinality of this file (if the wrapped function can provide one)
 	optional_idx GetCardinality() const {
 		return cardinality;
@@ -84,7 +106,7 @@ public:
 	//! The wrapped single-file table function
 	TableFunction function;
 	//! The bind data of the wrapped function for this file
-	unique_ptr<FunctionData> bind_data;
+	shared_ptr<FunctionData> bind_data;
 	//! The names/types the wrapped function bound to for this file
 	vector<Identifier> names;
 	vector<LogicalType> types;
@@ -117,23 +139,28 @@ private:
 //! provided by the multi-file framework on top of it.
 class TableFunctionMultiFileWrapper : public MultiFileReaderInterface {
 public:
-	TableFunctionMultiFileWrapper(TableFunction function, FileGlobInput glob_input, string reader_type);
+	TableFunctionMultiFileWrapper(TableFunction function, TableFunctionMultiFileSettings settings);
 
 public:
 	//! Wrap a single-file table function into a multi-file table function
-	//! "reader_type" is how the files are referred to in error messages - it defaults to the function name
 	static TableFunction CreateFunction(TableFunction single_file_function, Identifier name,
-	                                    FileGlobInput glob_input = FileGlobOptions::DISALLOW_EMPTY,
-	                                    string reader_type = string());
+	                                    TableFunctionMultiFileSettings settings = TableFunctionMultiFileSettings());
 	//! Wrap a single-file table function into a multi-file table function set (VARCHAR and LIST(VARCHAR) variants)
-	static TableFunctionSet CreateFunctionSet(TableFunction single_file_function, Identifier name,
-	                                          FileGlobInput glob_input = FileGlobOptions::DISALLOW_EMPTY,
-	                                          string reader_type = string());
+	static TableFunctionSet
+	CreateFunctionSet(TableFunction single_file_function, Identifier name,
+	                  TableFunctionMultiFileSettings settings = TableFunctionMultiFileSettings());
+
+	//! Binds a COPY ... FROM over the wrapped function - assign this to CopyFunction::copy_from_bind, together with
+	//! the wrapped multi-file function as CopyFunction::copy_from_function
+	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
+	                                                  vector<Identifier> &expected_names,
+	                                                  vector<LogicalType> &expected_types);
 
 	//! Only present to satisfy MultiFileFunction - the wrapper builds its interface from the function info instead
 	static unique_ptr<MultiFileReaderInterface> CreateInterface(ClientContext &context);
 
 public:
+	void InitializeFileOptions(MultiFileOptions &file_options) override;
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
 	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
@@ -141,12 +168,17 @@ public:
 	                     vector<LogicalType> &expected_types) override;
 	bool ParseOption(ClientContext &context, const Identifier &key, const Value &val, MultiFileOptions &file_options,
 	                 BaseFileReaderOptions &options) override;
+	void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
+	                      const vector<Identifier> &expected_names, const vector<LogicalType> &expected_types) override;
 	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                 unique_ptr<BaseFileReaderOptions> options) override;
 	optional_idx MaxThreads(ClientContext &context, const MultiFileBindData &bind_data,
 	                        const MultiFileGlobalState &global_state, FileExpandResult expand_result) override;
 	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                MultiFileBindData &bind_data) override;
+	void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data,
+	                    vector<LogicalType> &return_types, vector<Identifier> &names) override;
+	void FinalizeBindData(MultiFileBindData &multi_file_data) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
 	                                                           MultiFileGlobalState &global_state) override;
 	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &context,
@@ -164,13 +196,20 @@ public:
 	unique_ptr<MultiFileReaderInterface> Copy() override;
 	FileGlobInput GetGlobInput() override;
 
+private:
+	//! Parse a named parameter of the wrapped function - returns false if the function has no such parameter
+	bool ParseNamedParameter(const Identifier &key, const Value &val, TableFunctionFileReaderOptions &options) const;
+	//! Release the per-file bind data that is only needed while combining schemas
+	static void ReleaseBindData(const vector<shared_ptr<BaseUnionData>> &union_data);
+
 public:
 	//! The single-file table function that is wrapped
 	TableFunction function;
-	//! How the file paths passed to the function are globbed
-	FileGlobInput glob_input;
-	//! How the files are referred to in error messages
-	string reader_type;
+	//! How the wrapped function is exposed as a multi-file function
+	TableFunctionMultiFileSettings settings;
+	//! The schema obtained by combining the schemas of several files (empty if the schema comes from a single file)
+	vector<Identifier> combined_names;
+	vector<LogicalType> combined_types;
 };
 
 } // namespace duckdb

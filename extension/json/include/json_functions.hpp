@@ -83,6 +83,7 @@ public:
 	                                                optional_ptr<ReplacementScanData> data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
+	static CopyFunction GetJSONNewCopyFunction();
 	static ScalarFunction GetJSONCopyToJSONFunction();
 	static ScalarFunction GetJSONCopyToGeoJSONFunction();
 	static CopyFunction GetGeoJSONCopyFunction();
@@ -159,6 +160,7 @@ private:
 	static TableFunction GetReadSingleJSONFileTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static TableFunctionSet GetReadSingleJSONFileFunction();
 	static TableFunctionSet GetReadJSONNewFunction();
+	static TableFunction GetReadJSONNewTableFunction();
 
 	static TableFunctionSet GetJSONEachFunction();
 	static TableFunctionSet GetJSONTreeFunction();
