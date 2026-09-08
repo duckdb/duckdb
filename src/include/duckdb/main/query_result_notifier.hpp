@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-//! Rings the consumer of a query result when its observable state may have changed: a chunk became
+//! Notifies the consumer of a query result when its observable state may have changed: a chunk became
 //! available, producers parked waiting for the retention decision, execution finished or failed, or
 //! the query was interrupted.
 //!
@@ -25,13 +25,10 @@ namespace duckdb {
 //! DuckDB: participation takes this lock on every executor step, so a blocking callback deadlocks
 //! the connection.
 //!
-//! Notifications may be spurious or merged and carry no payload. The reaction is always the same:
+//! Notifications may collide or be merged, and carry no arguments. A receiver should always just
 //! call Poll or TryFetch, and keep calling while the answer is READY before waiting again.
 //! Participating calls (Fetch, ExecuteTask, Collection) never run the callback on the caller's
-//! thread, because the call reports the transition itself. One trap follows from that: a single
-//! ExecuteTask() that runs the last task returns NOT_READY (the executor reports completion on the
-//! next call) and its terminal notification is suppressed, so observe with Poll before waiting,
-//! never with ExecuteTask alone. One consumer thread per handle or stream.
+//! thread.
 class QueryResultNotifier {
 public:
 	using notify_callback_t = std::function<void()>;

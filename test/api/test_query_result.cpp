@@ -155,6 +155,31 @@ TEST_CASE("A submitted query parks for the consumer's choice", "[api][query_resu
 	REQUIRE(notifications.load() == 1);
 }
 
+TEST_CASE("ExecuteTask on a parked undecided handle reports READY and runs nothing", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+
+	auto handle = Submit(con, "SELECT i FROM range(500000) t(i)");
+	Deadline deadline;
+	QueryResultState state;
+	while ((state = handle->ExecuteTask()) != QueryResultState::READY) {
+		REQUIRE(state == QueryResultState::NOT_READY);
+		REQUIRE(!deadline.Passed());
+	}
+	auto &buffer = handle->GetBufferedData();
+	REQUIRE(buffer.HasParkedProducer());
+	REQUIRE(buffer.Lifetime() == ResultLifetime::UNDECIDED);
+	// The engine waits for the consumer's choice: stepping again decides nothing and runs nothing
+	REQUIRE(handle->ExecuteTask() == QueryResultState::READY);
+	REQUIRE(handle->ExecuteTask() == QueryResultState::READY);
+	REQUIRE(handle->Poll() == QueryResultState::READY);
+	REQUIRE(buffer.Lifetime() == ResultLifetime::UNDECIDED);
+	REQUIRE(buffer.PeakBufferedBytes() == 0);
+	// The choice releases the park
+	REQUIRE(handle->Collection().Count() == 500000);
+}
+
 TEST_CASE("Materialize returns at once and the workers complete the query", "[api][query_result]") {
 	DuckDB db(nullptr);
 	Connection con(db);
