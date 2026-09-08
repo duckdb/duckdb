@@ -89,6 +89,7 @@ PartitionedSort::PartitionedSort(ClientContext &client, const vector<BoundOrderB
 	child_strategy = SortStrategy::Factory(client, unpartitioned, order_bys, payload_types, unpartitioned_stats,
 	                                       unpartitioned_info, 0, require_payload);
 
+	this->payload_types = child_strategy->payload_types;
 	scan_ids = child_strategy->scan_ids;
 	sort_ids = child_strategy->sort_ids;
 }
