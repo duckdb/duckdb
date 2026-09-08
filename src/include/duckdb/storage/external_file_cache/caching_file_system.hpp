@@ -66,10 +66,8 @@ public:
 	//! Read [nr_bytes] bytes at the requested [location].
 	//! Returns a buffer handle group that keeps the data pinned in memory.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
-	//! Try to start an asynchronous read of [nr_bytes] bytes at [location], releasing the calling thread while the
-	//! read is in flight. On success [out_group] is set to the destination buffer - its contents are only valid once
-	//! [callback] has fired. Returns false when this read cannot be served asynchronously (the external file cache
-	//! block path, or a file system without asynchronous reads), in which case the caller must use Read().
+	//! Try to read [nr_bytes] at [location] without holding the calling thread. On success [out_group] is the
+	//! destination, valid only once [callback] has fired. Returns false when the caller must use Read() instead.
 	DUCKDB_API bool TryStartRead(idx_t nr_bytes, idx_t location, FileBufferHandleGroup &out_group,
 	                             AsyncIOCallback callback);
 	//! Read [nr_bytes] bytes and sets [nr_bytes] to the actually read bytes.

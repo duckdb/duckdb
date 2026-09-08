@@ -214,10 +214,9 @@ public:
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
 	DUCKDB_API virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
-	//! Try to start an asynchronous read of exactly nr_bytes from [location] into [buffer], releasing the calling
-	//! thread while the read is in flight. Returns false when this file system cannot read asynchronously, in which
-	//! case the caller must fall back to Read(). When it returns true [callback] is invoked exactly once, and
-	//! [handle] and [buffer] must stay alive until it fires.
+	//! Try to read [nr_bytes] from [location] into [buffer] without holding the calling thread.
+	//! Returns false when this file system has no asynchronous path, and the caller must use Read() instead.
+	//! [handle] and [buffer] must outlive [callback], which is invoked exactly once.
 	DUCKDB_API virtual bool TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
 	                                     AsyncIOCallback callback);
 	//! Write exactly nr_bytes to the specified location in the file. Fails if nr_bytes could not be written. This is

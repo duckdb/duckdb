@@ -27,9 +27,8 @@ struct AsyncReadRequest {
 	FileBufferHandleGroup &destination;
 };
 
-//! An async task that performs exactly one read through a CachingFileHandle.
-//! Subclasses only describe the read and consume it - whether it blocks the calling thread or is handed off to the
-//! file system is decided here, so no task has to carry a fallback of its own.
+//! An async task that performs exactly one read through a CachingFileHandle. Subclasses describe the read and
+//! consume it; whether it blocks or is handed to the file system is decided here, not by the task.
 class AsyncFileReadTask : public AsyncTask {
 public:
 	void Execute() final {

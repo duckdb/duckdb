@@ -31,8 +31,7 @@ enum class AsyncResultsExecutionMode : uint8_t {
 enum class AsyncTaskExecutionResult : uint8_t {
 	//! The task did all of its work, no completion callback will be made
 	FINISHED,
-	//! The task handed its work off, the completion callback fires exactly once when the work lands,
-	//! after which FinishAsync() must be called to consume the result
+	//! The work was handed off: one completion callback, then FinishAsync() to consume it
 	PENDING
 };
 
@@ -41,10 +40,8 @@ public:
 	virtual ~AsyncTask() {};
 	//! Do all of the task's work, blocking the calling thread until it is done
 	virtual void Execute() = 0;
-	//! Try to hand the task's work off so the calling thread is released while it is in flight.
-	//! A task blocks AT MOST ONCE: TryExecuteAsync is never called twice, and a PENDING result is always followed
-	//! by exactly one [on_complete] and then one FinishAsync().
-	//! The default implementation just does the work synchronously, so overriding this is opt-in.
+	//! Try to hand the task's work off, releasing the calling thread while it is in flight.
+	//! A task blocks at most once, so this is never called twice. Defaults to doing the work synchronously.
 	virtual AsyncTaskExecutionResult TryExecuteAsync(AsyncIOCallback on_complete) { // NOLINT
 		Execute();
 		return AsyncTaskExecutionResult::FINISHED;

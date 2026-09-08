@@ -90,8 +90,7 @@ public:
 private:
 	//! Start the task's work, routing an early failure through the batch completion like Execute() does
 	AsyncTaskExecutionResult StartAsyncWork() {
-		// keep ourselves alive for as long as the work is in flight, the completion may outlive the scheduler's
-		// reference to us
+		// the completion may outlive the scheduler's reference to us
 		auto self = shared_from_this();
 		try {
 			return async_task->TryExecuteAsync([this, self](optional_ptr<ErrorData> error) { OnAsyncDone(error); });
