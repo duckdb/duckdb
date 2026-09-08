@@ -6,3 +6,9 @@ require autocomplete
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT * FROM oncall UNPIVOT ((name) FOR precedence IN ((name1), (name2)));$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$PIVOT t ON year USING sum(sales) GROUP BY (g);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$UNPIVOT t ON jan, feb INTO NAME m VALUE (jan);$TEST_PEG_PARSER$);

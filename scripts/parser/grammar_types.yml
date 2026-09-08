@@ -715,6 +715,9 @@ StringList:
     - UnpivotHeader
     - UnpivotHeaderSingle
     - UnpivotHeaderList
+    - OptionalParensNameList
+    - ParenthesizedNameList
+    - BareNameList
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
