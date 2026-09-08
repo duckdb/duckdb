@@ -31,6 +31,8 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -636,7 +638,7 @@ static optional_ptr<CatalogEntry> LookupFunction(Binder &binder, const FunctionE
 
 //! Expands a macro call the way any other binder would: the ordinary overload selection, argument
 //! substitution and qualification, and nothing else. Binding proper happens later, where the rest of
-//! the clause is bound.
+//! the condition is bound.
 class MatchRecognizeMacroExpander : public ExpressionBinder {
 public:
 	MatchRecognizeMacroExpander(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
@@ -653,10 +655,11 @@ protected:
 	}
 };
 
-//! What a macro stands for is what the clause has to read, not the macro: an aggregate reached
-//! through one aggregates the rows of the match, and it is not there to be seen until the macro is
-//! gone. Expanding it rather than deciding what it must have been leaves overload selection and
-//! argument substitution to the code that owns them.
+//! A DEFINE's navigation becomes a column of the projection the matcher reads from, and that
+//! projection is built before the condition is bound - so a navigation reached through a macro is
+//! not there to be seen unless the macro is gone first. Expanding it rather than deciding what it
+//! must have been leaves overload selection and argument substitution to the code that owns them.
+//! MEASURES need none of this: they are bound where they stand.
 static void ExpandMacros(Binder &binder, unique_ptr<ParsedExpression> &expr, idx_t depth = 0) {
 	// a macro body can name another macro, and this is what stops one that names itself
 	if (depth > MatchRecognizeMaxMacroDepth()) {
@@ -666,9 +669,7 @@ static void ExpandMacros(Binder &binder, unique_ptr<ParsedExpression> &expr, idx
 	}
 	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function = expr->Cast<FunctionExpression>();
-		// DISTINCT, FILTER and argument ORDER BY only mean anything to an aggregate, so a macro
-		// carrying one of them stands for an aggregate and keeps it by becoming the window that
-		// unfolds it - which is the route the same macro takes over any other frame
+		// a macro spelled the way only an aggregate can be is reported as one, which is what it is
 		auto entry =
 		    HasAggregateModifiers(function) ? nullptr : LookupFunction(binder, function, CatalogType::MACRO_ENTRY);
 		if (entry) {
@@ -685,143 +686,216 @@ static void ExpandMacros(Binder &binder, unique_ptr<ParsedExpression> &expr, idx
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ExpandMacros(binder, child, depth); });
 }
 
-//! Rewrite a MEASURES expression into something evaluable next to the pattern window
-//! An aggregate in MEASURES aggregates the rows of the match that its arguments name a variable for,
-//! so rewriting them collects which variable that is.
-static void RewriteMeasure(Binder &binder, const string &state, unique_ptr<ParsedExpression> &expr,
-                           const MatchRecognizeConfig &config, const case_insensitive_map_t<vector<string>> &symbols,
-                           bool running, bool one_row, optional_ptr<case_insensitive_set_t> aggregate_scope = nullptr) {
-	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
-		auto &function = expr->Cast<FunctionExpression>();
-		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
-		// RUNNING and FINAL choose how much of the match the measure below them sees
-		const auto is_running = function.FunctionName() == MATCH_RECOGNIZE_RUNNING_MARKER;
-		if (is_running || function.FunctionName() == MATCH_RECOGNIZE_FINAL_MARKER) {
-			// ONE ROW PER MATCH reports a finished match, so its current row is the last one: the two
-			// are the same thing there and the keywords make no difference
-			expr = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
-			RewriteMeasure(binder, state, expr, config, symbols, one_row ? false : is_running, one_row,
-			               aggregate_scope);
-			return;
-		}
-		if (function_name == "CLASSIFIER" && function.GetArguments().empty()) {
-			expr = CreateStructExtract(state, "classifier");
-			return;
-		}
-		if (function_name == "MATCH_NUMBER" && function.GetArguments().empty()) {
-			expr = CreateStructExtract(state, "match_number");
-			return;
-		}
-		// logical navigation over the rows of the match. LAST(X.c) is what an unadorned X.c already
-		// means, so both share the masking; only the end they read from differs.
-		if ((function_name == "FIRST" || function_name == "LAST") && !function.GetArguments().empty() &&
-		    function.GetArguments().size() <= 2) {
-			idx_t offset = 0;
-			if (function.GetArguments().size() == 2) {
-				offset = BindNavigationOffset(function_name, function.GetArguments()[1].GetExpression());
-			}
-			auto inner = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
-			vector<string> symbol;
-			if (inner->GetExpressionType() == ExpressionType::COLUMN_REF) {
-				auto &colref = inner->Cast<ColumnRefExpression>();
-				auto &names = colref.ColumnNames();
-				auto entry = names.size() >= 2 ? symbols.find(names[0].GetIdentifierName()) : symbols.end();
-				if (entry != symbols.end()) {
-					symbol = entry->second;
-					inner = WithoutQualifier(colref);
-				}
-			}
-			RewriteMeasure(binder, state, inner, config, symbols, running, one_row, aggregate_scope);
-			auto packed = PackValue(state, std::move(inner));
-			auto masked = symbol.empty() ? std::move(packed) : ClassifiedValue(state, symbol, std::move(packed));
-			expr = MatchScopedValue(binder.context, state, config, std::move(masked), running, function_name == "FIRST",
-			                        offset);
-			return;
-		}
-		// An aggregate in MEASURES aggregates the rows of the match. A macro left unexpanded got that
-		// way by being spelled as an aggregate, and the window below unfolds it as one.
-		if (LookupFunction(binder, function, CatalogType::AGGREGATE_FUNCTION_ENTRY) ||
-		    (HasAggregateModifiers(function) && LookupFunction(binder, function, CatalogType::MACRO_ENTRY))) {
-			case_insensitive_set_t scope;
-			for (auto &argument : function.GetArgumentsMutable()) {
-				RewriteMeasure(binder, state, argument.GetExpressionMutable(), config, symbols, running, one_row,
-				               &scope);
-			}
-			auto &qualified = function.GetQualifiedName();
-			auto window = make_uniq<WindowExpression>(qualified.Catalog().GetIdentifierName(),
-			                                          qualified.Schema().GetIdentifierName(),
-			                                          qualified.Name().GetIdentifierName());
-			window->GetArgumentsMutable() = std::move(function.GetArgumentsMutable());
-			window->DistinctMutable() = function.Distinct();
-			// the ordering of an ordered aggregate's input is its own, and the order the match was
-			// found in is no substitute for it
-			if (function.OrderByMutable()) {
-				for (auto &order : function.OrderByMutable()->orders) {
-					RewriteMeasure(binder, state, order.expression, config, symbols, running, one_row, &scope);
-					window->ArgOrdersMutable().emplace_back(order.type, order.null_order, std::move(order.expression));
-				}
-			}
-			// the filter decides which of the match's rows the aggregate sees, so it reads the match the
-			// same way the arguments do: CLASSIFIER(), MATCH_NUMBER() and a pattern variable all mean
-			// there what they mean anywhere else in MEASURES
-			if (function.FilterMutable()) {
-				RewriteMeasure(binder, state, function.FilterMutable(), config, symbols, running, one_row, &scope);
-			}
-			if (scope.size() > 1) {
-				throw BinderException("An aggregate in MEASURES reads the rows of one pattern variable, so \"%s\" "
-				                      "cannot also read those of \"%s\"",
-				                      *scope.begin(), *std::next(scope.begin()));
-			}
-			// an empty match covers no rows, so the row carrying it must not reach the aggregate
-			unique_ptr<ParsedExpression> in_match =
-			    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, CreateStructExtract(state, "is_empty"));
-			if (!scope.empty()) {
-				// naming a variable restricts the aggregate to the rows it matched. Dropping those rows
-				// is not the same as passing them as NULL: an aggregate that keeps NULLs would see them.
-				auto classified = symbols.find(*scope.begin());
-				D_ASSERT(classified != symbols.end());
-				in_match = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(in_match),
-				                                            ClassifierMatches(state, classified->second));
-			}
-			if (function.FilterMutable()) {
-				window->FilterMutable() = make_uniq<ConjunctionExpression>(
-				    ExpressionType::CONJUNCTION_AND, std::move(function.FilterMutable()), std::move(in_match));
-			} else {
-				window->FilterMutable() = std::move(in_match);
-			}
-			ScopeToMatch(binder.context, state, *window, config, running);
-			expr = std::move(window);
-			return;
-		}
-	}
+//! An aggregate in MEASURES aggregates the rows of the match that its arguments name a variable for.
+//! The variable belongs to this clause's namespace rather than the input's, so it is resolved here
+//! and the reference is left as the column it names.
+static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const case_insensitive_map_t<vector<string>> &symbols,
+                            case_insensitive_set_t &scope) {
 	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr->Cast<ColumnRefExpression>();
 		auto &names = colref.ColumnNames();
-		auto entry = names.size() >= 2 ? symbols.find(names[0].GetIdentifierName()) : symbols.end();
-		if (entry != symbols.end()) {
-			// a known pattern variable scopes the column to the rows it matched
-			auto column = WithoutQualifier(colref);
-			if (aggregate_scope) {
-				// the enclosing aggregate is the one that drops the rows the variable did not match
-				aggregate_scope->insert(names[0].GetIdentifierName());
-				expr = std::move(column);
-				return;
-			}
-			expr =
-			    MatchScopedValue(binder.context, state, config,
-			                     ClassifiedValue(state, entry->second, PackValue(state, std::move(column))), running);
-			return;
-		}
-		// an empty match covers no rows, so a column of the input has no row here to be read from
-		if (!aggregate_scope) {
-			expr = OnlyWhenMatched(state, std::move(expr));
+		if (names.size() >= 2 && symbols.find(names[0].GetIdentifierName()) != symbols.end()) {
+			scope.insert(names[0].GetIdentifierName());
+			expr = WithoutQualifier(colref);
 		}
 		return;
 	}
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		RewriteMeasure(binder, state, child, config, symbols, running, one_row, aggregate_scope);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { ScopeToVariable(child, symbols, scope); });
 }
+
+//! Binds the MEASURES clause. Everything MATCH_RECOGNIZE adds to an expression is decided here -
+//! which rows of the match a value is read from, what a pattern variable in front of a column means,
+//! and how much of the match RUNNING and FINAL let it see - and everything else is ordinary binding.
+//!
+//! An aggregate arrives at the hook below only once the ordinary binder has expanded the macros and
+//! chosen the overload, so what the frame is applied to is the aggregate that is really being called.
+class MatchRecognizeMeasureBinder : public SelectBinder {
+public:
+	MatchRecognizeMeasureBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, string state_p,
+	                            const MatchRecognizeConfig &config_p,
+	                            const case_insensitive_map_t<vector<string>> &symbols_p, bool all_rows)
+	    : SelectBinder(binder, context, node), state(std::move(state_p)), config(config_p), symbols(symbols_p),
+	      one_row(!all_rows), running(all_rows) {
+	}
+
+protected:
+	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override {
+		auto &expr = *expr_ptr;
+		if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
+			auto &function = expr.Cast<FunctionExpression>();
+			auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
+			// RUNNING and FINAL choose how much of the match the measure below them sees. ONE ROW PER
+			// MATCH reports a finished match, so its current row is the last one: the two are the same
+			// thing there and the keywords make no difference.
+			const auto is_running = function.FunctionName() == MATCH_RECOGNIZE_RUNNING_MARKER;
+			if (is_running || function.FunctionName() == MATCH_RECOGNIZE_FINAL_MARKER) {
+				expr_ptr = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
+				const auto saved = running;
+				running = one_row ? false : is_running;
+				auto result = BindExpression(expr_ptr, depth, root_expression);
+				running = saved;
+				return result;
+			}
+			if (function_name == "CLASSIFIER" && function.GetArguments().empty()) {
+				expr_ptr = StateField("classifier");
+				return BindGenerated(expr_ptr, depth, root_expression);
+			}
+			if (function_name == "MATCH_NUMBER" && function.GetArguments().empty()) {
+				expr_ptr = StateField("match_number");
+				return BindGenerated(expr_ptr, depth, root_expression);
+			}
+			// logical navigation over the rows of the match. LAST(X.c) is what an unadorned X.c already
+			// means, so both share the masking; only the end they read from differs.
+			if ((function_name == "FIRST" || function_name == "LAST") && !function.GetArguments().empty() &&
+			    function.GetArguments().size() <= 2) {
+				return BindNavigation(function, function_name, expr_ptr, depth, root_expression);
+			}
+			// DISTINCT, FILTER and an argument ORDER BY only mean anything to an aggregate, so a call
+			// carrying one is one - including a macro standing for one, which the window unfolds. An
+			// aggregate written without them reaches the hook below instead, once the ordinary binder
+			// has resolved what it is.
+			if (HasAggregateModifiers(function)) {
+				return BindOverMatch(function, depth);
+			}
+		}
+		if (expr.GetExpressionType() == ExpressionType::COLUMN_REF && !scoped) {
+			auto &colref = expr.Cast<ColumnRefExpression>();
+			auto &names = colref.ColumnNames();
+			auto entry = names.size() >= 2 ? symbols.find(names[0].GetIdentifierName()) : symbols.end();
+			if (entry != symbols.end()) {
+				// a pattern variable scopes the column to the rows it matched
+				expr_ptr = MatchScopedValue(
+				    context, state, config,
+				    ClassifiedValue(state, entry->second, PackValue(state, WithoutQualifier(colref))), running);
+				return BindGenerated(expr_ptr, depth, root_expression);
+			}
+			// an empty match covers no rows, so a column of the input has no row here to be read from
+			expr_ptr = OnlyWhenMatched(state, std::move(expr_ptr));
+			return BindGenerated(expr_ptr, depth, root_expression);
+		}
+		return SelectBinder::BindExpression(expr_ptr, depth, root_expression);
+	}
+
+	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override {
+		return BindOverMatch(expr, depth);
+	}
+
+private:
+	//! An aggregate in MEASURES aggregates the rows of the match, which is the window below
+	BindResult BindOverMatch(FunctionExpression &expr, idx_t depth) {
+		// naming a variable restricts the aggregate to the rows it matched
+		case_insensitive_set_t scope;
+		for (auto &argument : expr.GetArgumentsMutable()) {
+			ScopeToVariable(argument.GetExpressionMutable(), symbols, scope);
+		}
+		if (expr.OrderByMutable()) {
+			for (auto &order : expr.OrderByMutable()->orders) {
+				ScopeToVariable(order.expression, symbols, scope);
+			}
+		}
+		// the filter decides which of the match's rows the aggregate sees, so it reads the match the
+		// same way the arguments do
+		if (expr.FilterMutable()) {
+			ScopeToVariable(expr.FilterMutable(), symbols, scope);
+		}
+		if (scope.size() > 1) {
+			throw BinderException("An aggregate in MEASURES reads the rows of one pattern variable, so \"%s\" "
+			                      "cannot also read those of \"%s\"",
+			                      *scope.begin(), *std::next(scope.begin()));
+		}
+
+		auto &qualified = expr.GetQualifiedName();
+		auto window =
+		    make_uniq<WindowExpression>(qualified.Catalog().GetIdentifierName(), qualified.Schema().GetIdentifierName(),
+		                                qualified.Name().GetIdentifierName());
+		window->GetArgumentsMutable() = std::move(expr.GetArgumentsMutable());
+		window->DistinctMutable() = expr.Distinct();
+		// the ordering of an ordered aggregate's input is its own, and the order the match was found
+		// in is no substitute for it
+		if (expr.OrderByMutable()) {
+			window->ArgOrdersMutable() = std::move(expr.OrderByMutable()->orders);
+		}
+		// an empty match covers no rows, so the row carrying it must not reach the aggregate. Dropping
+		// the rows a variable did not match is not the same as passing them as NULL: an aggregate that
+		// keeps NULLs would see them.
+		unique_ptr<ParsedExpression> in_match =
+		    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, StateField("is_empty"));
+		if (!scope.empty()) {
+			auto classified = symbols.find(*scope.begin());
+			D_ASSERT(classified != symbols.end());
+			in_match = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(in_match),
+			                                            ClassifierMatches(state, classified->second));
+		}
+		if (expr.FilterMutable()) {
+			window->FilterMutable() = make_uniq<ConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, std::move(expr.FilterMutable()), std::move(in_match));
+		} else {
+			window->FilterMutable() = std::move(in_match);
+		}
+		ScopeToMatch(context, state, *window, config, running);
+
+		// the aggregate reads the rows of the match through the frame above, so what it reads is not
+		// also masked one value at a time
+		const auto saved = scoped;
+		scoped = true;
+		auto result = BindWindowExpression(*window, depth);
+		scoped = saved;
+		return result;
+	}
+
+	//! One field of the matcher's state, as it stands where the measures are projected
+	unique_ptr<ParsedExpression> StateField(const string &field) {
+		return CreateStructExtract(make_uniq<ColumnRefExpression>(Identifier(state)), Identifier(field));
+	}
+
+	//! Bind an expression this binder built. Its own parts are not the clause's to interpret again,
+	//! and the user's expression inside it has already been through here.
+	BindResult BindGenerated(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+		const auto saved = scoped;
+		scoped = true;
+		auto result = BindExpression(expr_ptr, depth, root_expression);
+		scoped = saved;
+		return result;
+	}
+
+	BindResult BindNavigation(FunctionExpression &function, const string &function_name,
+	                          unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+		idx_t offset = 0;
+		if (function.GetArguments().size() == 2) {
+			offset = BindNavigationOffset(function_name, function.GetArguments()[1].GetExpression());
+		}
+		auto inner = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
+		vector<string> symbol;
+		if (inner->GetExpressionType() == ExpressionType::COLUMN_REF) {
+			auto &colref = inner->Cast<ColumnRefExpression>();
+			auto &names = colref.ColumnNames();
+			auto entry = names.size() >= 2 ? symbols.find(names[0].GetIdentifierName()) : symbols.end();
+			if (entry != symbols.end()) {
+				symbol = entry->second;
+				inner = WithoutQualifier(colref);
+			}
+		}
+		// what is navigated is an expression of the clause's own, so it is read the way one is
+		auto packed = PackValue(state, std::move(inner));
+		auto masked = symbol.empty() ? std::move(packed) : ClassifiedValue(state, symbol, std::move(packed));
+		expr_ptr =
+		    MatchScopedValue(context, state, config, std::move(masked), running, function_name == "FIRST", offset);
+		return BindGenerated(expr_ptr, depth, root_expression);
+	}
+
+	//! The column the matcher's state travels in
+	string state;
+	const MatchRecognizeConfig &config;
+	//! Every pattern variable and SUBSET, mapped to the symbols it stands for
+	const case_insensitive_map_t<vector<string>> &symbols;
+	//! ONE ROW PER MATCH reports a finished match, so RUNNING and FINAL are the same thing there
+	bool one_row;
+	//! Whether the expression being bound sees the match up to the current row, or all of it
+	bool running;
+	//! Whether a value here is already read through something that scopes it to the match
+	bool scoped = false;
+};
 
 //! Binds what the matcher is configured with: the conditions, the columns they read, and the
 //! partitioning and ordering the pattern walks. They are ordinary expressions over the projection
@@ -961,13 +1035,10 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		partition_names.push_back(expr->GetName());
 	}
 
-	// the clause reads what a macro stands for, so the macros are gone before any of it is read
+	// A DEFINE's navigation becomes a column of the projection the matcher reads from, which is built
+	// before the condition is bound - so what a macro stands for has to be visible by then. MEASURES
+	// need no such pass: they are bound where they stand, and the ordinary binder expands their macros.
 	for (auto &expr : ref.config->defines_expression_list) {
-		auto alias = expr->GetAlias();
-		ExpandMacros(*this, expr);
-		expr->SetAlias(std::move(alias));
-	}
-	for (auto &expr : ref.config->measures_expression_list) {
 		auto alias = expr->GetAlias();
 		ExpandMacros(*this, expr);
 		expr->SetAlias(std::move(alias));
@@ -1267,19 +1338,44 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	unnest_spans->SetAlias(Identifier(state_column));
 	unnest_node->select_list.push_back(std::move(unnest_spans));
-	auto select_node = std::move(unnest_node);
+	auto spans_node = std::move(unnest_node);
 
-	// MEASURES are projected on top of the pattern window, where the match a row belongs to is known
+	// MEASURES are projected on top of the pattern window, where the match a row belongs to is known.
+	// They are bound by a binder of their own, so that what MATCH_RECOGNIZE adds to an expression is
+	// decided at the same point as what SQL already means by it.
 	const auto all_rows = ref.config->rows_per_match == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL;
-	auto pattern_select = MakeSelectStatement(std::move(select_node));
-	auto measures_node = MakeSelectNode(make_uniq<SubqueryRef>(std::move(pattern_select)));
+	auto measures_binder = Binder::CreateBinder(context, this);
+	auto spans_ref = make_uniq<SubqueryRef>(MakeSelectStatement(std::move(spans_node)));
+	auto bound_spans = measures_binder->Bind(*spans_ref);
+
+	BoundSelectNode measures;
+	measures.from_table = std::move(bound_spans);
+	measures.projection_index = GenerateTableIndex();
+	measures.group_index = GenerateTableIndex();
+	measures.group_projection_index = GenerateTableIndex();
+	measures.aggregate_index = GenerateTableIndex();
+	measures.groupings_index = GenerateTableIndex();
+	measures.window_index = GenerateTableIndex();
+	measures.prune_index = GenerateTableIndex();
 
 	// the DEFINE columns are an implementation detail, so they do not reach the output
-	auto star = make_uniq<StarExpression>();
+	case_insensitive_set_t hidden;
 	for (auto &entry : hidden_columns) {
-		star->ExcludeListMutable().insert(QualifiedColumnName(Identifier(entry)));
+		hidden.insert(entry);
 	}
-	measures_node->select_list.push_back(std::move(star));
+	for (auto &binding : measures_binder->bind_context.GetBindingsList()) {
+		auto &column_names = binding->GetColumnNames();
+		auto &column_types = binding->GetColumnTypes();
+		for (idx_t i = 0; i < column_names.size(); i++) {
+			if (hidden.count(column_names[i].GetIdentifierName())) {
+				continue;
+			}
+			measures.select_list.push_back(make_uniq<BoundColumnRefExpression>(
+			    column_names[i], column_types[i], ColumnBinding(binding->GetIndex(), ProjectionIndex(i))));
+			measures.names.push_back(column_names[i]);
+			measures.types.push_back(column_types[i]);
+		}
+	}
 
 	// A measure is named twice: by the name the user gave it, which is what the output calls it, and
 	// by one of its own, which is what the projections below the output refer to it by. Keeping the
@@ -1287,17 +1383,35 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	// finding that column instead.
 	vector<Identifier> measure_aliases;
 	vector<string> measure_columns;
-	for (auto &expr : ref.config->measures_expression_list) {
-		D_ASSERT(!expr->GetAlias().empty());
-		measure_aliases.push_back(expr->GetAlias());
-		measure_columns.push_back(names.Reserve("__mr_measure_" + to_string(measure_columns.size())));
-		// rewriting can replace the expression wholesale, which would drop the alias with it
-		RewriteMeasure(*this, state_column, expr, *ref.config, measure_symbols, all_rows, !all_rows);
-		expr->SetAlias(Identifier(measure_columns.back()));
-		measures_node->select_list.push_back(std::move(expr));
+	{
+		MatchRecognizeMeasureBinder measure_expression_binder(*measures_binder, context, measures, state_column,
+		                                                      *ref.config, measure_symbols, all_rows);
+		for (auto &expr : ref.config->measures_expression_list) {
+			D_ASSERT(!expr->GetAlias().empty());
+			measure_aliases.push_back(expr->GetAlias());
+			measure_columns.push_back(names.Reserve("__mr_measure_" + to_string(measure_columns.size())));
+			auto bound = measure_expression_binder.Bind(expr);
+			bound->SetAlias(Identifier(measure_columns.back()));
+			measures.names.emplace_back(measure_columns.back());
+			measures.types.push_back(bound->GetReturnType());
+			measures.select_list.push_back(std::move(bound));
+		}
 	}
+	measures.column_count = measures.select_list.size();
 
-	select_node = std::move(measures_node);
+	BoundStatement bound_measures;
+	bound_measures.types = measures.types;
+	bound_measures.names = measures.names;
+	bound_measures.plan = CreatePlan(measures);
+
+	// what the measures report is all the level above them sees; the columns they were computed from
+	// stay behind with the binder that bound them
+	auto output_binder = Binder::CreateBinder(context, this);
+	output_binder->bind_context.AddGenericBinding(measures.GetRootIndex(), Identifier(names.Reserve("__mr_measures")),
+	                                              bound_measures.names, bound_measures.types);
+
+	auto select_node = MakeSelectNode(make_uniq<BoundRefWrapper>(std::move(bound_measures), std::move(output_binder)));
+	select_node->select_list.push_back(make_uniq<StarExpression>());
 
 	// ONE ROW PER MATCH reports one row per match, and reports the match rather than any of its rows:
 	// the output is the partitioning followed by the measures. Filtering has to happen above the
