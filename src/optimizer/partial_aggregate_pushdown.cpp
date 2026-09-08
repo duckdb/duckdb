@@ -7,6 +7,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -385,7 +386,6 @@ static bool PassesLowerGroupHeuristic(const LogicalAggregate &aggr, const Partia
 static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &aggr, TableIndex lower_aggregate_index,
                                    vector<unique_ptr<Expression>> &lower_aggregates,
                                    vector<unique_ptr<Expression>> &upper_aggregates) {
-	auto combine_function = CombineAggrFun::GetFunction();
 	FunctionBinder function_binder(context);
 
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
@@ -399,7 +399,8 @@ static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &agg
 		vector<unique_ptr<Expression>> arguments;
 		auto lower_binding = ColumnBinding(lower_aggregate_index, ProjectionIndex(i));
 		arguments.push_back(make_uniq<BoundColumnRefExpression>(lower_type, lower_binding));
-		auto upper_aggregate = function_binder.BindAggregateFunction(combine_function, std::move(arguments));
+		auto combine_function = GetBuiltinAggregateFunction(context, CombineAggrFun::Name, {lower_type});
+		auto upper_aggregate = function_binder.BindAggregateFunction(std::move(combine_function), std::move(arguments));
 		if (!upper_aggregate->GetReturnType().IsAggregateState()) {
 			return false;
 		}
@@ -575,19 +576,13 @@ static unique_ptr<BoundAggregateExpression> DEBindAggregate(ClientContext &conte
 
 static unique_ptr<BoundAggregateExpression> DEBindCombineAggr(ClientContext &context,
                                                               vector<unique_ptr<Expression>> children) {
-	auto functions = CombineAggrFun::GetFunctions();
 	vector<LogicalType> types;
 	for (auto &child : children) {
 		types.push_back(child->GetReturnType());
 	}
-	ErrorData error;
 	FunctionBinder function_binder(context);
-	auto best = function_binder.BindFunction(functions.name, functions, types, error);
-	if (!best.IsValid()) {
-		return nullptr;
-	}
-	auto &func = functions.GetFunctionByOffset(best.GetIndex());
-	return function_binder.BindAggregateFunction(func, std::move(children));
+	auto func = GetBuiltinAggregateFunction(context, CombineAggrFun::Name, types);
+	return function_binder.BindAggregateFunction(std::move(func), std::move(children));
 }
 
 struct DoubleEagerHeuristics {

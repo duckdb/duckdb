@@ -6,6 +6,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -354,15 +355,17 @@ private:
 			RewriteInfo rewrite_info;
 			auto count_arg = rule.Rewrite(expr, bindings, rewrite_info.additional_expressions);
 
-			// Add COUNT([x]) to the aggregate list
+			// Add COUNT([x]) to the aggregate list - the count set holds both the unary count and count_star
 			FunctionBinder function_binder(optimizer.context);
-			const auto count_fun = count_arg ? CountFunctionBase::GetFunction() : CountStarFun::GetFunction();
 			vector<unique_ptr<Expression>> count_args;
+			vector<LogicalType> count_arg_types;
 			if (count_arg) {
+				count_arg_types.push_back(count_arg->GetReturnType());
 				count_args.push_back(std::move(count_arg));
 			}
-			auto count_aggr = function_binder.BindAggregateFunction(count_fun, std::move(count_args), nullptr,
-			                                                        AggregateType::NON_DISTINCT);
+			auto count_fun = GetBuiltinAggregateFunction(optimizer.context, CountFun::Name, count_arg_types);
+			auto count_aggr = function_binder.BindAggregateFunction(std::move(count_fun), std::move(count_args),
+			                                                        nullptr, AggregateType::NON_DISTINCT);
 
 			rewrite_info.count_idx = aggr.expressions.size();
 			rewrites.emplace(i, std::move(rewrite_info));

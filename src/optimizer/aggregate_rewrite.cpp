@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -126,7 +127,8 @@ unique_ptr<AggregateRewritePlan> FrequencyAggregateRewrite::Create(AggregateRewr
 	if (!input.aggregate.IsDistinct()) {
 		count_column = frequency_aggregates.size();
 		FunctionBinder function_binder(input.context);
-		frequency_aggregates.push_back(function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}));
+		auto count_star = GetBuiltinAggregateFunction(input.context, CountStarFun::Name, {});
+		frequency_aggregates.push_back(function_binder.BindAggregateFunction(std::move(count_star), {}));
 	}
 
 	optional_idx order_column;
