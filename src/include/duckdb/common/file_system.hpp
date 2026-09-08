@@ -131,6 +131,8 @@ public:
 	DUCKDB_API void Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
 	//! Try to start an asynchronous read, see FileSystem::TryStartRead
 	DUCKDB_API bool TryStartRead(void *buffer, idx_t nr_bytes, idx_t location, AsyncIOCallback callback);
+	DUCKDB_API bool TryStartRead(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location,
+	                             AsyncIOCallback callback);
 	DUCKDB_API void Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Seek(idx_t location);
 	DUCKDB_API void Reset();

@@ -368,7 +368,7 @@ bool CachingFileHandle::TryStartRead(const idx_t nr_bytes, const idx_t location,
 	data_ptr_t destination;
 	// publish the destination before starting the read - the callback may fire inline
 	out_group = AllocateUncachedReadGroup(external_file_cache.GetBufferManager(), nr_bytes, destination);
-	if (!file_handle->TryStartRead(destination, nr_bytes, location, std::move(callback))) {
+	if (!file_handle->TryStartRead(context, destination, nr_bytes, location, std::move(callback))) {
 		out_group = FileBufferHandleGroup();
 		return false;
 	}

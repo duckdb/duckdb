@@ -854,6 +854,15 @@ bool FileHandle::TryStartRead(void *buffer, idx_t nr_bytes, idx_t location, Asyn
 	return file_system.TryStartRead(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location, std::move(callback));
 }
 
+bool FileHandle::TryStartRead(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location,
+                              AsyncIOCallback callback) {
+	// tracked up front, the same as the synchronous Read at this location does
+	if (track_io && context.GetClientContext() != nullptr) {
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
+	}
+	return TryStartRead(buffer, nr_bytes, location, std::move(callback));
+}
+
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (track_io && context.GetClientContext() != nullptr) {
 		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
