@@ -16,6 +16,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -62,27 +63,19 @@ struct MatchRecognizeRowSpans {
 };
 
 //! Appends memberships on behalf of one thread. The rows of a partition belong to the thread that
-//! took it, so only the blocks are its own business; they are handed to the state it writes into
-//! once it is done, which is before anything reads them back.
+//! took it, so only the arena is its own business; it is handed to the state it writes into once it
+//! is done, which is before anything reads the memberships back.
 //!
-//! The blocks come from the buffer manager's allocator, so that storage which grows with the
-//! memberships rather than with the rows grows against the memory limit and not outside it.
+//! The arena allocates through the buffer manager, so storage that grows with the memberships rather
+//! than with the rows grows against the memory limit and not outside it.
 struct MatchRecognizeSpanWriter {
-	//! Big enough that a block is taken rarely, small enough that a pattern matching almost nothing
-	//! does not reserve much for it
-	static constexpr idx_t BLOCK_SPANS = 2048;
-
 	explicit MatchRecognizeSpanWriter(ClientContext &client)
-	    : allocator(BufferManager::GetBufferManager(client).GetBufferAllocator()) {
+	    : arena(make_uniq<ArenaAllocator>(BufferManager::GetBufferManager(client).GetBufferAllocator())) {
 	}
 
 	void Append(MatchRecognizeRowSpans &row, const MatchRecognizeSpan &span) {
-		if (next == end) {
-			blocks.push_back(allocator.Allocate(BLOCK_SPANS * sizeof(MatchRecognizeRowSpans::Node)));
-			next = reinterpret_cast<MatchRecognizeRowSpans::Node *>(blocks.back().get());
-			end = next + BLOCK_SPANS;
-		}
-		auto node = next++;
+		auto node = reinterpret_cast<MatchRecognizeRowSpans::Node *>(
+		    arena->AllocateAligned(sizeof(MatchRecognizeRowSpans::Node)));
 		node->span = span;
 		node->next = nullptr;
 		if (row.count++ == 0) {
@@ -93,10 +86,7 @@ struct MatchRecognizeSpanWriter {
 		row.last = node;
 	}
 
-	Allocator &allocator;
-	vector<AllocatedData> blocks;
-	MatchRecognizeRowSpans::Node *next = nullptr;
-	MatchRecognizeRowSpans::Node *end = nullptr;
+	unique_ptr<ArenaAllocator> arena;
 };
 
 struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
@@ -114,13 +104,10 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 		D_ASSERT(executor.wexpr.GetReturnType().id() == LogicalTypeId::LIST);
 	}
 
-	//! Take over the blocks a thread filled, so that they outlive the walk that wrote them
+	//! Take over the arena a thread filled, so that it outlives the walk that wrote it
 	void KeepSpans(MatchRecognizeSpanWriter &writer) {
 		lock_guard<mutex> guard(state_lock);
-		for (auto &block : writer.blocks) {
-			span_blocks.push_back(std::move(block));
-		}
-		writer.blocks.clear();
+		span_arenas.push_back(std::move(writer.arena));
 	}
 
 	mutex state_lock;
@@ -139,8 +126,8 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 
 	//! Where each row's memberships start, and how many of them there are
 	vector<MatchRecognizeRowSpans> row_spans;
-	//! The blocks the memberships above live in
-	vector<AllocatedData> span_blocks;
+	//! The arenas the memberships above live in, one per thread that wrote any
+	vector<unique_ptr<ArenaAllocator>> span_arenas;
 };
 
 LogicalType WindowMatchRecognizeExecutor::ResultType() {

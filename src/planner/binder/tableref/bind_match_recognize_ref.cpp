@@ -3,6 +3,7 @@
 
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -499,27 +500,9 @@ static unique_ptr<ParsedExpression> ClassifiedValue(const string &state, const v
 //! reversed window has to spell both out, because "the opposite of the default" is not something the
 //! enums can say.
 static void ResolveOrder(ClientContext &context, OrderType &type, OrderByNullType &null_order) {
-	if (type == OrderType::ORDER_DEFAULT) {
-		type = Settings::Get<DefaultOrderSetting>(context);
-	}
-	if (null_order != OrderByNullType::ORDER_DEFAULT) {
-		return;
-	}
-	const auto ascending = type == OrderType::ASCENDING;
-	switch (Settings::Get<DefaultNullOrderSetting>(context)) {
-	case DefaultOrderByNullType::NULLS_FIRST:
-		null_order = OrderByNullType::NULLS_FIRST;
-		break;
-	case DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC:
-		null_order = ascending ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
-		break;
-	case DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC:
-		null_order = ascending ? OrderByNullType::NULLS_FIRST : OrderByNullType::NULLS_LAST;
-		break;
-	default:
-		null_order = OrderByNullType::NULLS_LAST;
-		break;
-	}
+	auto &config = DBConfig::GetConfig(context);
+	type = config.ResolveOrder(context, type);
+	null_order = config.ResolveNullOrder(context, type, null_order);
 }
 
 //! A reference to <symbol>.<column> resolves to that column on the last row the variable matched.
