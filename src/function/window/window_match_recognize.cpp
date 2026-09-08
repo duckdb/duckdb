@@ -1154,12 +1154,15 @@ private:
 	optional_idx Navigate(const MatchRecognizeFunctionData::Navigation &navigation, idx_t navigation_idx,
 	                      idx_t row) const {
 		if (navigation.symbol.empty()) {
-			// the match as a whole, counted from whichever end
-			if (navigation.last) {
-				return row < match_start + navigation.offset ? optional_idx() : optional_idx(row - navigation.offset);
+			// The match as a whole, counted from whichever end. The rows it covers so far are
+			// [match_start, row], so the offset is compared against how many there are rather than
+			// added to an end first - added first it would wrap and land back inside the match.
+			const auto matched = row - match_start;
+			if (navigation.offset > matched) {
+				return optional_idx();
 			}
-			const auto target = match_start + navigation.offset;
-			return target > row ? optional_idx() : optional_idx(target);
+			return navigation.last ? optional_idx(row - navigation.offset)
+			                       : optional_idx(match_start + navigation.offset);
 		}
 		auto &positions = navigation_positions[navigation_idx];
 		if (positions.size() <= navigation.offset) {

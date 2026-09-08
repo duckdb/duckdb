@@ -227,7 +227,13 @@ static idx_t BindNavigationOffset(const string &function_name, const ParsedExpre
 	if (!offset_value.DefaultTryCastAs(LogicalType::UBIGINT) || offset_value.IsNull()) {
 		throw BinderException("The offset of %s() must be a non-negative integer", function_name);
 	}
-	return NumericCast<idx_t>(offset_value.GetValue<uint64_t>());
+	const auto offset = offset_value.GetValue<uint64_t>();
+	// MEASURES counts the offset from one, as the window function it lowers to takes it, and a match
+	// no rows can reach is still an offset the two clauses have to agree on rather than wrap around
+	if (offset >= NumericCast<uint64_t>(NumericLimits<int64_t>::Maximum())) {
+		throw BinderException("The offset of %s() is larger than any match can have rows", function_name);
+	}
+	return NumericCast<idx_t>(offset);
 }
 
 //! CLASSIFIER() reads as the symbol being defined only because the row being tested is the one the
