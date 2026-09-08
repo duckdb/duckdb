@@ -298,33 +298,39 @@ unique_ptr<AlterTableInfo>
 PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const bool &has_result,
                                             unique_ptr<ColumnRefExpression> nested_column_name,
                                             unique_ptr<AlterTableInfo> alter_column_entry) {
+	//! The full dotted path as written (e.g. ["s", "a"] for "s.a")
+	auto column_path = nested_column_name->ColumnNames();
 	if (alter_column_entry->alter_table_type == AlterTableType::SET_DEFAULT) {
-		if (nested_column_name->ColumnNames().size() > 1) {
+		if (column_path.size() > 1) {
 			throw NotImplementedException("Setting a default value on a nested field is not yet supported");
 		}
 		auto set_default_entry = unique_ptr_cast<AlterTableInfo, SetDefaultInfo>(std::move(alter_column_entry));
-		set_default_entry->column_name = nested_column_name->ColumnNames()[0];
+		set_default_entry->column_name = column_path[0];
+		set_default_entry->column_path = column_path;
 		return std::move(set_default_entry);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::DROP_NOT_NULL) {
-		if (nested_column_name->ColumnNames().size() > 1) {
+		if (column_path.size() > 1) {
 			throw NotImplementedException("Dropping a NOT NULL constraint on a nested field is not yet supported");
 		}
 		auto drop_not_null = unique_ptr_cast<AlterTableInfo, DropNotNullInfo>(std::move(alter_column_entry));
-		drop_not_null->column_name = nested_column_name->ColumnNames()[0];
+		drop_not_null->column_name = column_path[0];
+		drop_not_null->column_path = column_path;
 		return std::move(drop_not_null);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::SET_NOT_NULL) {
-		if (nested_column_name->ColumnNames().size() > 1) {
+		if (column_path.size() > 1) {
 			throw NotImplementedException("Setting a NOT NULL constraint on a nested field is not yet supported");
 		}
 		auto set_not_null = unique_ptr_cast<AlterTableInfo, SetNotNullInfo>(std::move(alter_column_entry));
-		set_not_null->column_name = nested_column_name->ColumnNames()[0];
+		set_not_null->column_name = column_path[0];
+		set_not_null->column_path = column_path;
 		return std::move(set_not_null);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::ALTER_COLUMN_TYPE) {
-		if (nested_column_name->ColumnNames().size() > 1) {
+		if (column_path.size() > 1) {
 			throw NotImplementedException("Changing the type of a nested field is not yet supported");
 		}
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
-		change_column_type->column_name = nested_column_name->ColumnNames()[0];
+		change_column_type->column_name = column_path[0];
+		change_column_type->column_path = column_path;
 		if (!change_column_type->expression) {
 			change_column_type->expression =
 			    make_uniq<CastExpression>(change_column_type->target_type, std::move(nested_column_name));
