@@ -695,17 +695,17 @@ static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_
 			DistinctComparatorTypeSwitch(left_child, right_child, child_result.get(), left_child_sel, right_child_sel,
 			                             active_count);
 			// partition active into resolved vs still-remaining
-			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
+			remaining_count = NestedScatter(child_result.get(), result_data, active_count, remaining_lhs_sel,
 			                                remaining_rhs_sel, remaining_result_sel, child_validity, nullptr,
 			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL || n; });
 			break;
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOTEQUAL:
-			child_validity.SetAllValid(remaining_count);
+			child_validity.SetAllValid(active_count);
 			ComparatorTypeSwitch(left_child, right_child, child_result.get(), left_child_sel, right_child_sel,
 			                     active_count, comp, child_validity);
 			//	Only keep values we know are not equal.
-			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
+			remaining_count = NestedScatter(child_result.get(), result_data, active_count, remaining_lhs_sel,
 			                                remaining_rhs_sel, remaining_result_sel, child_validity, nullptr,
 			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL && !n; });
 			break;
@@ -728,12 +728,12 @@ static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_
 				break;
 			}
 
-			child_validity.SetAllValid(remaining_count);
+			child_validity.SetAllValid(active_count);
 			DistinctComparatorTypeSwitch(left_child, right_child, child_result.get(), left_child_sel, right_child_sel,
 			                             active_count);
 
 			// partition active into resolved vs still-remaining
-			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
+			remaining_count = NestedScatter(child_result.get(), result_data, active_count, remaining_lhs_sel,
 			                                remaining_rhs_sel, remaining_result_sel, child_validity, nullptr,
 			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL || n; });
 		}
