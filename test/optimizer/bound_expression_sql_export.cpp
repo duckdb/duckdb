@@ -1168,11 +1168,17 @@ TEST_CASE("Bound expression SQL export trusts native function definitions", "[bo
 			definition->SetSchemaName(has_schema ? Identifier::DefaultSchema() : Identifier());
 			auto bound = bind_scalar_definition(std::move(definition));
 			auto exported = BoundExpressionSQLExporter::Export(*bound, context);
+			if (!has_catalog || !has_schema) {
+				RequireIssue(exported, LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+				RequireIssue(BoundExpressionSQLExporter::Export(*bound->Copy(), context),
+				             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+				continue;
+			}
 			REQUIRE(exported.IsSuccess());
 			auto &name = exported.GetValue()->Cast<FunctionExpression>().GetQualifiedName();
 			REQUIRE(name.Name() == Identifier("abs"));
-			REQUIRE(name.Catalog() == (has_catalog && has_schema ? Identifier::SystemCatalog() : Identifier()));
-			REQUIRE(name.Schema() == (has_catalog && has_schema ? Identifier::DefaultSchema() : Identifier()));
+			REQUIRE(name.Catalog() == Identifier::SystemCatalog());
+			REQUIRE(name.Schema() == Identifier::DefaultSchema());
 			RequireRoundTrip(connection, *bound, context, string(), "abs(-7::INTEGER)");
 		}
 	}
@@ -1226,6 +1232,22 @@ TEST_CASE("Bound expression SQL export trusts native function definitions", "[bo
 		return function_binder.BindAggregateFunction(std::move(definition), std::move(children));
 	};
 	auto canonical_aggregate = bind_aggregate_definition(sum_definition);
+	for (bool has_catalog : {false, true}) {
+		for (bool has_schema : {false, true}) {
+			auto definition = make_shared_ptr<AggregateFunction>(*sum_definition);
+			definition->SetCatalogName(has_catalog ? Identifier::SystemCatalog() : Identifier());
+			definition->SetSchemaName(has_schema ? Identifier::DefaultSchema() : Identifier());
+			auto bound = bind_aggregate_definition(std::move(definition));
+			if (!has_catalog || !has_schema) {
+				RequireIssue(BoundExpressionSQLExporter::Export(*bound, context),
+				             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+				RequireIssue(BoundExpressionSQLExporter::Export(*bound->Copy(), context),
+				             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+			} else {
+				RequireRoundTrip(connection, *bound, context, string(), "sum(7::INTEGER)");
+			}
+		}
+	}
 	REQUIRE(canonical_aggregate->Function().GetDefinition() == sum_definition);
 	REQUIRE(BoundExpressionSQLExporter::Export(*canonical_aggregate, context).IsSuccess());
 	auto canonical_aggregate_copy = canonical_aggregate->Copy();
@@ -2083,9 +2105,11 @@ TEST_CASE("Bound expression SQL export preserves aggregate modifiers", "[bound_e
 	REQUIRE(count_aggregate.GetChildren().empty());
 	BoundExpressionSQLExportContext count_context;
 	auto count_result = BoundExpressionSQLExporter::Export(*count, count_context);
-	REQUIRE(count_result.IsValid());
-	REQUIRE(count_result.IsSuccess());
-	RequireRoundTrip(connection, *count, count_context, " FROM count_values", "count(*)");
+	REQUIRE(count_aggregate.Function().GetDefinition()->GetCatalogName().empty());
+	REQUIRE(count_aggregate.Function().GetDefinition()->GetSchemaName().empty());
+	LogicalPlanVerificationPath count_path;
+	count_path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+	RequireIssue(count_result, LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, count_path);
 	auto serialized_count = BinaryRoundTrip(*connection.context, *count);
 	REQUIRE(serialized_count->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 	auto &serialized_count_bound = serialized_count->Cast<BoundAggregateExpression>();
@@ -2317,7 +2341,86 @@ TEST_CASE("Bound expression SQL export owns outputs and propagates resolver exce
 	REQUIRE_THROWS_AS(BoundExpressionSQLExporter::Export(expression, throwing_context), InvalidInputException);
 }
 
-TEST_CASE("Optimized expression SQL export covers complete AVG and LIKE rewrites",
+TEST_CASE("SQL export rejects optimizer functions subject to search path shadowing",
+          "[bound_expression_sql_export][optimizer][serialization]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	REQUIRE_NO_FAIL(connection.Query("CREATE SCHEMA shadow"));
+	for (auto name : {"prefix", "suffix", "contains"}) {
+		REQUIRE_NO_FAIL(connection.Query("CREATE MACRO shadow." + string(name) + "(a,b) AS false"));
+	}
+	REQUIRE_NO_FAIL(connection.Query("CREATE MACRO shadow.count(a) AS 999::BIGINT"));
+	REQUIRE_NO_FAIL(connection.Query("SET search_path='shadow,main'"));
+	struct Case {
+		string source;
+		string from;
+		Identifier name;
+		string arguments;
+	};
+	vector<Case> cases {{"s LIKE 'a%'", " FROM (VALUES ('abc'),('cab'),(NULL)) v(s)", "prefix", "s, 'a'"},
+	                    {"s LIKE '%a'", " FROM (VALUES ('bca'),('abc'),(NULL)) v(s)", "suffix", "s, 'a'"},
+	                    {"s LIKE '%a%'", " FROM (VALUES ('abc'),('bbb'),(NULL)) v(s)", "contains", "s, 'a'"},
+	                    {"avg(i)", " FROM (VALUES (1),(2),(NULL)) v(i)", "count", "i"}};
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+	for (auto &entry : cases) {
+		INFO(entry.source);
+		auto query = "SELECT " + entry.source + entry.from;
+		auto plan = OptimizeExportQuery(connection, query);
+		auto expression = FindExpression(*plan, [&](const Expression &candidate) {
+			if (candidate.GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
+				return candidate.Cast<BoundFunctionExpression>().Function().GetDefinition()->GetName() == entry.name;
+			}
+			return candidate.GetExpressionType() == ExpressionType::BOUND_AGGREGATE &&
+			       candidate.Cast<BoundAggregateExpression>().Function().GetDefinition()->GetName() == entry.name;
+		});
+		REQUIRE(expression);
+		auto &definition =
+		    expression->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION
+		        ? static_cast<const Function &>(*expression->Cast<BoundFunctionExpression>().Function().GetDefinition())
+		        : static_cast<const Function &>(
+		              *expression->Cast<BoundAggregateExpression>().Function().GetDefinition());
+		REQUIRE(definition.GetCatalogName().empty());
+		REQUIRE(definition.GetSchemaName().empty());
+		auto optimized = connection.Query(query);
+		REQUIRE_NO_FAIL(*optimized);
+		REQUIRE_NO_FAIL(connection.Query("PRAGMA disable_optimizer"));
+		auto baseline = connection.Query(query);
+		REQUIRE_NO_FAIL(*baseline);
+		REQUIRE(optimized->Equals(*baseline, false));
+		REQUIRE_NO_FAIL(connection.Query("PRAGMA enable_optimizer"));
+		auto canonical_call = "system.main." + entry.name.GetIdentifierName() + "(" + entry.arguments + ")";
+		auto canonical = connection.Query("SELECT " + canonical_call + entry.from);
+		auto shadowed =
+		    connection.Query("SELECT " + entry.name.GetIdentifierName() + "(" + entry.arguments + ")" + entry.from);
+		REQUIRE_NO_FAIL(*canonical);
+		REQUIRE_NO_FAIL(*shadowed);
+		REQUIRE_FALSE(canonical->Equals(*shadowed, false));
+		vector<SQLBindingEntry> bindings;
+		CollectSQLBindings(*expression, bindings);
+		REQUIRE(bindings.size() == 1);
+		auto context = ResolveBinding(
+		    bindings[0].binding, {Identifier("v"), Identifier(entry.name == "count" ? "i" : "s")}, bindings[0].type);
+		RequireIssue(BoundExpressionSQLExporter::Export(*expression, context),
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		auto copied = expression->Copy();
+		RequireIssue(BoundExpressionSQLExporter::Export(*copied, context),
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		// Ordinary deserialization resolves these definitions to their complete catalog identity.
+		auto restored = BinaryRoundTrip(*connection.context, *expression);
+		auto exported = BoundExpressionSQLExporter::Export(*restored, context);
+		REQUIRE(exported.IsSuccess());
+		auto &name = exported.GetValue()->Cast<FunctionExpression>().GetQualifiedName();
+		REQUIRE(name.Catalog() == Identifier::SystemCatalog());
+		REQUIRE(name.Schema() == Identifier::DefaultSchema());
+		REQUIRE(name.Name() == entry.name);
+		RequireRoundTrip(connection, *restored, context, entry.from, canonical_call);
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("Optimized expression SQL export measures AVG and LIKE qualification gaps",
           "[bound_expression_sql_export][optimizer][serialization]") {
 	DuckDB db;
 	Connection connection(db);
@@ -2325,25 +2428,47 @@ TEST_CASE("Optimized expression SQL export covers complete AVG and LIKE rewrites
 	struct Case {
 		string query;
 		vector<Identifier> required_functions;
+		vector<Identifier> unqualified_functions;
 	};
 	vector<Case> cases {
-	    {"SELECT avg(i) FROM (VALUES (1),(2),(NULL)) t(i)", {"sum", "count", "/"}},
-	    {"SELECT sum(i + 1) FROM (VALUES (1),(2),(NULL)) t(i)", {"sum", "count"}},
-	    {"SELECT count(i) FROM (VALUES (1),(2),(NULL)) t(i)", {"count"}},
-	    {"SELECT count(*) FROM (VALUES (1),(2)) t(i)", {"count_star"}},
-	    {"SELECT sum(i), avg(i), count(DISTINCT i) FROM (VALUES (1),(2),(2),(NULL)) t(i)", {"sum", "count", "/"}},
-	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE 'a%'", {"prefix"}},
-	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE '%a'", {"suffix"}},
-	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE '%a%'", {"contains"}},
-	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s NOT LIKE 'a%'", {"prefix"}},
+	    {"SELECT avg(i) FROM (VALUES (1),(2),(NULL)) t(i)", {"sum", "count", "/"}, {"count"}},
+	    {"SELECT sum(i + 1) FROM (VALUES (1),(2),(NULL)) t(i)", {"sum", "count"}, {"count"}},
+	    {"SELECT count(i) FROM (VALUES (1),(2),(NULL)) t(i)", {"count"}, {}},
+	    {"SELECT count(*) FROM (VALUES (1),(2)) t(i)", {"count_star"}, {}},
+	    {"SELECT sum(i), avg(i), count(DISTINCT i) FROM (VALUES (1),(2),(2),(NULL)) t(i)",
+	     {"sum", "count", "/"},
+	     {"count"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE 'a%'", {"prefix"}, {"prefix"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE '%a'", {"suffix"}, {"suffix"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE '%a%'", {"contains"}, {"contains"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s NOT LIKE 'a%'", {"prefix"}, {"prefix"}},
 	};
 	for (auto &entry : cases) {
 		INFO(entry.query);
 		auto plan = OptimizeExportQuery(connection, entry.query);
 		vector<Identifier> functions;
+		vector<Identifier> unqualified_functions;
 		std::function<void(const Expression &)> visit_expression = [&](const Expression &expression) {
 			if (expression.GetExpressionType() == ExpressionType::BOUND_FUNCTION ||
 			    expression.GetExpressionType() == ExpressionType::BOUND_AGGREGATE) {
+				auto &definition = expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION
+				                       ? static_cast<const Function &>(
+				                             *expression.Cast<BoundFunctionExpression>().Function().GetDefinition())
+				                       : static_cast<const Function &>(
+				                             *expression.Cast<BoundAggregateExpression>().Function().GetDefinition());
+				functions.push_back(definition.GetName());
+				if (definition.GetCatalogName().empty() || definition.GetSchemaName().empty()) {
+					// Producer qualification is a follow-up; keep its missing coverage observable.
+					REQUIRE(std::find(entry.unqualified_functions.begin(), entry.unqualified_functions.end(),
+					                  definition.GetName()) != entry.unqualified_functions.end());
+					unqualified_functions.push_back(definition.GetName());
+					LogicalPlanVerificationPath path;
+					path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+					RequireIssue(BoundExpressionSQLExporter::Export(expression, {}),
+					             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+					ExpressionIterator::EnumerateChildren(expression, visit_expression);
+					return;
+				}
 				vector<SQLBindingEntry> bindings;
 				CollectSQLBindings(expression, bindings);
 				SyntheticSQLSource source;
@@ -2369,10 +2494,6 @@ TEST_CASE("Optimized expression SQL export covers complete AVG and LIKE rewrites
 				    connection.Query("SELECT " + restored_export.GetValue()->ToString() + source.from_clause);
 				REQUIRE_NO_FAIL(*restored_result);
 				REQUIRE(restored_result->Equals(*rebound, false));
-				functions.push_back(
-				    expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION
-				        ? expression.Cast<BoundFunctionExpression>().Function().GetDefinition()->GetName()
-				        : expression.Cast<BoundAggregateExpression>().Function().GetDefinition()->GetName());
 			}
 			ExpressionIterator::EnumerateChildren(expression, visit_expression);
 		};
@@ -2384,6 +2505,10 @@ TEST_CASE("Optimized expression SQL export covers complete AVG and LIKE rewrites
 			}
 		};
 		visit_operator(*plan);
+		for (auto &expected : entry.unqualified_functions) {
+			REQUIRE(std::find(unqualified_functions.begin(), unqualified_functions.end(), expected) !=
+			        unqualified_functions.end());
+		}
 		for (auto &required : entry.required_functions) {
 			INFO(required);
 			REQUIRE(std::find(functions.begin(), functions.end(), required) != functions.end());
@@ -2399,7 +2524,7 @@ TEST_CASE("Optimized expression SQL export covers complete AVG and LIKE rewrites
 	connection.Rollback();
 }
 
-TEST_CASE("SQL export covers functions introduced by aggregate and TopN rewrites",
+TEST_CASE("SQL export measures qualification gaps in aggregate and TopN rewrites",
           "[bound_expression_sql_export][optimizer][serialization]") {
 	DuckDB db;
 	Connection connection(db);
@@ -2502,8 +2627,24 @@ TEST_CASE("SQL export covers functions introduced by aggregate and TopN rewrites
 		REQUIRE_NO_FAIL(*optimized);
 		REQUIRE(optimized->Equals(*baseline));
 		auto expressions = collect(*plan);
+		idx_t unqualified_count = 0;
 		for (auto &reference : expressions) {
 			auto &expression = reference.get();
+			auto &definition = expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION
+			                       ? static_cast<const Function &>(
+			                             *expression.Cast<BoundFunctionExpression>().Function().GetDefinition())
+			                       : static_cast<const Function &>(
+			                             *expression.Cast<BoundAggregateExpression>().Function().GetDefinition());
+			if (definition.GetCatalogName().empty() || definition.GetSchemaName().empty()) {
+				REQUIRE((definition.GetName() == "combine_aggr" || definition.GetName() == "min" ||
+				         definition.GetName() == "max" || definition.GetName() == "count_star"));
+				LogicalPlanVerificationPath path;
+				path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+				RequireIssue(BoundExpressionSQLExporter::Export(expression, {}),
+				             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+				unqualified_count++;
+				continue;
+			}
 			vector<SQLBindingEntry> bindings;
 			CollectSQLBindings(expression, bindings);
 			BoundExpressionSQLExportContext context;
@@ -2564,6 +2705,11 @@ TEST_CASE("SQL export covers functions introduced by aggregate and TopN rewrites
 			    connection.Query("SELECT " + restored_export.GetValue()->ToString() + " AS exported" + from_clause);
 			REQUIRE_NO_FAIL(*restored_result);
 			REQUIRE(restored_result->Equals(*result));
+		}
+		if (entry.optimizer == "top_n_window_elimination") {
+			REQUIRE(unqualified_count == 0);
+		} else {
+			REQUIRE(unqualified_count > 0);
 		}
 	}
 	connection.Rollback();

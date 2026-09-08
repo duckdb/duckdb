@@ -513,11 +513,8 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound scalar function identity is incomplete"));
 		}
-		const bool qualified = !definition->GetCatalogName().empty() && !definition->GetSchemaName().empty();
-		QualifiedName name =
-		    qualified ? QualifiedName(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName())
-		              : QualifiedName(definition->GetName());
-		if ((qualified && (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()))) ||
+		QualifiedName name(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
+		if (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()) ||
 		    !IsValidIdentifier(name.Name()) || !IsSQLRepresentableType(expression.GetReturnType())) {
 			return Failure(UnsupportedFunction(path, std::move(identity),
 			                                   "The retained scalar function definition is not representable as SQL"));
@@ -580,11 +577,8 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function identity is incomplete"));
 		}
-		const bool qualified = !definition->GetCatalogName().empty() && !definition->GetSchemaName().empty();
-		QualifiedName name =
-		    qualified ? QualifiedName(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName())
-		              : QualifiedName(definition->GetName());
-		if ((qualified && (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()))) ||
+		QualifiedName name(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
+		if (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()) ||
 		    !IsValidIdentifier(name.Name()) || !IsSQLRepresentableType(expression.GetReturnType())) {
 			return Failure(UnsupportedFunction(
 			    path, std::move(identity), "The retained aggregate function definition is not representable as SQL"));
