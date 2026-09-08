@@ -133,7 +133,7 @@ unique_ptr<Expression> ConstantOrNullSimplification::SimplifyExpression(LogicalO
 		children.push_back(std::move(func_children[child_idx]));
 	}
 
-	return ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(!value.value()));
+	return ExpressionRewriter::ConstantOrNull(this->context, std::move(children), Value::BOOLEAN(!value.value()));
 }
 
 unique_ptr<LogicalOperator> ConstantOrNullSimplification::OptimizeFilter(unique_ptr<LogicalOperator> op,

@@ -97,6 +97,40 @@ SELECT count(*) FROM covered WHERE m IN ('sad', 'ok', 'happy');
 ----
 6144
 
+# 5b. typed ENUM constants cover the same full domain and should simplify too
+query II
+explain
+SELECT count(*) FROM covered WHERE m NOT IN ('sad'::mood, 'ok'::mood, 'happy'::mood);
+----
+physical_plan	<REGEX>:.*EMPTY.*
+
+query I
+SELECT count(*) FROM covered WHERE m NOT IN ('sad'::mood, 'ok'::mood, 'happy'::mood);
+----
+0
+
+query II
+explain
+SELECT count(*) FROM covered WHERE m IN ('sad'::mood, 'ok'::mood, 'happy'::mood);
+----
+physical_plan	<!REGEX>:.*constant_or_null.*
+
+query I
+SELECT count(*) FROM covered WHERE m IN ('sad'::mood, 'ok'::mood, 'happy'::mood);
+----
+6144
+
+query III
+SELECT
+	m IS NULL,
+	m NOT IN ('sad'::mood, 'ok'::mood, 'happy'::mood),
+	NOT (m IN ('sad'::mood, 'ok'::mood, 'happy'::mood))
+FROM (VALUES ('sad'::mood), (NULL::mood)) v(m)
+ORDER BY m IS NULL
+----
+false	false	false
+true	NULL	NULL
+
 # 6. stats-free input (VALUES): the rewrite still happens and nullability cannot be
 #    proven, but the constant false-or-null semantics prune the filter to an empty
 #    result anyway (no stats needed - the condition itself is constant per row)

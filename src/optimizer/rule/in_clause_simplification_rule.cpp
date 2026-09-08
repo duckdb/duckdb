@@ -65,32 +65,82 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 	return nullptr;
 }
 
+class EnumInProbeMatcher : public ExpressionMatcher {
+public:
+	EnumInProbeMatcher() : ExpressionMatcher() {
+	}
+
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override {
+		// Support both enum_col IN (...) and enum_col::VARCHAR IN (...).
+		if (expr.GetReturnType().id() == LogicalTypeId::ENUM) {
+			bindings.push_back(expr);
+			return true;
+		}
+		if (!BoundCastExpression::IsCast(expr) || expr.GetReturnType() != LogicalType::VARCHAR) {
+			return false;
+		}
+		auto &cast_expr = expr.Cast<BoundFunctionExpression>();
+		if (BoundCastExpression::Child(cast_expr).GetReturnType().id() != LogicalTypeId::ENUM) {
+			return false;
+		}
+		bindings.push_back(expr);
+		return true;
+	}
+};
+
+class EnumInConstantMatcher : public ExpressionMatcher {
+public:
+	EnumInConstantMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CONSTANT) {
+	}
+
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override {
+		if (!ExpressionMatcher::Match(expr, bindings)) {
+			return false;
+		}
+		auto &constant = expr.Cast<BoundConstantExpression>().GetValue();
+		if (constant.IsNull() || constant.type().id() == LogicalTypeId::VARCHAR ||
+		    constant.type().id() == LogicalTypeId::ENUM) {
+			return true;
+		}
+		bindings.pop_back();
+		return false;
+	}
+};
+
 InEnumSimplificationRule::InEnumSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	// match enum::VARCHAR IN (string literals)
+	// match enum IN constants and enum::VARCHAR IN constants
 	auto op = make_uniq<InUniformExpressionMatcher>();
 
-	//	Probe must be enum::VARCHAR
-	auto cast_matcher = make_uniq<CastExpressionMatcher>();
-	cast_matcher->type = make_uniq<SpecificTypeMatcher>(LogicalType::VARCHAR);
-	auto enum_matcher = make_uniq<ExpressionMatcher>();
-	enum_matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::ENUM);
-	cast_matcher->matcher = std::move(enum_matcher);
-	op->probe_matcher = std::move(cast_matcher);
-
-	//	Children must be constant strings
-	op->child_matcher = make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_CONSTANT);
-	op->child_matcher->type = make_uniq<SpecificTypeMatcher>(LogicalType::VARCHAR);
+	op->probe_matcher = make_uniq<EnumInProbeMatcher>();
+	op->child_matcher = make_uniq<EnumInConstantMatcher>();
 
 	root = std::move(op);
+}
+
+static optional_ptr<const Expression> GetEnumInProbe(const Expression &expr) {
+	if (expr.GetReturnType().id() == LogicalTypeId::ENUM) {
+		return expr;
+	}
+	if (!BoundCastExpression::IsCast(expr) || expr.GetReturnType() != LogicalType::VARCHAR) {
+		return nullptr;
+	}
+	auto &cast_expr = expr.Cast<BoundFunctionExpression>();
+	auto &child = BoundCastExpression::Child(cast_expr);
+	if (child.GetReturnType().id() != LogicalTypeId::ENUM) {
+		return nullptr;
+	}
+	return child;
 }
 
 unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                        bool &changes_made, bool is_root) {
 	auto &expr = bindings[0].get().Cast<BoundOperatorExpression>();
 	auto &children = expr.GetChildrenMutable();
-	auto &cast_expr = children[0]->Cast<BoundFunctionExpression>();
-	auto &enum_expr = BoundCastExpression::Child(cast_expr);
-	auto &enum_type = enum_expr.GetReturnType();
+	auto enum_expr = GetEnumInProbe(*children[0]);
+	if (enum_expr == nullptr) {
+		return nullptr;
+	}
+	auto &enum_type = enum_expr->GetReturnType();
 
 	// Look up the domain for the original ENUM
 	string_map_t<uint64_t> enum_domain;
@@ -100,7 +150,7 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
 	}
 
 	vector<unique_ptr<Expression>> in_children;
-	in_children.emplace_back(enum_expr.Copy());
+	in_children.emplace_back(enum_expr->Copy());
 
 	unordered_set<uint64_t> matched_enum_values {};
 	for (idx_t i = 1; i < children.size(); ++i) {
@@ -110,6 +160,10 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
 			//	Keep NULLs
 			in_children.emplace_back(make_uniq<BoundConstantExpression>(Value(enum_type)));
 		} else {
+			if (v.type().id() != LogicalTypeId::VARCHAR && v.type().id() != LogicalTypeId::ENUM) {
+				return nullptr;
+			}
+			// Check values against the probe enum domain before rebuilding typed enum constants.
 			auto s = v.ToString();
 			auto it = enum_domain.find(s);
 			if (it != enum_domain.end()) {
@@ -125,7 +179,7 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
 	//	If SOME of them are in the domain, swap out the children for the valid ENUM values.
 	if (matched_enum_values.size() == EnumType::GetSize(enum_type)) {
 		const bool in_clause = (expr.GetExpressionType() == ExpressionType::COMPARE_IN);
-		return rewriter.ConstantOrNull(in_children[0]->Copy(), Value::BOOLEAN(in_clause));
+		return rewriter.ConstantOrNull(GetContext(), in_children[0]->Copy(), Value::BOOLEAN(in_clause));
 	} else if (in_children.size() > 1) {
 		children.swap(in_children);
 	} else {
