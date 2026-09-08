@@ -455,8 +455,8 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
 
-FileReadSubmission FileSystem::TryStartRead(shared_ptr<const FileReadRequest> request,
-                                            AsyncIOCallback callback) { // NOLINT: sink params, unused by default
+// NOLINTNEXTLINE: sink params, taken by value so an override can move them into its queue
+FileReadSubmission FileSystem::TryStartRead(shared_ptr<const FileReadRequest> request, AsyncIOCallback callback) {
 	// by default a file system has no asynchronous read path, callers fall back to the synchronous Read
 	return FileReadSubmission::UNSUPPORTED;
 }
