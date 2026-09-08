@@ -1165,11 +1165,15 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		child_index[*children.back()] = MATCH_RECOGNIZE_MATCH_NUMBER_FIELD;
 	}
 
+	// a navigated column is one the matcher fills in per row, so where it sits among the ones it is
+	// handed is what the navigation descriptor names
 	unordered_set<idx_t> navigation_fields;
+	vector<idx_t> navigation_input;
 	for (auto &navigation : navigations) {
 		unique_ptr<ParsedExpression> column = make_uniq<ColumnRefExpression>(Identifier(navigation.column));
 		auto bound_column = matcher_binder.Bind(column);
-		navigation_fields.insert(AddMatcherInput(bound_column, children, child_index));
+		navigation_input.push_back(AddMatcherInput(bound_column, children, child_index));
+		navigation_fields.insert(navigation_input.back());
 	}
 
 	for (idx_t i = 0; i < define_conditions.size(); i++) {
@@ -1203,13 +1207,9 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	match_data->pattern = matcher_binder.Bind(ref.config->pattern);
 	ResolvePatternSymbols(match_data->pattern, symbol_index);
 
-	for (auto &navigation : navigations) {
-		unique_ptr<ParsedExpression> column = make_uniq<ColumnRefExpression>(Identifier(navigation.column));
-		auto bound_column = matcher_binder.Bind(column);
-		auto entry = child_index.find(*bound_column);
-		D_ASSERT(entry != child_index.end());
-		match_data->navigations.push_back(MatchRecognizeFunctionData::Navigation {navigation.last, navigation.symbol,
-		                                                                          entry->second, navigation.offset});
+	for (idx_t i = 0; i < navigations.size(); i++) {
+		match_data->navigations.push_back(MatchRecognizeFunctionData::Navigation {
+		    navigations[i].last, navigations[i].symbol, navigation_input[i], navigations[i].offset});
 	}
 
 	match_data->after_match = ref.config->after_match;
