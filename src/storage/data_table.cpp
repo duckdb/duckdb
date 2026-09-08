@@ -696,6 +696,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	auto pk_delete_indexes = pk_local_storage ? &pk_local_storage->delete_indexes : nullptr;
 	data_table.info->indexes.VerifyForeignKey(pk_delete_indexes, dst_keys_ptr, dst_chunk, global_conflict_manager);
 
+	auto sibling_storage = local_storage.GetStorage(data_table);
+	auto sibling_delete_indexes = sibling_storage ? &sibling_storage->delete_indexes : nullptr;
 	// Check if we can insert the chunk into the local storage.
 	bool local_error = false;
 	auto local_verification = sibling_storage != nullptr;
