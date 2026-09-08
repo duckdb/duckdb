@@ -19,7 +19,7 @@ Value ConstantExpression::GetValueForSerialization() const {
 	return literal.ToValue();
 }
 
-unique_ptr<ParsedExpression> ConstantExpression::DeserializeConstant(Value value, Literal literal) {
+unique_ptr<ParsedExpression> ConstantExpression::DeserializeConstant(const Value &value, Literal literal) {
 	if (literal.kind != LiteralKind::INVALID) {
 		return make_uniq<ConstantExpression>(std::move(literal));
 	}

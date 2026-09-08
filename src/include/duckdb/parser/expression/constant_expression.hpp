@@ -60,7 +60,7 @@ private:
 	//! The value written when serializing for storage versions that predate literals
 	Value GetValueForSerialization() const;
 	//! Rebuilds the expression from either the literal or, for older storage versions, the value
-	static unique_ptr<ParsedExpression> DeserializeConstant(Value value, Literal literal);
+	static unique_ptr<ParsedExpression> DeserializeConstant(const Value &value, Literal literal);
 
 	//! The literal as written in the query
 	Literal literal;

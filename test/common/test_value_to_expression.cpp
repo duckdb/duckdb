@@ -118,7 +118,10 @@ TEST_CASE("ConstantExpression::FromValue round-trips scalar values", "[api]") {
 	RequireExpressionRoundTrip(con, "INTERVAL '1 day 2 hours'");
 	RequireExpressionRoundTrip(con, "'5ecb6a72-1fc3-4b5f-9d8a-0d3a4b5c6d7e'::UUID");
 	RequireExpressionRoundTrip(con, "'a'::ENUM('a', 'b')");
-	RequireExpressionRoundTrip(con, "'{\"a\": 1}'::JSON");
+	// the JSON alias only exists when the json extension is part of the build
+	if (!con.Query("SELECT '{}'::JSON")->HasError()) {
+		RequireExpressionRoundTrip(con, "'{\"a\": 1}'::JSON");
+	}
 }
 
 TEST_CASE("ConstantExpression::FromValue round-trips pointer values", "[api]") {
