@@ -16,6 +16,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
@@ -114,27 +115,6 @@ static void NavigateOtherSymbols(unique_ptr<ParsedExpression> &expr, const strin
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { NavigateOtherSymbols(child, define_name, symbols); });
 }
 
-//! The names a qualified reference could be naming a table by. Anything else in front of a column is
-//! navigation into that column rather than a table it belongs to.
-static void CollectInputTableNames(const TableRef &ref, case_insensitive_set_t &names) {
-	if (!ref.alias.empty()) {
-		names.insert(ref.alias.GetIdentifierName());
-	}
-	switch (ref.type) {
-	case TableReferenceType::BASE_TABLE:
-		names.insert(ref.Cast<BaseTableRef>().Table().GetIdentifierName());
-		break;
-	case TableReferenceType::JOIN: {
-		auto &join = ref.Cast<JoinRef>();
-		CollectInputTableNames(*join.left, names);
-		CollectInputTableNames(*join.right, names);
-		break;
-	}
-	default:
-		break;
-	}
-}
-
 //! Everything a reference names behind its first name is navigation into the column, so dropping a
 //! qualifier drops that one name and keeps the rest: X.c.f is field f of column c, not column f.
 static void DropQualifier(ColumnRefExpression &colref) {
@@ -166,43 +146,73 @@ static void ZapDefineQualifier(ParsedExpression &root_expr, const string &define
 	});
 }
 
-//! A reference qualified with one of the input's own tables only resolves where the input still is
-//! one. Every clause here is evaluated above a subquery of it, so the reference is computed down
-//! there and read back under a name of its own. That is also what keeps two tables' columns of the
-//! same name apart, where dropping the qualifier would collapse them onto one.
+//! Names for the columns the clause generates. The input is bound before any of them is handed out,
+//! so a generated name is one the input does not already have rather than one it is hoped not to
+//! have - and no two of them are the same either.
+struct GeneratedNames {
+	explicit GeneratedNames(case_insensitive_set_t taken_p) : taken(std::move(taken_p)) {
+	}
+
+	string Reserve(const string &base) {
+		auto name = base;
+		for (idx_t suffix = 0; taken.count(name); suffix++) {
+			name = base + "_" + to_string(suffix);
+		}
+		taken.insert(name);
+		return name;
+	}
+
+	case_insensitive_set_t taken;
+};
+
+//! A reference that names one of the input's own tables, or navigates into one of its columns, only
+//! resolves where the input still is one. Every clause here is evaluated above a subquery of it, so
+//! the reference is computed down there, verbatim, and read back under a name of its own.
+//!
+//! Computing it rather than rewriting it is what makes the difference: two tables' columns of the
+//! same name stay apart, a schema qualification or an unaliased table function is still the name it
+//! was, and a struct field behind a qualifier is not mistaken for a column.
 struct HoistedInputRefs {
-	explicit HoistedInputRefs(string prefix_p) : prefix(std::move(prefix_p)) {
+	explicit HoistedInputRefs(GeneratedNames &names_p) : names(names_p) {
 	}
 
 	//! The subquery column standing for this reference, allocated on first use
 	const string &Hoist(const ColumnRefExpression &colref) {
+		// the components are length prefixed, so a dot inside a quoted identifier cannot read as the
+		// boundary between two of them
 		string key;
 		for (auto &name : colref.ColumnNames()) {
-			key += name.GetIdentifierName();
-			key += ".";
+			const auto identifier = name.GetIdentifierName();
+			key += to_string(identifier.size());
+			key += ":";
+			key += identifier;
 		}
 		auto entry = columns.find(key);
 		if (entry != columns.end()) {
 			return entry->second;
 		}
 		auto hoisted = colref.Copy();
-		auto column = prefix + to_string(columns.size());
+		auto column = names.Reserve("__mr_ref_" + to_string(columns.size()));
 		hoisted->SetAlias(Identifier(column));
 		select_list.push_back(std::move(hoisted));
 		return columns.emplace(std::move(key), std::move(column)).first->second;
 	}
 
-	string prefix;
+	GeneratedNames &names;
+	//! Keyed by what the reference spells, so that one written twice is computed once
 	case_insensitive_map_t<string> columns;
 	//! The expressions to add to the subquery the input is reached through
 	vector<unique_ptr<ParsedExpression>> select_list;
 };
 
-static void HoistInputQualifiers(unique_ptr<ParsedExpression> &expr, const case_insensitive_set_t &input_tables,
+//! A reference whose first name is a pattern variable belongs to this clause and is resolved here.
+//! Every other reference is the input's, so it is computed against the input - which is also what
+//! makes a reference the input finds ambiguous say so, rather than quietly taking the first of them.
+static void HoistInputReferences(unique_ptr<ParsedExpression> &expr, const case_insensitive_set_t &symbols,
                                  HoistedInputRefs &refs) {
 	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr->Cast<ColumnRefExpression>();
-		if (colref.IsQualified() && input_tables.count(colref.ColumnNames()[0].GetIdentifierName())) {
+		if (!symbols.count(colref.ColumnNames()[0].GetIdentifierName())) {
 			auto alias = expr->GetAlias();
 			expr = make_uniq<ColumnRefExpression>(Identifier(refs.Hoist(colref)));
 			expr->SetAlias(std::move(alias));
@@ -210,7 +220,7 @@ static void HoistInputQualifiers(unique_ptr<ParsedExpression> &expr, const case_
 		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { HoistInputQualifiers(child, input_tables, refs); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { HoistInputReferences(child, symbols, refs); });
 }
 
 //! FIRST() and LAST() count from the end of the match they read from, by a constant the two clauses
@@ -290,18 +300,19 @@ static void ReplaceFunctions(unique_ptr<ParsedExpression> &expr, const WindowExp
 
 //! DEFINE navigation turns into window functions, which cannot be nested inside the pattern window.
 //! Materialise them in the subquery below it and reference the result instead.
-static void HoistWindows(unique_ptr<ParsedExpression> &expr, SelectNode &subquery, const string &prefix,
-                         idx_t &counter) {
+static void HoistWindows(unique_ptr<ParsedExpression> &expr, SelectNode &subquery, GeneratedNames &names,
+                         vector<string> &hidden_columns) {
 	if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
-		auto alias = prefix + to_string(counter++);
+		auto alias = names.Reserve("__mr_win");
 		expr->SetAlias(Identifier(alias));
 		auto colref = make_uniq<ColumnRefExpression>(Identifier(alias));
 		subquery.select_list.push_back(std::move(expr));
+		hidden_columns.push_back(std::move(alias));
 		expr = std::move(colref);
 		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { HoistWindows(child, subquery, prefix, counter); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { HoistWindows(child, subquery, names, hidden_columns); });
 }
 
 //! Pattern symbols live in the same namespace as the input columns, so they are qualified with an
@@ -336,7 +347,7 @@ static bool ContainsNavigation(const ParsedExpression &expr) {
 
 //! Replace FIRST()/LAST() with a column the matcher fills in, and record what it has to navigate
 static void ExtractNavigation(unique_ptr<ParsedExpression> &expr, SelectNode &subquery,
-                              const case_insensitive_set_t &symbols, const string &prefix,
+                              const case_insensitive_set_t &symbols, GeneratedNames &names,
                               vector<MatchRecognizeNavigation> &navigations) {
 	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function = expr->Cast<FunctionExpression>();
@@ -365,7 +376,7 @@ static void ExtractNavigation(unique_ptr<ParsedExpression> &expr, SelectNode &su
 				}
 			}
 
-			auto column = prefix + to_string(navigations.size());
+			auto column = names.Reserve("__mr_nav");
 			inner->SetAlias(Identifier(column));
 			subquery.select_list.push_back(std::move(inner));
 			navigations.push_back(MatchRecognizeNavigation {name == "LAST", symbol, column, offset});
@@ -374,7 +385,7 @@ static void ExtractNavigation(unique_ptr<ParsedExpression> &expr, SelectNode &su
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		ExtractNavigation(child, subquery, symbols, prefix, navigations);
+		ExtractNavigation(child, subquery, symbols, names, navigations);
 	});
 }
 
@@ -576,7 +587,7 @@ static unique_ptr<ParsedExpression> MatchScopedValue(ClientContext &context, con
 //! read back from above it, which is the route a DEFINE condition's already take.
 static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const WindowExpression &pattern_window,
                                    const case_insensitive_map_t<vector<string>> &symbols, SelectNode &subquery,
-                                   const string &prefix, idx_t &counter) {
+                                   GeneratedNames &names, vector<string> &hidden_columns) {
 	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function = expr->Cast<FunctionExpression>();
 		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
@@ -586,8 +597,8 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 				throw BinderException("%s() takes an expression and an optional offset", function_name);
 			}
 			for (auto &argument : arguments) {
-				HoistMeasureNavigation(argument.GetExpressionMutable(), pattern_window, symbols, subquery, prefix,
-				                       counter);
+				HoistMeasureNavigation(argument.GetExpressionMutable(), pattern_window, symbols, subquery, names,
+				                       hidden_columns);
 			}
 			auto &inner = *arguments[0].GetExpressionMutable();
 			if (inner.GetExpressionType() == ExpressionType::COLUMN_REF) {
@@ -602,9 +613,10 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 			auto &window = navigation->Cast<WindowExpression>();
 			window.SetFunctionName(function_name == "PREV" ? "lag" : "lead");
 			window.GetArgumentsMutable() = std::move(arguments);
-			auto column = prefix + to_string(counter++);
+			auto column = names.Reserve("__mr_win");
 			window.SetAlias(Identifier(column));
 			subquery.select_list.push_back(std::move(navigation));
+			hidden_columns.push_back(column);
 			// the navigation may be the whole measure, whose alias names the output column
 			auto alias = expr->GetAlias();
 			expr = make_uniq<ColumnRefExpression>(Identifier(column));
@@ -613,7 +625,7 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		HoistMeasureNavigation(child, pattern_window, symbols, subquery, prefix, counter);
+		HoistMeasureNavigation(child, pattern_window, symbols, subquery, names, hidden_columns);
 	});
 }
 
@@ -809,20 +821,29 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	//   3. the MEASURES, computed across the match a row belongs to
 	//   4. for ONE ROW PER MATCH, a filter down to the row each match starts on
 
-	// The matcher's state travels between the select nodes below in a column of its own. Naming it
-	// after this clause keeps it apart from the input's columns and from the state of another
-	// MATCH_RECOGNIZE this one is stacked on.
-	// Every column the clause generates is named after that index, so nothing it adds at one level can
-	// be caught by a name added at another. It is not proof against an input column deliberately
-	// spelled the same way, which needs the input's own names to rule out.
-	const string scope_id = to_string(GenerateTableIndex().index);
-	const string state_column = "__pattern_window_" + scope_id;
-	const string spans_column = state_column + "_spans";
-	const string window_prefix = "__mr_win_" + scope_id + "_";
-	const string navigation_prefix = "__mr_nav_" + scope_id + "_";
-	const string measure_prefix = "__mr_measure_" + scope_id + "_";
-	const string match_number_column = MATCH_RECOGNIZE_MATCH_NUMBER_COLUMN + ("_" + scope_id);
-	HoistedInputRefs input_refs("__mr_ref_" + scope_id + "_");
+	// The input is bound once, here, while its tables, aliases and qualified columns are still what
+	// the query wrote. Everything below is planned on top of that binding, so the names it produces
+	// are known before this clause generates any of its own.
+	auto input_binder = Binder::CreateBinder(context, this);
+	auto bound_input = input_binder->Bind(*ref.input);
+	// what the input's columns are called is what the bind context says, not what a table ref bind
+	// happens to report back
+	case_insensitive_set_t input_names;
+	for (auto &binding : input_binder->bind_context.GetBindingsList()) {
+		for (auto &name : binding->GetColumnNames()) {
+			input_names.insert(name.GetIdentifierName());
+		}
+	}
+	auto input_ref = make_uniq<BoundRefWrapper>(std::move(bound_input), std::move(input_binder));
+
+	// The matcher's state travels between the select nodes below in a column of its own. Every column
+	// the clause generates is named apart from the input's own columns and from each other, which is
+	// also what keeps two stacked MATCH_RECOGNIZE clauses from naming the same thing.
+	GeneratedNames names(std::move(input_names));
+	const string state_column = names.Reserve("__pattern_window");
+	const string spans_column = names.Reserve(state_column + "_spans");
+	const string match_number_column = names.Reserve(MATCH_RECOGNIZE_MATCH_NUMBER_COLUMN);
+	HoistedInputRefs input_refs(names);
 
 	// a condition may name any pattern variable, so the whole namespace has to be known before the
 	// first expression is touched - a variable the PATTERN only mentions is one too
@@ -834,16 +855,10 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	    *ref.config->pattern, [&](const ColumnRefExpression &colref) {
 		    declared_symbols.insert(colref.GetColumnName().GetIdentifierName());
 	    });
-
-	// A pattern variable and a table of the input can be spelled the same way, and the variable is
-	// what the clause means by it, so the input's tables are only the names left over.
-	case_insensitive_set_t input_tables;
-	CollectInputTableNames(*ref.input, input_tables);
-	for (auto &symbol : declared_symbols) {
-		input_tables.erase(symbol);
-	}
+	// a SUBSET name stands for pattern variables too, so it is the clause's namespace as well
+	case_insensitive_set_t qualifying_symbols = declared_symbols;
 	for (auto &subset : ref.config->subsets) {
-		input_tables.erase(subset.name);
+		qualifying_symbols.insert(subset.name);
 	}
 
 	// ONE ROW PER MATCH reports what the match was partitioned by, under the name the partitioning
@@ -854,22 +869,36 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		partition_names.push_back(expr->GetName());
 	}
 
-	// every clause is evaluated above a subquery of the input, so a reference into one of its tables
-	// is computed there and read back by name
+	// Every clause here is evaluated above a subquery of the input, so a reference that means
+	// anything to the input rather than to this clause is computed against the input itself and read
+	// back by name.
 	for (auto &expr : ref.config->partition_expressions) {
-		HoistInputQualifiers(expr, input_tables, input_refs);
+		HoistInputReferences(expr, qualifying_symbols, input_refs);
 	}
 	for (auto &order : ref.config->order_by_expressions) {
-		HoistInputQualifiers(order.expression, input_tables, input_refs);
+		HoistInputReferences(order.expression, qualifying_symbols, input_refs);
 	}
 	for (auto &expr : ref.config->defines_expression_list) {
-		HoistInputQualifiers(expr, input_tables, input_refs);
+		HoistInputReferences(expr, qualifying_symbols, input_refs);
 	}
 	for (auto &expr : ref.config->measures_expression_list) {
-		HoistInputQualifiers(expr, input_tables, input_refs);
+		HoistInputReferences(expr, qualifying_symbols, input_refs);
 	}
 
-	auto select_node = MakeSelectNode(std::move(ref.input));
+	// The hoisted references sit in a projection of their own, directly over the input. Everything
+	// above reads them by name, including the navigation windows a DEFINE turns into, which could not
+	// order by a column computed beside them.
+	unique_ptr<TableRef> input_table = std::move(input_ref);
+	if (!input_refs.select_list.empty()) {
+		auto refs_node = MakeSelectNode(std::move(input_table));
+		refs_node->select_list.push_back(make_uniq<StarExpression>());
+		for (auto &expr : input_refs.select_list) {
+			refs_node->select_list.push_back(std::move(expr));
+		}
+		input_table = make_uniq<SubqueryRef>(MakeSelectStatement(std::move(refs_node)));
+	}
+
+	auto select_node = MakeSelectNode(std::move(input_table));
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 
 	// Pattern Matching Window: placeholder window expression
@@ -934,18 +963,12 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	case_insensitive_set_t pattern_symbols;
 	vector<string> define_symbols;
 	vector<unique_ptr<ParsedExpression>> define_conditions;
-	idx_t nav_counter = 0;
 
 	// MATCH_NUMBER() reads this column; the matcher rewrites it per match
 	auto match_number_value = make_uniq<ConstantExpression>(Value::UBIGINT(0));
 	match_number_value->SetAlias(Identifier(match_number_column));
 	define_select_node->select_list.push_back(std::move(match_number_value));
 	hidden_columns.emplace_back(match_number_column);
-
-	// the references hoisted out of the clauses are computed here, where the input still is one
-	for (auto &expr : input_refs.select_list) {
-		define_select_node->select_list.push_back(std::move(expr));
-	}
 
 	vector<MatchRecognizeNavigation> navigations;
 
@@ -962,10 +985,10 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		// become one before the navigation is pulled out
 		NavigateOtherSymbols(expr, define_name, declared_symbols);
 		// logical navigation is resolved by the matcher, so it leaves before qualifiers are checked
-		ExtractNavigation(expr, *define_select_node, declared_symbols, navigation_prefix, navigations);
+		ExtractNavigation(expr, *define_select_node, declared_symbols, names, navigations);
 		ZapDefineQualifier(*expr, define_name, declared_symbols);
 		ReplaceFunctions(expr, window_template->Cast<WindowExpression>(), define_name);
-		HoistWindows(expr, *define_select_node, window_prefix, nav_counter);
+		HoistWindows(expr, *define_select_node, names, hidden_columns);
 		ReplaceMatchNumber(expr, match_number_column);
 
 		pattern_symbols.insert(define_name);
@@ -1104,11 +1127,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	for (auto &expr : ref.config->measures_expression_list) {
 		HoistMeasureNavigation(expr, window_template->Cast<WindowExpression>(), measure_symbols, *define_select_node,
-		                       window_prefix, nav_counter);
-	}
-
-	for (idx_t nav_idx = 0; nav_idx < nav_counter; nav_idx++) {
-		hidden_columns.push_back(window_prefix + to_string(nav_idx));
+		                       names, hidden_columns);
 	}
 
 	auto define_select = MakeSelectStatement(std::move(define_select_node));
@@ -1153,7 +1172,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	for (auto &expr : ref.config->measures_expression_list) {
 		D_ASSERT(!expr->GetAlias().empty());
 		measure_aliases.push_back(expr->GetAlias());
-		measure_columns.push_back(measure_prefix + to_string(measure_columns.size()));
+		measure_columns.push_back(names.Reserve("__mr_measure_" + to_string(measure_columns.size())));
 		// rewriting can replace the expression wholesale, which would drop the alias with it
 		RewriteMeasure(*this, state_column, expr, *ref.config, measure_symbols, all_rows, !all_rows);
 		expr->SetAlias(Identifier(measure_columns.back()));
@@ -1225,8 +1244,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	auto child_binder = Binder::CreateBinder(context, this);
 	auto result = child_binder->Bind(*select_node);
 	const auto alias = !ref.alias.empty() ? ref.alias : Identifier("__match_recognize_table");
-	auto names = BindContext::AliasColumnNames(alias, result.names, ref.column_name_alias);
-	bind_context.AddGenericBinding(result.plan->GetRootIndex(), alias, names, result.types);
+	auto output_names = BindContext::AliasColumnNames(alias, result.names, ref.column_name_alias);
+	bind_context.AddGenericBinding(result.plan->GetRootIndex(), alias, output_names, result.types);
 	return result;
 }
 

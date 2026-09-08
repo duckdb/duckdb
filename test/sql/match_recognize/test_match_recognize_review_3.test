@@ -171,3 +171,99 @@ SELECT count(*), sum(n), sum(hash(c)) FROM (
 
 statement ok
 pragma threads=1;
+
+# The input is bound before the clause generates any column of its own, so what it generates is named
+# apart from what the input already calls its columns - whatever those are.
+
+query I
+FROM (VALUES (10, 99), (20, 99)) t(x, __mr_measure_0) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES sum(x) AS s PATTERN (A+)
+)
+----
+30
+
+query I
+FROM (VALUES (10, 99), (20, 99)) t(x, __mr_win) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES PREV(x) AS p PATTERN (A)
+)
+----
+NULL
+10
+
+query I
+FROM (VALUES (10, 99), (20, 99)) t(x, __mr_nav) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS FIRST(x) = 10
+)
+----
+2
+
+query I
+FROM (VALUES (1, 2), (3, 4)) t(a, __pattern_window) MATCH_RECOGNIZE (
+    ORDER BY a MEASURES sum(a) AS s PATTERN (A+)
+)
+----
+4
+
+# every one of them at once, and the input's own columns still reach the output
+query IIIIIII
+FROM (VALUES (1, 2, 3, 4, 5), (6, 7, 8, 9, 10))
+     t(__mr_win, __mr_nav, __mr_ref_0, __mr_measure_0, __pattern_window)
+MATCH_RECOGNIZE (
+    ORDER BY __mr_win MEASURES sum(__mr_measure_0) AS s, PREV(__mr_nav) AS p
+    ALL ROWS PER MATCH PATTERN (A+)
+)
+----
+1	2	3	4	5	4	NULL
+6	7	8	9	10	13	2
+
+# A reference is computed against the input rather than rewritten to a bare name, so a dot inside a
+# quoted identifier is not read as the boundary between two names.
+query II
+FROM (VALUES (10, {'y': 20})) t("x.y", x) MATCH_RECOGNIZE (
+    MEASURES t."x.y" AS a, t.x.y AS b PATTERN (A)
+)
+----
+10	20
+
+query II
+FROM (VALUES (10, {'y': 20})) t("x.y", x) MATCH_RECOGNIZE (
+    MEASURES "x.y" AS a, x.y AS b PATTERN (A)
+)
+----
+10	20
+
+# a table function without an alias, and a fully qualified table, are named the way the input names them
+query I
+FROM range(2) MATCH_RECOGNIZE (
+    ORDER BY range.range MEASURES count(*) AS n PATTERN (A+)
+)
+----
+2
+
+statement ok
+CREATE TABLE ticks(x INT);
+
+statement ok
+INSERT INTO ticks VALUES (1), (2);
+
+query I
+FROM ticks MATCH_RECOGNIZE (
+    ORDER BY main.ticks.x MEASURES count(*) AS n PATTERN (A+)
+)
+----
+2
+
+# a reference the input finds ambiguous says so rather than quietly taking the first of them
+statement error
+FROM ticks t1 JOIN ticks t2 ON t1.x = t2.x MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+)
+)
+----
+Ambiguous reference to column name "x"
+
+statement error
+FROM ticks MATCH_RECOGNIZE (
+    ORDER BY nope MEASURES count(*) AS n PATTERN (A+)
+)
+----
+Referenced column "nope" not found
