@@ -181,6 +181,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
 	    "__delta_only_variant_encoding_enabled",
 	    "access_mode",
+	    "active_grammar_extensions",
 	    "allowed_configs",
 	    "allowed_directories",
 	    "allowed_paths",
@@ -201,7 +202,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "force_variant_shredding",
-	    "streaming_buffer_size",
+	    "max_streaming_buffer_size",
+	    "streaming_buffer_size", // alias of max_streaming_buffer_size
 	    "log_query_path",
 	    "password",
 	    "username",
@@ -227,7 +229,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "debug_verification_mode",
 	    "standard_vector_size",
 	    "warnings_as_errors", // requires logging to be enabled
-	    "debug_heap_based_parser",
+	    "heap_based_parser",
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }

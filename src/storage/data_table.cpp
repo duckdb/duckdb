@@ -211,7 +211,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	try {
 		// read at the commits seen so far, not at this transaction's older snapshot
 		auto &transaction_manager = DuckTransactionManager::Get(db);
-		TransactionData rewrite_visibility(transaction.transaction_id, transaction_manager.GetLastCommit() + 1);
+		TransactionData rewrite_visibility(transaction.GetTransactionId(),
+		                                   VisibilityBound::Through(transaction_manager.GetLastCommit()));
 		row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr,
 		                                          rewrite_visibility);
 
@@ -418,8 +419,8 @@ void DataTableInfo::VerifyIndexBuffers() const {
 	indexes.VerifyBuffers();
 }
 
-void DataTable::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
-	row_groups->CleanupAppend(lowest_transaction, start, count);
+void DataTable::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count) {
+	row_groups->CleanupAppend(lowest_visibility_bound, start, count);
 }
 
 bool DataTable::IndexNameIsUnique(const string &name) {
@@ -538,7 +539,7 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 
 void DataTable::FetchCommitted(DataChunk &result, const vector<StorageIndex> &column_ids, const Vector &row_identifiers,
                                idx_t fetch_count, ColumnFetchState &state) {
-	TransactionData commit_transaction(MAX_TRANSACTION_ID, TRANSACTION_ID_START - 1);
+	TransactionData commit_transaction(MAX_TRANSACTION_ID, VisibilityBound::Before(MAX_COMMIT_ID));
 	row_groups->Fetch(commit_transaction, result, column_ids, row_identifiers, fetch_count, state);
 }
 
@@ -687,19 +688,20 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	// Global constraint verification.
 	auto &data_table = table_entry.GetStorage();
-	data_table.info->indexes.VerifyForeignKey(storage ? &storage->delete_indexes : nullptr, dst_keys_ptr, dst_chunk,
-	                                          global_conflict_manager);
+	auto &local_storage = LocalStorage::Get(context, db);
+	auto sibling_storage = local_storage.GetStorage(data_table);
+	auto sibling_delete_indexes = sibling_storage ? &sibling_storage->delete_indexes : nullptr;
+
+	data_table.info->indexes.VerifyForeignKey(sibling_delete_indexes, dst_keys_ptr, dst_chunk, global_conflict_manager);
 
 	// Check if we can insert the chunk into the local storage.
-	auto &local_storage = LocalStorage::Get(context, db);
 	bool local_error = false;
-	auto local_verification = local_storage.Find(data_table);
+	auto local_verification = sibling_storage != nullptr;
 
 	// Local constraint verification.
 	if (local_verification) {
 		auto &local_indexes = local_storage.GetIndexes(context, data_table);
-		local_indexes.VerifyForeignKey(storage ? &storage->delete_indexes : nullptr, dst_keys_ptr, dst_chunk,
-		                               local_conflict_manager);
+		local_indexes.VerifyForeignKey(sibling_delete_indexes, dst_keys_ptr, dst_chunk, local_conflict_manager);
 		local_error = IsForeignKeyConstraintError(local_conflict_manager, is_append, count);
 	}
 	// Global constraint verification.
@@ -1061,13 +1063,13 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 	}
 }
 
-bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id) {
-	if (checkpoint_id == MAX_TRANSACTION_ID) {
+bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, optional_idx checkpoint_id) {
+	if (!checkpoint_id.IsValid()) {
 		// no active checkpoint
 		return false;
 	}
 	auto current_segment_count = collection.GetSegmentCount();
-	if (last_seen_checkpoint.IsValid() && last_seen_checkpoint.GetIndex() == checkpoint_id) {
+	if (last_seen_checkpoint.IsValid() && last_seen_checkpoint.GetIndex() == checkpoint_id.GetIndex()) {
 		// we have already seen this checkpoint
 		// however, we might still need to append a new row group if a previous append was reverted
 		return current_segment_count <= checkpoint_row_group_count.GetIndex();
@@ -1080,7 +1082,8 @@ bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, tr
 }
 
 optional_idx DataTableInfo::CheckpointRowGroupCount(const CheckpointOptions &options) const {
-	if (!last_seen_checkpoint.IsValid() || last_seen_checkpoint.GetIndex() != options.transaction_id) {
+	if (!last_seen_checkpoint.IsValid() || !options.checkpoint_id.IsValid() ||
+	    last_seen_checkpoint.GetIndex() != options.checkpoint_id.GetIndex()) {
 		return optional_idx();
 	}
 	return checkpoint_row_group_count;

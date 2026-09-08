@@ -95,6 +95,8 @@ struct ConfigurationOption {
 	const char *default_value;
 	set_callback_t set_callback;
 	optional_idx setting_idx;
+	bool is_debug = false;
+	bool is_deprecated = false;
 };
 
 struct ConfigurationAlias {

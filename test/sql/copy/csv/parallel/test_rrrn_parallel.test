@@ -1,0 +1,96 @@
+# name: test/sql/copy/csv/parallel/test_rrrn_parallel.test
+# description: Test parallel CSV reader handles \r\r\n line endings without duplicate rows (issue #25164)
+# group: [parallel]
+
+require notwindows
+
+# Generate a CSV file with \r\r\n line endings whose layout forces a buffer
+# boundary to split a row terminator between the two \r characters:
+#   - header line: 23 'p' chars + "\r\r\n" terminator  -> 26 bytes
+#   - 60 data rows of fixed width 25 bytes ("NN,x<19 x's>\r\r\n", NN zero-padded)
+#     -> rows occupy bytes [26, 1526)
+# Row i's terminator starts at 26 + 25*i + 22, so its first \r is the last byte
+# of the 1024-byte buffer for row 39 (offset 1023). The buffer boundary at
+# offset 1024 therefore splits row 39's "\r\r\n" as "\r" | "\r\n".
+# Without the fix the parallel reader then falls through and double-counts
+# row 40 (61 rows total, id=40 seen twice); with the fix both parallel and
+# sequential reads return exactly 60 rows.
+
+statement ok
+COPY (
+    SELECT (repeat('p', 23) || chr(13) || chr(13) || chr(10) ||
+        string_agg(lpad(CAST(t.id AS VARCHAR), 2, '0') || ',' ||
+                   repeat('x', 19) || chr(13) || chr(13) || chr(10), '')
+    )::BLOB
+    FROM generate_series(0, 59) t(id)
+) TO '{TEST_DIR}/rrrn_test.csv' (FORMAT BLOB);
+
+# Force parallelism
+statement ok
+PRAGMA verify_parallelism
+
+# Parallel row count must match sequential: the straddling terminator must not
+# produce a duplicate row 40
+query II
+SELECT
+    (SELECT COUNT(*) FROM read_csv('{TEST_DIR}/rrrn_test.csv',
+        auto_detect=false, header=true, delim=',',
+        columns={'id':'BIGINT','val':'VARCHAR'},
+        strict_mode=false, ignore_errors=true,
+        buffer_size=1024, parallel=true)) AS parallel_count,
+    (SELECT COUNT(*) FROM read_csv('{TEST_DIR}/rrrn_test.csv',
+        auto_detect=false, header=true, delim=',',
+        columns={'id':'BIGINT','val':'VARCHAR'},
+        strict_mode=false, ignore_errors=true,
+        buffer_size=1024, parallel=false)) AS sequential_count
+----
+60	60
+
+# The row before the boundary (39) and the row after it (40) must each appear
+# exactly once in parallel mode
+query II
+SELECT
+    (SELECT COUNT(*) FROM read_csv('{TEST_DIR}/rrrn_test.csv',
+        auto_detect=false, header=true, delim=',',
+        columns={'id':'BIGINT','val':'VARCHAR'},
+        strict_mode=false, ignore_errors=true,
+        buffer_size=1024, parallel=true)
+     WHERE id = 40) AS id40_count,
+    (SELECT COUNT(*) FROM read_csv('{TEST_DIR}/rrrn_test.csv',
+        auto_detect=false, header=true, delim=',',
+        columns={'id':'BIGINT','val':'VARCHAR'},
+        strict_mode=false, ignore_errors=true,
+        buffer_size=1024, parallel=true)
+     WHERE id = 39) AS id39_count
+----
+1	1
+
+# No duplicate rows exist in parallel mode
+query I
+SELECT COUNT(*) FROM (
+    SELECT id, COUNT(*) AS cnt
+    FROM read_csv('{TEST_DIR}/rrrn_test.csv',
+        auto_detect=false, header=true, delim=',',
+        columns={'id':'BIGINT','val':'VARCHAR'},
+        strict_mode=false, ignore_errors=true,
+        buffer_size=1024, parallel=true)
+    GROUP BY id
+    HAVING cnt > 1
+)
+----
+0
+
+# Test with midbuffer line ending
+statement ok
+COPY (
+    SELECT (repeat('p', 22) || chr(13) || chr(13) || chr(10) ||
+        string_agg(lpad(CAST(t.id AS VARCHAR), 2, '0') || ',' || repeat('x', 19) || chr(13) || chr(13) || chr(10), ''))::BLOB
+    FROM generate_series(0, 89) t(id)
+) TO '{TEST_DIR}/rrrn_mid.csv' (FORMAT BLOB);
+
+query II
+SELECT count(*), count(DISTINCT id) FROM read_csv('{TEST_DIR}/rrrn_mid.csv',
+    auto_detect=false, header=true, delim=',', columns={'id':'BIGINT','val':'VARCHAR'},
+    strict_mode=false, ignore_errors=true, buffer_size=4096, max_line_size=2048, parallel=true)
+----
+90	90

@@ -71,20 +71,20 @@ public:
 public:
 	DUCKDB_API unique_ptr<CreateInfo> GetInfo() const override;
 
-	DUCKDB_API bool HasGeneratedColumns() const;
+	DUCKDB_API virtual bool HasGeneratedColumns() const;
 
 	//! Returns whether or not a column with the given name exists
-	DUCKDB_API bool ColumnExists(const Identifier &name) const;
+	DUCKDB_API virtual bool ColumnExists(const Identifier &name) const;
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	DUCKDB_API const ColumnDefinition &GetColumn(const Identifier &name) const;
+	DUCKDB_API virtual const ColumnDefinition &GetColumn(const Identifier &name) const;
 	//! Returns a reference to the column of the specified logical index. Throws an
 	//! exception if the column does not exist.
-	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex idx) const;
+	DUCKDB_API virtual const ColumnDefinition &GetColumn(LogicalIndex idx) const;
 	//! Returns a list of types of the table, excluding generated columns
-	DUCKDB_API vector<LogicalType> GetTypes() const;
+	DUCKDB_API virtual vector<LogicalType> GetTypes() const;
 	//! Returns a list of the columns of the table
-	DUCKDB_API const ColumnList &GetColumns() const;
+	DUCKDB_API virtual const ColumnList &GetColumns() const = 0;
 	//! Returns the underlying storage of the table
 	virtual DataTable &GetStorage();
 
@@ -101,7 +101,7 @@ public:
 	//! If the column does not exist:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
-	DUCKDB_API LogicalIndex GetColumnIndex(Identifier &name, bool if_exists = false) const;
+	DUCKDB_API virtual LogicalIndex GetColumnIndex(Identifier &name, bool if_exists = false) const;
 	DUCKDB_API StorageIndex GetStorageIndex(const ColumnIndex &column_index) const;
 
 	//! Returns the scan function that can be used to scan the given table
@@ -165,8 +165,6 @@ public:
 	                                                                 TriggerForEach for_each) const;
 
 protected:
-	//! A list of columns that are part of this table
-	ColumnList columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
 };
