@@ -86,7 +86,28 @@ SELECT debug_fs_max_concurrent_reads() > 1
 true
 
 statement ok
+SELECT debug_fs_reset_read_stats()
+
+# With no latency to inject the file system serves each read before returning, so the scan takes delivery
+# on the spot instead of parking. The asynchronous path is still the one taken.
+statement ok
 SET GLOBAL debug_fs_delay_mean_ms=0
+
+query I
+SELECT sum(c0) + sum(c2) + sum(c4) FROM '{TEST_DIR}/parquet_async_read.parquet'
+----
+44999550000
+
+query I
+SELECT debug_fs_async_read_count() > 0
+----
+true
+
+# Nothing is ever in flight, so no two reads can overlap.
+query I
+SELECT debug_fs_max_concurrent_reads()
+----
+1
 
 statement ok
 SET GLOBAL debug_fs_async_reads=false

@@ -31,6 +31,11 @@ COPY (
 statement ok
 SET GLOBAL debug_fs_async_reads=true
 
+# a latency to serve keeps the reads on the deferred path, which is the one that has to account for
+# its bytes without a synchronous Read to do it
+statement ok
+SET GLOBAL debug_fs_delay_mean_ms=1
+
 statement ok
 PRAGMA enable_profiling = 'json'
 
@@ -48,6 +53,9 @@ PRAGMA disable_profiling
 
 statement ok
 SET GLOBAL debug_fs_async_reads=false
+
+statement ok
+SET GLOBAL debug_fs_delay_mean_ms=0
 
 # the column data dwarfs the metadata, so untracked read heads leave only a few tens of KB behind
 query I

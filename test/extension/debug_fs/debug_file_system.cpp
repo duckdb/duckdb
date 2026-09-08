@@ -43,6 +43,13 @@ struct PendingDebugRead {
 	double due_ms;
 };
 
+//! Perform a requested read, straight to the inner handle: whatever delay it owes has been served already
+static void PerformRequestedRead(const FileReadRequest &request) {
+	auto &inner = *request.handle->Cast<DebugFileHandle>().inner;
+	auto &destination = *request.destination;
+	inner.file_system.Read(inner, destination.Data(), NumericCast<int64_t>(destination.Size()), request.location);
+}
+
 //! Completes asynchronously started reads on a dedicated thread, standing in for a platform whose I/O genuinely
 //! completes out-of-band (e.g. a browser handing a fetch response back to the event loop).
 class DebugAsyncReadQueue {
@@ -96,11 +103,7 @@ private:
 				ThreadUtil::SleepMs(LossyNumericCast<idx_t>(remaining_ms));
 			}
 			try {
-				// straight to the inner handle, the delay this read owes was already served above
-				auto &inner = *read.request->handle->Cast<DebugFileHandle>().inner;
-				auto &destination = *read.request->destination;
-				inner.file_system.Read(inner, destination.Data(), NumericCast<int64_t>(destination.Size()),
-				                       read.request->location);
+				PerformRequestedRead(*read.request);
 			} catch (std::exception &ex) {
 				ErrorData error(ex);
 				read.callback(&error);
@@ -250,15 +253,21 @@ FileReadSubmission DebugFileSystem::TryStartRead(shared_ptr<const FileReadReques
 	if (!async_reads) {
 		return FileReadSubmission::UNSUPPORTED;
 	}
+	auto delay_ms = SampleDelayMs();
+	ReadStarted();
+	async_read_count++;
+	if (delay_ms <= 0) {
+		// no latency to serve means nothing to wait for, so the bytes are there before we return
+		PerformRequestedRead(*request);
+		ReadFinished();
+		return FileReadSubmission::COMPLETED;
+	}
 	if (!async_queue) {
 		const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
 		if (!async_queue) {
 			async_queue = make_uniq<DebugAsyncReadQueue>();
 		}
 	}
-	auto delay_ms = SampleDelayMs();
-	ReadStarted();
-	async_read_count++;
 	// the injected latency is served by the completion thread, so the caller is free while it elapses
 	async_queue->Push(PendingDebugRead {std::move(request),
 	                                    [this, callback](optional_ptr<ErrorData> error) {
