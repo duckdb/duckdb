@@ -23,15 +23,16 @@ CHECKPOINT
 
 restart
 
+# the number of segments depends on the block size - all that matters is that the column is dictionary compressed
 query I
-SELECT count(*) FROM pragma_storage_info('dict_strings') WHERE column_name = 's' AND compression = 'DICT_FSST'
+SELECT count(*) > 0 FROM pragma_storage_info('dict_strings') WHERE column_name = 's' AND compression = 'DICT_FSST'
 ----
-1
+true
 
 query I
-SELECT count(*) FROM pragma_storage_info('rle_values') WHERE column_name = 'val' AND compression = 'RLE'
+SELECT count(*) > 0 FROM pragma_storage_info('rle_values') WHERE column_name = 'val' AND compression = 'RLE'
 ----
-1
+true
 
 query I
 SELECT count(*) FROM dict_strings WHERE id <> 0 AND s::INT = 10

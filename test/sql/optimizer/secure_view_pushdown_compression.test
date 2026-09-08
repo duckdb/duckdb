@@ -16,10 +16,11 @@ CHECKPOINT
 
 restart
 
+# the number of segments depends on the block size - all that matters is that the column is dictionary compressed
 query I
-SELECT count(*) FROM pragma_storage_info('dict_secrets') WHERE column_name = 's' AND compression = 'DICT_FSST'
+SELECT count(*) > 0 FROM pragma_storage_info('dict_secrets') WHERE column_name = 's' AND compression = 'DICT_FSST'
 ----
-1
+true
 
 statement ok
 CREATE SECURE VIEW dict_secure_view AS SELECT * FROM dict_secrets WHERE id <> 0
@@ -47,9 +48,9 @@ CHECKPOINT
 restart
 
 query I
-SELECT count(*) FROM pragma_storage_info('rle_secrets') WHERE column_name = 'val' AND compression = 'RLE'
+SELECT count(*) > 0 FROM pragma_storage_info('rle_secrets') WHERE column_name = 'val' AND compression = 'RLE'
 ----
-1
+true
 
 statement ok
 CREATE SECURE VIEW rle_secure_view AS SELECT * FROM rle_secrets WHERE grp <> 0

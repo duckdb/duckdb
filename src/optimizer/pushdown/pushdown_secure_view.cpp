@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
