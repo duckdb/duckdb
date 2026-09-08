@@ -1,7 +1,7 @@
 #include "duckdb/logging/log_type.hpp"
 
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/http_util.hpp"
+#include "duckdb/main/http/http_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/main/attached_database.hpp"
