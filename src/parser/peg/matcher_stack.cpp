@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-MatchStack::MatchStack() : arena(Allocator::DefaultAllocator()) {
+MatchStack::MatchStack() {
 	frames.reserve(INITIAL_FRAME_CAPACITY);
 }
 
@@ -89,7 +89,7 @@ void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 			return;
 		}
 	}
-	frame.process = matcher.StartMatch(state, arena);
+	frame.process = matcher.StartMatch(state);
 }
 
 bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
@@ -127,7 +127,6 @@ MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
 
 MatcherResult MatchStack::Execute(MatchInput input) {
 	D_ASSERT(frames.empty());
-	arena.Reset();
 	if (input.matcher.IsAtomic()) {
 		return ExecuteAtomicMatcher(input);
 	}

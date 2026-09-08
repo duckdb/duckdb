@@ -1,5 +1,4 @@
 #include "duckdb/parser/peg/matcher.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/parser/peg/matcher/choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher/optional_matcher.hpp"
@@ -43,8 +42,8 @@ private:
 	bool completed = false;
 };
 
-arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state, ArenaAllocator &allocator) const {
-	return arena_ptr<MatchProcess>(allocator.Make<AtomicMatchProcess>(*this, state));
+arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
+	return state.Make<AtomicMatchProcess>(*this, state);
 }
 
 class ListMatchProcess : public MatchProcess {
@@ -116,8 +115,8 @@ private:
 	bool awaiting_child = false;
 };
 
-arena_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state, ArenaAllocator &allocator) const {
-	return arena_ptr<MatchProcess>(allocator.Make<ListMatchProcess>(*this, state));
+arena_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state) const {
+	return state.Make<ListMatchProcess>(*this, state);
 }
 
 class ChoiceMatchProcess : public MatchProcess {
@@ -161,8 +160,8 @@ private:
 	bool awaiting_child = false;
 };
 
-arena_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state, ArenaAllocator &allocator) const {
-	return arena_ptr<MatchProcess>(allocator.Make<ChoiceMatchProcess>(*this, state));
+arena_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state) const {
+	return state.Make<ChoiceMatchProcess>(*this, state);
 }
 
 class OptionalMatchProcess : public MatchProcess {
@@ -200,8 +199,8 @@ private:
 	bool awaiting_child = false;
 };
 
-arena_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state, ArenaAllocator &allocator) const {
-	return arena_ptr<MatchProcess>(allocator.Make<OptionalMatchProcess>(*this, state));
+arena_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state) const {
+	return state.Make<OptionalMatchProcess>(*this, state);
 }
 
 class RepeatMatchProcess : public MatchProcess {
@@ -253,8 +252,8 @@ private:
 	bool awaiting_child = false;
 };
 
-arena_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state, ArenaAllocator &allocator) const {
-	return arena_ptr<MatchProcess>(allocator.Make<RepeatMatchProcess>(*this, state));
+arena_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state) const {
+	return state.Make<RepeatMatchProcess>(*this, state);
 }
 
 } // namespace duckdb

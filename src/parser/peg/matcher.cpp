@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-static MatcherResult ExecuteRecursive(MatchInput input, ArenaAllocator &allocator) {
+static MatcherResult ExecuteRecursive(MatchInput input) {
 	auto &matcher = input.matcher;
 	auto &state = input.state;
 	state.rule = matcher.GetRule();
@@ -30,7 +30,7 @@ static MatcherResult ExecuteRecursive(MatchInput input, ArenaAllocator &allocato
 		}
 	}
 
-	auto process = matcher.StartMatch(state, allocator);
+	auto process = matcher.StartMatch(state);
 	optional<MatcherResult> child_result;
 	while (true) {
 		auto step = process->Resume(child_result);
@@ -41,7 +41,7 @@ static MatcherResult ExecuteRecursive(MatchInput input, ArenaAllocator &allocato
 			packrat_state.StoreResult(matcher, state, result);
 			return result;
 		}
-		child_result = ExecuteRecursive(*child, allocator);
+		child_result = ExecuteRecursive(*child);
 	}
 }
 
@@ -51,8 +51,7 @@ MatcherResult Matcher::MatchParseResult(MatchState &state) const {
 		MatchStack stack;
 		return stack.Execute(input);
 	}
-	ArenaAllocator arena(Allocator::DefaultAllocator());
-	return ExecuteRecursive(input, arena);
+	return ExecuteRecursive(input);
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {

@@ -21,6 +21,7 @@
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -28,7 +29,7 @@ class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
-class ArenaAllocator;
+class MatchProcess;
 
 enum class SuggestionState : uint8_t {
 	SUGGEST_KEYWORD,
@@ -146,17 +147,19 @@ struct MatcherSuggestion {
 };
 
 struct MatchContext {
-	MatchContext(vector<MatcherSuggestion> &suggestions_p, ParseResultAllocator &allocator_p, idx_t &max_token_index_p,
+	MatchContext(vector<MatcherSuggestion> &suggestions_p, ParseResultAllocator &allocator_p,
+	             ArenaAllocator &process_allocator_p, idx_t &max_token_index_p,
 	             MatchMode mode_p = MatchMode::BUILD_PARSE_RESULT,
 	             IdentifierCaseMode identifier_case_mode_p = IdentifierCaseMode::PRESERVE_CASE,
 	             bool use_heap_based_parser_p = false, ParserPackratCache *packrat_cache_p = nullptr)
-	    : suggestions(suggestions_p), allocator(allocator_p), max_token_index(max_token_index_p),
-	      identifier_case_mode(identifier_case_mode_p), packrat_cache(packrat_cache_p), mode(mode_p),
-	      use_heap_based_parser(use_heap_based_parser_p) {
+	    : suggestions(suggestions_p), allocator(allocator_p), process_allocator(process_allocator_p),
+	      max_token_index(max_token_index_p), identifier_case_mode(identifier_case_mode_p),
+	      packrat_cache(packrat_cache_p), mode(mode_p), use_heap_based_parser(use_heap_based_parser_p) {
 	}
 
 	vector<MatcherSuggestion> &suggestions;
 	ParseResultAllocator &allocator;
+	ArenaAllocator &process_allocator;
 	idx_t &max_token_index;
 	IdentifierCaseMode identifier_case_mode;
 	ParserPackratCache *packrat_cache;
@@ -183,6 +186,9 @@ struct MatchState {
 
 	template <class RESULT, class... ARGS>
 	MatcherResult AllocateParseResult(ARGS &&...args);
+
+	template <class PROCESS, class... ARGS>
+	arena_ptr<MatchProcess> Make(ARGS &&...args);
 
 	void UpdateMaxTokenIndex() {
 		if (token_iterator.Position() > context.max_token_index) {
@@ -267,8 +273,8 @@ public:
 
 	//! Match and construct the parse result
 	MatcherResult MatchParseResult(MatchState &state) const;
-	//! Create matcher-local state with allocator.Make<PROCESS>() for either execution driver.
-	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state, ArenaAllocator &allocator) const = 0;
+	//! Create matcher-local state with state.Make<PROCESS>() for either execution driver.
+	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
 	virtual bool IsAtomic() const {
 		return false;
 	}
@@ -338,7 +344,7 @@ public:
 	bool IsAtomic() const final {
 		return true;
 	}
-	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state, ArenaAllocator &allocator) const final;
+	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const final;
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
 };
 
@@ -370,6 +376,12 @@ public:
 private:
 	vector<unique_ptr<ParseResult>> parse_results;
 };
+
+template <class PROCESS, class... ARGS>
+arena_ptr<MatchProcess> MatchState::Make(ARGS &&...args) {
+	static_assert(std::is_base_of<MatchProcess, PROCESS>::value, "Expected a matcher process");
+	return arena_ptr<MatchProcess>(context.process_allocator.Make<PROCESS>(std::forward<ARGS>(args)...));
+}
 
 template <class RESULT, class... ARGS>
 MatcherResult MatchState::AllocateParseResult(ARGS &&...args) {

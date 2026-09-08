@@ -10,7 +10,6 @@
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 
@@ -62,7 +61,6 @@ private:
 	MatcherResult FinalizeFrame(MatchStackFrame &frame);
 
 private:
-	ArenaAllocator arena;
 	vector<MatchStackFrame> frames;
 };
 
