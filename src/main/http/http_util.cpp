@@ -179,7 +179,7 @@ bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &respo
 // NOLINTNEXTLINE: taken by value so an asynchronous override can move it into its scheduler
 HTTPRequestState HTTPClient::Send(BaseRequest &request, HTTPExecutionMode mode, HTTPResponseCallback on_complete) {
 	// no asynchronous transport, so the request is already done when it returns
-	on_complete(Request(request), nullptr);
+	on_complete(Request(request), ErrorData());
 	return HTTPRequestState::COMPLETED;
 }
 
@@ -206,23 +206,23 @@ private:
 		auto self = shared_from_this();
 		// the returned state is not needed: an attempt that finished inline has already called back
 		client->Send(request, HTTPExecutionMode::DEFERRABLE,
-		             [self](unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
-			             self->OnAttemptDone(std::move(response), error);
+		             [self](unique_ptr<HTTPResponse> response, ErrorData error) {
+			             self->OnAttemptDone(std::move(response), std::move(error));
 		             });
 	}
 
-	void OnAttemptDone(unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
+	void OnAttemptDone(unique_ptr<HTTPResponse> response, ErrorData error) {
 		HTTPAttempt attempt;
 		attempt.response = std::move(response);
-		if (error) {
-			attempt.exception_error = error->RawMessage();
+		if (error.HasError()) {
+			attempt.exception_error = error.RawMessage();
 		}
 		http_util.LogRequest(request, attempt.response.get());
 
 		uint64_t delay_ms = 0;
 		switch (retry_state.OnAttempt(request, attempt, delay_ms)) {
 		case HTTPRetryDecision::FINISHED:
-			Deliver(std::move(attempt.response), nullptr);
+			Deliver(std::move(attempt.response), ErrorData());
 			return;
 		case HTTPRetryDecision::FAILED:
 			DeliverFailure(attempt);
@@ -240,16 +240,15 @@ private:
 	//! A throw has nowhere to go from a completion, so Finalize's exception is delivered as an error
 	void DeliverFailure(HTTPAttempt &attempt) {
 		try {
-			Deliver(retry_state.Finalize(request, attempt), nullptr);
+			Deliver(retry_state.Finalize(request, attempt), ErrorData());
 		} catch (std::exception &ex) {
-			ErrorData error(ex);
-			Deliver(nullptr, &error);
+			Deliver(nullptr, ErrorData(ex));
 		}
 	}
 
-	void Deliver(unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
+	void Deliver(unique_ptr<HTTPResponse> response, ErrorData error) {
 		delivered = true;
-		on_complete(std::move(response), error);
+		on_complete(std::move(response), std::move(error));
 	}
 
 private:
@@ -268,7 +267,7 @@ HTTPRequestState HTTPUtil::Send(BaseRequest &request, unique_ptr<HTTPClient> &cl
                                 HTTPResponseCallback on_complete) {
 	if (mode == HTTPExecutionMode::BLOCKING) {
 		// the caller needs an answer now, so take the synchronous path an implementation may override
-		on_complete(SendRequest(request, client), nullptr);
+		on_complete(SendRequest(request, client), ErrorData());
 		return HTTPRequestState::COMPLETED;
 	}
 	if (!client) {

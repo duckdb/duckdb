@@ -316,7 +316,7 @@ enum class HTTPRequestState : uint8_t {
 
 //! Invoked exactly once when a request completes, unless the call that started it threw.
 //! For a GET with a content_handler the body has already been streamed, so [response] carries status and headers.
-using HTTPResponseCallback = std::function<void(unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error)>;
+using HTTPResponseCallback = std::function<void(unique_ptr<HTTPResponse> response, ErrorData error)>;
 
 class HTTPClient {
 public:

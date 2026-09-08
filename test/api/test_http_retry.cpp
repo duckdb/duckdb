@@ -227,7 +227,7 @@ public:
 		response->success = true;
 		auto callback = std::move(pending);
 		pending = nullptr;
-		callback(std::move(response), nullptr);
+		callback(std::move(response), ErrorData());
 	}
 
 private:
@@ -243,12 +243,12 @@ TEST_CASE("HTTP client without an async transport completes inline", "[api]") {
 	SynchronousClient client;
 
 	idx_t completions = 0;
-	auto state = client.Send(request, HTTPExecutionMode::DEFERRABLE,
-	                         [&](unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
-		                         completions++;
-		                         REQUIRE(response);
-		                         REQUIRE(!error);
-	                         });
+	auto state =
+	    client.Send(request, HTTPExecutionMode::DEFERRABLE, [&](unique_ptr<HTTPResponse> response, ErrorData error) {
+		    completions++;
+		    REQUIRE(response);
+		    REQUIRE(!error.HasError());
+	    });
 	// the default inherits the synchronous path, so even DEFERRABLE finishes before returning
 	REQUIRE(state == HTTPRequestState::COMPLETED);
 	REQUIRE(completions == 1);
@@ -261,10 +261,10 @@ TEST_CASE("HTTP client defers a request only when the caller allows it", "[api]"
 	DeferringClient client;
 
 	idx_t completions = 0;
-	auto on_complete = [&](unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
+	auto on_complete = [&](unique_ptr<HTTPResponse> response, ErrorData error) {
 		completions++;
 		REQUIRE(response);
-		REQUIRE(!error);
+		REQUIRE(!error.HasError());
 	};
 
 	// BLOCKING must never be handed a result that is not ready
@@ -314,7 +314,7 @@ public:
 		auto response = make_uniq<HTTPResponse>(status);
 		auto callback = std::move(pending);
 		pending = nullptr;
-		callback(std::move(response), nullptr);
+		callback(std::move(response), ErrorData());
 	}
 
 	idx_t attempts = 0;
@@ -364,7 +364,7 @@ TEST_CASE("HTTP core retries a request the transport deferred", "[api]") {
 	idx_t completions = 0;
 	bool succeeded = false;
 	auto state = http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
-	                            [&](unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
+	                            [&](unique_ptr<HTTPResponse> response, ErrorData error) {
 		                            completions++;
 		                            succeeded = response && response->success;
 	                            });
@@ -406,7 +406,7 @@ TEST_CASE("HTTP core gives up on a deferred request after its retries", "[api]")
 	idx_t completions = 0;
 	bool failed = false;
 	http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
-	               [&](unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
+	               [&](unique_ptr<HTTPResponse> response, ErrorData error) {
 		               completions++;
 		               failed = response && !response->success;
 	               });
@@ -441,7 +441,7 @@ TEST_CASE("HTTP core grants a throttled deferred request extra retries", "[api]"
 
 	idx_t completions = 0;
 	http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
-	               [&](unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) { completions++; });
+	               [&](unique_ptr<HTTPResponse> response, ErrorData error) { completions++; });
 
 	// drive it until core stops asking for retries
 	for (idx_t i = 0; i < 20 && completions == 0; i++) {
