@@ -1,6 +1,9 @@
 #include "catch.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "test_helpers.hpp"
+
+#include <thread>
 
 using namespace duckdb;
 
@@ -481,4 +484,65 @@ TEST_CASE("HTTP retry policy still retries an idempotent request of the same sha
 	// the same status on a HEAD, which is idempotent, is retried
 	auto attempt = ResponseAttempt(HTTPStatusCode::InternalServerError_500);
 	REQUIRE(state.OnAttempt(fixture.request, attempt, delay_ms) == HTTPRetryDecision::RETRY);
+}
+
+namespace {
+
+//! A client whose transport completes on another thread, which is what makes the state a request
+//! reports on the way out racy: the completion can land while Send is still unwinding
+class ThreadedClient : public StubClient {
+public:
+	HTTPRequestState Send(BaseRequest &request, HTTPExecutionMode mode, HTTPResponseCallback on_complete) override {
+		if (mode == HTTPExecutionMode::BLOCKING) {
+			return HTTPClient::Send(request, mode, std::move(on_complete));
+		}
+		worker = std::thread([callback = std::move(on_complete)]() {
+			auto response = make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
+			response->success = true;
+			callback(std::move(response), ErrorData());
+		});
+		return HTTPRequestState::PENDING;
+	}
+
+	void Join() {
+		if (worker.joinable()) {
+			worker.join();
+		}
+	}
+
+private:
+	std::thread worker;
+};
+
+class ThreadedUtil : public HTTPUtil {
+public:
+	unique_ptr<HTTPClient> InitializeClient(HTTPParams &, const string &) override {
+		auto result = make_uniq<ThreadedClient>();
+		last_client = result.get();
+		return std::move(result);
+	}
+
+	optional_ptr<ThreadedClient> last_client;
+};
+
+} // namespace
+
+TEST_CASE("HTTP request completing on another thread is delivered exactly once", "[api]") {
+	// repeated so the completion lands at varying points of Send's unwind
+	for (idx_t run = 0; run < 200; run++) {
+		ThreadedUtil http_util;
+		HTTPParams params(http_util);
+		HTTPHeaders headers;
+		GetRequestInfo request("http://example.com/file", headers, params, nullptr, nullptr);
+		unique_ptr<HTTPClient> client;
+
+		atomic<idx_t> completions {0};
+		auto state = http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
+		                            [&](unique_ptr<HTTPResponse> response, ErrorData error) { completions++; });
+		http_util.last_client->Join();
+
+		// whichever side won the race, the completion runs once and the state is one of the two answers
+		REQUIRE(completions == 1);
+		REQUIRE((state == HTTPRequestState::PENDING || state == HTTPRequestState::COMPLETED));
+	}
 }

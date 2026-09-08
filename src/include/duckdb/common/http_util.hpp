@@ -447,6 +447,8 @@ public:
 	//! BLOCKING goes through SendRequest, so an implementation overriding that one keeps its behaviour.
 	//! DEFERRABLE retries here, driving HTTPClient::Send one attempt at a time, so a client that defers
 	//! keeps the retry policy. [request] and [client] must stay alive until the completion fires.
+	//! The completion may fire on another thread, so a caller that suspends on PENDING must arbitrate
+	//! between suspending and being resumed itself - see AsyncExecutionTask for the pattern.
 	DUCKDB_API virtual HTTPRequestState Send(BaseRequest &request, unique_ptr<HTTPClient> &client,
 	                                         HTTPExecutionMode mode, HTTPResponseCallback on_complete);
 

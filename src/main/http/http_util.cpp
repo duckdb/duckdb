@@ -1,5 +1,6 @@
 #include "duckdb/common/http_util.hpp"
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/hash_functions.hpp"
@@ -198,6 +199,7 @@ public:
 	//! Issue the request, reporting whether everything resolved before returning
 	HTTPRequestState Start() {
 		Attempt();
+		// the completion may have landed on another thread while we were unwinding
 		return delivered ? HTTPRequestState::COMPLETED : HTTPRequestState::PENDING;
 	}
 
@@ -257,8 +259,8 @@ private:
 	unique_ptr<HTTPClient> &client;
 	HTTPResponseCallback on_complete;
 	HTTPRetryState retry_state;
-	//! Whether the completion has been invoked, read only on the synchronous unwind out of Start
-	bool delivered = false;
+	//! Whether the completion has been invoked - written by whichever thread completes the request
+	atomic<bool> delivered {false};
 };
 
 } // namespace
