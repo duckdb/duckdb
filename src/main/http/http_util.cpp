@@ -35,6 +35,14 @@ namespace duckdb {
 HTTPParams::~HTTPParams() {
 }
 
+idx_t HTTPParams::GetTransportReuseDomain() const {
+	return transport_reuse_domain;
+}
+
+void HTTPParams::SetTransportReuseDomain(idx_t transport_reuse_domain_p) {
+	transport_reuse_domain = transport_reuse_domain_p;
+}
+
 HTTPHeaders::HTTPHeaders(DatabaseInstance &db) {
 	headers.insert({"User-Agent", StringUtil::Format("%s %s", db.config.UserAgent(), DuckDB::SourceID())});
 }
@@ -137,6 +145,10 @@ string HTTPUtil::GetName() const {
 	return "Built-In";
 }
 
+HTTPTransportReusePolicy HTTPUtil::GetTransportReusePolicy() const {
+	return HTTPTransportReusePolicy::EPHEMERAL;
+}
+
 bool HTTPResponse::ShouldRetry() const {
 	if (HasRequestError()) {
 		// request errors are eligible for retry
@@ -166,11 +178,16 @@ bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &respo
 
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
 	unique_ptr<HTTPClient> client;
-	return SendRequest(request, client);
+	return Request(request, client);
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request, unique_ptr<HTTPClient> &client) {
-	return SendRequest(request, client);
+	auto response = SendRequest(request, client);
+	if (!response) {
+		auto method = EnumUtil::ToString(request.type);
+		throw IOException("HTTP provider returned no response for HTTP %s to '%s'", method, request.url);
+	}
+	return response;
 }
 
 BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params)
@@ -300,51 +317,66 @@ void HTTPUtil::CloseClient(unique_ptr<HTTPClient> &&) {
 	// default: no-op, client is destroyed
 }
 
+unique_ptr<HTTPClient> HTTPUtil::InitializeClientWithPolicy(BaseRequest &request, HTTPClientCachePolicy cache_policy) {
+	HTTPClientInitializationOptions options;
+	options.cache_policy = cache_policy;
+	return InitializeClientExtended(request.params, request.proto_host_port, options);
+}
+
+unique_ptr<HTTPResponse> HTTPUtil::SendRequestOnce(BaseRequest &request, HTTPClient &client,
+                                                   HTTPClientCachePolicy initial_cache_policy,
+                                                   HTTPClientCachePolicy &retry_cache_policy) {
+	retry_cache_policy = initial_cache_policy;
+
+	// When logging is enabled, we collect request timings
+	if (request.params.logger) {
+		request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
+	}
+
+	unique_ptr<HTTPResponse> response;
+	try {
+		request.request_system_start = Timestamp::GetCurrentTimestamp();
+		request.request_monotonic_start = TimePoint::Tick();
+		response = client.Request(request);
+	} catch (...) {
+		retry_cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
+		request.request_monotonic_end = TimePoint::Tick();
+		LogRequest(request, nullptr);
+		throw;
+	}
+	if (!response || response->HasRequestError()) {
+		retry_cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
+	}
+	request.request_monotonic_end = TimePoint::Tick();
+	LogRequest(request, response ? response.get() : nullptr);
+	return response;
+}
+
 unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) {
+	const auto initial_cache_policy =
+	    request.params.transport_manager ? HTTPClientCachePolicy::BYPASS_CACHE : HTTPClientCachePolicy::DEFAULT;
 	if (!client) {
-		client = InitializeClient(request.params, request.proto_host_port);
+		if (initial_cache_policy == HTTPClientCachePolicy::BYPASS_CACHE) {
+			client = InitializeClientWithPolicy(request, initial_cache_policy);
+		} else {
+			client = InitializeClient(request.params, request.proto_host_port);
+		}
 		if (!client) {
 			throw InvalidConfigurationException(
 			    "HTTPClient is not been setup yet (possibly due to configuration), no HTTP request can be performed");
 		}
 	}
 
-	auto cache_policy = HTTPClientCachePolicy::DEFAULT;
-	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
-		unique_ptr<HTTPResponse> response;
-		cache_policy = HTTPClientCachePolicy::DEFAULT;
-
-		// When logging is enabled, we collect request timings
-		if (request.params.logger) {
-			request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
-		}
-
-		try {
-			request.request_system_start = Timestamp::GetCurrentTimestamp();
-			request.request_monotonic_start = TimePoint::Tick();
-			response = client->Request(request);
-		} catch (...) {
-			cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
-			request.request_monotonic_end = TimePoint::Tick();
-			LogRequest(request, nullptr);
-			throw;
-		}
-		if (!response || response->HasRequestError()) {
-			cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
-		}
-		request.request_monotonic_end = TimePoint::Tick();
-		LogRequest(request, response ? response.get() : nullptr);
-		return response;
-	});
-
-	// Refresh the client on retries
-	std::function<void(void)> on_retry([&]() {
-		HTTPClientInitializationOptions options;
-		options.cache_policy = cache_policy;
-		client = InitializeClientExtended(request.params, request.proto_host_port, options);
-	});
-
-	return RunRequestWithRetry(on_request, request, on_retry);
+	auto retry_cache_policy = initial_cache_policy;
+	return RunRequestWithRetry(
+	    [&]() { return SendRequestOnce(request, *client, initial_cache_policy, retry_cache_policy); }, request,
+	    [&]() {
+		    client.reset();
+		    client = InitializeClientWithPolicy(request, retry_cache_policy);
+		    if (!client) {
+			    throw InvalidConfigurationException("HTTP provider returned a null client during retry");
+		    }
+	    });
 }
 
 void HTTPUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response) {
@@ -646,6 +678,10 @@ unique_ptr<HTTPResponse> HTTPClient::Request(BaseRequest &request) {
 	default:
 		throw InternalException("Unsupported request type");
 	}
+}
+
+bool HTTPClient::CanReuse(const HTTPParams &) const {
+	return false;
 }
 
 bool HTTPUtil::IsHTTPProtocol(const string &url) {
