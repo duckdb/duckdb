@@ -928,36 +928,6 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
-	// FK has no serialized index data — the index is rebuilt from a table scan.
-	if (alter_info.IsAddForeignKey()) {
-		if (DeserializeOnly()) {
-			return;
-		}
-		catalog.Alter(context, alter_info);
-
-		// After the constraint is registered, add an empty unbound FK index to storage.
-		// It will be populated from a table scan on first bind, mirroring checkpoint loading.
-		auto &table_info = alter_info.Cast<AlterTableInfo>();
-		auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-		auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
-		auto &qualified_name = table_info.GetQualifiedName();
-		auto index_name = fk.GetName(qualified_name.Name().GetIdentifierName());
-
-		auto &table = catalog.GetEntry<TableCatalogEntry>(context, qualified_name).Cast<DuckTableEntry>();
-		auto &storage = table.GetStorage();
-
-		vector<LogicalIndex> column_indexes;
-		for (const auto &physical_index : fk.info.fk_keys) {
-			auto &col = table.GetColumns().GetColumn(physical_index);
-			column_indexes.push_back(col.Logical());
-		}
-
-		IndexStorageInfo index_storage_info {Identifier(index_name)};
-		storage.AddIndex(table.GetColumns(), column_indexes, IndexConstraintType::FOREIGN,
-		                 std::move(index_storage_info));
-		return;
-	}
-
 	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
 	ReplayIndexData(index_storage_info);
 	if (DeserializeOnly()) {
@@ -966,11 +936,26 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &table_info = alter_info.Cast<AlterTableInfo>();
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	auto table_name = ReplayQualifiedName(catalog, table_info.GetQualifiedName(), table_info.GetQualifiedName().Name());
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, table_name).Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
+
+	// Resolve the indexed columns and constraint type based on the constraint kind.
+	vector<LogicalIndex> logical_indexes;
+	IndexConstraintType constraint_type;
+	if (alter_info.IsAddPrimaryKey()) {
+		auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
+		logical_indexes = unique_info.GetLogicalIndexes(column_list);
+		constraint_type = IndexConstraintType::PRIMARY;
+	} else {
+		auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
+		for (const auto &physical_index : fk.info.fk_keys) {
+			auto &col = column_list.GetColumn(physical_index);
+			logical_indexes.push_back(col.Logical());
+		}
+		constraint_type = IndexConstraintType::FOREIGN;
+	}
 
 	// Add the table to the bind context to bind the parsed expressions.
 	auto binder = Binder::CreateBinder(context);
@@ -989,7 +974,6 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	// Bind the parsed expressions to create unbound expressions.
 	vector<unique_ptr<Expression>> unbound_expressions;
-	auto logical_indexes = unique_info.GetLogicalIndexes(column_list);
 	for (const auto &logical_index : logical_indexes) {
 		auto &col = column_list.GetColumn(logical_index);
 		unique_ptr<ParsedExpression> parsed =
@@ -1003,9 +987,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto &storage = table.GetStorage();
-	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, unique_info.GetIndexConstraintType(),
-	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
-	                       index_storage_info.options);
+	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, constraint_type, index_storage_info.name,
+	                       column_ids, unbound_expressions, index_storage_info, index_storage_info.options);
 
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
 	auto index_instance = index_type->create_instance(input);
