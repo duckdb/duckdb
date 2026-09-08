@@ -10,8 +10,6 @@
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
-#include "duckdb/parser/peg/match_process_allocator.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 
@@ -30,7 +28,7 @@ private:
 
 struct MatchStackFrame {
 public:
-	MatchStackFrame(MatchInput input, MatchProcessAllocator::Position process_position_p);
+	explicit MatchStackFrame(MatchInput input);
 
 public:
 	bool IsInitialized() const;
@@ -39,7 +37,6 @@ public:
 	const Matcher &matcher;
 	MatchState &match_state;
 	arena_ptr<MatchProcess> process;
-	MatchProcessAllocator::Position process_position;
 	optional<MatcherResult> child_result;
 	optional<MatcherResult> result;
 	PackratMatchState packrat_state;
@@ -64,8 +61,6 @@ private:
 	MatcherResult FinalizeFrame(MatchStackFrame &frame);
 
 private:
-	ArenaAllocator arena;
-	MatchProcessAllocator process_allocator;
 	vector<MatchStackFrame> frames;
 };
 

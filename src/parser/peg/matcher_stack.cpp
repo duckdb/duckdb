@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-MatchStack::MatchStack() : arena(Allocator::DefaultAllocator()), process_allocator(arena) {
+MatchStack::MatchStack() {
 	frames.reserve(INITIAL_FRAME_CAPACITY);
 }
 
@@ -15,9 +15,7 @@ MatchStack::~MatchStack() {
 
 void MatchStack::DestroyTopFrame() {
 	D_ASSERT(!frames.empty());
-	auto process_position = frames.back().process_position;
 	frames.pop_back();
-	process_allocator.Rewind(process_position);
 }
 
 optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
@@ -50,8 +48,7 @@ void PackratMatchState::StoreResult(const Matcher &matcher, MatchState &state, c
 	state.context.packrat_cache->Store(matcher, token_index_before.GetIndex(), cache_entry);
 }
 
-MatchStackFrame::MatchStackFrame(MatchInput input, MatchProcessAllocator::Position process_position_p)
-    : matcher(input.matcher), match_state(input.state), process_position(process_position_p) {
+MatchStackFrame::MatchStackFrame(MatchInput input) : matcher(input.matcher), match_state(input.state) {
 }
 
 bool MatchStackFrame::IsInitialized() const {
@@ -79,7 +76,7 @@ MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
 
 void MatchStack::PushFrame(MatchInput input) {
 	input.state.rule = input.matcher.GetRule();
-	frames.emplace_back(input, process_allocator.GetPosition());
+	frames.emplace_back(input);
 }
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
@@ -92,7 +89,7 @@ void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 			return;
 		}
 	}
-	frame.process = matcher.StartMatch(state, process_allocator);
+	frame.process = matcher.StartMatch(state);
 }
 
 bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {

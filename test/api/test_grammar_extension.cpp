@@ -32,7 +32,8 @@ static vector<MatcherSuggestion> GetLiteralChoiceSuggestions(const Matcher &matc
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator allocator;
 	idx_t max_position = 0;
-	MatchContext context(suggestions, allocator, max_position);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_position);
 	MatchState state(iterator, context);
 	matcher.AddSuggestion(state);
 	return suggestions;
@@ -71,7 +72,9 @@ static LiteralChoiceTestResult MatchLiteralChoiceTest(const Matcher &matcher, co
 	ParseResultAllocator allocator;
 	ParserPackratCache packrat;
 	idx_t max_position = 0;
-	MatchContext context(suggestions, allocator, max_position, mode, IdentifierCaseMode::PRESERVE_CASE, heap, &packrat);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_position, mode,
+	                     IdentifierCaseMode::PRESERVE_CASE, heap, &packrat);
 	MatchState state(iterator, context);
 	auto result = matcher.MatchParseResult(state);
 	return {result.IsSuccess(), state.token_iterator.Position(), max_position,
@@ -96,11 +99,10 @@ TEST_CASE("Literal choice dispatch preserves ordered choice results", "[api][gra
 		vector<MatcherSuggestion> suggestions;
 		ParseResultAllocator parse_results;
 		idx_t max_position = 0;
-		MatchContext context(suggestions, parse_results, max_position);
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, parse_results, process_allocator, max_position);
 		MatchState state(iterator, context);
-		ArenaAllocator arena(Allocator::DefaultAllocator());
-		MatchProcessAllocator processes(arena);
-		auto process = choice.StartMatch(state, processes);
+		auto process = choice.StartMatch(state);
 		auto step = process->Resume(nullopt);
 		if (text == "WHERE") {
 			REQUIRE(step.GetChild());
@@ -281,7 +283,8 @@ static bool MatchLiteralTestToken(const Matcher &matcher, const string &text) {
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator allocator;
 	idx_t max_token_index = 0;
-	MatchContext context(suggestions, allocator, max_token_index);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
 	MatchState state(iterator, context);
 	return matcher.MatchParseResult(state).IsSuccess();
 }
@@ -346,8 +349,8 @@ public:
 	GrammarExtensionTestMatcher() : child("ANSWER", KeywordInfo()) {
 	}
 
-	arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
-		return allocator.Make<GrammarExtensionTestMatchProcess>(child, state);
+	arena_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		return state.Make<GrammarExtensionTestMatchProcess>(child, state);
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -462,7 +465,6 @@ struct MatchProcessLifetimeState {
 	bool state_valid = true;
 	idx_t root_children = 1;
 	vector<idx_t> destroyed;
-	vector<uintptr_t> addresses;
 };
 
 class NestedTestMatchProcess : public MatchProcess {
@@ -470,7 +472,6 @@ public:
 	NestedTestMatchProcess(const Matcher &matcher_p, MatchState &state, MatchProcessLifetimeState &lifetime_p)
 	    : matcher(matcher_p), input_state(state), child_state(state), lifetime(lifetime_p), depth(++lifetime.active) {
 		lifetime.started++;
-		lifetime.addresses.push_back(reinterpret_cast<uintptr_t>(this));
 	}
 
 	~NestedTestMatchProcess() override {
@@ -517,8 +518,8 @@ public:
 	    : Matcher(MatcherType::LIST), lifetime(lifetime_p) {
 	}
 
-	arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
-		return allocator.Make<NestedTestMatchProcess>(*this, state, lifetime);
+	arena_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		return state.Make<NestedTestMatchProcess>(*this, state, lifetime);
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &) const override {
@@ -539,7 +540,8 @@ TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator allocator;
 	idx_t max_token_index = 0;
-	MatchContext context(suggestions, allocator, max_token_index);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
 	MatchState state(iterator, context);
 	MatchProcessLifetimeState lifetime;
 	lifetime.destroyed.reserve(2049);
@@ -550,6 +552,7 @@ TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api
 		lifetime.create_result = true;
 		for (idx_t depth : {idx_t(1), idx_t(64), idx_t(65), idx_t(128), idx_t(129), idx_t(256), idx_t(257), idx_t(1025),
 		                    idx_t(33), idx_t(130)}) {
+			process_allocator.Reset();
 			lifetime.depth = depth;
 			lifetime.started = 0;
 			lifetime.destroyed.clear();
@@ -624,20 +627,20 @@ public:
 	explicit DerivedListTestMatcher(MatchProcessLifetimeState &lifetime_p) : lifetime(lifetime_p) {
 	}
 
-	arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
-		return allocator.Make<NestedTestMatchProcess>(*this, state, lifetime);
+	arena_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		return state.Make<NestedTestMatchProcess>(*this, state, lifetime);
 	}
 
 private:
 	MatchProcessLifetimeState &lifetime;
 };
 
-template <idx_t SIZE, idx_t ALIGNMENT>
-class alignas(ALIGNMENT) ArenaNestedTestMatchProcess final : public NestedTestMatchProcess {
+template <idx_t SIZE>
+class ArenaNestedTestMatchProcess final : public NestedTestMatchProcess {
 public:
 	ArenaNestedTestMatchProcess(const Matcher &matcher, MatchState &state, MatchProcessLifetimeState &lifetime_p)
 	    : NestedTestMatchProcess(matcher, state, lifetime_p), lifetime(lifetime_p) {
-		lifetime.storage_valid &= reinterpret_cast<uintptr_t>(this) % ALIGNMENT == 0;
+		lifetime.storage_valid &= reinterpret_cast<uintptr_t>(this) % alignof(ArenaNestedTestMatchProcess) == 0;
 		if (lifetime.throw_in_constructor && lifetime.active == lifetime.depth) {
 			throw InvalidInputException("Nested process constructor failure");
 		}
@@ -660,16 +663,46 @@ public:
 	explicit ArenaNestedTestMatcher(MatchProcessLifetimeState &lifetime_p) : lifetime(lifetime_p) {
 	}
 
-	arena_ptr<MatchProcess> StartMatch(MatchState &state, MatchProcessAllocator &allocator) const override {
+	arena_ptr<MatchProcess> StartMatch(MatchState &state) const override {
 		if (lifetime.active % 2) {
-			return allocator.Make<ArenaNestedTestMatchProcess<9000, 64>>(*this, state, lifetime);
+			return state.Make<ArenaNestedTestMatchProcess<9000>>(*this, state, lifetime);
 		}
-		return allocator.Make<ArenaNestedTestMatchProcess<32, 8>>(*this, state, lifetime);
+		return state.Make<ArenaNestedTestMatchProcess<32>>(*this, state, lifetime);
 	}
 
 private:
 	MatchProcessLifetimeState &lifetime;
 };
+
+TEST_CASE("MatchState allocates processes through its shared context", "[api][grammar_extension]") {
+	for (bool heap : {false, true}) {
+		vector<MatcherToken> tokens;
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator parse_results;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		idx_t max_token_index = 0;
+		MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
+		context.use_heap_based_parser = heap;
+		MatchState state(iterator, context);
+		MatchState child_state(state);
+		MatchProcessLifetimeState lifetime;
+		lifetime.depth = 3;
+		ArenaNestedTestMatcher matcher(lifetime);
+		auto parent = state.Make<ArenaNestedTestMatchProcess<9000>>(matcher, state, lifetime);
+		auto parent_bytes = process_allocator.SizeInBytes();
+		REQUIRE(parent_bytes >= sizeof(ArenaNestedTestMatchProcess<9000>));
+		REQUIRE(&child_state.context.process_allocator == &process_allocator);
+		REQUIRE(matcher.MatchParseResult(child_state).IsSuccess());
+		REQUIRE(process_allocator.SizeInBytes() > parent_bytes);
+		REQUIRE(lifetime.active == 1);
+		parent.reset();
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.storage_valid);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.destroyed == vector<idx_t> {3, 2, 1});
+	}
+}
 
 TEST_CASE("Matcher drivers preserve overrides on derived built-in matchers", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
@@ -677,7 +710,8 @@ TEST_CASE("Matcher drivers preserve overrides on derived built-in matchers", "[a
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator allocator;
 	idx_t max_token_index = 0;
-	MatchContext context(suggestions, allocator, max_token_index);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
 	MatchState state(iterator, context);
 	MatchProcessLifetimeState lifetime;
 	lifetime.depth = 130;
@@ -694,26 +728,26 @@ TEST_CASE("Matcher drivers preserve overrides on derived built-in matchers", "[a
 	REQUIRE(lifetime.destroyed.size() == lifetime.depth);
 }
 
-TEST_CASE("Heap matcher reuses variable-sized aligned process storage", "[api][grammar_extension]") {
+TEST_CASE("Heap matcher supports variable-sized aligned arena processes", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator allocator;
 	idx_t max_token_index = 0;
-	MatchContext context(suggestions, allocator, max_token_index);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
 	MatchState state(iterator, context);
 	MatchProcessLifetimeState lifetime;
 	ArenaNestedTestMatcher matcher(lifetime);
 
-	SECTION("Sibling executions reuse storage without moving parent processes") {
+	SECTION("Repeated executions preserve process storage and destruction order") {
 		MatchStack stack;
-		vector<uintptr_t> addresses;
 		for (idx_t depth :
 		     {idx_t(1), idx_t(64), idx_t(65), idx_t(128), idx_t(129), idx_t(130), idx_t(33), idx_t(130)}) {
+			process_allocator.Reset();
 			lifetime.depth = depth;
 			lifetime.started = 0;
 			lifetime.destroyed.clear();
-			lifetime.addresses.clear();
 			REQUIRE(stack.Execute({matcher, state}).IsSuccess());
 			REQUIRE(lifetime.started == depth);
 			REQUIRE(lifetime.active == 0);
@@ -723,22 +757,16 @@ TEST_CASE("Heap matcher reuses variable-sized aligned process storage", "[api][g
 			for (idx_t i = 0; i < depth; i++) {
 				REQUIRE(lifetime.destroyed[i] == depth - i);
 			}
-			for (idx_t i = 0; i < MinValue<idx_t>(addresses.size(), lifetime.addresses.size()); i++) {
-				REQUIRE(addresses[i] == lifetime.addresses[i]);
-			}
-			if (addresses.size() < lifetime.addresses.size()) {
-				addresses = lifetime.addresses;
-			}
 		}
 	}
 
-	SECTION("Resume exceptions destroy pooled children before their parents") {
+	SECTION("Resume exceptions destroy arena children before their parents") {
 		lifetime.throw_at_leaf = true;
 	}
 	SECTION("Constructor exceptions destroy constructed members and parent processes") {
 		lifetime.throw_in_constructor = true;
 	}
-	SECTION("Siblings reuse process slots while their parent stays alive") {
+	SECTION("Siblings preserve process storage while their parent stays alive") {
 		lifetime.depth = 65;
 		lifetime.root_children = 2;
 		MatchStack stack;
@@ -747,9 +775,6 @@ TEST_CASE("Heap matcher reuses variable-sized aligned process storage", "[api][g
 		REQUIRE(lifetime.storage_valid);
 		REQUIRE(lifetime.state_valid);
 		REQUIRE(lifetime.started == 1 + 2 * (lifetime.depth - 1));
-		for (idx_t i = 1; i < lifetime.depth; i++) {
-			REQUIRE(lifetime.addresses[i] == lifetime.addresses[lifetime.depth - 1 + i]);
-		}
 	}
 	if (lifetime.throw_at_leaf || lifetime.throw_in_constructor) {
 		lifetime.depth = 130;
@@ -768,13 +793,14 @@ TEST_CASE("Heap matcher reuses variable-sized aligned process storage", "[api][g
 	}
 }
 
-TEST_CASE("Recursive matcher reuses process storage and unwinds safely", "[api][grammar_extension]") {
+TEST_CASE("Recursive matcher preserves arena process storage and unwinds safely", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_results;
 	idx_t max_token_index = 0;
-	MatchContext context(suggestions, parse_results, max_token_index);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
 	context.use_heap_based_parser = false;
 	MatchState state(iterator, context);
 	MatchProcessLifetimeState lifetime;
@@ -782,7 +808,7 @@ TEST_CASE("Recursive matcher reuses process storage and unwinds safely", "[api][
 	lifetime.destroyed.reserve(lifetime.depth);
 	ArenaNestedTestMatcher matcher(lifetime);
 
-	SECTION("Siblings reuse storage while their parent remains alive") {
+	SECTION("Siblings preserve storage while their parent remains alive") {
 		lifetime.root_children = 2;
 	}
 	SECTION("Failed matches destroy every process") {
@@ -809,20 +835,20 @@ TEST_CASE("Recursive matcher reuses process storage and unwinds safely", "[api][
 	for (idx_t sibling = 0; sibling < lifetime.root_children; sibling++) {
 		for (idx_t i = 0; i < child_count; i++) {
 			REQUIRE(lifetime.destroyed[sibling * child_count + i] == lifetime.depth - i);
-			REQUIRE(lifetime.addresses[1 + sibling * child_count + i] == lifetime.addresses[1 + i]);
 		}
 	}
 	REQUIRE(lifetime.destroyed.back() == 1);
 }
 
-TEST_CASE("Packrat results outlive reused process storage", "[api][grammar_extension]") {
+TEST_CASE("Packrat results outlive reset process arenas", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_results;
 	ParserPackratCache cache;
 	idx_t max_token_index = 0;
-	MatchContext context(suggestions, parse_results, max_token_index);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
 	context.packrat_cache = &cache;
 	MatchState state(iterator, context);
 	MatchProcessLifetimeState lifetime;
@@ -846,7 +872,9 @@ TEST_CASE("Packrat results outlive reused process storage", "[api][grammar_exten
 	ArenaNestedTestMatcher overwriter(lifetime);
 	lifetime.depth = 130;
 	lifetime.create_result = false;
+	process_allocator.Reset();
 	stack.Execute({overwriter, state});
+	process_allocator.Reset();
 	lifetime.started = 0;
 	auto cached = stack.Execute({matcher, state});
 	REQUIRE(cached.IsSuccess() == first.IsSuccess());
@@ -867,18 +895,16 @@ TEST_CASE("Compiled grammar processes use arena ownership", "[api][grammar_exten
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_results;
 	idx_t max_token_index = 0;
-	MatchContext context(suggestions, parse_results, max_token_index);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
 	MatchState state(iterator, context);
 	auto grammar = CompiledGrammar::Create();
-	ArenaAllocator arena(Allocator::DefaultAllocator());
-	MatchProcessAllocator pool(arena);
-	auto position = pool.GetPosition();
-	auto process = grammar->TopLevelStatementMatcher().StartMatch(state, pool);
+	auto process = grammar->TopLevelStatementMatcher().StartMatch(state);
 	REQUIRE(process);
-	REQUIRE(pool.GetPosition().segment);
-	REQUIRE(pool.GetPosition().offset > 0);
+	REQUIRE(process_allocator.SizeInBytes() > 0);
 	process.reset();
-	pool.Rewind(position);
+	process_allocator.Reset();
+	REQUIRE(process_allocator.SizeInBytes() == 0);
 }
 
 TEST_CASE("Grammar changes expose structured metadata", "[api][grammar_extension]") {
