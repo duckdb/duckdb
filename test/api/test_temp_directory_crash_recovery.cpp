@@ -5,8 +5,7 @@
 
 using namespace duckdb;
 
-TEST_CASE("Orphaned temp files from a crashed process are cleaned up on startup",
-          "[temp_directory]") {
+TEST_CASE("Orphaned temp files from a crashed process are cleaned up on startup", "[temp_directory]") {
 	auto temp_dir = TestCreatePath("temp_dir_crash_recovery");
 
 	auto fs = FileSystem::CreateLocal();

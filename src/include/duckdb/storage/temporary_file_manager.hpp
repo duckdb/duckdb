@@ -263,8 +263,8 @@ class TemporaryFileManager {
 	friend class TemporaryFileHandle;
 
 public:
-	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p, const string &temporary_file_identifier_p,
-	                     atomic<idx_t> &size_on_disk);
+	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
+	                     const string &temporary_file_identifier_p, atomic<idx_t> &size_on_disk);
 	~TemporaryFileManager();
 
 private:
