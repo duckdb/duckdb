@@ -23,6 +23,9 @@ public:
 
 	//! The name of the view - used for printing the plan
 	string view_name;
+	//! The filters that the optimizer pushed into the view - these are the caller's own expressions, and they are
+	//! reported as part of the boundary node because the operators inside the view are never shown
+	vector<string> pushed_filters;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
