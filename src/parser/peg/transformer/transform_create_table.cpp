@@ -166,10 +166,11 @@ PEGTransformerFactory::TransformCreateTableColumnList(PEGTransformer &transforme
 				if (constraint_type.type == ConstraintType::NOT_NULL) {
 					result.constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(col_idx)));
 				} else if (constraint_type.type == ConstraintType::UNIQUE) {
-					auto timing = constraint_type.is_deferred ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
-					result.constraints.push_back(
-					    make_uniq<UniqueConstraint>(LogicalIndex(col_idx), column_result.column_definition.GetName(),
-					                                constraint_type.is_primary_key, timing));
+					auto timing =
+					    constraint_type.is_deferred ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
+					result.constraints.push_back(make_uniq<UniqueConstraint>(LogicalIndex(col_idx),
+					                                                         column_result.column_definition.GetName(),
+					                                                         constraint_type.is_primary_key, timing));
 				}
 			}
 			result.columns.AddColumn(std::move(column_result.column_definition));
