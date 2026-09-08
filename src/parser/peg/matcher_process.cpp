@@ -1,6 +1,7 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/match_process_allocator.hpp"
 #include "duckdb/parser/peg/matcher/choice_matcher.hpp"
+#include "duckdb/parser/peg/matcher/literal_choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher/optional_matcher.hpp"
 #include "duckdb/parser/peg/matcher/repeat_matcher.hpp"
@@ -156,9 +157,11 @@ arena_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state, MatchProcessA
 	return allocator.Make<ListMatchProcess>(*this, state);
 }
 
+template <bool SINGLE_CHILD>
 class ChoiceMatchProcess : public MatchProcess {
 public:
-	ChoiceMatchProcess(const ChoiceMatcher &matcher_p, MatchState &state_p) : matcher(matcher_p), state(state_p) {
+	ChoiceMatchProcess(const ChoiceMatcher &matcher_p, MatchState &state_p, idx_t child_index_p = 0)
+	    : matcher(matcher_p), state(state_p), child_index(child_index_p) {
 		if (auto current = state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
@@ -176,6 +179,9 @@ public:
 				}
 				return MatchStep::Complete(state.AllocateParseResult<ChoiceParseResult>(*child_result->GetParseResult(),
 				                                                                        child_index, start_offset));
+			}
+			if (SINGLE_CHILD) {
+				return MatchStep::Complete(MatcherResult::Failure());
 			}
 			child_index++;
 			child_state.reset();
@@ -198,7 +204,14 @@ private:
 };
 
 arena_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
-	return allocator.Make<ChoiceMatchProcess>(*this, state);
+	return allocator.Make<ChoiceMatchProcess<false>>(*this, state);
+}
+
+arena_ptr<MatchProcess> LiteralChoiceMatcher::StartMatch(MatchState &state, MatchProcessAllocator &allocator) const {
+	auto literal = state.token_iterator.CurrentLiteralInfo(table);
+	auto entry = literal_children.find(literal.LiteralId());
+	auto child_index = entry == literal_children.end() ? matchers.size() : entry->second;
+	return allocator.Make<ChoiceMatchProcess<true>>(*this, state, child_index);
 }
 
 class OptionalMatchProcess : public MatchProcess {

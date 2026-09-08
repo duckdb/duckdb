@@ -2,8 +2,23 @@
 #include "duckdb/parser/peg/peg_parser.hpp"
 #include "duckdb/parser/peg/matcher/list.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/matcher/literal_choice_matcher.hpp"
 
 namespace duckdb {
+
+class CompiledKeywordMatcher final : public KeywordMatcher {
+public:
+	CompiledKeywordMatcher(const string &keyword, const KeywordInfo &info, const PEGKeywordHelper &helper)
+	    : KeywordMatcher(keyword, info, helper) {
+	}
+
+	optional_idx GetDispatchLiteral(const GrammarLiteralTable &table) const override {
+		if (literal_table.get() != &table || !literal_info.LiteralId()) {
+			return optional_idx();
+		}
+		return optional_idx(literal_info.LiteralId());
+	}
+};
 
 void MatcherFactory::MatcherConstructionState::Register(string_t rule_name) {
 	unconstructed.insert(rule_name);
@@ -257,7 +272,7 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 }
 
 unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, const KeywordInfo &info) const {
-	return make_uniq<KeywordMatcher>(keyword, info, compiled.GetKeywordHelper());
+	return make_uniq<CompiledKeywordMatcher>(keyword, info, compiled.GetKeywordHelper());
 }
 
 unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
@@ -265,6 +280,23 @@ unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
 }
 
 unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
+	auto table = compiled.GetKeywordHelper().GetLiteralTable();
+	if (table && matchers.size() > 1) {
+		unordered_map<uint32_t, idx_t> literal_children;
+		for (idx_t i = 0; i < matchers.size(); i++) {
+			auto &matcher = matchers[i].get();
+			if (matcher.Type() != MatcherType::KEYWORD) {
+				return make_uniq<ChoiceMatcher>(std::move(matchers));
+			}
+			auto literal = matcher.Cast<KeywordMatcher>().GetDispatchLiteral(*table);
+			if (!literal.IsValid()) {
+				return make_uniq<ChoiceMatcher>(std::move(matchers));
+			}
+			// Preserve the first alternative when spellings share an ID.
+			literal_children.emplace(static_cast<uint32_t>(literal.GetIndex()), i);
+		}
+		return make_uniq<LiteralChoiceMatcher>(std::move(matchers), *table, std::move(literal_children));
+	}
 	return make_uniq<ChoiceMatcher>(std::move(matchers));
 }
 

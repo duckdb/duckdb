@@ -11,12 +11,196 @@
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher_stack.hpp"
+#include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 
 using namespace duckdb;
+
+struct LiteralChoiceTestResult {
+	bool success;
+	idx_t position;
+	idx_t max_position;
+	string tree;
+};
+
+static vector<MatcherSuggestion> GetLiteralChoiceSuggestions(const Matcher &matcher) {
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_position = 0;
+	MatchContext context(suggestions, allocator, max_position);
+	MatchState state(iterator, context);
+	matcher.AddSuggestion(state);
+	return suggestions;
+}
+
+TEST_CASE("Literal choice dispatch retains autocomplete metadata", "[api][grammar_extension]") {
+	auto compiled = CompiledGrammar::Create();
+	auto grammar = ParsedGrammar::Parse("Program <- 'TABLE' / '(' / '.' / 'table'");
+	MatcherAllocator allocator;
+	MatcherFactory factory(allocator, grammar, *compiled, {});
+	auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
+	auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
+	vector<reference<Matcher>> children = choice.matchers;
+	ChoiceMatcher sequential(std::move(children));
+	auto actual = GetLiteralChoiceSuggestions(choice);
+	auto expected = GetLiteralChoiceSuggestions(sequential);
+	REQUIRE(actual.size() == 3);
+	REQUIRE(actual.size() == expected.size());
+	for (idx_t i = 0; i < actual.size(); i++) {
+		REQUIRE(actual[i].type == expected[i].type);
+		REQUIRE(actual[i].keyword.candidate == expected[i].keyword.candidate);
+		REQUIRE(actual[i].keyword.score_bonus == expected[i].keyword.score_bonus);
+		REQUIRE(actual[i].keyword.extra_char == expected[i].keyword.extra_char);
+		REQUIRE(actual[i].keyword.candidate_type == expected[i].keyword.candidate_type);
+	}
+}
+
+static LiteralChoiceTestResult MatchLiteralChoiceTest(const Matcher &matcher, const string &text, bool heap,
+                                                      MatchMode mode) {
+	vector<MatcherToken> tokens;
+	if (!text.empty()) {
+		tokens.emplace_back(text, 0, TokenType::KEYWORD);
+	}
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	ParserPackratCache packrat;
+	idx_t max_position = 0;
+	MatchContext context(suggestions, allocator, max_position, mode, IdentifierCaseMode::PRESERVE_CASE, heap, &packrat);
+	MatchState state(iterator, context);
+	auto result = matcher.MatchParseResult(state);
+	return {result.IsSuccess(), state.token_iterator.Position(), max_position,
+	        result.HasParseResult() ? result.GetParseResult()->ToString() : string()};
+}
+
+TEST_CASE("Literal choice dispatch preserves ordered choice results", "[api][grammar_extension]") {
+	auto compiled = CompiledGrammar::Create();
+	auto grammar = ParsedGrammar::Parse("Program <- 'SELECT' / 'FROM' / 'select' / 'WHERE' / '('");
+	MatcherAllocator allocator;
+	MatcherFactory factory(allocator, grammar, *compiled, {});
+	auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
+	auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
+	vector<reference<Matcher>> children = choice.matchers;
+	ChoiceMatcher sequential(std::move(children));
+	auto table = compiled->GetKeywordHelper().GetLiteralTable();
+	REQUIRE(table);
+	REQUIRE(choice.matchers[0].get().Cast<KeywordMatcher>().GetDispatchLiteral(*table).IsValid());
+	for (auto &text : vector<string> {"WHERE", "unknown_literal"}) {
+		vector<MatcherToken> tokens {MatcherToken(text, 0, TokenType::KEYWORD)};
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator parse_results;
+		idx_t max_position = 0;
+		MatchContext context(suggestions, parse_results, max_position);
+		MatchState state(iterator, context);
+		ArenaAllocator arena(Allocator::DefaultAllocator());
+		MatchProcessAllocator processes(arena);
+		auto process = choice.StartMatch(state, processes);
+		auto step = process->Resume(nullopt);
+		if (text == "WHERE") {
+			REQUIRE(step.GetChild());
+			REQUIRE(&step.GetChild()->matcher == &choice.matchers[3].get());
+		} else {
+			REQUIRE_FALSE(step.GetChild());
+			REQUIRE_FALSE(step.GetResult().IsSuccess());
+		}
+	}
+	for (bool heap : {false, true}) {
+		for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
+			for (auto &text : vector<string> {"select", "FROM", "where", "(", "unknown_literal", ""}) {
+				auto actual = MatchLiteralChoiceTest(choice, text, heap, mode);
+				auto expected = MatchLiteralChoiceTest(sequential, text, heap, mode);
+				REQUIRE(actual.success == expected.success);
+				REQUIRE(actual.position == expected.position);
+				REQUIRE(actual.max_position == expected.max_position);
+				REQUIRE(actual.tree == expected.tree);
+			}
+		}
+	}
+}
+
+class DispatchOverrideKeywordMatcher final : public KeywordMatcher {
+public:
+	DispatchOverrideKeywordMatcher(const string &keyword, const KeywordInfo &info, const PEGKeywordHelper &helper,
+	                               idx_t &calls_p)
+	    : KeywordMatcher(keyword, info, helper), calls(calls_p), accepts_from(keyword == "SELECT") {
+	}
+
+	MatcherResult MatchAtomic(MatchState &state) const override {
+		calls++;
+		auto token = state.token_iterator.Current();
+		if (accepts_from && token && StringUtil::CIEquals(token->text, "FROM")) {
+			state.token_iterator.Advance();
+			return MatcherResult::Success();
+		}
+		return KeywordMatcher::MatchAtomic(state);
+	}
+
+private:
+	idx_t &calls;
+	bool accepts_from;
+};
+
+class DispatchOverrideMatcherFactory final : public MatcherFactory {
+public:
+	DispatchOverrideMatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar, CompiledGrammar &compiled,
+	                               idx_t &calls_p)
+	    : MatcherFactory(allocator, grammar, compiled, {}), helper(compiled.GetKeywordHelper()), calls(calls_p) {
+	}
+
+private:
+	unique_ptr<KeywordMatcher> CreateKeyword(const string &keyword, const KeywordInfo &info) const override {
+		return make_uniq<DispatchOverrideKeywordMatcher>(keyword, info, helper, calls);
+	}
+
+	const PEGKeywordHelper &helper;
+	idx_t &calls;
+};
+
+TEST_CASE("Literal dispatch does not assume custom keyword matcher semantics", "[api][grammar_extension]") {
+	auto compiled = CompiledGrammar::Create();
+	auto grammar = ParsedGrammar::Parse("Program <- 'SELECT' / 'FROM'");
+	MatcherAllocator allocator;
+	idx_t calls = 0;
+	DispatchOverrideMatcherFactory factory(allocator, grammar, *compiled, calls);
+	auto &root = factory.CreateRootMatcher("Program");
+	for (bool heap : {false, true}) {
+		calls = 0;
+		auto result = MatchLiteralChoiceTest(root, "FROM", heap, MatchMode::RECOGNIZE_ONLY);
+		REQUIRE(result.success);
+		REQUIRE(result.position == 1);
+		REQUIRE(calls == 1);
+	}
+}
+
+TEST_CASE("Literal dispatch leaves mixed and unregistered alternatives unchanged", "[api][grammar_extension]") {
+	auto compiled = CompiledGrammar::Create();
+	for (auto &definition : vector<string> {"Program <- 'SELECT' / ('FROM' 'WHERE')",
+	                                        "Program <- 'SELECT' / 'unregistered_dispatch_word'"}) {
+		auto grammar = ParsedGrammar::Parse(definition);
+		MatcherAllocator allocator;
+		MatcherFactory factory(allocator, grammar, *compiled, {});
+		auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
+		auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
+		vector<reference<Matcher>> children = choice.matchers;
+		ChoiceMatcher sequential(std::move(children));
+		for (bool heap : {false, true}) {
+			for (auto &text : vector<string> {"SELECT", "FROM", "unregistered_dispatch_word", "missing"}) {
+				auto actual = MatchLiteralChoiceTest(choice, text, heap, MatchMode::BUILD_PARSE_RESULT);
+				auto expected = MatchLiteralChoiceTest(sequential, text, heap, MatchMode::BUILD_PARSE_RESULT);
+				REQUIRE(actual.success == expected.success);
+				REQUIRE(actual.position == expected.position);
+				REQUIRE(actual.max_position == expected.max_position);
+				REQUIRE(actual.tree == expected.tree);
+			}
+		}
+	}
+}
 
 TEST_CASE("Grammar literal IDs include category-only words and overlapping categories", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SELECT' / 'select' / '('");

@@ -54,6 +54,11 @@ public:
 		return "'" + keyword + "'";
 	}
 
+	//! Custom matchers must not be filtered using ordinary literal semantics by default.
+	virtual optional_idx GetDispatchLiteral(const GrammarLiteralTable &) const {
+		return optional_idx();
+	}
+
 private:
 	bool MatchKeyword(MatchState &state) const {
 		auto token = state.token_iterator.Current();
@@ -74,6 +79,8 @@ private:
 private:
 	const string keyword;
 	const KeywordInfo info;
+
+protected:
 	optional_ptr<const GrammarLiteralTable> literal_table;
 	LiteralInfo literal_info;
 };
