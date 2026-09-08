@@ -197,6 +197,19 @@ NULL	NULL	NULL
 NULL	NULL	NULL
 
 #
+# NS implementations
+#
+query I
+SELECT  '2019-01-01 00:00:00.123456789+00'::TIMESTAMPTZ_NS AT TIME ZONE 'UTC';
+----
+2019-01-01 00:00:00.123456789
+
+query I
+SELECT '2019-01-01 00:00:00.123456789'::TIMESTAMP_NS AT TIME ZONE 'UTC' t;
+----
+2018-12-31 16:00:00.123456789-08
+
+#
 # Verify UTC±NNNN translation
 # Note sign inversion (see https://en.wikipedia.org/wiki/Tz_database#Area)
 #
