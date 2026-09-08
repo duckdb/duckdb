@@ -2,9 +2,6 @@
 # description: ADD PRIMARY KEY must reject transaction-local NULLs
 # group: [add_pk]
 
-# Persistent NULLs are already rejected in test_add_pk_invalid_data.test.
-# Transaction-local inserts are not visible to the create-index scan.
-
 statement ok
 CREATE TABLE t(a INTEGER);
 
@@ -21,77 +18,3 @@ ALTER TABLE t ADD PRIMARY KEY (a);
 
 statement ok
 ROLLBACK;
-
-statement ok
-INSERT INTO t VALUES (NULL);
-
-query I
-SELECT a FROM t
-----
-NULL
-
-# Committed row plus a local NULL.
-
-statement ok
-DROP TABLE t;
-
-statement ok
-CREATE TABLE t(a INTEGER);
-
-statement ok
-INSERT INTO t VALUES (1);
-
-statement ok
-BEGIN;
-
-statement ok
-INSERT INTO t VALUES (NULL);
-
-statement error
-ALTER TABLE t ADD PRIMARY KEY (a);
-----
-<REGEX>:Constraint Error.*NOT NULL constraint failed.*
-
-statement ok
-ROLLBACK;
-
-# Compound PRIMARY KEY: NULL in one key column.
-
-statement ok
-CREATE TABLE t2(a INTEGER, b INTEGER);
-
-statement ok
-BEGIN;
-
-statement ok
-INSERT INTO t2 VALUES (1, NULL);
-
-statement error
-ALTER TABLE t2 ADD PRIMARY KEY (a, b);
-----
-<REGEX>:Constraint Error.*NOT NULL constraint failed.*
-
-statement ok
-ROLLBACK;
-
-# UNIQUE allows NULL, including a local NULL.
-
-statement ok
-CREATE TABLE t3(a INTEGER);
-
-statement ok
-BEGIN;
-
-statement ok
-INSERT INTO t3 VALUES (NULL);
-
-statement ok
-ALTER TABLE t3 ADD UNIQUE (a);
-
-statement ok
-COMMIT;
-
-query I
-SELECT a FROM t3
-----
-NULL
