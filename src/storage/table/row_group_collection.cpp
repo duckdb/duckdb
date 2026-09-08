@@ -2286,8 +2286,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	return result;
 }
 
-void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTable &parent,
-                                             const BoundConstraint &constraint) {
+void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction,
+                                             DataTable &parent, const BoundConstraint &constraint) {
 	if (total_rows == 0) {
 		return;
 	}
@@ -2305,17 +2305,21 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 	vector<StorageIndex> column_ids;
 	column_ids.emplace_back(physical_index);
 
-	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;
-	auto scan_type = TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED;
 	state.Initialize(column_ids, nullptr);
 	InitializeScan(context, state.table_state, column_ids, nullptr);
 
 	InitializeCreateIndexScan(state);
 
+	auto &transaction_manager = DuckTransactionManager::Get(parent.db);
+	TransactionData constraint_visibility(transaction.GetTransactionId(),
+	                                      VisibilityBound::Through(transaction_manager.GetLastCommit()));
+	ScanOptions scan_options(constraint_visibility);
+	scan_options.insert_type = InsertedScanType::ALL_ROWS;
+	scan_options.update_type = UpdateScanType::DISALLOW_UPDATES;
 	while (true) {
 		scan_chunk.Reset();
-		state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
+		state.table_state.Scan(scan_options, scan_chunk, state.segment_lock);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
