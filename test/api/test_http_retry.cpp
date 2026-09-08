@@ -617,3 +617,45 @@ TEST_CASE("HTTP timing of a deferred request spans the deferral", "[api]") {
 	REQUIRE(TimePoint::ElapsedMillis(before, request.request_monotonic_start) >= 0);
 	REQUIRE(TimePoint::ElapsedMillis(request.request_monotonic_start, request.request_monotonic_end) >= 10);
 }
+
+namespace {
+
+//! Runs out of clients on the retry, which the synchronous path reports as a configuration error
+class NullOnRetryUtil : public NonBlockingUtil {
+public:
+	NullOnRetryUtil() : NonBlockingUtil(1, HTTPStatusCode::InternalServerError_500) {
+	}
+
+	unique_ptr<HTTPClient> InitializeClient(HTTPParams &params, const string &proto_host_port) override {
+		if (initialized++ > 0) {
+			return nullptr;
+		}
+		return NonBlockingUtil::InitializeClient(params, proto_host_port);
+	}
+
+	idx_t initialized = 0;
+};
+
+} // namespace
+
+TEST_CASE("HTTP deferred retry reports a null client instead of dereferencing it", "[api]") {
+	NullOnRetryUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 3;
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, params, nullptr, nullptr);
+	unique_ptr<HTTPClient> client;
+
+	idx_t completions = 0;
+	bool reported_error = false;
+	http_util.Send(request, client, HTTPExecutionMode::DEFERRABLE,
+	               [&](unique_ptr<HTTPResponse> response, ErrorData error) {
+		               completions++;
+		               reported_error = error.HasError();
+	               });
+
+	// the 500 asks for a retry, and the retry cannot get a client to make it with
+	http_util.Complete();
+	REQUIRE(completions == 1);
+	REQUIRE(reported_error);
+}

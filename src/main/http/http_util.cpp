@@ -248,8 +248,12 @@ private:
 			DeliverFailure(attempt);
 			return;
 		case HTTPRetryDecision::RETRY: {
-			// refresh the client for the next attempt, mirroring the synchronous retry callback
+			// refresh the client for the next attempt, as the synchronous retry callback does
 			client = http_util.InitializeClient(request.params, request.proto_host_port);
+			if (!client) {
+				Deliver(nullptr, ErrorData("HTTP provider returned a null client during retry"));
+				return;
+			}
 			auto self = shared_from_this();
 			http_util.Wait(delay_ms, [self]() { self->Attempt(); });
 			return;
