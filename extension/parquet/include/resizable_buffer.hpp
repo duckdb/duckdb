@@ -13,6 +13,9 @@
 
 #include <exception>
 
+#include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+
 namespace duckdb {
 
 class ByteBuffer { // on to the 10 thousandth impl
@@ -118,9 +121,15 @@ class ResizeableBuffer : public ByteBuffer {
 public:
 	ResizeableBuffer() {
 	}
+
 	ResizeableBuffer(Allocator &allocator, const idx_t new_size) {
 		Resize(allocator, new_size);
 	}
+
+	ResizeableBuffer(BufferManager &buffer_manager, const idx_t new_size) {
+		Resize(buffer_manager, new_size);
+	}
+
 	void Resize(Allocator &allocator, const idx_t new_size) {
 		len = new_size;
 		offset = 0;
@@ -134,14 +143,36 @@ public:
 			ptr = allocated_data.get();
 		}
 	}
+
+	void Resize(BufferManager &buffer_manager, const idx_t new_size) {
+		len = new_size;
+		offset = 0;
+		if (new_size == 0) {
+			return;
+		}
+		if (new_size > alloc_len) {
+			alloc_len = NextPowerOfTwo(new_size);
+			handle = buffer_manager.Allocate(MemoryTag::PARQUET_READER, alloc_len, true);
+			block = handle.GetBlockHandle();
+			ptr = handle.GetDataMutable();
+		}
+	}
+
 	void Reset() {
-		ptr = allocated_data.get();
+		if (block) {
+			ptr = handle.GetDataMutable();
+		} else {
+			ptr = allocated_data.get();
+		}
 		len = alloc_len;
 		offset = 0;
 	}
 
 private:
 	AllocatedData allocated_data;
+	shared_ptr<BlockHandle> block;
+	BufferHandle handle;
+
 	idx_t alloc_len = 0;
 };
 

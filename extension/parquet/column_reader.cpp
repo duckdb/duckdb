@@ -146,6 +146,10 @@ Allocator &ColumnReader::GetAllocator() {
 	return reader.allocator;
 }
 
+BufferManager &ColumnReader::GetBufferManager() {
+	return reader.buffer_manager;
+}
+
 const ParquetReader &ColumnReader::Reader() {
 	return reader;
 }
@@ -485,7 +489,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 
 	if (compressed_bytes > 0) {
 		ResizeableBuffer compressed_buffer;
-		compressed_buffer.Resize(GetAllocator(), compressed_bytes);
+		compressed_buffer.Resize(GetBufferManager(), compressed_bytes);
 
 		ReadData(compressed_buffer.GetCurrentLoc(), compressed_bytes, page_hdr.type);
 
@@ -497,9 +501,9 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 
 void ColumnReader::AllocateBlock(idx_t size) {
 	if (!block) {
-		block = make_shared_ptr<ResizeableBuffer>(GetAllocator(), size);
+		block = make_shared_ptr<ResizeableBuffer>(GetBufferManager(), size);
 	} else {
-		block->Resize(GetAllocator(), size);
+		block->Resize(GetBufferManager(), size);
 	}
 }
 
@@ -533,7 +537,7 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	}
 
 	ResizeableBuffer compressed_buffer;
-	compressed_buffer.Resize(GetAllocator(), compressed_page_size + 1);
+	compressed_buffer.Resize(GetBufferManager(), compressed_page_size + 1);
 	ReadData(compressed_buffer.GetCurrentLoc(), compressed_page_size, page_hdr.type);
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.GetCurrentLoc(), compressed_page_size,

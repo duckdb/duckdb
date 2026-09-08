@@ -29,23 +29,23 @@ void ByteStreamSplitDecoder::InitializePage() {
 void ByteStreamSplitDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
 	idx_t valid_count = reader.GetValidCount(defines, read_count, result_offset);
 
-	auto &allocator = reader.reader.allocator;
+	auto &buffer_manager = reader.reader.buffer_manager;
 	decoded_data_buffer.Reset();
 	switch (reader.Schema().parquet_type) {
 	case duckdb_parquet::Type::FLOAT:
-		decoded_data_buffer.Resize(allocator, sizeof(float) * valid_count);
+		decoded_data_buffer.Resize(buffer_manager, sizeof(float) * valid_count);
 		bss_decoder->GetBatch<float>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 		break;
 	case duckdb_parquet::Type::DOUBLE:
-		decoded_data_buffer.Resize(allocator, sizeof(double) * valid_count);
+		decoded_data_buffer.Resize(buffer_manager, sizeof(double) * valid_count);
 		bss_decoder->GetBatch<double>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 		break;
 	case duckdb_parquet::Type::INT32:
-		decoded_data_buffer.Resize(allocator, sizeof(int32_t) * valid_count);
+		decoded_data_buffer.Resize(buffer_manager, sizeof(int32_t) * valid_count);
 		bss_decoder->GetBatch<int32_t>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 		break;
 	case duckdb_parquet::Type::INT64:
-		decoded_data_buffer.Resize(allocator, sizeof(int64_t) * valid_count);
+		decoded_data_buffer.Resize(buffer_manager, sizeof(int64_t) * valid_count);
 		bss_decoder->GetBatch<int64_t>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 		break;
 	default:

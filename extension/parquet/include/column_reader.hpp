@@ -347,6 +347,7 @@ private:
 
 protected:
 	Allocator &GetAllocator();
+	BufferManager &GetBufferManager();
 	// readers that use the default Read() need to implement those
 	virtual void PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values);
 	virtual void Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, idx_t result_offset, Vector &result);

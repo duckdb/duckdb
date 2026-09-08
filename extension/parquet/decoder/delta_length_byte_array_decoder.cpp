@@ -27,8 +27,8 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 	}
 	// read the binary packed lengths
 	auto &block = *reader.block;
-	auto &allocator = reader.reader.allocator;
-	DeltaByteArrayDecoder::ReadDbpData(allocator, block, length_buffer, byte_array_count);
+	auto &buffer_manager = reader.reader.buffer_manager;
+	DeltaByteArrayDecoder::ReadDbpData(buffer_manager, block, length_buffer, byte_array_count);
 
 	// Verify that the sum of DBP string lengths match up with the available string data
 	idx_t total_string_length = 0;

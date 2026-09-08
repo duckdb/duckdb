@@ -23,8 +23,8 @@ class Vector;
 DeltaByteArrayDecoder::DeltaByteArrayDecoder(ColumnReader &reader) : reader(reader) {
 }
 
-void DeltaByteArrayDecoder::ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer, ResizeableBuffer &result_buffer,
-                                        idx_t &value_count) {
+void DeltaByteArrayDecoder::ReadDbpData(BufferManager &buffer_manager, ResizeableBuffer &buffer,
+                                        ResizeableBuffer &result_buffer, idx_t &value_count) {
 	auto decoder = make_uniq<DbpDecoder>(buffer.GetCurrentLoc(), buffer.GetRemaining());
 	value_count = decoder->TotalValues();
 	result_buffer.Reset();
@@ -33,7 +33,7 @@ void DeltaByteArrayDecoder::ReadDbpData(Allocator &allocator, ResizeableBuffer &
 	if (!TryMultiplyOperator::Operation<idx_t, idx_t, idx_t>(value_count, sizeof(uint32_t), result_size)) {
 		throw InvalidInputException("DELTA_BYTE_ARRAY value count is too large - corrupt file?");
 	}
-	result_buffer.Resize(allocator, result_size);
+	result_buffer.Resize(buffer_manager, result_size);
 	decoder->GetBatch<uint32_t>(result_buffer.GetCurrentLoc(), value_count);
 	decoder->Finalize();
 	buffer.Inc(decoder->BytesConsumed());
@@ -41,12 +41,12 @@ void DeltaByteArrayDecoder::ReadDbpData(Allocator &allocator, ResizeableBuffer &
 
 void DeltaByteArrayDecoder::InitializePage() {
 	auto &block = *reader.block;
-	auto &allocator = reader.reader.allocator;
+	auto &buffer_manager = reader.reader.buffer_manager;
 	idx_t prefix_count, suffix_count;
 	auto &prefix_buffer = reader.encoding_buffers[0];
 	auto &suffix_buffer = reader.encoding_buffers[1];
-	ReadDbpData(allocator, block, prefix_buffer, prefix_count);
-	ReadDbpData(allocator, block, suffix_buffer, suffix_count);
+	ReadDbpData(buffer_manager, block, prefix_buffer, prefix_count);
+	ReadDbpData(buffer_manager, block, suffix_buffer, suffix_count);
 	if (prefix_count != suffix_count) {
 		throw std::runtime_error("DELTA_BYTE_ARRAY - prefix and suffix counts are different - corrupt file?");
 	}
@@ -58,7 +58,7 @@ void DeltaByteArrayDecoder::InitializePage() {
 	plain_data = make_shared_ptr<ResizeableBuffer>();
 
 	if (prefix_count == 0) {
-		plain_data->Resize(allocator, 0);
+		plain_data->Resize(buffer_manager, 0);
 		return;
 	}
 
@@ -86,7 +86,7 @@ void DeltaByteArrayDecoder::InitializePage() {
 		total_size += prefix_count * sizeof(uint32_t);
 	}
 
-	plain_data->Resize(allocator, total_size);
+	plain_data->Resize(buffer_manager, total_size);
 	unsafe_vector<uint8_t> prev_value(max_len);
 	idx_t prev_len = 0;
 
