@@ -1,0 +1,22 @@
+# name: test/sql/storage/compression/alp/alp_corrupt_file.test
+# group: [alp]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alp_corrupt_file.db.gz {TEST_DIR}/alp_corrupt_file.db
+
+statement ok
+ATTACH '{TEST_DIR}/alp_corrupt_file.db' AS db2
+
+statement ok
+USE db2;
+
+query I
+SELECT compression FROM pragma_storage_info('alp') WHERE compression='ALP';
+----
+ALP
+
+statement error
+SELECT * FROM alp LIMIT 1;
+----
+Data Corruption Error: Corrupted ALP segment: bit width 255 exceeds 64

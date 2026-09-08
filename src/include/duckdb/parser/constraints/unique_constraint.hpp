@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/constraint.hpp"
 
@@ -39,6 +40,8 @@ public:
 	bool IsPrimaryKey() const;
 	//! Returns true if the constraint was declared with the DEFERRED modifier.
 	bool IsDeferred() const;
+	//! Returns the index constraint type used to enforce this constraint.
+	IndexConstraintType GetIndexConstraintType() const;
 	//! Returns true, if the constraint is defined on a single column.
 	bool HasIndex() const;
 	//! Returns the column index on which the constraint is defined.

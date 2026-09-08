@@ -164,8 +164,18 @@ jobs:
           make cli-release-artifact ARTIFACT_SUFFIX=osx-arm64 CLI_BINARY=build/release_arm64/duckdb
           make cli-release-artifact ARTIFACT_SUFFIX=osx-amd64 CLI_BINARY=build/release_amd64/duckdb
           make shared-libs-release-artifact ARTIFACT_SUFFIX=osx-universal SHARED_LIBRARIES="build/release/src/libduckdb*.dylib"
-          zip -r -j static-libs-osx-arm64.zip src/include/duckdb.h build/release_arm64/libs/
-          zip -r -j static-libs-osx-amd64.zip src/include/duckdb.h build/release_amd64/libs/
+          zip -r -j static-libs-osx-arm64.zip \
+            src/include/duckdb.h \
+            src/include/duckdb_v2.h \
+            src/include/duckdb_extension.h \
+            src/include/duckdb_extension_v2.h \
+            build/release_arm64/libs/
+          zip -r -j static-libs-osx-amd64.zip \
+            src/include/duckdb.h \
+            src/include/duckdb_v2.h \
+            src/include/duckdb_extension.h \
+            src/include/duckdb_extension_v2.h \
+            build/release_amd64/libs/
 
           ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-osx-universal.tar.gz duckdb-cli-osx-arm64.tar.gz duckdb-cli-osx-amd64.tar.gz duckdb-shared-libs-osx-universal.tar.gz static-libs-osx-arm64.zip static-libs-osx-amd64.zip
 

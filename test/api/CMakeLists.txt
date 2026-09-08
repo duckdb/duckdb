@@ -11,6 +11,7 @@ add_subdirectory(cpp)
 
 set(TEST_API_OBJECTS
     test_api.cpp
+    test_process_util.cpp
     test_bind_statement.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
@@ -33,6 +34,7 @@ set(TEST_API_OBJECTS
     test_pending_query.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
+    test_stream_result_buffer.cpp
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
     test_read_ahead_abandon.cpp
@@ -40,6 +42,7 @@ set(TEST_API_OBJECTS
     test_dbdir.cpp
     test_pending_with_parameters.cpp
     test_parse_statement_iterator.cpp
+    test_grammar_extension.cpp
     test_progress_bar.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp

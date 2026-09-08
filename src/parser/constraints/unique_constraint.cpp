@@ -69,6 +69,10 @@ bool UniqueConstraint::IsDeferred() const {
 	return is_deferred;
 }
 
+IndexConstraintType UniqueConstraint::GetIndexConstraintType() const {
+	return IsPrimaryKey() ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
+}
+
 bool UniqueConstraint::HasIndex() const {
 	return index.index != DConstants::INVALID_INDEX;
 }
@@ -111,8 +115,7 @@ vector<LogicalIndex> UniqueConstraint::GetLogicalIndexes(const ColumnList &colum
 }
 
 Identifier UniqueConstraint::GetName(const Identifier &table_name) const {
-	auto type = IsPrimaryKey() ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
-	auto type_name = EnumUtil::ToString(type);
+	auto type_name = EnumUtil::ToString(GetIndexConstraintType());
 
 	string name;
 	for (const auto &column_name : GetColumnNames()) {

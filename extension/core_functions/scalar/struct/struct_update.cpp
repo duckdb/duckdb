@@ -116,6 +116,7 @@ static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, Func
 	auto incoming_children = identifier_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(expr.GetChildren().size(), true);
 	auto new_stats = StructStats::CreateUnknown(expr.GetReturnType());
+	new_stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 
 	for (idx_t arg_idx = 1; arg_idx < expr.GetChildren().size(); arg_idx++) {
 		auto &new_child = expr.GetChildren()[arg_idx];

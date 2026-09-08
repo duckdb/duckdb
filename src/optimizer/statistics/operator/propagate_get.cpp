@@ -201,6 +201,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			get.table_filters.RemoveFilterByColumnIndex(table_filter_column);
+			removed_expressions = true;
 			break;
 		case FilterPropagateResult::FILTER_TRUE_OR_NULL: {
 			if (IsConstantOrNullFilter(filter) && !CanReplaceConstantOrNull(filter)) {
