@@ -150,28 +150,30 @@ public:
 	//! Disable query profiling
 	DUCKDB_API void DisableProfiling();
 
-	//! Issue a query and run it to completion, returning a handle whose result is retained
+	//! Blocking. Runs the query to completion and returns its handle. The result is retained
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, QueryParameters query_parameters);
 
-	//! Submits a query to the database and returns its handle, without running it. Note that "query" may only
-	//! contain a single statement.
+	//! Non-blocking. Submits the query and returns its handle. The engine runs it iff threads - external_threads > 0,
+	//! but produces no data until the caller either calls a materializing method on the handle or opens a
+	//! QueryResultStream on it. The query may only contain a single statement.
 	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, QueryParameters query_parameters);
-	//! Submits a query to the database and returns its handle
+	//! Non-blocking. As above, for a parsed statement
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement, QueryParameters query_parameters);
 
-	//! Submit a query with a list of parameters
+	//! Non-blocking. As above, for bound parameter values
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
 	                                          identifier_map_t<BoundParameterData> &values,
 	                                          QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, identifier_map_t<BoundParameterData> &values,
 	                                          QueryParameters query_parameters);
 
-	//! Run a statement that was generated internally rather than parsed from user SQL. Statement verification
-	//! is skipped, and the client context lock is held for the entire duration of the query.
+	//! Blocking. Runs a statement that was generated internally rather than parsed from user SQL. Statement
+	//! verification is skipped, and the client context lock is held for the entire duration of the query.
 	DUCKDB_API unique_ptr<QueryResult> RunInternalStatement(unique_ptr<SQLStatement> statement,
 	                                                        const QueryParameters &parameters);
-	//! Same as RunInternalStatement, but returns the handle of the submitted query, which the caller drives
+	//! Non-blocking. Same as RunInternalStatement, but returns the handle of the submitted query, which the caller
+	//! drives
 	DUCKDB_API unique_ptr<QueryResult> SubmitInternalStatement(unique_ptr<SQLStatement> statement,
 	                                                           const QueryParameters &parameters);
 
@@ -195,8 +197,9 @@ public:
 	//! Internal function for try bind relation. It does not require a client-context lock.
 	DUCKDB_API void InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
 
-	//! Submit a relation
+	//! Non-blocking. Submits a relation and returns its handle
 	DUCKDB_API unique_ptr<QueryResult> Submit(const shared_ptr<Relation> &relation, QueryParameters query_parameters);
+	//! Blocking. Runs a relation to completion and returns its handle
 	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
 
 	//! Prepare a query

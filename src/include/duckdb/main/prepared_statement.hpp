@@ -89,27 +89,27 @@ public:
 	//! Returns the map of parameter index to the expected type of parameter
 	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 
-	//! Submit the prepared statement with the given set of arguments, returning its handle
+	//! Non-blocking. Submits the prepared statement with the given arguments and returns its handle
 	template <typename... ARGS>
 	unique_ptr<QueryResult> Submit(ARGS... args) {
 		vector<Value> values;
 		return SubmitRecursive(values, args...);
 	}
 
-	//! Submit the prepared statement with the given set of values, returning its handle
+	//! Non-blocking. Submits the prepared statement with the given values and returns its handle
 	DUCKDB_API unique_ptr<QueryResult> Submit(vector<Value> &values, QueryParameters query_parameters = {});
 
-	//! Submit the prepared statement with the given set of named values, returning its handle
+	//! Non-blocking. Submits the prepared statement with the given named values and returns its handle
 	DUCKDB_API unique_ptr<QueryResult> Submit(identifier_map_t<BoundParameterData> &named_values,
 	                                          QueryParameters query_parameters = {});
 
-	//! Execute the prepared statement with the given set of values, running it to completion
+	//! Blocking. Runs the prepared statement with the given values to completion
 	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values);
 
-	//! Execute the prepared statement with the given set of named+unnamed values, running it to completion
+	//! Blocking. Runs the prepared statement with the given named and unnamed values to completion
 	DUCKDB_API unique_ptr<QueryResult> Execute(identifier_map_t<BoundParameterData> &named_values);
 
-	//! Execute the prepared statement with the given set of arguments
+	//! Blocking. Runs the prepared statement with the given arguments to completion
 	template <typename... ARGS>
 	unique_ptr<QueryResult> Execute(ARGS... args) {
 		vector<Value> values;

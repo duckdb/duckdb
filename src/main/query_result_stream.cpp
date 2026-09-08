@@ -90,7 +90,7 @@ QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
 		try {
 			state = buffer.Pulse(*handle, *lock);
 			if (state != QueryResultState::ERROR) {
-				if (buffer.HasObservableChunk()) {
+				if (state == QueryResultState::READY) {
 					out_chunk = buffer.Scan();
 				}
 				if (out_chunk && out_chunk->size() != 0) {

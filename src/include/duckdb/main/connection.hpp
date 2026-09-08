@@ -73,8 +73,8 @@ public:
 	//! Force parallel execution, even for smaller tables. Should only be used in testing.
 	DUCKDB_API void ForceParallelism();
 
-	//! Issues a query to the database and runs it to completion, returning a handle whose result is
-	//! retained: it can be read repeatedly and at random.
+	//! Blocking. Runs the query to completion and returns its handle. The result is retained: it can be read
+	//! repeatedly and at random.
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &query);
 	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement,
 	                                         QueryResultMemoryType memory_type = QueryResultMemoryType::IN_MEMORY);
@@ -85,11 +85,11 @@ public:
 		return QueryParamsRecursive(query, values, args...);
 	}
 
-	//! Submits a query to the database and returns its handle, without running it. Nothing is produced
-	//! until the consumer chooses: opening a QueryResultStream on the handle drains, and a retained-side
-	//! call on the handle retains. Note that "query" may only contain a single statement.
+	//! Non-blocking. Submits the query and returns its handle. The engine runs it iff threads - external_threads > 0,
+	//! but produces no data until the caller either calls a materializing method on the handle or opens a
+	//! QueryResultStream on it. The query may only contain a single statement.
 	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, QueryParameters query_parameters = {});
-	//! Submits a query to the database and returns its handle
+	//! Non-blocking. As above, for a parsed statement and for bound parameter values
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
 	                                          QueryParameters query_parameters = {});
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,

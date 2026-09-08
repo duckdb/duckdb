@@ -238,7 +238,7 @@ unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 	{
 		annotated_lock_guard<annotated_mutex> lock(glock);
 		if (read_queue.empty()) {
-			context.reset();
+			Close();
 			D_ASSERT(blocked_sinks.empty());
 			D_ASSERT(buffer.empty());
 			return nullptr;
