@@ -58,3 +58,14 @@ query II
 EXPLAIN ANALYZE SELECT count(*) FROM all_null_map_key WHERE map_extract_value(m, key) IS NOT NULL;
 ----
 analyzed_plan	<REGEX>:.*Empty Result.*
+
+statement ok
+CREATE TABLE null_valued_map(m MAP(VARCHAR, INTEGER))
+
+statement ok
+INSERT INTO null_valued_map VALUES (MAP {'k': NULL})
+
+query I
+SELECT count(*) FROM null_valued_map WHERE list_position(map_values(m), NULL) = 1
+----
+1
