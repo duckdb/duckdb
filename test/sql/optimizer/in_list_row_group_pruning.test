@@ -60,3 +60,34 @@ query I
 SELECT count(*) FROM doubles WHERE i NOT IN (1, 2, 3);
 ----
 1
+
+# Each row group contains one string; NOT IN excludes the first and third groups.
+statement ok
+CREATE TABLE strings AS
+SELECT CASE range // 2048
+    WHEN 0 THEN 'v000000'
+    WHEN 1 THEN 'v000001'
+    WHEN 2 THEN 'v000010'
+    ELSE 'v999999'
+END AS s, 1 AS payload
+FROM range(8192);
+
+query I
+SELECT sum(payload) FROM strings WHERE s NOT IN ('v000000', 'v000010');
+----
+4096
+
+query I
+SELECT sum(payload) FROM strings WHERE s <> 'v000000' AND s <> 'v000010';
+----
+4096
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM strings WHERE s <> 'v000000' AND s <> 'v000010';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM strings WHERE s NOT IN ('v000000', 'v000010');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
