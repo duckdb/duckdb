@@ -246,9 +246,17 @@ CREATE TABLE ticks(x INT);
 statement ok
 INSERT INTO ticks VALUES (1), (2);
 
+# the schema is named here rather than taken as the default one, so that the reference reads the
+# same wherever the test's tables happen to live
+statement ok
+CREATE SCHEMA mr_schema;
+
+statement ok
+CREATE TABLE mr_schema.ticks AS FROM ticks;
+
 query I
-FROM ticks MATCH_RECOGNIZE (
-    ORDER BY main.ticks.x MEASURES count(*) AS n PATTERN (A+)
+FROM mr_schema.ticks MATCH_RECOGNIZE (
+    ORDER BY mr_schema.ticks.x MEASURES count(*) AS n PATTERN (A+)
 )
 ----
 2
@@ -810,3 +818,32 @@ FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
 )
 ----
 3
+
+# A clause that never names a column of its input still reports the input's columns, and which
+# column a reference lands on has to be the same question above the clause as below it: a base
+# table only hands out a binding for a column once something has asked for it, so the input is
+# projected before the clause reads its columns by position.
+statement ok
+CREATE TABLE mr_passthrough(a INTEGER, b VARCHAR)
+
+statement ok
+INSERT INTO mr_passthrough VALUES (1, 'x'), (2, 'y')
+
+query IT
+FROM mr_passthrough MATCH_RECOGNIZE (ALL ROWS PER MATCH PATTERN (A))
+----
+1	x
+2	y
+
+query ITI
+FROM mr_passthrough MATCH_RECOGNIZE (MEASURES 1 AS m ALL ROWS PER MATCH PATTERN (A))
+----
+1	x	1
+2	y	1
+
+query I
+SELECT count(*) FROM mr_passthrough MATCH_RECOGNIZE (
+    MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A)
+)
+----
+2

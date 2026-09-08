@@ -112,7 +112,7 @@ struct HoistedInputRefs {
 		// boundary between two of them
 		string key;
 		for (auto &name : colref.ColumnNames()) {
-			const auto identifier = name.GetIdentifierName();
+			const auto &identifier = name.GetIdentifierName();
 			key += to_string(identifier.size());
 			key += ":";
 			key += identifier;
@@ -366,15 +366,17 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	// The hoisted references sit in a projection of their own, directly over the input. Everything
 	// above reads them by name, including the navigation windows a DEFINE turns into, which could not
 	// order by a column computed beside them.
-	unique_ptr<TableRef> input_table = std::move(input_ref);
-	if (!input_refs.select_list.empty()) {
-		auto refs_node = MakeSelectNode(std::move(input_table));
-		refs_node->select_list.push_back(make_uniq<StarExpression>());
-		for (auto &expr : input_refs.select_list) {
-			refs_node->select_list.push_back(std::move(expr));
-		}
-		input_table = make_uniq<SubqueryRef>(MakeSelectStatement(std::move(refs_node)));
+	//
+	// The projection is there even when nothing was hoisted into it, because it is also what fixes
+	// what the input's columns are: a base table hands out a column binding only once something asks
+	// for that column, so the columns of a table nothing has asked about yet are not addressable
+	// positionally, and the clause below reads them positionally.
+	auto refs_node = MakeSelectNode(std::move(input_ref));
+	refs_node->select_list.push_back(make_uniq<StarExpression>());
+	for (auto &expr : input_refs.select_list) {
+		refs_node->select_list.push_back(std::move(expr));
 	}
+	unique_ptr<TableRef> input_table = make_uniq<SubqueryRef>(MakeSelectStatement(std::move(refs_node)));
 
 	// PREV() and NEXT() navigate the ordered partition rather than the match, so they become ordinary
 	// window functions over the partitioning and ordering the matcher walks. This is what they are
