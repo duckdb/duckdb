@@ -10,13 +10,35 @@ namespace duckdb {
 //! Bind data of read_single_json_file - the regular JSON scan data plus the single file that is read
 struct ReadSingleJSONFileData : public JSONScanData {
 	OpenFileInfo file;
+
+	//! Hand over the reader that detected the schema during the bind, if it has not been claimed yet
+	shared_ptr<JSONReader> TakeBindReader() const {
+		lock_guard<mutex> guard(bind_reader_lock);
+		return std::move(bind_reader);
+	}
+
+	void SetBindReader(shared_ptr<JSONReader> reader) {
+		lock_guard<mutex> guard(bind_reader_lock);
+		bind_reader = std::move(reader);
+	}
+
+private:
+	mutable mutex bind_reader_lock;
+	//! The reader that read this file while detecting the schema - the scan continues with it, so that files that
+	//! can only be read once (e.g. /dev/stdin) do not need to be opened again
+	mutable shared_ptr<JSONReader> bind_reader;
 };
 
 struct ReadSingleJSONFileGlobalState : public GlobalTableFunctionState {
 public:
 	ReadSingleJSONFileGlobalState(ClientContext &context, const ReadSingleJSONFileData &json_data)
-	    : state(context, json_data, 1),
-	      reader(make_shared_ptr<JSONReader>(context, json_data.options, json_data.file)) {
+	    : state(context, json_data, 1), reader(json_data.TakeBindReader()) {
+		if (reader) {
+			// continue with the reader that detected the schema - it has already read (part of) the file
+			reader->Reset();
+		} else {
+			reader = make_shared_ptr<JSONReader>(context, json_data.options, json_data.file);
+		}
 	}
 
 public:
@@ -113,6 +135,10 @@ static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, T
 	vector<shared_ptr<JSONReader>> sampled_readers;
 	JSONScan::BindSchema(context, *result, file_list, sampled_readers, return_types, names);
 	JSONScan::FinalizeBind(*result, names);
+	if (!sampled_readers.empty() && sampled_readers[0]) {
+		// keep the reader that detected the schema around - the scan continues with it
+		result->SetBindReader(std::move(sampled_readers[0]));
+	}
 	return std::move(result);
 }
 
