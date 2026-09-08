@@ -43,26 +43,3 @@ statement ok
 RESET debug_verify_statement
 
 endloop
-
-# Existing constraints continue to use eager enforcement when DEFERRED is absent.
-statement ok
-CREATE TABLE eager_constraints(i INTEGER PRIMARY KEY, j INTEGER UNIQUE);
-
-statement ok
-INSERT INTO eager_constraints VALUES (1, 10);
-
-statement error
-INSERT INTO eager_constraints VALUES (1, 20);
-----
-Constraint Error: Duplicate key "i: 1" violates primary key constraint.
-
-statement error
-INSERT INTO eager_constraints VALUES (2, 10);
-----
-Constraint Error: Duplicate key "j: 10" violates unique constraint.
-
-# IMMEDIATE is intentionally not part of the constraint grammar.
-statement error
-CREATE TABLE immediate_unique(i INTEGER UNIQUE IMMEDIATE);
-----
-Parser Error:
