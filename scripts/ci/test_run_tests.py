@@ -1378,6 +1378,33 @@ READ of size 4 at 0xdeadbeef thread T0
         self.assertEqual(reproduce_batch, ["test/sql/asan.test"])
         self.assertNotIn(run_tests.format_signal_summary(-6), lines)
 
+    def test_thread_sanitizer_output_is_not_truncated(self):
+        batch = ["test/sql/threadsan.test"]
+        stderr = """
+WARNING: ThreadSanitizer: data race (pid=123)
+  Read of size 8 by thread T2:
+    #0 duckdb::ArenaAllocator::AlignNext()
+
+  Previous write of size 8 by thread T1:
+    #0 duckdb_tdigest::TDigest::updateCumulative()
+
+  Location is heap block allocated by main thread:
+    #0 operator new(unsigned long)
+
+SUMMARY: ThreadSanitizer: data race in duckdb::ArenaAllocator::AlignNext()
+==================
+ThreadSanitizer: reported 1 warnings
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, "", stderr, batch, returncode=66)
+        stripped_lines = strip_ansi_lines(lines)
+
+        self.assertIn("WARNING: ThreadSanitizer: data race (pid=123)", stripped_lines)
+        self.assertIn("Previous write of size 8 by thread T1:", stripped_lines)
+        self.assertIn("Location is heap block allocated by main thread:", stripped_lines)
+        self.assertIn("SUMMARY: ThreadSanitizer: data race in duckdb::ArenaAllocator::AlignNext()", stripped_lines)
+        self.assertIn("ThreadSanitizer: reported 1 warnings", stripped_lines)
+        self.assertEqual(reproduce_batch, batch)
+
     def test_stdout_failed_block_extracts_explicit_message_reason(self):
         batch = ["/tmp/a.test", "/tmp/fail.test"]
         stdout = """
