@@ -376,16 +376,17 @@ void Executor::WaitForTask() {
 		blocked_thread_time += blocked_micros;
 		return;
 	}
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	if (scheduler.GetTaskCountForProducer(*producer) > 0) {
-		// A task is available for the calling thread, the next step will make progress without waiting
+	if (TaskScheduler::GetScheduler(context).GetTaskCountForProducer(*producer) > 0) {
+		// A new task is available for the calling thread, the next step will make progress without waiting
 		blocked_thread_time += blocked_micros;
 		return;
 	}
 	// Nothing to run on this thread, all remaining tasks are either running on other threads or descheduled.
 	// Wait (bounded), but wake up on task completion or reschedule.
-	blocked_thread_time += blocked_micros + WAIT_TIME_MS.count();
+	const auto wait_begin = TimePoint::Tick();
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
+	const auto wait_micros = NumericCast<idx_t>(TimePoint::ElapsedMicros(wait_begin, TimePoint::Tick()));
+	blocked_thread_time += blocked_micros + wait_micros;
 #endif
 }
 
