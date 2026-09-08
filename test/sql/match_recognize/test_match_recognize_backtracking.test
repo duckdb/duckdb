@@ -88,7 +88,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaaaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A*)*)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 1	5	5
@@ -98,7 +98,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaaaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A+)+)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 1	5	5
@@ -109,7 +109,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaaaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A|A A)+)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 1	5	5
@@ -119,7 +119,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaaaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A{2,4})
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 1	4	4
@@ -129,7 +129,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A{0,3} B)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	4	4
@@ -152,7 +152,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A{0,1}){3} A{3})
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 1	3	3
@@ -162,7 +162,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A{0,1}){4} A{4})
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 1	4	4
@@ -172,7 +172,7 @@ SELECT count(*), min(len), max(len) FROM rows_b MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A* B)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	1	1
@@ -183,7 +183,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A* A* A*)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 1	3	3
@@ -193,7 +193,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaaaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A|A){5})
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 1	5	5
@@ -203,7 +203,7 @@ SELECT count(*), min(len), max(len) FROM rows_aab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A|A B) B{0,1})
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 2	1	2
@@ -213,7 +213,7 @@ SELECT count(*), min(len), max(len) FROM rows_abab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A B){2})
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	4	4
@@ -223,7 +223,7 @@ SELECT count(*), min(len), max(len) FROM rows_abab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A B)+)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	4	4
@@ -233,7 +233,7 @@ SELECT count(*), min(len), max(len) FROM rows_aab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A{1,2} A{1,2} B)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	3	3
@@ -243,7 +243,7 @@ SELECT count(*), min(len), max(len) FROM rows_ab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A{0,1} B)|(A B))
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	2	2
@@ -253,7 +253,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A+)+ B)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	4	4
@@ -264,7 +264,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A+)+ B)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 0	NULL	NULL
@@ -274,7 +274,7 @@ SELECT count(*), min(len), max(len) FROM rows_ab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A|A B))
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	1	1
@@ -284,7 +284,7 @@ SELECT count(*), min(len), max(len) FROM rows_aa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A{0,1} A{0,1} A{0,1})
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 1	2	2
@@ -294,7 +294,7 @@ SELECT count(*), min(len), max(len) FROM rows_abab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A|B)+)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	4	4
@@ -306,7 +306,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A{0,0})
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 3	0	0
@@ -316,7 +316,7 @@ SELECT count(*), min(len), max(len) FROM rows_a MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (((A)))
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a'
 )
 ----
 1	1	1
@@ -326,7 +326,7 @@ SELECT count(*), min(len), max(len) FROM rows_abac MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN ((A B|A C)+)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c'
 )
 ----
 1	4	4
@@ -336,7 +336,7 @@ SELECT count(*), min(len), max(len) FROM rows_aab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A+ A B)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	3	3
@@ -346,7 +346,7 @@ SELECT count(*), min(len), max(len) FROM rows_aaab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A{2,} B)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	4	4
@@ -357,7 +357,7 @@ SELECT count(*), min(len), max(len) FROM rows_ab MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A B{0,1} B)
-    DEFINE A AS A.c = 'a', B AS B.c = 'b', C AS C.c = 'c', D AS D.c = 'd'
+    DEFINE A AS A.c = 'a', B AS B.c = 'b'
 )
 ----
 1	2	2

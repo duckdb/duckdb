@@ -69,7 +69,7 @@ query II
 SELECT count(*), max(len) FROM anch MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
-    PATTERN ($) DEFINE A AS c='a'
+    PATTERN ($)
 )
 ----
 0	NULL

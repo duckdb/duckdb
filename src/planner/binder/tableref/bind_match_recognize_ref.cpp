@@ -290,6 +290,9 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 			input_names.insert(name.GetIdentifierName());
 		}
 	}
+	// a reference to something outside this clause is the surrounding query's to resolve, so it is
+	// carried out to it rather than left with the binder that found it
+	MoveCorrelatedExpressions(*input_binder);
 	auto input_ref = make_uniq<BoundRefWrapper>(std::move(bound_input), std::move(input_binder));
 
 	// The matcher's state travels between the select nodes below in a column of its own. Every column
@@ -307,8 +310,10 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	for (auto &expr : ref.config->defines_expression_list) {
 		declared_symbols.insert(expr->GetAlias().GetIdentifierName());
 	}
+	case_insensitive_set_t pattern_variables;
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    *ref.config->pattern, [&](const ColumnRefExpression &colref) {
+		    pattern_variables.insert(colref.GetColumnName().GetIdentifierName());
 		    declared_symbols.insert(colref.GetColumnName().GetIdentifierName());
 	    });
 	// a SUBSET name stands for pattern variables too, so it is the clause's namespace as well
@@ -455,6 +460,11 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		if (pattern_symbols.find(define_name) != pattern_symbols.end()) {
 			// a symbol stands for one condition, so a second one for the same symbol has nowhere to go
 			throw BinderException("MATCH_RECOGNIZE defines pattern variable \"%s\" more than once", define_name);
+		}
+		if (!pattern_variables.count(define_name)) {
+			// a condition only decides rows for the variable the pattern matches with it, so one for a
+			// variable the pattern never mentions decides nothing at all - which is rarely what was meant
+			throw BinderException("MATCH_RECOGNIZE defines \"%s\", which its PATTERN does not use", define_name);
 		}
 		condition_binder.BeginDefine(define_name);
 		// a condition decides whether a row is the variable, so the matcher reads it as a boolean and
@@ -611,6 +621,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		match_data->conditions.push_back(std::move(condition));
 	}
 
+	MoveCorrelatedExpressions(*define_binder);
+
 	// the projection is complete once the matcher knows what it reads, so it can be planned
 	define_node.column_count = define_node.select_list.size();
 	BoundStatement bound_define;
@@ -739,6 +751,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 			measures.select_list.push_back(std::move(bound));
 		}
 	}
+	MoveCorrelatedExpressions(*measures_binder);
 	measures.column_count = measures.select_list.size();
 
 	BoundStatement bound_measures;
@@ -817,6 +830,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	auto child_binder = Binder::CreateBinder(context, this);
 	auto result = child_binder->Bind(*select_node);
+	MoveCorrelatedExpressions(*child_binder);
 	const auto alias = !ref.alias.empty() ? ref.alias : Identifier("__match_recognize_table");
 	auto output_names = BindContext::AliasColumnNames(alias, result.names, ref.column_name_alias);
 	bind_context.AddGenericBinding(result.plan->GetRootIndex(), alias, output_names, result.types);

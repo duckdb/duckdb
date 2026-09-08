@@ -15,7 +15,7 @@ insert into seq values (1,1),(2,1),(3,0),(4,1),(5,1),(6,1);
 # a single symbol matches one row at a time, so every A row starts its own match
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (A) DEFINE A as v=1
 ) ORDER BY x
 ----
 1
@@ -28,7 +28,7 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 query III
 SELECT i, ms, me FROM seq MATCH_RECOGNIZE(
     ORDER BY i MEASURES i AS x, FINAL FIRST(i) AS ms, FINAL LAST(i) AS me
-    ALL ROWS PER MATCH PATTERN (A+) DEFINE A as v=1, B as v=0
+    ALL ROWS PER MATCH PATTERN (A+) DEFINE A as v=1
 ) ORDER BY i
 ----
 1	1	2
@@ -41,7 +41,7 @@ SELECT i, ms, me FROM seq MATCH_RECOGNIZE(
 # An empty match covers no rows, so a column of the input has none to be read from and reports NULL.
 query II
 SELECT x, mn FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x, MATCH_NUMBER() AS mn PATTERN (A*) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x, MATCH_NUMBER() AS mn PATTERN (A*) DEFINE A as v=1
 ) ORDER BY mn
 ----
 2	1
@@ -51,7 +51,7 @@ NULL	2
 # repeating a symbol is the same as an exact quantifier; the overlapping 4-5 match is dropped
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (A A) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (A A) DEFINE A as v=1
 ) ORDER BY x
 ----
 2
@@ -59,7 +59,7 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (A{2}) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (A{2}) DEFINE A as v=1
 ) ORDER BY x
 ----
 2
@@ -68,14 +68,14 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 # only 3,4,5 are three consecutive A rows
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (A{3}) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (A{3}) DEFINE A as v=1
 ) ORDER BY x
 ----
 6
 
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (A{2,3}) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (A{2,3}) DEFINE A as v=1
 ) ORDER BY x
 ----
 2
@@ -83,7 +83,7 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (A{1,}) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (A{1,}) DEFINE A as v=1
 ) ORDER BY x
 ----
 2
@@ -92,7 +92,7 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 # capping the match at two rows leaves offset 5 free to start its own match
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (A{,2}) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (A{,2}) DEFINE A as v=1
 ) ORDER BY x
 ----
 2
@@ -103,7 +103,7 @@ NULL
 # ? takes the symbol or leaves it out, so like A* it still matches nothing at the B row
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (A?) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (A?) DEFINE A as v=1
 ) ORDER BY x
 ----
 1
@@ -115,7 +115,7 @@ NULL
 
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (A{0,1}) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (A{0,1}) DEFINE A as v=1
 ) ORDER BY x
 ----
 1
@@ -249,7 +249,7 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (((A))) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (((A))) DEFINE A as v=1
 ) ORDER BY x
 ----
 1
@@ -261,7 +261,7 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 # a symbol used in the pattern but not defined is implicitly true
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (B Z) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x PATTERN (B Z) DEFINE B as v=0
 ) ORDER BY x
 ----
 4
@@ -294,7 +294,7 @@ SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A+ B)
-    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+    DEFINE A AS A.v = 'a', B AS B.v = 'a'
 )
 ----
 1	5
@@ -304,7 +304,7 @@ SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A+ B B)
-    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+    DEFINE A AS A.v = 'a', B AS B.v = 'a'
 )
 ----
 1	5
@@ -314,7 +314,7 @@ SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A+ B B B)
-    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+    DEFINE A AS A.v = 'a', B AS B.v = 'a'
 )
 ----
 1	5
@@ -344,7 +344,7 @@ SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A* B B)
-    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+    DEFINE A AS A.v = 'a', B AS B.v = 'a'
 )
 ----
 1	5
@@ -354,7 +354,7 @@ SELECT count(*), max(len) FROM five MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (A{2,4} B B)
-    DEFINE A AS A.v = 'a', B AS B.v = 'a', C AS C.v = 'a'
+    DEFINE A AS A.v = 'a', B AS B.v = 'a'
 )
 ----
 1	5

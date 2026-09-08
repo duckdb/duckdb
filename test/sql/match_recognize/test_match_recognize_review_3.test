@@ -658,3 +658,83 @@ FROM (VALUES (1), (2), (3), (4)) t(x) MATCH_RECOGNIZE (
 2
 2
 2
+
+# A condition only decides rows for the variable the pattern matches with it, so one for a variable
+# the pattern never mentions decides nothing at all - which is rarely what was meant.
+statement error
+FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A) DEFINE A AS true, Q AS false
+)
+----
+which its PATTERN does not use
+
+query I
+FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A) DEFINE A AS true
+)
+----
+1
+1
+
+# A reference to the query around the clause is that query's to resolve, in whichever clause it
+# appears, and it reaches the matcher as the value the surrounding row gives it.
+query II
+SELECT * FROM (VALUES (1), (2)) u(k), LATERAL (
+    FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+        ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS x <= u.k
+    )
+) q ORDER BY ALL
+----
+1	1
+2	2
+
+query II
+SELECT * FROM (VALUES (1), (2)) u(k), LATERAL (
+    FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+        ORDER BY x MEASURES count(*) + u.k AS n PATTERN (A+)
+    )
+) q ORDER BY ALL
+----
+1	3
+2	4
+
+query III
+SELECT * FROM (VALUES (1), (-1)) u(k), LATERAL (
+    FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
+        ORDER BY x * u.k MEASURES FIRST(x) AS f, count(*) AS n PATTERN (A+)
+    )
+) q ORDER BY ALL
+----
+-1	3	3
+1	1	3
+
+query III
+SELECT * FROM (VALUES (1)) u(k), LATERAL (
+    FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+        PARTITION BY u.k ORDER BY x MEASURES count(*) AS n PATTERN (A+)
+    )
+) q ORDER BY ALL
+----
+1	1	2
+
+# one that reaches the matcher through a navigation, and one through a neighbour
+query II
+SELECT * FROM (VALUES (0), (5)) u(k), LATERAL (
+    FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
+        ORDER BY x MEASURES count(*) AS n PATTERN (A+)
+        DEFINE A AS PREV(x) IS NULL OR PREV(x) + u.k < x
+    )
+) q ORDER BY ALL
+----
+0	3
+5	1
+
+query II
+SELECT * FROM (VALUES (1), (2)) u(k), LATERAL (
+    FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
+        ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS FIRST(x) <= u.k
+    )
+) q ORDER BY ALL
+----
+1	3
+2	3

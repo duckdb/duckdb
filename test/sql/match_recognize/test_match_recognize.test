@@ -68,7 +68,7 @@ SELECT COUNT(*)
 FROM test AS t MATCH_RECOGNIZE(
     MEASURES A.v AS a_val
     PATTERN ((A (B C)))
-    DEFINE A as (v-1) > 0.11,  B as (v-1) > 0.11,  C as (v-1) > 0.11,  D as (v-1) > 0.11,  E as (v-1) > 0.11
+    DEFINE A as (v-1) > 0.11,  B as (v-1) > 0.11,  C as (v-1) > 0.11
 ) AS s
 
 statement ok
@@ -76,7 +76,7 @@ SELECT COUNT(*)
 FROM test AS t MATCH_RECOGNIZE(
     MEASURES A.v AS a_val
     PATTERN ((A (B C)*){1,2})
-    DEFINE A as (v-1) > 0.11,  B as (v-1) > 0.11,  C as (v-1) > 0.11,  D as (v-1) > 0.11,  E as (v-1) > 0.11
+    DEFINE A as (v-1) > 0.11, B as (v-1) > 0.11, C as (v-1) > 0.11
 ) AS s
 
 
@@ -85,7 +85,7 @@ SELECT COUNT(*)
 FROM test AS t MATCH_RECOGNIZE(
     MEASURES A.v AS a_val
     PATTERN (A | B)
-    DEFINE A as (v-1) > 0.11,  B as (v-1) > 0.11,  C as (v-1) > 0.11,  D as (v-1) > 0.11,  E as (v-1) > 0.11
+    DEFINE A as (v-1) > 0.11, B as (v-1) > 0.11
 ) AS s
 
 
