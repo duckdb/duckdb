@@ -53,14 +53,7 @@ unique_ptr<BoundFunctionExpression> BindBuiltinScalarFunction(ClientContext &con
 	for (auto &child : children) {
 		arguments.push_back(child->GetReturnType());
 	}
-	auto function = GetBuiltinScalarFunction(context, name, arguments);
-
-	FunctionBinder function_binder(context);
-	auto result = function_binder.BindScalarFunction(std::move(function), std::move(children));
-	if (result->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		throw InternalException("Optimizer exception - binding built-in function %s did not return a function", name);
-	}
-	return unique_ptr_cast<Expression, BoundFunctionExpression>(std::move(result));
+	return GetBuiltinScalarFunction(context, name, arguments)->Bind(context, std::move(children));
 }
 
 } // namespace duckdb
