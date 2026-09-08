@@ -1,0 +1,19 @@
+# name: benchmark/micro/list/string_split_regexp_dynamic.benchmark
+# description: Dynamic regexp string split benchmark
+# group: [list]
+
+name String Split Dynamic Regexp
+group micro
+subgroup list
+
+load
+CREATE TABLE regex_split_data AS
+SELECT repeat('a,b,c,d,e,f,g,h,i,j,', 10) AS input,
+       CASE WHEN i % 2 = 0 THEN ',' ELSE '[,]' END AS pattern
+FROM range(1000) t(i);
+
+run
+SELECT SUM(LENGTH(str_split_regex(input, pattern))) FROM regex_split_data
+
+result I
+101000

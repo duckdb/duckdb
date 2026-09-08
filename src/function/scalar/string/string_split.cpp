@@ -22,6 +22,9 @@ struct RegularStringSplit {
 		}
 		return FindStrInStr(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data), delim_size);
 	}
+
+	template <class CB>
+	static idx_t Split(string_t input, string_t delim, void *data, CB &&emit);
 };
 
 struct ConstantRegexpStringSplit {
@@ -36,17 +39,14 @@ struct ConstantRegexpStringSplit {
 		match_size = match.size();
 		return UnsafeNumericCast<idx_t>(match.data() - input_data);
 	}
+
+	template <class CB>
+	static idx_t Split(string_t input, string_t delim, void *data, CB &&emit);
 };
 
 struct RegexpStringSplit {
-	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
-	                  idx_t &match_size, void *data) {
-		duckdb_re2::RE2 regex(duckdb_re2::StringPiece(delim_data, delim_size));
-		if (!regex.ok()) {
-			throw InvalidInputException(regex.error());
-		}
-		return ConstantRegexpStringSplit::Find(input_data, input_size, delim_data, delim_size, match_size, &regex);
-	}
+	template <class CB>
+	static idx_t Split(string_t input, string_t delim, void *data, CB &&emit);
 };
 
 struct StringSplitter {
@@ -87,6 +87,31 @@ struct StringSplitter {
 	}
 };
 
+template <class CB>
+idx_t RegularStringSplit::Split(string_t input, string_t delim, void *data, CB &&emit) {
+	return StringSplitter::Split<RegularStringSplit>(input, delim, data, emit);
+}
+
+template <class CB>
+idx_t ConstantRegexpStringSplit::Split(string_t input, string_t delim, void *data, CB &&emit) {
+	return StringSplitter::Split<ConstantRegexpStringSplit>(input, delim, data, emit);
+}
+
+template <class CB>
+idx_t RegexpStringSplit::Split(string_t input, string_t delim, void *data, CB &&emit) {
+	if (input.GetSize() == 0) {
+		emit(input.GetData(), 0);
+		return 1;
+	}
+	D_ASSERT(data);
+	const auto options = reinterpret_cast<const duckdb_re2::RE2::Options *>(data);
+	duckdb_re2::RE2 regex(regexp_util::CreateStringPiece(delim), *options);
+	if (!regex.ok()) {
+		throw InvalidInputException(regex.error());
+	}
+	return StringSplitter::Split<ConstantRegexpStringSplit>(input, delim, &regex, emit);
+}
+
 template <class OP>
 void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, void *data = nullptr) {
 	auto input_entries = args.data[0].Values<string_t>();
@@ -109,10 +134,9 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 			list.WriteElement().WriteStringRef(input_entry.GetValue());
 			continue;
 		}
-		StringSplitter::Split<OP>(
-		    input_entry.GetValue(), delim_entry.GetValue(), data, [&](const char *split_data, idx_t split_size) {
-			    list.WriteElement().WriteStringRef(string_t(split_data, UnsafeNumericCast<uint32_t>(split_size)));
-		    });
+		OP::Split(input_entry.GetValue(), delim_entry.GetValue(), data, [&](const char *split_data, idx_t split_size) {
+			list.WriteElement().WriteStringRef(string_t(split_data, UnsafeNumericCast<uint32_t>(split_size)));
+		});
 	}
 
 	StringVector::AddHeapReference(ListVector::GetChildMutable(result), args.data[0]);
@@ -130,8 +154,8 @@ void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &r
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		StringSplitExecutor<ConstantRegexpStringSplit>(args, state, result, &lstate.constant_pattern);
 	} else {
-		// slow path: have to re-compile regex for every row
-		StringSplitExecutor<RegexpStringSplit>(args, state, result);
+		// slow path: have to compile the regex for every row
+		StringSplitExecutor<RegexpStringSplit>(args, state, result, &info.options);
 	}
 }
 
@@ -155,6 +179,7 @@ ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	// regexp options
 	regex_fun.GetSignature().AddParameter(LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
+	regexp_split.SetFallible();
 	return regexp_split;
 }
 
