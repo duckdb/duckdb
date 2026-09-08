@@ -1,0 +1,94 @@
+# name: test/sql/optimizer/array_extract_out_of_bounds_pruning.test
+# description: Out-of-bounds fixed-size array extract is simplified to NULL, enabling full row-group pruning
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/array_extract_simplification.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+statement ok
+CREATE TABLE arrays AS
+    SELECT [i::INTEGER, (i + 1)::INTEGER, (i + 2)::INTEGER]::INTEGER[3] AS a
+    FROM range(6144) tbl(i);
+
+# Out-of-bounds positive index: always NULL, filter is always false, plan eliminates the scan
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM arrays WHERE a[4] IS NOT NULL;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM arrays WHERE a[4] IS NOT NULL;
+----
+0
+
+# Out-of-bounds negative index: same
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM arrays WHERE a[-4] IS NOT NULL;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM arrays WHERE a[-4] IS NOT NULL;
+----
+0
+
+# In-bounds access: not simplified, normal scan
+query I
+SELECT count(*) FROM arrays WHERE a[1] IS NOT NULL;
+----
+6144
+
+# NULL index: result is NULL
+query I
+SELECT a[NULL] FROM arrays LIMIT 1;
+----
+NULL
+
+# Zero index: always NULL in 1-based indexing, filter is always false, plan eliminates the scan
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM arrays WHERE a[0] IS NOT NULL;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM arrays WHERE a[0] IS NOT NULL;
+----
+0
+
+query I
+SELECT a[0] FROM arrays LIMIT 1;
+----
+NULL
+
+# Boundary valid positive index (a[3] is in-bounds for INTEGER[3]): not simplified
+query I
+SELECT count(*) FROM arrays WHERE a[3] IS NOT NULL;
+----
+6144
+
+# Boundary valid negative indices: not simplified
+query I
+SELECT count(*) FROM arrays WHERE a[-1] IS NOT NULL;
+----
+6144
+
+query I
+SELECT count(*) FROM arrays WHERE a[-3] IS NOT NULL;
+----
+6144
+
+# Two out-of-bounds extracts on the same array column: the shared ARRAY -> LIST
+# cast is a candidate for common-subexpression elimination, which must not
+# prevent the out-of-bounds detection from firing on either extract
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM arrays WHERE a[4] IS NOT NULL OR a[5] IS NOT NULL;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM arrays WHERE a[4] IS NOT NULL OR a[5] IS NOT NULL;
+----
+0
