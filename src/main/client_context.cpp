@@ -462,7 +462,7 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock,
                                                                                  unique_ptr<SQLStatement> statement,
-                                                                                 QueryParameters parameters) {
+                                                                                 const QueryParameters &parameters) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
@@ -530,7 +530,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock,
                                                                          unique_ptr<SQLStatement> statement,
-                                                                         QueryParameters parameters) {
+                                                                         const QueryParameters &parameters) {
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
 	for (auto &state : registered_state->States()) {
@@ -1282,7 +1282,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::Submit(const string &query, QueryParameters parameters) {
+unique_ptr<QueryResult> ClientContext::Submit(const string &query, const QueryParameters &parameters) {
 	auto lock = LockContext();
 	try {
 		InitialCleanup(*lock);
@@ -1303,7 +1303,7 @@ unique_ptr<QueryResult> ClientContext::Submit(const string &query, QueryParamete
 	}
 }
 
-unique_ptr<QueryResult> ClientContext::Submit(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
+unique_ptr<QueryResult> ClientContext::Submit(unique_ptr<SQLStatement> statement, const QueryParameters &parameters) {
 	auto lock = LockContext();
 	try {
 		InitialCleanup(*lock);
@@ -1575,7 +1575,7 @@ unordered_set<string> ClientContext::GetTableNames(const string &query, const bo
 }
 
 unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, const shared_ptr<Relation> &relation,
-                                                      QueryParameters query_parameters) {
+                                                      const QueryParameters &query_parameters) {
 	InitialCleanup(lock);
 
 #ifdef DEBUG

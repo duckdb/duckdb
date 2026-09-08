@@ -101,7 +101,7 @@ public:
 
 	//! Non-blocking. Submits the prepared statement with the given named values and returns its handle
 	DUCKDB_API unique_ptr<QueryResult> Submit(identifier_map_t<BoundParameterData> &named_values,
-	                                          QueryParameters query_parameters = {});
+	                                          const QueryParameters &query_parameters = {});
 
 	//! Blocking. Runs the prepared statement with the given values to completion
 	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values);

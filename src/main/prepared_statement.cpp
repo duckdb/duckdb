@@ -137,7 +137,7 @@ unique_ptr<QueryResult> PreparedStatement::Submit(vector<Value> &values, QueryPa
 }
 
 unique_ptr<QueryResult> PreparedStatement::Submit(identifier_map_t<BoundParameterData> &named_values,
-                                                  QueryParameters query_parameters) {
+                                                  const QueryParameters &query_parameters) {
 	if (!success) {
 		auto exception = InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
 		return make_uniq<QueryResult>(ErrorData(exception));

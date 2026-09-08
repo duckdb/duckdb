@@ -1,7 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "tpcds_extension.hpp"
-#include "duckdb/main/pending_query_result.hpp"
 
 using namespace duckdb;
 
