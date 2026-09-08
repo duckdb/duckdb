@@ -278,12 +278,13 @@ FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
 statement ok
 CREATE MACRO agg_pair(a, b) AS sum(a) + sum(b);
 
-statement error
+# a macro body with two aggregates is two aggregates over the rows of the match
+query I
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES agg_pair(x, x) AS s PATTERN (A+)
 )
 ----
-exactly one aggregate function
+60
 
 # The memberships of the rows in overlapping matches are held in blocks that count against the memory
 # limit, so a pattern that produces far more of them than there are rows fails rather than growing

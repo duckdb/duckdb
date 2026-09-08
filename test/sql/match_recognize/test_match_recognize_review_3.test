@@ -267,3 +267,98 @@ FROM ticks MATCH_RECOGNIZE (
 )
 ----
 Referenced column "nope" not found
+
+# A macro is expanded the way any other binder expands one, so what the clause reads is what the
+# macro stands for rather than what its spelling suggests it must have been.
+
+statement ok
+CREATE MACRO m_two(v) AS sum(v) + count(v);
+
+statement ok
+CREATE MACRO m_sum(v) AS sum(v);
+
+statement ok
+CREATE MACRO m_nested(v) AS m_sum(v);
+
+statement ok
+CREATE MACRO m_first(v) AS FIRST(v);
+
+statement ok
+CREATE MACRO m_scalar(v) AS v + 1;
+
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES m_two(x) AS s PATTERN (A+)
+)
+----
+32
+
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES sum(x) + count(x) AS s PATTERN (A+)
+)
+----
+32
+
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES m_nested(x) AS s PATTERN (A+)
+)
+----
+30
+
+# a navigation reached through a macro navigates the match, like the one it stands for
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES m_first(x) AS s PATTERN (A+)
+)
+----
+10
+
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS m_first(x) = 10
+)
+----
+2
+
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES m_scalar(FIRST(x)) AS s PATTERN (A+)
+)
+----
+11
+
+# the overload the arguments select is the one that is expanded
+statement ok
+CREATE MACRO m_over(a) AS sum(a), (a, b) AS sum(a) + sum(b);
+
+query II
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES m_over(x) AS s1, m_over(x, x) AS s2 PATTERN (A+)
+)
+----
+30	60
+
+# a macro spelled as an aggregate keeps what only an aggregate can carry
+query I
+FROM (VALUES (10), (20), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES m_sum(DISTINCT x) AS s PATTERN (A+)
+)
+----
+30
+
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES m_sum(x) FILTER (WHERE CLASSIFIER() = 'A') AS s PATTERN (A B)
+)
+----
+10
+
+# a pattern variable named through a macro still scopes the aggregate to that variable's rows
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES m_sum(B.x) AS s PATTERN (A B) DEFINE B AS x > 15
+)
+----
+20

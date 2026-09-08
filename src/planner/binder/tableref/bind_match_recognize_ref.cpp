@@ -629,6 +629,16 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 	});
 }
 
+//! Whether a call is spelled the way only an aggregate can be
+static bool HasAggregateModifiers(const FunctionExpression &function) {
+	return function.Distinct() || function.Filter() || (function.OrderBy() && !function.OrderBy()->orders.empty());
+}
+
+//! How many macros deep the clause will follow one naming another before deciding it never ends
+static idx_t MatchRecognizeMaxMacroDepth() {
+	return 64;
+}
+
 static optional_ptr<CatalogEntry> LookupFunction(Binder &binder, const FunctionExpression &function, CatalogType type) {
 	EntryLookupInfo lookup(type, QualifiedName(function.FunctionName()));
 	auto &qualified = function.GetQualifiedName();
@@ -636,43 +646,55 @@ static optional_ptr<CatalogEntry> LookupFunction(Binder &binder, const FunctionE
 	return entry && entry->type == type ? entry : nullptr;
 }
 
-//! Counted the way the window binder finds the aggregate it pushes a frame down to: an aggregate is
-//! one of them and what it aggregates is not looked into any further.
-static idx_t CountAggregates(Binder &binder, const ParsedExpression &expr) {
-	if (expr.GetExpressionType() == ExpressionType::FUNCTION &&
-	    LookupFunction(binder, expr.Cast<FunctionExpression>(), CatalogType::AGGREGATE_FUNCTION_ENTRY)) {
-		return 1;
+//! Expands a macro call the way any other binder would: the ordinary overload selection, argument
+//! substitution and qualification, and nothing else. Binding proper happens later, where the rest of
+//! the clause is bound.
+class MatchRecognizeMacroExpander : public ExpressionBinder {
+public:
+	MatchRecognizeMacroExpander(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 	}
-	idx_t count = 0;
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { count += CountAggregates(binder, child); });
-	return count;
-}
 
-//! A macro standing for an aggregate aggregates the rows of the match like the aggregate it stands
-//! for. The window binder already pushes a window's frame down into a macro body that is one
-//! aggregate, so all that is needed here is to recognise which macros those are and let them take
-//! the same route - rather than expanding them a second way of our own.
-static bool IsAggregateMacro(Binder &binder, const FunctionExpression &function) {
-	auto entry = LookupFunction(binder, function, CatalogType::MACRO_ENTRY);
-	if (!entry) {
-		return false;
+	using ExpressionBinder::UnfoldMacroExpression;
+
+protected:
+	BindResult BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) override {
+		throw InternalException("MATCH_RECOGNIZE expands macros here rather than binding them");
 	}
-	bool aggregate = false;
-	for (auto &macro : entry->Cast<ScalarMacroCatalogEntry>().macros) {
-		if (macro->type != MacroType::SCALAR_MACRO) {
-			return false;
-		}
-		const auto aggregates = CountAggregates(binder, *macro->Cast<ScalarMacroFunction>().expression);
-		if (aggregates > 1) {
-			// there is no single aggregate for the match's frame to be pushed down to, which is what
-			// the window binder says about the same macro used over any other frame
-			throw BinderException("Window function macro bodies must contain exactly one aggregate function");
-		}
-		// none of them and it is an ordinary scalar macro, which binds where it stands
-		aggregate = aggregate || aggregates == 1;
+	string UnsupportedAggregateMessage() override {
+		return "MATCH_RECOGNIZE expands macros here rather than binding them";
 	}
-	return aggregate;
+};
+
+//! What a macro stands for is what the clause has to read, not the macro: an aggregate reached
+//! through one aggregates the rows of the match, and it is not there to be seen until the macro is
+//! gone. Expanding it rather than deciding what it must have been leaves overload selection and
+//! argument substitution to the code that owns them.
+static void ExpandMacros(Binder &binder, unique_ptr<ParsedExpression> &expr, idx_t depth = 0) {
+	// a macro body can name another macro, and this is what stops one that names itself
+	if (depth > MatchRecognizeMaxMacroDepth()) {
+		throw BinderException("MATCH_RECOGNIZE expanded macros more than %llu deep, which is deeper than a macro "
+		                      "that ends somewhere goes",
+		                      MatchRecognizeMaxMacroDepth());
+	}
+	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
+		auto &function = expr->Cast<FunctionExpression>();
+		// DISTINCT, FILTER and argument ORDER BY only mean anything to an aggregate, so a macro
+		// carrying one of them stands for an aggregate and keeps it by becoming the window that
+		// unfolds it - which is the route the same macro takes over any other frame
+		auto entry =
+		    HasAggregateModifiers(function) ? nullptr : LookupFunction(binder, function, CatalogType::MACRO_ENTRY);
+		if (entry) {
+			auto alias = expr->GetAlias();
+			MatchRecognizeMacroExpander expander(binder, binder.context);
+			expander.UnfoldMacroExpression(function, entry->Cast<ScalarMacroCatalogEntry>(), expr, 0);
+			expr->SetAlias(std::move(alias));
+			// what it expanded to can name a macro of its own
+			ExpandMacros(binder, expr, depth + 1);
+			return;
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { ExpandMacros(binder, child, depth); });
 }
 
 //! Rewrite a MEASURES expression into something evaluable next to the pattern window
@@ -728,10 +750,10 @@ static void RewriteMeasure(Binder &binder, const string &state, unique_ptr<Parse
 			                        offset);
 			return;
 		}
-		// an aggregate in MEASURES aggregates the rows of the match, whether it is written directly or
-		// reached through a macro standing for one
+		// An aggregate in MEASURES aggregates the rows of the match. A macro left unexpanded got that
+		// way by being spelled as an aggregate, and the window below unfolds it as one.
 		if (LookupFunction(binder, function, CatalogType::AGGREGATE_FUNCTION_ENTRY) ||
-		    IsAggregateMacro(binder, function)) {
+		    (HasAggregateModifiers(function) && LookupFunction(binder, function, CatalogType::MACRO_ENTRY))) {
 			case_insensitive_set_t scope;
 			for (auto &argument : function.GetArgumentsMutable()) {
 				RewriteMeasure(binder, state, argument.GetExpressionMutable(), config, symbols, running, one_row,
@@ -867,6 +889,18 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	vector<Identifier> partition_names;
 	for (auto &expr : ref.config->partition_expressions) {
 		partition_names.push_back(expr->GetName());
+	}
+
+	// the clause reads what a macro stands for, so the macros are gone before any of it is read
+	for (auto &expr : ref.config->defines_expression_list) {
+		auto alias = expr->GetAlias();
+		ExpandMacros(*this, expr);
+		expr->SetAlias(std::move(alias));
+	}
+	for (auto &expr : ref.config->measures_expression_list) {
+		auto alias = expr->GetAlias();
+		ExpandMacros(*this, expr);
+		expr->SetAlias(std::move(alias));
 	}
 
 	// Every clause here is evaluated above a subquery of the input, so a reference that means
