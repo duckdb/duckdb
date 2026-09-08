@@ -31,6 +31,12 @@ constexpr const idx_t MATCH_RECOGNIZE_MATCH_NUMBER_FIELD = 0;
 constexpr const char *MATCH_RECOGNIZE_RUNNING_MARKER = "__mr_running";
 constexpr const char *MATCH_RECOGNIZE_FINAL_MARKER = "__mr_final";
 
+//! The plan column a pattern variable is qualified with, so that a DEFINE naming it cannot resolve
+//! to a base table column of the same name
+inline string MatchRecognizeDefineColumn(const string &symbol) {
+	return MATCH_RECOGNIZE_DEFINE_PREFIX + symbol;
+}
+
 //! The user facing pattern variable for a prefixed plan column
 inline string MatchRecognizeSymbolName(const string &column_name) {
 	const auto prefix_size = strlen(MATCH_RECOGNIZE_DEFINE_PREFIX);
