@@ -2,9 +2,6 @@
 # description: Test ComparisonSimplificationRule
 # group: [expression]
 
-statement ok
-PRAGMA enable_verification
-
 # VARCHAR => TIME is not invertible.
 query I
 WITH results AS (     

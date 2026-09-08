@@ -52,14 +52,13 @@ FROM
    FROM catalog_sales,
         customer,
         date_dim,
-        frequent_ss_items,
         best_ss_customer
    WHERE d_year = 2000
      AND d_moy = 2
      AND cs_sold_date_sk = d_date_sk
-     AND cs_item_sk = item_sk
      AND cs_bill_customer_sk = best_ss_customer.c_customer_sk
      AND cs_bill_customer_sk = customer.c_customer_sk
+     and cs_item_sk in (select item_sk from frequent_ss_items)
    GROUP BY c_last_name,
             c_first_name
    UNION ALL SELECT c_last_name,
@@ -68,14 +67,13 @@ FROM
    FROM web_sales,
         customer,
         date_dim,
-        frequent_ss_items,
         best_ss_customer
    WHERE d_year = 2000
      AND d_moy = 2
      AND ws_sold_date_sk = d_date_sk
-     AND ws_item_sk = item_sk
      AND ws_bill_customer_sk = best_ss_customer.c_customer_sk
      AND ws_bill_customer_sk = customer.c_customer_sk
+     and ws_item_sk in (select item_sk from frequent_ss_items)
    GROUP BY c_last_name,
             c_first_name) sq3
 ORDER BY c_last_name NULLS FIRST,

@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/extension_manager.hpp"
@@ -88,7 +89,7 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 	// system transactions do not register catalog version changes :/
 	duckdb::TableFunction tf("some_new_table_function", {}, SomeTableFunc);
 	ExtensionInfo extension_info {};
-	ExtensionActiveLoad load_info {*db.instance, extension_info, "test_catalog_extension"};
+	ExtensionActiveLoad load_info {*db.instance, extension_info, "test_catalog_extension", ""};
 	ExtensionLoader loader {load_info};
 	loader.RegisterFunction(tf);
 

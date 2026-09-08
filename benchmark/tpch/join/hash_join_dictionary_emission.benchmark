@@ -1,0 +1,23 @@
+# name: benchmark/tpch/join/hash_join_dictionary_emission.benchmark
+# description: small build side dictionary emission — emitted dictionaries are exploited by downstream operators
+# group: [join]
+
+name Hash Join Dictionary Emission
+group join
+subgroup tpch
+
+require tpch
+
+cache tpch_sf10.duckdb
+
+load
+CALL dbgen(sf=10);
+
+init
+SET threads=1;
+
+run
+SELECT n.n_name, COUNT(*) AS cnt
+FROM nation n
+JOIN customer c ON hash(n.n_nationkey) = hash(c.c_nationkey)
+GROUP BY n.n_name;

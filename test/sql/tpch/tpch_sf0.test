@@ -2,15 +2,14 @@
 # description: Test TPC-H SF0
 # group: [tpch]
 
-require tpch
+set variable sf 0
 
-statement ok
-CALL dbgen(sf=0);
+include test/sql/tpch/tpch_setup.test_template
 
 loop i 1 23
 
 statement ok
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 
 endloop
 
@@ -30,3 +29,8 @@ PRAGMA tpch(32908301298)
 statement error
 PRAGMA tpch(1.1)
 ----
+
+statement error
+PRAGMA tpch(NULL)
+----
+<REGEX>:.*Cannot use NULL as argument for the TPC-H query number.*

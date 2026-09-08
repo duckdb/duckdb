@@ -9,14 +9,18 @@ add_library_unity(
   like.cpp
   md5.cpp
   nfc_normalize.cpp
+  overlay.cpp
   regexp.cpp
+  path_join.cpp
   substring.cpp
   prefix.cpp
   regexp_escape.cpp
   sha1.cpp
   sha256.cpp
   strip_accents.cpp
+  string_common.cpp
   string_split.cpp
+  string_slice.cpp
   suffix.cpp
   contains.cpp)
 set(ALL_OBJECT_FILES

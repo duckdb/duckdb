@@ -1,0 +1,22 @@
+# name: test/extension/explicit_extension_schema_testing.test
+# description: test functions regisitered in separate extension schemas
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/explicit_extension_schema.duckdb_extension';
+
+query I
+SELECT explicit_schema.dedicated_schema_function();
+----
+Hello from the explicit_extension_schema schema!
+
+query I
+SELECT dedicated_schema_function();
+----
+Hello from the explicit_extension_schema schema!

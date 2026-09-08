@@ -1,0 +1,92 @@
+# name: test/optimizer/joins/relation_statistics_bindings.test
+# description: Relation statistics remain aligned with output bindings through projections, aggregates and CTEs
+# group: [joins]
+
+statement ok
+CREATE TABLE rs_input(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO rs_input VALUES (1, 10), (1, 11), (1, 12), (2, 20), (3, 30), (3, 31);
+
+statement ok
+CREATE TABLE rs_count_lookup(cnt BIGINT, label VARCHAR);
+
+statement ok
+INSERT INTO rs_count_lookup VALUES (1, 'one'), (2, 'two'), (3, 'three');
+
+statement ok
+CREATE TABLE rs_key_lookup(k INTEGER);
+
+statement ok
+INSERT INTO rs_key_lookup VALUES (1), (3);
+
+# The aggregate exposes two binding namespaces: group keys and aggregate results.
+# Reordering the CTE projection must not make their shared column indexes collide.
+query IITI rowsort
+WITH grouped AS MATERIALIZED (
+    SELECT count(*) AS cnt, k, sum(v) AS total
+    FROM rs_input
+    GROUP BY k
+)
+SELECT grouped.k, grouped.cnt, grouped.total, rs_count_lookup.label
+FROM grouped
+JOIN rs_count_lookup ON grouped.cnt = rs_count_lookup.cnt
+JOIN rs_key_lookup ON grouped.k = rs_key_lookup.k;
+----
+1	3	33	three
+3	2	61	two
+
+# Exercise the same binding layout after inlining the CTE and applying a filter.
+query III rowsort
+WITH grouped AS NOT MATERIALIZED (
+    SELECT sum(v) AS total, k, count(*) AS cnt
+    FROM rs_input
+    GROUP BY k
+)
+SELECT grouped.k, grouped.cnt, grouped.total
+FROM grouped
+JOIN rs_count_lookup ON grouped.cnt = rs_count_lookup.cnt
+WHERE grouped.total > 25;
+----
+1	3	33
+3	2	61
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+# The corrected aggregate binding layout should keep the three connected relations in a join tree.
+query TT
+EXPLAIN
+WITH grouped AS NOT MATERIALIZED (
+    SELECT sum(v) AS total, k, count(*) AS cnt
+    FROM rs_input
+    GROUP BY k
+)
+SELECT grouped.k, grouped.cnt, grouped.total
+FROM grouped
+JOIN rs_count_lookup ON grouped.cnt = rs_count_lookup.cnt
+JOIN rs_key_lookup ON grouped.k = rs_key_lookup.k;
+----
+physical_plan	<!REGEX>:.*CROSS_PRODUCT.*
+
+# An unsupported output-changing operator is a join-order boundary. Its child can still be optimized,
+# but the parent join must not receive guessed output-column statistics.
+statement ok
+CREATE TABLE rs_pivot_input(id INTEGER, category VARCHAR, v INTEGER);
+
+statement ok
+INSERT INTO rs_pivot_input VALUES (1, 'a', 10), (1, 'b', 20), (2, 'a', 30);
+
+statement ok
+CREATE TABLE rs_pivot_lookup(id INTEGER, label VARCHAR);
+
+statement ok
+INSERT INTO rs_pivot_lookup VALUES (1, 'x'), (2, 'y');
+
+query IIIT rowsort
+SELECT pivoted.id, pivoted.a, pivoted.b, rs_pivot_lookup.label
+FROM (PIVOT rs_pivot_input ON category USING sum(v) GROUP BY id) pivoted
+JOIN rs_pivot_lookup USING (id);
+----
+1	10	20	x
+2	30	NULL	y

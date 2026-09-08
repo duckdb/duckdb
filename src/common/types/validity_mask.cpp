@@ -1,9 +1,14 @@
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/serializer/read_stream.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -13,12 +18,38 @@ ValidityData::ValidityData(const ValidityMask &original, idx_t count)
     : TemplatedValidityData(original.GetData(), count) {
 }
 
+void ValidityMask::Combine(const Vector &other, idx_t count) {
+	if (other.GetVectorType() == VectorType::FLAT_VECTOR) {
+		// combine validity masks directly
+		Combine(FlatVector::Validity(other), count);
+		return;
+	}
+	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (ConstantVector::IsNull(other)) {
+			// other is constant NULL - result is constant NULl
+			SetAllInvalid(count);
+		}
+		// other is not NULL - skip
+		return;
+	}
+	auto validity = other.Validity();
+	if (validity.CannotHaveNull()) {
+		// no NULL values - we can skip this
+		return;
+	}
+	for (idx_t r = 0; r < count; r++) {
+		if (!validity.IsValid(r)) {
+			SetInvalid(r);
+		}
+	}
+}
+
 void ValidityMask::Combine(const ValidityMask &other, idx_t count) {
-	if (other.AllValid()) {
+	if (other.CannotHaveNull()) {
 		// X & 1 = X
 		return;
 	}
-	if (AllValid()) {
+	if (CannotHaveNull()) {
 		// 1 & Y = Y
 		Initialize(other);
 		return;
@@ -84,7 +115,7 @@ idx_t ValidityMask::Capacity() const {
 }
 
 void ValidityMask::Slice(const ValidityMask &other, idx_t source_offset, idx_t count) {
-	if (other.AllValid()) {
+	if (other.CannotHaveNull()) {
 		validity_mask = nullptr;
 		validity_data.reset();
 		return;
@@ -100,6 +131,10 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t source_offset, idx_t c
 
 bool ValidityMask::IsAligned(idx_t count) {
 	return count % BITS_PER_VALUE == 0;
+}
+
+void ValidityMask::CopyRange(const ValidityMask &other, idx_t count) {
+	CopySel(other, *FlatVector::IncrementalSelectionVector(), 0, 0, count);
 }
 
 void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel, idx_t source_offset,
@@ -121,7 +156,7 @@ void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel
 }
 
 void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count) {
-	if (AllValid() && other.AllValid()) {
+	if (CannotHaveNull() && other.CannotHaveNull()) {
 		// Both validity masks are uninitialized, nothing to do
 		return;
 	}
@@ -263,19 +298,34 @@ void ValidityMask::Read(ReadStream &reader, idx_t count) {
 	Initialize(count);
 	// deserialize the storage type
 	auto flag = reader.Read<ValiditySerialization>();
-	if (flag == ValiditySerialization::BITMASK) {
+	switch (flag) {
+	case ValiditySerialization::BITMASK:
 		// deserialize the bitmask
 		reader.ReadData(data_ptr_cast(GetData()), ValidityMask::ValidityMaskSize(count));
 		return;
+	case ValiditySerialization::VALID_VALUES:
+	case ValiditySerialization::INVALID_VALUES:
+		break;
+	default:
+		throw DataCorruptionException("Corrupted validity mask: unrecognized serialization type %u",
+		                              static_cast<uint8_t>(flag));
 	}
 	auto is_u32 = count >= NumericLimits<uint16_t>::Maximum();
 	auto is_valid = flag == ValiditySerialization::VALID_VALUES;
-	auto serialize_count = reader.Read<uint32_t>();
+	idx_t serialize_count = reader.Read<uint32_t>();
+	if (serialize_count > count) {
+		throw DataCorruptionException("Corrupted validity mask: entry count %llu exceeds the mask size of %llu",
+		                              serialize_count, count);
+	}
 	if (is_valid) {
 		SetAllInvalid(count);
 	}
 	for (idx_t i = 0; i < serialize_count; i++) {
 		idx_t index = is_u32 ? reader.Read<uint32_t>() : reader.Read<uint16_t>();
+		if (index >= count) {
+			throw DataCorruptionException("Corrupted validity mask: index %llu exceeds the mask size of %llu", index,
+			                              count);
+		}
 		Set(index, is_valid);
 	}
 }

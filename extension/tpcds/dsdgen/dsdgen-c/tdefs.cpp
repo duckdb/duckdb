@@ -46,8 +46,8 @@
 #include "tdef_functions.h"
 #include "r_params.h"
 
-extern tdef w_tdefs[];
-extern tdef s_tdefs[];
+extern thread_local tdef w_tdefs[];
+extern thread_local tdef s_tdefs[];
 extern table_func_t s_tdef_funcs[];
 extern table_func_t w_tdef_funcs[];
 

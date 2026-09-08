@@ -30,7 +30,7 @@ public:
 	//! Expected table types.
 	vector<LogicalType> expected_types;
 	//! Expected table names.
-	vector<string> expected_names;
+	vector<Identifier> expected_names;
 
 public:
 	string ToString() const override;

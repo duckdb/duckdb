@@ -1,0 +1,115 @@
+# name: test/sql/types/geo/geometry_stats_prune_null.test
+# description: Test that the && filter is not pruned away for geometry columns containing NULLs
+# group: [geo]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT
+		CASE
+			WHEN i % 10 = 0 THEN NULL
+			ELSE printf('POINT(%d %d)', i % 100, i % 100)::GEOMETRY
+		END AS g,
+		i AS id
+	FROM range(1000) tbl(i)
+) TO '{TEST_DIR}/duckdb_geo_nullable.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V2', ROW_GROUP_SIZE 1000);
+
+# The predicate covers the full extent of the column, but the NULL values still do not match it
+query I
+SELECT count(*) FROM '{TEST_DIR}/duckdb_geo_nullable.parquet' WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+900
+
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/duckdb_geo_nullable.parquet' WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+900
+
+statement ok
+RESET disabled_optimizers;
+
+# Same, but for a table in storage instead of a parquet file
+require noforcestorage
+
+statement ok
+CREATE TABLE geo_nullable AS
+	SELECT
+		CASE
+			WHEN i % 10 = 0 THEN NULL
+			ELSE printf('POINT(%d %d)', i % 100, i % 100)::GEOMETRY
+		END AS g,
+		i AS id
+	FROM range(1000) tbl(i);
+
+query I
+SELECT count(*) FROM geo_nullable WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+900
+
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
+query I
+SELECT count(*) FROM geo_nullable WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+900
+
+statement ok
+RESET disabled_optimizers;
+
+# Without NULL values the filter can still be pruned away entirely
+statement ok
+CREATE TABLE geo_not_null AS SELECT printf('POINT(%d %d)', i % 100, i % 100)::GEOMETRY AS g FROM range(1000) tbl(i);
+
+query I
+SELECT count(*) FROM geo_not_null WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+1000
+
+query II
+EXPLAIN SELECT count(*) FROM geo_not_null WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+physical_plan	<!REGEX>:.*Filters.*
+
+# Disjoint predicates are still pruned to nothing, even with NULL values present
+query I
+SELECT count(*) FROM geo_nullable WHERE g && 'POLYGON((500 500, 600 500, 600 600, 500 600, 500 500))'::GEOMETRY;
+----
+0
+
+# Empty geometries contribute nothing to the zonemap, but never intersect anything either,
+# so a covering predicate cannot prune the filter away when the column contains one
+statement ok
+CREATE TABLE geo_empty AS SELECT printf('POINT(%d %d)', i % 100, i % 100)::GEOMETRY AS g FROM range(999) tbl(i);
+
+statement ok
+INSERT INTO geo_empty VALUES ('POLYGON EMPTY'::GEOMETRY);
+
+query I
+SELECT count(*) FROM geo_empty WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+999
+
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
+query I
+SELECT count(*) FROM geo_empty WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+999
+
+statement ok
+RESET disabled_optimizers;
+
+# Same, for a parquet file - there the empty geometry is not even visible in the statistics
+statement ok
+COPY (SELECT * FROM geo_empty) TO '{TEST_DIR}/duckdb_geo_empty.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V2', ROW_GROUP_SIZE 2000);
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/duckdb_geo_empty.parquet' WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+999

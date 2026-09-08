@@ -2,28 +2,25 @@
 # description: Test aggregates on NaN values
 # group: [float]
 
-statement ok
-PRAGMA enable_verification
-
 foreach type FLOAT DOUBLE
 
 query III
-SELECT SUM('inf'::${type}), SUM('-inf'::${type}), SUM('nan'::${type})
+SELECT SUM('inf'::{type}), SUM('-inf'::{type}), SUM('nan'::{type})
 ----
 inf	-inf	nan
 
 query III
-SELECT MIN('inf'::${type}), MIN('-inf'::${type}), MIN('nan'::${type})
+SELECT MIN('inf'::{type}), MIN('-inf'::{type}), MIN('nan'::{type})
 ----
 inf	-inf	nan
 
 query III
-SELECT MAX('inf'::${type}), MAX('-inf'::${type}), MAX('nan'::${type})
+SELECT MAX('inf'::{type}), MAX('-inf'::{type}), MAX('nan'::{type})
 ----
 inf	-inf	nan
 
 statement ok
-create table floats(f ${type});
+create table floats(f {type});
 
 statement ok
 insert into floats values ('inf'), ('-inf'), ('nan');

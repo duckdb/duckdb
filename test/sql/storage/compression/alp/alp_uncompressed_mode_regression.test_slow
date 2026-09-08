@@ -8,7 +8,7 @@ require parquet
 # PART 1: Test with v1.4.0 (baseline, no alp_uncompressed_mode available)
 #########################################
 
-load __TEST_DIR__/test_alp_regression_v1_4_0.db readwrite v1.4.0
+load {TEST_DIR}/test_alp_regression_v1_4_0.db readwrite v1.4.0
 
 statement ok
 PRAGMA force_compression='uncompressed'
@@ -56,7 +56,7 @@ SELECT
 # PART 2: Test with v1.5.0 (new alp_uncompressed_mode available to the compression engine)
 #########################################
 
-load __TEST_DIR__/test_alp_regression_v1_5_0.db readwrite v1.5.0
+load {TEST_DIR}/test_alp_regression_v1_5_0.db readwrite v1.5.0
 
 statement ok
 PRAGMA force_compression='uncompressed'
@@ -104,7 +104,7 @@ SELECT
 # Now assert: compression ratio of alp using storage version v1.5.0 must be AT LEAST as good as using v1.4.0
 # Load v1.4.0 metrics for comparison
 statement ok
-ATTACH '__TEST_DIR__/test_alp_regression_v1_4_0.db' AS v1_4_0_db;
+ATTACH '{TEST_DIR}/test_alp_regression_v1_4_0.db' AS v1_4_0_db;
 
 statement ok
 CREATE TYPE regression_result AS UNION (

@@ -1,6 +1,10 @@
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
@@ -42,7 +46,7 @@ void CatalogEntryMap::UpdateEntry(unique_ptr<CatalogEntry> catalog_entry) {
 	entry->second->SetChild(std::move(existing));
 }
 
-case_insensitive_tree_t<unique_ptr<CatalogEntry>> &CatalogEntryMap::Entries() {
+identifier_tree_t<unique_ptr<CatalogEntry>> &CatalogEntryMap::Entries() {
 	return entries;
 }
 
@@ -74,7 +78,7 @@ void CatalogEntryMap::DropEntry(CatalogEntry &entry) {
 	}
 }
 
-optional_ptr<CatalogEntry> CatalogEntryMap::GetEntry(const string &name) {
+optional_ptr<CatalogEntry> CatalogEntryMap::GetEntry(const Identifier &name) {
 	auto entry = entries.find(name);
 	if (entry == entries.end()) {
 		return nullptr;
@@ -89,7 +93,7 @@ CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults
 CatalogSet::~CatalogSet() {
 }
 
-bool CatalogSet::StartChain(CatalogTransaction transaction, const string &name, unique_lock<mutex> &read_lock) {
+bool CatalogSet::StartChain(CatalogTransaction transaction, const Identifier &name, unique_lock<mutex> &read_lock) {
 	D_ASSERT(!map.GetEntry(name));
 
 	// check if there is a default entry
@@ -127,7 +131,7 @@ static bool IsDependencyEntry(CatalogEntry &entry) {
 	return entry.type == CatalogType::DEPENDENCY_ENTRY;
 }
 
-void CatalogSet::CheckCatalogEntryInvariants(CatalogEntry &value, const string &name) {
+void CatalogSet::CheckCatalogEntryInvariants(CatalogEntry &value, const Identifier &name) {
 	if (value.internal && !catalog.IsSystemCatalog() && name != DEFAULT_SCHEMA) {
 		throw InternalException("Attempting to create internal entry \"%s\" in non-system catalog - internal entries "
 		                        "can only be created in the system catalog",
@@ -141,10 +145,10 @@ void CatalogSet::CheckCatalogEntryInvariants(CatalogEntry &value, const string &
 			    name);
 		}
 		if (value.temporary && !catalog.IsTemporaryCatalog()) {
-			throw InternalException("Attempting to create temporary entry \"%s\" in non-temporary catalog", name);
+			throw InternalException("Attempting to create temporary entry %s in non-temporary catalog", name);
 		}
 		if (!value.temporary && catalog.IsTemporaryCatalog() && name != DEFAULT_SCHEMA) {
-			throw InvalidInputException("Cannot create non-temporary entry \"%s\" in temporary catalog", name);
+			throw InvalidInputException("Cannot create non-temporary entry %s in temporary catalog", name);
 		}
 	}
 }
@@ -166,8 +170,9 @@ optional_ptr<CatalogEntry> CatalogSet::CreateCommittedEntry(unique_ptr<CatalogEn
 	return catalog_entry;
 }
 
-bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
-                                     unique_lock<mutex> &read_lock, bool should_be_empty) {
+bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const Identifier &name,
+                                     unique_ptr<CatalogEntry> value, unique_lock<mutex> &read_lock,
+                                     bool should_be_empty) {
 	auto entry_value = map.GetEntry(name);
 	if (!entry_value) {
 		// Add a dummy node to start the chain
@@ -192,12 +197,12 @@ bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const strin
 	return true;
 }
 
-bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
+bool CatalogSet::CreateEntry(CatalogTransaction transaction, const Identifier &name, unique_ptr<CatalogEntry> value,
                              const LogicalDependencyList &dependencies) {
 	CheckCatalogEntryInvariants(*value, name);
 
 	// Mark this entry as being created by the current active transaction
-	value->timestamp = transaction.transaction_id;
+	value->timestamp = transaction.GetTransactionId();
 	value->set = this;
 	catalog.GetDependencyManager()->AddObject(transaction, *value, dependencies);
 
@@ -209,13 +214,13 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	return CreateEntryInternal(transaction, name, std::move(value), read_lock);
 }
 
-bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
+bool CatalogSet::CreateEntry(ClientContext &context, const Identifier &name, unique_ptr<CatalogEntry> value,
                              const LogicalDependencyList &dependencies) {
 	return CreateEntry(catalog.GetCatalogTransaction(context), name, std::move(value), dependencies);
 }
 
 //! This method is used to retrieve an entry for the purpose of making a new version, through an alter/drop/create
-optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, const string &name) {
+optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, const Identifier &name) {
 	auto entry_value = map.GetEntry(name);
 	if (!entry_value) {
 		return nullptr;
@@ -228,7 +233,7 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction trans
 		// Another transaction has already made an edit to this catalog entry, because of limitations in the Catalog we
 		// can't create an edit alongside this even if the other transaction might end up getting aborted. So we have to
 		// abort the transaction.
-		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", catalog_entry.name);
+		throw TransactionException("Catalog write-write conflict on alter with %s", catalog_entry.name);
 	}
 	// The entry is visible to our snapshot, check if it's deleted
 	if (catalog_entry.deleted) {
@@ -241,7 +246,7 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 	// lock the catalog for writing
 	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 
-	auto entry = GetEntryInternal(transaction, info.name);
+	auto entry = GetEntryInternal(transaction, info.GetQualifiedName().Name());
 	if (!entry) {
 		return false;
 	}
@@ -257,14 +262,15 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 		}
 	}
 	if (!owner_entry) {
-		throw CatalogException("CatalogElement \"%s.%s\" does not exist!", info.owner_schema, info.owner_name);
+		throw CatalogException("CatalogElement \"%s.%s\" does not exist!", info.owner_schema.GetIdentifierName(),
+		                       info.owner_name.GetIdentifierName());
 	}
 	write_lock.unlock();
 	catalog.GetDependencyManager()->AddOwnership(transaction, *owner_entry, *entry);
 	return true;
 }
 
-bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const string &new_name,
+bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const Identifier &new_name,
                                      AlterInfo &alter_info, unique_lock<mutex> &read_lock) {
 	auto &original_name = old.name;
 
@@ -275,7 +281,7 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 		if (!existing_entry.deleted) {
 			// There exists an entry by this name that is not deleted
 			old.UndoAlter(context, alter_info);
-			throw CatalogException("Could not rename \"%s\" to \"%s\": another entry with this name already exists!",
+			throw CatalogException("Could not rename %s to %s: another entry with this name already exists!",
 			                       original_name, new_name);
 		}
 	}
@@ -283,7 +289,7 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 	// Add a RENAMED_ENTRY before adding a DELETED_ENTRY, this makes it so that when this is committed
 	// we know that this was not a DROP statement.
 	auto renamed_tombstone = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, old.ParentCatalog(), original_name);
-	renamed_tombstone->timestamp = transaction.transaction_id;
+	renamed_tombstone->timestamp = transaction.GetTransactionId();
 	renamed_tombstone->deleted = false;
 	renamed_tombstone->set = this;
 	if (!CreateEntryInternal(transaction, original_name, std::move(renamed_tombstone), read_lock,
@@ -297,20 +303,20 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 	// Add the renamed entry
 	// Start this off with a RENAMED_ENTRY node, for commit/cleanup/rollback purposes
 	auto renamed_node = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, catalog, new_name);
-	renamed_node->timestamp = transaction.transaction_id;
+	renamed_node->timestamp = transaction.GetTransactionId();
 	renamed_node->deleted = false;
 	renamed_node->set = this;
 	return CreateEntryInternal(transaction, new_name, std::move(renamed_node), read_lock);
 }
 
-bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info) {
+bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &name, AlterInfo &alter_info) {
 	// If the entry does not exist, we error
 	auto entry = GetEntry(transaction, name);
 	if (!entry) {
 		return false;
 	}
 	if (!alter_info.allow_internal && entry->internal) {
-		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
+		throw CatalogException("Cannot alter entry %s because it is an internal system entry", entry->name);
 	}
 
 	unique_ptr<CatalogEntry> value;
@@ -330,6 +336,20 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		}
 	}
 
+	// If this ALTER produced a new DuckTableEntry, refresh the LocalTableStorage's table_entry
+	// pointer so that commit-time Flush pushes an AppendInfo referencing the current DuckTableEntry.
+	if (transaction.context && value->type == CatalogType::TABLE_ENTRY) {
+		auto &tce = value->Cast<TableCatalogEntry>();
+		if (tce.IsDuckTable()) {
+			auto &new_entry = tce.Cast<DuckTableEntry>();
+			auto &new_storage = new_entry.GetStorage();
+			auto lstorage = LocalStorage::Get(*transaction.context, new_storage.db).GetStorage(new_storage);
+			if (lstorage) {
+				lstorage->table_entry = &new_entry;
+			}
+		}
+	}
+
 	// lock the catalog for writing
 	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
@@ -340,12 +360,12 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	entry = GetEntryInternal(transaction, name);
 
 	// Mark this entry as being created by this transaction
-	value->timestamp = transaction.transaction_id;
+	value->timestamp = transaction.GetTransactionId();
 	value->set = this;
 	// Preserve the oid across the alter: an altered entry is the same logical object as before
 	value->oid = entry->oid;
 
-	if (!StringUtil::CIEquals(value->name, entry->name)) {
+	if (!(value->name == entry->name)) {
 		if (!RenameEntryInternal(transaction, *entry, value->name, alter_info, read_lock)) {
 			return false;
 		}
@@ -380,14 +400,14 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	return true;
 }
 
-bool CatalogSet::DropDependencies(CatalogTransaction transaction, const string &name, bool cascade,
+bool CatalogSet::DropDependencies(CatalogTransaction transaction, const Identifier &name, bool cascade,
                                   bool allow_drop_internal) {
 	auto entry = GetEntry(transaction, name);
 	if (!entry) {
 		return false;
 	}
 	if (entry->internal && !allow_drop_internal) {
-		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
+		throw CatalogException("Cannot drop entry %s because it is an internal system entry", entry->name);
 	}
 	// check any dependencies of this object
 	D_ASSERT(entry->ParentCatalog().IsDuckCatalog());
@@ -396,7 +416,7 @@ bool CatalogSet::DropDependencies(CatalogTransaction transaction, const string &
 	return true;
 }
 
-bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal) {
+bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const Identifier &name, bool allow_drop_internal) {
 	// lock the catalog for writing
 	// we can only delete an entry that exists
 	auto entry = GetEntryInternal(transaction, name);
@@ -404,14 +424,14 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 		return false;
 	}
 	if (entry->internal && !allow_drop_internal) {
-		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
+		throw CatalogException("Cannot drop entry %s because it is an internal system entry", entry->name);
 	}
 
 	// create a new tombstone entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the tombstone node
 	auto value = make_uniq<InCatalogEntry>(CatalogType::DELETED_ENTRY, entry->ParentCatalog(), entry->name);
-	value->timestamp = transaction.transaction_id;
+	value->timestamp = transaction.GetTransactionId();
 	value->set = this;
 	value->deleted = true;
 	auto value_ptr = value.get();
@@ -425,7 +445,8 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 	return true;
 }
 
-bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
+bool CatalogSet::DropEntry(CatalogTransaction transaction, const Identifier &name, bool cascade,
+                           bool allow_drop_internal) {
 	if (!DropDependencies(transaction, name, cascade, allow_drop_internal)) {
 		return false;
 	}
@@ -434,7 +455,7 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 	return DropEntryInternal(transaction, name, allow_drop_internal);
 }
 
-bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool cascade, bool allow_drop_internal) {
+bool CatalogSet::DropEntry(ClientContext &context, const Identifier &name, bool cascade, bool allow_drop_internal) {
 	return DropEntry(catalog.GetCatalogTransaction(context), name, cascade, allow_drop_internal);
 }
 
@@ -444,9 +465,10 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, CatalogEnt
 
 	// Make sure that we don't see any uncommitted changes
 	auto transaction_id = MAX_TRANSACTION_ID;
+	D_ASSERT(IsCommitted(commit_id));
 	// This will allow us to see all committed changes made before this COMMIT happened
-	auto tx_start_time = commit_id + 1;
-	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id, tx_start_time);
+	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id,
+	                                      VisibilityBound::Through(commit_id));
 
 	D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);
 	auto &dep = entry.Cast<DependencyEntry>();
@@ -455,17 +477,18 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, CatalogEnt
 
 //! Verify that no dependencies creations were committed since our transaction started, that reference the entry we're
 //! dropping
-void CatalogSet::CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry) {
+void CatalogSet::CommitDrop(transaction_t commit_id, VisibilityBound visibility_bound, CatalogEntry &entry) {
 	auto &duck_catalog = GetCatalog();
 
 	entry.OnDrop();
 	// Make sure that we don't see any uncommitted changes
 	auto transaction_id = MAX_TRANSACTION_ID;
+	D_ASSERT(IsCommitted(commit_id));
 	// This will allow us to see all committed changes made before this COMMIT happened
-	auto tx_start_time = commit_id;
-	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id, tx_start_time);
+	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id,
+	                                      VisibilityBound::Before(commit_id));
 
-	duck_catalog.GetDependencyManager()->VerifyCommitDrop(commit_transaction, start_time, entry);
+	duck_catalog.GetDependencyManager()->VerifyCommitDrop(commit_transaction, visibility_bound, entry);
 }
 
 DuckCatalog &CatalogSet::GetCatalog() {
@@ -489,33 +512,22 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 bool CatalogSet::CreatedByOtherActiveTransaction(CatalogTransaction transaction, transaction_t timestamp) {
 	// True if this transaction is not committed yet and the entry was made by another active (not committed)
 	// transaction
-	return (timestamp >= TRANSACTION_ID_START && timestamp != transaction.transaction_id);
+	return !IsCommitted(timestamp) && timestamp != transaction.GetTransactionId();
 }
 
 bool CatalogSet::CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp) {
-	// The entry has been committed after this transaction started, this is not our source of truth.
-	return (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
+	// the entry is committed but not visible to this transaction, so it is not our source of truth
+	return IsCommitted(timestamp) && !transaction.view.Sees(timestamp);
 }
 
 bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t timestamp) {
-	return CreatedByOtherActiveTransaction(transaction, timestamp) || CommittedAfterStarting(transaction, timestamp);
-}
-
-bool CatalogSet::IsCommitted(transaction_t timestamp) {
-	//! FIXME: `transaction_t` itself should be a class that has these methods
-	return timestamp < TRANSACTION_ID_START;
+	// a version conflicts exactly when it is not visible to the transaction: it is either another
+	// active transaction's uncommitted version, or committed outside this transaction's snapshot
+	return !transaction.view.Sees(timestamp);
 }
 
 bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t timestamp) {
-	if (timestamp == transaction.transaction_id) {
-		// we created this version
-		return true;
-	}
-	if (timestamp < transaction.start_time) {
-		// this version was commited before we started the transaction
-		return true;
-	}
-	return false;
+	return transaction.view.Sees(timestamp);
 }
 
 CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current) {
@@ -539,7 +551,7 @@ CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction,
 CatalogEntry &CatalogSet::GetCommittedEntry(CatalogEntry &current) {
 	reference<CatalogEntry> entry(current);
 	while (entry.get().HasChild()) {
-		if (entry.get().timestamp < TRANSACTION_ID_START) {
+		if (IsCommitted(entry.get().timestamp.load())) {
 			// this entry is committed: use it
 			break;
 		}
@@ -548,22 +560,22 @@ CatalogEntry &CatalogSet::GetCommittedEntry(CatalogEntry &current) {
 	return entry.get();
 }
 
-SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, const string &name) {
+SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, const Identifier &name) {
 	unique_lock<mutex> lock(catalog_lock);
 	CreateDefaultEntries(transaction, lock);
 
 	SimilarCatalogEntry result;
 	for (auto &kv : map.Entries()) {
-		auto entry_score = StringUtil::SimilarityRating(kv.first, name);
+		auto entry_score = StringUtil::SimilarityRating(kv.first.GetIdentifierName(), name.GetIdentifierName());
 		if (entry_score > result.score) {
 			result.score = entry_score;
-			result.name = kv.first;
+			result.name = Identifier(kv.first.GetIdentifierName());
 		}
 	}
 	return result;
 }
 
-optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction transaction, const string &name,
+optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction transaction, const Identifier &name,
                                                           unique_lock<mutex> &read_lock) {
 	// no entry found with this name, check for defaults
 	if (!defaults || defaults->created_all_entries) {
@@ -599,7 +611,7 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 	return GetEntry(transaction, name);
 }
 
-CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transaction, const string &name) {
+CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transaction, const Identifier &name) {
 	unique_lock<mutex> read_lock(catalog_lock);
 	auto entry_value = map.GetEntry(name);
 	if (entry_value) {
@@ -616,7 +628,7 @@ CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transact
 				return EntryLookup {nullptr, EntryLookup::FailureReason::DELETED};
 			}
 		}
-		D_ASSERT(StringUtil::CIEquals(name, current.name));
+		D_ASSERT(current.name == name);
 		return EntryLookup {&current, EntryLookup::FailureReason::SUCCESS};
 	}
 	auto default_entry = CreateDefaultEntry(transaction, name, read_lock);
@@ -626,12 +638,12 @@ CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transact
 	return EntryLookup {default_entry, EntryLookup::FailureReason::SUCCESS};
 }
 
-optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const string &name) {
+optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const Identifier &name) {
 	auto lookup = GetEntryDetailed(transaction, name);
 	return lookup.result;
 }
 
-optional_ptr<CatalogEntry> CatalogSet::GetEntry(ClientContext &context, const string &name) {
+optional_ptr<CatalogEntry> CatalogSet::GetEntry(ClientContext &context, const Identifier &name) {
 	return GetEntry(catalog.GetCatalogTransaction(context), name);
 }
 
@@ -650,7 +662,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 	auto &to_be_removed_node = entry.Parent();
 	to_be_removed_node.Rollback(entry);
 
-	D_ASSERT(StringUtil::CIEquals(entry.name, to_be_removed_node.name));
+	D_ASSERT(entry.name == to_be_removed_node.name);
 	if (!to_be_removed_node.HasParent()) {
 		to_be_removed_node.Child().SetAsRoot();
 	}
@@ -721,6 +733,29 @@ void CatalogSet::ScanWithReturn(CatalogTransaction transaction, const std::funct
 	}
 }
 
+optional_ptr<CatalogEntry> CatalogSet::GetHeadEntry(const Identifier &name) {
+	lock_guard<mutex> lock(catalog_lock);
+	return map.GetEntry(name);
+}
+
+void CatalogSet::ScanWithConflictDetection(CatalogTransaction transaction,
+                                           const std::function<void(CatalogEntry &)> &scan_callback,
+                                           const std::function<void(CatalogEntry &)> &conflict_callback) {
+	unique_lock<mutex> lock(catalog_lock);
+	CreateDefaultEntries(transaction, lock);
+
+	for (auto &kv : map.Entries()) {
+		auto &entry = *kv.second;
+		if (HasConflict(transaction, entry.timestamp) && !entry.deleted) {
+			conflict_callback(entry);
+		}
+		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);
+		if (!entry_for_transaction.deleted) {
+			scan_callback(entry_for_transaction);
+		}
+	}
+}
+
 void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback) {
 	Scan(catalog.GetCatalogTransaction(context), callback);
 }
@@ -730,14 +765,14 @@ void CatalogSet::ScanWithReturn(ClientContext &context, const std::function<bool
 }
 
 void CatalogSet::ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,
-                                const string &prefix) {
+                                const Identifier &prefix) {
 	// lock the catalog set
 	unique_lock<mutex> lock(catalog_lock);
 	CreateDefaultEntries(transaction, lock);
 
 	auto &entries = map.Entries();
 	auto it = entries.lower_bound(prefix);
-	auto end = entries.upper_bound(prefix + char(255));
+	auto end = entries.upper_bound(Identifier(prefix.GetIdentifierName() + char(255)));
 	for (; it != end; it++) {
 		auto &entry = *it->second;
 		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);
@@ -752,9 +787,9 @@ void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {
 	lock_guard<mutex> lock(catalog_lock);
 	for (auto &kv : map.Entries()) {
 		auto &entry = *kv.second;
-		auto &commited_entry = GetCommittedEntry(entry);
-		if (!commited_entry.deleted) {
-			callback(commited_entry);
+		auto &committed_entry = GetCommittedEntry(entry);
+		if (!committed_entry.deleted) {
+			callback(committed_entry);
 		}
 	}
 }

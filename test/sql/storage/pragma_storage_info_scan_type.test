@@ -1,0 +1,70 @@
+# name: test/sql/storage/pragma_storage_info_scan_type.test
+# description: Test the include_segment_info / loaded_segments_only named parameters of pragma_storage_info
+# group: [storage]
+
+# smaller block sizes spill bitpacking into another compressor; pin to keep the asserted segment_info
+require block_size 262144
+
+# the asserted segment_info breakdown counts per-vector modes; pin to keep the counts stable
+require vector_size 2048
+
+load {TEST_DIR}/test_pragma_storage_info_scan_type.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE bp_tbl (a INTEGER)
+
+statement ok
+INSERT INTO bp_tbl SELECT 1 FROM range(0, 10000) tbl(i)
+
+statement ok
+INSERT INTO bp_tbl SELECT 2 FROM range(0, 10000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+# By default include_segment_info=false: the segment_info column is not present.
+statement error
+SELECT segment_info FROM pragma_storage_info('bp_tbl') LIMIT 1
+----
+<REGEX>:Binder Error:.*segment_info.*
+
+# Explicit include_segment_info=false also omits the column.
+statement error
+SELECT segment_info FROM pragma_storage_info('bp_tbl', include_segment_info=false) LIMIT 1
+----
+<REGEX>:Binder Error:.*segment_info.*
+
+# Other columns are still there.
+query I
+SELECT COUNT(*) > 0 FROM pragma_storage_info('bp_tbl') WHERE segment_type NOT IN ('VALIDITY')
+----
+true
+
+# include_segment_info=true populates the (expensive) segment_info column with per-segment bitpacking modes.
+query I
+SELECT segment_info FROM pragma_storage_info('bp_tbl', include_segment_info=true) WHERE segment_type NOT IN ('VALIDITY')
+----
+CONSTANT: 9, DELTA_FOR: 1
+
+# Same row counts whether or not we include segment_info.
+query I
+SELECT COUNT(*) = (SELECT COUNT(*) FROM pragma_storage_info('bp_tbl', include_segment_info=true))
+FROM pragma_storage_info('bp_tbl')
+----
+true
+
+# loaded_segments_only is orthogonal and combinable with either include_segment_info value.
+statement ok
+SELECT * FROM pragma_storage_info('bp_tbl', include_segment_info=true, loaded_segments_only=true)
+
+statement ok
+SELECT * FROM pragma_storage_info('bp_tbl', loaded_segments_only=true)
+
+# loaded_segments_only without include_segment_info still omits the segment_info column.
+statement error
+SELECT segment_info FROM pragma_storage_info('bp_tbl', loaded_segments_only=true) LIMIT 1
+----
+<REGEX>:Binder Error:.*segment_info.*

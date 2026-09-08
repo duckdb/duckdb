@@ -11,6 +11,7 @@
 #include "duckdb/common/bswap.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
@@ -30,6 +31,71 @@ enum class SortKeyType : uint8_t {
 	PAYLOAD_FIXED_32 = 8,
 	PAYLOAD_VARIABLE_32 = 9,
 };
+
+//! Expands MACRO once for every SortKeyType that TupleDataLayout can produce.
+//! The entire sorting stack is templated on SortKeyType, so every entry here multiplies the
+//! amount of code generated for sorting, merging, scattering/gathering and the range joins.
+//! All nine together are ~623 KB of a Release build, ~70 KB each.
+//!
+//! The sort_key_layouts feature drops the three layouts that can be replaced by a wider one that
+//! is already there: a key without payload rounds up to NO_PAYLOAD_FIXED_32, and a payload key
+//! wider than 24 bytes falls back to PAYLOAD_VARIABLE_32. See TupleDataLayout::Initialize.
+//!
+//! What is left cannot go. NO_PAYLOAD_FIXED_8 and PAYLOAD_FIXED_16 are the BIGINT sort key, and
+//! VariableSortKey::Construct(int64_t) throws. PAYLOAD_FIXED_24 is what an index build over an
+//! 8-byte column uses (a 9-byte key plus the row pointer) and it is the most memory-sensitive sort
+//! we do: widening it fails test_art_mem_limit.test, which builds one under a 10MB memory_limit.
+//!
+//! This trades real time for code size. Order By over 20M rows, trimmed vs not, against a 1.19x
+//! noise band measured by running the same binary in both slots:
+//!   ORDER BY 1x INTEGER  NO_PAYLOAD_FIXED_8  kept          1.06x
+//!   ORDER BY 1x BIGINT   NO_PAYLOAD_FIXED_16 -> FIXED_32   1.56x
+//!   ORDER BY 2x BIGINT   NO_PAYLOAD_FIXED_24 -> FIXED_32   1.26x
+//!   ORDER BY 3x BIGINT   NO_PAYLOAD_FIXED_32 kept          1.03x
+//! for 297 KB off the dylib, the same whether this feature is trimmed on its own or as part of a
+//! full SMALLER_BINARY=1 build. Dropping NO_PAYLOAD_FIXED_32 and PAYLOAD_FIXED_24 as well, so that
+//! everything collapses onto the variable-size key, saves ~90 KB more but costs 1.6-2.4x instead,
+//! because a variable-size key compares through the heap. Re-measure before trimming further.
+#if DUCKDB_SMALLER_BINARY(sort_key_layouts)
+#define DUCKDB_FOR_EACH_SORT_KEY_TYPE(MACRO)                                                                           \
+	MACRO(NO_PAYLOAD_FIXED_8)                                                                                          \
+	MACRO(NO_PAYLOAD_FIXED_32)                                                                                         \
+	MACRO(NO_PAYLOAD_VARIABLE_32)                                                                                      \
+	MACRO(PAYLOAD_FIXED_16)                                                                                            \
+	MACRO(PAYLOAD_FIXED_24)                                                                                            \
+	MACRO(PAYLOAD_VARIABLE_32)
+#else
+#define DUCKDB_FOR_EACH_SORT_KEY_TYPE(MACRO)                                                                           \
+	MACRO(NO_PAYLOAD_FIXED_8)                                                                                          \
+	MACRO(NO_PAYLOAD_FIXED_16)                                                                                         \
+	MACRO(NO_PAYLOAD_FIXED_24)                                                                                         \
+	MACRO(NO_PAYLOAD_FIXED_32)                                                                                         \
+	MACRO(NO_PAYLOAD_VARIABLE_32)                                                                                      \
+	MACRO(PAYLOAD_FIXED_16)                                                                                            \
+	MACRO(PAYLOAD_FIXED_24)                                                                                            \
+	MACRO(PAYLOAD_FIXED_32)                                                                                            \
+	MACRO(PAYLOAD_VARIABLE_32)
+#endif
+
+//! Same as above, restricted to the sort key types that carry a payload pointer
+#if DUCKDB_SMALLER_BINARY(sort_key_layouts)
+#define DUCKDB_FOR_EACH_PAYLOAD_SORT_KEY_TYPE(MACRO)                                                                   \
+	MACRO(PAYLOAD_FIXED_16)                                                                                            \
+	MACRO(PAYLOAD_FIXED_24)                                                                                            \
+	MACRO(PAYLOAD_VARIABLE_32)
+#else
+#define DUCKDB_FOR_EACH_PAYLOAD_SORT_KEY_TYPE(MACRO)                                                                   \
+	MACRO(PAYLOAD_FIXED_16)                                                                                            \
+	MACRO(PAYLOAD_FIXED_24)                                                                                            \
+	MACRO(PAYLOAD_FIXED_32)                                                                                            \
+	MACRO(PAYLOAD_VARIABLE_32)
+#endif
+
+//! Same as above, restricted to the sort key types that need reordering when going external,
+//! i.e. those that are not constant size, or that carry a payload pointer
+#define DUCKDB_FOR_EACH_REORDERABLE_SORT_KEY_TYPE(MACRO)                                                               \
+	MACRO(NO_PAYLOAD_VARIABLE_32)                                                                                      \
+	DUCKDB_FOR_EACH_PAYLOAD_SORT_KEY_TYPE(MACRO)
 
 //! Forces a pointer size of 8 bytes (even on 32-bit)
 struct sort_key_ptr_t { // NOLINT: match stl case

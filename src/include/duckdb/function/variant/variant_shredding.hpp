@@ -5,7 +5,7 @@
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
@@ -47,12 +47,14 @@ public:
 	const VariantColumnStatsData &GetColumnStats(idx_t index) const;
 
 public:
-	void Update(Vector &input, idx_t count);
-	LogicalType GetShreddedType() const;
+	void Update(const Vector &input, idx_t count);
+	//! If force_partial is set, every level keeps its 'untyped_value_index' (overlay) column even when the
+	//! sampled values are fully consistent - allowing later inconsistent values to be partially shredded.
+	LogicalType GetShreddedType(bool force_partial = false) const;
 
 private:
 	bool GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type,
-	                             optional_idx parent_count = optional_idx()) const;
+	                             optional_idx parent_count = optional_idx(), bool force_partial = false) const;
 
 private:
 	//! Nested type analysis
@@ -104,7 +106,7 @@ public:
 public:
 	bool ValueIsShredded(UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index);
 	void SetShredded(uint32_t row, uint32_t values_index, uint32_t result_idx);
-	case_insensitive_string_set_t ObjectFields();
+	unordered_set<string> ObjectFields() const;
 	virtual const unordered_set<VariantLogicalType> &GetVariantTypes() = 0;
 
 public:

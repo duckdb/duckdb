@@ -1,0 +1,83 @@
+# name: test/optimizer/joins/required_cross_product_activation.test
+# description: Activate explicit cross products only when they are needed to connect the predicate graph
+# group: [joins]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE f1 AS SELECT i AS id, i % 11 AS dk FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE f2 AS SELECT i AS id, i % 12 AS dk FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE d1 AS SELECT 1 AS k;
+
+statement ok
+CREATE TABLE d2 AS SELECT 1 AS k;
+
+statement ok
+ANALYZE;
+
+foreach threshold 0 30
+
+statement ok
+SET approximate_join_order_threshold = {threshold};
+
+# The syntactic cross products in the FROM list are redundant once the predicate graph is connected.
+query I
+SELECT count(*)
+FROM d1, d2, f1, f2
+WHERE f1.dk = d1.k
+  AND f2.dk = d2.k
+  AND f1.id = f2.id;
+----
+76
+
+query II
+EXPLAIN
+SELECT count(*)
+FROM d1, d2, f1, f2
+WHERE f1.dk = d1.k
+  AND f2.dk = d2.k
+  AND f1.id = f2.id;
+----
+physical_plan	<!REGEX>:.*CROSS_PRODUCT.*
+
+# A disconnected graph still needs its explicit cross product.
+query I
+SELECT count(*) FROM d1, d2;
+----
+1
+
+query II
+EXPLAIN SELECT count(*) FROM d1, d2;
+----
+physical_plan	<REGEX>:.*CROSS_PRODUCT.*
+
+statement ok
+SET debug_force_no_cross_product = true;
+
+# Connected queries continue to work when cross products are forbidden.
+query I
+SELECT count(*)
+FROM d1, d2, f1, f2
+WHERE f1.dk = d1.k
+  AND f2.dk = d2.k
+  AND f1.id = f2.id;
+----
+76
+
+statement error
+SELECT count(*) FROM d1, d2;
+----
+Invalid Input Error: Query requires a cross-product, but 'force_no_cross_product'
+
+statement ok
+SET debug_force_no_cross_product = false;
+
+endloop
+
+statement ok
+RESET approximate_join_order_threshold;

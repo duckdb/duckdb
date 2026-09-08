@@ -1,0 +1,15 @@
+diff --git a/src/inet_extension.cpp b/src/inet_extension.cpp
+index 46d916c..5c45e96 100644
+--- a/src/inet_extension.cpp
++++ b/src/inet_extension.cpp
+@@ -24,8 +24,8 @@ static void LoadInternal(ExtensionLoader &loader) {
+   // versions.
+   children.emplace_back(make_pair("address", LogicalType::HUGEINT));
+   children.emplace_back(make_pair("mask", LogicalType::USMALLINT));
+-  auto inet_type = LogicalType::STRUCT(std::move(children));
+-  inet_type.SetAlias(INET_TYPE_NAME);
++  auto inet_type =
++      LogicalType::STRUCT(std::move(children)).WithAlias(INET_TYPE_NAME);
+   loader.RegisterType(INET_TYPE_NAME, inet_type);
+ 
+   // add the casts to and from INET type

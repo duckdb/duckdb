@@ -12,7 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
 
-#if defined(GENERATED_EXTENSION_HEADERS) && !defined(DUCKDB_AMALGAMATION)
+#if defined(GENERATED_EXTENSION_HEADERS)
 #include "duckdb/common/common.hpp"
 #include "generated_extension_headers.hpp"
 

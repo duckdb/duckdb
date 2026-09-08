@@ -1,0 +1,34 @@
+# name: test/sql/error/error_location_multicaret.test
+# description: Error carets should span the full source range of the offending token
+# group: [error]
+
+# column reference: caret spans the whole column name (foo_bar_col -> 11 carets)
+statement error
+SELECT foo_bar_col FROM (SELECT 1 AS a)
+----
+^^^^^^^^^^^
+
+# qualified table reference: caret spans the whole qualified name (xyz.abc -> 7 carets)
+statement error
+SELECT xyz.abc FROM range(3) t(a)
+----
+^^^^^^^
+
+# syntax error: caret spans the offending token (LAUNCH -> 6 carets)
+statement error
+SELECT 1 WHERE zzz LAUNCH
+----
+^^^^^^
+
+# cast error: caret spans the cast suffix (::utinyint -> 10 carets)
+statement error
+SELECT 12345::utinyint
+----
+^^^^^^^^^^
+
+# single-character identifier still produces a single caret
+statement error
+SELECT q FROM (SELECT 1 AS a)
+----
+LINE 1: SELECT q FROM (SELECT 1 AS a)
+               ^

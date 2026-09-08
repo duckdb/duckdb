@@ -1,0 +1,46 @@
+# name: test/sql/update/update_string_null_merge_dict_fsst.test
+# description: Merging a string update over a NULL base row read from DICT_FSST storage
+# group: [update]
+
+load {TEST_DIR}/update_string_null_merge_dict_fsst readwrite v1.3.0
+
+statement ok
+pragma force_compression='dict_fsst'
+
+# rows 0 and 2 are NULL
+# the rest are low-cardinality strings so DICT_FSST is used
+statement ok
+create table t as select case when i = 0 or i = 2 then NULL else 'value_' || (i % 50) end s from range(5000) t(i)
+
+statement ok
+checkpoint
+
+restart
+
+# both updates in one transaction so the second one merges into the first.
+statement ok
+BEGIN
+
+# the first update seeds the vector's update info on a non-NULL row;
+statement ok
+update t set s='seedseedseed' where rowid = 1
+
+# the second update is NULL in the DICT_FSST base data.
+statement ok
+update t set s='merge_value' where rowid = 0
+
+statement ok
+COMMIT
+
+query I
+select s from t where rowid < 3 order by rowid
+----
+merge_value
+seedseedseed
+NULL
+
+query II
+select count(*), count(s) from t
+----
+5000
+4999

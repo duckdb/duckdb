@@ -43,16 +43,18 @@ static double JaccardScalarFunction(Vector &result, const string_t str, string_t
 }
 
 static void JaccardFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &str_vec = args.data[0];
-	auto &tgt_vec = args.data[1];
+	const auto &str_vec = args.data[0];
+	const auto &tgt_vec = args.data[1];
 
 	BinaryExecutor::Execute<string_t, string_t, double>(
-	    str_vec, tgt_vec, result, args.size(),
-	    [&](string_t str, string_t tgt) { return JaccardScalarFunction(result, str, tgt); });
+	    str_vec, tgt_vec, result, [&](string_t str, string_t tgt) { return JaccardScalarFunction(result, str, tgt); });
 }
 
 ScalarFunction JaccardFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE, JaccardFunction);
+	ScalarFunction function({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE, JaccardFunction);
+	// throws if one of the strings is empty
+	function.SetFallible();
+	return function;
 }
 
 } // namespace duckdb

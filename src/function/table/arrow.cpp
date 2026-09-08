@@ -49,7 +49,7 @@ void ArrowTableFunction::PopulateArrowTableSchema(ClientContext &context, ArrowT
 
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBindDumb(ClientContext &context, TableFunctionBindInput &input,
                                                                vector<LogicalType> &return_types,
-                                                               vector<string> &names) {
+                                                               vector<Identifier> &names) {
 	auto bind_data = ArrowScanBind(context, input, return_types, names);
 	auto &arrow_bind_data = bind_data->Cast<ArrowScanFunctionData>();
 	arrow_bind_data.projection_pushdown_enabled = false;
@@ -57,7 +57,8 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBindDumb(ClientContext &co
 }
 
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
-                                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                                           vector<LogicalType> &return_types,
+                                                           vector<Identifier> &names) {
 	if (input.inputs[0].IsNull() || input.inputs[1].IsNull() || input.inputs[2].IsNull()) {
 		throw BinderException("arrow_scan: pointers cannot be null");
 	}
@@ -80,7 +81,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	auto &data = *res;
 	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
 	PopulateArrowTableSchema(context, res->arrow_table, data.schema_root.arrow_schema);
-	names = res->arrow_table.GetNames();
+	names = StringsToIdentifiers(res->arrow_table.GetNames());
 	return_types = res->arrow_table.GetTypes();
 	res->all_types = return_types;
 	if (return_types.empty()) {
@@ -200,15 +201,15 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 	data.lines_read += output_size;
 	if (global_state.CanRemoveFilterColumns()) {
 		state.all_columns.Reset();
-		state.all_columns.SetCardinality(output_size);
+		state.all_columns.SetChildCardinality(output_size);
 		ArrowToDuckDB(state, data.arrow_table.GetColumns(), state.all_columns);
 		output.ReferenceColumns(state.all_columns, global_state.projection_ids);
 	} else {
-		output.SetCardinality(output_size);
+		output.SetChildCardinality(output_size);
 		ArrowToDuckDB(state, data.arrow_table.GetColumns(), output);
 	}
 
-	output.Verify();
+	output.Verify(context);
 	state.chunk_offset += output.size();
 }
 
@@ -241,6 +242,7 @@ static bool CanPushdown(const ArrowType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
@@ -264,7 +266,8 @@ static bool CanPushdown(const ArrowType &type) {
 			return false;
 		}
 	}
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		const auto &struct_info = type.GetTypeInfo<ArrowStructInfo>();
 		for (idx_t i = 0; i < struct_info.ChildCount(); i++) {
 			if (!CanPushdown(struct_info.GetChild(i))) {
@@ -284,6 +287,7 @@ static bool HasViewType(const ArrowType &type) {
 	case LogicalTypeId::BLOB:
 		return type.GetTypeInfo<ArrowStringInfo>().GetSizeType() == ArrowVariableSizeType::VIEW;
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::UNION: {
 		const auto &struct_info = type.GetTypeInfo<ArrowStructInfo>();
 		for (idx_t i = 0; i < struct_info.ChildCount(); i++) {
@@ -339,6 +343,7 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	arrow.filter_pushdown = true;
 	arrow.filter_prune = true;
 	arrow.supports_pushdown_type = ArrowPushdownType;
+	arrow.parallelism = TableFunctionParallelism::SEQUENTIAL;
 	set.AddFunction(arrow);
 
 	TableFunction arrow_dumb("arrow_scan_dumb", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
@@ -348,6 +353,7 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	arrow_dumb.projection_pushdown = false;
 	arrow_dumb.filter_pushdown = false;
 	arrow_dumb.filter_prune = false;
+	arrow_dumb.parallelism = TableFunctionParallelism::SEQUENTIAL;
 	set.AddFunction(arrow_dumb);
 }
 

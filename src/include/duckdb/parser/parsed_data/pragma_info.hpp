@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -25,7 +26,7 @@ public:
 	}
 
 	//! Name of the PRAGMA statement
-	string name;
+	Identifier name;
 	//! Parameter list (if any)
 	vector<unique_ptr<ParsedExpression>> parameters;
 	//! Named parameter list (if any)

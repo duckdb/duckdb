@@ -2,8 +2,14 @@
 # description: Test if Json can parse bool
 # group: [json]
 
-statement ok
-set custom_profiling_settings='{"optimizer_filter_pullup":true}';
+require json
 
-statement ok
-set custom_profiling_settings='{"optimizer_filter_pullup":"true"}';
+query I
+SELECT json_extract('{"key": true}', '$.key')::BOOLEAN
+----
+true
+
+query I
+SELECT json_extract('{"key": false}', '$.key')::BOOLEAN
+----
+false

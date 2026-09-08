@@ -2,9 +2,6 @@
 # description: Test LIKE statement
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # scalar like
 query T
 SELECT 'aaa' LIKE 'bbb'

@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
@@ -27,7 +28,7 @@ UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, ClientContext &context_p)
 UndoBufferReference UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
 	idx_t alloc_len = AlignValue<idx_t>(len + UNDO_ENTRY_HEADER_SIZE);
 	auto handle = allocator.Allocate(alloc_len);
-	auto data = handle.Ptr();
+	auto data = handle.GetDataMutable();
 	// write the undo entry metadata
 	Store<UndoFlags>(type, data);
 	data += sizeof(UndoFlags);
@@ -44,13 +45,13 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 	state.started = true;
 	while (state.current) {
 		state.handle = allocator.buffer_manager.Pin(state.current->block);
-		state.start = state.handle.Ptr();
+		state.start = state.handle.GetDataMutable();
 		state.end = state.start + state.current->position;
 		while (state.start < state.end) {
 			auto len_position = state.start + sizeof(UndoFlags);
 			auto payload_position = len_position + sizeof(uint32_t);
-			UndoFlags type = Load<UndoFlags>(state.start);
-			uint32_t len = Load<uint32_t>(len_position);
+			auto type = Load<UndoFlags>(state.start);
+			auto len = Load<uint32_t>(len_position);
 
 			callback(type, payload_position);
 			state.start = payload_position + len;
@@ -68,7 +69,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::It
 	state.current = allocator.tail.get();
 	while (state.current) {
 		state.handle = allocator.buffer_manager.Pin(state.current->block);
-		state.start = state.handle.Ptr();
+		state.start = state.handle.GetDataMutable();
 		state.end = state.current == end_state.current ? end_state.start : state.start + state.current->position;
 		while (state.start < state.end) {
 			auto type = Load<UndoFlags>(state.start);
@@ -92,7 +93,7 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 	auto current = allocator.head.get();
 	while (current) {
 		auto handle = allocator.buffer_manager.Pin(current->block);
-		data_ptr_t start = handle.Ptr();
+		data_ptr_t start = handle.GetDataMutable();
 		data_ptr_t end = start + current->position;
 		// create a vector with all nodes in this chunk
 		vector<pair<UndoFlags, data_ptr_t>> nodes;
@@ -140,7 +141,7 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 			if (info->is_consecutive) {
 				properties.estimated_size += sizeof(row_t) * info->count;
 			}
-			if (info->table->HasIndexes()) {
+			if (info->table->GetStorage().HasIndexes()) {
 				properties.has_index_deletes = true;
 			}
 			properties.has_deletes = true;
@@ -172,7 +173,7 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 	return properties;
 }
 
-void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
+void UndoBuffer::Cleanup(VisibilityBound lowest_visibility_bound) {
 	// garbage collect everything in the Undo Chunk
 	// this should only happen if
 	//  (1) the transaction this UndoBuffer belongs to has successfully
@@ -181,7 +182,7 @@ void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	//      the chunks)
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
-	CleanupState state(transaction, lowest_active_transaction, active_transaction_state);
+	CleanupState state(transaction, lowest_visibility_bound, active_transaction_state);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 }

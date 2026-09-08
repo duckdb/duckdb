@@ -3,7 +3,7 @@
 # group: [join]
 
 statement ok
-pragma verify_external
+SET debug_force_external=true;
 
 statement ok
 CREATE TABLE test1 (i INT, s1 VARCHAR, s2 VARCHAR)

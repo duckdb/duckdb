@@ -22,6 +22,7 @@ enum class JoinRefType : uint8_t {
 	POSITIONAL, // Positional condition
 	ASOF,       // AsOf conditions
 	DEPENDENT,  // Dependent join conditions
+	NEAREST,    // Nearest-neighbour (top-k per left row) conditions
 };
 
 const char *ToString(JoinRefType value);

@@ -15,6 +15,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -144,7 +145,8 @@ public:
 	//! Read/Write temporary buffers at given positions in this file (potentially compressed)
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, const TemporaryFileIndex &index_in_file,
 	                                           unique_ptr<FileBuffer> reusable_buffer) const;
-	void WriteTemporaryBuffer(FileBuffer &buffer, idx_t block_index, AllocatedData &compressed_buffer) const;
+	void WriteTemporaryBuffer(QueryContext context, FileBuffer &buffer, idx_t block_index,
+	                          AllocatedData &compressed_buffer) const;
 
 	//! Deletes the file if there are no more blocks
 	bool DeleteIfEmpty();
@@ -220,12 +222,10 @@ public:
 	TemporaryFileCompressionAdaptivity();
 
 public:
-	//! Get current time in nanoseconds to measure write times
-	static int64_t GetCurrentTimeNanos();
 	//! Get the compression level to use based on current write times
 	TemporaryCompressionLevel GetCompressionLevel();
 	//! Update write time for given compression level
-	void Update(TemporaryCompressionLevel level, int64_t time_before_ns);
+	void Update(TemporaryCompressionLevel level, const TimePoint &time_before);
 
 private:
 	//! Convert from level to index into write time array and back
@@ -282,7 +282,7 @@ public:
 	};
 
 	//! Create/Read/Update/Delete operations for temporary buffers
-	idx_t WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer);
+	idx_t WriteTemporaryBuffer(QueryContext context, block_id_t block_id, FileBuffer &buffer);
 	bool HasTemporaryBuffer(block_id_t block_id);
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, block_id_t id,
 	                                           unique_ptr<FileBuffer> reusable_buffer, idx_t *eviction_size = nullptr);

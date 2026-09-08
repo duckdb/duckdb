@@ -9,6 +9,9 @@ import tempfile
 directory = sys.argv[1]
 patch_pattern = f"{directory}*.patch"
 
+if os.environ.get("DUCKDB_SKIP_APPLYING_PATCHES") == "1":
+    exit(0)
+
 # Find patch files matching the pattern
 patches = glob.glob(patch_pattern)
 
@@ -48,8 +51,12 @@ output_proc = subprocess.run(["git", "diff", "--numstat"], capture_output=True, 
 prev_output_lines = output_proc.stdout.decode('utf8').split('\n')
 prev_output_lines.sort()
 
-subprocess.run(["git", "clean", "-f"], check=True)
+subprocess.run(["git", "clean", "-fd"], check=True)
 subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
+
+# clean and reset submodules too
+subprocess.run(["git", "submodule", "foreach", "git", "clean", "-fd"], check=True)
+subprocess.run(["git", "submodule", "foreach", "git", "reset", "--hard", "HEAD"], check=True)
 
 
 def apply_patch(patch_file):
@@ -84,7 +91,7 @@ output_lines.sort()
 if len(output_lines) <= len(prev_output_lines) and prev_output_lines != output_lines:
     print("Detected local changes - rolling back patch application")
 
-    subprocess.run(["git", "clean", "-f"], check=True)
+    subprocess.run(["git", "clean", "-fd"], check=True)
     subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
     with tempfile.NamedTemporaryFile() as f:
         f.write(prev_diff)

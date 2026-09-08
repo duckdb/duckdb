@@ -342,15 +342,15 @@ NULL	NULL
 query III
 SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part 
 FROM timestamps
-WHERE part NOT IN ('epoch', 'julian')
 ----
-0	0	era
-2020	2020	year
-2	2	month
-13123456	13123456	microsecond
-2	2	hour
-30	30	minute
-24	24	day
+0.0	0.0	era
+-234185951.876544	-234211151.876544	epoch
+2020.0	2020.0	year
+2.0	2.0	month
+13123456.0	13123456.0	microsecond
+2.0	2.0	hour
+30.0	30.0	minute
+24.0	24.0	day
 NULL	NULL	second
 NULL	NULL	decade
 NULL	NULL	century
@@ -544,7 +544,7 @@ foreach partcode era millennium century decade year quarter month day hour minut
 query III
 SELECT *
 FROM (
-	SELECT ts, DATE_PART('${partcode}', ts) AS p, ${partcode}(ts) AS f
+	SELECT ts, DATE_PART('{partcode}', ts) AS p, {partcode}(ts) AS f
 	FROM timestamps
 ) tbl
 WHERE p IS DISTINCT FROM f
@@ -560,9 +560,9 @@ endloop
 foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear julian epoch timezone timezone_hour timezone_minute
 
 query III
-SELECT ts, DATE_PART('${partcode}', ts) AS pc, DATE_PART(['${partcode}'], ts) AS st
+SELECT ts, DATE_PART('{partcode}', ts) AS pc, DATE_PART(['{partcode}'], ts) AS st
 FROM timestamps
-WHERE pc IS DISTINCT FROM st['${partcode}'];
+WHERE pc IS DISTINCT FROM st['{partcode}'];
 ----
 
 endloop
@@ -679,9 +679,9 @@ NULL	NULL
 foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear julian epoch timezone timezone_hour timezone_minute
 
 query III
-SELECT ts, DATE_PART('${partcode}', ts) AS p, DATE_PART(['${partcode}'], ts) AS s
+SELECT ts, DATE_PART('{partcode}', ts) AS p, DATE_PART(['{partcode}'], ts) AS s
 FROM timestamps
-WHERE p IS DISTINCT FROM s['${partcode}'];
+WHERE p IS DISTINCT FROM s['{partcode}'];
 ----
 
 endloop

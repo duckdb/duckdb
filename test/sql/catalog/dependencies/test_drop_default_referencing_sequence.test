@@ -1,7 +1,7 @@
 # name: test/sql/catalog/dependencies/test_drop_default_referencing_sequence.test
 # group: [dependencies]
 
-load __TEST_DIR__/alter_sequence_dependency.db readwrite v1.5.4
+load {TEST_DIR}/alter_sequence_dependency.db readwrite v1.5.4
 
 statement ok
 set wal_autocheckpoint = '10gb';

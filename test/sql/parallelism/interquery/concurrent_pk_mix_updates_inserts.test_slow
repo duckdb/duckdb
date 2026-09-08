@@ -18,7 +18,7 @@ loop x 0 100
 
 onlyif threadid<5
 statement maybe
-INSERT INTO integers VALUES (100 + ${x})
+INSERT INTO integers VALUES (100 + {x})
 ----
 violat
 
@@ -37,7 +37,7 @@ endloop
 loop x 0 200
 
 statement maybe
-INSERT INTO integers VALUES (${x})
+INSERT INTO integers VALUES ({x})
 ----
 
 endloop

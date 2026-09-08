@@ -1,0 +1,124 @@
+# name: test/sql/json/test_json_geometry_format.test
+# description: Test the json_geometry_format setting
+# group: [json]
+
+require json
+
+# GEOMETRY is written as WKT by default, so existing output is unchanged
+query I
+SELECT current_setting('json_geometry_format');
+----
+wkt
+
+query II
+SELECT to_json('POINT(1 2)'::GEOMETRY), 'POINT(1 2)'::GEOMETRY::JSON;
+----
+"POINT (1 2)"	"POINT (1 2)"
+
+statement ok
+SET json_geometry_format='geojson';
+
+query II
+SELECT to_json('POINT(1 2)'::GEOMETRY), 'POINT(1 2)'::GEOMETRY::JSON;
+----
+{"type":"Point","coordinates":[1.0,2.0]}	{"type":"Point","coordinates":[1.0,2.0]}
+
+# Nested geometries follow the setting too
+query I
+SELECT to_json({a: 1, g: 'POINT(3 4)'::GEOMETRY});
+----
+{"a":1,"g":{"type":"Point","coordinates":[3.0,4.0]}}
+
+query I
+SELECT to_json(['POINT(1 2)'::GEOMETRY, NULL::GEOMETRY]);
+----
+[{"type":"Point","coordinates":[1.0,2.0]},null]
+
+query I
+SELECT json_object('g', 'LINESTRING(0 0, 1 1)'::GEOMETRY);
+----
+{"g":{"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]}}
+
+query I
+SELECT to_json(NULL::GEOMETRY);
+----
+NULL
+
+# COPY ... TO ... (FORMAT JSON) follows the setting
+statement ok
+COPY (SELECT 1 AS id, 'POINT(1 2)'::GEOMETRY AS g) TO '{TEST_DIR}/setting.json' (FORMAT JSON);
+
+query I
+SELECT trim(content, chr(10)) FROM read_text('{TEST_DIR}/setting.json');
+----
+{"id":1,"g":{"type":"Point","coordinates":[1.0,2.0]}}
+
+# The setting is case-insensitive
+statement ok
+SET json_geometry_format='GeoJSON';
+
+query I
+SELECT to_json('POINT(1 2)'::GEOMETRY);
+----
+{"type":"Point","coordinates":[1.0,2.0]}
+
+statement ok
+SET json_geometry_format='WKT';
+
+query I
+SELECT to_json('POINT(1 2)'::GEOMETRY);
+----
+"POINT (1 2)"
+
+# RESET restores the default
+statement ok
+SET json_geometry_format='geojson';
+
+statement ok
+RESET json_geometry_format;
+
+query I
+SELECT to_json('POINT(1 2)'::GEOMETRY);
+----
+"POINT (1 2)"
+
+# COPY ... TO ... (FORMAT GEOJSON) always writes GeoJSON, whatever the setting says
+statement ok
+SET json_geometry_format='wkt';
+
+statement ok
+COPY (SELECT 'POINT(1 2)'::GEOMETRY AS g) TO '{TEST_DIR}/always.geojsonl' (FORMAT GEOJSON, ARRAY false);
+
+query I
+SELECT trim(content, chr(10)) FROM read_text('{TEST_DIR}/always.geojsonl');
+----
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{}}
+
+# Reading is unaffected: both WKT strings and GeoJSON objects are accepted either way
+statement ok
+SET json_geometry_format='geojson';
+
+query I
+SELECT ST_AsText('"POINT(9 9)"'::JSON::GEOMETRY);
+----
+POINT (9 9)
+
+query I
+SELECT ST_AsText('{"type":"Point","coordinates":[1,2]}'::JSON::GEOMETRY);
+----
+POINT (1 2)
+
+statement ok
+RESET json_geometry_format;
+
+# An invalid value is rejected by SET, rather than by every later conversion
+statement error
+SET json_geometry_format='bogus';
+----
+<REGEX>:.*Invalid value "bogus" for json_geometry_format, expected 'wkt' or 'geojson'.*
+
+# The setting is unchanged after the failed SET
+query I
+SELECT to_json('POINT(1 2)'::GEOMETRY);
+----
+"POINT (1 2)"

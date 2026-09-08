@@ -8,14 +8,18 @@
 
 namespace duckdb {
 
-class PipeFile : public FileHandle {
+namespace {
+struct PipeFileSystemHolder {
+	PipeFileSystem pipe_fs;
+};
+
+class PipeFile : private PipeFileSystemHolder, public FileHandle {
 public:
 	explicit PipeFile(QueryContext context_p, unique_ptr<FileHandle> child_handle_p)
 	    : FileHandle(pipe_fs, child_handle_p->path, child_handle_p->GetFlags()),
 	      child_handle(std::move(child_handle_p)), context(context_p) {
 	}
 
-	PipeFileSystem pipe_fs;
 	unique_ptr<FileHandle> child_handle;
 
 public:
@@ -35,6 +39,7 @@ int64_t PipeFile::ReadChunk(void *buffer, int64_t nr_bytes) {
 int64_t PipeFile::WriteChunk(void *buffer, int64_t nr_bytes) {
 	return child_handle->Write(context, buffer, UnsafeNumericCast<idx_t>(nr_bytes));
 }
+} // namespace
 
 void PipeFileSystem::Reset(FileHandle &handle) {
 	throw InternalException("Cannot reset pipe file system");

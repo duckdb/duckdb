@@ -2,9 +2,6 @@
 # description: Test scan over multiple files with mismatching schemas
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query IIIIIIII
 FROM read_csv('{DATA_DIR}/csv/customer.4.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false,  columns = {'c_custkey': 'BIGINT', 'c_name': 'VARCHAR', 'c_address': 'VARCHAR', 'c_nationkey': 'INTEGER', 'c_phone': 'VARCHAR', 'c_acctbal': 'DECIMAL(15, 2)', 'c_mktsegment': 'VARCHAR', 'c_comment': 'VARCHAR'}, parallel=true, buffer_size = 300);
 ----

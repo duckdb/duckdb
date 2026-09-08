@@ -18,7 +18,7 @@ BatchCollectionChunkScanState::~BatchCollectionChunkScanState() {
 void BatchCollectionChunkScanState::InternalLoad(ErrorData &error) {
 	if (state.range.begin == state.range.end) {
 		// Signal empty chunk to break out of the loop
-		current_chunk->SetCardinality(0);
+		current_chunk->SetChildCardinality(0);
 		return;
 	}
 	offset = 0;
@@ -39,7 +39,7 @@ const vector<LogicalType> &BatchCollectionChunkScanState::Types() const {
 	return collection.Types();
 }
 
-const vector<string> &BatchCollectionChunkScanState::Names() const {
+const vector<Identifier> &BatchCollectionChunkScanState::Names() const {
 	throw NotImplementedException("BatchDataCollections don't have names");
 }
 

@@ -1,0 +1,7 @@
+# name: benchmark/recursive_cte/aoc2022_day09.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/aoc2022/recursive_cte_aoc2022.benchmark.in
+DAY=day09
+BENCHMARK_NAME=AoC 2022 day09 rope bridge
+DESCRIPTION=Run nine chained recursive rope-following computations

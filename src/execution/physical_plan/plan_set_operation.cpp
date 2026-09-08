@@ -9,32 +9,31 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/function/window/rows_functions.hpp"
+#include "duckdb/function/window_function.hpp"
 
 namespace duckdb {
 
 static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(ClientContext &client,
                                                                         const vector<LogicalType> &types) {
 	vector<unique_ptr<Expression>> res;
-	auto expr =
-	    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
-	expr->start = WindowBoundary::UNBOUNDED_PRECEDING;
-	expr->end = WindowBoundary::UNBOUNDED_FOLLOWING;
+	auto expr = RowNumberFun::GetFunction().Bind(client);
+	expr->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+	expr->WindowEndMutable() = WindowBoundary::UNBOUNDED_FOLLOWING;
 	for (idx_t i = 0; i < types.size(); i++) {
-		expr->partitions.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
-		ExpressionBinder::PushCollation(client, expr->partitions.back(), types[i]);
+		expr->PartitionsMutable().push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+		ExpressionBinder::PushCollation(client, expr->PartitionsMutable().back(), types[i]);
 	}
 	res.push_back(std::move(expr));
 	return res;
 }
 
 static JoinCondition CreateNotDistinctComparison(ClientContext &context, const LogicalType &type, idx_t i) {
-	JoinCondition cond;
-	cond.left = make_uniq<BoundReferenceExpression>(type, i);
-	cond.right = make_uniq<BoundReferenceExpression>(type, i);
-	cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-
-	ExpressionBinder::PushCollation(context, cond.left, type);
-	ExpressionBinder::PushCollation(context, cond.right, type);
+	auto left = make_uniq<BoundReferenceExpression>(type, i);
+	auto right = make_uniq<BoundReferenceExpression>(type, i);
+	JoinCondition cond(std::move(left), std::move(right), ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+	ExpressionBinder::PushCollation(context, cond.LeftReference(), type);
+	ExpressionBinder::PushCollation(context, cond.RightReference(), type);
 
 	return cond;
 }
@@ -101,6 +100,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 
 		// For EXCEPT ALL / INTERSECT ALL we need to remove the row number column again
 		if (op.setop_all) {
+			// Restore the logical operator's types: the ROW_NUMBER column is an implementation detail of the physical
+			// plan.
+			op.types.pop_back();
+
 			vector<unique_ptr<Expression>> select_list;
 			for (idx_t i = 0; i < types.size(); i++) {
 				select_list.push_back(make_uniq<BoundReferenceExpression>(types[i], i));

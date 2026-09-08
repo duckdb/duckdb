@@ -3,9 +3,6 @@
 # group: [projection]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);
 
 statement ok
@@ -34,6 +31,17 @@ query I
 SELECT renamed_col FROM (SELECT integers.* RENAME integers.i AS renamed_col FROM integers)
 ----
 1
+
+# dots in quoted identifiers are not qualification separators
+query II
+SELECT d, c FROM (SELECT * RENAME ("a.b" AS d) FROM (SELECT 1 AS "a.b", 2 AS c))
+----
+1	2
+
+query II
+SELECT d, c FROM (SELECT * RENAME ("table.with.dot"."column.with.dot" AS d) FROM (SELECT 1 AS "column.with.dot", 2 AS c) AS "table.with.dot")
+----
+1	2
 
 # multiple renames
 query II

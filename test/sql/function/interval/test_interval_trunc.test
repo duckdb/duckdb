@@ -163,7 +163,7 @@ NULL
 foreach datepart year isoyear
 
 query I
-SELECT DATE_TRUNC('${datepart}', i) FROM intervals
+SELECT DATE_TRUNC('{datepart}', i) FROM intervals
 ----
 1247 years
 -1448 years
@@ -198,7 +198,7 @@ endloop
 foreach datepart week yearweek
 
 query I
-SELECT DATE_TRUNC('${datepart}', i) FROM intervals
+SELECT DATE_TRUNC('{datepart}', i) FROM intervals
 ----
 1247 years 4 months
 -1448 years -5 months
@@ -233,7 +233,7 @@ endloop
 foreach datepart dayofmonth dayofweek isodow dayofyear
 
 query I
-SELECT DATE_TRUNC('${datepart}', i) FROM intervals
+SELECT DATE_TRUNC('{datepart}', i) FROM intervals
 ----
 1247 years 4 months
 -1448 years -5 months
@@ -330,7 +330,7 @@ NULL
 foreach datepart second epoch
 
 query I
-SELECT DATE_TRUNC('${datepart}', i) FROM intervals
+SELECT DATE_TRUNC('{datepart}', i) FROM intervals
 ----
 1247 years 4 months
 -1448 years -5 months

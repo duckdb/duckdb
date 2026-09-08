@@ -1,15 +1,28 @@
 #pragma once
 
+#include <stdint.h>
+#include <string>
+#include <unordered_set>
+
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 struct FieldID;
+class Deserializer;
+class Serializer;
+
 struct ChildFieldIDs {
 	ChildFieldIDs();
 	ChildFieldIDs Copy() const;
-	unique_ptr<case_insensitive_map_t<FieldID>> ids;
+	unique_ptr<identifier_map_t<FieldID>> ids;
 
 	void Serialize(Serializer &serializer) const;
 	static ChildFieldIDs Deserialize(Deserializer &source);
@@ -29,7 +42,7 @@ public:
 	static FieldID Deserialize(Deserializer &source);
 
 public:
-	static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const vector<string> &names,
+	static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const vector<Identifier> &names,
 	                             const vector<LogicalType> &sql_types);
 	static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 	                        unordered_set<uint32_t> &unique_field_ids,

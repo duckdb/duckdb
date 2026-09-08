@@ -1,7 +1,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/common/types/string_type.hpp"
-
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 
 namespace duckdb {
 
@@ -62,10 +62,12 @@ struct PrefixOperator {
 } // namespace
 
 ScalarFunction PrefixFun::GetFunction() {
-	return ScalarFunction("prefix",                                     // name of the function
-	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	                      LogicalType::BOOLEAN,                         // return type
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator>);
+	ScalarFunction function("prefix",                                     // name of the function
+	                        {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
+	                        LogicalType::BOOLEAN,                         // return type
+	                        ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator>);
+	function.SetFilterPruneCallback(PrefixFilterPrune);
+	return function;
 }
 
 } // namespace duckdb

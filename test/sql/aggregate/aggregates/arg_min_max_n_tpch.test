@@ -2,13 +2,9 @@
 # description: Test max/min N overloads with TPCH data
 # group: [aggregates]
 
-require tpch
+set variable sf 0.001
 
-statement ok
-PRAGMA enable_verification
-
-statement ok
-CALL dbgen(sf=0.001);
+include test/sql/tpch/tpch_setup.test_template
 
 query I
 select min(l_orderkey, 3) from lineitem;

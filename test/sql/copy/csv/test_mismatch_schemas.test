@@ -2,9 +2,6 @@
 # description: Test scan over multiple files with mismatching schemas
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # We will use the header from the first file (the one identified in the binder) as our schema. If other files have extra columns, these columns will be ignored
 query III
 SELECT * FROM read_csv(['{DATA_DIR}/csv/multiple_files/more_columns/file_1.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_2.csv',

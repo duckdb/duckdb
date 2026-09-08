@@ -10,13 +10,13 @@ require parquet
 # Check that this is a geoparquet file
 query II
 SELECT key, (decode(value)) as col
-FROM parquet_kv_metadata('__WORKING_DIRECTORY__/data/geoparquet/data-point-encoding_wkb.parquet')
+FROM parquet_kv_metadata('{WORKING_DIRECTORY}/data/geoparquet/data-point-encoding_wkb.parquet')
 WHERE key = 'geo'
 ----
 geo	{"version": "1.1.0", "primary_column": "geometry", "columns": {"geometry": {"encoding": "WKB", "geometry_types": ["Point"]}}}
 
 query II rowsort
-SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-encoding_wkb.parquet'
+SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-point-encoding_wkb.parquet'
 ----
 0	POINT (30 10)
 1	POINT EMPTY
@@ -27,7 +27,7 @@ statement ok
 SET enable_geoparquet_conversion = false;
 
 query II rowsort
-SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-encoding_wkb.parquet'
+SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-point-encoding_wkb.parquet'
 ----
 0	\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\x00\x00\x00\x00\x00\x00$@
 1	\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F
@@ -39,14 +39,14 @@ SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-enco
 # Test writing geoparquet when conversion is enabled but spatial is not loaded
 #------------------------------------------------------------------------------
 
-load __TEST_DIR__/geometry_db_test.db
+load {TEST_DIR}/geometry_db_test.db
 
 statement ok
 SET enable_geoparquet_conversion = true;
 
 # Create a table containing geometries
 statement ok
-CREATE TABLE t1 AS SELECT col, geometry::GEOMETRY as geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv';
+CREATE TABLE t1 AS SELECT col, geometry::GEOMETRY as geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-point-wkt.csv';
 
 # Restart
 restart no_extension_load
@@ -57,11 +57,11 @@ statement ok
 SET enable_geoparquet_conversion = true;
 
 statement ok
-COPY (FROM t1) TO '__TEST_DIR__/data-point-out-enabled.parquet' (FORMAT PARQUET)
+COPY (FROM t1) TO '{TEST_DIR}/data-point-out-enabled.parquet' (FORMAT PARQUET)
 
 # The bytes may differ because this is serialized GEOMETRY, not WKB
 query II rowsort raw_geo
-SELECT col, geometry FROM '__TEST_DIR__/data-point-out-enabled.parquet'
+SELECT col, geometry FROM '{TEST_DIR}/data-point-out-enabled.parquet'
 ----
 0	\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\x00\x00\x00\x00\x00\x00$@
 1	\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
@@ -71,7 +71,7 @@ SELECT col, geometry FROM '__TEST_DIR__/data-point-out-enabled.parquet'
 
 query I
 SELECT (decode(value)) as col
-FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-enabled.parquet');
+FROM parquet_kv_metadata('{TEST_DIR}/data-point-out-enabled.parquet');
 ----
 {"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["Point"],"bbox":[30.0,10.0,40.0,40.0]}}}
 
@@ -86,7 +86,7 @@ statement ok
 SET enable_geoparquet_conversion = false;
 
 statement ok
-CREATE TABLE t2 AS SELECT col, geometry::GEOMETRY as geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv';
+CREATE TABLE t2 AS SELECT col, geometry::GEOMETRY as geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-point-wkt.csv';
 
 # Restart
 restart no_extension_load
@@ -98,16 +98,16 @@ SET enable_geoparquet_conversion = true;
 
 # Write some parquet containing geometry
 statement ok
-COPY (FROM t1) TO '__TEST_DIR__/data-point-out-disabled.parquet' (FORMAT PARQUET)
+COPY (FROM t1) TO '{TEST_DIR}/data-point-out-disabled.parquet' (FORMAT PARQUET)
 
 # The bytes may differ because this is serialized GEOMETRY, not WKB
 query II rowsort raw_geo
-SELECT col, geometry FROM '__TEST_DIR__/data-point-out-disabled.parquet'
+SELECT col, geometry FROM '{TEST_DIR}/data-point-out-disabled.parquet'
 ----
 
 query I
 SELECT (decode(value)) as col
-FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-disabled.parquet');
+FROM parquet_kv_metadata('{TEST_DIR}/data-point-out-disabled.parquet');
 ----
 {"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["Point"],"bbox":[30.0,10.0,40.0,40.0]}}}
 

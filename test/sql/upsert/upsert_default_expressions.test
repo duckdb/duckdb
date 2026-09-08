@@ -2,9 +2,6 @@
 # group: [upsert]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 create or replace table tbl (
 	a integer primary key default 4,
 	b integer DEFAULT 3

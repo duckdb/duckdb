@@ -80,6 +80,54 @@ struct {
 #define FL_LOADED  0x01
 static int load_dist(d_idx_t *d);
 
+struct DistCache {
+	~DistCache() {
+		Clear();
+	}
+
+	void Clear() {
+		if (!idx) {
+			entry_count = 0;
+			return;
+		}
+		for (int i = 0; i < entry_count; i++) {
+			FreeDistribution(idx[i]);
+		}
+		free(idx);
+		idx = NULL;
+		entry_count = 0;
+	}
+
+	static void FreeDistribution(d_idx_t &entry) {
+		auto dist = entry.dist;
+		if (!dist) {
+			return;
+		}
+		if (dist->weight_sets) {
+			for (int i = 0; i < entry.w_width; i++) {
+				free(dist->weight_sets[i]);
+			}
+		}
+		if (dist->value_sets) {
+			for (int i = 0; i < entry.v_width; i++) {
+				free(dist->value_sets[i]);
+			}
+		}
+		free(dist->type_vector);
+		free(dist->weight_sets);
+		free(dist->maximums);
+		free(dist->value_sets);
+		free(dist->names);
+		free(dist->strings);
+		free(dist);
+		entry.dist = NULL;
+		entry.flags = 0;
+	}
+
+	int entry_count = 0;
+	d_idx_t *idx = NULL;
+};
+
 /*
  * Routine: di_compare()
  * Purpose: comparison routine for two d_idx_t entries; used by qsort
@@ -115,117 +163,115 @@ int di_compare(const void *op1, const void *op2) {
  * TODO: None
  */
 d_idx_t *find_dist(const char *name) {
-	static int entry_count;
-	static d_idx_t *idx = NULL;
+	static thread_local DistCache dist_cache;
+	auto &entry_count = dist_cache.entry_count;
+	auto &idx = dist_cache.idx;
 	d_idx_t key, *id = NULL;
 	int i;
 	FILE *ifp;
 	int32_t temp;
 
 	/* load the index if this is the first time through */
-	if (!InitConstants::find_dist_init) {
-		/* make sure that this is read one thread at a time */
-		if (!InitConstants::find_dist_init) /* make sure no one beat us to it */
-		{
+	if (!InitConstants::find_dist_init || !idx) {
+		dist_cache.Clear();
 
-			/* open the dist file */
-			auto read_ptr = tpcds_idx;
-			//			if ((ifp = fopen(get_str("DISTRIBUTIONS"), "rb")) == NULL) {
-			//				fprintf(stderr, "Error: open of distributions failed: ");
-			//				perror(get_str("DISTRIBUTIONS"));
-			//				exit(1);
-			//			}
+		/* open the dist file */
+		auto read_ptr = tpcds_idx;
+		//			if ((ifp = fopen(get_str("DISTRIBUTIONS"), "rb")) == NULL) {
+		//				fprintf(stderr, "Error: open of distributions failed: ");
+		//				perror(get_str("DISTRIBUTIONS"));
+		//				exit(1);
+		//			}
+		memcpy(&temp, read_ptr, sizeof(int32_t));
+		read_ptr += sizeof(int32_t);
+		//			if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
+		//				fprintf(stderr, "Error: read of index count failed: ");
+		//				perror(get_str("DISTRIBUTIONS"));
+		//				exit(2);
+		//			}
+		entry_count = ntohl(temp);
+		read_ptr = tpcds_idx + tpcds_idx_len - (entry_count * IDX_SIZE);
+		//			if ((temp = fseek(ifp, -entry_count * IDX_SIZE, SEEK_END)) < 0) {
+		//				fprintf(stderr, "Error: lseek to index failed: ");
+		//				fprintf(stderr, "attempting to reach %d\nSystem error: ", (int)(-entry_count * IDX_SIZE));
+		//				perror(get_str("DISTRIBUTIONS"));
+		//				exit(3);
+		//			}
+		idx = (d_idx_t *)malloc(entry_count * sizeof(d_idx_t));
+		MALLOC_CHECK(idx);
+		for (i = 0; i < entry_count; i++) {
+			memset(idx + i, 0, sizeof(d_idx_t));
+			//				if (fread(idx[i].name, 1, D_NAME_LEN, ifp) < D_NAME_LEN) {
+			//					fprintf(stderr, "Error: read index failed (1): ");
+			//					perror(get_str("DISTRIBUTIONS"));
+			//					exit(2);
+			//				}
+			memcpy(idx[i].name, read_ptr, D_NAME_LEN);
+			read_ptr += D_NAME_LEN;
+			idx[i].name[D_NAME_LEN] = '\0';
 			memcpy(&temp, read_ptr, sizeof(int32_t));
 			read_ptr += sizeof(int32_t);
-			//			if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
-			//				fprintf(stderr, "Error: read of index count failed: ");
-			//				perror(get_str("DISTRIBUTIONS"));
-			//				exit(2);
-			//			}
-			entry_count = ntohl(temp);
-			read_ptr = tpcds_idx + tpcds_idx_len - (entry_count * IDX_SIZE);
-			//			if ((temp = fseek(ifp, -entry_count * IDX_SIZE, SEEK_END)) < 0) {
-			//				fprintf(stderr, "Error: lseek to index failed: ");
-			//				fprintf(stderr, "attempting to reach %d\nSystem error: ", (int)(-entry_count * IDX_SIZE));
-			//				perror(get_str("DISTRIBUTIONS"));
-			//				exit(3);
-			//			}
-			idx = (d_idx_t *)malloc(entry_count * sizeof(d_idx_t));
-			MALLOC_CHECK(idx);
-			for (i = 0; i < entry_count; i++) {
-				memset(idx + i, 0, sizeof(d_idx_t));
-				//				if (fread(idx[i].name, 1, D_NAME_LEN, ifp) < D_NAME_LEN) {
-				//					fprintf(stderr, "Error: read index failed (1): ");
-				//					perror(get_str("DISTRIBUTIONS"));
-				//					exit(2);
-				//				}
-				memcpy(idx[i].name, read_ptr, D_NAME_LEN);
-				read_ptr += D_NAME_LEN;
-				idx[i].name[D_NAME_LEN] = '\0';
-				memcpy(&temp, read_ptr, sizeof(int32_t));
-				read_ptr += sizeof(int32_t);
-				//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
-				//					fprintf(stderr, "Error: read index failed (2): ");
-				//					perror(get_str("DISTRIBUTIONS"));
-				//					exit(2);
-				//				}
-				idx[i].index = ntohl(temp);
-				memcpy(&temp, read_ptr, sizeof(int32_t));
-				read_ptr += sizeof(int32_t);
-				//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
-				//					fprintf(stderr, "Error: read index failed (4): ");
-				//					perror(get_str("DISTRIBUTIONS"));
-				//					exit(2);
-				//				}
-				idx[i].offset = ntohl(temp);
-				memcpy(&temp, read_ptr, sizeof(int32_t));
-				read_ptr += sizeof(int32_t);
-				//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
-				//					fprintf(stderr, "Error: read index failed (5): ");
-				//					perror(get_str("DISTRIBUTIONS"));
-				//					exit(2);
-				//				}
-				idx[i].str_space = ntohl(temp);
-				memcpy(&temp, read_ptr, sizeof(int32_t));
-				read_ptr += sizeof(int32_t);
-				//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
-				//					fprintf(stderr, "Error: read index failed (6): ");
-				//					perror(get_str("DISTRIBUTIONS"));
-				//					exit(2);
-				//				}
-				idx[i].length = ntohl(temp);
-				memcpy(&temp, read_ptr, sizeof(int32_t));
-				read_ptr += sizeof(int32_t);
-				//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
-				//					fprintf(stderr, "Error: read index failed (7): ");
-				//					perror(get_str("DISTRIBUTIONS"));
-				//					exit(2);
-				//				}
-				idx[i].w_width = ntohl(temp);
-				memcpy(&temp, read_ptr, sizeof(int32_t));
-				read_ptr += sizeof(int32_t);
-				//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
-				//					fprintf(stderr, "Error: read index failed (8): ");
-				//					perror(get_str("DISTRIBUTIONS"));
-				//					exit(2);
-				//				}
-				idx[i].v_width = ntohl(temp);
-				memcpy(&temp, read_ptr, sizeof(int32_t));
-				read_ptr += sizeof(int32_t);
-				//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
-				//					fprintf(stderr, "Error: read index failed (9): ");
-				//					perror(get_str("DISTRIBUTIONS"));
-				//					exit(2);
-				//				}
-				idx[i].name_space = ntohl(temp);
-				idx[i].dist = NULL;
-			}
-			qsort((void *)idx, entry_count, sizeof(d_idx_t), di_compare);
-			InitConstants::find_dist_init = 1;
-
-			/* make sure that this is read one thread at a time */
-			//			fclose(ifp);
+			//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
+			//					fprintf(stderr, "Error: read index failed (2): ");
+			//					perror(get_str("DISTRIBUTIONS"));
+			//					exit(2);
+			//				}
+			idx[i].index = ntohl(temp);
+			memcpy(&temp, read_ptr, sizeof(int32_t));
+			read_ptr += sizeof(int32_t);
+			//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
+			//					fprintf(stderr, "Error: read index failed (4): ");
+			//					perror(get_str("DISTRIBUTIONS"));
+			//					exit(2);
+			//				}
+			idx[i].offset = ntohl(temp);
+			memcpy(&temp, read_ptr, sizeof(int32_t));
+			read_ptr += sizeof(int32_t);
+			//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
+			//					fprintf(stderr, "Error: read index failed (5): ");
+			//					perror(get_str("DISTRIBUTIONS"));
+			//					exit(2);
+			//				}
+			idx[i].str_space = ntohl(temp);
+			memcpy(&temp, read_ptr, sizeof(int32_t));
+			read_ptr += sizeof(int32_t);
+			//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
+			//					fprintf(stderr, "Error: read index failed (6): ");
+			//					perror(get_str("DISTRIBUTIONS"));
+			//					exit(2);
+			//				}
+			idx[i].length = ntohl(temp);
+			memcpy(&temp, read_ptr, sizeof(int32_t));
+			read_ptr += sizeof(int32_t);
+			//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
+			//					fprintf(stderr, "Error: read index failed (7): ");
+			//					perror(get_str("DISTRIBUTIONS"));
+			//					exit(2);
+			//				}
+			idx[i].w_width = ntohl(temp);
+			memcpy(&temp, read_ptr, sizeof(int32_t));
+			read_ptr += sizeof(int32_t);
+			//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
+			//					fprintf(stderr, "Error: read index failed (8): ");
+			//					perror(get_str("DISTRIBUTIONS"));
+			//					exit(2);
+			//				}
+			idx[i].v_width = ntohl(temp);
+			memcpy(&temp, read_ptr, sizeof(int32_t));
+			read_ptr += sizeof(int32_t);
+			//				if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
+			//					fprintf(stderr, "Error: read index failed (9): ");
+			//					perror(get_str("DISTRIBUTIONS"));
+			//					exit(2);
+			//				}
+			idx[i].name_space = ntohl(temp);
+			idx[i].dist = NULL;
 		}
+		qsort((void *)idx, entry_count, sizeof(d_idx_t), di_compare);
+		InitConstants::find_dist_init = 1;
+
+		/* make sure that this is read one thread at a time */
+		//			fclose(ifp);
 	}
 
 	/* find the distribution, if it exists and move to it */
@@ -275,6 +321,7 @@ static int load_dist(d_idx_t *di) {
 
 		di->dist = (dist_t *)malloc(sizeof(struct DIST_T));
 		MALLOC_CHECK(di->dist);
+		memset(di->dist, 0, sizeof(struct DIST_T));
 		d = di->dist;
 
 		// fprintf(stderr, "\ndist %s ", di->name);

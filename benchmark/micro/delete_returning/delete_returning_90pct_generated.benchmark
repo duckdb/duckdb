@@ -1,0 +1,20 @@
+# name: benchmark/micro/delete_returning/delete_returning_90pct_generated.benchmark
+# description: DELETE RETURNING ~90% of rows with generated column (fallback path)
+# group: [delete_returning]
+
+load
+CREATE TABLE t_90pct_gen (c1 INT, c2 VARCHAR, c3 DOUBLE, c4 INT, c5 AS (c1 + c4));
+INSERT INTO t_90pct_gen SELECT
+    i, 'val_' || i::VARCHAR, i * 1.5, i + 1
+FROM range(1000000) t(i);
+
+run
+DELETE FROM t_90pct_gen WHERE c1 % 10 != 0 RETURNING *;
+
+cleanup
+DROP TABLE IF EXISTS t_90pct_gen;
+CREATE TABLE t_90pct_gen (c1 INT, c2 VARCHAR, c3 DOUBLE, c4 INT, c5 AS (c1 + c4));
+INSERT INTO t_90pct_gen SELECT
+    i, 'val_' || i::VARCHAR, i * 1.5, i + 1
+FROM range(1000000) t(i);
+

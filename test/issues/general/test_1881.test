@@ -2,9 +2,6 @@
 # description: Issue 1881: Segmentation fault, pandas UPDATE with JOIN
 # group: [general]
 
-statement ok
-PRAGMA enable_verification
-
 # with random values (original)
 statement ok
 create table foo as select (random() * 1000)::int a from range(100000);

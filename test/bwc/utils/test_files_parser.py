@@ -56,7 +56,7 @@ def parse_excluded_tests(path):
     with open(path) as f:
         for line in f:
             stripped = line.strip()
-            if len(stripped) > 0 and line[0] != '#':
+            if len(stripped) > 0 and stripped[0] != '#':
                 exclusion_list[stripped] = True
     return exclusion_list
 
@@ -435,6 +435,7 @@ class SerializerSQLLogicContext(SQLLogicContext):
             "no_alternative_verify",
             "noalternativeverify",
             "noforcestorage",
+            "no_force_storage",
             "nothreadsan",
             "notmingw",
             "notwindows",
@@ -520,6 +521,7 @@ class SQLLogicTestSerializer(SQLLogicRunner):
         keywords = {
             '__TEST_DIR__': BWC_OUTPUT_DIR_NAME,
             '__WORKING_DIRECTORY__': '.',
+            '{WORKING_DIRECTORY}': '.',
             '{DATA_DIR}': 'data',
             '{TEMP_DIR}': BWC_OUTPUT_DIR_NAME,
             '{TEST_DIR}': BWC_OUTPUT_DIR_NAME,
@@ -577,7 +579,7 @@ class LoadingStats:
     def __init__(self):
         self.skipped_count = 0
         self.skipped_count_per_reason = {}
-        self.start_time = time.time()
+        self.start_time = time.monotonic()
         self.nb_steps = 0
         self.nb_tests = 0
         self.nb_cached_queries = 0
@@ -609,7 +611,7 @@ class LoadingStats:
 
     def log_stats(self):
         logger.info(
-            f"Loaded {self.nb_tests} test files (with {self.nb_steps} steps) in {time.time() - self.start_time:.2f}s"
+            f"Loaded {self.nb_tests} test files (with {self.nb_steps} steps) in {time.monotonic() - self.start_time:.2f}s"
         )
         logger.info(
             f"  Cached queries: {self.nb_cached_queries} ({(self.nb_cached_queries/self.nb_tests*100) if self.nb_tests > 0 else 0:.2f}%)"

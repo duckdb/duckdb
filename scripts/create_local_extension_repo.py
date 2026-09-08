@@ -1,6 +1,6 @@
 ###
 # This script copies all extensions in a build folder from their cmake-produced structure into the extension repository
-# structure of ./<duckdb_version>/<build_archictecture>/<extension_name>.duckdb_extension
+# structure of ./<duckdb_version>/<build_architecture>/<extension_name>.duckdb_extension
 # Note that it requires duckdb_platofrom_out file to be populated with the platform
 
 import os

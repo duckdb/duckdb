@@ -14,11 +14,11 @@ loop i 0 20
 
 onlyif threadid=0
 statement ok
-ALTER TABLE integers RENAME TO integers_${i}
+ALTER TABLE integers RENAME TO integers_{i}
 
 onlyif threadid=0
 statement ok
-ALTER TABLE integers_${i} RENAME TO integers
+ALTER TABLE integers_{i} RENAME TO integers
 
 endloop
 

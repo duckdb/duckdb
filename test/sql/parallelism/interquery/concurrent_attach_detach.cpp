@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "catch.hpp"
 
 #include "duckdb/common/atomic.hpp"
@@ -246,14 +248,15 @@ void AttachWorker::append_internal(AttachTask &task, bool is_upsert) {
 			auto query = StringUtil::Format("MERGE INTO %s.main.%s USING appended_data USING (i) WHEN MATCHED THEN "
 			                                "UPDATE WHEN NOT MATCHED THEN INSERT",
 			                                SQLIdentifier(getDBName(db_id)), SQLIdentifier(tbl_str));
-			vector<string> names;
+			vector<Identifier> names;
 			names.push_back("i");
 			names.push_back("s");
 			names.push_back("ts");
 			names.push_back("obj");
 			base_appender = make_uniq<QueryAppender>(conn, query, types, names);
 		} else {
-			base_appender = make_uniq<Appender>(conn, getDBName(db_id), DEFAULT_SCHEMA, tbl_str);
+			base_appender = make_uniq<Appender>(conn, Identifier(getDBName(db_id)), Identifier::DefaultSchema(),
+			                                    Identifier(tbl_str));
 		}
 		auto &appender = *base_appender;
 
@@ -263,20 +266,20 @@ void AttachWorker::append_internal(AttachTask &task, bool is_upsert) {
 
 		// int
 		auto &col_ubigint = chunk.data[0];
-		auto data_ubigint = FlatVector::GetData<uint64_t>(col_ubigint);
+		auto data_ubigint = FlatVector::GetDataMutable<uint64_t>(col_ubigint);
 		// varchar
 		auto &col_varchar = chunk.data[1];
-		auto data_varchar = FlatVector::GetData<string_t>(col_varchar);
+		auto data_varchar = FlatVector::GetDataMutable<string_t>(col_varchar);
 		// timestamp
 		auto &col_ts = chunk.data[2];
-		auto data_ts = FlatVector::GetData<timestamp_t>(col_ts);
+		auto data_ts = FlatVector::GetDataMutable<timestamp_t>(col_ts);
 		// struct
 		auto &col_struct = chunk.data[3];
 		auto &data_struct_entries = StructVector::GetEntries(col_struct);
 		auto &entry_ubigint = data_struct_entries[0];
-		auto data_struct_ubigint = FlatVector::GetData<uint64_t>(*entry_ubigint);
+		auto data_struct_ubigint = FlatVector::GetDataMutable<uint64_t>(entry_ubigint);
 		auto &entry_varchar = data_struct_entries[1];
-		auto data_struct_varchar = FlatVector::GetData<string_t>(*entry_varchar);
+		auto data_struct_varchar = FlatVector::GetDataMutable<string_t>(entry_varchar);
 
 		for (idx_t i = 0; i < task.ids.size(); i++) {
 			auto row_idx = task.ids[i];
@@ -284,10 +287,10 @@ void AttachWorker::append_internal(AttachTask &task, bool is_upsert) {
 			data_varchar[i] = StringVector::AddString(col_varchar, to_string(row_idx));
 			data_ts[i] = timestamp_t {static_cast<int64_t>(1000 * (row_idx))};
 			data_struct_ubigint[i] = row_idx;
-			data_struct_varchar[i] = StringVector::AddString(*entry_varchar, to_string(row_idx));
+			data_struct_varchar[i] = StringVector::AddString(entry_varchar, to_string(row_idx));
 		}
 
-		chunk.SetCardinality(task.ids.size());
+		chunk.SetChildCardinality(task.ids.size());
 		appender.AppendDataChunk(chunk);
 		appender.Close();
 

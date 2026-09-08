@@ -5,10 +5,6 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
-
 namespace duckdb {
 
 CommonTableExpressionMap::CommonTableExpressionMap() {
@@ -24,7 +20,12 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 		for (auto &al : kv.second->key_targets) {
 			kv_info->key_targets.push_back(al->Copy());
 		}
-		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
+		for (auto &al : kv.second->payload_aggregates) {
+			kv_info->payload_aggregates.push_back(al->Copy());
+		}
+		if (kv.second->query_node) {
+			kv_info->query_node = kv.second->query_node->Copy();
+		}
 		kv_info->materialized = kv.second->materialized;
 		res.map[kv.first] = std::move(kv_info);
 	}
@@ -39,7 +40,7 @@ string CommonTableExpressionMap::ToString() const {
 	// check if there are any recursive CTEs
 	bool has_recursive = false;
 	for (auto &kv : map) {
-		if (kv.second->query->node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
+		if (kv.second->query_node && kv.second->query_node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
 			has_recursive = true;
 			break;
 		}
@@ -55,14 +56,14 @@ string CommonTableExpressionMap::ToString() const {
 			result += ", ";
 		}
 		auto &cte = *kv.second;
-		result += KeywordHelper::WriteOptionallyQuoted(kv.first);
+		result += SQLIdentifier(kv.first);
 		if (!cte.aliases.empty()) {
 			result += " (";
 			for (idx_t k = 0; k < cte.aliases.size(); k++) {
 				if (k > 0) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(cte.aliases[k]);
+				result += SQLIdentifier(cte.aliases[k]);
 			}
 			result += ")";
 		}
@@ -73,6 +74,9 @@ string CommonTableExpressionMap::ToString() const {
 					result += ", ";
 				}
 				result += cte.key_targets[k]->ToString();
+				if (cte.key_targets[k]->HasAlias()) {
+					result += StringUtil::Format(" AS %s", SQLIdentifier(cte.key_targets[k]->GetAlias()));
+				}
 			}
 			result += ") ";
 		}
@@ -83,7 +87,8 @@ string CommonTableExpressionMap::ToString() const {
 		} else {
 			result += " AS (";
 		}
-		result += cte.query->ToString();
+		D_ASSERT(cte.query_node);
+		result += cte.query_node->ToString();
 		result += ")";
 		first_cte = false;
 	}
@@ -106,18 +111,14 @@ string QueryNode::ResultModifiersToString() const {
 		} else if (modifier.type == ResultModifierType::LIMIT_MODIFIER) {
 			auto &limit_modifier = modifier.Cast<LimitModifier>();
 			if (limit_modifier.limit) {
-				result += " LIMIT " + limit_modifier.limit->ToString();
+				if (limit_modifier.limit_type == LimitValueType::PERCENTAGE) {
+					result += " LIMIT (" + limit_modifier.limit->ToString() + ") %";
+				} else {
+					result += " LIMIT " + limit_modifier.limit->ToString();
+				}
 			}
 			if (limit_modifier.offset) {
 				result += " OFFSET " + limit_modifier.offset->ToString();
-			}
-		} else if (modifier.type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
-			auto &limit_p_modifier = modifier.Cast<LimitPercentModifier>();
-			if (limit_p_modifier.limit) {
-				result += " LIMIT (" + limit_p_modifier.limit->ToString() + ") %";
-			}
-			if (limit_p_modifier.offset) {
-				result += " OFFSET " + limit_p_modifier.offset->ToString();
 			}
 		}
 	}
@@ -160,11 +161,15 @@ bool QueryNode::Equals(const QueryNode *other) const {
 		if (!ParsedExpression::ListEquals(entry.second->key_targets, other_entry->second->key_targets)) {
 			return false;
 		}
-		if (!entry.second->query->Equals(*other->cte_map.map.at(entry.first)->query)) {
+		if (!ParsedExpression::ListEquals(entry.second->payload_aggregates, other_entry->second->payload_aggregates)) {
+			return false;
+		}
+		if (!entry.second->query_node ||
+		    !entry.second->query_node->Equals(other->cte_map.map.at(entry.first)->query_node.get())) {
 			return false;
 		}
 	}
-	return other->type == type;
+	return true;
 }
 
 void QueryNode::CopyProperties(QueryNode &other) const {
@@ -179,7 +184,12 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		for (auto &key : kv.second->key_targets) {
 			kv_info->key_targets.push_back(key->Copy());
 		}
-		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
+		for (auto &agg : kv.second->payload_aggregates) {
+			kv_info->payload_aggregates.push_back(agg->Copy());
+		}
+		if (kv.second->query_node) {
+			kv_info->query_node = kv.second->query_node->Copy();
+		}
 		kv_info->materialized = kv.second->materialized;
 		other.cte_map.map[kv.first] = std::move(kv_info);
 	}
@@ -195,8 +205,7 @@ void QueryNode::AddDistinct() {
 				// we have a DISTINCT without an ON clause - this distinct does not need to be added
 				return;
 			}
-		} else if (modifier.type == ResultModifierType::LIMIT_MODIFIER ||
-		           modifier.type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+		} else if (modifier.type == ResultModifierType::LIMIT_MODIFIER) {
 			// we encountered a LIMIT or LIMIT PERCENT - these change the result of DISTINCT, so we do need to push a
 			// DISTINCT relation
 			break;

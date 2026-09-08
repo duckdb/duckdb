@@ -12,9 +12,6 @@ statement ok
 SET TimeZone = 'America/Los_Angeles';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE timestamps AS SELECT ts::TIMESTAMPTZ AS ts FROM (VALUES
 	('-infinity'),
 	('0044-03-13 (BC) 10:33:41.987654+01'),

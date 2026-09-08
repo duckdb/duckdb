@@ -5,9 +5,6 @@
 require parquet
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE values_TINYINT AS SELECT d::TINYINT d FROM (VALUES
     (-128), (42), (NULL), (127)) tbl (d);
 
@@ -26,49 +23,49 @@ CREATE TABLE values_BIGINT AS SELECT d::BIGINT d FROM (VALUES
 foreach type TINYINT SMALLINT INTEGER BIGINT
 
 statement ok
-CREATE OR REPLACE TABLE signed(d ${type})
+CREATE OR REPLACE TABLE signed(d {type})
 
 statement ok
-INSERT INTO signed SELECT * FROM values_${type}
+INSERT INTO signed SELECT * FROM values_{type}
 
 statement ok
-COPY signed TO '__TEST_DIR__/signed.parquet' (FORMAT 'parquet');
+COPY signed TO '{TEST_DIR}/signed.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM '__TEST_DIR__/signed.parquet' EXCEPT SELECT * FROM signed
+SELECT * FROM '{TEST_DIR}/signed.parquet' EXCEPT SELECT * FROM signed
 ----
 
 query I
-SELECT * FROM signed EXCEPT SELECT * FROM '__TEST_DIR__/signed.parquet'
+SELECT * FROM signed EXCEPT SELECT * FROM '{TEST_DIR}/signed.parquet'
 ----
 
 query I
-SELECT * FROM '__TEST_DIR__/signed.parquet' WHERE d=42
+SELECT * FROM '{TEST_DIR}/signed.parquet' WHERE d=42
 ----
 42
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/signed.parquet' WHERE d>42
+SELECT COUNT(*) FROM '{TEST_DIR}/signed.parquet' WHERE d>42
 ----
 1
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/signed.parquet' WHERE d>=42
+SELECT COUNT(*) FROM '{TEST_DIR}/signed.parquet' WHERE d>=42
 ----
 2
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/signed.parquet' WHERE d<42
+SELECT COUNT(*) FROM '{TEST_DIR}/signed.parquet' WHERE d<42
 ----
 1
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/signed.parquet' WHERE d<=42
+SELECT COUNT(*) FROM '{TEST_DIR}/signed.parquet' WHERE d<=42
 ----
 2
 
 query I
-SELECT typeof(d)='${type}' FROM '__TEST_DIR__/signed.parquet' LIMIT 1
+SELECT typeof(d)='{type}' FROM '{TEST_DIR}/signed.parquet' LIMIT 1
 ----
 true
 

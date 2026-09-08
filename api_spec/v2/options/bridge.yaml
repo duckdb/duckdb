@@ -1,0 +1,4 @@
+include_header: duckdb/main/capi_v2/capi_v2_internal.hpp
+# Return expression for generated stubs. ERROR_API is the unspecified
+# internal API error in the v2 error code enum.
+stub_return: DUCKDB_V2_ERROR_API

@@ -9,7 +9,7 @@ CREATE TABLE users (
 );
 
 # FIXME: not consistent
-mode skip
+mode skip instable
 
 # The condition skips the last tuple
 statement error

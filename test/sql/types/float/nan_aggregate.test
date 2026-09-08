@@ -2,14 +2,11 @@
 # description: Test NaN and inf as aggregate groups
 # group: [float]
 
-statement ok
-PRAGMA enable_verification
-
 # grouping by inf and nan
 foreach type FLOAT DOUBLE
 
 statement ok
-create table floats(f ${type}, i int);
+create table floats(f {type}, i int);
 
 statement ok
 insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
@@ -42,7 +39,7 @@ DROP TABLE floats
 endloop
 
 # still need to catch overflows during sum operation
-mode skip
+mode skip instable
 
 statement ok
 create table floats_doubles (f FLOAT, d DOUBLE);

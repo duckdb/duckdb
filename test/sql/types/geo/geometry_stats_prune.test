@@ -9,7 +9,7 @@ require noforcestorage
 #set geometry_minimum_shredding_size=0;
 
 statement ok
-ATTACH '__TEST_DIR__/repro_geo_rowgroup.db' AS geoms (ROW_GROUP_SIZE 2048, STORAGE_VERSION 'v1.5.0');
+ATTACH '{TEST_DIR}/repro_geo_rowgroup.db' AS geoms (ROW_GROUP_SIZE 2048, STORAGE_VERSION 'v1.5.0');
 
 statement ok
 USE geoms;
@@ -43,7 +43,7 @@ statement ok
 DETACH geoms;
 
 statement ok
-ATTACH '__TEST_DIR__/repro_geo_rowgroup.db' AS geoms (STORAGE_VERSION 'v1.5.0');
+ATTACH '{TEST_DIR}/repro_geo_rowgroup.db' AS geoms (STORAGE_VERSION 'v1.5.0');
 
 statement ok
 USE geoms;

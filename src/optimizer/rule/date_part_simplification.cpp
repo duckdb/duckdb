@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/type_matcher.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/function/function.hpp"
@@ -14,7 +15,10 @@ namespace duckdb {
 DatePartSimplificationRule::DatePartSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto func = make_uniq<FunctionExpressionMatcher>();
 	func->function = make_uniq<SpecificFunctionMatcher>("date_part");
-	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	auto specifier = make_uniq<ConstantExpressionMatcher>();
+	// only the single-part overload is simplified - the struct overload takes a constant LIST of part names
+	specifier->type = make_uniq<SpecificTypeMatcher>(LogicalType::VARCHAR);
+	func->matchers.push_back(std::move(specifier));
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::ORDERED;
 	root = std::move(func);
@@ -24,15 +28,15 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
                                                          bool &changes_made, bool is_root) {
 	auto &date_part = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant_expr = bindings[1].get().Cast<BoundConstantExpression>();
-	auto &constant = constant_expr.value;
+	const auto &constant = constant_expr.GetValue();
 
 	if (constant.IsNull()) {
 		// NULL specifier: return constant NULL
-		return make_uniq<BoundConstantExpression>(Value(date_part.return_type));
+		return make_uniq<BoundConstantExpression>(Value(date_part.GetReturnType()));
 	}
 	// otherwise check the specifier
 	auto specifier = GetDatePartSpecifier(StringValue::Get(constant));
-	string new_function_name;
+	Identifier new_function_name;
 	switch (specifier) {
 	case DatePartSpecifier::YEAR:
 		new_function_name = "year";
@@ -90,11 +94,12 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	}
 	// found a replacement function: bind it
 	vector<unique_ptr<Expression>> children;
-	children.push_back(std::move(date_part.children[1]));
+	children.push_back(std::move(date_part.GetChildrenMutable()[1]));
 
 	ErrorData error;
 	FunctionBinder binder(rewriter.context);
-	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, new_function_name, std::move(children), error, false);
+	auto function =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), new_function_name, std::move(children), error, false);
 	if (!function) {
 		error.Throw();
 	}

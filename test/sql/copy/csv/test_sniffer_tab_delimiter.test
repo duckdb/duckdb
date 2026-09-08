@@ -2,9 +2,6 @@
 # description: Test sniff_csv function with user set options
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select columns from sniff_csv('{DATA_DIR}/csv/test_apple_financial.csv.gz', header = 1, skip=3, delim = '\t')
 ----

@@ -6,10 +6,10 @@ require parquet
 
 foreach skip_checkpoint true false
 
-load __TEST_DIR__/optimistic_write_large_strings_${skip_checkpoint}.db
+load {TEST_DIR}/optimistic_write_large_strings_{skip_checkpoint}.db
 
 statement ok
-SET debug_skip_checkpoint_on_commit=${skip_checkpoint}
+SET debug_skip_checkpoint_on_commit={skip_checkpoint}
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
@@ -21,12 +21,12 @@ statement ok
 INSERT INTO test VALUES (NULL);
 
 statement ok
-COPY (SELECT repeat('X', len) FROM (VALUES (903), (4932)) t(len)) TO '__TEST_DIR__/large_strings.parquet';
+COPY (SELECT repeat('X', len) FROM (VALUES (903), (4932)) t(len)) TO '{TEST_DIR}/large_strings.parquet';
 
 statement ok
 INSERT INTO test FROM read_parquet([
-	'__TEST_DIR__/large_strings.parquet',
-	'__TEST_DIR__/large_strings.parquet']
+	'{TEST_DIR}/large_strings.parquet',
+	'{TEST_DIR}/large_strings.parquet']
 );
 
 query I

@@ -1,0 +1,35 @@
+# name: test/sql/storage/total_string_length_repeated_insert.test
+# description: Test that total string length is tracked correctly for repeated inserts
+# group: [storage]
+
+load {TEST_DIR}/total_string_length_repeated_insert.db readwrite v2.0.0
+
+statement ok
+create table test(s VARCHAR);
+
+statement ok
+set checkpoint_threshold='1TB';
+
+statement ok
+INSERT INTO test SELECT 'abc' FROM range(10_000);
+
+query I
+select s.total_string_length from (select stats(s) s from test limit 1)
+----
+30000
+
+statement ok
+INSERT INTO test SELECT 'abc' FROM range(10_000);
+
+query I
+select s.total_string_length from (select stats(s) s from test limit 1)
+----
+60000
+
+statement ok
+INSERT INTO test SELECT 'abc' FROM range(10_000);
+
+query I
+select s.total_string_length from (select stats(s) s from test limit 1)
+----
+90000

@@ -33,7 +33,7 @@ TIME WITH TIME ZONE
 foreach func today current_date
 
 query I
-SELECT typeof(${func}());
+SELECT typeof({func}());
 ----
 DATE
 
@@ -42,7 +42,7 @@ endloop
 foreach func now get_current_timestamp transaction_timestamp
 
 query I
-SELECT typeof(${func}());
+SELECT typeof({func}());
 ----
 TIMESTAMP WITH TIME ZONE
 

@@ -26,6 +26,69 @@ public:
 		return !binder->correlated_columns.empty();
 	}
 
+public:
+	const shared_ptr<Binder> &GetBinder() const {
+		return binder;
+	}
+	shared_ptr<Binder> &GetBinderMutable() {
+		return binder;
+	}
+	const BoundStatement &Subquery() const {
+		return subquery;
+	}
+	BoundStatement &SubqueryMutable() {
+		return subquery;
+	}
+	SubqueryType GetSubqueryType() const {
+		return subquery_type;
+	}
+	SubqueryType &SubqueryTypeMutable() {
+		return subquery_type;
+	}
+	const vector<unique_ptr<Expression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<Expression>> &GetChildrenMutable() {
+		return children;
+	}
+	const vector<LogicalType> &GetChildTypes() const {
+		return child_types;
+	}
+	vector<LogicalType> &ChildTypesMutable() {
+		return child_types;
+	}
+	const vector<LogicalType> &GetChildTargets() const {
+		return child_targets;
+	}
+	vector<LogicalType> &ChildTargetsMutable() {
+		return child_targets;
+	}
+	ExpressionType ComparisonType() const {
+		return comparison_type;
+	}
+	ExpressionType &ComparisonTypeMutable() {
+		return comparison_type;
+	}
+	bool HasSubquery() const override {
+		return true;
+	}
+	bool IsScalar() const override {
+		return false;
+	}
+	bool IsFoldable() const override {
+		return false;
+	}
+	bool IsVolatile() const override;
+
+	string ToString() const override;
+
+	bool Equals(const BaseExpression &other) const override;
+
+	unique_ptr<Expression> Copy() const override;
+
+	bool PropagatesNullValues() const override;
+
+private:
 	//! The binder used to bind the subquery node
 	shared_ptr<Binder> binder;
 	//! The bound subquery node
@@ -41,24 +104,5 @@ public:
 	//! The target LogicalType of the subquery result (i.e. to which type it should be casted, if child_type <>
 	//! child_target). Only used for ANY expressions.
 	vector<LogicalType> child_targets;
-
-public:
-	bool HasSubquery() const override {
-		return true;
-	}
-	bool IsScalar() const override {
-		return false;
-	}
-	bool IsFoldable() const override {
-		return false;
-	}
-
-	string ToString() const override;
-
-	bool Equals(const BaseExpression &other) const override;
-
-	unique_ptr<Expression> Copy() const override;
-
-	bool PropagatesNullValues() const override;
 };
 } // namespace duckdb

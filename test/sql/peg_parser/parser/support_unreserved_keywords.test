@@ -10,8 +10,6 @@ CALL check_peg_parser($TEST_PEG_PARSER$CREATE OR REPLACE TABLE 'everflow_daily' 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE tmp.t1(id int);$TEST_PEG_PARSER$);
 
-require tpch
-
 statement ok
 CREATE SCHEMA abcdefgh;
 
@@ -20,9 +18,9 @@ SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE abcd') 
 ----
 abcdefgh.	13
 
+set variable sf 0
 
-statement ok
-CALL dbgen(sf=0);
+include test/sql/tpch/tpch_setup.test_template
 
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('INSERT INTO lin') LIMIT 1;

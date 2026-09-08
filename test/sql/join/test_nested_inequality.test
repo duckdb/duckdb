@@ -181,3 +181,68 @@ order by lhs.i, rhs.i;
 9	1	[9, 10, 11]	3	1	[3, 4, 5]
 9	1	[9, 10, 11]	5	1	[5, 6, 7]
 9	1	[9, 10, 11]	7	1	[7, 8, 9]
+
+statement ok
+CREATE TABLE issue23927(s STRUCT(a INT));
+
+statement ok
+INSERT INTO issue23927 VALUES 
+	({'a': 1}), 
+	({'a': 2}), 
+	(NULL), 
+	(NULL), 
+	({'a': NULL})
+;
+
+# 6 rows
+query II
+SELECT issue23927.s, sub0.s
+FROM issue23927 
+INNER JOIN issue23927 AS sub0 
+ON (issue23927.s <= sub0.s)
+ORDER BY ALL;
+----
+{'a': 1}	{'a': 1}
+{'a': 1}	{'a': 2}
+{'a': 1}	{'a': NULL}
+{'a': 2}	{'a': 2}
+{'a': 2}	{'a': NULL}
+{'a': NULL}	{'a': NULL}
+
+# the predicate over those 6 rows
+query I
+SELECT (issue23927.s < issue23927.s) 
+FROM issue23927 
+INNER JOIN issue23927 AS sub0 
+ON (issue23927.s <= sub0.s);
+----
+false
+false
+false
+false
+false
+false
+
+query II
+SELECT issue23927.s, sub0.s
+FROM issue23927 
+INNER JOIN issue23927 AS sub0 
+ON (issue23927.s <= sub0.s) 
+WHERE NOT (issue23927.s < issue23927.s)
+ORDER BY ALL;
+----
+{'a': 1}	{'a': 1}
+{'a': 1}	{'a': 2}
+{'a': 1}	{'a': NULL}
+{'a': 2}	{'a': 2}
+{'a': 2}	{'a': NULL}
+{'a': NULL}	{'a': NULL}
+
+query II
+SELECT issue23927.s, sub0.s
+FROM issue23927 
+INNER JOIN issue23927 AS sub0 
+ON (issue23927.s <= sub0.s) 
+WHERE (issue23927.s < issue23927.s) IS NULL
+ORDER BY ALL;
+----

@@ -1,6 +1,8 @@
 #include "duckdb/main/stream_query_result.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/execution/executor.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/main/database.hpp"
@@ -8,7 +10,7 @@
 namespace duckdb {
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProperties properties,
-                                     vector<LogicalType> types, vector<string> names,
+                                     vector<LogicalType> types, vector<Identifier> names,
                                      ClientProperties client_properties, shared_ptr<BufferedData> data)
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, std::move(properties), std::move(types),
                   std::move(names), std::move(client_properties)),
@@ -24,7 +26,7 @@ StreamQueryResult::~StreamQueryResult() {
 
 string StreamQueryResult::ToString() {
 	string result;
-	if (success) {
+	if (!HasError()) {
 		result = HeaderToString();
 		result += "[[STREAM RESULT]]";
 	} else {
@@ -55,6 +57,10 @@ StreamExecutionResult StreamQueryResult::ExecuteTask() {
 
 void StreamQueryResult::WaitForTask() {
 	auto lock = LockContext();
+	// Nothing to wait for on a result being materialized; ExecuteTask reports it
+	if (buffered_data->Decide(ResultLifetime::DRAINING) != ResultLifetime::DRAINING) {
+		return;
+	}
 	buffered_data->UnblockSinks();
 	context->WaitForTask(*lock, *this);
 }
@@ -91,11 +97,8 @@ unique_ptr<DataChunk> StreamQueryResult::FetchNextInternal(ClientContextLock &lo
 			invalidate_query = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
 			// fatal exceptions invalidate the entire database
-			auto &config = context->config;
-			if (!config.query_verification_enabled) {
-				auto &db_instance = DatabaseInstance::GetDatabase(*context);
-				ValidChecker::Invalidate(db_instance, error.RawMessage());
-			}
+			auto &db_instance = DatabaseInstance::GetDatabase(*context);
+			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
 		context->ProcessError(error, context->GetCurrentQuery());
 		SetError(std::move(error));
@@ -114,6 +117,9 @@ unique_ptr<DataChunk> StreamQueryResult::FetchInternal() {
 		chunk = FetchNextInternal(*lock);
 	}
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
+		if (!HasError()) {
+			buffered_data->AssertNoBlockedSinks();
+		}
 		Close();
 		return nullptr;
 	}
@@ -135,17 +141,16 @@ static unique_ptr<DataChunk> AlternativeFetch(StreamQueryResult &stream_result) 
 		                            "caused by executing a different query");
 	}
 	if (execution_result == StreamExecutionResult::EXECUTION_ERROR) {
-		stream_result.ThrowError();
+		// Mirror Fetch: the error is already on the result, so the drain ends instead of throwing
+		stream_result.Close();
+		return nullptr;
 	}
 	return stream_result.Fetch();
 }
 #endif
 
-unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
-	if (HasError() || !context) {
-		return make_uniq<MaterializedQueryResult>(GetErrorObject());
-	}
-	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+unique_ptr<MaterializedQueryResult> StreamQueryResult::MaterializeByDraining() {
+	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), GetTypes());
 
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
@@ -160,16 +165,53 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		}
 		collection->Append(append_state, *chunk);
 	}
-	auto result =
-	    make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection), client_properties);
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
-	return result;
+	return make_uniq<MaterializedQueryResult>(GetStatementType(), GetStatementProperties(), GetNames(),
+	                                          std::move(collection), client_properties);
+}
+
+unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
+	if (HasError() || !context) {
+		return make_uniq<MaterializedQueryResult>(GetErrorObject());
+	}
+	bool retained;
+	unique_ptr<QueryResult> result;
+	{
+		auto lock = LockContext();
+		CheckExecutableInternal(*lock);
+		retained = buffered_data->Decide(ResultLifetime::RETAINED) == ResultLifetime::RETAINED;
+		if (retained) {
+			// Producers append into the sink's collection from here on, so the query runs to
+			// completion and the collection is taken from the sink instead of copied out of the buffer
+			PendingExecutionResult execution_result;
+			while (!PendingQueryResult::IsExecutionFinished(execution_result =
+			                                                    context->ExecuteTaskInternal(*lock, *this))) {
+				if (execution_result == PendingExecutionResult::BLOCKED ||
+				    execution_result == PendingExecutionResult::RESULT_READY) {
+					context->WaitForTask(*lock, *this);
+				}
+			}
+			if (execution_result == PendingExecutionResult::EXECUTION_FINISHED) {
+				result = context->GetExecutor().GetResult();
+				context->CleanupInternal(*lock, result.get(), false);
+			}
+		}
+	}
+	if (!retained) {
+		return MaterializeByDraining();
+	}
+	Close();
+	if (HasError()) {
+		return make_uniq<MaterializedQueryResult>(GetErrorObject());
+	}
+	D_ASSERT(result && result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
+	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
 bool StreamQueryResult::IsOpenInternal(ClientContextLock &lock) {
-	bool invalidated = !success || !context;
+	bool invalidated = HasError() || !context;
 	if (!invalidated) {
 		invalidated = !context->IsActiveResult(lock, *this);
 	}
@@ -187,7 +229,7 @@ void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 }
 
 bool StreamQueryResult::IsOpen() {
-	if (!success || !context) {
+	if (HasError() || !context) {
 		return false;
 	}
 	auto lock = LockContext();
@@ -196,6 +238,14 @@ bool StreamQueryResult::IsOpen() {
 
 void StreamQueryResult::Close() {
 	buffered_data->Close();
+	if (context) {
+		auto lock = LockContext();
+		if (context->IsActiveResult(*lock, *this)) {
+			// Abandoned before the stream was fully drained: release the active-query state now
+			// (matching InitialCleanup) instead of leaking it until the next query or context teardown.
+			context->CleanupInternal(*lock, this, false);
+		}
+	}
 	context.reset();
 }
 

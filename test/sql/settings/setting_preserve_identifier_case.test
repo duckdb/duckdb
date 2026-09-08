@@ -5,13 +5,55 @@
 query I
 SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
 ----
-true
+preserve_case
+
+# 'preserve_case' keeps the case as written
+statement ok
+CREATE SCHEMA MySchema;
 
 statement ok
-CREATE SCHEMA MYSCHEMA;
+CREATE TABLE MySchema.Integers(I INTEGER);
+
+query III
+SELECT duckdb_tables.schema_name, duckdb_tables.table_name, column_name FROM duckdb_tables JOIN duckdb_columns USING (table_oid);
+----
+MySchema	Integers	I
 
 statement ok
-CREATE TABLE MYSCHEMA.INTEGERS(I INTEGER);
+DROP SCHEMA MySchema CASCADE
+
+# 'lowercase' lowercases non-quoted identifiers
+statement ok
+SET preserve_identifier_case TO 'lowercase';
+
+query I
+SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
+----
+lowercase
+
+statement ok
+CREATE SCHEMA MySchema;
+
+statement ok
+CREATE TABLE MySchema.Integers(I INTEGER);
+
+query III
+SELECT duckdb_tables.schema_name, duckdb_tables.table_name, column_name FROM duckdb_tables JOIN duckdb_columns USING (table_oid);
+----
+myschema	integers	i
+
+statement ok
+DROP SCHEMA myschema CASCADE
+
+# 'uppercase' uppercases non-quoted identifiers
+statement ok
+SET preserve_identifier_case TO 'uppercase';
+
+statement ok
+CREATE SCHEMA MySchema;
+
+statement ok
+CREATE TABLE MySchema.Integers(I INTEGER);
 
 query III
 SELECT duckdb_tables.schema_name, duckdb_tables.table_name, column_name FROM duckdb_tables JOIN duckdb_columns USING (table_oid);
@@ -21,21 +63,92 @@ MYSCHEMA	INTEGERS	I
 statement ok
 DROP SCHEMA MYSCHEMA CASCADE
 
+# quoted identifiers are preserved exactly regardless of the mode
 statement ok
-SET preserve_identifier_case TO false;
+CREATE TABLE "QuotedName"("MixedCol" INTEGER);
+
+query II
+SELECT duckdb_tables.table_name, column_name FROM duckdb_tables JOIN duckdb_columns USING (table_oid);
+----
+QuotedName	MixedCol
+
+statement ok
+DROP TABLE "QuotedName"
+
+# string literals are not folded
+query I
+SELECT 'MyString';
+----
+MyString
+
+# a single-quoted path in a table position is a path, not an identifier, so it keeps its case.
+# the error message is checked rather than a successful read, so that this also fails on a
+# case-insensitive filesystem, where a folded path would still resolve.
+statement error
+SELECT * FROM '{TEST_DIR}/NoSuch/Mixed/File.csv';
+----
+<REGEX>:.*NoSuch/Mixed/File\.csv.*
+
+statement ok
+SET preserve_identifier_case TO 'lowercase';
+
+statement error
+SELECT * FROM '{TEST_DIR}/NoSuch/Mixed/File.csv';
+----
+<REGEX>:.*NoSuch/Mixed/File\.csv.*
+
+# RESET restores the default
+statement ok
+SET preserve_identifier_case TO 'uppercase';
+
+statement ok
+RESET preserve_identifier_case;
 
 query I
 SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
 ----
-false
+preserve_case
 
-statement ok
-CREATE SCHEMA MYSCHEMA;
-
-statement ok
-CREATE TABLE MYSCHEMA.INTEGERS(I INTEGER);
-
-query III
-SELECT duckdb_tables.schema_name, duckdb_tables.table_name, column_name FROM duckdb_tables JOIN duckdb_columns USING (table_oid);
+statement error
+SET preserve_identifier_case TO 'bogus';
 ----
-myschema	integers	i
+<REGEX>:.*Unrecognized parameter for option preserve_identifier_case "bogus", expected one of: preserve_case, lowercase, uppercase.*
+
+statement error
+SET preserve_identifier_case TO NULL;
+----
+<REGEX>:.*preserve_identifier_case setting cannot be NULL.*
+
+# the setting used to be a BOOLEAN - every legacy boolean spelling is kept as a backwards-compatible alias
+foreach truthy true 1 't' 'y' 'yes'
+
+statement ok
+SET preserve_identifier_case TO {truthy};
+
+query I
+SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
+----
+preserve_case
+
+endloop
+
+foreach falsy false 0 'f' 'n' 'no'
+
+statement ok
+SET preserve_identifier_case TO {falsy};
+
+query I
+SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
+----
+lowercase
+
+endloop
+
+statement ok
+RESET preserve_identifier_case;
+
+# non-boolean garbage is still rejected
+statement error
+SET preserve_identifier_case TO 'yesnt';
+----
+<REGEX>:.*expected one of: preserve_case, lowercase, uppercase.*

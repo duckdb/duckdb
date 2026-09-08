@@ -8,7 +8,6 @@
 #include <string>
 
 using namespace duckdb;
-using namespace std;
 
 constexpr const char *QUERY_DIRECTORY = "test/ossfuzz/cases";
 

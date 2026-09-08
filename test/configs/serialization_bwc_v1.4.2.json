@@ -4,7 +4,6 @@
     {
       "reason": "Unknown failure (empty reason)",
       "paths": [
-        "test/sql/function/list/lambdas/test_lambda_storage.test",
         "test/sql/logging/http_log_timing.test",
         "test/sql/cte/recursive_cte_key_variant.test"
       ]

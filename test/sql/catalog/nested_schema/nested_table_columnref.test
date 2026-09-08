@@ -1,0 +1,162 @@
+# name: test/sql/catalog/nested_schema/nested_table_columnref.test
+# description: Test qualified column references to tables in nested schemas
+# group: [nested_schema]
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE TABLE s1.s2.tbl(i INTEGER, s STRUCT(a INTEGER, b INTEGER));
+
+statement ok
+INSERT INTO s1.s2.tbl VALUES (1, {'a': 10, 'b': 20});
+
+# schema1.schema2.table.column
+query I
+SELECT s1.s2.tbl.i FROM s1.s2.tbl;
+----
+1
+
+# catalog.schema1.schema2.table.column
+query I
+SELECT memory.s1.s2.tbl.i FROM s1.s2.tbl;
+----
+1
+
+# table.column
+query I
+SELECT tbl.i FROM s1.s2.tbl;
+----
+1
+
+# unqualified column
+query I
+SELECT i FROM s1.s2.tbl;
+----
+1
+
+# schema1.schema2.table.column.field (struct field access on a nested-schema table)
+query I
+SELECT s1.s2.tbl.s.a FROM s1.s2.tbl;
+----
+10
+
+# table.column.field
+query I
+SELECT tbl.s.b FROM s1.s2.tbl;
+----
+20
+
+# catalog.schema1.schema2.table.column.field
+query I
+SELECT memory.s1.s2.tbl.s.a FROM s1.s2.tbl;
+----
+10
+
+# column.field (unqualified struct column)
+query I
+SELECT s.a FROM s1.s2.tbl;
+----
+10
+
+# referencing the whole nested-schema table produces a struct (implicit struct_pack)
+query I
+SELECT s1.s2.tbl FROM s1.s2.tbl;
+----
+{'i': 1, 's': {'a': 10, 'b': 20}}
+
+query I
+SELECT s2.tbl FROM s1.s2.tbl;
+----
+{'i': 1, 's': {'a': 10, 'b': 20}}
+
+# the innermost schema alone qualifies the table
+query I
+SELECT s2.tbl.i FROM s1.s2.tbl;
+----
+1
+
+# a non-immediate schema does not qualify the table
+statement error
+SELECT s1.tbl.i FROM s1.s2.tbl;
+----
+<REGEX>:.*not found.*
+
+# a bogus catalog/schema qualifier errors
+statement error
+SELECT nope.s2.tbl.i FROM s1.s2.tbl;
+----
+<REGEX>:.*not found.*
+
+# disambiguation between same-named tables in different nested schemas
+statement ok
+CREATE SCHEMA s1.s3;
+
+statement ok
+CREATE TABLE s1.s2.dup(a INTEGER);
+
+statement ok
+CREATE TABLE s1.s3.dup(b INTEGER);
+
+statement ok
+INSERT INTO s1.s2.dup VALUES (100);
+
+statement ok
+INSERT INTO s1.s3.dup VALUES (200);
+
+# disambiguate by the innermost schema
+query II
+SELECT s2.dup.a, s3.dup.b FROM s1.s2.dup, s1.s3.dup;
+----
+100	200
+
+# disambiguate by the full schema path
+query II
+SELECT s1.s2.dup.a, s1.s3.dup.b FROM s1.s2.dup, s1.s3.dup;
+----
+100	200
+
+# a shared outer schema does not disambiguate the tables
+statement error
+SELECT s1.dup.a FROM s1.s2.dup, s1.s3.dup;
+----
+<REGEX>:.*not found.*
+
+# same immediate schema, different outer schema -> ambiguous when referenced by the immediate schema only
+statement ok
+CREATE SCHEMA s4;
+
+statement ok
+CREATE SCHEMA s4.s2;
+
+statement ok
+CREATE TABLE s4.s2.dup(a INTEGER);
+
+statement ok
+INSERT INTO s4.s2.dup VALUES (300);
+
+# "s2.dup" now matches both s1.s2.dup and s4.s2.dup (both have column a) -> ambiguous, and the hint shows the full paths
+statement error
+SELECT s2.dup.a FROM s1.s2.dup, s4.s2.dup;
+----
+<REGEX>:.*Ambiguous.*s1.s2.dup.*s4.s2.dup.*
+
+# the full path resolves the ambiguity
+query II
+SELECT s1.s2.dup.a AS x, s4.s2.dup.a AS y FROM s1.s2.dup, s4.s2.dup;
+----
+100	300
+
+# aliasing a nested-schema table hides its schema qualification
+query I
+SELECT t.i FROM s1.s2.tbl AS t;
+----
+1
+
+statement error
+SELECT s1.s2.tbl.i FROM s1.s2.tbl AS t;
+----
+<REGEX>:.*not found.*

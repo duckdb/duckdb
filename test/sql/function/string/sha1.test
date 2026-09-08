@@ -2,9 +2,6 @@
 # description: Test the sha1 function
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT sha1('hello'), sha1(NULL)
 ----

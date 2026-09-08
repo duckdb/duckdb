@@ -2,7 +2,7 @@
 # description: Test that we reclaim space when dropping and adding columns
 # group: [reclaim_space]
 
-load __TEST_DIR__/test_reclaim_space_drop_column.db
+load {TEST_DIR}/test_reclaim_space_drop_column.db
 
 statement ok
 PRAGMA force_checkpoint;
@@ -50,7 +50,7 @@ CHECKPOINT;
 
 query I
 SELECT
-	CASE WHEN ${i} = 0 THEN NULL
+	CASE WHEN {i} = 0 THEN NULL
 	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.5 THEN NULL
 	ELSE {'current': current, 'total_blocks_tbl': total_blocks_tbl} END
 FROM pragma_database_size() AS current, total_blocks_tbl;
@@ -61,7 +61,7 @@ NULL
 
 statement ok
 UPDATE total_blocks_tbl SET total_blocks = (
-	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+	SELECT CASE WHEN {i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
 		ELSE (total_blocks) END);
 
 query III

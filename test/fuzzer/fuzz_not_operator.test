@@ -1,9 +1,6 @@
 # name: test/fuzzer/fuzz_not_operator.test
 # group: [fuzzer]
 
-statement ok
-pragma enable_verification
-
 # Because 2060771621 + -2134619525 becomes bigger than INTEGER (detected type for the constants)
 # previously we would wrongfully strip the where clause and return an empty set.
 query I

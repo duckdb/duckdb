@@ -1,0 +1,116 @@
+# name: test/sql/settings/deprecated_settings.test
+# description: Setting a deprecated setting, or running a deprecated no-op pragma, emits a deprecation warning
+# group: [settings]
+
+statement ok
+SET enable_logging=true;
+
+statement ok
+SET warnings_as_errors=true;
+
+# every deprecated setting warns when it is set
+statement error
+SET delim_join_as_cte=false;
+----
+The 'delim_join_as_cte' setting is deprecated and will be removed in a future release.
+
+statement error
+SET legacy_disable_null_type=true;
+----
+The 'legacy_disable_null_type' setting is deprecated and will be removed in a future release.
+
+statement error
+SET legacy_metrics_format=true;
+----
+The 'legacy_metrics_format' setting is deprecated and will be removed in a future release.
+
+statement error
+SET null_on_division_by_zero=true;
+----
+The 'null_on_division_by_zero' setting is deprecated and will be removed in a future release.
+
+statement error
+SET experimental_metadata_reuse=false;
+----
+The 'experimental_metadata_reuse' setting is deprecated and will be removed in a future release.
+
+statement error
+SET force_column_metadata_reuse=true;
+----
+The 'force_column_metadata_reuse' setting is deprecated and will be removed in a future release.
+
+statement error
+SET enable_object_cache=true;
+----
+The 'enable_object_cache' setting is deprecated and will be removed in a future release.
+
+statement error
+SET regex_match_operator_semantics='full';
+----
+The 'regex_match_operator_semantics' setting is deprecated and will be removed in a future release.
+
+statement error
+SET table_function_identifier_conversion='ENABLE_IMPLICIT_STRING';
+----
+The 'table_function_identifier_conversion' setting is deprecated and will be removed in a future release.
+
+# the global scope warns as well
+statement error
+SET GLOBAL experimental_metadata_reuse=false;
+----
+The 'experimental_metadata_reuse' setting is deprecated and will be removed in a future release.
+
+# resetting a deprecated setting back to its default does not warn
+statement ok
+RESET delim_join_as_cte;
+
+statement ok
+RESET enable_object_cache;
+
+statement ok
+RESET regex_match_operator_semantics;
+
+statement ok
+RESET table_function_identifier_conversion;
+
+# invalid values are still rejected before the deprecation warning is emitted
+statement error
+SET regex_match_operator_semantics='NOPE';
+----
+<REGEX>:.*unrecognized value "NOPE".*
+
+statement error
+SET table_function_identifier_conversion=NULL;
+----
+<REGEX>:.*table_function_identifier_conversion setting cannot be NULL.*
+
+# the no-op pragmas warn too
+statement error
+PRAGMA enable_verification;
+----
+The 'enable_verification' pragma no longer has any effect; it is deprecated and will be removed in a future release.
+
+statement error
+PRAGMA disable_verification;
+----
+The 'disable_verification' pragma no longer has any effect; it is deprecated and will be removed in a future release.
+
+statement error
+PRAGMA enable_object_cache;
+----
+The 'enable_object_cache' pragma no longer has any effect; it is deprecated and will be removed in a future release.
+
+statement error
+PRAGMA disable_object_cache;
+----
+The 'disable_object_cache' pragma no longer has any effect; it is deprecated and will be removed in a future release.
+
+# settings that are not deprecated do not warn
+statement ok
+SET integer_division=true;
+
+statement ok
+RESET integer_division;
+
+statement ok
+SET warnings_as_errors=false;

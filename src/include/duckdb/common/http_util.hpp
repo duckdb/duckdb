@@ -10,19 +10,20 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/winapi.hpp"
+#include "duckdb/common/time_point.hpp"
 #include <functional>
 
 namespace duckdb {
 class DatabaseInstance;
 class Logger;
 class HTTPUtil;
+class HTTPTransportManager;
+class HTTPTransportManagerState;
 class FileOpener;
 struct FileOpenerInfo;
-
-struct HTTPLogWriter {};
 
 struct HTTPParams {
 	explicit HTTPParams(HTTPUtil &http_util) : http_util(http_util) {
@@ -55,6 +56,7 @@ struct HTTPParams {
 
 public:
 	void Initialize(optional_ptr<FileOpener> opener);
+	DUCKDB_API idx_t GetTransportReuseDomain() const;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -66,11 +68,51 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+protected:
+	DUCKDB_API void SetTransportReuseDomain(idx_t transport_reuse_domain);
+
+private:
+	friend class HTTPUtil;
+	friend class HTTPTransportManager;
+
+	//! Manager borrowed from the owning DatabaseInstance.
+	optional_ptr<HTTPTransportManager> transport_manager;
+	//! Provider publication captured by the creating manager session.
+	optional_ptr<HTTPTransportManagerState> transport_state;
+	//! Manager-issued identity used for session-local reuse.
+	idx_t transport_session_id = DConstants::INVALID_INDEX;
+	//! Provider-issued identity for transport-compatible parameters.
+	idx_t transport_reuse_domain = 0;
 };
 
-enum class RequestType : uint8_t { GET_REQUEST, PUT_REQUEST, HEAD_REQUEST, DELETE_REQUEST, POST_REQUEST };
+struct SignatureV4Params {
+	string canonical_request;
+	string credential_scope;
+	string region;
+	string service;
+	string secret_access_key;
+	string date_now;
+	string datetime_now;
+};
+
+enum class RequestType : uint8_t {
+	GET_REQUEST,
+	PUT_REQUEST,
+	HEAD_REQUEST,
+	DELETE_REQUEST,
+	POST_REQUEST,
+	OPTIONS_REQUEST
+};
+
+enum class HTTPClientCachePolicy : uint8_t { DEFAULT, BYPASS_CACHE };
+
+struct HTTPClientInitializationOptions {
+	HTTPClientCachePolicy cache_policy = HTTPClientCachePolicy::DEFAULT;
+};
 
 struct HTTPHeaders {
+	using header_values_t = vector<string>;
 	using header_map_t = case_insensitive_map_t<string>;
 
 public:
@@ -80,8 +122,12 @@ public:
 	DUCKDB_API ~HTTPHeaders();
 
 	void Insert(string key, string value);
+	//! Append another field line without combining its value.
+	void Append(string key, string value);
 	bool HasHeader(const string &key) const;
+	//! Return the first field value.
 	string GetHeaderValue(const string &key) const;
+	header_values_t GetHeaderValues(const string &key) const;
 
 	header_map_t::iterator begin() { // NOLINT: match stl API
 		return headers.begin();
@@ -107,6 +153,8 @@ public:
 
 private:
 	header_map_t headers;
+	//! HTTP responses can contain multiple field lines with the same name (i.e., Cache-Control).
+	case_insensitive_map_t<header_values_t> repeated_headers;
 };
 
 struct HTTPResponse {
@@ -151,12 +199,20 @@ struct BaseRequest {
 	//! Whether or not to return failed requests (instead of throwing)
 	bool try_request = false;
 
-	// Requests will optionally contain their timings
+	//! Requests will optionally contain their timings
 	bool have_request_timing = false;
-	timestamp_t request_start;
-	timestamp_t request_end;
+	// System clock start timestamp
+	timestamp_t request_system_start;
+	// Monotonic clock start and end timestamp
+	TimePoint request_monotonic_start;
+	TimePoint request_monotonic_end;
 	//! Request body size in bytes (the Content-Length we send). Only set for PUT/POST.
 	idx_t request_body_length = 0;
+
+	//! Optional per-request network measurements, populated by clients that measure them.
+	bool have_time_to_fst_byte = false;
+	double time_to_fst_byte_sec = 0;
+	idx_t bytes_received = 0;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -218,6 +274,12 @@ struct DeleteRequestInfo : public BaseRequest {
 	DUCKDB_API ~DeleteRequestInfo();
 };
 
+struct OptionsRequestInfo : public BaseRequest {
+	OptionsRequestInfo(const string &path, const HTTPHeaders &headers, HTTPParams &params)
+	    : BaseRequest(RequestType::OPTIONS_REQUEST, path, headers, params) {
+	}
+};
+
 struct PostRequestInfo : public BaseRequest {
 	PostRequestInfo(const string &path, const HTTPHeaders &headers, HTTPParams &params, const_data_ptr_t buffer_in,
 	                idx_t buffer_in_len)
@@ -242,12 +304,14 @@ public:
 	}
 	virtual ~HTTPClient() = default;
 	virtual void Initialize(HTTPParams &http_params) = 0;
+	DUCKDB_API virtual bool CanReuse(const HTTPParams &http_params) const;
 
 	virtual unique_ptr<HTTPResponse> Get(GetRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Put(PutRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Head(HeadRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Delete(DeleteRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Post(PostRequestInfo &info) = 0;
+	virtual unique_ptr<HTTPResponse> Options(OptionsRequestInfo &info) = 0;
 	virtual void Cleanup() {};
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
@@ -261,6 +325,17 @@ private:
 	const string base_url;
 };
 
+enum class HTTPTransportReusePolicy : uint8_t {
+	//! Requests do not use an HTTPClient and do not consume manager capacity.
+	CLIENT_FREE,
+	//! Each request uses a bounded client that is destroyed after the request.
+	EPHEMERAL,
+	//! Compatible clients may be reused only by their creating session.
+	SESSION_LOCAL,
+	//! Compatible clients may be reused across sessions in one DatabaseInstance.
+	SHARED
+};
+
 class HTTPUtil {
 public:
 	HTTPUtil();
@@ -269,10 +344,22 @@ public:
 	HTTPUtil(const HTTPUtil &other) = delete;
 	HTTPUtil &operator=(const HTTPUtil &) = delete;
 
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
 public:
 	static HTTPUtil &Get(DatabaseInstance &db);
 
 	virtual string GetName() const;
+	DUCKDB_API virtual HTTPTransportReusePolicy GetTransportReusePolicy() const;
 
 	virtual unique_ptr<HTTPParams> InitializeParameters(DatabaseInstance &db, const string &path);
 	virtual unique_ptr<HTTPParams> InitializeParameters(ClientContext &context, const string &path);
@@ -280,13 +367,18 @@ public:
 	                                                    optional_ptr<FileOpenerInfo> info);
 
 	virtual unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port);
+	DUCKDB_API virtual unique_ptr<HTTPClient> InitializeClientExtended(HTTPParams &http_params,
+	                                                                   const string &proto_host_port,
+	                                                                   const HTTPClientInitializationOptions &options);
 
 	//! Close a client — implementations may cache it for reuse
 	virtual void CloseClient(unique_ptr<HTTPClient> &&client);
 
+	//! Perform a checked request that throws when the provider returns no response.
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);
 
+	//! Advanced provider hook used by the checked Request wrappers.
 	virtual unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client);
 	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
@@ -302,6 +394,13 @@ public:
 	static string GetStatusMessage(HTTPStatusCode status);
 	static bool IsHTTPProtocol(const string &url);
 	static void BumpToSecureProtocol(string &url);
+	static string CreateSignatureV4(EncryptionUtil &encryption_util, const SignatureV4Params &sig_params);
+
+private:
+	unique_ptr<HTTPClient> InitializeClientWithPolicy(BaseRequest &request, HTTPClientCachePolicy cache_policy);
+	unique_ptr<HTTPResponse> SendRequestOnce(BaseRequest &request, HTTPClient &client,
+	                                         HTTPClientCachePolicy initial_cache_policy,
+	                                         HTTPClientCachePolicy &retry_cache_policy);
 
 public:
 	static duckdb::unique_ptr<HTTPResponse>

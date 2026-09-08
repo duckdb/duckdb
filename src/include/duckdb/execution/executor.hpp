@@ -55,6 +55,11 @@ public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
+	//! Whether the thread driving ExecuteTask holds a partially processed task.
+	//! `task` is owned by that thread alone, so only it may call this.
+	bool HasTaskInProgress() const {
+		return task != nullptr;
+	}
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
 	void WaitForTask();
 	void SignalTaskRescheduled(lock_guard<mutex> &);
@@ -75,7 +80,7 @@ public:
 	void ThrowException();
 
 	//! Work on tasks for this specific executor, until there are no tasks remaining
-	void WorkOnTasks();
+	bool WorkOnTasks();
 
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
@@ -113,9 +118,7 @@ public:
 	void RegisterTask() {
 		executor_tasks++;
 	}
-	void UnregisterTask() {
-		executor_tasks--;
-	}
+	void UnregisterTask();
 
 	idx_t GetTotalPipelines() const {
 		return total_pipelines;
@@ -126,18 +129,17 @@ public:
 	}
 
 private:
-	//! Check if the streaming query result is waiting to be fetched from, must hold the 'executor_lock'
+	//! Whether a producer is parked on the result sink's buffer. A parked producer
+	//! implies a poppable chunk, and only consumption restarts it
 	bool ResultCollectorIsBlocked();
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
 	void ScheduleEventsInternal(ScheduleEventData &event_data);
 
-	static void VerifyScheduledEvents(const ScheduleEventData &event_data);
+	static void VerifyScheduledEvents(const vector<shared_ptr<Event>> &events);
 	static void VerifyScheduledEventsInternal(const idx_t i, const vector<reference<Event>> &vertices,
 	                                          vector<bool> &visited, vector<bool> &recursion_stack);
-
-	void SchedulePipeline(const shared_ptr<MetaPipeline> &pipeline, ScheduleEventData &event_data);
 
 	bool NextExecutor();
 
@@ -183,14 +185,14 @@ private:
 	shared_ptr<Task> task;
 
 	//! Task that have been descheduled
-	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
+	reference_map_t<Task, shared_ptr<Task>> to_be_rescheduled_tasks;
 	//! The semaphore to signal task rescheduling
 	std::condition_variable task_reschedule;
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
 
-	//! Total time blocked while waiting on tasks. In ticks. One tick corresponds to WAIT_TIME.
+	//! Total time blocked while waiting on tasks, in microseconds
 	atomic<idx_t> blocked_thread_time;
 };
 } // namespace duckdb

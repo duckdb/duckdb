@@ -1,10 +1,10 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/types/bit.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/aggregate_state_layout.hpp"
 
 namespace duckdb {
 
@@ -12,9 +12,10 @@ namespace {
 
 template <class T>
 struct BitState {
-	using TYPE = T;
-	bool is_set;
+	using value_type = T;
+	using STATE_TYPE = OptionalStateType<StateTypedValue<T, StateReturnType>>;
 	T value;
+	bool is_set;
 };
 
 template <class OP>
@@ -46,12 +47,6 @@ AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 }
 
 struct BitwiseOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		//  If there are no matching rows, returns a null value.
-		state.is_set = false;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		if (!state.is_set) {
@@ -68,11 +63,6 @@ struct BitwiseOperation {
 		OP::template Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 
-	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE &state, INPUT_TYPE input) {
-		state.value = typename STATE::TYPE(input);
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.is_set) {
@@ -81,11 +71,16 @@ struct BitwiseOperation {
 		}
 		if (!target.is_set) {
 			// target is NULL, use source value directly.
-			OP::template Assign<typename STATE::TYPE>(target, source.value);
+			OP::template Assign<typename STATE::value_type>(target, source.value);
 			target.is_set = true;
 		} else {
-			OP::template Execute<typename STATE::TYPE>(target, source.value);
+			OP::template Execute<typename STATE::value_type>(target, source.value);
 		}
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void Assign(STATE &state, INPUT_TYPE input) {
+		state.value = typename STATE::value_type(input);
 	}
 
 	template <class T, class STATE>
@@ -102,26 +97,55 @@ struct BitwiseOperation {
 	}
 };
 
-struct BitAndOperation : public BitwiseOperation {
+template <class OP>
+struct NumericBitwiseOperation : public BitwiseOperation, public ClusteredStateCopy {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value &= typename STATE::TYPE(input);
-		;
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
+		if (!local.is_set) {
+			Assign(local, input);
+			local.is_set = true;
+		} else {
+			OP::template Execute<INPUT_TYPE>(local, input);
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		if (count != 0) {
+			UpdateClusteredLocal(local, input);
+		}
 	}
 };
 
-struct BitOrOperation : public BitwiseOperation {
+template <class OP>
+struct SimpleBitwiseOperation : public NumericBitwiseOperation<SimpleBitwiseOperation<OP>> {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value |= typename STATE::TYPE(input);
-		;
+		state.value =
+		    OP::template Operation<typename STATE::value_type>(state.value, typename STATE::value_type(input));
 	}
 };
 
-struct BitXorOperation : public BitwiseOperation {
+using BitAndOperation = SimpleBitwiseOperation<BitAnd>;
+using BitOrOperation = SimpleBitwiseOperation<BitOr>;
+
+struct BitXorOperation : public NumericBitwiseOperation<BitXorOperation> {
+	using NumericBitwiseOperation<BitXorOperation>::UpdateClusteredLocal;
+
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value ^= typename STATE::TYPE(input);
+		state.value =
+		    BitXor::template Operation<typename STATE::value_type>(state.value, typename STATE::value_type(input));
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		if ((count & 1) != 0) {
+			NumericBitwiseOperation<BitXorOperation>::template UpdateClusteredLocal<INPUT_TYPE>(local, input);
+		} else if (count != 0 && !local.is_set) {
+			local.value = typename STATE::value_type(0);
+			local.is_set = true;
+		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -133,25 +157,44 @@ struct BitXorOperation : public BitwiseOperation {
 	}
 };
 
+using BitStringState = BitState<string_t>;
+
 struct BitStringBitwiseOperation : public BitwiseOperation {
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.is_set && !state.value.IsInlined()) {
-			delete[] state.value.GetData();
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (!state.is_set) {
+			OP::template Assign<INPUT_TYPE>(state, input, unary_input.input);
+			state.is_set = true;
+		} else {
+			OP::template Execute<INPUT_TYPE>(state, input);
+		}
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
+		if (!source.is_set) {
+			// source is NULL, nothing to do.
+			return;
+		}
+		if (!target.is_set) {
+			// target is NULL, use source value directly.
+			OP::template Assign<typename STATE::value_type>(target, source.value, aggr_input_data);
+			target.is_set = true;
+		} else {
+			OP::template Execute<typename STATE::value_type>(target, source.value);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE &state, INPUT_TYPE input) {
+	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &aggr_input_data) {
 		D_ASSERT(state.is_set == false);
 		if (input.IsInlined()) {
 			state.value = input;
 		} else { // non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
-			auto ptr = new char[len];
+			auto ptr = aggr_input_data.allocator.Allocate(len);
 			memcpy(ptr, input.GetData(), len);
-
-			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
+			state.value = string_t(char_ptr_cast(ptr), UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 
@@ -201,10 +244,8 @@ AggregateFunctionSet BitAndFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_and.AddFunction(GetBitfieldUnaryAggregate<BitAndOperation>(type));
 	}
-
-	bit_and.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringAndOperation>(
-	        LogicalType::BIT, LogicalType::BIT));
+	bit_and.AddFunction(AggregateFunction::UnaryAggregate<BitStringState, string_t, string_t, BitStringAndOperation>(
+	    LogicalType::BIT, LogicalType::BIT));
 	return bit_and;
 }
 
@@ -213,9 +254,8 @@ AggregateFunctionSet BitOrFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_or.AddFunction(GetBitfieldUnaryAggregate<BitOrOperation>(type));
 	}
-	bit_or.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringOrOperation>(
-	        LogicalType::BIT, LogicalType::BIT));
+	bit_or.AddFunction(AggregateFunction::UnaryAggregate<BitStringState, string_t, string_t, BitStringOrOperation>(
+	    LogicalType::BIT, LogicalType::BIT));
 	return bit_or;
 }
 
@@ -224,9 +264,8 @@ AggregateFunctionSet BitXorFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_xor.AddFunction(GetBitfieldUnaryAggregate<BitXorOperation>(type));
 	}
-	bit_xor.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringXorOperation>(
-	        LogicalType::BIT, LogicalType::BIT));
+	bit_xor.AddFunction(AggregateFunction::UnaryAggregate<BitStringState, string_t, string_t, BitStringXorOperation>(
+	    LogicalType::BIT, LogicalType::BIT));
 	return bit_xor;
 }
 

@@ -1,0 +1,49 @@
+# name: test/parquet/variant/pushdown/variant_extract_multifile.test
+# group: [pushdown]
+
+require parquet
+
+statement ok
+COPY (
+	FROM (VALUES
+		({'x': 1::SMALLINT, 'y': 10::INTEGER}::VARIANT),
+		({'x': 5::SMALLINT, 'y': 50::INTEGER}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_multifile_a.parquet' (
+	SHREDDING {'v': 'STRUCT(x SMALLINT, y INTEGER)'}
+);
+
+statement ok
+COPY (
+	FROM (VALUES
+		({'x': 5::INTEGER, 'y': 500::INTEGER}::VARIANT),
+		({'x': '5', 'y': 55::INTEGER}::VARIANT),
+		({'z': 0::INTEGER, 'y': 0::INTEGER}::VARIANT),
+		(NULL::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_multifile_b.parquet' (SHREDDING {'v': 'NULL'});
+
+query II
+SELECT count(*), sum(v.y::INTEGER)
+FROM '{TEST_DIR}/variant_pushdown_multifile_*.parquet'
+WHERE v.x = 5::INTEGER
+----
+2	550
+
+query I nosort
+SELECT v.x::SMALLINT
+FROM '{TEST_DIR}/variant_pushdown_multifile_*.parquet'
+WHERE v.x = 5::INTEGER
+ORDER BY ALL
+----
+5
+5
+
+query III
+SELECT
+	count(*) FILTER (WHERE v.x IS NULL),
+	count(*) FILTER (WHERE v.x::VARCHAR = '5'),
+	count(*) FILTER (WHERE TRY(v.x::INTEGER) = 5)
+FROM '{TEST_DIR}/variant_pushdown_multifile_*.parquet'
+----
+2	3	3

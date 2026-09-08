@@ -2,7 +2,7 @@
 # description: Test space reclamation of optimistic writing with a PK constraint violation.
 # group: [parallel]
 
-load __TEST_DIR__/reclaim_space_primary_key.db
+load {TEST_DIR}/reclaim_space_primary_key.db
 
 statement ok
 SET preserve_insertion_order=false;
@@ -58,18 +58,18 @@ statement ok
 ROLLBACK
 
 query I
-SELECT COUNT(*) - ${i} FROM integers2;
+SELECT COUNT(*) - {i} FROM integers2;
 ----
 1
 
 statement ok
-INSERT INTO integers2 VALUES (10000000 + ${i});
+INSERT INTO integers2 VALUES (10000000 + {i});
 
 statement ok
 CHECKPOINT;
 
 query I
-SELECT COUNT(*) - ${i} FROM integers2;
+SELECT COUNT(*) - {i} FROM integers2;
 ----
 2
 
@@ -77,7 +77,7 @@ SELECT COUNT(*) - ${i} FROM integers2;
 
 query I
 SELECT
-	CASE WHEN ${i} = 0 THEN True::test_result
+	CASE WHEN {i} = 0 THEN True::test_result
 	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.6 THEN True::test_result
 	ELSE {
 		'old': total_blocks_tbl.total_blocks,
@@ -94,7 +94,7 @@ true
 statement ok
 UPDATE total_blocks_tbl SET total_blocks = (
 	SELECT
-		CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+		CASE WHEN {i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
 		ELSE (total_blocks)END
 	);
 

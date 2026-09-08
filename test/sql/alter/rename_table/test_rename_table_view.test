@@ -11,12 +11,15 @@ INSERT INTO tbl VALUES (999), (100)
 statement ok
 CREATE VIEW v1 AS SELECT * FROM tbl
 
-statement error
+statement ok
 ALTER TABLE v1 RENAME TO v2
+
+statement error
+SELECT * FROM v1
 ----
 
 query I
-SELECT * FROM v1
+SELECT * FROM v2
 ----
 999
 100

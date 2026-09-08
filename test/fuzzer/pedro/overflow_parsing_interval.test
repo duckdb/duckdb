@@ -1,9 +1,6 @@
 # name: test/fuzzer/pedro/overflow_parsing_interval.test
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
-
 # Parsing as a double loses prcision
 query I
 SELECT INTERVAL '-9223372036854775808' MICROSECONDS;

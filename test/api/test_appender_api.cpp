@@ -4,7 +4,6 @@
 #include "duckdb/common/types/hugeint.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 template <class SRC>
 void TestAppendingSingleDecimalValue(SRC value, Value expected_result, uint8_t width, uint8_t scale) {
@@ -40,8 +39,7 @@ TEST_CASE("Test appending to a decimal column", "[api]") {
 	int64_t bigint_reference_value = 3245234123123;
 	TestAppendingSingleDecimalValue<const char *>("3245234.123123", Value::DECIMAL(bigint_reference_value, 13, 6), 13,
 	                                              6);
-	// Precision loss
-	TestAppendingSingleDecimalValue<float>(12.3124324f, Value::DECIMAL(123124320, 9, 7), 9, 7);
+	TestAppendingSingleDecimalValue<float>(12.3124324f, Value::DECIMAL(123124323, 9, 7), 9, 7);
 
 	// Precision loss
 	result = Hugeint::TryConvert<const char *>("12345234234312432287744000", hugeint_value);

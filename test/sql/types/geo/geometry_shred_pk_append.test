@@ -6,7 +6,7 @@
 # a new row segment is created or not. If the row group has a non-updateable type (like GEOMETRY), new segments should
 # be created regardless, and the rowgroup should not be marked as updateable.
 
-load __TEST_DIR__/geometry_shred_pk_append.db readwrite v1.5.0
+load {TEST_DIR}/geometry_shred_pk_append.db readwrite v1.5.0
 
 statement ok
 SET geometry_minimum_shredding_size = 0;

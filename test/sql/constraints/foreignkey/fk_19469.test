@@ -1,5 +1,5 @@
 # name: test/sql/constraints/foreignkey/fk_19469.test
-# description: Issue #19469: Error in constraint violation message when checking foreign key constraints.
+# description: Issue #19469 and #19990: Error in constraint violation message when checking foreign key constraints.
 # group: [foreignkey]
 
 statement ok
@@ -77,3 +77,30 @@ INSERT INTO D VALUES
 (0, 1, 'x', 'y', 50);
 ----
 Constraint Error: Violates foreign key constraint because key "c3: x, c4: y" does not exist in the referenced table
+
+statement ok
+CREATE TABLE fk_19990_reference (
+    reference_id BIGINT PRIMARY KEY
+);
+
+statement ok
+INSERT INTO fk_19990_reference VALUES (1), (2);
+
+statement ok
+CREATE TABLE fk_19990_data (
+    data_id INTEGER PRIMARY KEY,
+    reference_id BIGINT,
+    FOREIGN KEY (reference_id) REFERENCES fk_19990_reference (reference_id)
+);
+
+statement ok
+CREATE TABLE fk_19990_temp_data AS
+    SELECT *
+    FROM (VALUES (1, 1), (2, 3)) AS t(data_id, reference_id);
+
+statement error
+INSERT INTO fk_19990_data BY NAME
+    SELECT *
+    FROM fk_19990_temp_data;
+----
+Constraint Error: Violates foreign key constraint because key "reference_id: 3" does not exist in the referenced table

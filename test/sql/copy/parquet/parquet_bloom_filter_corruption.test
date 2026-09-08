@@ -1,0 +1,27 @@
+# name: test/sql/copy/parquet/parquet_bloom_filter_corruption.test
+# description: Test reading a Parquet file with a corrupted bloom filter payload length
+# group: [parquet]
+
+require parquet
+
+query I
+SELECT count(*) FROM read_parquet('{DATA_DIR}/parquet-testing/bloom_filter_bad_numbytes.parquet')
+----
+100000
+
+query I
+SELECT count(*) FROM read_parquet('{DATA_DIR}/parquet-testing/bloom_filter_bad_numbytes.parquet') WHERE r = 0
+----
+1000
+
+# An out-of-file bloom filter range should disable pruning before attempting to prefetch it
+query I
+SELECT count(*) FROM read_parquet('{DATA_DIR}/parquet-testing/bloom_filter_bad_length_range.parquet') WHERE r = 0
+----
+1000
+
+# The header payload size must match the bloom filter length declared in the column metadata
+query I
+SELECT count(*) FROM read_parquet('{DATA_DIR}/parquet-testing/bloom_filter_short_numbytes.parquet') WHERE r = 200
+----
+100

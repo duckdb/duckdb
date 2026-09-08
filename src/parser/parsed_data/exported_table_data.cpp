@@ -5,7 +5,7 @@
 namespace duckdb {
 
 ExportedTableInfo::ExportedTableInfo(TableCatalogEntry &entry, ExportedTableData table_data_p,
-                                     vector<string> &not_null_columns_p)
+                                     vector<Identifier> &not_null_columns_p)
     : entry(entry), table_data(std::move(table_data_p)) {
 	table_data.not_null_columns = not_null_columns_p;
 }
@@ -15,8 +15,7 @@ ExportedTableInfo::ExportedTableInfo(ClientContext &context, ExportedTableData t
 }
 
 TableCatalogEntry &ExportedTableInfo::GetEntry(ClientContext &context, const ExportedTableData &table_data) {
-	return Catalog::GetEntry<TableCatalogEntry>(context, table_data.database_name, table_data.schema_name,
-	                                            table_data.table_name);
+	return Catalog::GetEntry<TableCatalogEntry>(context, table_data.qualified_name);
 }
 
 } // namespace duckdb

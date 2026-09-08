@@ -11,7 +11,6 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -25,8 +24,10 @@ public:
 
 public:
 	//! Gets the set of table references that are reachable from this node
-	static void GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &bindings);
-	static void GetExpressionBindings(const Expression &expr, unordered_set<idx_t> &bindings);
+	static void GetTableReferences(LogicalOperator &op, unordered_set<TableIndex> &bindings);
+	static void GetExpressionBindings(const Expression &expr, unordered_set<TableIndex> &bindings);
+	//! Moves the state shared by all logical joins when replacing one join operator with another
+	static void MoveJoinState(LogicalJoin &source, LogicalJoin &target);
 
 	bool HasProjectionMap() const override {
 		return !left_projection_map.empty() || !right_projection_map.empty();
@@ -35,17 +36,15 @@ public:
 	//! The type of the join (INNER, OUTER, etc...)
 	JoinType join_type;
 	//! Table index used to refer to the MARK column (in case of a MARK join)
-	idx_t mark_index {};
+	TableIndex mark_index {};
 	//! The columns of the LHS that are output by the join
-	vector<idx_t> left_projection_map;
+	vector<ProjectionIndex> left_projection_map;
 	//! The columns of the RHS that are output by the join
-	vector<idx_t> right_projection_map;
-	//! Join Keys statistics (optional)
-	vector<unique_ptr<BaseStatistics>> join_stats;
+	vector<ProjectionIndex> right_projection_map;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
-	vector<idx_t> GetTableIndex() const override;
+	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

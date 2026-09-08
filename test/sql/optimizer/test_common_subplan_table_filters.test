@@ -1,0 +1,63 @@
+# name: test/sql/optimizer/test_common_subplan_table_filters.test
+# description: Common subplan signatures preserve table filter column identities
+# group: [optimizer]
+
+statement ok
+CREATE TABLE csp_filter_key(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO csp_filter_key VALUES (1, 0), (2, 2), (3, 0), (4, 4);
+
+# Filters on different base columns can have the same projection index
+query TI rowsort
+SELECT 'a', count(*) FROM csp_filter_key WHERE a > 1
+UNION ALL
+SELECT 'b', count(*) FROM csp_filter_key WHERE b > 1;
+----
+a	3
+b	2
+
+# Multiple filters retain their association with the correct base columns
+query TI rowsort
+SELECT 'a', count(*) FROM csp_filter_key WHERE a > 1 AND b < 3
+UNION ALL
+SELECT 'b', count(*) FROM csp_filter_key WHERE a < 3 AND b > 1;
+----
+a	2
+b	1
+
+# IN filters on different base columns must not share a subplan
+query TI rowsort
+SELECT 'a', count(*) FROM csp_filter_key WHERE a IN (2, 3, 4)
+UNION ALL
+SELECT 'b', count(*) FROM csp_filter_key WHERE b IN (2, 3, 4);
+----
+a	3
+b	2
+
+# Genuinely identical filtered subplans remain equivalent
+query TI rowsort
+SELECT 'x', count(*) FROM csp_filter_key WHERE a > 1
+UNION ALL
+SELECT 'y', count(*) FROM csp_filter_key WHERE a > 1;
+----
+x	3
+y	3
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+# Different table filters must not be extracted as a common subplan
+query II
+EXPLAIN SELECT 'a', count(*) FROM csp_filter_key WHERE a > 1
+UNION ALL
+SELECT 'b', count(*) FROM csp_filter_key WHERE b > 1;
+----
+logical_opt	<!REGEX>:.*CTE.*
+
+query II
+EXPLAIN SELECT 'x', count(*) FROM csp_filter_key WHERE a > 1
+UNION ALL
+SELECT 'y', count(*) FROM csp_filter_key WHERE a > 1;
+----
+logical_opt	<REGEX>:.*CTE.*

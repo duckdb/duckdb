@@ -1,5 +1,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -14,12 +15,14 @@
 #include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/expression_binder/projection_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include <algorithm>
 
 namespace duckdb {
 
 vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, const vector<BindingAlias> &aliases,
-                                                              const vector<string> &names) {
+                                                              const vector<Identifier> &names) {
 	vector<unique_ptr<ParsedExpression>> result;
 	D_ASSERT(aliases.size() == names.size());
 
@@ -32,9 +35,9 @@ vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, co
 }
 
 unique_ptr<BoundMergeIntoAction>
-Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, idx_t proj_index,
+Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
                         vector<unique_ptr<Expression>> &expressions, MergeIntoAction &action,
-                        const vector<BindingAlias> &source_aliases, const vector<string> &source_names) {
+                        const vector<BindingAlias> &source_aliases, const vector<Identifier> &source_names) {
 	auto result = make_uniq<BoundMergeIntoAction>();
 	result->action_type = action.action_type;
 	if (action.condition) {
@@ -71,8 +74,8 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			}
 		}
 		unique_ptr<LogicalOperator> fake_root;
-		BindUpdateSet(proj_index, fake_root, *action.update_info, table, result->columns, result->expressions,
-		              expressions);
+		BindUpdateSet(proj_index, fake_root, *action.update_info, table, result->columns, merge_into.bound_defaults,
+		              result->expressions, expressions);
 
 		// bind any additional columns that need to be bound for update constraints
 		// FIXME: this is pretty hacky
@@ -108,10 +111,12 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 		}
 		vector<LogicalIndex> named_column_map;
 		vector<LogicalType> expected_types;
+		physical_index_vector_t<idx_t> column_index_map;
 		BindInsertColumnList(table, action.insert_columns, action.default_values, named_column_map, expected_types,
-		                     result->column_index_map);
+		                     column_index_map);
 
-		vector<unique_ptr<Expression>> insert_expressions;
+		vector<ColumnBinding> insert_bindings;
+		vector<LogicalType> insert_types;
 		if (!action.default_values && action.expressions.empty()) {
 			// no expressions: *
 			// expand source bindings
@@ -124,18 +129,26 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			auto &column = table.GetColumns().GetColumn(named_column_map[i]);
 
 			InsertBinder insert_binder(*this, context);
-			insert_binder.target_type = column.Type();
+			insert_binder.target_type = table.GetExpectedTypeForInsert(column);
 
 			TryReplaceDefaultExpression(action.expressions[i], column);
 			auto insert_expr = insert_binder.Bind(action.expressions[i]);
-
-			insert_expressions.push_back(std::move(insert_expr));
+			auto insert_type = insert_expr->GetReturnType();
+			auto expr_index = ColumnBinding::PushExpression(expressions, std::move(insert_expr));
+			insert_bindings.emplace_back(proj_index, expr_index);
+			insert_types.push_back(std::move(insert_type));
 		}
 
-		for (auto &insert_expr : insert_expressions) {
-			result->expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    insert_expr->return_type, ColumnBinding(proj_index, expressions.size())));
-			expressions.push_back(std::move(insert_expr));
+		for (auto &col : table.GetColumns().Physical()) {
+			auto storage_idx = col.StorageOid();
+			auto mapped_index = column_index_map.empty() ? storage_idx : column_index_map[col.Physical()];
+			if (mapped_index == DConstants::INVALID_INDEX) {
+				result->expressions.push_back(merge_into.bound_defaults[storage_idx]->Copy());
+			} else {
+				result->expressions.push_back(table.GetDefaultExpressionForColumn(
+				    context, insert_types[mapped_index], col.Type(), insert_bindings[mapped_index],
+				    *merge_into.bound_defaults[storage_idx]));
+			}
 		}
 		break;
 	}
@@ -160,19 +173,20 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 }
 
 void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBinding> &source_bindings,
-                          idx_t new_table_index) {
+                          TableIndex new_table_index) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
 		    for (idx_t i = 0; i < source_bindings.size(); i++) {
-			    if (bound_colref.binding == source_bindings[i]) {
-				    bound_colref.binding.table_index = new_table_index;
-				    bound_colref.binding.column_index = i;
+			    if (bound_colref.Binding() == source_bindings[i]) {
+				    bound_colref.BindingMutable().table_index = new_table_index;
+				    bound_colref.BindingMutable().column_index = ProjectionIndex(i);
 			    }
 		    }
 	    });
 }
 
-void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &source_bindings, idx_t new_table_index) {
+void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &source_bindings,
+                          TableIndex new_table_index) {
 	LogicalOperatorVisitor::EnumerateExpressions(
 	    op, [&](unique_ptr<Expression> *child) { RewriteMergeBindings(*child, source_bindings, new_table_index); });
 }
@@ -192,10 +206,14 @@ void CheckMergeAction(MergeActionCondition condition, MergeActionType action_typ
 }
 
 BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
+	return Bind(*stmt.node);
+}
+
+BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind the target table
 	auto target_binder = Binder::CreateBinder(context, this);
-	string table_alias = stmt.target->alias;
-	auto bound_table = target_binder->Bind(*stmt.target);
+	auto table_alias = node.target->alias;
+	auto bound_table = target_binder->Bind(*node.target);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("Can only merge into base tables!");
 	}
@@ -204,12 +222,21 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		throw BinderException("Can only merge into base tables!");
 	}
 	auto &table = *table_ptr;
+
+	bool has_triggers = false;
+	auto transaction = table.ParentCatalog().GetCatalogTransaction(context);
+	table.ScanTriggers(transaction, [&](CatalogEntry &) { has_triggers = true; });
+	if (has_triggers && !global_binder_state->trigger_expanded_tables.count(table)) {
+		// if the table is not in the trigger_expanded tables, it means that we're on a top level MERGE INTO
+		throw NotImplementedException("MERGE INTO is not supported on tables with triggers");
+	}
+
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
 		// modification type depends on actions
 		DatabaseModificationType modification;
-		for (auto &action_condition : stmt.actions) {
+		for (auto &action_condition : node.actions) {
 			for (auto &action : action_condition.second) {
 				switch (action->action_type) {
 				case MergeActionType::MERGE_UPDATE:
@@ -231,11 +258,11 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 	// bind the source
 	auto source_binder = Binder::CreateBinder(context, this);
-	auto source_binding = source_binder->Bind(*stmt.source);
+	auto source_binding = source_binder->Bind(*node.source);
 
-	// get the source names/types
+	// get the source names/types and collect source table indices for validation
 	vector<BindingAlias> source_aliases;
-	vector<string> source_names;
+	vector<Identifier> source_names;
 	for (auto &binding_entry : source_binder->bind_context.GetBindingsList()) {
 		auto &binding = *binding_entry;
 		auto &column_names = binding.GetColumnNames();
@@ -251,7 +278,15 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
 
-	for (auto &entry : stmt.actions) {
+	// bind table constraints/default values in case these are referenced
+	auto &catalog_name = table.ParentCatalog().GetName();
+	auto &schema_name = table.ParentSchema().name;
+	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name.GetIdentifierName(),
+	                  schema_name.GetIdentifierName());
+
+	merge_into->bound_constraints = BindConstraints(table);
+
+	for (auto &entry : node.actions) {
 		if (entry.first == MergeActionCondition::WHEN_MATCHED) {
 			continue;
 		}
@@ -273,8 +308,8 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// if we have both                                               -> FULL join
 	// if we only have WHEN MATCHED we only need matches             -> INNER join
 	JoinRef join;
-	auto has_not_matched_by_source = stmt.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE) > 0;
-	auto has_not_matched_by_target = stmt.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) > 0;
+	auto has_not_matched_by_source = node.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE) > 0;
+	auto has_not_matched_by_target = node.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) > 0;
 	if (has_not_matched_by_source && has_not_matched_by_target) {
 		join.type = JoinType::OUTER;
 	} else if (has_not_matched_by_source) {
@@ -286,10 +321,10 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	}
 	join.left = make_uniq<BoundRefWrapper>(std::move(source_binding), std::move(source_binder));
 	join.right = make_uniq<BoundRefWrapper>(std::move(bound_table), std::move(target_binder));
-	if (stmt.join_condition) {
-		join.condition = std::move(stmt.join_condition);
+	if (node.join_condition) {
+		join.condition = std::move(node.join_condition);
 	} else {
-		join.using_columns = std::move(stmt.using_columns);
+		join.using_columns = std::move(node.using_columns);
 	}
 	auto bound_join_node = Bind(join);
 
@@ -306,19 +341,12 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	bool inverted = join.type == JoinType::RIGHT;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
 
-	if (!stmt.returning_list.empty()) {
+	if (!node.returning_list.empty()) {
 		merge_into->return_chunk = true;
 	}
 
-	// bind table constraints/default values in case these are referenced
-	auto &catalog_name = table.ParentCatalog().GetName();
-	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name, schema_name);
-
-	merge_into->bound_constraints = BindConstraints(table);
-
 	// bind WHEN_MATCHED merge actions (can contain references to both source and target)
-	for (auto &entry : stmt.actions) {
+	for (auto &entry : node.actions) {
 		if (entry.first != MergeActionCondition::WHEN_MATCHED) {
 			continue;
 		}
@@ -350,10 +378,10 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 		// insert the source marker
 		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42));
-		marker->alias = "source_marker";
+		marker->SetAlias("source_marker");
 		ColumnBinding source_marker;
-		source_marker = ColumnBinding(new_proj_index, select_list.size());
-		select_list.push_back(std::move(marker));
+		auto source_marker_idx = ColumnBinding::PushExpression(select_list, std::move(marker));
+		source_marker = ColumnBinding(new_proj_index, source_marker_idx);
 
 		// construct the new projection
 		auto proj = make_uniq<LogicalProjection>(new_proj_index, std::move(select_list));
@@ -371,12 +399,46 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		// push a reference
 		merge_into->source_marker = projection_expressions.size();
 		auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, source_marker);
-		marker_ref->alias = "source_marker";
+		marker_ref->SetAlias("source_marker");
 		projection_expressions.push_back(std::move(marker_ref));
 	}
 
+	// Check if we have a DELETE action
+	bool has_delete_action = false;
+	for (auto &entry : merge_into->actions) {
+		for (auto &action : entry.second) {
+			if (action->action_type == MergeActionType::MERGE_DELETE) {
+				has_delete_action = true;
+				break;
+			}
+		}
+		if (has_delete_action) {
+			break;
+		}
+	}
+
+	// If RETURNING is present and we have a DELETE action, add all physical columns to the scan
+	// so we can pass them through instead of fetching by row ID in PhysicalDelete.
+	// Generated columns will be computed in the RETURNING projection by the binder.
+	if (has_delete_action) {
+		if (!node.returning_list.empty()) {
+			// Use the overloaded helper to add physical columns to the scan and build projection expressions
+			auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
+			BindDeleteReturningColumns(table, get, merge_into->delete_return_columns, projection_expressions,
+			                           *target_binding);
+		} else if (table.IsDuckTable()) {
+			// Only optimize for DuckDB tables (not attached external tables like SQLite)
+			auto &storage = table.GetStorage();
+			if (storage.HasUniqueIndexes()) {
+				auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
+				BindDeleteIndexColumns(table, get, merge_into->delete_return_columns, projection_expressions,
+				                       *target_binding);
+			}
+		}
+	}
+
 	merge_into->row_id_start = projection_expressions.size();
-	// finally bind the row id column and add them to the projection list
+	// Row ID columns must remain last: PhysicalMergeInto treats the trailing columns as one composite key.
 	BindRowIdColumns(table, get, projection_expressions);
 
 	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_expressions));
@@ -384,14 +446,14 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 	merge_into->AddChild(std::move(proj));
 
-	if (!stmt.returning_list.empty()) {
+	if (!node.returning_list.empty()) {
 		auto merge_table_index = merge_into->table_index;
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(merge_into);
 
 		// add the merge_action virtual column
 		virtual_column_map_t virtual_columns;
 		virtual_columns.insert(make_pair(VIRTUAL_COLUMN_START, TableColumn("merge_action", LogicalType::VARCHAR)));
-		return BindReturning(std::move(stmt.returning_list), table, table_alias, merge_table_index,
+		return BindReturning(std::move(node.returning_list), table, table_alias, merge_table_index,
 		                     std::move(index_as_logicaloperator), std::move(virtual_columns));
 	}
 

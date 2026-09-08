@@ -1,0 +1,29 @@
+# name: test/optimizer/pushdown/timestamp_to_date_infinity_pushdown.test
+# description: Test timestamp to date filter pushdown with infinite date constants
+# group: [pushdown]
+
+statement ok
+create table ts_inf(t timestamp);
+
+statement ok
+insert into ts_inf values (timestamp '-infinity'), (timestamp '2025-01-01'), (timestamp 'infinity'), (NULL);
+
+query I
+select count(*) from ts_inf where cast(t as date) = date 'infinity';
+----
+1
+
+query I
+select count(*) from ts_inf where date 'infinity' = cast(t as date);
+----
+1
+
+query I
+select count(*) from ts_inf where cast(t as date) = date '-infinity';
+----
+1
+
+query I
+select count(*) from ts_inf where date '-infinity' = cast(t as date);
+----
+1

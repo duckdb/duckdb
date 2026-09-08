@@ -28,6 +28,7 @@ enum class PhysicalOperatorType : uint8_t {
 	HASH_GROUP_BY,
 	PERFECT_HASH_GROUP_BY,
 	PARTITIONED_AGGREGATE,
+	LIMITED_DISTINCT,
 	FILTER,
 	PROJECTION,
 	COPY_TO_FILE,
@@ -97,6 +98,7 @@ enum class PhysicalOperatorType : uint8_t {
 	PRAGMA,
 	TRANSACTION,
 	CREATE_TYPE,
+	CREATE_TRIGGER,
 	ATTACH,
 	DETACH,
 
@@ -119,11 +121,20 @@ enum class PhysicalOperatorType : uint8_t {
 	EXTENSION,
 	VERIFY_VECTOR,
 	UPDATE_EXTENSIONS,
+	CONNECT,
+	DISCONNECT,
+	EXTERNAL_RESOURCE,
 
 	// -----------------------------
 	// Secret
 	// -----------------------------
 	CREATE_SECRET,
+
+	// Physical-only recursive CTE specialization. Keep appended to preserve existing enum values.
+	RECURSIVE_KEY_JOIN,
+	SECURE_VIEW,
+	//! Source of a MERGE INTO action pipeline. Keep appended to preserve existing enum values.
+	MERGE_ACTION_SOURCE,
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

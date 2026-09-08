@@ -2,9 +2,6 @@
 # description: Test try_strptime function
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT try_strptime('21 June, 2018', '%d %B, %Y')
 ----
@@ -676,5 +673,5 @@ Invalid Input Error: Failed to parse format specifier
 statement error
 SELECT try_strptime('2000/10/10', random()::varchar)
 ----
-Invalid Input Error: strptime format must be a constant
+<REGEX>:.*Binder Error.*try_strptime.*must be a constant expression.*
 

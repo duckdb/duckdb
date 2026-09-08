@@ -18,7 +18,10 @@
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
+
+#include <cmath>
 
 namespace duckdb {
 
@@ -52,7 +55,8 @@ public:
 	//! Create a DOUBLE value
 	DUCKDB_API Value(double val); // NOLINT: Allow implicit conversion from `double`
 	//! Create a VARCHAR value
-	DUCKDB_API Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
+	DUCKDB_API Value(const char *val);       // NOLINT: Allow implicit conversion from `const char *`
+	DUCKDB_API Value(const Identifier &val); // NOLINT: Allow implicit conversion from `Identifier`
 	//! Create a NULL value
 	DUCKDB_API Value(std::nullptr_t val); // NOLINT: Allow implicit conversion from `nullptr_t`
 	//! Create a VARCHAR value
@@ -61,6 +65,8 @@ public:
 	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
 	//! Create a VARCHAR value
 	DUCKDB_API Value(String val); // NOLINT: Allow implicit conversion from `string`
+	//! Create a VARCHAR value
+	DUCKDB_API Value(std::string_view val);
 	//! Copy constructor
 	DUCKDB_API Value(const Value &other);
 	//! Move constructor
@@ -73,9 +79,6 @@ public:
 	// move assignment
 	DUCKDB_API Value &operator=(Value &&other) noexcept;
 
-	inline LogicalType &GetTypeMutable() {
-		return type_;
-	}
 	inline const LogicalType &type() const { // NOLINT
 		return type_;
 	}
@@ -148,6 +151,8 @@ public:
 	DUCKDB_API static Value TIMESTAMPNS(timestamp_ns_t timestamp);
 	//! Create a timestamp_tz Value from a specified value.
 	DUCKDB_API static Value TIMESTAMPTZ(timestamp_tz_t timestamp);
+	//! Create a timestamp_tz_ns Value from a specified value.
+	DUCKDB_API static Value TIMESTAMPTZNS(timestamp_tz_ns_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	DUCKDB_API static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                                  int32_t micros);
@@ -169,6 +174,9 @@ public:
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
 	DUCKDB_API static Value STRUCT(const LogicalType &type, vector<Value> struct_values);
+	//! Create an unnamed TUPLE value of the given child values
+	DUCKDB_API static Value TUPLE(vector<Value> values);
+	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, vector<Value> underlying_struct_values);
 	//! Create a variant value with given list of internal variant data (keys/children/values/data)
 	DUCKDB_API static Value VARIANT(vector<Value> children);
 	//! Create a list value with the given entries
@@ -194,6 +202,9 @@ public:
 	static Value BLOB_RAW(const string &data) { // NOLINT
 		return Value::BLOB(const_data_ptr_cast(data.c_str()), data.size());
 	}
+	static Value BLOB_RAW(std::string_view data) {
+		return Value::BLOB(const_data_ptr_cast(data.data()), data.size());
+	}
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	DUCKDB_API static Value BLOB(const string &data);
 	//! Creates a bitstring by casting a specified string to a bitstring
@@ -209,7 +220,7 @@ public:
 	DUCKDB_API static Value TYPE(const string_t &serialized_type);
 
 	//! Creates an aggregate state
-	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
+	DUCKDB_API static Value LEGACY_AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
 
 	template <class T>
 	T GetValue() const;
@@ -222,6 +233,10 @@ public:
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
 	T GetValueUnsafe() const;
+
+	//! Pointer to the inline-stored payload bytes. Only valid for constant-size physical types; the
+	//! pointer borrows the Value's storage and is valid until the Value is destroyed.
+	DUCKDB_API const_data_ptr_t GetPointerToData() const;
 
 	//! Return a copy of this value
 	Value Copy() const {
@@ -242,20 +257,18 @@ public:
 	                        bool strict = false) const;
 	DUCKDB_API Value CastAs(ClientContext &context, const LogicalType &target_type, bool strict = false) const;
 	DUCKDB_API Value DefaultCastAs(const LogicalType &target_type, bool strict = false) const;
-	//! Tries to cast this value to another type, and stores the result in "new_value"
-	DUCKDB_API bool TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
-	                          Value &new_value, string *error_message, bool strict = false) const;
-	DUCKDB_API bool TryCastAs(ClientContext &context, const LogicalType &target_type, Value &new_value,
-	                          string *error_message, bool strict = false) const;
-	DUCKDB_API bool DefaultTryCastAs(const LogicalType &target_type, Value &new_value, string *error_message,
-	                                 bool strict = false) const;
-	//! Tries to cast this value to another type, and stores the result in THIS value again
-	DUCKDB_API bool TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
-	                          bool strict = false);
-	DUCKDB_API bool TryCastAs(ClientContext &context, const LogicalType &target_type, bool strict = false);
-	DUCKDB_API bool DefaultTryCastAs(const LogicalType &target_type, bool strict = false);
+	//! Tries to cast this value to another type - returns the result, or nullopt if the cast is not possible.
+	//! Never throws on a failed cast; pass "error_message" to obtain the reason for the failure
+	DUCKDB_API optional<Value> TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input,
+	                                     const LogicalType &target_type, string *error_message = nullptr,
+	                                     bool strict = false) const;
+	DUCKDB_API optional<Value> TryCastAs(ClientContext &context, const LogicalType &target_type,
+	                                     string *error_message = nullptr, bool strict = false) const;
+	DUCKDB_API optional<Value> DefaultTryCastAs(const LogicalType &target_type, string *error_message = nullptr,
+	                                            bool strict = false) const;
 
-	DUCKDB_API void Reinterpret(LogicalType new_type);
+	//! Returns a copy of this value with its type replaced - the underlying value is reinterpreted, not cast
+	DUCKDB_API Value WithType(LogicalType new_type) const;
 
 	//! Serializes a Value to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
@@ -347,6 +360,7 @@ private:
 		timestamp_ms_t timestamp_ms;
 		timestamp_ns_t timestamp_ns;
 		timestamp_tz_t timestamp_tz;
+		timestamp_tz_ns_t timestamp_tz_ns;
 		interval_t interval;
 	} value_; // NOLINT
 
@@ -446,6 +460,10 @@ struct TimestampTZValue {
 	DUCKDB_API static timestamp_tz_t Get(const Value &value);
 };
 
+struct TimestampTZNSValue {
+	DUCKDB_API static timestamp_tz_ns_t Get(const Value &value);
+};
+
 struct IntervalValue {
 	DUCKDB_API static interval_t Get(const Value &value);
 };
@@ -474,6 +492,11 @@ struct UnionValue {
 
 struct TypeValue {
 	DUCKDB_API static LogicalType GetType(const Value &value);
+};
+
+struct VariantValue {
+	//! Convert a (non-null) VARIANT-typed Value back to a plain Value
+	DUCKDB_API static Value GetValue(const Value &variant_val);
 };
 
 //! Return the internal integral value for any type that is stored as an integral value internally
@@ -522,6 +545,8 @@ template <>
 Value DUCKDB_API Value::CreateValue(timestamp_ns_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(timestamp_tz_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_tz_ns_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(const char *value);
 template <>
@@ -584,9 +609,15 @@ DUCKDB_API timestamp_ns_t Value::GetValue() const;
 template <>
 DUCKDB_API timestamp_tz_t Value::GetValue() const;
 template <>
+DUCKDB_API timestamp_tz_ns_t Value::GetValue() const;
+template <>
 DUCKDB_API interval_t Value::GetValue() const;
 template <>
 DUCKDB_API Value Value::GetValue() const;
+// Not a logical type like the specializations above, but a semantic wrapper around the string value. It mirrors the
+// implicit Value(const Identifier &) constructor, so identifiers can round-trip through a Value.
+template <>
+DUCKDB_API Identifier Value::GetValue() const;
 
 template <>
 DUCKDB_API bool Value::GetValueUnsafe() const;
@@ -637,12 +668,18 @@ DUCKDB_API timestamp_ns_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API timestamp_tz_t Value::GetValueUnsafe() const;
 template <>
+DUCKDB_API timestamp_tz_ns_t Value::GetValueUnsafe() const;
+template <>
 DUCKDB_API interval_t Value::GetValueUnsafe() const;
 
 template <>
-DUCKDB_API bool Value::IsNan(float input);
+inline bool Value::IsNan(float input) {
+	return std::isnan(input);
+}
 template <>
-DUCKDB_API bool Value::IsNan(double input);
+inline bool Value::IsNan(double input) {
+	return std::isnan(input);
+}
 
 template <>
 DUCKDB_API bool Value::IsFinite(float input);
@@ -660,5 +697,7 @@ template <>
 DUCKDB_API bool Value::IsFinite(timestamp_ns_t input);
 template <>
 DUCKDB_API bool Value::IsFinite(timestamp_tz_t input);
+template <>
+DUCKDB_API bool Value::IsFinite(timestamp_tz_ns_t input);
 
 } // namespace duckdb

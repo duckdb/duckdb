@@ -2,9 +2,6 @@
 # description: Test timestamp with timezones cast
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 # we can cast timestamps with UTC in them
 query I
 SELECT TIMESTAMP '2021-05-25 04:55:03.382494 UTC';
@@ -21,18 +18,17 @@ SELECT TIMESTAMP '2021-05-25 04:55:03.382494 uTc';
 ----
 2021-05-25 04:55:03.382494
 
-statement error
+query I
 SELECT TIMESTAMP '2021-05-25 04:55:03.382494 EST';
 ----
-has a timestamp that is not UTC
+2021-05-25 04:55:03.382494
 
 require icu
 
-# FIXME: we should be able to make this work
-statement error
+query I
 SELECT TIMESTAMP '2021-05-25 04:55:03.382494 EST';
 ----
-has a timestamp that is not UTC
+2021-05-25 04:55:03.382494
 
 statement ok
 set Calendar='gregorian';

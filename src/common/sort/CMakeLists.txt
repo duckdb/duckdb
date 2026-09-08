@@ -4,6 +4,7 @@ add_library_unity(
   full_sort.cpp
   hashed_sort.cpp
   natural_sort.cpp
+  partition_key_tracker.cpp
   sort.cpp
   sort_strategy.cpp
   sorted_run.cpp

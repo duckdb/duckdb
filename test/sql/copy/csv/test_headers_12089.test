@@ -2,9 +2,6 @@
 # description: Test that headers described on #12089 are properly parsed.
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select columns FROM sniff_csv('{DATA_DIR}/csv/headers/escaped_quote.csv');
 ----

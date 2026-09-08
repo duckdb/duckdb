@@ -429,13 +429,19 @@ void free_text_pool() {
  *		produce ELIZA-like text of random, bounded length, truncating the last
  *		generated sentence as required
  */
-void dbg_text(char *tgt, int min, int max, seed_t *seed) {
-	DSS_HUGE hgLength = 0, hgOffset, wordlen = 0, s_len, needed;
-	char sentence[MAX_SENT_LEN + 1], *cp;
-
+int dbg_text_source(int min, int max, seed_t *seed, const char **source) {
+	DSS_HUGE hgLength = 0, hgOffset;
 	RANDOM(hgOffset, 0, txtBufferSize - max, seed);
 	RANDOM(hgLength, min, max, seed);
-	strncpy(&tgt[0], &szTextPool[hgOffset], (int)hgLength);
+	/* source points into szTextPool and remains valid until free_text_pool() */
+	*source = &szTextPool[hgOffset];
+	return (int)hgLength;
+}
+
+void dbg_text(char *tgt, int min, int max, seed_t *seed) {
+	const char *source;
+	auto hgLength = dbg_text_source(min, max, seed, &source);
+	memcpy(&tgt[0], source, (size_t)hgLength);
 	tgt[hgLength] = '\0';
 
 	return;

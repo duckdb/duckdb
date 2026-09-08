@@ -9,12 +9,14 @@
 #pragma once
 
 #include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_properties.hpp"
 
 namespace duckdb {
+class BoxRendererContext;
 struct BoxRendererConfig;
 
 enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT, ARROW_RESULT };
@@ -23,11 +25,34 @@ class BaseQueryResult {
 public:
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-	                           vector<LogicalType> types, vector<string> names);
+	                           vector<LogicalType> types, vector<Identifier> names);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API BaseQueryResult(QueryResultType type, ErrorData error);
 	DUCKDB_API virtual ~BaseQueryResult();
 
+public:
+	//! Returns the type of the result (MATERIALIZED or STREAMING)
+	DUCKDB_API QueryResultType GetResultType() const;
+	//! Returns the type of the statement that created this result
+	DUCKDB_API StatementType GetStatementType() const;
+	//! Returns the properties of the statement that created this result
+	DUCKDB_API const StatementProperties &GetStatementProperties() const;
+	//! Returns the SQL types of the result
+	DUCKDB_API const vector<LogicalType> &GetTypes() const;
+	//! Returns the names of the result
+	DUCKDB_API const vector<Identifier> &GetNames() const;
+	//! Returns the number of columns in the result
+	DUCKDB_API idx_t ColumnCount() const;
+
+	[[noreturn]] DUCKDB_API void ThrowError(const string &prepended_message = "") const;
+	DUCKDB_API void SetError(ErrorData error);
+	DUCKDB_API bool HasError() const;
+	DUCKDB_API const ExceptionType &GetErrorType() const;
+	DUCKDB_API const std::string &GetError() const;
+	DUCKDB_API ErrorData &GetErrorObject();
+	DUCKDB_API const ErrorData &GetErrorObject() const;
+
+private:
 	//! The type of the result (MATERIALIZED or STREAMING)
 	QueryResultType type;
 	//! The type of the statement that created this result
@@ -37,18 +62,7 @@ public:
 	//! The SQL types of the result
 	vector<LogicalType> types;
 	//! The names of the result
-	vector<string> names;
-
-public:
-	[[noreturn]] DUCKDB_API void ThrowError(const string &prepended_message = "") const;
-	DUCKDB_API void SetError(ErrorData error);
-	DUCKDB_API bool HasError() const;
-	DUCKDB_API const ExceptionType &GetErrorType() const;
-	DUCKDB_API const std::string &GetError() const;
-	DUCKDB_API ErrorData &GetErrorObject();
-	DUCKDB_API idx_t ColumnCount();
-
-protected:
+	vector<Identifier> names;
 	//! Whether or not execution was successful
 	bool success;
 	//! The error (in case execution was not successful)
@@ -62,7 +76,7 @@ class QueryResult : public BaseQueryResult {
 public:
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-	                       vector<LogicalType> types, vector<string> names, ClientProperties client_properties);
+	                       vector<LogicalType> types, vector<Identifier> names, ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API QueryResult(QueryResultType type, ErrorData error);
 	DUCKDB_API ~QueryResult() override;
@@ -75,7 +89,7 @@ public:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		if (type != TARGET::TYPE) {
+		if (GetResultType() != TARGET::TYPE) {
 			throw InternalException("Failed to cast query result to type - query result type mismatch");
 		}
 		return reinterpret_cast<TARGET &>(*this);
@@ -83,7 +97,7 @@ public:
 
 	template <class TARGET>
 	const TARGET &Cast() const {
-		if (type != TARGET::TYPE) {
+		if (GetResultType() != TARGET::TYPE) {
 			throw InternalException("Failed to cast query result to type - query result type mismatch");
 		}
 		return reinterpret_cast<const TARGET &>(*this);
@@ -91,11 +105,12 @@ public:
 
 public:
 	//! Deduplicate column names for interop with external libraries
+	static void DeduplicateColumns(vector<Identifier> &names);
 	static void DeduplicateColumns(vector<string> &names);
 
 public:
 	//! Returns the name of the column for the given index
-	DUCKDB_API const string &ColumnName(idx_t index) const;
+	DUCKDB_API const Identifier &ColumnName(idx_t index) const;
 	//! Fetches a DataChunk of normalized (flat) vectors from the query result.
 	//! Returns nullptr if there are no more results to fetch.
 	DUCKDB_API unique_ptr<DataChunk> Fetch();
@@ -105,17 +120,17 @@ public:
 	//! Converts the QueryResult to a string
 	DUCKDB_API virtual string ToString() = 0;
 	//! Converts the QueryResult to a box-rendered string
-	DUCKDB_API virtual string ToBox(ClientContext &context, const BoxRendererConfig &config);
+	DUCKDB_API virtual string ToBox(BoxRendererContext &context, const BoxRendererConfig &config);
 	//! Prints the QueryResult to the console
 	DUCKDB_API void Print();
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
-	DUCKDB_API bool Equals(QueryResult &other);
+	DUCKDB_API bool Equals(QueryResult &other, bool compare_names = true);
 
 	bool TryFetch(unique_ptr<DataChunk> &result, ErrorData &error) {
 		try {
 			result = Fetch();
-			return success;
+			return !HasError();
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
 			return false;

@@ -89,6 +89,14 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT * FROM test_all_types()", false, true);
 }
 
+TEST_CASE("Test arrow NULL value roundtrip", "[arrow]") {
+	// null types
+	TestArrowRoundtrip("SELECT NULL");
+	TestArrowRoundtrip("SELECT [NULL, NULL]");
+	TestArrowRoundtrip("SELECT {'x': NULL, 'y': NULL}");
+	TestArrowRoundtrip("SELECT [{'x': NULL, 'y': NULL}, {'x': NULL, 'y': NULL}]");
+}
+
 TEST_CASE("Test Arrow fixed-size binary format parsing", "[arrow]") {
 	// Verify that GetTypeFromFormat correctly parses the size from "w:NN" format strings.
 	// Regression test for duckdb/duckdb-wasm#2199: format.find(':') would match colons
@@ -320,11 +328,6 @@ TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
 	DBConfig config;
 	DuckDB db(nullptr, &config);
 	Connection con(db);
-
-#if defined(D_ASSERT_IS_ENABLED) && !defined(DEBUG)
-	return; // Skip in relassert, takes too long
-#endif
-
 	if (!db.ExtensionIsLoaded("tpch")) {
 		return;
 	}
@@ -340,11 +343,11 @@ TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
 
 	// REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM lineitem_no_constraint;", false));
 	REQUIRE(ArrowTestHelper::RunArrowComparison(
-	    con, "SELECT l_orderkey, l_shipdate, l_comment FROM lineitem_no_constraint ORDER BY l_orderkey DESC;", false));
+	    con, "SELECT l_orderkey, l_shipdate, l_comment FROM lineitem_no_constraint ORDER BY l_orderkey DESC;", true));
 	REQUIRE(
-	    ArrowTestHelper::RunArrowComparison(con, "SELECT lineitem_no_constraint FROM lineitem_no_constraint;", false));
-	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT [lineitem_no_constraint] FROM lineitem_no_constraint;",
-	                                            false));
+	    ArrowTestHelper::RunArrowComparison(con, "SELECT lineitem_no_constraint FROM lineitem_no_constraint;", true));
+	REQUIRE(
+	    ArrowTestHelper::RunArrowComparison(con, "SELECT [lineitem_no_constraint] FROM lineitem_no_constraint;", true));
 }
 
 TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {

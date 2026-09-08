@@ -3,9 +3,6 @@
 # group: [fuzz]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table strings (a VARCHAR, b VARCHAR);
 
 query III

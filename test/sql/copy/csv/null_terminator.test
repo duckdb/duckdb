@@ -2,9 +2,6 @@
 # description: Test csv file with null terminator
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 FROM '{DATA_DIR}/csv/null_terminator.csv'
 ----

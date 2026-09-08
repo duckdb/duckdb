@@ -1,0 +1,43 @@
+{
+  "description": "Run with the latest v1.x storage format on persistent databases.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__latest_storage.db",
+  "on_load": "skip",
+  "settings": [
+    {
+      "name": "storage_compatibility_version",
+      "value": "v1.5.2"
+    }
+  ],
+  "inherit_skip_tests": "test/configs/force_storage.json",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "TODO",
+      "paths": [
+        "test/extension/autoloading_types.test",
+        "test/fuzzer/pedro/incomplete_checkpoint.test",
+        "test/sql/storage/temp_directory/max_swap_space_error.test",
+        "test/sql/attach/attach_icu_collation.test",
+        "test/sql/json/test_json_serialize_sql.test",
+        "test/sql/table_function/duckdb_databases.test",
+        "test/sql/logging/file_system_logging_attach.test",
+        "test/sql/logging/file_system_logging_attach_deadlock.test"
+      ]
+    },
+    {
+      "reason": "Attached databases have a main schema, which is not implicit.",
+      "paths": [
+        "test/fuzzer/sqlsmith/current_schemas_null.test"
+      ]
+    },
+    {
+      "reason": "CREATE SECURE VIEW requires v2.0.0 storage.",
+      "paths": [
+        "test/sql/catalog/view/secure_view.test",
+        "test/sql/optimizer/secure_view_explain.test",
+        "test/sql/optimizer/secure_view_pushdown.test",
+        "test/sql/optimizer/secure_view_statistics.test"
+      ]
+    }
+  ]
+}

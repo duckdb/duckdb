@@ -42,8 +42,12 @@
 #elif defined(__x86_64__) || defined(__i386__)
     #define CPU_SPINWAIT __asm__ volatile("pause")
     #define HAVE_CPU_SPINWAIT 1
-#elif defined(__powerpc64__) || defined(__PPC64__)
-    #define CPU_SPINWAIT __asm__ volatile("or 27,27,27")
+#elif defined(__powerpc64__) || defined(__PPC64__) || defined(__POWERPC__)
+    #ifdef __APPLE__
+        #define CPU_SPINWAIT __asm__ volatile("or r27,r27,r27")
+    #else
+        #define CPU_SPINWAIT __asm__ volatile("or 27,27,27")
+    #endif
     #define HAVE_CPU_SPINWAIT 1
 #else
     #define CPU_SPINWAIT
@@ -259,6 +263,8 @@
 #define LG_PAGE 12 // x86 and x86_64 typically have a 4KB page size
 #elif defined(__powerpc__) || defined(__ppc__)
 #define LG_PAGE 16 // PowerPC architectures often use 64KB page size
+#elif defined(__loongarch__)
+#define LG_PAGE 14 // LoongArch architectures uses a 16KB page size
 #elif defined(__sparc__)
 #define LG_PAGE 13 // SPARC architectures usually have an 8KB page size
 #elif defined(__aarch64__) || defined(__ARM_ARCH)

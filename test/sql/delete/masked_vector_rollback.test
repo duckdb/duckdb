@@ -1,0 +1,47 @@
+# name: test/sql/delete/masked_vector_rollback.test
+# description: Rolling back a delete over a masked vector restores the rows
+# group: [delete]
+
+statement ok
+CREATE TABLE r AS SELECT i FROM range(4096) t(i)
+
+statement ok
+CHECKPOINT
+
+statement ok
+DELETE FROM r WHERE i % 2 = 0
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM r
+----
+2048
+
+statement ok
+BEGIN
+
+query I
+DELETE FROM r WHERE i % 4 = 1
+----
+1024
+
+query I
+SELECT COUNT(*) FROM r
+----
+1024
+
+statement ok
+ROLLBACK
+
+# rollback restores the newly-deleted rows; the previously masked deletes remain
+query I
+SELECT COUNT(*) FROM r
+----
+2048
+
+query I
+SELECT COUNT(*) FILTER (WHERE i % 2 = 0) FROM r
+----
+0

@@ -14,7 +14,7 @@ loop x 0 1000
 
 # Conflict on tuple deletion or violates primary key constraint
 statement maybe
-UPDATE integers SET i = 1000 + (i % 100) WHERE i = ${x}
+UPDATE integers SET i = 1000 + (i % 100) WHERE i = {x}
 ----
 
 endloop

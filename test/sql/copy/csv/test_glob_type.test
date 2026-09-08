@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SET threads=1
 
 query I
@@ -18,6 +15,10 @@ CREATE TABLE T AS SELECT 'bar,baz', UNION ALL SELECT ',baz' from range (0,100000
 
 statement ok
 COPY T TO '{TEMP_DIR}/t.csv' (QUOTE '', HEADER 0)
+
+# Limit threads to stabilize the CSV sniff test on high CPU core machines.
+statement ok
+set threads=4;
 
 # If we can't be absolutely sure by reading the whole file, we need to push it as a varchar still
 query I
@@ -44,3 +45,14 @@ query I
 SELECT typeof(bar) FROM read_csv(['{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/2.csv','{DATA_DIR}/csv/17451/extra/3.csv'], files_to_sniff = -1) limit 1
 ----
 VARCHAR
+
+statement ok
+COPY (SELECT 1 WHERE false) TO '{TEST_DIR}/empty_glob_1.csv' (HEADER 0)
+
+statement ok
+COPY (SELECT 1 WHERE false) TO '{TEST_DIR}/empty_glob_2.csv' (HEADER 0)
+
+statement error
+SELECT * FROM read_csv_auto(['{TEST_DIR}/empty_glob_1.csv', '{TEST_DIR}/empty_glob_2.csv'])
+----
+No columns found in CSV files.

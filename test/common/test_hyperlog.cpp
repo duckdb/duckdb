@@ -6,7 +6,6 @@
 #include "duckdb/common/types/hyperloglog.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test that hyperloglog works", "[hyperloglog]") {
 	HyperLogLog log;
@@ -58,7 +57,7 @@ TEST_CASE("Test different hyperloglog version serialization", "[hyperloglog]") {
 	Allocator allocator;
 	MemoryStream stream(allocator);
 	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::FromString("v1.0.0");
+	options.storage_compatibility.storage_version = StorageVersion::V1_0_0;
 
 	// Add 100M values to a NEW HyperLogLog
 	HyperLogLog original_log;

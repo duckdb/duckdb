@@ -3,10 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-
-statement ok
 CREATE TABLE lineitem(a INT NOT NULL,
                       b INT NOT NULL,
                       c INT NOT NULL);

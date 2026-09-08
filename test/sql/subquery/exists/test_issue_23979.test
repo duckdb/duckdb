@@ -1,0 +1,48 @@
+# name: test/sql/subquery/exists/test_issue_23979.test
+# description: Correlated EXISTS with a column null-extended by an outer join
+# group: [exists]
+
+statement ok
+CREATE TABLE issue23979_l(o INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO issue23979_l VALUES (1), (2);
+
+statement ok
+CREATE TABLE issue23979_r(o INTEGER PRIMARY KEY, wh INTEGER NOT NULL);
+
+statement ok
+INSERT INTO issue23979_r VALUES (1, 1);
+
+statement ok
+CREATE TABLE issue23979_s2(o INTEGER, wh INTEGER);
+
+statement ok
+INSERT INTO issue23979_s2 VALUES (1, 2), (2, 3);
+
+statement ok
+SET delim_join_as_cte=true;
+
+query IITTT
+SELECT l.o,
+       r.wh,
+       r.wh <> s2.wh AS direct_comparison,
+       EXISTS (
+           SELECT 1
+           FROM issue23979_s2 x
+           WHERE x.o = l.o
+             AND r.wh <> x.wh
+       ) AS correlated_exists,
+       EXISTS (
+           SELECT 1
+           FROM issue23979_s2 x
+           WHERE x.o = l.o
+             AND (r.wh + 0) <> x.wh
+       ) AS equivalent_rewrite
+FROM issue23979_l l
+LEFT JOIN issue23979_r r USING (o)
+JOIN issue23979_s2 s2 USING (o)
+ORDER BY l.o;
+----
+1	1	1	1	1
+2	NULL	NULL	0	0

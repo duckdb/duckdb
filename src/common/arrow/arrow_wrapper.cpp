@@ -86,7 +86,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
-	if (result.type == QueryResultType::STREAM_RESULT) {
+	if (result.GetResultType() == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
 			my_stream->last_error = ErrorData("Query Stream is closed");
@@ -94,8 +94,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		}
 	}
 	if (my_stream->column_types.empty()) {
-		my_stream->column_types = result.types;
-		my_stream->column_names = result.names;
+		my_stream->column_types = result.GetTypes();
+		my_stream->column_names = IdentifiersToStrings(result.GetNames());
 	}
 	try {
 		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
@@ -118,7 +118,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
-	if (result.type == QueryResultType::STREAM_RESULT) {
+	if (result.GetResultType() == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
 			// Nothing to output
@@ -127,8 +127,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		}
 	}
 	if (my_stream->column_types.empty()) {
-		my_stream->column_types = result.types;
-		my_stream->column_names = result.names;
+		my_stream->column_types = result.GetTypes();
+		my_stream->column_names = IdentifiersToStrings(result.GetNames());
 	}
 
 	try {
@@ -185,7 +185,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 
 	extension_types =
-	    ArrowTypeExtensionData::GetExtensionTypes(*result->client_properties.client_context, result->types);
+	    ArrowTypeExtensionData::GetExtensionTypes(*result->client_properties.client_context, result->GetTypes());
 }
 
 } // namespace duckdb

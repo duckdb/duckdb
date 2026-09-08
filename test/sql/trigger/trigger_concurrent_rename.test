@@ -1,0 +1,138 @@
+# name: test/sql/trigger/trigger_concurrent_rename.test
+# description: Concurrent trigger creation and column rename must not produce an inconsistent catalog
+# group: [trigger]
+
+require noforcestorage
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE audit(x INTEGER);
+
+# ---------------------------------------------------------------------------
+# Scenario A: con2 holds an uncommitted trigger referencing j while con1
+# renames j.  The rename scan detects the conflict and con1's ALTER fails.
+# After con2 commits, con1 retries and the trigger is updated to [k].
+# ---------------------------------------------------------------------------
+statement ok con2
+BEGIN;
+
+statement ok con2
+CREATE TRIGGER tr AFTER UPDATE OF j ON t INSERT INTO audit VALUES (1);
+
+# con1 cannot rename j while con2 has an uncommitted trigger referencing it
+statement error con1
+ALTER TABLE t RENAME COLUMN j TO k;
+----
+<REGEX>:.*write-write conflict.*
+
+statement ok con2
+COMMIT;
+
+# After con2's trigger is committed, con1's rename succeeds and updates the trigger
+statement ok con1
+ALTER TABLE t RENAME COLUMN j TO k;
+
+query TT
+SELECT trigger_name, columns FROM duckdb_triggers() WHERE trigger_name = 'tr';
+----
+tr	[k]
+
+# The trigger still fires correctly under the new column name
+statement ok
+INSERT INTO t VALUES (0, 0);
+
+statement ok
+UPDATE t SET k = 1;
+
+query I
+SELECT count(*) FROM audit;
+----
+1
+
+statement ok
+DROP TRIGGER tr ON t;
+
+# ---------------------------------------------------------------------------
+# Scenario B: con1 begins a rename (scan done, not yet committed), con2
+# creates and commits a trigger referencing the old column j.  The
+# commit-time check on con2's trigger detects the pending rename and fails.
+# ---------------------------------------------------------------------------
+statement ok
+ALTER TABLE t RENAME COLUMN k TO j;
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+ALTER TABLE t RENAME COLUMN j TO k;
+
+# con2 tries to create a trigger while con1's rename is uncommitted.
+# The commit-time check sees con1's pending alter and rejects con2's commit.
+statement error con2
+CREATE TRIGGER tr AFTER UPDATE OF j ON t INSERT INTO audit VALUES (1);
+----
+<REGEX>:.*write-write conflict.*
+
+statement ok con1
+COMMIT;
+
+# ---------------------------------------------------------------------------
+# Scenario C: con1 renames j→k AND adds a new column j (both uncommitted).
+# A naive ColumnExists check would pass because the new j exists in the head
+# entry.  The version-comparison check catches this: any structural change to
+# the table while an UPDATE OF trigger is being created must conflict.
+# ---------------------------------------------------------------------------
+statement ok
+ALTER TABLE t RENAME COLUMN k TO j;
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+ALTER TABLE t RENAME COLUMN j TO k;
+
+statement ok con1
+ALTER TABLE t ADD COLUMN j INTEGER;
+
+statement error con2
+CREATE TRIGGER tr AFTER UPDATE OF j ON t INSERT INTO audit VALUES (1);
+----
+<REGEX>:.*write-write conflict.*
+
+statement ok con1
+ROLLBACK;
+
+# ---------------------------------------------------------------------------
+# Scenario D: RENAME and CREATE TRIGGER in the same transaction.
+# The trigger is bound after the rename, so it references the new column name.
+# The bind_txn must see changes already committed by this same transaction
+# (stamped with commit_id) — otherwise a false conflict fires.
+# After Scenario C's ROLLBACK the table is back to (i, j).
+# ---------------------------------------------------------------------------
+statement ok
+BEGIN;
+
+statement ok
+ALTER TABLE t RENAME COLUMN j TO k;
+
+statement ok
+CREATE TRIGGER tr AFTER UPDATE OF k ON t INSERT INTO audit VALUES (1);
+
+statement ok
+COMMIT;
+
+statement ok
+DELETE FROM audit;
+
+statement ok
+UPDATE t SET k = 3;
+
+query I
+SELECT count(*) FROM audit;
+----
+1
+
+statement ok
+DROP TRIGGER tr ON t;

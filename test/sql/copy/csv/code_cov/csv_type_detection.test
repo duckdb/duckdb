@@ -2,9 +2,6 @@
 # description: Tests to enforce codecov in csv type detection sniffing
 # group: [code_cov]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 from read_csv_auto('{DATA_DIR}/csv/invalid_utf8.csv', auto_detect = false, columns={'c01': 'VARCHAR'} )
 ----

@@ -1,0 +1,92 @@
+# name: test/sql/delete/delete_compression_blocked_by_old_snapshot.test
+# description: Deletes hidden from an old snapshot compress at the next checkpoint after the snapshot closes
+# group: [delete]
+
+require vector_size 2048
+
+load {TEST_DIR}/delete_compression_blocked_by_old_snapshot.db
+
+statement ok
+SET debug_skip_checkpoint_on_commit=true
+
+# one full row group; vector 0 stays fully alive so the row group is never vacuumed away -
+# freeing the delete-id arrays of the other vectors then requires the compression pass
+statement ok
+CREATE TABLE tbl AS SELECT i FROM range(122880) t(i);
+
+statement ok
+CHECKPOINT
+
+statement ok
+SET VARIABLE base_mem = (SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag='BASE_TABLE')
+
+# reader pinning the snapshot BEFORE the deletes commit
+statement ok con1
+BEGIN
+
+query I con1
+SELECT COUNT(*) FROM tbl
+----
+122880
+
+# fully delete all vectors but the first across two transactions (piecemeal - the per-vector
+# delete ids differ between the transactions, so the deletes cannot be compressed on commit)
+query I
+DELETE FROM tbl WHERE i >= 2048 AND i % 2 = 0
+----
+60416
+
+query I
+DELETE FROM tbl WHERE i >= 2048 AND i % 2 = 1
+----
+60416
+
+# the deletes materialized per-row delete ids (16KB per fully-deleted vector)
+query I
+SELECT memory_usage_bytes > getvariable('base_mem') + 900000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true
+
+# the deletes are not yet visible to con1's snapshot: the checkpoint cannot compress them
+statement ok
+CHECKPOINT
+
+query I
+SELECT memory_usage_bytes > getvariable('base_mem') + 900000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true
+
+query I con1
+SELECT COUNT(*) FROM tbl
+----
+122880
+
+statement ok con1
+COMMIT
+
+# NO modification of tbl happens past this point: the deletes must still compress now that
+# they are visible to all transactions. the write to a separate table makes the WAL
+# non-empty - a CHECKPOINT with an empty WAL is skipped entirely and never reaches the
+# compression pass
+statement ok
+CREATE TABLE other AS SELECT 1 AS i
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT memory_usage_bytes < getvariable('base_mem') + 300000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true
+
+query II
+SELECT COUNT(*), MAX(i) FROM tbl
+----
+2048	2047
+
+restart
+
+query II
+SELECT COUNT(*), MAX(i) FROM tbl
+----
+2048	2047

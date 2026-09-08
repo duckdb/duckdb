@@ -11,7 +11,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
@@ -23,9 +23,13 @@
 
 namespace duckdb {
 
+class LogicalPlanVerifier;
+
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
 class LogicalOperator {
+	friend class LogicalPlanVerifier;
+
 public:
 	explicit LogicalOperator(LogicalOperatorType type);
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions);
@@ -45,19 +49,28 @@ public:
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
-	virtual idx_t GetRootIndex();
+	virtual TableIndex GetRootIndex();
 	static string ColumnBindingsToString(const vector<ColumnBinding> &bindings);
 	void PrintColumnBindings();
-	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
-	static vector<LogicalType> MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map);
-	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types, const vector<idx_t> &projection_map);
+	static vector<ColumnBinding> GenerateColumnBindings(TableIndex table_idx, idx_t column_count);
+	static vector<LogicalType> MapTypes(const vector<LogicalType> &types,
+	                                    const vector<ProjectionIndex> &projection_map);
+	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types,
+	                                         const vector<ProjectionIndex> &projection_map);
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
 
+	//! Returns true if this operator or any of its descendants has side effects
+	//! Used to prevent inlining or elimination of side-effecting CTEs.
+	bool HasSideEffects() const;
+	//! Returns true if this operator or any of its descendants contains a volatile expression
+	bool HasVolatileExpressions() const;
+
 	virtual string GetName() const;
 	virtual InsertionOrderPreservingMap<string> ParamsToString() const;
-	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	virtual string ToString(optional_ptr<ClientContext> context = nullptr,
+	                        const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify(ClientContext &context);
@@ -86,7 +99,7 @@ public:
 	}
 
 	//! Returns the set of table indexes of this operator
-	virtual vector<idx_t> GetTableIndex() const;
+	virtual vector<TableIndex> GetTableIndex() const;
 
 protected:
 	//! Resolve types for this specific operator

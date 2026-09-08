@@ -3,10 +3,9 @@
 
 require json
 
-require tpch
+set variable sf 0.01
 
-statement ok
-call dbgen(sf=0.01);
+include test/sql/tpch/tpch_setup.test_template
 
 query I nosort res
 select lineitem::json from lineitem limit 2;

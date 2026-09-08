@@ -1,8 +1,6 @@
 #include "core_functions/aggregate/algebraic_functions.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "core_functions/aggregate/algebraic/stddev.hpp"
-#include <cmath>
 
 namespace duckdb {
 

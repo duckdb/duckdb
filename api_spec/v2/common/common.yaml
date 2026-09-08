@@ -1,0 +1,250 @@
+module: common
+handles:
+  environment:
+    description: |
+      An opaque, owned handle to the V2 environment: the required root through
+      which databases are opened. All databases under one environment share a
+      cache, so file-level conflicts — the same database file opened twice —
+      are detected across them. Destroying the environment refuses with
+      ERROR_RESOURCE_IN_USE while any database opened through it is still
+      alive; close those first.
+    cleanup_with: destroy_environment
+  database:
+    description: An opaque, owned handle to a DuckDB database instance.
+  connection:
+    description: An opaque, owned handle to a DuckDB connection.
+  option:
+    description: |
+      An opaque, owned handle to a single config option: a name and a setting,
+      plus optional metadata (description, default setting, target scope,
+      aliases). You can create an with option_create and pass it when opening a database or connection, or you can
+      retrieve one with metadata already filled in using option_get. The
+      caller always destroys it via option_destroy,
+    cleanup_with: option_destroy
+  # Error reporting. Every fallible function takes a trailing
+  # `error_info *err` out-parameter.
+  #
+  # Contract:
+  #   - The return value always carries the error code and is authoritative.
+  #   - `err` is optional: callers may pass nullptr to opt out of the detail.
+  #   - If the call succeeds, `*err` is left as nullptr.
+  #   - If the call fails and `err != nullptr`, DuckDB allocates an info handle
+  #     and stores its pointer in `*err`. The caller owns it and must destroy
+  #     it with error_info_destroy.
+  #   - If `*err` is already non-null on entry, DuckDB destroys the previous
+  #     info before writing. To keep an info across calls, detach it first:
+  #     `saved = *err; *err = nullptr;`.
+  error_info:
+    description: Opaque detail for a failed call; destroy with error_info_destroy.
+    cleanup_with: error_info_destroy
+  logical_type:
+    description: |
+      An opaque, owned handle to a logical type. Carries a type id plus any
+      kind-specific metadata: decimal width and scale, enum dictionary, list /
+      array / struct / map / union child types, alias. A type is read-only once
+      constructed; instances arrive from a query result schema, or from one of
+      the create_type_* constructors. Always destroy via logical_type_destroy.
+      Borrowed strings returned by the getters are valid only until then.
+    cleanup_with: logical_type_destroy
+  value:
+    description: |
+      An opaque, owned handle to a single SQL value: a logical type plus a
+      typed payload. Always destroy via value_destroy. The string returned by
+      value_get_varchar / value_get_blob is borrowed and valid only until then.
+      That holds for BIGNUM too, where what is borrowed is the opaque storage
+      form; bignum_decode translates it into a magnitude and a sign flag,
+      writing into a buffer the caller supplies.
+    cleanup_with: value_destroy
+  result:
+    description: |
+      An opaque, owned handle to the streaming result of a query. Carries the
+      schema (column names and logical types), the statement type, and the
+      result type from prepare time; row data is produced incrementally by
+      stepping (result_step) or draining (result_fetch_chunk). Single consumer:
+      step from one thread at a time.
+
+      A result is a cursor on the connection's execution, not a box of data.
+      While it is live — not finished, cancelled, errored, or destroyed — the
+      connection refuses new queries with ERROR_RESOURCE_IN_USE, and the
+      query's transaction stays open, deferring version cleanup and
+      checkpointing, so drain or destroy it promptly. Side-effecting statements
+      (PRAGMA, ALTER, ...) take effect only once the result is drained. Always
+      destroy via result_destroy, which is safe even on a partially consumed
+      stream.
+    cleanup_with: result_destroy
+  data_chunk:
+    description: |
+      An opaque, owned handle to a data chunk: a set of vectors of equal
+      logical length plus a cardinality (row count).
+      
+      A data chunk is the main "unit of execution" in DuckDB, and the main unit of data transfer in the API.
+      It may be owned or borrowed, depending on the context.
+    cleanup_with: data_chunk_destroy
+  vector:
+    description: |
+      A borrowed handle to a vector within a data chunk, carrying a part of a column's values.
+      Vectors are always borrowed from a data chunk, and are valid only as long as their parent data chunk is alive.
+  arena:
+    description: |
+      A borrowed handle to a "arena allocator". 
+      
+      Bytes handed out by arena_allocate share the same lifetime as the arena itself.
+      vector_get_arena yields the arena backing the out-of-line bytes of non-inlined VARCHAR / BLOB / BIT / BIGNUM 
+      values, valid until the owning vector is flattened, reallocated, or destroyed.
+  context:
+    description: |
+      A borrowed handle to a client context: a connection seen from inside
+      DuckDB. Handed out within DuckDB-managed scopes — function bind / init /
+      exec callbacks, replacement scans, and the extension entrypoint — and
+      valid only for the duration of that scope; the caller never destroys it.
+      A context is the scope for reading (settings, the file system) and for
+      constructing values and types, not for registration: catalog entries and
+      database-level hooks are installed through an extension or a connection.
+      A transaction is always active while a context is handed out, which is
+      what the context-scoped constructors assume.
+structs:
+  str:
+    description: |
+      A borrowed, length-delimited string view: `ptr` points at `len` bytes of
+      character data. The bytes are NOT guaranteed to be null-terminated and
+      may contain interior null bytes, so always honor `len` rather than
+      scanning for a terminator. The view never owns its bytes; the function
+      that produced it documents how long they live (typically "valid until the
+      owning handle is destroyed"). `{NULL, 0}` is the canonical empty view,
+      and `ptr` must not be dereferenced when `len` is 0. Not to be confused
+      with `bytes`, the transparent 16-byte *storage* format for a
+      variable-size value in a vector.
+    fields:
+      - {name: ptr, type: char, pointer: 1, const: true}
+      - {name: len, type: idx}
+  bytes:
+    description: |
+      16-byte storage for a variable-size, byte-backed value: VARCHAR, BLOB,
+      BIT, or BIGNUM. The bytes are inlined when the length is at most
+      BYTES_INLINE_LENGTH, in value.inlined.inlined; otherwise
+      value.pointer.ptr holds them and value.pointer.prefix repeats the first
+      4. The union is transparent, so read the fields directly. VARCHAR and
+      BLOB carry no further encoding; BIT and BIGNUM do. For BIT, byte 0 is the
+      padding-bit count and bytes 1.. are the data; BIGNUM is decoded via
+      bignum_decode.
+    fields:
+      - name: value
+        union:
+          - name: pointer
+            fields:
+              - {name: length, type: u32}
+              - {name: prefix, type: char, array_size: 4}
+              - {name: ptr, type: char, pointer: 1}
+          - name: inlined
+            fields:
+              - {name: length, type: u32}
+              - {name: inlined, type: char, array_size: 12}
+  opaque:
+    description: |
+      An opaque, owned handle to a caller-defined resource. Bundles the pointer
+      with optional callbacks that destroy and compare the resource.
+    fields:
+      - {name: ptr, type: void, pointer: 1}
+      - {name: destroy, type: opaque_destroy}
+      - {name: equals, type: opaque_equals}
+callbacks:
+  text_sink:
+    description: |
+      Receives text produced by DuckDB
+
+      Invoked exactly once per producing call, with the complete text in a
+      single view.
+
+      The view is borrowed for the duration of the call only. Copy what you
+      need before returning, and do not retain `text.ptr`. The bytes are NOT guaranteed to be null-terminated.
+
+      `err` is a live error slot, never NULL. Populate it with
+      error_info_set_code / error_info_set_text to signal failure to DuckDB. Do not destroy it yourself.
+
+      The sink runs inside DuckDB's call frame: it must not throw or unwind across the boundary, and it must not 
+      re-enter the API on the handle being operated on.
+    return_type: void
+    parameters:
+      text:
+        type: str
+        description: Borrowed view of the complete text. Valid only until the sink returns.
+      user_data:
+        type: void
+        indirection: 1
+        description: The opaque pointer handed to the producing call alongside the callback, passed through untouched.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Live error slot, never NULL. Populate it to fail the producing call; do not destroy it.
+  opaque_equals:
+    description: |
+      Compares two caller-defined resources for equality.
+    
+      Invoked when DuckDB needs to compare two opaque handles. The callback is
+      responsible for interpreting the pointers and comparing the underlying
+      resources. Return true if they are equal, false otherwise.
+  
+      The callback runs inside DuckDB's call frame: it must not throw or unwind across the boundary, and it must not 
+      re-enter the API on the handle being operated on.
+    parameters:
+      a:
+        type: void
+        indirection: 1
+        description: Opaque pointer to the first resource to compare.
+      b:
+        type: void
+        indirection: 1
+        description: Opaque pointer to the second resource to compare.
+    return_type: bool
+
+  opaque_destroy:
+    description: |
+      Destroys a caller-defined resource.
+    
+      Invoked when DuckDB needs to destroy an opaque handle. The callback is
+      responsible for interpreting the pointer and freeing the underlying
+      resource.
+  
+      The callback runs inside DuckDB's call frame: it must not throw or unwind across the boundary, and it must not 
+      re-enter the API on the handle being operated on.
+    return_type: void
+    parameters:
+      data:
+        type: void
+        indirection: 1
+        description: Opaque pointer to the resource to destroy. The callback is responsible for freeing it.
+aliases:
+  sel:
+    underlying: u32
+    description: | 
+      An entry in a selection-vector.
+      
+      A selection-vector is a "dictionary" represented as an array of indices (sel_t's) mapping "logical" row indices to 
+      the "physical" offsets in a vectors primary data buffer. Used by "dictionary vectors" to represent a filtered or 
+      "sparse" view of the vector's data.
+  varchar:
+    underlying: bytes
+    description: VARCHAR storage. Read the transparent bytes fields directly.
+  blob:
+    underlying: bytes
+    description: BLOB storage. Read the transparent bytes fields directly.
+  bit:
+    underlying: bytes
+    description: BIT storage. Byte 0 is the padding-bit count, bytes 1.. the data.
+  bignum:
+    underlying: bytes
+    description: BIGNUM storage. Decode via bignum_decode.
+  identifier:
+    underlying: str
+    description: |
+      A borrowed name view with the same layout as str, marking a string
+      DuckDB treats as a SQL identifier: one matched case-insensitively.
+      Compare two identifiers case-insensitively rather than byte for byte, and
+      render one into SQL through the identifier-quoting entry point rather
+      than embedding it raw. The catalog preserves casing; some registries
+      (config settings) canonicalize to lowercase.
+constants:
+  BYTES_INLINE_LENGTH:
+    value: 12
+    description: "Inline cutoff for `bytes` storage: a value of at most this many bytes is stored inline."

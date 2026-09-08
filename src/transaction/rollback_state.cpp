@@ -6,11 +6,13 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -29,7 +31,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert the append in the base table
-		info->table->RevertAppend(transaction, info->start_row, info->count);
+		info->table->GetStorage().RevertAppend(transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {

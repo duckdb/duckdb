@@ -1,27 +1,34 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 
 namespace duckdb {
 
-StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, LogicalOperator &root_p)
-    : optimizer(optimizer_p), context(optimizer.context), root(&root_p) {
+StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, LogicalOperator &root_p,
+                                           StatisticsPropagationMode mode_p)
+    : optimizer(optimizer_p), context(optimizer.context), mode(mode_p), root(&root_p) {
 	root->ResolveOperatorTypes();
 }
 
@@ -44,8 +51,17 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		result = PropagateStatistics(node.Cast<LogicalAggregate>(), node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+		result = PropagateStatistics(node.Cast<LogicalCopyToFile>(), node_ptr);
+		break;
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		result = PropagateStatistics(node.Cast<LogicalCrossProduct>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+		result = PropagateStatistics(node.Cast<LogicalCTERef>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		result = PropagateStatistics(node.Cast<LogicalMaterializedCTE>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = PropagateStatistics(node.Cast<LogicalFilter>(), node_ptr);
@@ -56,12 +72,18 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = PropagateStatistics(node.Cast<LogicalProjection>(), node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		result = PropagateStatistics(node.Cast<LogicalSecureView>(), node_ptr);
+		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		result = PropagateStatistics(node.Cast<LogicalJoin>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		result = PropagateStatistics(node.Cast<LogicalLimit>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
 		result = PropagateStatistics(node.Cast<LogicalPositionalJoin>(), node_ptr);
@@ -81,7 +103,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		result = PropagateChildren(node, node_ptr);
 	}
 
-	if (!optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
+	if (mode == StatisticsPropagationMode::FULL &&
+	    !optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
 		// compress data based on statistics for materializing operators
 		CompressedMaterialization compressed_materialization(optimizer, *root, statistics_map);
 		compressed_materialization.Compress(node_ptr);
@@ -94,23 +117,36 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(unique_ptr<
 	return PropagateStatistics(*node_ptr, node_ptr);
 }
 
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCopyToFile &op,
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
+	auto stats = PropagateChildren(op, node_ptr);
+	if (!op.function.copy_to_propagate_statistics || !op.bind_data || op.children.empty()) {
+		return stats;
+	}
+	auto bindings = op.children[0]->GetColumnBindings();
+	vector<optional_ptr<BaseStatistics>> column_stats(bindings.size());
+	for (idx_t i = 0; i < bindings.size(); i++) {
+		auto entry = statistics_map.find(bindings[i]);
+		if (entry != statistics_map.end()) {
+			column_stats[i] = entry->second.get();
+		}
+	}
+	CopyToPropagateStatsInput input {context, *op.bind_data, column_stats};
+	op.function.copy_to_propagate_statistics(input);
+	return stats;
+}
+
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression &expr,
                                                                      unique_ptr<Expression> &expr_ptr) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_AGGREGATE:
 		return PropagateExpression(expr.Cast<BoundAggregateExpression>(), expr_ptr);
-	case ExpressionClass::BOUND_BETWEEN:
-		return PropagateExpression(expr.Cast<BoundBetweenExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CASE:
 		return PropagateExpression(expr.Cast<BoundCaseExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return PropagateExpression(expr.Cast<BoundConjunctionExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_FUNCTION:
 		return PropagateExpression(expr.Cast<BoundFunctionExpression>(), expr_ptr);
-	case ExpressionClass::BOUND_CAST:
-		return PropagateExpression(expr.Cast<BoundCastExpression>(), expr_ptr);
-	case ExpressionClass::BOUND_COMPARISON:
-		return PropagateExpression(expr.Cast<BoundComparisonExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CONSTANT:
 		return PropagateExpression(expr.Cast<BoundConstantExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_COLUMN_REF:
@@ -126,8 +162,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(unique_ptr<Expression> &expr) {
 	auto stats = PropagateExpression(*expr, expr);
-	if (ClientConfig::GetConfig(context).query_verification_enabled && stats) {
-		expr->verification_stats = stats->ToUnique();
+	if (Settings::Get<DebugVerifyStatsSetting>(context) && stats) {
+		expr->SetVerificationStats(stats->ToUnique());
 	}
 	return stats;
 }

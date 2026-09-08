@@ -16,10 +16,10 @@ INSERT INTO int_maps VALUES
 ;
 
 statement ok
-COPY int_maps TO '__TEST_DIR__/int_map.parquet' (FORMAT PARQUET)
+COPY int_maps TO '{TEST_DIR}/int_map.parquet' (FORMAT PARQUET)
 
 query I
-SELECT * FROM '__TEST_DIR__/int_map.parquet'
+SELECT * FROM '{TEST_DIR}/int_map.parquet'
 ----
 {42=1, 84=2}
 {101=3, 201=NULL, 301=5}
@@ -34,7 +34,7 @@ INSERT INTO int_maps VALUES
 
 # parquet does not support keys with null values
 statement error
-COPY string_map TO '__TEST_DIR__/int_maps.parquet' (FORMAT PARQUET)
+COPY string_map TO '{TEST_DIR}/int_maps.parquet' (FORMAT PARQUET)
 ----
 <REGEX>:.*Catalog Error.*does not exist!.*
 
@@ -52,10 +52,10 @@ INSERT INTO string_map VALUES
 ;
 
 statement ok
-COPY string_map TO '__TEST_DIR__/string_map.parquet' (FORMAT PARQUET)
+COPY string_map TO '{TEST_DIR}/string_map.parquet' (FORMAT PARQUET)
 
 query I
-SELECT * FROM '__TEST_DIR__/string_map.parquet'
+SELECT * FROM '{TEST_DIR}/string_map.parquet'
 ----
 {key1=value1, key2=value2}
 {best band=Tenacious D, best boyband=Backstreet Boys, richest person=Jon Lajoie}
@@ -83,10 +83,10 @@ INSERT INTO list_map VALUES
 ;
 
 statement ok
-COPY list_map TO '__TEST_DIR__/list_map.parquet' (FORMAT PARQUET)
+COPY list_map TO '{TEST_DIR}/list_map.parquet' (FORMAT PARQUET)
 
 query I
-SELECT * FROM '__TEST_DIR__/list_map.parquet'
+SELECT * FROM '{TEST_DIR}/list_map.parquet'
 ----
 {[1, 2, 3]=[6, 7, 8], []=NULL, [4, 5]=[NULL]}
 {}

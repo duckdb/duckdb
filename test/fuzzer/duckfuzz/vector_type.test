@@ -4,9 +4,6 @@
 
 require noforcestorage
 
-statement ok
-pragma enable_verification
-
 query I
 SELECT vector_type(42::INTEGER)
 ----

@@ -1,14 +1,33 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
+static void SimplifyNullSafeSemiJoinConditions(ClientContext &context, LogicalComparisonJoin &join) {
+	D_ASSERT(join.join_type == JoinType::SEMI);
+	NotNullExpressionAnalyzer analyzer(context);
+	for (auto &cond : join.conditions) {
+		if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			continue;
+		}
+		// Once a MARK join is reduced to SEMI, a null-safe equality is equivalent to regular equality if either
+		// join key is known not to be NULL. Regular equality unlocks the existing runtime-filter infrastructure.
+		if (!analyzer.IsNotNull(*join.children[0], cond.GetLHS()) &&
+		    !analyzer.IsNotNull(*join.children[1], cond.GetRHS())) {
+			continue;
+		}
+		cond =
+		    JoinCondition(cond.LeftReference()->Copy(), cond.RightReference()->Copy(), ExpressionType::COMPARE_EQUAL);
+	}
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalOperator> op,
-                                                             unordered_set<idx_t> &left_bindings,
-                                                             unordered_set<idx_t> &right_bindings) {
+                                                             unordered_set<TableIndex> &left_bindings,
+                                                             unordered_set<TableIndex> &right_bindings) {
 	auto op_bindings = op->GetColumnBindings();
 	auto &join = op->Cast<LogicalJoin>();
 	auto &comp_join = op->Cast<LogicalComparisonJoin>();
@@ -17,7 +36,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
 
 	right_bindings.insert(comp_join.mark_index);
-	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
+	FilterPushdown left_pushdown(optimizer, convert_mark_joins, projection_mode);
+	FilterPushdown right_pushdown(optimizer, convert_mark_joins, projection_mode);
 #ifdef DEBUG
 	bool simplified_mark_join = false;
 #endif
@@ -53,12 +73,15 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// clause
 			if (filters[i]->filter->GetExpressionType() == ExpressionType::OPERATOR_NOT) {
 				auto &op_expr = filters[i]->filter->Cast<BoundOperatorExpression>();
-				if (op_expr.children[0]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+				if (op_expr.GetChildren()[0]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 					// the filter is NOT(marker), check the join conditions
 					bool all_null_values_are_equal = true;
 					for (auto &cond : comp_join.conditions) {
-						if (cond.comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
-						    cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						if (!cond.IsComparison()) {
+							continue;
+						}
+						if (cond.GetComparisonType() != ExpressionType::COMPARE_DISTINCT_FROM &&
+						    cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 							all_null_values_are_equal = false;
 							break;
 						}
@@ -79,6 +102,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	}
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	if (join.join_type == JoinType::SEMI) {
+		SimplifyNullSafeSemiJoinConditions(GetContext(), comp_join);
+	}
 	return PushFinalFilters(std::move(op));
 }
 

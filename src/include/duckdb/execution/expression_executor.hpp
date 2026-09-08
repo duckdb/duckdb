@@ -12,11 +12,11 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 
 namespace duckdb {
 class Allocator;
+class ClientContext;
 class ExecutionContext;
 
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
@@ -39,6 +39,7 @@ public:
 public:
 	bool HasContext();
 	ClientContext &GetContext();
+	optional_ptr<ClientContext> GetContextPtr();
 	Allocator &GetAllocator();
 
 	//! Add an expression to the set of to-be-executed expressions of the executor
@@ -57,6 +58,8 @@ public:
 	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression
 	//! executors with a single expression
 	DUCKDB_API void ExecuteExpression(DataChunk &input, Vector &result);
+	//! Execute the expression only on rows described by the 'sel', write to those same row indices in 'result'
+	DUCKDB_API void ExecuteExpression(DataChunk &input, Vector &result, const SelectionVector &sel, idx_t count);
 	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression
 	//! executors with a single expression
 	DUCKDB_API void ExecuteExpression(Vector &result);
@@ -96,17 +99,14 @@ protected:
 
 	static unique_ptr<ExpressionState> InitializeState(const BoundReferenceExpression &expr,
 	                                                   ExpressionExecutorState &state);
-	static unique_ptr<ExpressionState> InitializeState(const BoundBetweenExpression &expr,
-	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundCaseExpression &expr, ExpressionExecutorState &state);
-	static unique_ptr<ExpressionState> InitializeState(const BoundCastExpression &expr, ExpressionExecutorState &state);
-	static unique_ptr<ExpressionState> InitializeState(const BoundComparisonExpression &expr,
-	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundConjunctionExpression &expr,
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundConstantExpression &expr,
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundFunctionExpression &expr,
+	                                                   ExpressionExecutorState &state);
+	static unique_ptr<ExpressionState> InitializeState(const BoundLambdaExpression &expr,
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundOperatorExpression &expr,
 	                                                   ExpressionExecutorState &state);
@@ -116,20 +116,15 @@ protected:
 	void Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 
-	void Execute(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             Vector &result);
 	void Execute(const BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             Vector &result);
-	void Execute(const BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             Vector &result);
-
-	void Execute(const BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(const BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
 	             idx_t count, Vector &result);
 	void Execute(const BoundConstantExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(const BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
+	             Vector &result);
+	void Execute(const BoundLambdaExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(const BoundOperatorExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
@@ -145,17 +140,15 @@ protected:
 	idx_t DefaultSelect(const Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel);
 
-	idx_t Select(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             SelectionVector *true_sel, SelectionVector *false_sel);
-	idx_t Select(const BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             SelectionVector *true_sel, SelectionVector *false_sel);
 	idx_t Select(const BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
 	             idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
+	idx_t Select(const BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
+	             SelectionVector *true_sel, SelectionVector *false_sel);
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(const Expression &expr, Vector &result, idx_t count);
 
-	void FillSwitch(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count);
+	void FillSwitch(const Vector &vector, Vector &result, const SelectionVector &sel, sel_t count);
 
 private:
 	//! Client context

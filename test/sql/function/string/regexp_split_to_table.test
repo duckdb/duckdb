@@ -2,9 +2,6 @@
 # description: regexp_split_to_table test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # non-regex split
 query T
 SELECT regexp_split_to_table('a b c', ' ')

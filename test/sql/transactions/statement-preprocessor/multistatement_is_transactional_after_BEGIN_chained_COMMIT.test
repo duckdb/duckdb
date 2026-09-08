@@ -2,7 +2,7 @@
 # group: [statement-preprocessor]
 
 statement ok
-ATTACH '__TEST_DIR__/wal_replay.db';
+ATTACH '{TEST_DIR}/wal_replay.db';
 
 statement ok
 USE wal_replay;

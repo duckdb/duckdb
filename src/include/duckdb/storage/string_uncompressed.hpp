@@ -15,6 +15,7 @@
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 
 namespace duckdb {
 struct StringDictionaryContainer {
@@ -59,7 +60,7 @@ public:
 
 public:
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
-	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
+	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
@@ -74,28 +75,27 @@ public:
 	                                                            optional_ptr<ColumnSegmentState> segment_state);
 
 	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 		// This block was initialized in StringInitSegment
-		auto handle = buffer_manager.Pin(segment.block);
+		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 		return make_uniq<CompressionAppendState>(std::move(handle));
 	}
 
-	static idx_t StringAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
+	static idx_t StringAppend(CompressionAppendState &append_state, ColumnSegment &segment, BaseStatistics &stats,
 	                          UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 		return StringAppendBase(append_state.handle, segment, stats, data, offset, count);
 	}
 
-	static idx_t StringAppendBase(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data,
+	static idx_t StringAppendBase(ColumnSegment &segment, BaseStatistics &stats, UnifiedVectorFormat &data,
 	                              idx_t offset, idx_t count) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		auto handle = buffer_manager.Pin(segment.block);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 		return StringAppendBase(handle, segment, stats, data, offset, count);
 	}
 
-	static idx_t StringAppendBase(BufferHandle &handle, ColumnSegment &segment, SegmentStatistics &stats,
+	static idx_t StringAppendBase(BufferHandle &handle, ColumnSegment &segment, BaseStatistics &stats,
 	                              UnifiedVectorFormat &data, idx_t offset, idx_t count) {
-		D_ASSERT(segment.GetBlockOffset() == 0);
-		auto handle_ptr = handle.Ptr();
+		auto handle_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
 		auto source_data = UnifiedVectorFormat::GetData<string_t>(data);
 		auto result_data = reinterpret_cast<int32_t *>(handle_ptr + DICTIONARY_HEADER_SIZE);
 		auto dictionary_size = reinterpret_cast<uint32_t *>(handle_ptr);
@@ -103,18 +103,19 @@ public:
 
 		idx_t remaining_space = RemainingSpace(segment, handle);
 		auto base_count = segment.count.load();
+		StatsWriter<string_t> stats_writer(stats.GetType());
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = data.sel->get_index(offset + i);
 			auto target_idx = base_count + i;
 			if (remaining_space < sizeof(int32_t)) {
 				// string index does not fit in the block at all
-				segment.count += i;
-				return i;
+				count = i;
+				break;
 			}
 			remaining_space -= sizeof(int32_t);
 			const bool is_null = !data.validity.RowIsValid(source_idx);
 			if (is_null) {
-				stats.statistics.SetHasNullFast();
+				stats_writer.SetHasNull();
 				// null value is stored as a copy of the last value, this is done to be able to efficiently do the
 				// string_length calculation
 				if (target_idx > 0) {
@@ -124,7 +125,7 @@ public:
 				}
 				continue;
 			}
-			auto end = handle.Ptr() + *dictionary_end;
+			auto end = handle_ptr + *dictionary_end;
 
 #ifdef DEBUG
 			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
@@ -143,12 +144,12 @@ public:
 			}
 			if (DUCKDB_UNLIKELY(required_space > remaining_space)) {
 				// no space remaining: return how many tuples we ended up writing
-				segment.count += i;
-				return i;
+				count = i;
+				break;
 			}
 
 			// we have space: write the string
-			UpdateStringStats(stats, source_data[source_idx]);
+			stats_writer.Update(source_data[source_idx]);
 
 			if (DUCKDB_UNLIKELY(use_overflow_block)) {
 				// write to overflow blocks
@@ -188,6 +189,7 @@ public:
 			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
 #endif
 		}
+		stats_writer.Merge(stats);
 		segment.count += count;
 		return count;
 	}
@@ -197,9 +199,9 @@ public:
 			return;
 		}
 		// we need to decrement the dictionary size by all of the strings we are erasing
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		auto handle = buffer_manager.Pin(segment.block);
-		auto handle_ptr = handle.Ptr();
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+		auto handle_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
 		auto result_data = reinterpret_cast<int32_t *>(handle_ptr + DICTIONARY_HEADER_SIZE);
 		auto dictionary_size = reinterpret_cast<uint32_t *>(handle_ptr);
 		uint32_t new_dictionary_size;
@@ -209,26 +211,17 @@ public:
 			auto entry_offset = result_data[new_count - 1];
 			if (entry_offset < 0) {
 				// overflow strings store the dict offset negatively - invert size
-				new_dictionary_size = static_cast<uint32_t>(-entry_offset);
+				new_dictionary_size = NumericCast<uint32_t>(-entry_offset);
 			} else {
-				new_dictionary_size = static_cast<uint32_t>(entry_offset);
+				new_dictionary_size = NumericCast<uint32_t>(entry_offset);
 			}
 		}
 		*dictionary_size = new_dictionary_size;
 	}
 
-	static idx_t FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats);
+	static idx_t FinalizeAppend(ColumnSegment &segment, BaseStatistics &stats);
 
 public:
-	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
-		stats.statistics.SetHasNoNullFast();
-		if (stats.statistics.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
-			GeometryStats::Update(stats.statistics, new_value);
-		} else {
-			StringStats::Update(stats.statistics, new_value);
-		}
-	}
-
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
 	static uint32_t GetDictionaryEnd(ColumnSegment &segment, BufferHandle &handle);
@@ -236,14 +229,16 @@ public:
 	static void WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
 	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
 	                              int32_t &result_offset);
-	static string_t ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset);
+	static string_t ReadOverflowString(const QueryContext &context, ColumnSegment &segment, Vector &result,
+	                                   block_id_t block, int32_t offset);
 	static string_t ReadString(data_ptr_t target, int32_t offset, uint32_t string_length);
 	static string_t ReadStringWithLength(data_ptr_t target, int32_t offset);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
-	inline static string_t FetchStringFromDict(ColumnSegment &segment, uint32_t dict_end_offset, Vector &result,
-	                                           data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length) {
+	inline static string_t FetchStringFromDict(const QueryContext &context, ColumnSegment &segment,
+	                                           uint32_t dict_end_offset, Vector &result, data_ptr_t base_ptr,
+	                                           int32_t dict_offset, uint32_t string_length) {
 		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockSize()));
 		if (DUCKDB_LIKELY(dict_offset >= 0)) {
 			// regular string - fetch from dictionary
@@ -252,13 +247,22 @@ public:
 
 			auto str_ptr = char_ptr_cast(dict_pos);
 			return string_t(str_ptr, string_length);
+		} else if (string_length == 0) {
+			// NULL values are stored as a copy of the previous entry's dictionary offset (see
+			// StringAppendBase). When the previous entry is a big (overflow) string, its offset is
+			// negative, so the NULL inherits that negative offset even though it references no
+			// overflow data (its computed length is 0). Return an empty string here instead of
+			// following the marker into ReadOverflowString - otherwise every NULL that trails a big
+			// string re-reads and re-allocates the entire overflow string (O(num_nulls * big_size)
+			// memory, tagged OVERFLOW_STRINGS). The value is masked NULL by the caller regardless.
+			return string_t(char_ptr_cast(base_ptr), 0);
 		} else {
 			// read overflow string
 			block_id_t block_id;
 			int32_t offset;
 			ReadStringMarker(base_ptr + dict_end_offset - AbsValue<int32_t>(dict_offset), block_id, offset);
 
-			return ReadOverflowString(segment, result, block_id, offset);
+			return ReadOverflowString(context, segment, result, block_id, offset);
 		}
 	}
 

@@ -2,27 +2,22 @@
 
 #include "core_functions/aggregate/regression_functions.hpp"
 #include "core_functions/aggregate/regression/regr_slope.hpp"
-#include "duckdb/function/function_set.hpp"
+#include "core_functions/aggregate/algebraic_functions.hpp"
 
 namespace duckdb {
 
 namespace {
 struct RegrInterceptState {
-	size_t count;
+	static constexpr const char *STATE_NAMES[] = {"count", "sum_x", "sum_y", "slope"};
+	using STATE_TYPE = StructStateType<uint64_t, double, double, RegrSlopeState>;
+
+	uint64_t count;
 	double sum_x;
 	double sum_y;
 	RegrSlopeState slope;
 };
 
 struct RegrInterceptOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.count = 0;
-		state.sum_x = 0;
-		state.sum_y = 0;
-		RegrSlopeOperation::Initialize<RegrSlopeState>(state.slope);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		state.count++;

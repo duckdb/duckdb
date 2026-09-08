@@ -1,0 +1,83 @@
+# name: test/sql/delete/full_vector_delete_conflict.test
+# description: Verify snapshot visibility and conflict detection after a committed full-vector delete
+# group: [delete]
+
+statement ok
+CREATE TABLE tbl AS SELECT i FROM range(4096) t(i);
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok con1
+BEGIN
+
+statement ok con2
+BEGIN
+
+# con1 deletes all rows (full vectors) and commits
+query I con1
+DELETE FROM tbl
+----
+4096
+
+statement ok con1
+COMMIT
+
+# con2 started before the delete committed - it must still see all rows
+query I con2
+SELECT COUNT(*) FROM tbl
+----
+4096
+
+# con2 must not be able to delete the rows that con1 already deleted
+statement error con2
+DELETE FROM tbl
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+# new transactions see the delete
+query I
+SELECT COUNT(*) FROM tbl
+----
+0
+
+# deleting from the fully deleted table is a no-op
+query I
+DELETE FROM tbl
+----
+0
+
+# conflict on an uncommitted partial delete, rollback, then full-vector delete
+statement ok
+CREATE TABLE tbl2 AS SELECT i FROM range(4096) t(i);
+
+statement ok con1
+BEGIN
+
+query I con1
+DELETE FROM tbl2 WHERE i < 100
+----
+100
+
+# the full-vector delete conflicts with the uncommitted partial delete
+statement error con2
+DELETE FROM tbl2
+----
+Conflict on tuple deletion
+
+statement ok con1
+ROLLBACK
+
+# after the rollback the entire table can be deleted
+query I con2
+DELETE FROM tbl2
+----
+4096
+
+query I
+SELECT COUNT(*) FROM tbl2
+----
+0

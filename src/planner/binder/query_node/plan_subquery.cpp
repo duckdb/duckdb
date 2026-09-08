@@ -8,11 +8,18 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
@@ -24,11 +31,174 @@
 
 namespace duckdb {
 
+static bool PlanReturnsExactlyOneRow(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto &aggr = op.Cast<LogicalAggregate>();
+		return aggr.groups.empty() && aggr.grouping_sets.empty() && aggr.grouping_functions.empty();
+	}
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+		return true;
+	case LogicalOperatorType::LOGICAL_LIMIT: {
+		auto &limit = op.Cast<LogicalLimit>();
+		if (limit.limit_val.Type() != LimitNodeType::CONSTANT_VALUE || limit.limit_val.GetConstantValue() != 1) {
+			return false;
+		}
+		if (limit.offset_val.Type() != LimitNodeType::UNSET &&
+		    (limit.offset_val.Type() != LimitNodeType::CONSTANT_VALUE || limit.offset_val.GetConstantValue() != 0)) {
+			return false;
+		}
+		return op.children.size() == 1 && PlanReturnsExactlyOneRow(*op.children[0]);
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		return op.children.size() == 1 && PlanReturnsExactlyOneRow(*op.children[0]);
+	default:
+		return false;
+	}
+}
+
+static bool IsExtremumRewriteValid(const BoundSubqueryExpression &expr) {
+	// TODO/FIXME: Generalize this rewrite to multi-column subqueries
+	if (expr.GetChildren().size() != 1 || expr.GetChildTypes().size() != 1 || expr.GetChildTargets().size() != 1) {
+		return false;
+	}
+	auto cmp_type = expr.ComparisonType();
+	return cmp_type == ExpressionType::COMPARE_GREATERTHAN ||
+	       cmp_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO || cmp_type == ExpressionType::COMPARE_LESSTHAN ||
+	       cmp_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+}
+
+static unique_ptr<Expression> PlanExtremumRewrite(Binder &binder, BoundSubqueryExpression &expr,
+                                                  unique_ptr<LogicalOperator> &plan) {
+	auto &child_type = expr.GetChildTypes()[0];
+	auto plan_columns = plan->GetColumnBindings();
+	D_ASSERT(plan_columns.size() == 1);
+	auto plan_column = plan_columns[0];
+
+	vector<unique_ptr<Expression>> aggregate_list;
+
+	auto bound_colref = make_uniq<BoundColumnRefExpression>(child_type, plan_column);
+
+	FunctionBinder function_binder(binder);
+	// 1. MIN or MAX
+	auto cmp_type = expr.ComparisonType();
+	bool is_min =
+	    (cmp_type == ExpressionType::COMPARE_GREATERTHAN || cmp_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+
+	auto &compare_type = expr.GetChildTargets()[0];
+	vector<unique_ptr<Expression>> min_max_children;
+	auto min_max_child = bound_colref->Copy();
+	ExpressionBinder::PushCollation(binder.context, min_max_child, compare_type);
+	min_max_children.push_back(std::move(min_max_child));
+
+	auto extremum_aggr =
+	    function_binder.BindAggregateFunction(is_min ? MinFunction::GetFunction() : MaxFunction::GetFunction(),
+	                                          std::move(min_max_children), nullptr, AggregateType::NON_DISTINCT);
+	aggregate_list.push_back(std::move(extremum_aggr));
+
+	// 2. count_star = COUNT(*)
+	auto count_star_aggr =
+	    function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr, AggregateType::NON_DISTINCT);
+	aggregate_list.push_back(std::move(count_star_aggr));
+
+	// 3. count_child = COUNT(child)
+	vector<unique_ptr<Expression>> count_child_children;
+	count_child_children.push_back(bound_colref->Copy());
+	auto count_child_aggr = function_binder.BindAggregateFunction(
+	    CountFunctionBase::GetFunction(), std::move(count_child_children), nullptr, AggregateType::NON_DISTINCT);
+	aggregate_list.push_back(std::move(count_child_aggr));
+
+	auto aggr_index = binder.GenerateTableIndex();
+	auto aggregate = make_uniq<LogicalAggregate>(binder.GenerateTableIndex(), aggr_index, std::move(aggregate_list));
+	aggregate->AddChild(std::move(plan));
+	plan = std::move(aggregate);
+
+	auto count_star_ref =
+	    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(aggr_index, ProjectionIndex(1)));
+	auto count_child_ref =
+	    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(aggr_index, ProjectionIndex(2)));
+	auto extremum_ref = make_uniq<BoundColumnRefExpression>(child_type, ColumnBinding(aggr_index, ProjectionIndex(0)));
+
+	auto &x_expr = *expr.GetChildrenMutable()[0];
+
+	auto false_val = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+	auto null_val = make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+	auto true_val = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+
+	// 5. ELSE FALSE
+	unique_ptr<Expression> current_else = false_val->Copy();
+
+	// 4. WHEN count_star > count_child THEN NULL
+	unique_ptr<Expression> count_star_gt_count_child = BoundComparisonExpression::Create(
+	    ExpressionType::COMPARE_GREATERTHAN, count_star_ref->Copy(), count_child_ref->Copy());
+	current_else =
+	    make_uniq<BoundCaseExpression>(std::move(count_star_gt_count_child), null_val->Copy(), std::move(current_else));
+
+	// 3. WHEN X > MIN(Y) THEN TRUE
+	auto x_cast = BoundCastExpression::AddDefaultCastToType(x_expr.Copy(), compare_type);
+	auto extremum_cast = BoundCastExpression::AddDefaultCastToType(std::move(extremum_ref), compare_type);
+	unique_ptr<Expression> x_op_min =
+	    BoundComparisonExpression::Create(cmp_type, std::move(x_cast), std::move(extremum_cast));
+
+	// Push collations for the comparison
+	ExpressionBinder::PushCollation(binder.context,
+	                                BoundComparisonExpression::LeftMutable(x_op_min->Cast<BoundFunctionExpression>()),
+	                                compare_type);
+	ExpressionBinder::PushCollation(binder.context,
+	                                BoundComparisonExpression::RightMutable(x_op_min->Cast<BoundFunctionExpression>()),
+	                                compare_type);
+
+	current_else = make_uniq<BoundCaseExpression>(std::move(x_op_min), true_val->Copy(), std::move(current_else));
+
+	// 2. WHEN X IS NULL THEN NULL
+	unique_ptr<Expression> x_is_null =
+	    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+	x_is_null->Cast<BoundOperatorExpression>().GetChildrenMutable().push_back(x_expr.Copy());
+	current_else = make_uniq<BoundCaseExpression>(std::move(x_is_null), null_val->Copy(), std::move(current_else));
+
+	// 1. WHEN count_star == 0 THEN FALSE
+	auto zero_val = make_uniq<BoundConstantExpression>(Value::BIGINT(0));
+	unique_ptr<Expression> count_star_is_zero =
+	    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, count_star_ref->Copy(), std::move(zero_val));
+	current_else =
+	    make_uniq<BoundCaseExpression>(std::move(count_star_is_zero), false_val->Copy(), std::move(current_else));
+
+	// 0. WHEN count_star IS NULL THEN FALSE (for correlated empty groups)
+	unique_ptr<Expression> count_star_is_null =
+	    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+	count_star_is_null->Cast<BoundOperatorExpression>().GetChildrenMutable().push_back(count_star_ref->Copy());
+	current_else =
+	    make_uniq<BoundCaseExpression>(std::move(count_star_is_null), false_val->Copy(), std::move(current_else));
+
+	return current_else;
+}
+
+static bool IsMultiColumnTuple(const LogicalType &type) {
+	return type.id() == LogicalTypeId::TUPLE && StructType::GetChildCount(type) > 1;
+}
+
+static bool IsMultiColumnComparison(const BoundSubqueryExpression &expr) {
+	if (expr.GetChildren().size() > 1 || expr.GetChildTypes().size() > 1) {
+		return true;
+	}
+	for (auto &child : expr.GetChildren()) {
+		if (IsMultiColumnTuple(child->GetReturnType())) {
+			return true;
+		}
+	}
+	for (auto &child_type : expr.GetChildTypes()) {
+		if (IsMultiColumnTuple(child_type)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
                                                        unique_ptr<LogicalOperator> &root,
                                                        unique_ptr<LogicalOperator> plan) {
 	D_ASSERT(!expr.IsCorrelated());
-	switch (expr.subquery_type) {
+	switch (expr.GetSubqueryType()) {
 	case SubqueryType::EXISTS: {
 		// uncorrelated EXISTS
 		// we only care about existence, hence we push a LIMIT 1 operator
@@ -42,7 +212,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		FunctionBinder function_binder(binder);
 		auto count_star =
 		    function_binder.BindAggregateFunction(count_star_fun, {}, nullptr, AggregateType::NON_DISTINCT);
-		auto idx_type = count_star->return_type;
+		auto idx_type = count_star->GetReturnType();
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(std::move(count_star));
 		auto aggregate_index = binder.GenerateTableIndex();
@@ -52,10 +222,11 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = std::move(aggregate);
 
 		// now we push a projection with a comparison to 1
-		auto left_child = make_uniq<BoundColumnRefExpression>(idx_type, ColumnBinding(aggregate_index, 0));
+		auto left_child =
+		    make_uniq<BoundColumnRefExpression>(idx_type, ColumnBinding(aggregate_index, ProjectionIndex(0)));
 		auto right_child = make_uniq<BoundConstantExpression>(Value::Numeric(idx_type, 1));
-		auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(left_child),
-		                                                       std::move(right_child));
+		auto comparison = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, std::move(left_child),
+		                                                    std::move(right_child));
 
 		vector<unique_ptr<Expression>> projection_list;
 		projection_list.push_back(std::move(comparison));
@@ -70,27 +241,33 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a ColumnRefExpression referring to the result of the projection (either
 		// TRUE or FALSE)
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), LogicalType::BOOLEAN,
-		                                           ColumnBinding(projection_index, 0));
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), LogicalType::BOOLEAN,
+		                                           ColumnBinding(projection_index, ProjectionIndex(0)));
 	}
 	case SubqueryType::SCALAR: {
 		// uncorrelated scalar, we want to return the first entry
 		// figure out the table index of the bound table of the entry which we want to return
 		auto bindings = plan->GetColumnBindings();
 		D_ASSERT(bindings.size() == 1);
-		idx_t table_idx = bindings[0].table_index;
+		if (expr.GetReturnType().id() != LogicalTypeId::SQLNULL && PlanReturnsExactlyOneRow(*plan)) {
+			auto result = make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(), bindings[0]);
+			root = LogicalCrossProduct::Create(std::move(root), std::move(plan));
+			return std::move(result);
+		}
+		auto table_idx = bindings[0].table_index;
 
 		bool error_on_multiple_rows = Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(binder.context);
 
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
-		auto bound = make_uniq<BoundColumnRefExpression>(expr.return_type, ColumnBinding(table_idx, 0));
+		auto bound =
+		    make_uniq<BoundColumnRefExpression>(expr.GetReturnType(), ColumnBinding(table_idx, ProjectionIndex(0)));
 		vector<unique_ptr<Expression>> first_children;
 		first_children.push_back(std::move(bound));
 
 		FunctionBinder function_binder(binder);
 		auto first_agg =
-		    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(expr.return_type),
+		    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(expr.GetReturnType()),
 		                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
 
 		expressions.push_back(std::move(first_agg));
@@ -108,16 +285,16 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		if (error_on_multiple_rows) {
 			// CASE WHEN count > 1 THEN error('Scalar subquery can only return a single row') ELSE first_agg END
-			idx_t proj_index = binder.GenerateTableIndex();
+			auto proj_index = binder.GenerateTableIndex();
 
-			auto first_ref =
-			    make_uniq<BoundColumnRefExpression>(plan->expressions[0]->return_type, ColumnBinding(aggr_index, 0));
-			auto count_ref =
-			    make_uniq<BoundColumnRefExpression>(plan->expressions[1]->return_type, ColumnBinding(aggr_index, 1));
+			auto first_ref = make_uniq<BoundColumnRefExpression>(plan->expressions[0]->GetReturnType(),
+			                                                     ColumnBinding(aggr_index, ProjectionIndex(0)));
+			auto count_ref = make_uniq<BoundColumnRefExpression>(plan->expressions[1]->GetReturnType(),
+			                                                     ColumnBinding(aggr_index, ProjectionIndex(1)));
 
 			auto constant_one = make_uniq<BoundConstantExpression>(Value::BIGINT(1));
-			auto count_check = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
-			                                                        std::move(count_ref), std::move(constant_one));
+			auto count_check = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHAN,
+			                                                     std::move(count_ref), std::move(constant_one));
 
 			vector<unique_ptr<Expression>> error_children;
 			error_children.push_back(make_uniq<BoundConstantExpression>(
@@ -125,7 +302,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			          "return a single row.\n\nUse \"SET scalar_subquery_error_on_multiple_rows=false\" to revert to "
 			          "previous behavior of returning a random row.")));
 			auto error_expr = function_binder.BindScalarFunction(ErrorFun::GetFunction(), std::move(error_children));
-			error_expr->return_type = first_ref->return_type;
+			error_expr->SetReturnType(first_ref->GetReturnType());
 			auto case_expr =
 			    make_uniq<BoundCaseExpression>(std::move(count_check), std::move(error_expr), std::move(first_ref));
 
@@ -147,10 +324,17 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the first result of the
 		// aggregation
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(aggr_index, 0));
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), expr.GetReturnType(),
+		                                           ColumnBinding(aggr_index, ProjectionIndex(0)));
 	}
 	default: {
-		D_ASSERT(expr.subquery_type == SubqueryType::ANY);
+		D_ASSERT(expr.GetSubqueryType() == SubqueryType::ANY);
+		if (IsExtremumRewriteValid(expr)) {
+			auto result = PlanExtremumRewrite(binder, expr, plan);
+			root = LogicalCrossProduct::Create(std::move(root), std::move(plan));
+			return result;
+		}
+
 		// we generate a MARK join that results in either (TRUE, FALSE or NULL)
 		// subquery has NULL values -> result is (TRUE or NULL)
 		// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
@@ -158,7 +342,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		auto plan_columns = plan->GetColumnBindings();
 
 		// then we generate the MARK join with the subquery
-		idx_t mark_index = binder.GenerateTableIndex();
+		auto mark_index = binder.GenerateTableIndex();
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::MARK);
 		join->mark_index = mark_index;
 		join->AddChild(std::move(root));
@@ -168,13 +352,13 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// Special case: if we have a single struct child and multiple types,
 		// this means we kept the struct intact for ordered comparison (e.g., (a,b) < ANY(...))
 		// We need to construct a corresponding struct on the RHS from the subquery columns
-		if (expr.children.size() == 1 && expr.child_types.size() > 1) {
+		if (expr.GetChildren().size() == 1 && expr.GetChildTypes().size() > 1) {
 			// Construct a struct on the RHS from the subquery columns
 			vector<unique_ptr<Expression>> struct_children;
-			struct_children.reserve(expr.child_types.size());
-			for (idx_t i = 0; i < expr.child_types.size(); i++) {
-				auto &child_type = expr.child_types[i];
-				auto &compare_type = expr.child_targets[i];
+			struct_children.reserve(expr.GetChildTypes().size());
+			for (idx_t i = 0; i < expr.GetChildTypes().size(); i++) {
+				auto &child_type = expr.GetChildTypes()[i];
+				auto &compare_type = expr.GetChildTargets()[i];
 				auto colref = BoundCastExpression::AddDefaultCastToType(
 				    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[i]), compare_type);
 				struct_children.push_back(std::move(colref));
@@ -184,30 +368,26 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			FunctionBinder function_binder(binder);
 			auto struct_expr = function_binder.BindScalarFunction(RowFun::GetFunction(), std::move(struct_children));
 
-			JoinCondition cond;
-			cond.left = std::move(expr.children[0]);
-			cond.right = std::move(struct_expr);
-			cond.comparison = expr.comparison_type;
+			JoinCondition cond(std::move(expr.GetChildrenMutable()[0]), std::move(struct_expr), expr.ComparisonType());
 
 			// push collations
-			ExpressionBinder::PushCollation(binder.context, cond.left, cond.left->return_type);
-			ExpressionBinder::PushCollation(binder.context, cond.right, cond.right->return_type);
+			ExpressionBinder::PushCollation(binder.context, cond.LeftReference(), cond.GetLHS().GetReturnType());
+			ExpressionBinder::PushCollation(binder.context, cond.RightReference(), cond.GetRHS().GetReturnType());
 
 			join->conditions.push_back(std::move(cond));
 		} else {
 			// Standard case: compare each child separately
-			for (idx_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
-				JoinCondition cond;
-				cond.left = std::move(expr.children[child_idx]);
-				auto &child_type = expr.child_types[child_idx];
-				auto &compare_type = expr.child_targets[child_idx];
-				cond.right = BoundCastExpression::AddDefaultCastToType(
+			for (idx_t child_idx = 0; child_idx < expr.GetChildren().size(); child_idx++) {
+				auto &child_type = expr.GetChildTypes()[child_idx];
+				auto &compare_type = expr.GetChildTargets()[child_idx];
+				auto right_expr = BoundCastExpression::AddDefaultCastToType(
 				    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), compare_type);
-				cond.comparison = expr.comparison_type;
+				JoinCondition cond(std::move(expr.GetChildrenMutable()[child_idx]), std::move(right_expr),
+				                   expr.ComparisonType());
 
 				// push collations
-				ExpressionBinder::PushCollation(binder.context, cond.left, compare_type);
-				ExpressionBinder::PushCollation(binder.context, cond.right, compare_type);
+				ExpressionBinder::PushCollation(binder.context, cond.LeftReference(), compare_type);
+				ExpressionBinder::PushCollation(binder.context, cond.RightReference(), compare_type);
 
 				join->conditions.push_back(std::move(cond));
 			}
@@ -215,7 +395,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		root = std::move(join);
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), expr.GetReturnType(),
+		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	}
 }
@@ -229,11 +410,6 @@ static unique_ptr<LogicalDependentJoin> CreateDuplicateEliminatedJoin(const Corr
 	delim_join->perform_delim = perform_delim;
 	delim_join->join_type = join_type;
 	delim_join->AddChild(std::move(original_plan));
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		auto &col = correlated_columns[i];
-		delim_join->duplicate_eliminated_columns.push_back(make_uniq<BoundColumnRefExpression>(col.type, col.binding));
-		delim_join->mark_types.push_back(col.type);
-	}
 	return delim_join;
 }
 
@@ -251,22 +427,25 @@ static bool PerformDelimOnType(const LogicalType &type) {
 	return true;
 }
 
-static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &correlated_columns) {
-	if (!ClientConfig::GetConfig(binder.context).enable_optimizer) {
+static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &correlated_columns,
+                                        optional_ptr<LogicalOperator> dependent_plan = nullptr) {
+	bool perform_delim = !dependent_plan || !dependent_plan->HasVolatileExpressions();
+	if (perform_delim && !Settings::Get<EnableOptimizerSetting>(binder.context)) {
 		// if optimizations are disabled we always do a delim join
 		return true;
 	}
-	bool perform_delim = true;
-	for (auto &col : correlated_columns) {
-		if (!PerformDelimOnType(col.type)) {
-			perform_delim = false;
-			break;
+	if (perform_delim) {
+		for (auto &col : correlated_columns) {
+			if (!PerformDelimOnType(col.type)) {
+				perform_delim = false;
+				break;
+			}
 		}
 	}
 	if (perform_delim) {
 		return true;
 	}
-	auto binding = ColumnBinding(binder.GenerateTableIndex(), 0);
+	auto binding = ColumnBinding(binder.GenerateTableIndex(), ProjectionIndex(0));
 	auto type = LogicalType::BIGINT;
 	auto name = "delim_index";
 	CorrelatedColumnInfo info(binding, type, name, 0);
@@ -278,17 +457,20 @@ static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &corre
 static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
                                                      unique_ptr<LogicalOperator> &root,
                                                      unique_ptr<LogicalOperator> plan) {
-	auto &correlated_columns = expr.binder->correlated_columns;
-	// FIXME: there should be a way of disabling decorrelation for ANY queries as well, but not for now...
-	bool perform_delim =
-	    expr.subquery_type == SubqueryType::ANY ? true : PerformDuplicateElimination(binder, correlated_columns);
+	auto &correlated_columns = expr.GetBinder()->correlated_columns;
+	// Preserve the existing duplicate-elimination path for deterministic ANY queries. Volatile ANY queries require
+	// row identity for the same reason as other correlated subqueries: sharing one result between equal outer values
+	// changes their evaluation cardinality.
+	bool perform_delim = expr.GetSubqueryType() == SubqueryType::ANY && !plan->HasVolatileExpressions()
+	                         ? true
+	                         : PerformDuplicateElimination(binder, correlated_columns, plan);
 	D_ASSERT(expr.IsCorrelated());
 	// correlated subquery
 	// for a more in-depth explanation of this code, read the paper "Unnesting Arbitrary Subqueries"
 	// also read "Improving Unnesting of Complex Queries"
 	// we handle three types of correlated subqueries: Scalar, EXISTS and ANY
 	// all three cases are very similar with some minor changes (mainly the type of join performed at the end)
-	switch (expr.subquery_type) {
+	switch (expr.GetSubqueryType()) {
 	case SubqueryType::SCALAR: {
 		// correlated SCALAR query
 		// first push a DUPLICATE ELIMINATED join
@@ -305,32 +487,44 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::SINGLE, std::move(root), perform_delim);
 
 		// We have to store all information required to perform UNNESTING later.
-		delim_join->subquery_type = SubqueryType::SCALAR;
 		delim_join->any_join = false;
 
 		auto plan_column = plan->GetColumnBindings().back();
 		delim_join->AddChild(std::move(plan));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the data element returned by the join
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, plan_column);
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), expr.GetReturnType(), plan_column);
 	}
 	case SubqueryType::EXISTS: {
 		// correlated EXISTS query
 		// this query is similar to the correlated SCALAR query, except we use a MARK join here
-		idx_t mark_index = binder.GenerateTableIndex();
+		auto mark_index = binder.GenerateTableIndex();
 		auto delim_join =
 		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
 
-		delim_join->subquery_type = SubqueryType::EXISTS;
 		delim_join->mark_index = mark_index;
 		delim_join->any_join = true;
 		delim_join->AddChild(std::move(plan));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), expr.GetReturnType(),
+		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	default: {
-		D_ASSERT(expr.subquery_type == SubqueryType::ANY);
+		D_ASSERT(expr.GetSubqueryType() == SubqueryType::ANY);
+
+		if (IsExtremumRewriteValid(expr)) {
+			auto result = PlanExtremumRewrite(binder, expr, plan);
+			// For the extremum rewrite, we treat the correlated subquery just like a SCALAR query.
+			// It produces a single aggregated result per RHS execution.
+			auto delim_join =
+			    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::SINGLE, std::move(root), perform_delim);
+			delim_join->any_join = false;
+			delim_join->AddChild(std::move(plan));
+			root = std::move(delim_join);
+			return result;
+		}
+
 		// correlated ANY query
 		// this query is similar to the correlated SCALAR query
 		// however, in this case we push a correlated MARK join
@@ -338,16 +532,15 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// the correlated mark join handles this case by itself
 		// as the MARK join has one extra join condition (the original condition, of the ANY expression, e.g.
 		// [i=ANY(...)])
-		idx_t mark_index = binder.GenerateTableIndex();
+		auto mark_index = binder.GenerateTableIndex();
 		auto delim_join =
 		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
 
-		delim_join->subquery_type = SubqueryType::ANY;
 		delim_join->mark_index = mark_index;
 		delim_join->any_join = true;
 		auto &dependent_join = plan;
 
-		if (expr.children.size() > 1) {
+		if (IsMultiColumnComparison(expr)) {
 			// FIXME: the code to generate the plan here is actually correct
 			// the problem is in the hash join - specifically PhysicalHashJoin::InitializeHashTable
 			// this contains code that is hard-coded for a single comparison
@@ -356,39 +549,197 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 			throw NotImplementedException("Correlated IN/ANY/ALL with multiple columns not yet supported");
 		}
 
-		delim_join->expression_children = std::move(expr.children);
-		delim_join->child_types = expr.child_types;
-		delim_join->child_targets = expr.child_targets;
-		delim_join->comparison_type = expr.comparison_type;
+		auto plan_columns = dependent_join->GetColumnBindings();
+		D_ASSERT(expr.GetChildren().size() == 1);
+		auto left_expr = std::move(expr.GetChildrenMutable()[0]);
+		auto &child_type = expr.GetChildTypes()[0];
+		auto &compare_type = expr.GetChildTargets()[0];
+		auto right_expr = BoundCastExpression::AddDefaultCastToType(
+		    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[0]), compare_type);
+		ExpressionBinder::PushCollation(binder.context, left_expr, compare_type);
+		ExpressionBinder::PushCollation(binder.context, right_expr, compare_type);
+		delim_join->condition =
+		    BoundComparisonExpression::Create(expr.ComparisonType(), std::move(left_expr), std::move(right_expr));
 
 		delim_join->AddChild(std::move(dependent_join));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), expr.GetReturnType(),
+		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	}
 }
 
-void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
-	if (!op.children.empty()) {
-		// Collect all recursive CTEs during recursive descend
-		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
-		    op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-			auto &rec_cte = op.Cast<LogicalCTE>();
-			binder.recursive_ctes[rec_cte.table_index] = &op;
-		}
-		for (idx_t i = 0; i < op.children.size(); i++) {
-			root = std::move(op.children[i]);
-			D_ASSERT(root);
-			VisitOperatorExpressions(op);
-			op.children[i] = std::move(root);
-		}
+static JoinSide GetCurrentJoinSide(LogicalJoin &join, const Expression &expr) {
+	unordered_set<TableIndex> left_bindings;
+	unordered_set<TableIndex> right_bindings;
+	LogicalJoin::GetTableReferences(*join.children[0], left_bindings);
+	LogicalJoin::GetTableReferences(*join.children[1], right_bindings);
+	return JoinSide::GetCurrentJoinSide(expr, left_bindings, right_bindings);
+}
 
-		for (idx_t i = 0; i < op.children.size(); i++) {
-			D_ASSERT(op.children[i]);
-			VisitOperator(*op.children[i]);
+static unique_ptr<LogicalOperator> &GetJoinSideRoot(LogicalJoin &join, JoinSide side, JoinSide uncorrelated_side) {
+	if (side == JoinSide::NONE) {
+		side = uncorrelated_side;
+	}
+	if (side == JoinSide::LEFT) {
+		return join.children[0];
+	}
+	if (side == JoinSide::RIGHT) {
+		return join.children[1];
+	}
+	throw NotImplementedException("Correlated subquery in a non-inner join condition cannot reference both sides of "
+	                              "the join");
+}
+
+static bool HasJoinConditionExpressions(LogicalOperatorType type) {
+	switch (type) {
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void RecursiveDependentJoinPlanner::PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr,
+                                                       JoinSide uncorrelated_side) {
+	if (!expr) {
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { PlanJoinSubqueries(join, child, uncorrelated_side); });
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_SUBQUERY) {
+		return;
+	}
+
+	auto side = GetCurrentJoinSide(join, *expr);
+	auto &root = GetJoinSideRoot(join, side, uncorrelated_side);
+	auto &subquery = expr->Cast<BoundSubqueryExpression>();
+	expr = binder.PlanSubquery(subquery, root);
+}
+
+void RecursiveDependentJoinPlanner::PlanJoinExpressions(LogicalOperator &op) {
+	if (!HasJoinConditionExpressions(op.type)) {
+		return;
+	}
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		for (auto &cond : join.conditions) {
+			if (cond.IsComparison()) {
+				PlanJoinSubqueries(join, cond.LeftReference(), JoinSide::LEFT);
+				PlanJoinSubqueries(join, cond.RightReference(), JoinSide::RIGHT);
+			} else {
+				PlanJoinSubqueries(join, cond.JoinExpressionReference(), JoinSide::LEFT);
+			}
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+		auto &join = op.Cast<LogicalAnyJoin>();
+		PlanJoinSubqueries(join, join.condition, JoinSide::LEFT);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void RecursiveDependentJoinPlanner::PlanJoinChildFilters(LogicalOperator &op) {
+	if (!HasJoinConditionExpressions(op.type)) {
+		return;
+	}
+
+	auto &join = op.Cast<LogicalJoin>();
+	for (auto &child : join.children) {
+		if (child->type != LogicalOperatorType::LOGICAL_FILTER) {
+			continue;
+		}
+		auto &filter = child->Cast<LogicalFilter>();
+		D_ASSERT(filter.children.size() == 1);
+		for (auto &expr : filter.expressions) {
+			binder.PlanSubqueries(expr, filter.children[0]);
 		}
 	}
+}
+
+BindingReplacementGraph RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<LogicalOperator> &op_ptr) {
+	PlanJoinChildFilters(*op_ptr);
+	if (op_ptr->type == LogicalOperatorType::LOGICAL_ANY_JOIN &&
+	    op_ptr->Cast<LogicalAnyJoin>().condition->HasSubquery()) {
+		return PlanAnyJoinCondition(op_ptr);
+	}
+	auto old_output = op_ptr->GetColumnBindings();
+	BindingReplacementGraph operator_replacements;
+	if (!op_ptr->children.empty()) {
+		// Collect all recursive CTEs during recursive descend
+		if (op_ptr->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
+		    op_ptr->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			auto &rec_cte = op_ptr->Cast<LogicalCTE>();
+			binder.recursive_ctes[rec_cte.table_index] = op_ptr.get();
+		}
+		if (HasJoinConditionExpressions(op_ptr->type)) {
+			PlanJoinExpressions(*op_ptr);
+		} else {
+			for (idx_t i = 0; i < op_ptr->children.size(); i++) {
+				root = std::move(op_ptr->children[i]);
+				D_ASSERT(root);
+				VisitOperatorExpressions(*op_ptr);
+				op_ptr->children[i] = std::move(root);
+			}
+		}
+
+		for (idx_t i = 0; i < op_ptr->children.size(); i++) {
+			D_ASSERT(op_ptr->children[i]);
+			auto old_child_bindings = op_ptr->children[i]->GetColumnBindings();
+			auto child_replacements = PlanOperator(op_ptr->children[i]);
+			ColumnBindingRewrite::ApplyToChild(op_ptr, i, std::move(old_child_bindings), child_replacements);
+			operator_replacements.Merge(child_replacements);
+		}
+	}
+	ColumnBindingRewrite::ValidateOutput(old_output, op_ptr->GetColumnBindings(), operator_replacements);
+	return operator_replacements;
+}
+
+BindingReplacementGraph RecursiveDependentJoinPlanner::PlanAnyJoinCondition(unique_ptr<LogicalOperator> &op_ptr) {
+	auto old_output = op_ptr->GetColumnBindings();
+	BindingReplacementGraph operator_replacements;
+
+	for (idx_t child_index = 0; child_index < op_ptr->children.size(); child_index++) {
+		auto old_child_bindings = op_ptr->children[child_index]->GetColumnBindings();
+		auto child_replacements = PlanOperator(op_ptr->children[child_index]);
+		ColumnBindingRewrite::ApplyToChild(op_ptr, child_index, std::move(old_child_bindings), child_replacements);
+		operator_replacements.Merge(child_replacements);
+	}
+
+	BindingReplacementGraph pair_replacements;
+	if (TryRewritePairDependentJoinCondition(binder, op_ptr, pair_replacements)) {
+		operator_replacements.Merge(pair_replacements);
+		auto recursive_replacements = PlanOperator(op_ptr);
+		operator_replacements.Merge(recursive_replacements);
+		ColumnBindingRewrite::ValidateOutput(old_output, op_ptr->GetColumnBindings(), operator_replacements);
+		return operator_replacements;
+	}
+
+	auto &join = op_ptr->Cast<LogicalAnyJoin>();
+	D_ASSERT(join.condition);
+	PlanJoinSubqueries(join, join.condition, JoinSide::LEFT);
+	for (idx_t child_index = 0; child_index < join.children.size(); child_index++) {
+		auto old_child_bindings = join.children[child_index]->GetColumnBindings();
+		auto child_replacements = PlanOperator(join.children[child_index]);
+		ColumnBindingRewrite::ApplyToChild(op_ptr, child_index, std::move(old_child_bindings), child_replacements);
+		operator_replacements.Merge(child_replacements);
+	}
+	ColumnBindingRewrite::ValidateOutput(old_output, op_ptr->GetColumnBindings(), operator_replacements);
+	return operator_replacements;
+}
+
+void RecursiveDependentJoinPlanner::Plan(Binder &binder, unique_ptr<LogicalOperator> &op) {
+	RecursiveDependentJoinPlanner planner(binder);
+	planner.PlanOperator(op);
 }
 
 unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundSubqueryExpression &expr,
@@ -399,9 +750,7 @@ unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundSubquery
 unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root) {
 	D_ASSERT(root);
 	// first we translate the QueryNode of the subquery into a logical plan
-	auto sub_binder = Binder::CreateBinder(context, this);
-	sub_binder->is_outside_flattened = false;
-	auto subquery_root = std::move(expr.subquery.plan);
+	auto subquery_root = std::move(expr.SubqueryMutable().plan);
 	D_ASSERT(subquery_root);
 
 	// now we actually flatten the subquery
@@ -414,11 +763,6 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 		result_expression = PlanCorrelatedSubquery(*this, expr, root, std::move(plan));
 	}
 	IncreaseDepth();
-	// finally, we recursively plan the nested subqueries (if there are any)
-	if (sub_binder->has_unplanned_dependent_joins) {
-		RecursiveDependentJoinPlanner plan(*this);
-		plan.VisitOperator(*root);
-	}
 	return result_expression;
 }
 
@@ -443,27 +787,20 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
                                                     unique_ptr<Expression> condition) {
 	// scan the right operator for correlated columns
 	// correlated LATERAL JOIN
-	vector<JoinCondition> conditions;
-	vector<unique_ptr<Expression>> arbitrary_expressions;
 	if (condition) {
 		if (condition->HasSubquery()) {
 			throw BinderException(*condition, "Subqueries are not supported in LATERAL join conditions");
 		}
-		// extract join conditions, if there are any
-		LogicalComparisonJoin::ExtractJoinConditions(context, join_type, JoinRefType::REGULAR, left, right,
-		                                             std::move(condition), conditions, arbitrary_expressions);
 	}
 
-	auto perform_delim = PerformDuplicateElimination(*this, correlated);
+	auto perform_delim = PerformDuplicateElimination(*this, correlated, right);
 	auto delim_join = CreateDuplicateEliminatedJoin(correlated, join_type, std::move(left), perform_delim);
 
 	// Store all information required to perform UNNESTING later.
 	delim_join->perform_delim = perform_delim;
 	delim_join->any_join = false;
 	delim_join->propagate_null_values = join_type != JoinType::INNER;
-	delim_join->is_lateral_join = true;
-	delim_join->arbitrary_expressions = std::move(arbitrary_expressions);
-	delim_join->conditions = std::move(conditions);
+	delim_join->condition = std::move(condition);
 	delim_join->AddChild(std::move(right));
 	return std::move(delim_join);
 }

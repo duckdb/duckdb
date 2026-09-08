@@ -15,6 +15,9 @@
 namespace duckdb {
 
 struct StddevState {
+	static constexpr const char *STATE_NAMES[] = {"count", "mean", "dsquared"};
+	using STATE_TYPE = StructStateType<uint64_t, double, double>;
+
 	uint64_t count;  //  n
 	double mean;     //  M1
 	double dsquared; //  M2
@@ -23,13 +26,6 @@ struct StddevState {
 // Streaming approximate standard deviation using Welford's
 // method, DOI: 10.2307/1266577
 struct STDDevBaseOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.count = 0;
-		state.mean = 0;
-		state.dsquared = 0;
-	}
-
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, const INPUT_TYPE &input) {
 		// update running mean and d^2
@@ -87,9 +83,6 @@ struct VarSampOperation : public STDDevBaseOperation {
 			finalize_data.ReturnNull();
 		} else {
 			target = state.dsquared / (state.count - 1);
-			if (!Value::DoubleIsFinite(target)) {
-				throw OutOfRangeException("VARSAMP is out of range!");
-			}
 		}
 	}
 };
@@ -101,9 +94,6 @@ struct VarPopOperation : public STDDevBaseOperation {
 			finalize_data.ReturnNull();
 		} else {
 			target = state.count > 1 ? (state.dsquared / state.count) : 0;
-			if (!Value::DoubleIsFinite(target)) {
-				throw OutOfRangeException("VARPOP is out of range!");
-			}
 		}
 	}
 };
@@ -115,9 +105,6 @@ struct STDDevSampOperation : public STDDevBaseOperation {
 			finalize_data.ReturnNull();
 		} else {
 			target = sqrt(state.dsquared / (state.count - 1));
-			if (!Value::DoubleIsFinite(target)) {
-				throw OutOfRangeException("STDDEV_SAMP is out of range!");
-			}
 		}
 	}
 };
@@ -129,9 +116,6 @@ struct STDDevPopOperation : public STDDevBaseOperation {
 			finalize_data.ReturnNull();
 		} else {
 			target = state.count > 1 ? sqrt(state.dsquared / state.count) : 0;
-			if (!Value::DoubleIsFinite(target)) {
-				throw OutOfRangeException("STDDEV_POP is out of range!");
-			}
 		}
 	}
 };
@@ -143,9 +127,6 @@ struct StandardErrorOfTheMeanOperation : public STDDevBaseOperation {
 			finalize_data.ReturnNull();
 		} else {
 			target = sqrt(state.dsquared / state.count) / sqrt((state.count));
-			if (!Value::DoubleIsFinite(target)) {
-				throw OutOfRangeException("SEM is out of range!");
-			}
 		}
 	}
 };

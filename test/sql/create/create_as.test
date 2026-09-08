@@ -3,9 +3,6 @@
 # group: [create]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl1 AS SELECT 1;
 
 query I
@@ -115,7 +112,7 @@ SELECT * FROM tbl6;
 statement error
 CREATE TABLE tbl7(col1, col2) AS SELECT 5;
 ----
-Binder Error: Target table has more colum names than query result.
+Binder Error: Target table has more column names than query result.
 
 # WITH NO DATA / WITH DATA
 statement ok

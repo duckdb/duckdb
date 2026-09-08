@@ -31,7 +31,7 @@ public:
 	void CheckValid() const {
 		if (MemorySafety<SAFE>::ENABLED) {
 			if (!ptr) {
-				throw InternalException("Attempting to dereference an optional pointer that is not set");
+				ThrowOptionalPointerNotSet();
 			}
 		}
 	}

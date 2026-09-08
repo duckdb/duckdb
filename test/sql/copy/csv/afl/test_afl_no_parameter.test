@@ -2,13 +2,10 @@
 # description: Test AFL CSV Files work with null padding set
 # group: [afl]
 
-statement ok
-PRAGMA enable_verification
-
 loop i 1 25
 
 statement maybe
-FROM '{DATA_DIR}/csv/afl/no_parameter/${i}.csv'
+FROM '{DATA_DIR}/csv/afl/no_parameter/{i}.csv'
 ----
 
 endloop

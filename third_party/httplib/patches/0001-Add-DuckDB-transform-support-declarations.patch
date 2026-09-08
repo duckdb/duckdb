@@ -1,0 +1,58 @@
+From 26d9cb189987045548e27250f4addee613ef97fa Mon Sep 17 00:00:00 2001
+From: Copilot <copilot@localhost>
+Date: Fri, 28 Aug 2026 13:11:56 +0200
+Subject: [PATCH 1/8] Add DuckDB transform support declarations
+
+
+diff --git a/third_party/httplib/httplib.hpp b/third_party/httplib/httplib.hpp
+index f88cc60..314804d 100644
+--- a/third_party/httplib/httplib.hpp
++++ b/third_party/httplib/httplib.hpp
+@@ -11,6 +11,10 @@
+ #define CPPHTTPLIB_VERSION "0.53.1"
+ #define CPPHTTPLIB_VERSION_NUM "0x003501"
+ 
++#include "duckdb/common/re2_regex.hpp"
++#include "duckdb/common/string.hpp"
++#include "duckdb/original/std/memory.hpp"
++
+ #ifdef _WIN32
+ #if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
+ #error                                                                         \
+@@ -22,6 +26,12 @@
+  * Configuration
+  */
+ 
++#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
++#define CPPHTTPLIB_NAMESPACE duckdb_httplib_openssl
++#else
++#define CPPHTTPLIB_NAMESPACE duckdb_httplib
++#endif
++
+ #ifndef CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND
+ #define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND 5
+ #endif
+@@ -1278,6 +1288,7 @@ using Headers =
+ using Params =
+     detail::insertion_ordered_multimap<std::string, std::equal_to<std::string>>;
+ using Match = duckdb_re2::Match;
++using Regex = duckdb_re2::Regex;
+ 
+ using DownloadProgress = std::function<bool(size_t current, size_t total)>;
+ using UploadProgress = std::function<bool(size_t current, size_t total)>;
+@@ -2227,13 +2238,13 @@ private:
+                             HandlerWithContentReader>>;
+ 
+   static duckdb::unique_ptr<detail::MatcherBase>
+-  Regex(const std::string &pattern);
++  make_matcher(const std::string &pattern);
+ 
+   template <typename H>
+   Server &add_handler(
+       std::vector<std::pair<duckdb::unique_ptr<detail::MatcherBase>, H>> &handlers,
+       const std::string &pattern, H handler) {
+-    handlers.emplace_back(Regex(pattern), std::move(handler));
++    handlers.emplace_back(make_matcher(pattern), std::move(handler));
+     return *this;
+   }
+ 

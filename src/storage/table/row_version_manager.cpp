@@ -12,23 +12,26 @@ RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
                 MemoryTag::BASE_TABLE) {
 }
 
-idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
+idx_t RowVersionManager::GetRowCount(ScanOptions options, idx_t count) {
 	lock_guard<mutex> l(version_lock);
-	idx_t deleted_count = 0;
+	idx_t total_count = 0;
 	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
-		if (i >= vector_info.size() || !vector_info[i]) {
-			continue;
-		}
-		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
-		if (max_count == 0) {
+		idx_t segment_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		if (segment_count == 0) {
 			break;
 		}
-		deleted_count += vector_info[i]->GetCommittedDeletedCount(max_count);
+		if (i >= vector_info.size() || !vector_info[i]) {
+			// no version info - this means all rows are visible
+			total_count += segment_count;
+			continue;
+		}
+		idx_t row_count = vector_info[i]->GetRowCount(options, segment_count);
+		total_count += row_count;
 	}
-	return deleted_count;
+	return total_count;
 }
 
-optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
+optional_ptr<ChunkVectorInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
 	if (vector_idx >= vector_info.size()) {
 		return nullptr;
 	}
@@ -45,14 +48,40 @@ idx_t RowVersionManager::GetSelVector(ScanOptions options, idx_t vector_idx, Sel
 	return chunk_info->GetSelVector(options, sel_vector, max_count);
 }
 
-bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
-	lock_guard<mutex> lock(version_lock);
-	idx_t vector_index = row / STANDARD_VECTOR_SIZE;
-	auto info = GetChunkInfo(vector_index);
-	if (!info) {
-		return true;
+idx_t RowVersionManager::GetVisibleRows(TransactionData transaction, const idx_t *offsets, idx_t count,
+                                        SelectionVector &visible_sel) {
+	if (count == 0) {
+		return 0;
 	}
-	return info->Fetch(transaction, UnsafeNumericCast<row_t>(row - vector_index * STANDARD_VECTOR_SIZE));
+	const lock_guard<mutex> lock(version_lock);
+	idx_t visible_count = 0;
+	idx_t idx = 0;
+	while (idx < count) {
+		const idx_t vector_idx = offsets[idx] / STANDARD_VECTOR_SIZE;
+		const idx_t base = vector_idx * STANDARD_VECTOR_SIZE;
+		const idx_t vector_end = base + STANDARD_VECTOR_SIZE;
+		// The first position after the current same-version-vector run.
+		idx_t next_idx = idx + 1;
+		// Extend the run while offsets remain within the same version-info vector.
+		while (next_idx < count && offsets[next_idx] >= base && offsets[next_idx] < vector_end) {
+			next_idx++;
+		}
+		auto info = GetChunkInfo(vector_idx);
+		if (!info) {
+			// no version info, which means entire chunk is visible
+			for (idx_t k = idx; k < next_idx; k++) {
+				visible_sel.set_index(visible_count++, k);
+			}
+		} else {
+			for (idx_t k = idx; k < next_idx; k++) {
+				if (info->Fetch(transaction, NumericCast<row_t>(offsets[k] - base))) {
+					visible_sel.set_index(visible_count++, k);
+				}
+			}
+		}
+		idx = next_idx;
+	}
+	return visible_count;
 }
 
 void RowVersionManager::FillVectorInfo(idx_t vector_idx) {
@@ -68,6 +97,7 @@ void RowVersionManager::FillVectorInfo(idx_t vector_idx) {
 void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start,
                                           idx_t row_group_end) {
 	lock_guard<mutex> lock(version_lock);
+	needs_compression_check = true;
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 
@@ -81,27 +111,16 @@ void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t cou
 		idx_t vector_end =
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		if (vector_start == 0 && vector_end == STANDARD_VECTOR_SIZE) {
-			// entire vector is encapsulated by append: append a single constant
-			auto constant_info = make_uniq<ChunkConstantInfo>(vector_idx * STANDARD_VECTOR_SIZE);
-			constant_info->insert_id = transaction.transaction_id;
-			constant_info->delete_id = NOT_DELETED_ID;
-			vector_info[vector_idx] = std::move(constant_info);
+			// entire vector is encapsulated by append: store a single constant insert id
+			vector_info[vector_idx] = make_uniq<ChunkVectorInfo>(allocator, vector_idx * STANDARD_VECTOR_SIZE,
+			                                                     transaction.GetTransactionId());
 		} else {
 			// part of a vector is encapsulated: append to that part
-			optional_ptr<ChunkVectorInfo> new_info;
 			if (!vector_info[vector_idx]) {
 				// first time appending to this vector: create new info
-				auto insert_info = make_uniq<ChunkVectorInfo>(allocator, vector_idx * STANDARD_VECTOR_SIZE);
-				new_info = insert_info.get();
-				vector_info[vector_idx] = std::move(insert_info);
-			} else if (vector_info[vector_idx]->type == ChunkInfoType::VECTOR_INFO) {
-				// use existing vector
-				new_info = &vector_info[vector_idx]->Cast<ChunkVectorInfo>();
-			} else {
-				throw InternalException("Error in RowVersionManager::AppendVersionInfo - expected either a "
-				                        "ChunkVectorInfo or no version info");
+				vector_info[vector_idx] = make_uniq<ChunkVectorInfo>(allocator, vector_idx * STANDARD_VECTOR_SIZE);
 			}
-			new_info->Append(vector_start, vector_end, transaction.transaction_id);
+			vector_info[vector_idx]->Append(vector_start, vector_end, transaction.GetTransactionId());
 		}
 	}
 }
@@ -124,7 +143,7 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 	}
 }
 
-void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, idx_t row_group_start, idx_t count) {
+void RowVersionManager::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t row_group_start, idx_t count) {
 	if (count == 0) {
 		return;
 	}
@@ -146,7 +165,7 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 		}
 		auto &info = *vector_info[vector_idx];
 		// if we wrote the entire chunk info try to compress it
-		auto cleanup = info.Cleanup(lowest_active_transaction);
+		auto cleanup = info.Cleanup(lowest_visibility_bound);
 		if (cleanup) {
 			vector_info[vector_idx].reset();
 		}
@@ -167,27 +186,53 @@ ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 	if (!vector_info[vector_idx]) {
 		// no info yet: create it
 		vector_info[vector_idx] = make_uniq<ChunkVectorInfo>(allocator, vector_idx * STANDARD_VECTOR_SIZE);
-	} else if (vector_info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
-		auto &constant = vector_info[vector_idx]->Cast<ChunkConstantInfo>();
-		// info exists but it's a constant info: convert to a vector info
-		auto new_info = make_uniq<ChunkVectorInfo>(allocator, vector_idx * STANDARD_VECTOR_SIZE, constant.insert_id);
-		vector_info[vector_idx] = std::move(new_info);
 	}
-	D_ASSERT(vector_info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
-	return vector_info[vector_idx]->Cast<ChunkVectorInfo>();
+	return *vector_info[vector_idx];
 }
 
 idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
 	lock_guard<mutex> lock(version_lock);
+	needs_compression_check = true;
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
+	needs_compression_check = true;
 	if (!uncheckpointed_delete_commit.IsValid() || commit_id > uncheckpointed_delete_commit.GetIndex()) {
 		uncheckpointed_delete_commit = commit_id;
 	}
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
+}
+
+void RowVersionManager::CompressVersionIds(VisibilityBound lowest_visibility_bound) {
+	lock_guard<mutex> lock(version_lock);
+	if (!needs_compression_check) {
+		// no version ids were modified since the last pass, and the last pass left nothing
+		// that could still become compressible - nothing to do
+#ifdef DEBUG
+		// a cleared manager-level check implies every vector's check is disarmed - verify the
+		// per-vector claims that the skipped pass relies on
+		for (auto &info : vector_info) {
+			if (info) {
+				D_ASSERT(!info->RecheckCompression());
+				info->VerifyCachedCompressionState();
+			}
+		}
+#endif
+		return;
+	}
+	bool pending = false;
+	for (auto &info : vector_info) {
+		if (info && info->CompressVersionIds(lowest_visibility_bound) == VersionCompressionResult::PENDING) {
+			// some ids can still compress once the lowest active start advances - check again next pass
+			pending = true;
+		}
+	}
+	needs_compression_check = pending;
+	// compression frees the per-row id segments - release any buffers that are now empty
+	// (Free keeps the last buffer with free space alive to prevent buffer creation fluctuation)
+	allocator.RemoveEmptyBuffers();
 }
 
 vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
@@ -201,14 +246,14 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 		// return the current set of pointers
 		return storage_pointers;
 	}
-	// first count how many ChunkInfo's we need to deserialize
-	vector<pair<idx_t, reference<ChunkInfo>>> to_serialize;
+	// first count how many chunk infos we need to serialize
+	vector<pair<idx_t, reference<ChunkVectorInfo>>> to_serialize;
 	for (idx_t vector_idx = 0; vector_idx < vector_info.size(); vector_idx++) {
 		auto chunk_info = vector_info[vector_idx].get();
 		if (!chunk_info) {
 			continue;
 		}
-		if (!chunk_info->HasDeletes(options.transaction_id)) {
+		if (!chunk_info->HasDeletes(options.visibility_bound)) {
 			continue;
 		}
 		to_serialize.emplace_back(vector_idx, *chunk_info);
@@ -224,12 +269,12 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 			auto &vector_idx = entry.first;
 			auto &chunk_info = entry.second.get();
 			metadata_writer.Write<idx_t>(vector_idx);
-			chunk_info.Write(metadata_writer, options.transaction_id);
+			chunk_info.Write(metadata_writer, options.visibility_bound);
 		}
 		metadata_writer.Flush();
 	}
 
-	if (uncheckpointed_delete_commit.IsValid() && uncheckpointed_delete_commit.GetIndex() <= options.transaction_id) {
+	if (uncheckpointed_delete_commit.IsValid() && uncheckpointed_delete_commit.GetIndex() < options.visibility_bound) {
 		// the last checkpointed id was either before or on the transaction we are checkpointing
 		// nothing to checkpoint in future commits until more deletes appear
 		uncheckpointed_delete_commit = optional_idx();
@@ -255,7 +300,13 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 		}
 
 		version_info->FillVectorInfo(vector_index);
-		version_info->vector_info[vector_index] = ChunkInfo::Read(version_info->GetAllocator(), source);
+		auto info = ChunkVectorInfo::Read(version_info->GetAllocator(), source);
+		if (info && info->RecheckCompression()) {
+			// with the current storage format deserialized ids are always settled, but Read
+			// derives this from the deserialized content - follow its verdict
+			version_info->needs_compression_check = true;
+		}
+		version_info->vector_info[vector_index] = std::move(info);
 	}
 	version_info->uncheckpointed_delete_commit = optional_idx();
 	return version_info;
@@ -264,6 +315,26 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 bool RowVersionManager::HasUnserializedChanges() {
 	lock_guard<mutex> lock(version_lock);
 	return uncheckpointed_delete_commit.IsValid();
+}
+
+bool RowVersionManager::HasDeletes() {
+	lock_guard<mutex> lock(version_lock);
+	for (auto &info : vector_info) {
+		if (info && info->AnyDeleted()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool RowVersionManager::HasUncommittedChanges() {
+	lock_guard<mutex> lock(version_lock);
+	for (auto &info : vector_info) {
+		if (info && info->HasUncommittedChanges()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {

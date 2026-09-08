@@ -2,9 +2,6 @@
 # description: Test reporting error location of casts
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 # unimplemented cast
 statement error
 SELECT 1::STRUCT(i INTEGER)

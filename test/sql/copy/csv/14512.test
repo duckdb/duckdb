@@ -2,9 +2,6 @@
 # description: Test for issue #14512
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 FROM read_csv('{DATA_DIR}/csv/14512.csv', strict_mode=TRUE);
 ----

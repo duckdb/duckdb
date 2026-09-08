@@ -1,0 +1,265 @@
+# name: test/sql/join/non_inner_join_subquery_binding.test
+# description: Binding and statement-root regressions for non-inner join condition subqueries
+# group: [join]
+
+statement ok
+SET debug_verify_column_bindings=true;
+
+# The two join inputs share one lexical scope even when pair-dependent
+# decorrelation represents one input as a lateral correlation.
+statement error
+SELECT *
+FROM (VALUES (1)) l(a)
+LEFT JOIN (VALUES (2)) r(a)
+ON EXISTS (
+	SELECT 1
+	WHERE a = l.a
+	  AND r.a = 2
+);
+----
+<REGEX>:.*Ambiguous reference to column name "a".*
+
+# The same ambiguity applies to references directly in the join condition.
+statement error
+SELECT *
+FROM (VALUES (1)) l(a)
+LEFT JOIN (VALUES (2)) r(a)
+ON a = 1
+AND EXISTS (
+	SELECT 1
+	WHERE l.a = r.a
+);
+----
+<REGEX>:.*Ambiguous reference to column name "a".*
+
+# Qualification through function arguments and dotted calls uses the same scope.
+statement error
+SELECT *
+FROM (VALUES ('a')) l(v)
+LEFT JOIN (VALUES ('A')) r(v)
+ON EXISTS (
+	SELECT 1
+	WHERE lower(v) = l.v
+	  AND r.v = 'A'
+);
+----
+<REGEX>:.*Ambiguous reference to column name "v".*
+
+query TT
+SELECT l.v, r.v
+FROM (VALUES ('a')) l(v)
+LEFT JOIN (VALUES ('A')) r(v)
+ON EXISTS (
+	SELECT 1
+	WHERE l.v.lower() = 'a'
+	  AND r.v.lower() = 'a'
+);
+----
+a	A
+
+# Lambda parameters shadow same-named columns from both join inputs.
+query IIII
+SELECT *
+FROM (VALUES (1, 1)) l(x, a)
+LEFT JOIN (VALUES (2, 1)) r(x, b)
+ON list_transform([1], lambda x: x)[1] = 1
+AND EXISTS (
+	SELECT 1
+	WHERE l.a = r.b
+);
+----
+1	1	2	1
+
+# Field access retains lambda precedence over the complete join scope.
+query II
+SELECT l.a, r.b
+FROM (VALUES ({'v': 10}, 1)) l(x, a)
+LEFT JOIN (VALUES ({'v': 20}, 1)) r(x, b)
+ON list_transform([{'v': 1}], lambda x: x.v)[1] = 1
+AND EXISTS (
+	SELECT 1
+	WHERE l.a = r.b
+);
+----
+1	1
+
+# Struct-valued macro parameters shadow same-named columns from both join inputs.
+statement ok
+CREATE MACRO join_extract(x) AS x.v;
+
+query IIII
+SELECT *
+FROM (VALUES (1, 1)) l(x, a)
+LEFT JOIN (VALUES (2, 1)) r(x, b)
+ON join_extract({'v': 1}) = 1
+AND EXISTS (
+	SELECT 1
+	WHERE l.a = r.b
+);
+----
+1	1	2	1
+
+# Positional references follow the complete lexical join output order.
+query IIII
+SELECT *
+FROM (VALUES (1, 1)) l(a, x)
+LEFT JOIN (VALUES (2, 1)) r(b, y)
+ON #1 = 1
+AND #3 = 2
+AND EXISTS (
+	SELECT 1
+	WHERE l.x = r.y
+);
+----
+1	1	2	1
+
+# RIGHT JOIN normalization preserves the original syntactic output order.
+query IIII
+SELECT *
+FROM (VALUES (1, 1)) l(a, x)
+RIGHT JOIN (VALUES (2, 1)) r(b, y)
+ON #1 = 1
+AND #3 = 2
+AND EXISTS (
+	SELECT 1
+	WHERE l.x = r.y
+);
+----
+1	1	2	1
+
+statement error
+SELECT *
+FROM (VALUES (1, 1)) l(a, x)
+LEFT JOIN (VALUES (2, 1)) r(b, y)
+ON #5 = 1
+AND EXISTS (
+	SELECT 1
+	WHERE l.x = r.y
+);
+----
+<REGEX>:.*Positional reference 5 out of range \(total 4 columns\).*
+
+# A dotted reference can be an unqualified struct path and follows the same
+# join-scope ambiguity rules.
+statement error
+SELECT *
+FROM (VALUES ({'v': 1})) l(s)
+LEFT JOIN (VALUES ({'v': 2})) r(s)
+ON EXISTS (
+	SELECT 1
+	WHERE s.v = l.s.v
+	  AND r.s.v = 2
+);
+----
+<REGEX>:.*Ambiguous reference to column name "s".*
+
+# A table-qualified reference takes precedence over an unqualified struct path
+# across the complete join scope, independent of which input contains the table.
+query II
+SELECT s.v, r.s.v
+FROM (VALUES (1)) s(v)
+LEFT JOIN (VALUES ({'v': 2})) r(s)
+ON EXISTS (
+	SELECT 1
+	WHERE s.v = 1
+	  AND r.s.v = 2
+);
+----
+1	2
+
+query II
+SELECT l.s.v, s.v
+FROM (VALUES ({'v': 1})) l(s)
+LEFT JOIN (VALUES (2)) s(v)
+ON EXISTS (
+	SELECT 1
+	WHERE l.s.v = 1
+	  AND s.v = 2
+);
+----
+1	2
+
+# USING columns retain their normal join-scope precedence on either input.
+query II
+SELECT a.x, r.x
+FROM ((VALUES (1)) a(x) JOIN (VALUES (1)) b(x) USING (x))
+LEFT JOIN (VALUES (1)) r(x)
+ON EXISTS (
+	SELECT 1
+	WHERE x = r.x
+);
+----
+1	1
+
+query II
+SELECT l.x, a.x
+FROM (VALUES (1)) l(x)
+LEFT JOIN ((VALUES (1)) a(x) JOIN (VALUES (1)) b(x) USING (x))
+ON EXISTS (
+	SELECT 1
+	WHERE l.x = x
+);
+----
+1	1
+
+# Distinct USING outputs with the same name are ambiguous in the combined scope.
+statement error
+SELECT *
+FROM ((VALUES (1)) a(x) JOIN (VALUES (1)) b(x) USING (x))
+LEFT JOIN ((VALUES (1)) c(x) JOIN (VALUES (1)) d(x) USING (x))
+ON EXISTS (
+	SELECT 1
+	WHERE x = 1
+	  AND a.x = c.x
+);
+----
+<REGEX>:.*Ambiguous column reference: column "x".*
+
+# Deferred pair-dependent FULL JOIN planning runs at the completed UPDATE root.
+statement ok
+CREATE TABLE update_target(i INTEGER);
+
+statement ok
+INSERT INTO update_target VALUES (1), (2);
+
+statement ok
+UPDATE update_target t
+SET i = t.i + 10
+FROM (VALUES (1)) l(a)
+FULL JOIN (VALUES (1)) r(b)
+  ON l.a = r.b
+ AND EXISTS (
+	SELECT 1
+	WHERE l.a = r.b
+);
+
+query I
+SELECT i FROM update_target ORDER BY i;
+----
+11
+12
+
+# DELETE ... USING reaches the same statement-independent finalization path.
+statement ok
+CREATE TABLE delete_target(i INTEGER);
+
+statement ok
+INSERT INTO delete_target VALUES (1), (2);
+
+statement ok
+DELETE FROM delete_target t
+USING (VALUES (1)) l(a)
+FULL JOIN (VALUES (1)) r(b)
+  ON l.a = r.b
+ AND EXISTS (
+	SELECT 1
+	WHERE l.a = r.b
+);
+
+query I
+SELECT count(*) FROM delete_target;
+----
+0
+
+statement ok
+SET debug_verify_column_bindings=false;

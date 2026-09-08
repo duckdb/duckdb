@@ -121,7 +121,7 @@ int split_work(int tnum, ds_key_t *pkFirstRow, ds_key_t *pkRowCount) {
  */
 int checkSeeds(tdef *pTdef) {
 	int i, res, nReturnCode = 0;
-	static int bSetSeeds = 0;
+	static thread_local int bSetSeeds = 0;
 
 	if (!InitConstants::checkSeeds_init) {
 		bSetSeeds = is_set("CHKSEEDS");

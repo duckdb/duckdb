@@ -9,7 +9,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPrepare &op) {
 	// Generate the physical plan only if all parameters are bound.
 	// Otherwise, the physical plan is never used.
 	D_ASSERT(op.children.size() <= 1);
-	if (op.prepared->properties.bound_all_parameters && !op.children.empty()) {
+	if (op.prepared->properties.bound_all_parameters && !op.prepared->properties.always_require_rebind &&
+	    !op.children.empty()) {
 		PhysicalPlanGenerator inner_planner(context);
 		op.prepared->physical_plan = inner_planner.PlanInternal(*op.children[0]);
 		op.prepared->types = op.prepared->physical_plan->Root().types;

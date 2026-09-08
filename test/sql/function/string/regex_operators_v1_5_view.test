@@ -1,0 +1,57 @@
+# name: test/sql/function/string/regex_operators_v1_5_view.test
+# description: Test regular expression operator semantics in views written by v1.5
+# group: [string]
+
+# data/storage/regex_operators_v1_5.db.gz was written by DuckDB v1.5.3.
+require vector_size 2048
+
+unzip data/storage/regex_operators_v1_5.db.gz {TEST_DIR}/regex_operators_v1_5.db
+
+load {TEST_DIR}/regex_operators_v1_5.db readonly
+
+statement ok
+SET regex_match_operator_semantics = 'partial'
+
+# Direct operators use the current setting.
+query T
+SELECT col FROM tbl WHERE col ~ 'b' ORDER BY col
+----
+abc
+b
+xabcy
+
+# Persisted v1.5 views keep the old full-match behavior.
+query T
+SELECT col FROM v_regex_match
+----
+b
+
+query T
+SELECT col FROM v_regex_not_match
+----
+abc
+xabcy
+zzz
+
+statement ok
+SET regex_match_operator_semantics = 'full'
+
+query T
+SELECT col FROM tbl WHERE col ~ 'b' ORDER BY col
+----
+b
+
+query T
+SELECT col FROM v_regex_match
+----
+b
+
+query T
+SELECT col FROM v_regex_not_match
+----
+abc
+xabcy
+zzz
+
+statement ok
+RESET regex_match_operator_semantics

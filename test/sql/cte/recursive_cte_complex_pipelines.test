@@ -2,9 +2,6 @@
 # description: Recursive CTEs with complex pipelines
 # group: [cte]
 
-statement ok
-PRAGMA enable_verification
-
 # recursive CTE with various cross products
 query I
 WITH RECURSIVE t AS
@@ -131,3 +128,85 @@ SELECT * FROM t ORDER BY 1 NULLS LAST;
 4
 8
 16
+
+# recursive CTE inside lateral join with inherited correlations
+query I
+SELECT 1
+FROM (VALUES (1::INT4)) a(v),
+LATERAL (
+	WITH RECURSIVE
+		b AS (
+			SELECT 0::INT4 AS i
+			WHERE a.v IS NOT NULL
+		),
+		c AS (
+			SELECT 0::INT8 AS i
+			UNION ALL
+			SELECT d.i + 1::INT8
+			FROM c d,
+			LATERAL (
+				SELECT 1
+				FROM b e
+				WHERE e.i = d.i
+			) f
+		)
+	SELECT * FROM c
+) g
+LIMIT 1;
+----
+1
+
+# A post-LEFT filter in an EXISTS controls convergence of the recursion.
+statement ok
+SET max_execution_time=5000
+
+query II
+WITH RECURSIVE t(step, r, v) AS (
+	VALUES (0, 'x', 1)
+	UNION ALL (
+		WITH tmp AS (SELECT * FROM t),
+		next(step, r, v) AS MATERIALIZED (
+			SELECT step, 'z', v FROM tmp WHERE r = 'x'
+			UNION ALL
+			SELECT * FROM tmp WHERE r <> 'z'
+		)
+		SELECT step + 1, r, v
+		FROM next
+		WHERE EXISTS (
+			SELECT *
+			FROM next n
+			LEFT JOIN tmp p ON n.r = p.r
+			WHERE p.v IS DISTINCT FROM n.v
+		)
+	)
+)
+SELECT max(step), count(*) FROM t;
+----
+1	3
+
+query II
+WITH RECURSIVE t(step, r, v) AS (
+	VALUES (0, 'x', 1)
+	UNION ALL (
+		WITH tmp AS (SELECT * FROM t),
+		next(step, r, v) AS NOT MATERIALIZED (
+			SELECT step, 'z', v FROM tmp WHERE r = 'x'
+			UNION ALL
+			SELECT * FROM tmp WHERE r <> 'z'
+		)
+		SELECT step + 1, r, v
+		FROM next
+		WHERE EXISTS (
+			SELECT *
+			FROM next n
+			LEFT JOIN tmp p ON n.r = p.r
+			WHERE p.v IS DISTINCT FROM n.v
+		)
+	)
+)
+SELECT max(step), count(*) FROM t;
+----
+1	3
+
+statement ok
+RESET max_execution_time

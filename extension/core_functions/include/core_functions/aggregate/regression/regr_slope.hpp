@@ -13,17 +13,14 @@
 namespace duckdb {
 
 struct RegrSlopeState {
+	static constexpr const char *STATE_NAMES[] = {"cov_pop", "var_pop"};
+	using STATE_TYPE = StructStateType<CovarState, StddevState>;
+
 	CovarState cov_pop;
 	StddevState var_pop;
 };
 
 struct RegrSlopeOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		CovarOperation::Initialize<CovarState>(state.cov_pop);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, y, x, idata);
@@ -43,9 +40,6 @@ struct RegrSlopeOperation {
 		} else {
 			auto cov = state.cov_pop.co_moment / state.cov_pop.count;
 			auto var_pop = state.var_pop.count > 1 ? (state.var_pop.dsquared / state.var_pop.count) : 0;
-			if (!Value::DoubleIsFinite(var_pop)) {
-				throw OutOfRangeException("VARPOP is out of range!");
-			}
 			target = var_pop != 0 ? cov / var_pop : NAN;
 		}
 	}

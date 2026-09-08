@@ -1,0 +1,41 @@
+# name: test/sql/types/geo/geometry_legacy_recheckpoint.test
+# description: Re-checkpointing an unchanged legacy (pre-v1.5) geometry column should not fail
+# group: [geo]
+
+statement ok
+attach '{TEST_DIR}/geometry_legacy_recheckpoint.db' AS db (STORAGE_VERSION 'v1.4.4');
+
+statement ok
+CREATE TABLE db.t1 AS SELECT i, ('POINT(' || i || ' ' || i || ')')::GEOMETRY AS geom FROM range(1000) tbl(i);
+
+statement ok
+CHECKPOINT db;
+
+# delete from another column's row group - the geometry column itself is unchanged,
+# but the row group has changes, forcing the unchanged legacy geometry column to be re-checkpointed
+statement ok
+DELETE FROM db.t1 WHERE i = 5;
+
+statement ok
+CHECKPOINT db;
+
+query II
+SELECT count(*), count(geom) FROM db.t1;
+----
+999	999
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/geometry_legacy_recheckpoint.db' AS db;
+
+query II
+SELECT count(*), count(geom) FROM db.t1;
+----
+999	999
+
+query I
+SELECT geom FROM db.t1 WHERE i = 4;
+----
+POINT (4 4)
