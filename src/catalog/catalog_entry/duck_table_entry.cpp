@@ -1432,7 +1432,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		const auto existing_pk = GetPrimaryKey();
 		if (unique.is_primary_key && existing_pk) {
 			auto existing_name = existing_pk->ToString();
-			throw CatalogException("table \"%s\" can have only one primary key: %s", name, existing_name);
+			throw CatalogException("table %s can have only one primary key: %s", name, existing_name);
 		}
 		break;
 	}
