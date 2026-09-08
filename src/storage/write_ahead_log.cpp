@@ -14,6 +14,7 @@
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
@@ -551,20 +552,21 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	WriteAheadLogSerializer serializer(*this, WALType::ALTER_INFO);
 	serializer.WriteProperty(101, "info", &info);
 
-	if (!info.IsAddUniqueConstraint()) {
+	if (!info.IsAddPrimaryKey() && !info.IsAddForeignKey()) {
 		return serializer.End();
 	}
 
 	auto &table_info = info.Cast<AlterTableInfo>();
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	auto &unique = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	auto &table_entry = entry.Cast<DuckTableEntry>();
 	auto &parent = table_entry.Parent().Cast<DuckTableEntry>();
 	auto &parent_info = parent.GetStorage().GetDataTableInfo();
 	auto &list = parent_info->GetIndexes();
 
-	auto name = unique.GetName(parent.name);
+	auto name = info.IsAddPrimaryKey() ? constraint_info.constraint->Cast<UniqueConstraint>().GetName(parent.name)
+	                                   : Identifier(constraint_info.constraint->Cast<ForeignKeyConstraint>().GetName(
+	                                         parent.name.GetIdentifierName()));
 	auto &database = GetDatabase();
 	SerializeIndex(database, serializer, list, name);
 	serializer.End();
