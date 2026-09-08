@@ -16,11 +16,11 @@ statement ok
 insert into test values (1, 3, 1.3, 10.3), (1, 1, 1.1, 10.1), (1, 2, 1.2, 10.2),  (2, 2, 2.2, 20.2), (2, 1, 2.1, 20.1),  (2, 3, 2.3, 20.3);
 
 query IIII
-SELECT p, o, __pattern_window.match_start,  __pattern_window.match_end
+SELECT p, o, ms, me
 FROM test MATCH_RECOGNIZE(
     PARTITION BY p
     ORDER BY o
-    MEASURES A.v AS a_val, B.v as b_val
+    MEASURES A.v AS a_val, B.v as b_val, FINAL FIRST(o) AS ms, FINAL LAST(o) AS me
     ALL ROWS PER MATCH
     AFTER MATCH SKIP TO LAST B
     PATTERN (A B)
@@ -28,12 +28,12 @@ FROM test MATCH_RECOGNIZE(
 )
 ORDER BY p,o
 ----
-1	2	1	2
-1	3	1	2
-2	1	0	1
-2	2	0	1
+1	2	2	3
+1	3	2	3
+2	1	1	2
 2	2	1	2
-2	3	1	2
+2	2	2	3
+2	3	2	3
 
 query IIII
 SELECT s.p, s.mn, s.a_val, s.b_val

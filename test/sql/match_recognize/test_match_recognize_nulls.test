@@ -13,8 +13,8 @@ insert into n values (1,1),(2,NULL),(3,2),(4,3),(5,NULL),(6,4);
 
 # a condition that is NULL is not true, so a NULL row ends the run rather than extending it
 query II
-SELECT i, __pattern_window.classifier FROM n MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A+) DEFINE A as v>0
+SELECT i, cl FROM n MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl ALL ROWS PER MATCH PATTERN (A+) DEFINE A as v>0
 ) ORDER BY i
 ----
 1	A

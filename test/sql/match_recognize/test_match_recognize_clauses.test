@@ -132,16 +132,17 @@ create table pt(p integer, i integer);
 statement ok
 insert into pt values (1,1),(1,2),(1,3),(2,1),(2,2),(2,3);
 
-# matches never span a partition, and the reported offsets are partition relative
+# matches never span a partition, so both partitions match their own first two rows
 query IIII
-SELECT p, i, __pattern_window.match_start, __pattern_window.match_end FROM pt MATCH_RECOGNIZE(
-    PARTITION BY p ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A A) DEFINE A as true
+SELECT p, i, ms, me FROM pt MATCH_RECOGNIZE(
+    PARTITION BY p ORDER BY i MEASURES i AS x, FINAL FIRST(i) AS ms, FINAL LAST(i) AS me
+    ALL ROWS PER MATCH PATTERN (A A) DEFINE A as true
 ) ORDER BY p, i
 ----
-1	1	0	1
-1	2	0	1
-2	1	0	1
-2	2	0	1
+1	1	1	2
+1	2	1	2
+2	1	1	2
+2	2	1	2
 
 # every row of every partition is considered, including the last one
 query II
@@ -320,7 +321,7 @@ SELECT 1 FROM ticks MATCH_RECOGNIZE(
     PATTERN (R B) DEFINE R AS R.v = 5, B AS B.v > nosuch.v
 )
 ----
-<REGEX>:Binder Error:.*"nosuch" in the definition of B is not a pattern variable.*
+<REGEX>:Binder Error:.*nosuch.*
 
 # DEFINE AUTO takes each variable's condition from the column of the same name, cast to boolean, so
 # a variable stands for that column being true, or non zero, or whatever else its type calls true.

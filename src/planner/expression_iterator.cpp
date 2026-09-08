@@ -1,5 +1,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 
+#include "duckdb/function/match_recognize.hpp"
+
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -98,6 +100,29 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	case ExpressionClass::BOUND_UNNEST: {
 		auto &unnest_expr = expr.Cast<BoundUnnestExpression>();
 		callback(unnest_expr.ChildMutable());
+		break;
+	}
+	case ExpressionClass::PATTERN: {
+		// a MATCH_RECOGNIZE pattern is a tree of its own node types rather than of ordinary expressions
+		switch (expr.GetExpressionType()) {
+		case ExpressionType::ALTERNATION: {
+			auto &alternation = expr.Cast<BoundAlternationExpression>();
+			callback(alternation.child_left);
+			callback(alternation.child_right);
+			break;
+		}
+		case ExpressionType::CONCATENATION:
+			for (auto &child : expr.Cast<BoundConcatenationExpression>().children) {
+				callback(child);
+			}
+			break;
+		case ExpressionType::QUANTIFIER:
+			callback(expr.Cast<BoundQuantifierExpression>().child);
+			break;
+		default:
+			// an anchor has no children, and a leaf is a constant
+			break;
+		}
 		break;
 	}
 	case ExpressionClass::BOUND_COLUMN_REF:

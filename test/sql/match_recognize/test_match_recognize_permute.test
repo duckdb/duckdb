@@ -35,8 +35,8 @@ SELECT count(*), max(len) FROM perm MATCH_RECOGNIZE(
 
 # three parts reach every arrangement, so b a c matches as B A C
 query II
-SELECT i, __pattern_window.classifier FROM perm MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
+SELECT i, cl FROM perm MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (PERMUTE(A, B, C)) DEFINE A AS c='a', B AS c='b', C AS c='c'
 ) ORDER BY i
 ----
@@ -46,8 +46,8 @@ SELECT i, __pattern_window.classifier FROM perm MATCH_RECOGNIZE(
 
 # where more than one arrangement fits, the one listed first wins
 query II
-SELECT i, __pattern_window.classifier FROM perm MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
+SELECT i, cl FROM perm MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (PERMUTE(A, B)) DEFINE A AS true, B AS true
 ) ORDER BY i
 ----
@@ -57,8 +57,8 @@ SELECT i, __pattern_window.classifier FROM perm MATCH_RECOGNIZE(
 4	B
 
 query II
-SELECT i, __pattern_window.classifier FROM perm MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
+SELECT i, cl FROM perm MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
     PATTERN (PERMUTE(B, A)) DEFINE A AS true, B AS true
 ) ORDER BY i
 ----

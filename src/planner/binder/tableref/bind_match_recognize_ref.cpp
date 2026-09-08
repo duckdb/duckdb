@@ -13,6 +13,8 @@
 #include "duckdb/parser/expression/pattern_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
@@ -110,11 +112,39 @@ static void NavigateOtherSymbols(unique_ptr<ParsedExpression> &expr, const strin
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { NavigateOtherSymbols(child, define_name, symbols); });
 }
 
-static void CheckAndZapQualifiers(ParsedExpression &root_expr, const string &define_name) {
+//! The names a qualified reference could be naming a table by. Anything else in front of a column is
+//! navigation into that column rather than a table it belongs to.
+static void CollectInputTableNames(const TableRef &ref, case_insensitive_set_t &names) {
+	if (!ref.alias.empty()) {
+		names.insert(ref.alias.GetIdentifierName());
+	}
+	switch (ref.type) {
+	case TableReferenceType::BASE_TABLE:
+		names.insert(ref.Cast<BaseTableRef>().Table().GetIdentifierName());
+		break;
+	case TableReferenceType::JOIN: {
+		auto &join = ref.Cast<JoinRef>();
+		CollectInputTableNames(*join.left, names);
+		CollectInputTableNames(*join.right, names);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+//! A condition is evaluated over a subquery of the input, so a pattern variable and a table of the
+//! input both have to go. Anything else in front of a column is navigation into it and stays.
+static void ZapDefineQualifier(ParsedExpression &root_expr, const string &define_name,
+                               const case_insensitive_set_t &symbols, const case_insensitive_set_t &input_tables) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
-		if (colref.IsQualified() && colref.ColumnNames()[0] != define_name) {
-			throw BinderException("\"%s\" in the definition of %s is not a pattern variable or a column of the input",
-			                      colref.ColumnNames()[0].GetIdentifierName(), define_name);
+		if (!colref.IsQualified()) {
+			return;
+		}
+		const auto qualifier = colref.ColumnNames()[0].GetIdentifierName();
+		if (!StringUtil::CIEquals(qualifier, define_name) && !symbols.count(qualifier) &&
+		    !input_tables.count(qualifier)) {
+			return;
 		}
 		colref.ColumnNamesMutable() = {colref.GetColumnName()};
 	});
@@ -313,17 +343,29 @@ static unique_ptr<ParsedExpression> CreateStructExtract(const string &column_nam
 //! The field a value travels in while it is carried to the row that reports it
 constexpr const char *MATCH_RECOGNIZE_VALUE_FIELD = "v";
 
+//! An empty match covers no rows, so nothing an expression reads from a row of the match is there to be
+//! read. The row the match is reported on is not one of them.
+static unique_ptr<ParsedExpression> OnlyWhenMatched(const string &state, unique_ptr<ParsedExpression> value) {
+	auto in_match = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, CreateStructExtract(state, "is_empty"));
+	auto result = make_uniq<CaseExpression>();
+	CaseCheck check;
+	check.when_expr = std::move(in_match);
+	check.then_expr = std::move(value);
+	result->CaseChecksMutable().push_back(std::move(check));
+	result->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	return std::move(result);
+}
+
 //! struct_pack(v := <value>) is never NULL, so a NULL the value itself holds stays apart from the NULL
 //! that masks a row the variable did not match - which is the NULL that MatchScopedValue walks back over.
 //! An empty match covers no rows, so the row that carries it has no value to report and is masked too.
-static unique_ptr<ParsedExpression> PackValue(unique_ptr<ParsedExpression> value) {
+static unique_ptr<ParsedExpression> PackValue(const string &state, unique_ptr<ParsedExpression> value) {
 	value->SetAlias(Identifier(MATCH_RECOGNIZE_VALUE_FIELD));
 	vector<unique_ptr<ParsedExpression>> fields;
 	fields.push_back(std::move(value));
 	auto packed = make_uniq<FunctionExpression>("struct_pack", std::move(fields));
 
-	auto in_match = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT,
-	                                              CreateStructExtract("__pattern_window", "is_empty"));
+	auto in_match = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, CreateStructExtract(state, "is_empty"));
 	auto result = make_uniq<CaseExpression>();
 	CaseCheck check;
 	check.when_expr = std::move(in_match);
@@ -335,14 +377,19 @@ static unique_ptr<ParsedExpression> PackValue(unique_ptr<ParsedExpression> value
 
 //! CASE WHEN <classifier> IN (symbols) THEN <column> END - NULL on every row none of them matched.
 //! A plain pattern variable stands for itself; a SUBSET name stands for all of its members.
-static unique_ptr<ParsedExpression> ClassifiedValue(const vector<string> &symbols, unique_ptr<ParsedExpression> value) {
+static unique_ptr<ParsedExpression> ClassifierMatches(const string &state, const vector<string> &symbols) {
 	D_ASSERT(!symbols.empty());
 	vector<unique_ptr<ParsedExpression>> in_children;
-	in_children.push_back(CreateStructExtract("__pattern_window", "classifier"));
+	in_children.push_back(CreateStructExtract(state, "classifier"));
 	for (auto &symbol : symbols) {
 		in_children.push_back(make_uniq<ConstantExpression>(Value(symbol)));
 	}
-	auto matches_symbol = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
+	return make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
+}
+
+static unique_ptr<ParsedExpression> ClassifiedValue(const string &state, const vector<string> &symbols,
+                                                    unique_ptr<ParsedExpression> value) {
+	auto matches_symbol = ClassifierMatches(state, symbols);
 	auto result = make_uniq<CaseExpression>();
 	CaseCheck check;
 	check.when_expr = std::move(matches_symbol);
@@ -382,8 +429,8 @@ static void ResolveOrder(ClientContext &context, OrderType &type, OrderByNullTyp
 //! A reference to <symbol>.<column> resolves to that column on the last row the variable matched.
 //! ONE ROW PER MATCH reports a finished match, so it sees the whole match (FINAL semantics); ALL ROWS
 //! PER MATCH reports progress, so it only sees the match up to the current row (RUNNING semantics).
-static void ScopeToMatch(ClientContext &context, WindowExpression &window, const MatchRecognizeConfig &config,
-                         bool running, bool reversed = false) {
+static void ScopeToMatch(ClientContext &context, const string &state, WindowExpression &window,
+                         const MatchRecognizeConfig &config, bool running, bool reversed = false) {
 	// walked backwards, the rows that came before the current one come after it
 	window.WindowStartMutable() =
 	    running && reversed ? WindowBoundary::CURRENT_ROW_ROWS : WindowBoundary::UNBOUNDED_PRECEDING;
@@ -394,7 +441,7 @@ static void ScopeToMatch(ClientContext &context, WindowExpression &window, const
 	for (auto &expr : config.partition_expressions) {
 		window.PartitionsMutable().push_back(expr->Copy());
 	}
-	window.PartitionsMutable().push_back(CreateStructExtract("__pattern_window", "match_number"));
+	window.PartitionsMutable().push_back(CreateStructExtract(state, "match_number"));
 	// Every window says which way round it walks, rather than leaning on the order its input happens
 	// to arrive in. Windows that leave it unsaid are free to be grouped with one that says the
 	// opposite, and then they walk that way too.
@@ -414,13 +461,13 @@ static void ScopeToMatch(ClientContext &context, WindowExpression &window, const
 	// about which of them is which. The row's place in the partition is unique, so ordering on it last
 	// leaves nothing tied.
 	window.OrderByMutable().emplace_back(reversed ? OrderType::DESCENDING : OrderType::ASCENDING,
-	                                     OrderByNullType::NULLS_LAST,
-	                                     CreateStructExtract("__pattern_window", "row_index"));
+	                                     OrderByNullType::NULLS_LAST, CreateStructExtract(state, "row_index"));
 }
 
 //! Takes a value packed by PackValue and reports it from the first or last row of the match that carries
 //! one. IGNORE NULLS is what makes it that row rather than the first or last row of the match.
-static unique_ptr<ParsedExpression> MatchScopedValue(ClientContext &context, const MatchRecognizeConfig &config,
+static unique_ptr<ParsedExpression> MatchScopedValue(ClientContext &context, const string &state,
+                                                     const MatchRecognizeConfig &config,
                                                      unique_ptr<ParsedExpression> packed, bool running,
                                                      bool first = false, idx_t offset = 0) {
 	// nth_value counts from the frame's first row, so counting back from the match's last one is the
@@ -435,7 +482,7 @@ static unique_ptr<ParsedExpression> MatchScopedValue(ClientContext &context, con
 	}
 	window->HasIgnoreNullsMutable() = true;
 	window->IgnoreNullsMutable() = true;
-	ScopeToMatch(context, *window, config, running, reversed);
+	ScopeToMatch(context, state, *window, config, running, reversed);
 	return CreateStructExtract(std::move(window), MATCH_RECOGNIZE_VALUE_FIELD);
 }
 
@@ -485,9 +532,12 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 }
 
 //! Rewrite a MEASURES expression into something evaluable next to the pattern window
-static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, const MatchRecognizeConfig &config,
-                           const case_insensitive_map_t<vector<string>> &symbols, bool running, bool one_row,
-                           bool inside_aggregate = false) {
+//! An aggregate in MEASURES aggregates the rows of the match that its arguments name a variable for,
+//! so rewriting them collects which variable that is.
+static void RewriteMeasure(Binder &binder, const string &state, unique_ptr<ParsedExpression> &expr,
+                           const MatchRecognizeConfig &config, const case_insensitive_map_t<vector<string>> &symbols,
+                           const case_insensitive_set_t &input_tables, bool running, bool one_row,
+                           optional_ptr<case_insensitive_set_t> aggregate_scope = nullptr) {
 	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function = expr->Cast<FunctionExpression>();
 		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
@@ -497,15 +547,16 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 			// ONE ROW PER MATCH reports a finished match, so its current row is the last one: the two
 			// are the same thing there and the keywords make no difference
 			expr = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
-			RewriteMeasure(binder, expr, config, symbols, one_row ? false : is_running, one_row, inside_aggregate);
+			RewriteMeasure(binder, state, expr, config, symbols, input_tables, one_row ? false : is_running, one_row,
+			               aggregate_scope);
 			return;
 		}
 		if (function_name == "CLASSIFIER" && function.GetArguments().empty()) {
-			expr = CreateStructExtract("__pattern_window", "classifier");
+			expr = CreateStructExtract(state, "classifier");
 			return;
 		}
 		if (function_name == "MATCH_NUMBER" && function.GetArguments().empty()) {
-			expr = CreateStructExtract("__pattern_window", "match_number");
+			expr = CreateStructExtract(state, "match_number");
 			return;
 		}
 		// logical navigation over the rows of the match. LAST(X.c) is what an unadorned X.c already
@@ -535,11 +586,11 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 					inner = make_uniq<ColumnRefExpression>(colref.GetColumnName());
 				}
 			}
-			RewriteMeasure(binder, inner, config, symbols, running, one_row, inside_aggregate);
-			auto packed = PackValue(std::move(inner));
-			auto masked = symbol.empty() ? std::move(packed) : ClassifiedValue(symbol, std::move(packed));
-			expr =
-			    MatchScopedValue(binder.context, config, std::move(masked), running, function_name == "FIRST", offset);
+			RewriteMeasure(binder, state, inner, config, symbols, input_tables, running, one_row, aggregate_scope);
+			auto packed = PackValue(state, std::move(inner));
+			auto masked = symbol.empty() ? std::move(packed) : ClassifiedValue(state, symbol, std::move(packed));
+			expr = MatchScopedValue(binder.context, state, config, std::move(masked), running, function_name == "FIRST",
+			                        offset);
 			return;
 		}
 		// an aggregate in MEASURES aggregates the rows of the match
@@ -547,9 +598,10 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 		auto entry = binder.GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
 		                                    lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
-			// the aggregate already spans the match, so inside it a variable only masks its rows
+			case_insensitive_set_t scope;
 			for (auto &argument : function.GetArgumentsMutable()) {
-				RewriteMeasure(binder, argument.GetExpressionMutable(), config, symbols, running, one_row, true);
+				RewriteMeasure(binder, state, argument.GetExpressionMutable(), config, symbols, input_tables, running,
+				               one_row, &scope);
 			}
 			auto &qualified = function.GetQualifiedName();
 			auto window = make_uniq<WindowExpression>(qualified.Catalog().GetIdentifierName(),
@@ -557,16 +609,38 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 			                                          qualified.Name().GetIdentifierName());
 			window->GetArgumentsMutable() = std::move(function.GetArgumentsMutable());
 			window->DistinctMutable() = function.Distinct();
+			// the ordering of an ordered aggregate's input is its own, and the order the match was
+			// found in is no substitute for it
+			if (function.OrderByMutable()) {
+				for (auto &order : function.OrderByMutable()->orders) {
+					RewriteMeasure(binder, state, order.expression, config, symbols, input_tables, running, one_row,
+					               &scope);
+					window->ArgOrdersMutable().emplace_back(order.type, order.null_order, std::move(order.expression));
+				}
+			}
+			if (scope.size() > 1) {
+				throw BinderException("An aggregate in MEASURES reads the rows of one pattern variable, so \"%s\" "
+				                      "cannot also read those of \"%s\"",
+				                      *scope.begin(), *std::next(scope.begin()));
+			}
 			// an empty match covers no rows, so the row carrying it must not reach the aggregate
-			auto in_match = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT,
-			                                              CreateStructExtract("__pattern_window", "is_empty"));
+			unique_ptr<ParsedExpression> in_match =
+			    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, CreateStructExtract(state, "is_empty"));
+			if (!scope.empty()) {
+				// naming a variable restricts the aggregate to the rows it matched. Dropping those rows
+				// is not the same as passing them as NULL: an aggregate that keeps NULLs would see them.
+				auto classified = symbols.find(*scope.begin());
+				D_ASSERT(classified != symbols.end());
+				in_match = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(in_match),
+				                                            ClassifierMatches(state, classified->second));
+			}
 			if (function.FilterMutable()) {
 				window->FilterMutable() = make_uniq<ConjunctionExpression>(
 				    ExpressionType::CONJUNCTION_AND, std::move(function.FilterMutable()), std::move(in_match));
 			} else {
 				window->FilterMutable() = std::move(in_match);
 			}
-			ScopeToMatch(binder.context, *window, config, running);
+			ScopeToMatch(binder.context, state, *window, config, running);
 			expr = std::move(window);
 			return;
 		}
@@ -578,24 +652,30 @@ static void RewriteMeasure(Binder &binder, unique_ptr<ParsedExpression> &expr, c
 		if (entry != symbols.end()) {
 			// a known pattern variable scopes the column to the rows it matched
 			auto column = make_uniq<ColumnRefExpression>(colref.GetColumnName());
-			if (inside_aggregate) {
-				// the aggregate spans the match and skips the rows the variable did not match, which is
-				// exactly what the masking NULL means there
-				expr = ClassifiedValue(entry->second, std::move(column));
+			if (aggregate_scope) {
+				// the enclosing aggregate is the one that drops the rows the variable did not match
+				aggregate_scope->insert(names[0].GetIdentifierName());
+				expr = std::move(column);
 				return;
 			}
-			expr = MatchScopedValue(binder.context, config,
-			                        ClassifiedValue(entry->second, PackValue(std::move(column))), running);
+			expr =
+			    MatchScopedValue(binder.context, state, config,
+			                     ClassifiedValue(state, entry->second, PackValue(state, std::move(column))), running);
 			return;
 		}
-		if (colref.IsQualified()) {
-			// the input is reached through a subquery here, so a table qualifier no longer resolves
+		if (colref.IsQualified() && input_tables.count(names[0].GetIdentifierName())) {
+			// the input is reached through a subquery here, so a table qualifier no longer resolves.
+			// Anything else in front of the column is navigation into it, which still has to bind.
 			colref.ColumnNamesMutable() = {colref.GetColumnName()};
-			return;
 		}
+		// an empty match covers no rows, so a column of the input has no row here to be read from
+		if (!aggregate_scope) {
+			expr = OnlyWhenMatched(state, std::move(expr));
+		}
+		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		RewriteMeasure(binder, child, config, symbols, running, one_row, inside_aggregate);
+		RewriteMeasure(binder, state, child, config, symbols, input_tables, running, one_row, aggregate_scope);
 	});
 }
 
@@ -606,6 +686,15 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	//      dropped here
 	//   3. the MEASURES, computed across the match a row belongs to
 	//   4. for ONE ROW PER MATCH, a filter down to the row each match starts on
+
+	// The matcher's state travels between the select nodes below in a column of its own. Naming it
+	// after this clause keeps it apart from the input's columns and from the state of another
+	// MATCH_RECOGNIZE this one is stacked on.
+	const string state_column = "__pattern_window_" + to_string(GenerateTableIndex().index);
+	const string spans_column = state_column + "_spans";
+
+	case_insensitive_set_t input_tables;
+	CollectInputTableNames(*ref.input, input_tables);
 
 	auto select_node = MakeSelectNode(std::move(ref.input));
 	select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -681,10 +770,16 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	hidden_columns.emplace_back(MATCH_RECOGNIZE_MATCH_NUMBER_COLUMN);
 
 	vector<MatchRecognizeNavigation> navigations;
+	// a condition may name any pattern variable, so the whole namespace has to be known before the
+	// first one is rewritten - a variable the PATTERN only mentions is one too
 	case_insensitive_set_t declared_symbols;
 	for (auto &expr : ref.config->defines_expression_list) {
 		declared_symbols.insert(expr->GetAlias().GetIdentifierName());
 	}
+	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
+	    *ref.config->pattern, [&](const ColumnRefExpression &colref) {
+		    declared_symbols.insert(colref.GetColumnName().GetIdentifierName());
+	    });
 
 	for (auto &expr : ref.config->defines_expression_list) {
 		auto define_name = expr->GetAlias().GetIdentifierName();
@@ -700,7 +795,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		NavigateOtherSymbols(expr, define_name, declared_symbols);
 		// logical navigation is resolved by the matcher, so it leaves before qualifiers are checked
 		ExtractNavigation(expr, *define_select_node, declared_symbols, navigations);
-		CheckAndZapQualifiers(*expr, define_name);
+		ZapDefineQualifier(*expr, define_name, declared_symbols, input_tables);
 		ReplaceFunctions(expr, window_template->Cast<WindowExpression>(), define_name);
 		HoistWindows(expr, *define_select_node, nav_counter);
 		ReplaceMatchNumber(expr);
@@ -770,7 +865,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	for (auto &condition : define_conditions) {
 		ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 		    *condition, [&](const ColumnRefExpression &colref) {
-			    auto column_name = colref.GetColumnName().GetIdentifierName();
+			    // what is left qualified here navigates into a column, so the column is the first name
+			    auto column_name = colref.ColumnNames()[0].GetIdentifierName();
 			    if (seen_columns.insert(column_name).second) {
 				    condition_columns.push_back(make_uniq<ColumnRefExpression>(Identifier(column_name)));
 			    }
@@ -795,8 +891,11 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	vector<unique_ptr<ParsedExpression>> condition_fields;
 	for (idx_t i = 0; i < define_conditions.size(); i++) {
-		define_conditions[i]->SetAlias(Identifier("c" + to_string(i)));
-		condition_fields.push_back(std::move(define_conditions[i]));
+		// a condition decides whether a row is the variable, so the matcher reads it as a boolean and
+		// the plan has to produce one
+		auto condition = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(define_conditions[i]));
+		condition->SetAlias(Identifier("c" + to_string(i)));
+		condition_fields.push_back(std::move(condition));
 	}
 	arguments.emplace_back(make_uniq<FunctionExpression>("struct_pack", std::move(condition_fields)));
 
@@ -846,7 +945,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	auto define_select = MakeSelectStatement(std::move(define_select_node));
 	select_node->from_table = make_uniq<SubqueryRef>(std::move(define_select));
-	pattern_window->SetAlias("__pattern_window_spans");
+	pattern_window->SetAlias(Identifier(spans_column));
 	select_node->select_list.push_back(std::move(pattern_window));
 
 	// The window reports every match a row takes part in, so overlapping matches each get their own
@@ -854,14 +953,14 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	auto spans_select = MakeSelectStatement(std::move(select_node));
 	auto unnest_node = MakeSelectNode(make_uniq<SubqueryRef>(std::move(spans_select)));
 	auto spans_star = make_uniq<StarExpression>();
-	spans_star->ExcludeListMutable().insert(QualifiedColumnName(Identifier("__pattern_window_spans")));
+	spans_star->ExcludeListMutable().insert(QualifiedColumnName(Identifier(spans_column)));
 	unnest_node->select_list.push_back(std::move(spans_star));
 
 	vector<unique_ptr<ParsedExpression>> spans_argument;
-	spans_argument.push_back(make_uniq<ColumnRefExpression>(Identifier("__pattern_window_spans")));
+	spans_argument.push_back(make_uniq<ColumnRefExpression>(Identifier(spans_column)));
 	auto unnest_spans = make_uniq<FunctionExpression>("unnest", std::move(spans_argument));
 
-	unnest_spans->SetAlias("__pattern_window");
+	unnest_spans->SetAlias(Identifier(state_column));
 	unnest_node->select_list.push_back(std::move(unnest_spans));
 	select_node = std::move(unnest_node);
 
@@ -883,7 +982,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		measure_aliases.push_back(expr->GetAlias());
 		// rewriting can replace the expression wholesale, which would drop the MEASURES alias
 		auto alias = expr->GetAlias();
-		RewriteMeasure(*this, expr, *ref.config, measure_symbols, all_rows, !all_rows);
+		RewriteMeasure(*this, state_column, expr, *ref.config, measure_symbols, input_tables, all_rows, !all_rows);
 		expr->SetAlias(std::move(alias));
 		measures_node->select_list.push_back(std::move(expr));
 	}
@@ -895,12 +994,18 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	// measures rather than beside them, because they are computed across the whole match.
 	// an excluded row still belongs to the match, so it is dropped above the measures rather than
 	// before them: the aggregates over the match have to have seen it
-	if (all_rows && has_exclusion) {
+	if (all_rows) {
 		auto measures_select = MakeSelectStatement(std::move(select_node));
 		auto filter_node = MakeSelectNode(make_uniq<SubqueryRef>(std::move(measures_select)));
-		filter_node->select_list.push_back(make_uniq<StarExpression>());
-		filter_node->where_clause = make_uniq<OperatorExpression>(
-		    ExpressionType::OPERATOR_NOT, CreateStructExtract("__pattern_window", "is_excluded"));
+		// the matcher's state has served the measures and the filter below, and it is no business of
+		// whoever reads the result
+		auto output_star = make_uniq<StarExpression>();
+		output_star->ExcludeListMutable().insert(QualifiedColumnName(Identifier(state_column)));
+		filter_node->select_list.push_back(std::move(output_star));
+		if (has_exclusion) {
+			filter_node->where_clause = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT,
+			                                                          CreateStructExtract(state_column, "is_excluded"));
+		}
 		select_node = std::move(filter_node);
 	}
 
@@ -923,15 +1028,15 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		}
 		// the last row is the one reported: a bare column or CLASSIFIER() in MEASURES reads it
 		// directly, which is the FINAL semantics the standard gives them
-		filter_node->where_clause = CreateStructExtract("__pattern_window", "is_match_end");
+		filter_node->where_clause = CreateStructExtract(state_column, "is_match_end");
 		select_node = std::move(filter_node);
 	}
 
 	auto child_binder = Binder::CreateBinder(context, this);
 	auto result = child_binder->Bind(*select_node);
-	bind_context.AddGenericBinding(result.plan->GetRootIndex(),
-	                               !ref.alias.empty() ? ref.alias : "__match_recognize_table", result.names,
-	                               result.types);
+	const auto alias = !ref.alias.empty() ? ref.alias : Identifier("__match_recognize_table");
+	auto names = BindContext::AliasColumnNames(alias, result.names, ref.column_name_alias);
+	bind_context.AddGenericBinding(result.plan->GetRootIndex(), alias, names, result.types);
 	return result;
 }
 

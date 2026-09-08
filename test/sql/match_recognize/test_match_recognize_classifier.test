@@ -14,17 +14,18 @@ insert into ev values (1,1),(2,0),(3,0),(4,1),(5,0),(6,1);
 # PATTERN (A B+) finds 0-2 and 3-4; row 6 starts no match because no B follows it.
 # ALL ROWS PER MATCH reports every row of every match, tagged with the variable that matched it.
 query IIIIII
-SELECT i, __pattern_window.classifier, __pattern_window.match_number, __pattern_window.is_match_start,
-       __pattern_window.match_start, __pattern_window.match_end
+SELECT i, cl, mn, x = ms, ms, me
 FROM ev MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl, MATCH_NUMBER() AS mn,
+             FINAL FIRST(i) AS ms, FINAL LAST(i) AS me
+    ALL ROWS PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
 ) ORDER BY x
 ----
-1	A	1	true	0	2
-2	B	1	false	0	2
-3	B	1	false	0	2
-4	A	2	true	3	4
-5	B	2	false	3	4
+1	A	1	1	1	3
+2	B	1	0	1	3
+3	B	1	0	1	3
+4	A	2	1	4	5
+5	B	2	0	4	5
 
 # ONE ROW PER MATCH reports only the row each match starts on
 query III
@@ -54,8 +55,8 @@ insert into alt values (1,1),(2,0),(3,1);
 
 # the classifier names the alternative that matched
 query II
-SELECT i, __pattern_window.classifier FROM alt MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A | B) DEFINE A as v=1, B as v=0
+SELECT i, cl FROM alt MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl ALL ROWS PER MATCH PATTERN (A | B) DEFINE A as v=1, B as v=0
 ) ORDER BY x
 ----
 1	A
@@ -70,8 +71,8 @@ insert into im values (1),(2);
 
 # a symbol that is used but not defined still classifies its row
 query II
-SELECT i, __pattern_window.classifier FROM im MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A Z) DEFINE A as true
+SELECT i, cl FROM im MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl ALL ROWS PER MATCH PATTERN (A Z) DEFINE A as true
 ) ORDER BY x
 ----
 1	A
@@ -85,8 +86,9 @@ insert into pv values (1,1),(1,2),(1,3),(1,4),(2,1),(2,2);
 
 # match numbering restarts in every partition
 query IIII
-SELECT p, i, __pattern_window.classifier, __pattern_window.match_number FROM pv MATCH_RECOGNIZE(
-    PARTITION BY p ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B) DEFINE A as true, B as true
+SELECT p, i, cl, mn FROM pv MATCH_RECOGNIZE(
+    PARTITION BY p ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl, MATCH_NUMBER() AS mn
+    ALL ROWS PER MATCH PATTERN (A B) DEFINE A as true, B as true
 ) ORDER BY p, i
 ----
 1	1	A	1

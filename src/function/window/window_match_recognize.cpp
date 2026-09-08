@@ -10,11 +10,13 @@
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -195,15 +197,29 @@ static void ResolvePatternSymbols(unique_ptr<Expression> &pattern, const case_in
 
 unique_ptr<FunctionData> WindowMatchRecognizeExecutor::Bind(BindWindowFunctionInput &input) {
 	auto &arguments = input.GetArguments();
-	// Deserialization rebinds the function after the configuration arguments are gone, filling the
-	// optional parameters with NULL. The bind data is restored by the deserialize callback instead.
+	// Everything after the columns is configuration the MATCH_RECOGNIZE binder builds, so a call that
+	// does not carry it did not come from one. Deserialization restores the bind data through the
+	// deserialize callback and never reaches here.
 	const auto configured = arguments.size() == 7 &&
 	                        arguments[3]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
 	                        !arguments[3]->Cast<BoundConstantExpression>().GetValue().IsNull();
 	if (!configured) {
-		input.GetBoundFunction().GetArguments().resize(MinValue<idx_t>(1, arguments.size()));
-		input.GetBoundFunction().SetReturnType(ResultType());
-		return nullptr;
+		throw BinderException("%s is how the MATCH_RECOGNIZE clause is planned rather than a function to call, so it "
+		                      "cannot be used directly",
+		                      MatchRecognizeFun::Name);
+	}
+	// the casts below are only safe for the shape the MATCH_RECOGNIZE binder builds
+	const bool packed = arguments[0]->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+	                    arguments[1]->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+	                    (arguments[2]->GetExpressionClass() == ExpressionClass::PATTERN ||
+	                     arguments[2]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) &&
+	                    arguments[4]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+	                    arguments[5]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+	                    arguments[6]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
+	if (!packed) {
+		throw BinderException("%s was called with something other than the configuration the MATCH_RECOGNIZE clause "
+		                      "builds for it",
+		                      MatchRecognizeFun::Name);
 	}
 
 	auto bind_data = make_uniq<MatchRecognizeFunctionData>();
@@ -435,10 +451,16 @@ public:
 	MatchRecognizeLocalState(ExecutionContext &context, const WindowMatchRecognizeGlobalState &gstate)
 	    : WindowExecutorLocalState(context, gstate) {
 		auto &config = gstate.executor.wexpr.BindInfo()->Cast<MatchRecognizeFunctionData>();
-		for (auto &condition : config.conditions) {
-			auto copied = condition->Copy();
+		for (idx_t i = 0; i < config.conditions.size(); i++) {
+			// a condition that depends on the match being assembled has no answer yet, and evaluating
+			// it here would raise its errors against a match state that does not exist
+			if (config.row_scoped[i]) {
+				continue;
+			}
+			auto copied = config.conditions[i]->Copy();
 			types.push_back(copied->GetReturnType());
 			conditions.push_back(std::move(copied));
+			condition_index.push_back(i);
 		}
 		if (!conditions.empty()) {
 			executor = make_uniq<ExpressionExecutor>(context.client, conditions);
@@ -447,6 +469,8 @@ public:
 	}
 
 	vector<unique_ptr<Expression>> conditions;
+	//! The condition each of the above decides, since the ones settled per row are left out
+	vector<idx_t> condition_index;
 	vector<LogicalType> types;
 	unique_ptr<ExpressionExecutor> executor;
 	DataChunk result;
@@ -481,7 +505,7 @@ void WindowMatchRecognizeExecutor::Sink(ExecutionContext &context, DataChunk &si
 	lstate.result.Reset();
 	lstate.executor->Execute(slice, lstate.result);
 	for (idx_t i = 0; i < lstate.conditions.size(); i++) {
-		auto &values = gstate.condition_values[i];
+		auto &values = gstate.condition_values[lstate.condition_index[i]];
 		for (const auto &entry : lstate.result.data[i].Values<bool>()) {
 			values[input_idx + entry.GetIndex()] = entry.IsValid() && entry.GetValueUnsafe() ? 1 : 0;
 		}
@@ -519,11 +543,53 @@ struct PatternInstruction {
 
 using SymbolMatcher = std::function<bool(idx_t symbol, idx_t row)>;
 
+//! The fewest rows a pattern node can match. A repetition of it can only be reached that many times
+//! fewer than there are rows, which is what keeps a counted quantifier around one from expanding into
+//! repetitions that could never be taken.
+static idx_t MinConsumption(const Expression &node) {
+	const auto saturating_add = [](idx_t left, idx_t right) {
+		return left > NumericLimits<idx_t>::Maximum() - right ? NumericLimits<idx_t>::Maximum() : left + right;
+	};
+	switch (node.GetExpressionType()) {
+	case ExpressionType::VALUE_CONSTANT:
+		// a symbol takes exactly one row
+		return 1;
+	case ExpressionType::CONCATENATION: {
+		idx_t total = 0;
+		for (auto &child : node.Cast<BoundConcatenationExpression>().children) {
+			total = saturating_add(total, MinConsumption(*child));
+		}
+		return total;
+	}
+	case ExpressionType::ALTERNATION: {
+		auto &alternation = node.Cast<BoundAlternationExpression>();
+		return MinValue(MinConsumption(*alternation.child_left), MinConsumption(*alternation.child_right));
+	}
+	case ExpressionType::QUANTIFIER: {
+		auto &quantifier = node.Cast<BoundQuantifierExpression>();
+		if (!quantifier.min_count.IsValid() || quantifier.min_count.GetIndex() == 0) {
+			return 0;
+		}
+		const auto child = MinConsumption(*quantifier.child);
+		const auto count = quantifier.min_count.GetIndex();
+		return child != 0 && count > NumericLimits<idx_t>::Maximum() / child ? NumericLimits<idx_t>::Maximum()
+		                                                                     : child * count;
+	}
+	default:
+		// an anchor takes no row
+		return 0;
+	}
+}
+
 struct PatternProgram {
+	//! A pattern whose program grows past this cannot be matched in any useful time anyway, and the
+	//! memo below is one record per instruction per row
+	static constexpr idx_t MAX_INSTRUCTIONS = 1 << 20;
+
 	vector<PatternInstruction> code;
 
-	//! `limit` bounds a counted quantifier: no repetition can match fewer than one row, so more
-	//! repetitions than there are rows can never be reached
+	//! `limit` bounds a counted quantifier: a repetition matching `n` rows can be reached at most
+	//! `limit / n` times before the rows run out, so more repetitions than that are unreachable
 	void Compile(const Expression &node, idx_t limit, bool excluded = false) {
 		switch (node.GetExpressionType()) {
 		case ExpressionType::VALUE_CONSTANT: {
@@ -531,14 +597,14 @@ struct PatternProgram {
 			symbol.op = PatternOp::SYMBOL;
 			symbol.symbol = NumericCast<idx_t>(node.Cast<BoundConstantExpression>().GetValue().GetValue<uint64_t>());
 			symbol.excluded = excluded;
-			code.push_back(symbol);
+			Push(symbol);
 			break;
 		}
 		case ExpressionType::ANCHOR: {
 			PatternInstruction anchor;
 			anchor.op = PatternOp::ANCHOR;
 			anchor.at_end = node.Cast<BoundAnchorExpression>().at_end;
-			code.push_back(anchor);
+			Push(anchor);
 			break;
 		}
 		case ExpressionType::CONCATENATION:
@@ -560,10 +626,12 @@ struct PatternProgram {
 		case ExpressionType::QUANTIFIER: {
 			auto &quantifier = node.Cast<BoundQuantifierExpression>();
 			const auto inner = excluded || quantifier.excluded;
-			// more mandatory repetitions than there are rows can never be satisfied, and one past the
-			// row count is already enough to be sure of that
+			// one repetition past what the rows allow already makes the program unsatisfiable, which is
+			// what every further one would have been too
 			const idx_t declared_min = quantifier.min_count.IsValid() ? quantifier.min_count.GetIndex() : 0;
-			const idx_t min_count = MinValue(declared_min, limit + 1);
+			const idx_t consumption = MinConsumption(*quantifier.child);
+			const idx_t reachable = consumption == 0 ? limit + 1 : limit / consumption + 1;
+			const idx_t min_count = MinValue(declared_min, reachable);
 			for (idx_t i = 0; i < min_count; i++) {
 				Compile(*quantifier.child, limit, inner);
 			}
@@ -581,7 +649,7 @@ struct PatternProgram {
 				code[split].alternative = reluctant ? again : leave;
 				break;
 			}
-			const auto max_count = MinValue(quantifier.max_count.GetIndex(), min_count + limit);
+			const auto max_count = MinValue(quantifier.max_count.GetIndex(), min_count + reachable);
 			vector<idx_t> exits;
 			for (idx_t i = min_count; i < max_count; i++) {
 				auto split = Emit(PatternOp::SPLIT);
@@ -608,9 +676,31 @@ private:
 	idx_t Emit(PatternOp op) {
 		PatternInstruction instruction;
 		instruction.op = op;
-		code.push_back(instruction);
+		Push(instruction);
 		return code.size() - 1;
 	}
+
+	void Push(const PatternInstruction &instruction) {
+		if (code.size() >= MAX_INSTRUCTIONS) {
+			throw InvalidInputException(
+			    "The MATCH_RECOGNIZE pattern compiles to more than %llu instructions, which is more than can be "
+			    "matched. Repetition counts multiply, so nesting them is what usually gets here.",
+			    MAX_INSTRUCTIONS);
+		}
+		code.push_back(instruction);
+	}
+};
+
+//! How long a walked state stays proof that the search below it is a dead end. That depends on what
+//! the conditions read, because a state is only a dead end for as long as its conditions answer the
+//! same way.
+enum class PatternMemo : uint8_t {
+	//! Conditions read nothing but the row they test, so a dead end stays one for the whole partition
+	PARTITION,
+	//! A condition reads MATCH_NUMBER(), which is fixed within an attempt but differs between them
+	ATTEMPT,
+	//! A condition navigates the match, so a state's answer depends on the rows matched before it
+	HISTORY
 };
 
 //! Walks the compiled program depth first, preferring the branch a greedy quantifier wants, and
@@ -618,46 +708,63 @@ private:
 //!
 //! A (instruction, row) pair that has been explored once and did not lead to a match cannot lead to
 //! one later, so it is never explored again. That is what keeps the search polynomial where plain
-//! backtracking is exponential, and it holds only while a variable's condition depends on nothing
-//! but the row it is testing. A condition that navigates the match being assembled, or reads
-//! MATCH_NUMBER(), depends on the rows matched so far, so for those the record is dropped between
-//! attempts and the matcher backtracks in the ordinary way.
+//! backtracking is exponential, and it holds only while the conditions answer the same way each time
+//! that pair is reached. A condition that navigates the match being assembled reads the rows matched
+//! before the one it tests, so two ways of reaching the same pair can disagree and the record has to
+//! go. What is left there is the epoch below, which only ever spans a stretch of the walk that
+//! matched no row at all: within one the history cannot differ, so it still cuts the loops a
+//! nullable repetition would otherwise spin in forever.
 struct PatternMatcher {
-	PatternMatcher(const PatternProgram &program_p, const SymbolMatcher &symbol_matches_p, vector<idx_t> &classifiers_p,
-	               vector<uint8_t> &excluded_rows_p, bool conditions_are_row_local_p)
-	    : program(program_p), symbol_matches(symbol_matches_p), classifiers(classifiers_p),
-	      excluded_rows(excluded_rows_p), conditions_are_row_local(conditions_are_row_local_p),
-	      row_count(classifiers_p.size()), explored(program_p.code.size() * (classifiers_p.size() + 1), 0),
-	      epoch(conditions_are_row_local_p ? 1 : 0) {
+	PatternMatcher(ClientContext &context_p, const PatternProgram &program_p, const SymbolMatcher &symbol_matches_p,
+	               vector<idx_t> &classifiers_p, vector<uint8_t> &excluded_rows_p, PatternMemo memo_p)
+	    : context(context_p), program(program_p), symbol_matches(symbol_matches_p), classifiers(classifiers_p),
+	      excluded_rows(excluded_rows_p), memo(memo_p), row_count(classifiers_p.size()) {
+		if (memo == PatternMemo::HISTORY) {
+			// no row is matched within an epoch, so every state it records sits at the same row and one
+			// record per instruction is enough
+			history_marks.assign(program.code.size(), 0);
+			return;
+		}
+		const auto rows = row_count + 1;
+		if (program.code.size() > NumericLimits<idx_t>::Maximum() / rows) {
+			throw OutOfMemoryException("The MATCH_RECOGNIZE pattern needs a record per instruction per row, which does "
+			                           "not fit in memory for %llu instructions over %llu rows",
+			                           program.code.size(), row_count);
+		}
+		explored_size = program.code.size() * rows;
+		// through the buffer manager's allocator, so that it counts against the memory limit
+		explored = BufferManager::GetBufferManager(context).GetBufferAllocator().Allocate(explored_size);
+		ClearExplored();
+	}
+
+	//! A partition is matched within its own bounds, and the anchors and row offsets a record was
+	//! taken under only hold there, so nothing is carried over from the one before
+	void BeginPartition() {
+		NextEpoch();
 	}
 
 	//! Match starting at `start`, within the partition [`partition_start`, `input_size`)
 	bool Match(idx_t start, idx_t partition_start, idx_t input_size) {
-		if (!conditions_are_row_local) {
-			// stepping the epoch retires every record at once; the array itself only has to be
-			// cleared when the epoch wraps around to a value old records could still hold
-			if (++epoch == 0) {
-				std::fill(explored.begin(), explored.end(), 0);
-				epoch = 1;
-			}
+		if (memo != PatternMemo::PARTITION) {
+			NextEpoch();
 		}
 		attempt_marks.clear();
 		pending.clear();
-		pending.emplace_back(0, start);
+		pending.push_back(PendingState {0, start, history_epoch});
 		while (!pending.empty()) {
 			auto state = pending.back();
 			pending.pop_back();
-			auto pc = state.first;
-			auto offset = state.second;
+			auto pc = state.pc;
+			auto offset = state.offset;
+			auto walk = state.epoch;
 			while (true) {
-				const auto slot_index = pc * (row_count + 1) + offset;
-				auto &slot = explored[slot_index];
-				if (slot == epoch) {
-					break;
+				// a walk can be long, and a pattern that has to try again for every row longer still
+				if (++steps >= INTERRUPT_INTERVAL) {
+					steps = 0;
+					context.InterruptCheck();
 				}
-				slot = epoch;
-				if (conditions_are_row_local) {
-					attempt_marks.push_back(slot_index);
+				if (!Visit(pc, offset, walk)) {
+					break;
 				}
 				auto &instruction = program.code[pc];
 				if (instruction.op == PatternOp::MATCH) {
@@ -665,7 +772,7 @@ struct PatternMatcher {
 					// exhaustion. This search stopped early, so a later start must be free to walk
 					// these states again - persisting them would hide its matches.
 					for (auto mark : attempt_marks) {
-						explored[mark] = 0;
+						explored.get()[mark] = 0;
 					}
 					match_end = offset;
 					return true;
@@ -675,7 +782,7 @@ struct PatternMatcher {
 					continue;
 				}
 				if (instruction.op == PatternOp::SPLIT) {
-					pending.emplace_back(instruction.alternative, offset);
+					pending.push_back(PendingState {instruction.alternative, offset, walk});
 					pc = instruction.target;
 					continue;
 				}
@@ -699,6 +806,10 @@ struct PatternMatcher {
 				excluded_rows[offset] = instruction.excluded ? 1 : 0;
 				pc++;
 				offset++;
+				// the walk now carries one more matched row, which is a history of its own
+				if (memo == PatternMemo::HISTORY) {
+					walk = NextEpoch();
+				}
 			}
 		}
 		return false;
@@ -708,20 +819,86 @@ struct PatternMatcher {
 	idx_t match_end = 0;
 
 private:
+	//! A state still to be walked. Its epoch names the rows matched to reach it, so the records it
+	//! reads are only the ones taken under the same history.
+	struct PendingState {
+		idx_t pc;
+		idx_t offset;
+		uint32_t epoch;
+	};
+
+	//! Record that this state is being walked, or report that it already was
+	bool Visit(idx_t pc, idx_t offset, uint32_t walk) {
+		if (memo == PatternMemo::HISTORY) {
+			if (history_marks[pc] == walk) {
+				return false;
+			}
+			history_marks[pc] = walk;
+			return true;
+		}
+		const auto slot_index = pc * (row_count + 1) + offset;
+		auto &slot = explored.get()[slot_index];
+		if (slot == epoch) {
+			return false;
+		}
+		slot = epoch;
+		if (memo == PatternMemo::PARTITION) {
+			attempt_marks.push_back(slot_index);
+		}
+		return true;
+	}
+
+	//! Retire every record taken so far. Stepping a counter does that without touching the records
+	//! themselves; only a counter that wrapped back onto a value they could still hold needs the
+	//! array cleared.
+	uint32_t NextEpoch() {
+		if (memo != PatternMemo::HISTORY) {
+			if (++epoch == 0) {
+				ClearExplored();
+				epoch = 1;
+			}
+			return epoch;
+		}
+		if (++history_epoch != 0) {
+			return history_epoch;
+		}
+		std::fill(history_marks.begin(), history_marks.end(), 0);
+		// the states still to be walked were recorded under identities that are about to be handed
+		// out again, so they are given ones that cannot be
+		history_epoch = 0;
+		for (auto &state : pending) {
+			state.epoch = ++history_epoch;
+		}
+		return ++history_epoch;
+	}
+
+	void ClearExplored() {
+		memset(explored.get(), 0, explored_size);
+	}
+
+	//! How many instructions the walk takes between two checks for a cancelled query
+	static constexpr idx_t INTERRUPT_INTERVAL = 4096;
+
+	ClientContext &context;
 	const PatternProgram &program;
 	const SymbolMatcher &symbol_matches;
 	vector<idx_t> &classifiers;
 	vector<uint8_t> &excluded_rows;
-	bool conditions_are_row_local;
+	PatternMemo memo;
 	idx_t row_count;
+	idx_t steps = 0;
 	//! One record per (instruction, row): the epoch in which that state was walked
-	vector<uint8_t> explored;
-	//! Records matching this belong to the current attempt; the partition-wide memo of row-local
-	//! conditions never retires, so there it stays at 1
-	uint8_t epoch;
+	AllocatedData explored;
+	idx_t explored_size = 0;
+	//! Records matching this belong to the current partition or attempt
+	uint8_t epoch = 0;
+	//! One record per instruction, for the epoch that spans a stretch of the walk matching no row.
+	//! No row is matched within one, so every state it records sits at the same row.
+	vector<uint32_t> history_marks;
+	uint32_t history_epoch = 0;
 	//! The records this attempt wrote into the partition-wide memo, undone if it finds a match
 	vector<idx_t> attempt_marks;
-	vector<pair<idx_t, idx_t>> pending;
+	vector<PendingState> pending;
 };
 
 //! Where to resume scanning after a match spanning [match_start, match_end]
@@ -971,17 +1148,20 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 		return row_conditions.Matches(index, row);
 	};
 
-	// a condition that navigates the match, or reads MATCH_NUMBER(), depends on the rows matched so
-	// far rather than only on the row it is testing
-	bool conditions_are_row_local = true;
+	// a condition that navigates the match depends on the rows matched before the one it tests, and
+	// one that reads MATCH_NUMBER() on which attempt it is
+	auto memo = PatternMemo::PARTITION;
 	for (auto scoped : config.row_scoped) {
-		conditions_are_row_local = conditions_are_row_local && !scoped;
+		memo = scoped ? PatternMemo::ATTEMPT : memo;
+	}
+	if (!config.navigations.empty()) {
+		memo = PatternMemo::HISTORY;
 	}
 
 	PatternProgram program;
 	program.Compile(*config.pattern, classifiers.size());
 	program.Finish();
-	PatternMatcher matcher(program, symbol_matches, classifiers, gstate.excluded_rows, conditions_are_row_local);
+	PatternMatcher matcher(context.client, program, symbol_matches, classifiers, gstate.excluded_rows, memo);
 
 	// Partitions are independent, so every thread that reaches Finalize takes them from a shared
 	// cursor rather than one thread doing the whole hash group.
@@ -992,12 +1172,14 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 		}
 		const auto partition_start = gstate.partitions[partition_idx].first;
 		const auto partition_end = gstate.partitions[partition_idx].second;
+		matcher.BeginPartition();
 
 		// scan the partition left to right, applying AFTER MATCH SKIP after every match. Rows that are
 		// not part of any match keep a NULL struct, which filters them out downstream.
 		idx_t match_number = 0;
 		auto row = partition_start;
 		while (row <= partition_end) {
+			context.client.InterruptCheck();
 			row_conditions.BeginMatch(row, match_number + 1);
 			if (!matcher.Match(row, partition_start, partition_end + 1)) {
 				row++;

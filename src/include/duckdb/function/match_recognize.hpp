@@ -57,6 +57,14 @@ public:
 		auto child_right_copy = child_right->Copy();
 		return make_uniq<BoundAlternationExpression>(std::move(child_left_copy), std::move(child_right_copy));
 	}
+
+	bool Equals(const BaseExpression &other_p) const override {
+		if (!Expression::Equals(other_p)) {
+			return false;
+		}
+		auto &other = other_p.Cast<BoundAlternationExpression>();
+		return child_left->Equals(*other.child_left) && child_right->Equals(*other.child_right);
+	}
 };
 
 class BoundConcatenationExpression : public Expression {
@@ -81,6 +89,13 @@ public:
 			children_copy.push_back(child->Copy());
 		}
 		return make_uniq<BoundConcatenationExpression>(std::move(children_copy));
+	}
+
+	bool Equals(const BaseExpression &other_p) const override {
+		if (!Expression::Equals(other_p)) {
+			return false;
+		}
+		return Expression::ListEquals(children, other_p.Cast<BoundConcatenationExpression>().children);
 	}
 };
 
@@ -117,6 +132,25 @@ public:
 		auto child_copy = child->Copy();
 		return make_uniq<BoundQuantifierExpression>(std::move(child_copy), min_count, max_count, excluded, reluctant);
 	}
+
+	bool Equals(const BaseExpression &other_p) const override {
+		if (!Expression::Equals(other_p)) {
+			return false;
+		}
+		auto &other = other_p.Cast<BoundQuantifierExpression>();
+		return min_count == other.min_count && max_count == other.max_count && excluded == other.excluded &&
+		       reluctant == other.reluctant && child->Equals(*other.child);
+	}
+
+	hash_t Hash() const override {
+		// the child is hashed by the base, which walks it like any other expression tree. Combining is
+		// an XOR, so the second count is offset before it is mixed in - {1,1} would cancel itself out.
+		const auto min_value = min_count.IsValid() ? min_count.GetIndex() : DConstants::INVALID_INDEX;
+		const auto max_value = max_count.IsValid() ? max_count.GetIndex() : DConstants::INVALID_INDEX;
+		auto result = CombineHash(Expression::Hash(), duckdb::Hash(min_value));
+		result = CombineHash(result, duckdb::Hash(max_value ^ 0x9E3779B97F4A7C15ULL));
+		return CombineHash(result, duckdb::Hash(static_cast<uint8_t>((excluded ? 1 : 0) | (reluctant ? 2 : 0))));
+	}
 };
 
 class BoundAnchorExpression : public Expression {
@@ -137,6 +171,14 @@ public:
 	unique_ptr<Expression> Copy() const override {
 		return make_uniq<BoundAnchorExpression>(at_end);
 	}
+
+	bool Equals(const BaseExpression &other_p) const override {
+		return Expression::Equals(other_p) && at_end == other_p.Cast<BoundAnchorExpression>().at_end;
+	}
+
+	hash_t Hash() const override {
+		return CombineHash(Expression::Hash(), duckdb::Hash(at_end));
+	}
 };
 
 struct MatchRecognizeFunctionData : FunctionData {
@@ -154,6 +196,10 @@ struct MatchRecognizeFunctionData : FunctionData {
 		string symbol;
 		idx_t field;
 		idx_t offset;
+
+		bool Equals(const Navigation &other) const {
+			return last == other.last && symbol == other.symbol && field == other.field && offset == other.offset;
+		}
 	};
 	vector<Navigation> navigations;
 	//! Conditions that read a navigation field, and so have to be evaluated row by row
@@ -180,7 +226,17 @@ struct MatchRecognizeFunctionData : FunctionData {
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<MatchRecognizeFunctionData>();
-		return other.pattern->Equals(*pattern) && other.symbols == symbols && other.after_match == after_match &&
+		if (navigations.size() != other.navigations.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < navigations.size(); i++) {
+			if (!navigations[i].Equals(other.navigations[i])) {
+				return false;
+			}
+		}
+		return other.pattern->Equals(*pattern) && Expression::ListEquals(conditions, other.conditions) &&
+		       other.symbols == symbols && other.depends_on_match_number == depends_on_match_number &&
+		       other.row_scoped == row_scoped && other.after_match == after_match &&
 		       other.after_match_variable == after_match_variable;
 	}
 };

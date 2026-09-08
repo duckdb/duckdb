@@ -26,25 +26,27 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 
 # + is greedy: 0-1 stops at the B row, 3-5 runs to the end
 query III
-SELECT i, __pattern_window.match_start, __pattern_window.match_end FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A+) DEFINE A as v=1, B as v=0
+SELECT i, ms, me FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, FINAL FIRST(i) AS ms, FINAL LAST(i) AS me
+    ALL ROWS PER MATCH PATTERN (A+) DEFINE A as v=1, B as v=0
 ) ORDER BY i
 ----
-1	0	1
-2	0	1
-4	3	5
-5	3	5
-6	3	5
+1	1	2
+2	1	2
+4	4	6
+5	4	6
+6	4	6
 
-# a pattern that can match nothing produces an empty match where no rows fit, here at the B row
-query I
-SELECT x FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x PATTERN (A*) DEFINE A as v=1, B as v=0
-) ORDER BY x
+# a pattern that can match nothing produces an empty match where no rows fit, here at the B row.
+# An empty match covers no rows, so a column of the input has none to be read from and reports NULL.
+query II
+SELECT x, mn FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, MATCH_NUMBER() AS mn PATTERN (A*) DEFINE A as v=1, B as v=0
+) ORDER BY mn
 ----
-2
-3
-6
+2	1
+NULL	2
+6	3
 
 # repeating a symbol is the same as an exact quantifier; the overlapping 4-5 match is dropped
 query I
@@ -94,9 +96,9 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 ) ORDER BY x
 ----
 2
-3
 5
 6
+NULL
 
 # ? takes the symbol or leaves it out, so like A* it still matches nothing at the B row
 query I
@@ -106,10 +108,10 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 ----
 1
 2
-3
 4
 5
 6
+NULL
 
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
@@ -118,10 +120,10 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 ----
 1
 2
-3
 4
 5
 6
+NULL
 
 # an optional tail is taken where it fits and skipped where it does not: only the match starting at
 # offset 1 is followed by a B row
@@ -137,8 +139,8 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 6
 
 query II
-SELECT i, __pattern_window.classifier FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B?) DEFINE A as v=1, B as v=0
+SELECT i, cl FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl ALL ROWS PER MATCH PATTERN (A B?) DEFINE A as v=1, B as v=0
 ) ORDER BY i
 ----
 1	A
@@ -161,12 +163,13 @@ SELECT x FROM seq MATCH_RECOGNIZE(
 
 # concatenation
 query III
-SELECT i, __pattern_window.match_start, __pattern_window.match_end FROM seq MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN (A B) DEFINE A as v=1, B as v=0
+SELECT i, ms, me FROM seq MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, FINAL FIRST(i) AS ms, FINAL LAST(i) AS me
+    ALL ROWS PER MATCH PATTERN (A B) DEFINE A as v=1, B as v=0
 ) ORDER BY i
 ----
-2	1	2
-3	1	2
+2	2	3
+3	2	3
 
 query I
 SELECT x FROM seq MATCH_RECOGNIZE(
@@ -427,8 +430,8 @@ insert into lbl values (1,1,10),(2,2,20),(3,1,30);
 
 # a quoted variable keeps the spelling it was written with, and that is what CLASSIFIER() reports
 query II
-SELECT i, __pattern_window.classifier FROM lbl MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN ("lo"+) DEFINE "lo" AS "lo".v > 0
+SELECT i, cl FROM lbl MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl ALL ROWS PER MATCH PATTERN ("lo"+) DEFINE "lo" AS "lo".v > 0
 ) ORDER BY i
 ----
 1	lo
@@ -446,8 +449,9 @@ SELECT x FROM lbl MATCH_RECOGNIZE(
 
 # quoting also allows a name that is not an identifier on its own
 query II
-SELECT i, __pattern_window.classifier FROM lbl MATCH_RECOGNIZE(
-    ORDER BY i MEASURES i AS x ALL ROWS PER MATCH PATTERN ("up down"+) DEFINE "up down" AS "up down".v > 1
+SELECT i, cl FROM lbl MATCH_RECOGNIZE(
+    ORDER BY i MEASURES i AS x, CLASSIFIER() AS cl
+    ALL ROWS PER MATCH PATTERN ("up down"+) DEFINE "up down" AS "up down".v > 1
 ) ORDER BY i
 ----
 2	up down
