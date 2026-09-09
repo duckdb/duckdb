@@ -387,7 +387,7 @@ void Executor::WaitForTask() {
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
-		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
+		// Only the consumer's decision or pop lets the query progress, so waiting here is pointless
 		blocked_thread_time += blocked_micros;
 		return;
 	}
@@ -505,7 +505,7 @@ QueryResultState Executor::ExecuteTask(bool dry_run) {
 			}
 			return QueryResultState::NOT_READY;
 		}
-		execution_result = QueryResultState::ERROR;
+		execution_result = QueryResultState::EXECUTION_ERROR;
 
 		// an exception has occurred executing one of the pipelines
 		// we need to cancel all tasks associated with this executor
@@ -519,7 +519,7 @@ QueryResultState Executor::ExecuteTask(bool dry_run) {
 	NextExecutor();
 	if (HasError()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
-		execution_result = QueryResultState::ERROR;
+		execution_result = QueryResultState::EXECUTION_ERROR;
 		ThrowException();
 	} // LCOV_EXCL_STOP
 	execution_result = QueryResultState::FINISHED;
@@ -684,7 +684,7 @@ bool Executor::ResultCollectorIsBlocked() {
 	}
 	auto buffer = GetResultBuffer();
 	if (buffer) {
-		return buffer->HasParkedProducer();
+		return buffer->WaitsOnConsumer();
 	}
 	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
 	// The sink state is published by a pipeline initialize task on a worker, under the

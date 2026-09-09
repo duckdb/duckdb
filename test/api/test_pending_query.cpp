@@ -222,7 +222,7 @@ TEST_CASE("Interrupt is observed by QueryResult::ExecuteTask", "[api]") {
 	QueryResultState state = QueryResultState::NOT_READY;
 	for (idx_t i = 0; i < 1000000; i++) {
 		state = handle->ExecuteTask();
-		if (state == QueryResultState::READY || state == QueryResultState::ERROR) {
+		if (state == QueryResultState::READY || state == QueryResultState::EXECUTION_ERROR) {
 			break;
 		}
 	}
@@ -233,7 +233,7 @@ TEST_CASE("Interrupt is observed by QueryResult::ExecuteTask", "[api]") {
 	// Without the fix the parked collector keeps reporting READY and the interrupt is never seen.
 	bool saw_error = false;
 	for (idx_t j = 0; j < 1000; j++) {
-		if (handle->ExecuteTask() == QueryResultState::ERROR) {
+		if (handle->ExecuteTask() == QueryResultState::EXECUTION_ERROR) {
 			saw_error = true;
 			break;
 		}

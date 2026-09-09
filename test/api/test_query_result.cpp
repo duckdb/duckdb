@@ -145,7 +145,7 @@ TEST_CASE("A submitted query parks for the consumer's choice", "[api][query_resu
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
 	}
 	// READY is the engine waiting on the consumer: a producer is parked with its first chunk
-	REQUIRE(handle->GetBufferedData().HasParkedProducer());
+	REQUIRE(handle->GetBufferedData().WaitsOnConsumer());
 	REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::UNDECIDED);
 	REQUIRE(handle->GetBufferedData().PeakBufferedBytes() == 0);
 	// The park is one transition, however many producers park on it, and nothing else can ring
@@ -168,7 +168,7 @@ TEST_CASE("ExecuteTask on a parked undecided handle reports READY and runs nothi
 		REQUIRE(!deadline.Passed());
 	}
 	auto &buffer = handle->GetBufferedData();
-	REQUIRE(buffer.HasParkedProducer());
+	REQUIRE(buffer.WaitsOnConsumer());
 	REQUIRE(buffer.Lifetime() == ResultLifetime::UNDECIDED);
 	// The engine waits for the consumer's choice: stepping again decides nothing and runs nothing
 	REQUIRE(handle->ExecuteTask() == QueryResultState::READY);
@@ -257,7 +257,7 @@ TEST_CASE("An execution error surfaces on every retained-side call", "[api][quer
 
 	handle->Materialize();
 	Deadline deadline;
-	while (handle->Poll() != QueryResultState::ERROR) {
+	while (handle->Poll() != QueryResultState::EXECUTION_ERROR) {
 		REQUIRE(!deadline.Passed());
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
 	}
@@ -292,7 +292,7 @@ TEST_CASE("Poll observes an interrupt on a materializing handle", "[api][query_r
 		REQUIRE(!deadline.Passed());
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
 	}
-	REQUIRE(state == QueryResultState::ERROR);
+	REQUIRE(state == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(StringUtil::Contains(handle->GetError(), "INTERRUPT"));
 
 	con.context->ClearInterrupt();
@@ -403,7 +403,7 @@ TEST_CASE("A handle destroyed without collecting releases the query", "[api][que
 		auto handle = Submit(con, "WITH c AS MATERIALIZED (SELECT i FROM fanout) "
 		                          "SELECT t1.i FROM c t1 JOIN c t2 USING (i)");
 		Deadline deadline;
-		while (!handle->GetBufferedData().HasParkedProducer()) {
+		while (!handle->GetBufferedData().WaitsOnConsumer()) {
 			REQUIRE(!deadline.Passed());
 			std::this_thread::sleep_for(std::chrono::microseconds(100));
 		}

@@ -245,13 +245,18 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 	try {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 		auto ccontext = connection.get().context;
-		// Parsed once: a submission takes a single statement, and re-running the text to find out
-		// would execute it twice
-		auto statements = connection.get().ExtractStatements(context.sql_query);
-		if (statements.size() != 1) {
+		// A submission takes a single statement, and only the engine's own parse is profiled, so the
+		// text is counted here and submitted as text. A parse failure takes the blocking path, which
+		// reports it with its location and type, and runs text that only parses after a LOAD
+		idx_t statement_count = 0;
+		try {
+			statement_count = connection.get().ExtractStatements(context.sql_query).size();
+		} catch (std::exception &) {
+		}
+		if (statement_count != 1) {
 			return ccontext->Query(context.sql_query, parameters);
 		}
-		auto handle = ccontext->Submit(std::move(statements[0]), parameters);
+		auto handle = ccontext->Submit(context.sql_query, parameters);
 		if (handle->HasError()) {
 			return handle;
 		}

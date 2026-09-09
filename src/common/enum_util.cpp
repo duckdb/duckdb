@@ -4947,7 +4947,7 @@ const StringUtil::EnumStringLiteral *GetQueryResultStateValues() {
 		{ static_cast<uint32_t>(QueryResultState::BLOCKED), "BLOCKED" },
 		{ static_cast<uint32_t>(QueryResultState::NO_TASKS_AVAILABLE), "NO_TASKS_AVAILABLE" },
 		{ static_cast<uint32_t>(QueryResultState::FINISHED), "FINISHED" },
-		{ static_cast<uint32_t>(QueryResultState::ERROR), "ERROR" }
+		{ static_cast<uint32_t>(QueryResultState::EXECUTION_ERROR), "EXECUTION_ERROR" }
 	};
 	return values;
 }

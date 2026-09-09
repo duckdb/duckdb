@@ -800,7 +800,7 @@ QueryResultState ClientContext::ExecuteTaskInternal(ClientContextLock &lock, Bas
 		result.SetError(ErrorData("Unhandled exception in ExecuteTaskInternal"));
 	} // LCOV_EXCL_STOP
 	EndQueryInternal(lock, false, invalidate_transaction, result.GetErrorObject());
-	return QueryResultState::ERROR;
+	return QueryResultState::EXECUTION_ERROR;
 }
 
 void ClientContext::InitialCleanup(ClientContextLock &lock) {
@@ -1317,14 +1317,14 @@ unique_ptr<QueryResult> ClientContext::Submit(unique_ptr<SQLStatement> statement
 unique_ptr<QueryResult> ClientContext::Submit(const string &query, identifier_map_t<BoundParameterData> &values,
                                               QueryParameters parameters) {
 	parameters.statement_args = values;
-	return Submit(query, std::move(parameters));
+	return Submit(query, parameters);
 }
 
 unique_ptr<QueryResult> ClientContext::Submit(unique_ptr<SQLStatement> statement,
                                               identifier_map_t<BoundParameterData> &values,
                                               QueryParameters parameters) {
 	parameters.statement_args = values;
-	return Submit(std::move(statement), std::move(parameters));
+	return Submit(std::move(statement), parameters);
 }
 
 unique_ptr<QueryResult> ClientContext::RunInternalStatement(unique_ptr<SQLStatement> statement,
@@ -1588,9 +1588,10 @@ unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, c
 	return SubmitInternal(lock, std::move(relation_stmt), query_parameters);
 }
 
-unique_ptr<QueryResult> ClientContext::Submit(const shared_ptr<Relation> &relation, QueryParameters query_parameters) {
+unique_ptr<QueryResult> ClientContext::Submit(const shared_ptr<Relation> &relation,
+                                              const QueryParameters &query_parameters) {
 	auto lock = LockContext();
-	return SubmitInternal(*lock, relation, std::move(query_parameters));
+	return SubmitInternal(*lock, relation, query_parameters);
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {

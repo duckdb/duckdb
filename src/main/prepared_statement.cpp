@@ -127,13 +127,13 @@ unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values) {
 	return Execute(named_values);
 }
 
-unique_ptr<QueryResult> PreparedStatement::Submit(vector<Value> &values, QueryParameters query_parameters) {
+unique_ptr<QueryResult> PreparedStatement::Submit(vector<Value> &values, const QueryParameters &query_parameters) {
 	identifier_map_t<BoundParameterData> named_values;
 	for (idx_t i = 0; i < values.size(); i++) {
 		auto &val = values[i];
 		named_values[Identifier(std::to_string(i + 1))] = BoundParameterData(val);
 	}
-	return Submit(named_values, std::move(query_parameters));
+	return Submit(named_values, query_parameters);
 }
 
 unique_ptr<QueryResult> PreparedStatement::Submit(identifier_map_t<BoundParameterData> &named_values,

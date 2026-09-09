@@ -200,7 +200,8 @@ public:
 	DUCKDB_API void InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
 
 	//! Non-blocking. Submits a relation and returns its handle
-	DUCKDB_API unique_ptr<QueryResult> Submit(const shared_ptr<Relation> &relation, QueryParameters query_parameters);
+	DUCKDB_API unique_ptr<QueryResult> Submit(const shared_ptr<Relation> &relation,
+	                                          const QueryParameters &query_parameters);
 	//! Blocking. Runs a relation to completion and returns its handle
 	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
 

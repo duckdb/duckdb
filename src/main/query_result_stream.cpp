@@ -45,7 +45,7 @@ QueryResultState QueryResultStream::Poll() {
 QueryResultState QueryResultStream::ExecuteTask() {
 	if (!handle->context) {
 		// The stream already ended. Keep reporting the terminal state
-		return handle->HasError() ? QueryResultState::ERROR : QueryResultState::FINISHED;
+		return handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
 	}
 	QueryResultState state;
 	{
@@ -55,14 +55,14 @@ QueryResultState QueryResultStream::ExecuteTask() {
 		} catch (std::exception &ex) {
 			// A pending interrupt reaches the consumer as an error on the stream, never as a throw
 			handle->HandleFetchFailure(*lock, ErrorData(ex));
-			state = QueryResultState::ERROR;
+			state = QueryResultState::EXECUTION_ERROR;
 		} catch (...) { // LCOV_EXCL_START
 			handle->SetError(ErrorData("Unhandled exception in ExecuteTask"));
 			handle->EndQuery(*lock, true);
-			state = QueryResultState::ERROR;
+			state = QueryResultState::EXECUTION_ERROR;
 		} // LCOV_EXCL_STOP
 	}
-	if (state == QueryResultState::ERROR) {
+	if (state == QueryResultState::EXECUTION_ERROR) {
 		// A finished execution can still hold trailing chunks, so only an error ends the stream here
 		Close();
 	}
@@ -81,7 +81,7 @@ QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
 	out_chunk.reset();
 	if (!handle->context) {
 		// The stream already ended. Keep reporting the terminal state
-		return handle->HasError() ? QueryResultState::ERROR : QueryResultState::FINISHED;
+		return handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
 	}
 	auto &buffer = *handle->buffer;
 	QueryResultState state;
@@ -89,7 +89,7 @@ QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
 		auto lock = handle->LockContext();
 		try {
 			state = buffer.Pulse(*handle, *lock);
-			if (state != QueryResultState::ERROR) {
+			if (state != QueryResultState::EXECUTION_ERROR) {
 				if (state == QueryResultState::READY) {
 					out_chunk = buffer.Scan();
 				}
@@ -102,7 +102,7 @@ QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
 					buffer.AssertNoBlockedSinks();
 					handle->EndQuery(*lock);
 					// Cleanup can fail on an autocommit commit. It records the error without throwing
-					state = handle->HasError() ? QueryResultState::ERROR : QueryResultState::FINISHED;
+					state = handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
 				} else if (state == QueryResultState::READY) {
 					// A chunk was announced but the scan came up empty: the stream has not ended yet
 					state = QueryResultState::NOT_READY;
@@ -110,11 +110,11 @@ QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
 			}
 		} catch (std::exception &ex) {
 			handle->HandleFetchFailure(*lock, ErrorData(ex));
-			state = QueryResultState::ERROR;
+			state = QueryResultState::EXECUTION_ERROR;
 		} catch (...) { // LCOV_EXCL_START
 			handle->SetError(ErrorData("Unhandled exception in TryFetch"));
 			handle->EndQuery(*lock, true);
-			state = QueryResultState::ERROR;
+			state = QueryResultState::EXECUTION_ERROR;
 		} // LCOV_EXCL_STOP
 	}
 	if (IsTerminal(state)) {
@@ -128,7 +128,7 @@ unique_ptr<DataChunk> QueryResultStream::FetchInternal(ClientContextLock &lock) 
 	unique_ptr<DataChunk> chunk;
 	try {
 		auto state = buffer.ReplenishBuffer(*handle, lock);
-		if (state == QueryResultState::ERROR) {
+		if (state == QueryResultState::EXECUTION_ERROR) {
 			return nullptr;
 		}
 		chunk = buffer.Scan();

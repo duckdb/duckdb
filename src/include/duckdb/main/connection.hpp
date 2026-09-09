@@ -90,10 +90,10 @@ public:
 	//! Non-blocking. Submits the query and returns its handle. The engine runs it iff threads - external_threads > 0,
 	//! but produces no data until the caller either calls a materializing method on the handle or opens a
 	//! QueryResultStream on it. The query may only contain a single statement.
-	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, QueryParameters query_parameters = {});
+	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, const QueryParameters &query_parameters = {});
 	//! Non-blocking. As above, for a parsed statement and for bound parameter values
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
-	                                          QueryParameters query_parameters = {});
+	                                          const QueryParameters &query_parameters = {});
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
 	                                          identifier_map_t<BoundParameterData> &named_values,
 	                                          QueryParameters query_parameters = {});

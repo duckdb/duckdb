@@ -153,7 +153,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_ch
 		case QueryResultState::BLOCKED:
 		case QueryResultState::NO_TASKS_AVAILABLE:
 			return DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-		case QueryResultState::ERROR:
+		case QueryResultState::EXECUTION_ERROR:
 			return HandleExecutionError(handle->GetErrorObject());
 		case QueryResultState::READY:
 		case QueryResultState::FINISHED: {
@@ -196,7 +196,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_ch
 			case QueryResultState::BLOCKED:
 			case QueryResultState::NO_TASKS_AVAILABLE:
 				return DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-			case QueryResultState::ERROR:
+			case QueryResultState::EXECUTION_ERROR:
 				return HandleExecutionError(stream->GetErrorObject());
 			case QueryResultState::READY:
 			case QueryResultState::FINISHED:
@@ -275,7 +275,7 @@ void ResultWrapperV2::Wait() {
 			// blocking is meaningful.
 			handle->WaitForTask();
 			return;
-		case QueryResultState::ERROR:
+		case QueryResultState::EXECUTION_ERROR:
 			// The error (interrupts included) is already recorded on the
 			// handle and the engine closed the query. Transition the state
 			// machine now: a later ExecuteTask would trip the engine's

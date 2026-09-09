@@ -40,7 +40,7 @@ public:
 	//! Reports where execution stands. Runs no task
 	DUCKDB_API QueryResultState Poll();
 	//! Executes a single task of the query on the calling thread. An interrupt or an execution error
-	//! is recorded on the stream and reported as ERROR
+	//! is recorded on the stream and reported as EXECUTION_ERROR
 	DUCKDB_API QueryResultState ExecuteTask();
 	//! Blocks until a task is runnable or the engine is waiting on the caller. Runs no task
 	DUCKDB_API void WaitForTask();

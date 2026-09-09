@@ -64,8 +64,9 @@ public:
 	void DecideDraining();
 	//! Park a producer until the retention is decided. False when it already is
 	bool ParkUndecided(const InterruptState &blocked_sink);
-	//! Whether a producer is parked on this buffer, for a decision or for space. Only the consumer releases it
-	bool HasParkedProducer();
+	//! Whether the engine waits on the consumer: a producer is parked for the retention decision, or for
+	//! space that only a pop frees
+	bool WaitsOnConsumer();
 	//! Blocking call that executes tasks on the calling thread until a chunk is buffered or execution reaches a
 	//! terminal state.
 	QueryResultState ReplenishBuffer(QueryResult &result, ClientContextLock &context_lock);
@@ -82,7 +83,7 @@ public:
 	void SetResultNotifier(shared_ptr<QueryResultNotifier> notifier_p) DUCKDB_EXCLUDES(glock);
 	//! The highest number of bytes the buffer ever held.
 	virtual idx_t PeakBufferedBytes() = 0;
-	//! Whether a producer is parked for space. A parked producer implies a poppable chunk.
+	//! Whether a producer is parked for space.
 	virtual bool HasBlockedSink() = 0;
 	//! Whether a chunk is ready for the consumer to pop.
 	virtual bool HasObservableChunk() = 0;

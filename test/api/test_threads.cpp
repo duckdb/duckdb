@@ -187,11 +187,13 @@ TEST_CASE("Test scheduling with no threads", "[api]") {
 	REQUIRE((query_1_pipelines == 0));
 
 	// Execute the second query
-	REQUIRE_NO_FAIL(query_2->Execute());
+	query_2->Complete();
+	REQUIRE_NO_FAIL(*query_2);
 
 	// And even after that, there should still be no completed pipelines for the first query.
 	query_1_pipelines = con1.context->GetExecutor().GetCompletedPipelines();
 	REQUIRE((query_1_pipelines == 0));
-	REQUIRE_NO_FAIL(query_1->Execute());
+	query_1->Complete();
+	REQUIRE_NO_FAIL(*query_1);
 }
 #endif

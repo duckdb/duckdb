@@ -172,7 +172,7 @@ TEST_CASE("A simple stream reports an execution error while a chunk is still buf
 	                                        to_string(4 * STANDARD_VECTOR_SIZE) + ") t(i)");
 	// The pop wakes the parked producer, whose next chunk fails on the worker thread
 	REQUIRE(stream->Fetch());
-	REQUIRE(PollToTerminal(*stream) == QueryResultState::ERROR);
+	REQUIRE(PollToTerminal(*stream) == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(stream->HasError());
 	REQUIRE(StringUtil::Contains(stream->GetError(), "boom"));
 }
@@ -188,7 +188,7 @@ TEST_CASE("A batched stream reports an execution error while a chunk is still bu
 	auto stream = ExecuteStreaming(con, "SELECT (CASE WHEN i = " + to_string(2 * STANDARD_VECTOR_SIZE) +
 	                                        " THEN 'boom' ELSE i::VARCHAR END)::INT FROM t");
 	REQUIRE(stream->Fetch());
-	REQUIRE(PollToTerminal(*stream) == QueryResultState::ERROR);
+	REQUIRE(PollToTerminal(*stream) == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(stream->HasError());
 	REQUIRE(StringUtil::Contains(stream->GetError(), "boom"));
 }
@@ -364,6 +364,77 @@ TEST_CASE("A simple stream result never exceeds the buffer cap", "[api][stream_b
 	REQUIRE(stream.GetBufferedData().Cast<SimpleBufferedData>().PeakBufferedBytes() <= 100000);
 }
 
+TEST_CASE("A parked read-ahead batch does not report the batched buffer waiting on the consumer",
+          "[api][stream_buffer]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	DataChunk chunk;
+	chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::BIGINT});
+	chunk.SetCardinality(STANDARD_VECTOR_SIZE);
+	// The cap counts the buffered copy. Four chunks fit and the reserve for the minimum batch is one
+	// chunk, so a read-ahead batch parks on its fourth chunk with nothing in the read queue
+	const auto chunk_bytes = BufferedData::CopyForBuffering(chunk)->GetDataSize();
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='" + to_string(4 * chunk_bytes) + " bytes'"));
+	BatchedBufferedData buffered(*con.context, ResultLifetime::DRAINING);
+	auto signal = make_shared_ptr<InterruptDoneSignalState>();
+	weak_ptr<InterruptDoneSignalState> weak_signal(signal);
+	InterruptState read_ahead(weak_signal);
+
+	idx_t appended = 0;
+	while (!buffered.AppendOrBlock(chunk, 1, read_ahead)) {
+		appended++;
+		REQUIRE(appended <= 4);
+	}
+	REQUIRE(appended == 3);
+	REQUIRE(buffered.HasBlockedSink());
+	REQUIRE(!buffered.HasObservableChunk());
+	// The park waits on the minimum batch, not on the consumer: reporting otherwise makes a consumer
+	// that waits for a task spin until the minimum batch delivers
+	REQUIRE(!buffered.WaitsOnConsumer());
+
+	// The minimum batch always gets its reserve, and its chunk is what the consumer pops
+	InterruptState minimum(weak_signal);
+	REQUIRE(!buffered.AppendOrBlock(chunk, 0, minimum));
+	REQUIRE(buffered.HasObservableChunk());
+	REQUIRE(buffered.WaitsOnConsumer());
+	REQUIRE(buffered.Scan());
+	REQUIRE(!buffered.HasObservableChunk());
+	REQUIRE(!buffered.WaitsOnConsumer());
+}
+
+TEST_CASE("Poll on a draining batched stream reports READY only with a chunk to pop", "[api][stream_buffer]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(2000000)"));
+	// A small buffer keeps read-ahead batches parking for the whole drain
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='64KB'"));
+
+	auto result = ExecuteStreaming(con, "SELECT i FROM t");
+	auto &stream = *result;
+	auto &buffered = stream.GetBufferedData().Cast<BatchedBufferedData>();
+	Deadline deadline;
+	idx_t row_count = 0;
+	while (true) {
+		unique_ptr<DataChunk> chunk;
+		auto state = stream.TryFetch(chunk);
+		if (state == QueryResultState::READY) {
+			row_count += chunk->size();
+			continue;
+		}
+		if (IsTerminal(state)) {
+			REQUIRE(state == QueryResultState::FINISHED);
+			break;
+		}
+		REQUIRE(!deadline.Passed());
+		// READY is the engine waiting on this consumer, and nothing but this thread pops, so a chunk
+		// announced here is still there to check
+		if (stream.Poll() == QueryResultState::READY) {
+			REQUIRE(buffered.HasObservableChunk());
+		}
+	}
+	REQUIRE(row_count == 2000000);
+}
+
 TEST_CASE("Submit returns before any chunk is buffered", "[api][stream_buffer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -375,7 +446,7 @@ TEST_CASE("Submit returns before any chunk is buffered", "[api][stream_buffer]")
 		auto &buffered = handle->GetBufferedData();
 		// The first producer parks with its chunk unconsumed until the consumer chooses
 		Deadline deadline;
-		while (!buffered.HasParkedProducer()) {
+		while (!buffered.WaitsOnConsumer()) {
 			REQUIRE(!deadline.Passed());
 			std::this_thread::sleep_for(std::chrono::microseconds(100));
 		}

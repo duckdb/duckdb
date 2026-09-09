@@ -199,12 +199,12 @@ QueryResultState QueryResult::Cancelled() {
 		                   "The execution of the query was cancelled before it could finish, likely caused by "
 		                   "executing a different query"));
 	}
-	return QueryResultState::ERROR;
+	return QueryResultState::EXECUTION_ERROR;
 }
 
 QueryResultState QueryResult::Poll() {
 	if (HasError()) {
-		return QueryResultState::ERROR;
+		return QueryResultState::EXECUTION_ERROR;
 	}
 	if (collection || !context) {
 		// The result was collected, or the query already ended: keep reporting the terminal state

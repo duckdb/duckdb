@@ -97,7 +97,7 @@ public:
 	}
 
 	//! Non-blocking. Submits the prepared statement with the given values and returns its handle
-	DUCKDB_API unique_ptr<QueryResult> Submit(vector<Value> &values, QueryParameters query_parameters = {});
+	DUCKDB_API unique_ptr<QueryResult> Submit(vector<Value> &values, const QueryParameters &query_parameters = {});
 
 	//! Non-blocking. Submits the prepared statement with the given named values and returns its handle
 	DUCKDB_API unique_ptr<QueryResult> Submit(identifier_map_t<BoundParameterData> &named_values,

@@ -259,7 +259,7 @@ TEST_CASE("An interrupt wakes a waiting consumer", "[api][query_result_stream]")
 	while (!IsTerminal(state = stream->TryFetch(chunk))) {
 		REQUIRE(!deadline.Passed());
 	}
-	REQUIRE(state == QueryResultState::ERROR);
+	REQUIRE(state == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(StringUtil::Contains(stream->GetError(), "INTERRUPT"));
 
 	con.context->ClearInterrupt();
@@ -280,7 +280,7 @@ TEST_CASE("Interrupt sets the flag without ringing the notify callback", "[api][
 	REQUIRE(channel.Count() == 0);
 
 	unique_ptr<DataChunk> chunk;
-	REQUIRE(stream->TryFetch(chunk) == QueryResultState::ERROR);
+	REQUIRE(stream->TryFetch(chunk) == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(StringUtil::Contains(stream->GetError(), "INTERRUPT"));
 
 	con.context->ClearInterrupt();
@@ -302,7 +302,7 @@ TEST_CASE("InterruptAndNotify wakes a consumer waiting on an idle engine", "[api
 	interrupter.join();
 
 	unique_ptr<DataChunk> chunk;
-	REQUIRE(stream->TryFetch(chunk) == QueryResultState::ERROR);
+	REQUIRE(stream->TryFetch(chunk) == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(StringUtil::Contains(stream->GetError(), "INTERRUPT"));
 
 	con.context->ClearInterrupt();
@@ -334,11 +334,11 @@ TEST_CASE("An error after the first chunk surfaces at the consumer's next call",
 			state = stream->TryFetch(chunk);
 			REQUIRE(!deadline.Passed());
 		}
-		REQUIRE(state == QueryResultState::ERROR);
+		REQUIRE(state == QueryResultState::EXECUTION_ERROR);
 		REQUIRE(StringUtil::Contains(stream->GetError(), "boom"));
 		// The buffer still held a chunk when the error landed; none of it is reported afterwards
 		REQUIRE(!chunk);
-		REQUIRE(stream->TryFetch(chunk) == QueryResultState::ERROR);
+		REQUIRE(stream->TryFetch(chunk) == QueryResultState::EXECUTION_ERROR);
 		REQUIRE(!chunk);
 
 		auto next = con.Query("SELECT 42");

@@ -139,9 +139,9 @@ bool duckdb_pending_execution_is_finished(duckdb_pending_state pending_state) {
 	case DUCKDB_PENDING_RESULT_NOT_READY:
 		return IsObservable(QueryResultState::NOT_READY);
 	case DUCKDB_PENDING_ERROR:
-		return IsObservable(QueryResultState::ERROR);
+		return IsObservable(QueryResultState::EXECUTION_ERROR);
 	default:
-		return IsObservable(QueryResultState::ERROR);
+		return IsObservable(QueryResultState::EXECUTION_ERROR);
 	}
 }
 

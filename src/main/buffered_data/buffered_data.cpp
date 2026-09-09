@@ -64,7 +64,7 @@ bool BufferedData::ParkUndecided(const InterruptState &blocked_sink) {
 	return true;
 }
 
-bool BufferedData::HasParkedProducer() {
+bool BufferedData::WaitsOnConsumer() {
 	// The undecided list is empty once the retention is settled: ParkUndecided re-checks under glock
 	if (lifetime == ResultLifetime::UNDECIDED) {
 		annotated_lock_guard<annotated_mutex> lock(glock);
@@ -72,7 +72,9 @@ bool BufferedData::HasParkedProducer() {
 			return true;
 		}
 	}
-	return HasBlockedSink();
+	// A space park is only the consumer's to release when a pop is possible: the batched buffer also
+	// parks read-ahead batches while the read queue is empty, and the minimum batch releases those
+	return HasBlockedSink() && HasObservableChunk();
 }
 
 void BufferedData::SetResultNotifier(shared_ptr<QueryResultNotifier> notifier_p) {
@@ -122,10 +124,10 @@ QueryResultState BufferedData::ExecuteTaskInternal(QueryResult &result, ClientCo
 	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
 	auto execution_result = cc->ExecuteTaskInternal(context_lock, result);
-	if (execution_result == QueryResultState::ERROR) {
+	if (execution_result == QueryResultState::EXECUTION_ERROR) {
 		// The query has ended, so a still-buffered chunk must not be reported as poppable
 		Close();
-		return QueryResultState::ERROR;
+		return QueryResultState::EXECUTION_ERROR;
 	}
 	if (ReplenishSatisfied()) {
 		return QueryResultState::READY;
@@ -157,9 +159,9 @@ QueryResultState BufferedData::Pulse(QueryResult &result, ClientContextLock &con
 	}
 	// Observe the execution state without running tasks
 	auto execution_result = cc->ExecuteTaskInternal(context_lock, result, true);
-	if (execution_result == QueryResultState::ERROR) {
+	if (execution_result == QueryResultState::EXECUTION_ERROR) {
 		Close();
-		return QueryResultState::ERROR;
+		return QueryResultState::EXECUTION_ERROR;
 	}
 	if (HasObservableChunk()) {
 		return QueryResultState::READY;

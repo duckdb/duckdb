@@ -91,12 +91,13 @@ unique_ptr<QueryResult> Connection::Query(unique_ptr<SQLStatement> statement, Qu
 	return context->Query(std::move(statement), std::move(query_parameters));
 }
 
-unique_ptr<QueryResult> Connection::Submit(const string &query, QueryParameters query_parameters) {
-	return context->Submit(query, std::move(query_parameters));
+unique_ptr<QueryResult> Connection::Submit(const string &query, const QueryParameters &query_parameters) {
+	return context->Submit(query, query_parameters);
 }
 
-unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement, QueryParameters query_parameters) {
-	return context->Submit(std::move(statement), std::move(query_parameters));
+unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement,
+                                           const QueryParameters &query_parameters) {
+	return context->Submit(std::move(statement), query_parameters);
 }
 
 unique_ptr<QueryResult> Connection::Submit(const string &query, identifier_map_t<BoundParameterData> &named_values,
