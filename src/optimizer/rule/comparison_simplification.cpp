@@ -175,10 +175,15 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 	if (BoundComparisonExpression::IsComparison(column_ref_expr) && !constant_value.IsNull() &&
-	    constant_value.type().id() == LogicalTypeId::BOOLEAN && BooleanValue::Get(constant_value)) {
+	    constant_value.type().id() == LogicalTypeId::BOOLEAN) {
 		if (expr.GetExpressionType() == ExpressionType::COMPARE_EQUAL ||
 		    (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM && is_root &&
 		     op.type == LogicalOperatorType::LOGICAL_FILTER)) {
+			if (!BooleanValue::Get(constant_value)) {
+				auto &comparison = column_ref_expr.Cast<BoundFunctionExpression>();
+				auto negated_type = NegateComparisonExpression(comparison.GetExpressionType());
+				BoundComparisonExpression::SetType(comparison, negated_type);
+			}
 			return column_ref_left ? std::move(left) : std::move(right);
 		}
 	}
