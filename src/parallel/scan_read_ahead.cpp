@@ -212,10 +212,17 @@ void ScanReadAhead::SetDone() {
 }
 
 bool ScanReadAhead::TryReserveSlot() {
-	const bool over_budget = pending_io_bytes.load() >= backlog_budget.load();
-	const idx_t depth = over_budget ? 1 : read_ahead_depth;
-	if (active_jobs.fetch_add(1) >= depth) {
+	// take the minimum job charge up front so concurrent producers cannot all pass the budget check together
+	const auto backlog = pending_io_bytes.fetch_add(MINIMUM_JOB_IO_CHARGE);
+	// admit while the backlog is below budget, overshooting it by at most one job charge;
+	// an empty backlog always admits one job so the scan makes progress under any budget
+	if (backlog != 0 && backlog >= backlog_budget.load()) {
+		pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
+		return false;
+	}
+	if (active_jobs.fetch_add(1) >= read_ahead_depth) {
 		--active_jobs;
+		pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
 		return false;
 	}
 	++active_producers;
@@ -223,8 +230,6 @@ bool ScanReadAhead::TryReserveSlot() {
 }
 
 void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
-	// beyond its scheduled I/O a job carries scan-state overhead (row-group sized decode buffers)
-	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
 	auto completion = make_shared_ptr<ReadAheadJobCompletion>(executor);
 	job->io_completion = completion;
 	// wrap all reads before scheduling any, a wrapped task settles the completion even when scheduling throws
@@ -235,7 +240,8 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 		read_tasks.push_back(make_uniq<ReadAheadIOTask>(*executor, std::move(task), completion));
 	}
 	job->io_bytes = MaxValue<idx_t>(job->io_bytes, MINIMUM_JOB_IO_CHARGE);
-	pending_io_bytes += job->io_bytes;
+	// the minimum charge was taken by TryReserveSlot, charge the remainder
+	pending_io_bytes += job->io_bytes - MINIMUM_JOB_IO_CHARGE;
 	// schedule the reads detached on the async pool right away
 	for (auto &task : read_tasks) {
 		executor->ScheduleTask(std::move(task));

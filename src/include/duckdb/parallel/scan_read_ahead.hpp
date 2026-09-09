@@ -129,6 +129,7 @@ private:
 		~ProducerReservation() {
 			if (!committed) {
 				read_ahead.ReleaseSlot();
+				read_ahead.pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
 			}
 			--read_ahead.active_producers;
 		}
@@ -164,6 +165,10 @@ private:
 	void ReleaseSlot();
 
 private:
+	//! Minimum budget charge per job, beyond its scheduled I/O a job carries scan-state overhead (decode buffers)
+	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
+
+private:
 	//! Maximum number of jobs scheduled ahead of decoding, unlimited in the -1 auto mode
 	const idx_t read_ahead_depth;
 	//! Async memory governor
@@ -179,7 +184,7 @@ private:
 	idx_t next_batch_index = 0;
 	//! Jobs scheduled ahead of decoding
 	atomic<idx_t> active_jobs {0};
-	//! Bytes of scheduled I/O that has not completed yet, released once the claimed job's I/O finished
+	//! Budget charge of the backlog: reserved producer slots plus scheduled jobs, released per job in WaitForJob
 	atomic<idx_t> pending_io_bytes {0};
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
