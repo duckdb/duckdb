@@ -330,3 +330,42 @@ DELETE FROM delete_using_indexed USING range(100) source(i) WHERE source.i = 0 R
 7
 8
 9
+
+# Verify that deduplicated row IDs stay aligned with delete-index keys
+statement ok
+SET threads=1;
+
+statement ok
+PRAGMA disable_optimizer;
+
+statement ok
+CREATE TABLE delete_using_duplicate_indexed(id INTEGER PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO delete_using_duplicate_indexed VALUES (0, 'zero'), (1, 'one');
+
+statement ok
+BEGIN;
+
+query I rowsort
+DELETE FROM delete_using_duplicate_indexed
+USING (VALUES (0), (0), (1)) AS source(id)
+WHERE delete_using_duplicate_indexed.id = source.id
+RETURNING delete_using_duplicate_indexed.id;
+----
+0
+1
+
+statement ok
+INSERT INTO delete_using_duplicate_indexed VALUES (1, 'replacement');
+
+query IT
+SELECT * FROM delete_using_duplicate_indexed;
+----
+1	replacement
+
+statement ok
+ROLLBACK;
+
+statement ok
+PRAGMA enable_optimizer;

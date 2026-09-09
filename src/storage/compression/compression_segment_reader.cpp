@@ -13,11 +13,23 @@ CompressionSegmentReader CompressionSegmentReader::FromSegment(const BufferHandl
 	if (DUCKDB_UNLIKELY(block_offset > block_size)) {
 		ThrowOffsetExceedsBlockSize(context);
 	}
-	return CompressionSegmentReader(handle.Ptr() + block_offset, block_size - block_offset, context);
+	auto reader_size = block_size - block_offset;
+	auto &data_size = segment.GetDataSize();
+	if (data_size) {
+		if (DUCKDB_UNLIKELY(*data_size > reader_size)) {
+			ThrowByteSizeExceedsBlockSize(context);
+		}
+		reader_size = *data_size;
+	}
+	return CompressionSegmentReader(handle.Ptr() + block_offset, reader_size, context);
 }
 
 void CompressionSegmentReader::ThrowOffsetExceedsBlockSize(const char *context) {
 	throw DataCorruptionException("Corrupted %s: block offset exceeds the block size", context);
+}
+
+void CompressionSegmentReader::ThrowByteSizeExceedsBlockSize(const char *context) {
+	throw DataCorruptionException("Corrupted %s: segment byte size exceeds the remaining block size", context);
 }
 
 void CompressionSegmentReader::ThrowForwardReadOutOfBounds() const {
@@ -42,6 +54,10 @@ void CompressionSegmentReader::ThrowArrayMisaligned() const {
 
 void CompressionSegmentReader::ThrowArrayOutOfBounds() const {
 	throw DataCorruptionException("Corrupted %s: array count extends past the end of the segment", context);
+}
+
+void CompressionSegmentReader::ThrowDestinationTooSmall() const {
+	throw DataCorruptionException("Corrupted %s: read does not fit the destination buffer", context);
 }
 
 void CompressionSegmentReader::Align(idx_t alignment) {

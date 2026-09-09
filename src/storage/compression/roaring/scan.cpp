@@ -164,17 +164,18 @@ void CompressedRunContainerScanState::Verify() const {
 
 //! BitsetContainer
 
-BitsetContainerScanState::BitsetContainerScanState(idx_t container_index, idx_t count, validity_t *bitset)
-    : ContainerScanState(container_index, count), bitset(bitset) {
+BitsetContainerScanState::BitsetContainerScanState(idx_t container_index, idx_t container_size, validity_t *bitset)
+    : ContainerScanState(container_index, container_size),
+      bitset(bitset,
+             container_size / ValidityMask::BITS_PER_VALUE + (container_size % ValidityMask::BITS_PER_VALUE != 0)) {
 }
 
 void BitsetContainerScanState::ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) {
 	if (!result_offset && (to_scan % ValidityMask::BITS_PER_VALUE) == 0 &&
 	    (scanned_count % ValidityMask::BITS_PER_VALUE) == 0) {
-		ValidityUncompressed::AlignedScan(reinterpret_cast<data_ptr_t>(bitset), scanned_count, result_mask, to_scan);
+		ValidityUncompressed::AlignedScan(bitset, scanned_count, result_mask, to_scan);
 	} else {
-		ValidityUncompressed::UnalignedScan(reinterpret_cast<data_ptr_t>(bitset), container_size, scanned_count,
-		                                    result_mask, result_offset, to_scan);
+		ValidityUncompressed::UnalignedScan(bitset, container_size, scanned_count, result_mask, result_offset, to_scan);
 	}
 	scanned_count += to_scan;
 }

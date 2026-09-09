@@ -1,23 +1,26 @@
 #include "duckdb/common/bitpacking.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/operator/add.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/storage/compression/compression_segment_reader.hpp"
 #include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 #include <functional>
+#include <type_traits>
+#include <variant>
 
 namespace duckdb {
 
@@ -37,11 +40,53 @@ static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) 
 	encoded_value |= UnsafeNumericCast<bitpacking_metadata_encoded_t>((uint8_t)metadata.mode << 24);
 	return encoded_value;
 }
-static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
+
+static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t metadata_encoded) {
 	bitpacking_metadata_t metadata;
-	metadata.mode = static_cast<BitpackingMode>((*metadata_encoded >> 24) & 0xFF);
-	metadata.offset = *metadata_encoded & 0x00FFFFFF;
+	metadata.mode = static_cast<BitpackingMode>((metadata_encoded >> 24) & 0xFF);
+	metadata.offset = metadata_encoded & 0x00FFFFFF;
 	return metadata;
+}
+
+[[noreturn]] static void ThrowBitpackingUnknownMode() {
+	throw DataCorruptionException("Corrupted bitpacking segment: unknown bitpacking mode");
+}
+
+static void ValidateBitpackingMode(BitpackingMode mode) {
+	switch (mode) {
+	case BitpackingMode::CONSTANT:
+	case BitpackingMode::CONSTANT_DELTA:
+	case BitpackingMode::FOR:
+	case BitpackingMode::DELTA_FOR:
+		return;
+	default:
+		ThrowBitpackingUnknownMode();
+	}
+}
+
+[[noreturn]] static void ThrowBitpackingWidthOutOfRange() {
+	throw DataCorruptionException("Corrupted bitpacking segment: bit width exceeds the physical type width");
+}
+
+[[noreturn]] static void ThrowBitpackingGroupOffsetsInvalid() {
+	throw DataCorruptionException(
+	    "Corrupted bitpacking segment: group offsets do not describe a range in the data region");
+}
+
+[[noreturn]] static void ThrowBitpackingGroupIndexOutOfRange() {
+	throw DataCorruptionException("Corrupted bitpacking segment: group index exceeds the metadata table");
+}
+
+[[noreturn]] static void ThrowBitpackingReadPastEnd() {
+	throw DataCorruptionException("Corrupted bitpacking segment: read exceeds the segment row count");
+}
+
+template <class T, class T_U = typename MakeUnsigned<T>::type>
+static bitpacking_width_t ValidateBitpackingWidth(T stored_width) {
+	if (static_cast<T_U>(stored_width) > sizeof(T) * 8) {
+		ThrowBitpackingWidthOutOfRange();
+	}
+	return static_cast<bitpacking_width_t>(stored_width);
 }
 
 struct EmptyBitpackingWriter {
@@ -189,11 +234,9 @@ public:
 		                                                              minimum_delta, delta_offset);
 	}
 
-	template <class T_INNER>
+	template <class T_INNER, class T_U = typename MakeUnsigned<T_INNER>::type>
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
 		static_assert(NumericLimits<T_INNER>::IsIntegral(), "Integral type required.");
-
-		using T_U = typename MakeUnsigned<T_INNER>::type;
 
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
 			reinterpret_cast<T_U *>(buffer)[i] -= static_cast<T_U>(frame_of_reference);
@@ -358,7 +401,7 @@ public:
 	}
 
 	StatsWriter<T> stats_writer;
-	// Ptr to next free spot in segment;
+	// Pointer to the next free position in the segment.
 	data_ptr_t data_ptr;
 	// Ptr to next free spot for storing bitwidths and frame-of-references (growing downwards).
 	data_ptr_t metadata_ptr;
@@ -540,205 +583,388 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-template <class T>
-static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
-	using T_U = typename MakeUnsigned<T>::type;
+template <class T, class T_U = typename MakeUnsigned<T>::type>
+static void ApplyFrameOfReference(unsafe_array_ptr<T> values, T frame_of_reference) {
 	if (!frame_of_reference) {
 		return;
 	}
 
-	for (idx_t i = 0; i < size; i++) {
-		reinterpret_cast<T_U *>(dst)[i] += static_cast<T_U>(frame_of_reference);
+	// The frame of reference is read from disk, so add it with defined wrapping for every T value.
+	auto unsigned_values = reinterpret_cast<T_U *>(values.data());
+	for (idx_t i = 0; i < values.size(); i++) {
+		unsigned_values[i] += static_cast<T_U>(frame_of_reference);
 	}
 }
 
 // Based on https://github.com/lemire/FastPFor (Apache License 2.0)
-template <class T>
-static T DeltaDecode(T *data, T previous_value, const size_t size) {
-	D_ASSERT(size >= 1);
+template <class T, class T_U = typename MakeUnsigned<T>::type>
+static T DeltaDecode(unsafe_array_ptr<T> values, T previous_value) {
+	D_ASSERT(!values.empty());
 
-	data[0] += previous_value;
+	// Use unsigned arithmetic to avoid signed overflow on corrupt data.
+	auto udata = reinterpret_cast<T_U *>(values.data());
+	udata[0] += static_cast<T_U>(previous_value);
 
+	auto count = values.size();
 	const size_t UnrollQty = 4;
-	const size_t sz0 = (size / UnrollQty) * UnrollQty; // equal to 0, if size < UnrollQty
+	const size_t sz0 = (count / UnrollQty) * UnrollQty; // equal to 0, if count < UnrollQty
 	size_t i = 1;
 	if (sz0 >= UnrollQty) {
-		T a = data[0];
+		T_U a = udata[0];
 		for (; i < sz0 - UnrollQty; i += UnrollQty) {
-			a = data[i] += a;
-			a = data[i + 1] += a;
-			a = data[i + 2] += a;
-			a = data[i + 3] += a;
+			a = udata[i] += a;
+			a = udata[i + 1] += a;
+			a = udata[i + 2] += a;
+			a = udata[i + 3] += a;
 		}
 	}
-	for (; i != size; ++i) {
-		data[i] += data[i - 1];
+	for (; i != count; ++i) {
+		udata[i] += udata[i - 1];
 	}
 
-	return data[size - 1];
+	return values[count - 1];
 }
 
 template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingScanState : public SegmentScanState {
-public:
-	explicit BitpackingScanState(const QueryContext &context, ColumnSegment &segment) : current_segment(segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-		handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-		auto data_ptr = handle.GetDataMutable();
+private:
+	//! Alignment type for UnPackGroup<T>, 64-bit and hugeint payloads are read through a uint32_t pointer.
+	using T_PACKED = std::conditional_t<(sizeof(T) <= sizeof(uint32_t)), T, uint32_t>;
 
-		// load offset to bitpacking widths pointer
-		auto bitpacking_metadata_offset = Load<idx_t>(data_ptr + segment.GetBlockOffset());
-		bitpacking_metadata_ptr =
-		    data_ptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
-		if (bitpacking_metadata_ptr >= handle.GetDataMutable() + current_segment.GetBlockSize()) {
-			throw InternalException("Bitpacking offset is out of range at block \"%llu\" - corrupt database file",
-			                        segment.GetBlockHandle()->BlockId());
+public:
+	//! No metadata group has been loaded, the scan is positioned at the first row.
+	struct Initial {};
+
+	//! The scan has reached the end of the segment, with no metadata group loaded.
+	struct Finished {};
+
+	//! Scan position, header values, and packed payload for one metadata group, published only after validation.
+	struct CurrentGroup {
+		//! Index of this metadata group.
+		idx_t index;
+		//! Current row offset within this metadata group.
+		idx_t offset;
+		//! Group row count derived from the segment row count read from disk.
+		idx_t count;
+		//! Group descriptor decoded and validated from metadata read from disk.
+		bitpacking_metadata_t metadata;
+		//! Width read from disk, validated for T before use.
+		bitpacking_width_t width;
+		//! Frame of reference read from disk, arithmetic must accept every bit pattern of T.
+		T frame_of_reference;
+		//! Constant read from disk, arithmetic must accept every bit pattern of T.
+		T constant;
+		//! Delta offset initialized from disk, arithmetic must accept every bit pattern of T.
+		T delta_offset;
+		//! Packed payload read from disk and validated by the group reader, absent when no payload bytes are stored.
+		optional<unsafe_array_ptr<const uint8_t>> payload;
+		//! Algorithm group count derived from the segment row count read from disk.
+		idx_t algorithm_group_count;
+		//! Algorithm group byte size derived from the validated width read from disk.
+		idx_t algorithm_group_size;
+
+		idx_t Remaining() const {
+			D_ASSERT(offset <= count);
+			return count - offset;
 		}
 
-		// load the first group
-		LoadNextGroup();
+		bool AtEnd() const {
+			return offset == count;
+		}
+
+		void Advance(idx_t advance_count) {
+			D_ASSERT(advance_count <= Remaining());
+			offset += advance_count;
+		}
+
+		//! Returns the packed algorithm group containing the current row offset.
+		unsafe_array_ptr<const uint8_t> GetAlgorithmGroup() const {
+			D_ASSERT(!AtEnd());
+			D_ASSERT(width > 0);
+			D_ASSERT(payload);
+			auto algorithm_group_index = offset / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+			D_ASSERT(algorithm_group_index < algorithm_group_count);
+			auto algorithm_group_offset = algorithm_group_index * algorithm_group_size;
+			return payload->SubArray(algorithm_group_offset, algorithm_group_size);
+		}
+
+		//! Unpacks the algorithm group at the current row offset.
+		void UnpackAlgorithmGroup(T *target, bool skip_sign_extend) const {
+			D_ASSERT(metadata.mode == BitpackingMode::FOR || metadata.mode == BitpackingMode::DELTA_FOR);
+			if (width == 0) {
+				std::fill(target, target + BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, T(0));
+				return;
+			}
+			auto algorithm_group = GetAlgorithmGroup();
+			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(target), algorithm_group.data(), width,
+			                                     skip_sign_extend);
+		}
+	};
+
+	static idx_t GetMetadataTableStart(const CompressionSegmentReader &reader, idx_t group_count) {
+		// The metadata end is read from disk and determines the start of the reverse metadata table.
+		return reader.Get<idx_t>(0) - group_count * sizeof(bitpacking_metadata_encoded_t);
+	}
+
+	explicit BitpackingScanState(BufferHandle handle_p, ColumnSegment &segment)
+	    : handle(std::move(handle_p)),
+	      reader(CompressionSegmentReader::FromSegment(handle, segment, "bitpacking segment")),
+	      segment_count(segment.count.load()), group_count(segment_count / BITPACKING_METADATA_GROUP_SIZE +
+	                                                       (segment_count % BITPACKING_METADATA_GROUP_SIZE != 0)),
+	      metadata_table_start(GetMetadataTableStart(reader, group_count)),
+	      metadata_table(reader.GetArray<bitpacking_metadata_encoded_t>(metadata_table_start, group_count)) {
+		if (metadata_table_start < BitpackingPrimitives::BITPACKING_HEADER_SIZE) {
+			ThrowBitpackingGroupOffsetsInvalid();
+		}
+		reader = reader.GetSubReader(BitpackingPrimitives::BITPACKING_HEADER_SIZE,
+		                             metadata_table_start - BitpackingPrimitives::BITPACKING_HEADER_SIZE,
+		                             "bitpacking group data");
 	}
 
 	BufferHandle handle;
-	ColumnSegment &current_segment;
+	//! Group data between the segment header and reverse metadata table.
+	CompressionSegmentReader reader;
+	//! Segment row count retained for consistent group bounds.
+	idx_t segment_count;
 
 	T decompression_buffer[BITPACKING_METADATA_GROUP_SIZE];
 
-	bitpacking_metadata_t current_group;
-	bitpacking_width_t current_width;
-	T current_frame_of_reference;
-	T current_constant;
-	T current_delta_offset;
+	//! Group count derived from the segment row count read from disk.
+	idx_t group_count;
+	//! Metadata table start derived from the metadata end read from disk.
+	idx_t metadata_table_start;
+	//! Reverse metadata table read from disk, bounds-checked for group_count entries.
+	unsafe_array_ptr<const bitpacking_metadata_encoded_t> metadata_table;
 
-	idx_t current_group_offset = 0;
-	data_ptr_t current_group_ptr;
-	data_ptr_t bitpacking_metadata_ptr;
+	//! Current scan state, with group data present only while a validated metadata group is active.
+	std::variant<Initial, CurrentGroup, Finished> group_state = Initial {};
 
 public:
-	//! Loads the metadata for the current metadata group. This will set bitpacking_metadata_ptr to the next group.
-	//! It also loads any metadata at the start of a compressed buffer (e.g. the width, for, or constant value)
-	//! depending on the bitpacking mode of that group.
-	void LoadNextGroup() {
-		D_ASSERT(bitpacking_metadata_ptr > handle.GetDataMutable() &&
-		         (bitpacking_metadata_ptr < handle.GetDataMutable() + current_segment.GetBlockSize()));
-		current_group_offset = 0;
-		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
+	//! Get a group descriptor from the reverse metadata table.
+	bitpacking_metadata_t GetGroupMetadata(idx_t group_index) const {
+		if (group_index >= group_count) {
+			ThrowBitpackingGroupIndexOutOfRange();
+		}
+		return DecodeMeta(metadata_table[group_count - 1 - group_index]);
+	}
 
-		bitpacking_metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
-		current_group_ptr = GetPtr(current_group);
+	CurrentGroup &GetCurrentGroup() {
+		return std::get<CurrentGroup>(group_state);
+	}
+
+	const CurrentGroup &GetCurrentGroup() const {
+		return std::get<CurrentGroup>(group_state);
+	}
+
+	bool IsInitial() const {
+		return std::holds_alternative<Initial>(group_state);
+	}
+
+	bool HasCurrentGroup() const {
+		return std::holds_alternative<CurrentGroup>(group_state);
+	}
+
+	bool IsFinished() const {
+		return std::holds_alternative<Finished>(group_state);
+	}
+
+	void Finish() {
+		group_state = Finished {};
+	}
+
+	//! Loads the selected group's mode-specific header and validates its packed payload range.
+	void LoadGroup(idx_t group_index) {
+		auto current_group = GetGroupMetadata(group_index);
+
+		// Group boundaries come from metadata read from disk, so load and validate them.
+		auto group_start = current_group.offset;
+		auto group_end =
+		    group_index + 1 < group_count ? GetGroupMetadata(group_index + 1).offset : metadata_table_start;
+		if (group_start < BitpackingPrimitives::BITPACKING_HEADER_SIZE || group_start > group_end ||
+		    group_end > metadata_table_start) {
+			ThrowBitpackingGroupOffsetsInvalid();
+		}
+		// Group offsets are relative to the segment start, while reader starts after the segment header.
+		auto group_data_offset = group_start - BitpackingPrimitives::BITPACKING_HEADER_SIZE;
+		auto group_reader = reader.GetSubReader(group_data_offset, group_end - group_start, "bitpacking group data");
+		bitpacking_width_t current_width = 0;
+		T current_frame_of_reference = 0;
+		T current_constant = 0;
+		T current_delta_offset = 0;
 
 		// Read first value
 		switch (current_group.mode) {
 		case BitpackingMode::CONSTANT:
-			current_constant = *reinterpret_cast<T *>(current_group_ptr);
-			current_group_ptr += sizeof(T);
+			current_constant = group_reader.template Read<T>();
 			break;
 		case BitpackingMode::FOR:
 		case BitpackingMode::CONSTANT_DELTA:
 		case BitpackingMode::DELTA_FOR:
-			current_frame_of_reference = *reinterpret_cast<T *>(current_group_ptr);
-			current_group_ptr += sizeof(T);
+			current_frame_of_reference = group_reader.template Read<T>();
 			break;
 		default:
-			throw InternalException("Invalid bitpacking mode");
+			ThrowBitpackingUnknownMode();
 		}
 
 		// Read second value
 		switch (current_group.mode) {
 		case BitpackingMode::CONSTANT_DELTA:
-			current_constant = *reinterpret_cast<T *>(current_group_ptr);
-			current_group_ptr += sizeof(T);
+			current_constant = group_reader.template Read<T>();
 			break;
 		case BitpackingMode::FOR:
-		case BitpackingMode::DELTA_FOR:
-			current_width = (bitpacking_width_t)(*reinterpret_cast<T *>(current_group_ptr));
-			current_group_ptr += MaxValue(sizeof(T), sizeof(bitpacking_width_t));
+		case BitpackingMode::DELTA_FOR: {
+			auto stored_width = group_reader.template Read<T>();
+			current_width = ValidateBitpackingWidth<T>(stored_width);
 			break;
+		}
 		case BitpackingMode::CONSTANT:
 			break;
 		default:
-			throw InternalException("Invalid bitpacking mode");
+			ThrowBitpackingUnknownMode();
 		}
 
 		// Read third value
 		if (current_group.mode == BitpackingMode::DELTA_FOR) {
-			current_delta_offset = *reinterpret_cast<T *>(current_group_ptr);
-			current_group_ptr += sizeof(T);
+			current_delta_offset = group_reader.template Read<T>();
 		}
+
+		// The row count for this group comes from the segment count read from disk.
+		auto group_row_count = MinValue<idx_t>(BITPACKING_METADATA_GROUP_SIZE,
+		                                       segment_count - group_index * BITPACKING_METADATA_GROUP_SIZE);
+
+		// The payload size comes from the group row count and width read from disk, so calculate and validate it.
+		idx_t algorithm_group_count = 0;
+		idx_t algorithm_group_size = 0;
+		idx_t expected_payload_size = 0;
+		if (current_group.mode == BitpackingMode::FOR || current_group.mode == BitpackingMode::DELTA_FOR) {
+			algorithm_group_count = group_row_count / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE +
+			                        (group_row_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0);
+			algorithm_group_size = BitpackingPrimitives::GetRequiredSize(
+			    BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, current_width);
+			expected_payload_size = algorithm_group_count * algorithm_group_size;
+		}
+		optional<unsafe_array_ptr<const uint8_t>> payload;
+		if (expected_payload_size > 0) {
+			payload = group_reader.template ReadBytesAligned<T_PACKED>(expected_payload_size);
+		}
+		CurrentGroup loaded_group {group_index,
+		                           0,
+		                           group_row_count,
+		                           current_group,
+		                           current_width,
+		                           current_frame_of_reference,
+		                           current_constant,
+		                           current_delta_offset,
+		                           payload,
+		                           algorithm_group_count,
+		                           algorithm_group_size};
+
+		// Publish the group only after all disk-derived values and payload bounds have been validated.
+		group_state = std::move(loaded_group);
 	}
 
-	void Skip(ColumnSegment &segment, idx_t skip_count) {
+	void Skip(idx_t skip_count) {
 		bool skip_sign_extend = true;
 
-		idx_t skipped = 0;
-		idx_t initial_group_offset = current_group_offset;
-
-		// This skips straight to the correct metadata group
-		idx_t meta_groups_to_skip = (skip_count + current_group_offset) / BITPACKING_METADATA_GROUP_SIZE;
-		if (meta_groups_to_skip) {
-			// bitpacking_metadata_ptr points to the next metadata: this means we need to advance the pointer by n-1
-			bitpacking_metadata_ptr -= (meta_groups_to_skip - 1) * sizeof(bitpacking_metadata_encoded_t);
-			LoadNextGroup();
-			// The first (partial) group we skipped
-			skipped += BITPACKING_METADATA_GROUP_SIZE - initial_group_offset;
-			// The remaining groups that were skipped
-			skipped += (meta_groups_to_skip - 1) * BITPACKING_METADATA_GROUP_SIZE;
+		if (IsFinished()) {
+			if (skip_count > 0) {
+				ThrowBitpackingReadPastEnd();
+			}
+			return;
 		}
 
-		// Assert we can are in the correct metadata group
-		idx_t remaining_to_skip = skip_count - skipped;
-		D_ASSERT(current_group_offset + remaining_to_skip < BITPACKING_METADATA_GROUP_SIZE);
+		// Initial starts at group 0 offset 0, otherwise resume from the active group.
+		auto active_group = std::get_if<CurrentGroup>(&group_state);
+		D_ASSERT(active_group || IsInitial());
+		idx_t group_index = active_group ? active_group->index : 0;
+		idx_t group_offset = active_group ? active_group->offset : 0;
 
-		if (current_group.mode == BitpackingMode::CONSTANT || current_group.mode == BitpackingMode::CONSTANT_DELTA ||
-		    current_group.mode == BitpackingMode::FOR) {
-			// Skipping within a constant or constant delta is done by increasing the current_group_offset
+		idx_t skipped = 0;
+
+		// This skips straight to the correct metadata group
+		idx_t meta_groups_to_skip = (skip_count + group_offset) / BITPACKING_METADATA_GROUP_SIZE;
+		if (meta_groups_to_skip) {
+			idx_t target_group_index = group_index + meta_groups_to_skip;
+			bool skip_lands_exactly_on_group_boundary =
+			    (skip_count + group_offset) % BITPACKING_METADATA_GROUP_SIZE == 0;
+			if (target_group_index > group_count ||
+			    (target_group_index == group_count && !skip_lands_exactly_on_group_boundary)) {
+				ThrowBitpackingReadPastEnd();
+			}
+
+			// Remove rows from the current offset to the start of the target group.
+			auto skipped_group_rows = meta_groups_to_skip * BITPACKING_METADATA_GROUP_SIZE - group_offset;
+			D_ASSERT(skipped_group_rows <= skip_count);
+			skipped += skipped_group_rows;
+
+			if (target_group_index == group_count) {
+				// No group exists after the terminal position.
+				Finish();
+				D_ASSERT(skipped == skip_count);
+				return;
+			}
+			LoadGroup(target_group_index);
+		}
+		if (IsInitial()) {
+			// A skip that remains in the first group still needs that group loaded.
+			LoadGroup(0);
+		}
+		auto &current_group = GetCurrentGroup();
+
+		if (skipped > skip_count) {
+			ThrowBitpackingReadPastEnd();
+		}
+		auto remaining_to_skip = skip_count - skipped;
+		if (current_group.offset > current_group.count ||
+		    remaining_to_skip > current_group.count - current_group.offset) {
+			ThrowBitpackingReadPastEnd();
+		}
+
+		if (current_group.metadata.mode == BitpackingMode::CONSTANT ||
+		    current_group.metadata.mode == BitpackingMode::CONSTANT_DELTA ||
+		    current_group.metadata.mode == BitpackingMode::FOR) {
+			// Skipping within a non-delta group advances the current group's row offset.
+			current_group.Advance(remaining_to_skip);
 			skipped += remaining_to_skip;
-			current_group_offset += remaining_to_skip;
 		} else {
-			// For DELTA we actually need to decompress from the current_group_offset up until the row we want to skip
-			// to this is because we need that delta to be able to continue scanning from here
-			D_ASSERT(current_group.mode == BitpackingMode::DELTA_FOR);
+			// DELTA_FOR must decode skipped values to retain the preceding delta.
+			D_ASSERT(current_group.metadata.mode == BitpackingMode::DELTA_FOR);
 
 			while (skipped < skip_count) {
-				// Calculate compression group offset and pointer
 				idx_t offset_in_compression_group =
-				    current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-				data_ptr_t current_position_ptr = current_group_ptr + current_group_offset * current_width / 8;
-				data_ptr_t decompression_group_start_pointer =
-				    current_position_ptr - offset_in_compression_group * current_width / 8;
-
+				    current_group.offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 				idx_t skipping_this_algorithm_group =
-				    MinValue(remaining_to_skip,
+				    MinValue(skip_count - skipped,
 				             BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - offset_in_compression_group);
 
-				BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(decompression_buffer),
-				                                     decompression_group_start_pointer, current_width,
-				                                     skip_sign_extend);
+				current_group.UnpackAlgorithmGroup(decompression_buffer, skip_sign_extend);
 
-				T *decompression_ptr = decompression_buffer + offset_in_compression_group;
-				ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(decompression_ptr),
-				                           static_cast<T_S>(current_frame_of_reference), skipping_this_algorithm_group);
-				DeltaDecode<T_S>(reinterpret_cast<T_S *>(decompression_ptr), static_cast<T_S>(current_delta_offset),
-				                 skipping_this_algorithm_group);
-				current_delta_offset = decompression_ptr[skipping_this_algorithm_group - 1];
+				unsafe_array_ptr<T_S> decompression_values(reinterpret_cast<T_S *>(decompression_buffer),
+				                                           BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+				auto skipped_values =
+				    decompression_values.SubArray(offset_in_compression_group, skipping_this_algorithm_group);
+				ApplyFrameOfReference<T_S>(skipped_values, static_cast<T_S>(current_group.frame_of_reference));
+				// The last skipped value becomes the preceding value for the next delta decode.
+				current_group.delta_offset =
+				    static_cast<T>(DeltaDecode<T_S>(skipped_values, static_cast<T_S>(current_group.delta_offset)));
 
+				current_group.Advance(skipping_this_algorithm_group);
 				skipped += skipping_this_algorithm_group;
-				current_group_offset += skipping_this_algorithm_group;
-				remaining_to_skip -= skipping_this_algorithm_group;
 			}
 		}
 
 		D_ASSERT(skipped == skip_count);
-	}
-
-	data_ptr_t GetPtr(bitpacking_metadata_t group) {
-		return handle.GetDataMutable() + current_segment.GetBlockOffset() + group.offset;
+		if (current_group.AtEnd() && current_group.index + 1 == group_count) {
+			Finish();
+		}
 	}
 };
 
 template <class T>
 unique_ptr<SegmentScanState> BitpackingInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto result = make_uniq<BitpackingScanState<T>>(context, segment);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
+	auto result = make_uniq<BitpackingScanState<T>>(std::move(handle), segment);
 	return std::move(result);
 }
 
@@ -749,6 +975,9 @@ template <class T, class T_S = typename MakeSigned<T>::type, class T_U = typenam
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<BitpackingScanState<T>>();
+	if (scan_count == 0) {
+		return;
+	}
 
 	T *result_data = FlatVector::GetDataMutable<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -756,83 +985,87 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
 	bool skip_sign_extend = true;
 
+	if (scan_state.IsInitial()) {
+		scan_state.LoadGroup(0);
+	}
+	if (!scan_state.HasCurrentGroup()) {
+		ThrowBitpackingReadPastEnd();
+	}
+
 	idx_t scanned = 0;
 	while (scanned < scan_count) {
-		D_ASSERT(scan_state.current_group_offset <= BITPACKING_METADATA_GROUP_SIZE);
-
-		// Exhausted this metadata group, move pointers to next group and load metadata for next group.
-		if (scan_state.current_group_offset == BITPACKING_METADATA_GROUP_SIZE) {
-			scan_state.LoadNextGroup();
+		auto &current_group = scan_state.GetCurrentGroup();
+		if (current_group.AtEnd()) {
+			D_ASSERT(current_group.index + 1 < scan_state.group_count);
+			scan_state.LoadGroup(current_group.index + 1);
+			continue;
 		}
 
 		idx_t offset_in_compression_group =
-		    scan_state.current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		    current_group.offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
-		if (scan_state.current_group.mode == BitpackingMode::CONSTANT) {
+		if (current_group.metadata.mode == BitpackingMode::CONSTANT) {
 			idx_t remaining = scan_count - scanned;
-			idx_t to_scan = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+			idx_t to_scan = MinValue(remaining, current_group.Remaining());
 			T *begin = result_data + result_offset + scanned;
-			T *end = begin + remaining;
-			std::fill(begin, end, scan_state.current_constant);
+			T *end = begin + to_scan;
+			std::fill(begin, end, current_group.constant);
 			scanned += to_scan;
-			scan_state.current_group_offset += to_scan;
+			current_group.Advance(to_scan);
 			continue;
 		}
-		if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
+		if (current_group.metadata.mode == BitpackingMode::CONSTANT_DELTA) {
 			idx_t remaining = scan_count - scanned;
-			idx_t to_scan = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+			idx_t to_scan = MinValue(remaining, current_group.Remaining());
 			T *target_ptr = result_data + result_offset + scanned;
 
 			for (idx_t i = 0; i < to_scan; i++) {
-				idx_t multiplier = scan_state.current_group_offset + i;
-				// intended static casts to unsigned and back for defined wrapping of integers
-				target_ptr[i] = static_cast<T>((static_cast<T_U>(scan_state.current_constant) * multiplier) +
-				                               static_cast<T_U>(scan_state.current_frame_of_reference));
+				idx_t multiplier = current_group.offset + i;
+				// Operands read from disk can contain any T value, so use defined wrapping.
+				target_ptr[i] = static_cast<T>((static_cast<T_U>(current_group.constant) * multiplier) +
+				                               static_cast<T_U>(current_group.frame_of_reference));
 			}
 
 			scanned += to_scan;
-			scan_state.current_group_offset += to_scan;
+			current_group.Advance(to_scan);
 			continue;
 		}
-		D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
-		         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
+		D_ASSERT(current_group.metadata.mode == BitpackingMode::FOR ||
+		         current_group.metadata.mode == BitpackingMode::DELTA_FOR);
 
 		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
 		                                                          offset_in_compression_group);
-		// Calculate start of compression algorithm group
-		data_ptr_t current_position_ptr =
-		    scan_state.current_group_ptr + scan_state.current_group_offset * scan_state.current_width / 8;
-		data_ptr_t decompression_group_start_pointer =
-		    current_position_ptr - offset_in_compression_group * scan_state.current_width / 8;
-
+		to_scan = MinValue(to_scan, current_group.Remaining());
 		T *current_result_ptr = result_data + result_offset + scanned;
 
 		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
 			// Decompress directly into result vector
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(current_result_ptr), decompression_group_start_pointer,
-			                                     scan_state.current_width, skip_sign_extend);
+			current_group.UnpackAlgorithmGroup(current_result_ptr, skip_sign_extend);
 		} else {
 			// Decompress compression algorithm to buffer
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
-			                                     decompression_group_start_pointer, scan_state.current_width,
-			                                     skip_sign_extend);
+			current_group.UnpackAlgorithmGroup(scan_state.decompression_buffer, skip_sign_extend);
 
 			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
 			       to_scan * sizeof(T));
 		}
 
-		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
-			ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(current_result_ptr),
-			                           static_cast<T_S>(scan_state.current_frame_of_reference), to_scan);
-			DeltaDecode<T_S>(reinterpret_cast<T_S *>(current_result_ptr),
-			                 static_cast<T_S>(scan_state.current_delta_offset), to_scan);
-			scan_state.current_delta_offset = current_result_ptr[to_scan - 1];
+		if (current_group.metadata.mode == BitpackingMode::DELTA_FOR) {
+			unsafe_array_ptr<T_S> current_results(reinterpret_cast<T_S *>(current_result_ptr), to_scan);
+			ApplyFrameOfReference<T_S>(current_results, static_cast<T_S>(current_group.frame_of_reference));
+			current_group.delta_offset =
+			    static_cast<T>(DeltaDecode<T_S>(current_results, static_cast<T_S>(current_group.delta_offset)));
 		} else {
-			ApplyFrameOfReference<T>(current_result_ptr, scan_state.current_frame_of_reference, to_scan);
+			ApplyFrameOfReference<T>(unsafe_array_ptr<T>(current_result_ptr, to_scan),
+			                         current_group.frame_of_reference);
 		}
 
 		scanned += to_scan;
-		scan_state.current_group_offset += to_scan;
+		current_group.Advance(to_scan);
+	}
+
+	auto &current_group = scan_state.GetCurrentGroup();
+	if (current_group.AtEnd() && current_group.index + 1 == scan_state.group_count) {
+		scan_state.Finish();
 	}
 }
 
@@ -844,67 +1077,66 @@ void BitpackingScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-template <class T>
+template <class T, class T_U = typename MakeUnsigned<T>::type>
 void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                         idx_t result_idx) {
-	BitpackingScanState<T> scan_state(state.context, segment);
-	scan_state.Skip(segment, NumericCast<idx_t>(row_id));
+	D_ASSERT(row_id >= 0);
+	auto row_index = NumericCast<idx_t>(row_id);
+	D_ASSERT(row_index < segment.count);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
+	BitpackingScanState<T> scan_state(std::move(handle), segment);
+	scan_state.Skip(row_index);
 
-	D_ASSERT(scan_state.current_group_offset < BITPACKING_METADATA_GROUP_SIZE);
+	if (!scan_state.HasCurrentGroup()) {
+		ThrowBitpackingReadPastEnd();
+	}
+	auto &group = scan_state.GetCurrentGroup();
+	D_ASSERT(!group.AtEnd());
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	T *result_data = FlatVector::GetDataMutable<T>(result);
 	T *current_result_ptr = result_data + result_idx;
 
-	idx_t offset_in_compression_group =
-	    scan_state.current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	if (group.metadata.mode == BitpackingMode::CONSTANT) {
+		*current_result_ptr = group.constant;
+		return;
+	}
 
-	data_ptr_t decompression_group_start_pointer =
-	    scan_state.current_group_ptr +
-	    (scan_state.current_group_offset - offset_in_compression_group) * scan_state.current_width / 8;
+	if (group.metadata.mode == BitpackingMode::CONSTANT_DELTA) {
+		// Operands read from disk can contain any T value, so use defined wrapping.
+		idx_t multiplier = group.offset;
+		*current_result_ptr = static_cast<T>((static_cast<T_U>(group.constant) * multiplier) +
+		                                     static_cast<T_U>(group.frame_of_reference));
+		return;
+	}
 
-	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
+	D_ASSERT(group.metadata.mode == BitpackingMode::FOR || group.metadata.mode == BitpackingMode::DELTA_FOR);
+
+	idx_t offset_in_compression_group = group.offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+
+	// FOR residuals are non-negative.
 	bool skip_sign_extend = true;
 
-	if (scan_state.current_group.mode == BitpackingMode::CONSTANT) {
-		*current_result_ptr = scan_state.current_constant;
-		return;
+	group.UnpackAlgorithmGroup(scan_state.decompression_buffer, skip_sign_extend);
+
+	// Use unsigned arithmetic to avoid signed overflow on corrupt data.
+	T_U value = static_cast<T_U>(scan_state.decompression_buffer[offset_in_compression_group]);
+	value += static_cast<T_U>(group.frame_of_reference);
+
+	if (group.metadata.mode == BitpackingMode::DELTA_FOR) {
+		value += static_cast<T_U>(group.delta_offset);
 	}
-
-	if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
-		T multiplier;
-		auto cast = TryCast::Operation<idx_t, T>(scan_state.current_group_offset, multiplier);
-		(void)cast;
-		D_ASSERT(cast);
-#ifdef DEBUG
-		// overflow check
-		T result;
-		bool multiply = TryMultiplyOperator::Operation(multiplier, scan_state.current_constant, result);
-		bool add = TryAddOperator::Operation(result, scan_state.current_frame_of_reference, result);
-		D_ASSERT(multiply && add);
-#endif
-		*current_result_ptr = (multiplier * scan_state.current_constant) + scan_state.current_frame_of_reference;
-		return;
-	}
-
-	D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
-	         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
-
-	BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
-	                                     decompression_group_start_pointer, scan_state.current_width, skip_sign_extend);
-
-	*current_result_ptr = scan_state.decompression_buffer[offset_in_compression_group];
-	*current_result_ptr += scan_state.current_frame_of_reference;
-
-	if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
-		*current_result_ptr += scan_state.current_delta_offset;
-	}
+	*current_result_ptr = static_cast<T>(value);
 }
 
 template <class T>
 void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+	if (skip_count == 0) {
+		return;
+	}
 	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);
-	scan_state.Skip(segment, skip_count);
+	scan_state.Skip(skip_count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -913,13 +1145,13 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 template <class T>
 InsertionOrderPreservingMap<string> BitpackingGetSegmentInfo(QueryContext context, ColumnSegment &segment) {
 	map<BitpackingMode, idx_t> counts;
-	auto tuple_count = segment.count.load();
-	BitpackingScanState<T> scan_state(context, segment);
-	for (idx_t i = 0; i < tuple_count; i += BITPACKING_METADATA_GROUP_SIZE) {
-		if (i) {
-			scan_state.LoadNextGroup();
-		}
-		counts[scan_state.current_group.mode]++;
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
+	BitpackingScanState<T> scan_state(std::move(handle), segment);
+	for (idx_t group_index = 0; group_index < scan_state.group_count; group_index++) {
+		auto mode = scan_state.GetGroupMetadata(group_index).mode;
+		ValidateBitpackingMode(mode);
+		counts[mode]++;
 	}
 
 	InsertionOrderPreservingMap<string> result;

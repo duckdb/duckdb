@@ -24,6 +24,8 @@ public:
 
 	static void Log(const string &annotation, const string &str);
 	static void PrintSkip(const string &file_name, const string &reason);
+	//! Emit the parseable skip marker and record the skip with the reporter
+	static void ReportSkip(const string &file_name, const string &reason);
 	void PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise);
 	static void PrintLineSep();
 	static void PrintHeader(string header);

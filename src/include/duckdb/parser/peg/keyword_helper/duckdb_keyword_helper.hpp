@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/keyword_helper/default_keyword_maps.hpp"
 
 namespace duckdb {
 
@@ -20,11 +21,7 @@ private:
 	void InitializeKeywordMaps();
 
 private:
-	case_insensitive_set_t reserved_keyword_map;
-	case_insensitive_set_t unreserved_keyword_map;
-	case_insensitive_set_t colname_keyword_map;
-	case_insensitive_set_t typefunc_keyword_map;
-	case_insensitive_set_t typename_keyword_map;
+	DefaultKeywordMaps keyword_maps;
 
 private:
 	bool initialized;

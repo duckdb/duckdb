@@ -136,7 +136,7 @@ public:
 				throw NotImplementedException("GetStreamingState for %s",
 				                              ExpressionTypeToString(expr.GetExpressionType()));
 			}
-			const auto offset = fstate->Cast<WindowExecutorStreamingState>().offset;
+			const auto offset = fstate->offset;
 			if (offset < 0) {
 				lead_count = MaxValue<idx_t>(idx_t(-offset), lead_count);
 			}
@@ -157,7 +157,7 @@ public:
 	//! We can't initialise until we have an input chunk
 	bool initialized;
 	//! Function states
-	vector<unique_ptr<LocalSourceState>> states;
+	vector<unique_ptr<WindowExecutorStreamingState>> states;
 	Allocator &allocator;
 	//! The number of rows ahead to buffer for LEAD
 	idx_t lead_count = 0;

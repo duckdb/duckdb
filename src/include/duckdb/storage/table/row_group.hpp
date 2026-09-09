@@ -26,6 +26,7 @@ class AsyncTask;
 class AttachedDatabase;
 class BlockManager;
 class ColumnData;
+class ColumnStatistics;
 class DatabaseInstance;
 class DataTable;
 class DuckTableEntry;
@@ -131,9 +132,10 @@ public:
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
-	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk, TransactionData transaction);
+	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk, TransactionData transaction,
+	                               ColumnStatistics &changed_stats);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
-	                               ExpressionExecutor &executor);
+	                               ExpressionExecutor &executor, ColumnStatistics &new_column_stats);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	//! Accumulates this row group's on-disk blocks into the drop state.
@@ -184,7 +186,7 @@ public:
 	//! Revert a previous append made by RowGroup::AppendVersionInfo
 	void RevertAppend(idx_t new_count);
 	//! Clean up append states that can either be compressed or deleted
-	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count);
 
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *row_ids, idx_t count,
@@ -248,10 +250,10 @@ public:
 	idx_t GetColumnCount() const;
 
 	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
-	//! Attempts to compress the version information of the row group
-	//! Per-row insert/delete ids that behave identically for all transactions with a start time of at least
-	//! lowest_active_start (i.e. all active and future transactions) are compressed into constants
-	void CompressVersionInfo(transaction_t lowest_active_start);
+	//! Attempts to compress the version information of the row group. Insert and delete ids that precede
+	//! lowest_visibility_bound look the same to every active and future transaction, so they can be
+	//! collapsed into constants
+	void CompressVersionInfo(VisibilityBound lowest_visibility_bound);
 
 	//! Direct accessors, fall outside of general use but can be useful to some extensions
 	ColumnData &GetRawColumnData(const StorageIndex &c) const;

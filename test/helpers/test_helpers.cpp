@@ -1,5 +1,5 @@
 // #define CATCH_CONFIG_RUNNER
-#include "catch.hpp"
+#include "test_reporter.hpp"
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/path.hpp"
@@ -383,7 +383,7 @@ static string ResolveTestId() {
 	}
 	string name;
 	try {
-		name = Catch::getResultCapture().getCurrentTestName();
+		name = TestReporter::Get().CurrentTestName();
 	} catch (...) {
 		name = "";
 	}
@@ -645,6 +645,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 	}
 
 	result->options.debug_initialize = test_config.GetDebugInitialize();
+	result->options.main_database_options = test_config.GetMainDatabaseOptions();
 	result->SetOptionByName("debug_verify_vector", EnumUtil::ToString(test_config.GetVectorVerification()));
 	return result;
 }

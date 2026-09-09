@@ -854,11 +854,14 @@ TEST_CASE("Path::FromString/ToString round-trips", "[file_system]") {
 		    make_tuple(OK_, "file:/a",      "file:/a"),
 		    make_tuple(OK_, "file:/a/b",    "file:/a/b"),
 
+		    make_tuple(OK_, "file://localhost",     "file://localhost/"),
 		    make_tuple(OK_, "file://localhost/",    "file://localhost/"),
 		    make_tuple(OK_, "file://localhost/a",   "file://localhost/a"),
 		    make_tuple(OK_, "file://localhost/a/b", "file://localhost/a/b"),
 
 		    make_tuple(ERR, "file://otherhost/a/b", ""),
+		    make_tuple(ERR, "file://otherhost",     ""),
+		    make_tuple(ERR, "file://",              ""),
 
 		    make_tuple(OK_, "file:///",     "file:///"),
 		    make_tuple(OK_, "file:///a",    "file:///a"),

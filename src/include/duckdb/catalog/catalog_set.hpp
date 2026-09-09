@@ -79,7 +79,7 @@ public:
 	//! Verify that the entry referenced by the dependency is still alive
 	DUCKDB_API void VerifyExistenceOfDependency(transaction_t commit_id, CatalogEntry &entry);
 	//! Verify we can still drop the entry while committing
-	DUCKDB_API void CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry);
+	DUCKDB_API void CommitDrop(transaction_t commit_id, VisibilityBound visibility_bound, CatalogEntry &entry);
 
 	DUCKDB_API DuckCatalog &GetCatalog();
 
@@ -129,7 +129,6 @@ public:
 	DUCKDB_API bool CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool HasConflict(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool UseTimestamp(CatalogTransaction transaction, transaction_t timestamp);
-	static bool IsCommitted(transaction_t timestamp);
 
 	static void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
 

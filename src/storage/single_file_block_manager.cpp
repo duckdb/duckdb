@@ -1330,12 +1330,9 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.iteration = ++iteration_count;
 
 	set<block_id_t> all_free_blocks = free_list;
-	set<block_id_t> fully_freed_blocks;
-	for (auto &block : modified_blocks) {
+	auto checkpoint_freed_blocks = modified_blocks;
+	for (auto &block : checkpoint_freed_blocks) {
 		all_free_blocks.insert(block);
-		if (AddFreeBlock(lock, block)) {
-			fully_freed_blocks.insert(block);
-		}
 	}
 	auto written_multi_use_blocks = multi_use_blocks;
 	// newly used blocks are still free blocks for this checkpoint - so add them to the free list that we write
@@ -1343,7 +1340,6 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		all_free_blocks.insert(newly_used_block);
 		written_multi_use_blocks.erase(newly_used_block);
 	}
-	modified_blocks.clear();
 
 	if (!free_list_blocks.empty()) {
 		// there are blocks to write, either in the free_list or in the modified_blocks
@@ -1412,6 +1408,16 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
 	handle->Sync();
+	set<block_id_t> fully_freed_blocks;
+	{
+		unique_lock<mutex> release_lock(single_file_block_lock);
+		for (auto &block : checkpoint_freed_blocks) {
+			modified_blocks.erase(block);
+			if (AddFreeBlock(release_lock, block)) {
+				fully_freed_blocks.insert(block);
+			}
+		}
+	}
 	// Release the free fully freed blocks to the filesystem.
 	TrimFreeBlocks(fully_freed_blocks);
 }
