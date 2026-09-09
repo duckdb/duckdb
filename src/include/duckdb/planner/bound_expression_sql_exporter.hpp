@@ -33,7 +33,8 @@ struct BoundExpressionSQLExportContext {
 	BoundExpressionSQLBindingResolver resolve_binding;
 };
 
-//! Reconstructs logical SQL from valid bound expressions, independently of physical specialization.
+//! Reconstructs SQL from bound/optimized logical expressions before physical planning lowers their structure.
+//! Optimizer specializations are supported when the retained logical definition, arguments and modifiers survive.
 class BoundExpressionSQLExporter {
 public:
 	DUCKDB_API static LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>

@@ -1,6 +1,7 @@
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 
 #include "duckdb/planner/sql_export_helpers.hpp"
+#include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
@@ -29,6 +30,62 @@ using BoundExpressionSQLExportResult = LogicalPlanVerificationResult<unique_ptr<
 using SQLExportHelpers::ChildPath;
 using SQLExportHelpers::IsSQLRepresentableType;
 using SQLExportHelpers::IsValidIdentifier;
+
+static bool HasUnsupportedVariantKeys(const VariantNode &node) {
+	// Struct literals require nonempty, case-insensitively unique keys; inspect before the lossy STRUCT conversion.
+	if (node.GetTypeId() == VariantLogicalType::OBJECT) {
+		identifier_set_t names;
+		for (auto &child : node.GetObjectChildren()) {
+			if (child.key.GetSize() == 0 || !names.insert(Identifier(child.key.GetString())).second ||
+			    HasUnsupportedVariantKeys(child.value)) {
+				return true;
+			}
+		}
+	} else if (node.GetTypeId() == VariantLogicalType::ARRAY) {
+		for (auto child : node.GetArrayChildren()) {
+			if (HasUnsupportedVariantKeys(child)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static bool HasUnsupportedVariantKeys(const Value &value) {
+	if (value.IsNull()) {
+		return false;
+	}
+	optional_ptr<const vector<Value>> children;
+	switch (value.type().id()) {
+	case LogicalTypeId::VARIANT: {
+		Vector vector(value, count_t(1));
+		VariantIterator iterator(vector);
+		return HasUnsupportedVariantKeys(iterator.Root(0));
+	}
+	case LogicalTypeId::STRUCT:
+		children = StructValue::GetChildren(value);
+		break;
+	case LogicalTypeId::LIST:
+		children = ListValue::GetChildren(value);
+		break;
+	case LogicalTypeId::ARRAY:
+		children = ArrayValue::GetChildren(value);
+		break;
+	case LogicalTypeId::MAP:
+		children = MapValue::GetChildren(value);
+		break;
+	case LogicalTypeId::UNION:
+		return HasUnsupportedVariantKeys(UnionValue::GetValue(value));
+	default:
+		return false;
+	}
+	for (auto &child : *children) {
+		if (HasUnsupportedVariantKeys(child)) {
+			return true;
+		}
+	}
+	return false;
+}
 
 static bool IsExpressionRootPath(const LogicalPlanVerificationPath &path) {
 	if (!path.IsValid()) {
@@ -192,6 +249,14 @@ private:
 		if (return_type != value.type()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound constant value and return types differ"));
+		}
+		if (TypeVisitor::Contains(return_type, [](const LogicalType &type) { return type.IsAggregateState(); })) {
+			return Failure(UnsupportedFeature(path, "aggregate_state_literal",
+			                                  "Aggregate-state values do not have a SQL literal representation"));
+		}
+		if (TypeVisitor::Contains(return_type, LogicalTypeId::VARIANT) && HasUnsupportedVariantKeys(value)) {
+			return Failure(UnsupportedFeature(path, "variant_literal",
+			                                  "VARIANT object keys cannot be represented by a struct literal"));
 		}
 		unique_ptr<ParsedExpression> result = make_uniq<ConstantExpression>(value);
 		if (return_type.id() != LogicalTypeId::SQLNULL) {
@@ -525,10 +590,11 @@ private:
 				                                   "The bound scalar function uses an internal argument type"));
 			}
 		}
-		if (definition->GetProperties().GetCaptureArgumentAliases()) {
-			return Failure(
-			    UnsupportedFunction(path, std::move(identity),
-			                        "The bound scalar function requires argument aliases that are not retained"));
+		if (definition->GetProperties().GetCaptureArgumentAliases() ||
+		    definition->GetProperties().RequiresExpressionNames()) {
+			return Failure(UnsupportedFunction(
+			    path, std::move(identity),
+			    "The bound scalar function requires expression names that SQL export does not preserve"));
 		}
 		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetArguments()) ||
 		    expression.GetReturnType() != function.GetReturnType() ||
@@ -599,9 +665,11 @@ private:
 				                                   "The bound aggregate uses an internal argument type"));
 			}
 		}
-		if (definition->GetProperties().GetCaptureArgumentAliases()) {
-			return Failure(UnsupportedFunction(path, std::move(identity),
-			                                   "The bound aggregate requires argument aliases that are not retained"));
+		if (definition->GetProperties().GetCaptureArgumentAliases() ||
+		    definition->GetProperties().RequiresExpressionNames()) {
+			return Failure(
+			    UnsupportedFunction(path, std::move(identity),
+			                        "The bound aggregate requires expression names that SQL export does not preserve"));
 		}
 		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetLogicalArguments())) {
 			return Failure(UnsupportedFunction(path, std::move(identity),

@@ -585,6 +585,235 @@ TEST_CASE("Bound expression SQL export preserves exact constant types and values
 	REQUIRE_FALSE(metadata_result.GetValue()->Cast<CastExpression>().Child().HasQueryLocation());
 }
 
+TEST_CASE("Bound expression SQL export reconstructs VARIANT literals", "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	for (auto &sql : {"'hello'::VARIANT", "NULL::VARIANT", "7::SMALLINT::VARIANT", "12.34::DECIMAL(9,2)::VARIANT",
+	                  "'a''b'::BLOB::VARIANT", "{'slash\\key': {'🦆': 12.34::DECIMAL(9,2)}}::VARIANT",
+	                  "{'quoted''key': [1::SMALLINT::VARIANT, 'x'::VARIANT, NULL::VARIANT]}::VARIANT",
+	                  "[7::SMALLINT::VARIANT, 'x'::VARIANT]", "{'v': 7::SMALLINT::VARIANT}",
+	                  "[7::SMALLINT::VARIANT]::VARIANT[1]"}) {
+		INFO(sql);
+		auto original = connection.Query("SELECT " + string(sql));
+		REQUIRE_NO_FAIL(*original);
+		BoundConstantExpression expression(original->GetValue(0, 0));
+		RequireRoundTrip(connection, expression, {}, string(), sql);
+		auto copied = expression.Copy();
+		RequireRoundTrip(connection, *copied, {}, string(), sql);
+		auto restored = BinaryRoundTrip(*connection.context, expression);
+		RequireRoundTrip(connection, *restored, {}, string(), sql);
+	}
+}
+
+TEST_CASE("Bound expression SQL export preserves negative floating zero", "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	for (auto type : {"FLOAT", "DOUBLE"}) {
+		auto sql = "'-0.0'::" + string(type) + "::VARIANT";
+		auto original = connection.Query("SELECT " + sql);
+		REQUIRE_NO_FAIL(*original);
+		BoundConstantExpression expression(original->GetValue(0, 0));
+		for (idx_t lifecycle = 0; lifecycle < 3; lifecycle++) {
+			auto candidate = lifecycle == 2 ? BinaryRoundTrip(*connection.context, expression) : expression.Copy();
+			auto exported = BoundExpressionSQLExporter::Export(lifecycle == 0 ? expression : *candidate, {});
+			REQUIRE(exported.IsSuccess());
+			auto result = connection.Query("SELECT 1.0 / (" + exported.GetValue()->ToString() + ")::DOUBLE");
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->GetValue(0, 0) == Value("-Infinity").DefaultCastAs(LogicalType::DOUBLE));
+		}
+	}
+}
+
+TEST_CASE("Bound expression SQL export rejects opaque aggregate-state literals", "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	auto result = connection.Query("SELECT sum(i) EXPORT_STATE FROM (VALUES (1),(2)) t(i)");
+	REQUIRE_NO_FAIL(*result);
+	auto state = result->GetValue(0, 0);
+	REQUIRE(state.type().IsAggregateState());
+	vector<Value> values {state, Value(state.type()), Value::LIST(state.type(), {state}),
+	                      Value::STRUCT({{"state", state}}), Value(LogicalType::LIST(state.type()))};
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+	path.components.push_back({LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, 2});
+	for (auto &value : values) {
+		BoundConstantExpression expression(value);
+		RequireIssue(BoundExpressionSQLExporter::ExportAtPath(expression, {}, path),
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
+	}
+}
+
+TEST_CASE("Bound expression SQL export rejects unrepresentable VARIANT object keys", "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	if (!db.instance->ExtensionIsLoaded("json")) {
+		WARN("JSON extension required for empty VARIANT key coverage");
+		return;
+	}
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+	for (auto json : {"{\"\":1}", "{\"\":3,\"a\":1}", "{\"a\":1,\"\":2}", "{\"outer\":{\"\":1,\"x\":2}}", "[{\"\":1}]",
+	                  "{\"a\":1,\"A\":2}", "{\"outer\":{\"a\":1,\"A\":2}}", "[{\"a\":1,\"A\":2}]"}) {
+		auto original = connection.Query("SELECT j::JSON::VARIANT FROM (VALUES ('" + string(json) + "')) t(j)");
+		REQUIRE_NO_FAIL(*original);
+		auto value = original->GetValue(0, 0);
+		for (auto &nested : {value, Value::LIST(LogicalType::VARIANT(), {value}), Value::STRUCT({{"v", value}}),
+		                     Value::ARRAY(LogicalType::VARIANT(), {value}),
+		                     Value::MAP(LogicalType::VARCHAR, LogicalType::VARIANT(), {Value("v")}, {value}),
+		                     Value::UNION({{"v", LogicalType::VARIANT()}}, 0, value)}) {
+			BoundConstantExpression expression(nested);
+			for (idx_t lifecycle = 0; lifecycle < 3; lifecycle++) {
+				auto candidate = lifecycle == 2 ? BinaryRoundTrip(*connection.context, expression) : expression.Copy();
+				RequireIssue(BoundExpressionSQLExporter::Export(lifecycle == 0 ? expression : *candidate, {}),
+				             LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
+			}
+		}
+	}
+}
+
+TEST_CASE("Bound expression SQL export rejects alias-sensitive binders", "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+	vector<pair<string, string>> cases {{"struct_insert", "struct_insert({'a': i}, b := i)"},
+	                                    {"struct_update", "struct_update({'a': i}, a := i + 1)"},
+	                                    {"union_value", "union_value(a := i)"},
+	                                    {"write_log", "write_log('test', disable_logging := true, return_value := i)"}};
+	if (db.instance->ExtensionIsLoaded("json")) {
+		cases.emplace_back("json_serialize_sql", "json_serialize_sql('SELECT 1', format := true)");
+		cases.emplace_back("json_serialize_plan", "json_serialize_plan('SELECT 1', optimize := false)");
+	}
+	for (auto &entry : cases) {
+		INFO(entry.first);
+		auto sql = "SELECT " + entry.second + " FROM (VALUES (1),(2)) t(i)";
+		auto original = connection.Query(sql);
+		REQUIRE_NO_FAIL(*original);
+		auto plan = BindExportQuery(connection, sql);
+		auto expression = FindExpression(*plan, [&](const Expression &candidate) {
+			return candidate.GetExpressionType() == ExpressionType::BOUND_FUNCTION &&
+			       candidate.Cast<BoundFunctionExpression>().Function().GetDefinition()->GetName() == entry.first;
+		});
+		REQUIRE(expression);
+		REQUIRE(expression->Cast<BoundFunctionExpression>()
+		            .Function()
+		            .GetDefinition()
+		            ->GetProperties()
+		            .RequiresExpressionNames());
+		RequireIssue(BoundExpressionSQLExporter::Export(*expression, {}),
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		auto copied = expression->Copy();
+		RequireIssue(BoundExpressionSQLExporter::Export(*copied, {}),
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		if (entry.first == "struct_insert" || entry.first == "struct_update" || entry.first == "union_value") {
+			auto restored = BinaryRoundTrip(*connection.context, *expression);
+			RequireIssue(BoundExpressionSQLExporter::Export(*restored, {}),
+			             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		}
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("Bound expression SQL export rejects functions that observe expression names",
+          "[bound_expression_sql_export][serialization]") {
+	FunctionProperties properties;
+	REQUIRE_FALSE(properties.RequiresExpressionNames());
+	auto named_properties = properties;
+	named_properties.SetRequiresExpressionNames(true);
+	REQUIRE(properties != named_properties);
+	properties = named_properties;
+	REQUIRE(properties.RequiresExpressionNames());
+	REQUIRE(properties == named_properties);
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	LogicalPlanVerificationPath path;
+	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
+	struct Case {
+		string sql;
+		string expected;
+		bool nested;
+	};
+	vector<Case> cases {{"SELECT alias(i) AS renamed FROM (VALUES (1),(2),(NULL)) t(i)", "renamed", false},
+	                    {"SELECT alias(i + 1) FROM (VALUES (1),(2),(NULL)) t(i)", "(i + 1)", false},
+	                    {"SELECT upper(alias(i)) FROM (VALUES (1),(2),(NULL)) t(i)", "I", true}};
+	for (auto &entry : cases) {
+		INFO(entry.sql);
+		auto original = connection.Query(entry.sql);
+		REQUIRE_NO_FAIL(*original);
+		for (idx_t row = 0; row < 3; row++) {
+			REQUIRE(original->GetValue(0, row) == Value(entry.expected));
+		}
+		auto plan = BindExportQuery(connection, entry.sql);
+		auto alias = FindExpression(*plan, [](const Expression &expression) {
+			return expression.GetExpressionType() == ExpressionType::BOUND_FUNCTION &&
+			       expression.Cast<BoundFunctionExpression>().Function().GetDefinition()->GetName() == "alias";
+		});
+		REQUIRE(alias);
+		REQUIRE(alias->Cast<BoundFunctionExpression>()
+		            .Function()
+		            .GetDefinition()
+		            ->GetProperties()
+		            .RequiresExpressionNames());
+		RequireIssue(BoundExpressionSQLExporter::Export(*alias, {}),
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		auto copied = alias->Copy();
+		RequireIssue(BoundExpressionSQLExporter::Export(*copied, {}),
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		auto restored = BinaryRoundTrip(*connection.context, *alias);
+		RequireIssue(BoundExpressionSQLExporter::Export(*restored, {}),
+		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		if (entry.nested) {
+			auto parent = FindExpression(*plan, [](const Expression &expression) {
+				return expression.GetExpressionType() == ExpressionType::BOUND_FUNCTION &&
+				       expression.Cast<BoundFunctionExpression>().Function().GetDefinition()->GetName() == "upper";
+			});
+			REQUIRE(parent);
+			auto child_path = path;
+			child_path.components.push_back({LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, 0});
+			RequireIssue(BoundExpressionSQLExporter::Export(*parent, {}),
+			             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, child_path);
+		}
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("Bound expression SQL export preserves ordering before physical aggregate lowering",
+          "[bound_expression_sql_export][serialization]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	const string from = " FROM (VALUES (1),(2)) t(i)";
+	auto plan = BindExportQuery(connection, "SELECT first(i ORDER BY i DESC)" + from);
+	auto expression = FindExpression(*plan, [](const Expression &candidate) {
+		return candidate.GetExpressionType() == ExpressionType::BOUND_AGGREGATE;
+	});
+	REQUIRE(expression);
+	for (idx_t lifecycle = 0; lifecycle < 3; lifecycle++) {
+		auto candidate = lifecycle == 2 ? BinaryRoundTrip(*connection.context, *expression) : expression->Copy();
+		auto &aggregate = candidate->Cast<BoundAggregateExpression>();
+		REQUIRE(aggregate.GetOrderBys());
+		REQUIRE(aggregate.GetOrderBys()->orders.size() == 1);
+		vector<SQLBindingEntry> bindings;
+		CollectSQLBindings(*candidate, bindings);
+		REQUIRE(bindings.size() == 1);
+		auto context = ResolveBinding(bindings[0].binding, {Identifier("i")}, LogicalType::INTEGER);
+		RequireRoundTrip(connection, lifecycle == 0 ? *expression : *candidate, context, from,
+		                 "first(i ORDER BY i DESC)");
+	}
+	auto expected = connection.Query("SELECT first(i ORDER BY i DESC)" + from);
+	REQUIRE_NO_FAIL(*expected);
+	REQUIRE(expected->GetValue(0, 0) == Value::INTEGER(2));
+	// Physical lowering consumes the ordering; such execution expressions are outside the export API contract.
+	auto lowered = expression->Copy();
+	vector<unique_ptr<Expression>> groups;
+	FunctionBinder::BindSortedAggregate(*connection.context, lowered->Cast<BoundAggregateExpression>(), groups,
+	                                    nullptr);
+	REQUIRE_FALSE(lowered->Cast<BoundAggregateExpression>().GetOrderBys());
+	connection.Rollback();
+}
+
 TEST_CASE("Bound expression SQL export resolves columns only by binding", "[bound_expression_sql_export]") {
 	auto left_binding = ColumnBinding(TableIndex(10), ProjectionIndex(0));
 	auto right_binding = ColumnBinding(TableIndex(11), ProjectionIndex(0));
