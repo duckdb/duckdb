@@ -4,6 +4,7 @@
 
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -17,6 +18,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
@@ -782,11 +784,45 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
 	}
 }
 
+static bool
+ExpressionCanThrowOnNullInput(ClientContext &context, const Expression &expr,
+                              const std::function<bool(const BoundColumnRefExpression &)> &column_becomes_null) {
+	bool can_throw = false;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		if (can_throw || !child.CanThrow()) {
+			return;
+		}
+		// CanThrow is conservative for foldable children such as implicit constant casts.
+		Value constant_value;
+		if (child.IsConsistent() && child.IsFoldable() &&
+		    ExpressionExecutor::TryEvaluateScalar(context, child, constant_value)) {
+			return;
+		}
+		if (!ExpressionBecomesNull(child, column_becomes_null) ||
+		    ExpressionCanThrowOnNullInput(context, child, column_becomes_null)) {
+			// Independent children are evaluated before the parent can propagate NULL.
+			can_throw = true;
+		}
+	});
+	return can_throw;
+}
+
 FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> &plan,
                                                                                 bool propagate_null_values,
                                                                                 vector<ColumnBinding> state) {
-	for (auto &expr : plan->expressions) {
-		propagate_null_values &= expr->PropagatesNullValues();
+	if (propagate_null_values) {
+		auto child_output = plan->children[0]->GetColumnBindings();
+		column_binding_set_t child_bindings(child_output.begin(), child_output.end());
+		auto column_becomes_null = [&](const BoundColumnRefExpression &column) {
+			return column.Depth() == 0 && child_bindings.find(column.Binding()) != child_bindings.end();
+		};
+		for (auto &expr : plan->expressions) {
+			if (expr->IsVolatile() || !ExpressionBecomesNull(*expr, column_becomes_null) ||
+			    ExpressionCanThrowOnNullInput(binder.context, *expr, column_becomes_null)) {
+				propagate_null_values = false;
+				break;
+			}
+		}
 	}
 
 	propagate_null_values &= plan->children[0]->type != LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
@@ -806,7 +842,8 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
                                                                                vector<ColumnBinding> state) {
 	auto &aggr = plan->Cast<LogicalAggregate>();
 	for (auto &expr : plan->expressions) {
-		propagate_null_values &= expr->PropagatesNullValues();
+		auto &aggr_expr = expr->Cast<BoundAggregateExpression>();
+		propagate_null_values &= !aggr_expr.IsVolatile() && aggr_expr.PropagatesNullValues();
 	}
 	auto result = PushDownChild(plan, propagate_null_values, std::move(state));
 
@@ -835,17 +872,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 		return result;
 	}
 
-	JoinType join_type = JoinType::INNER;
-	if (any_join || !propagate_null_values) {
-		join_type = JoinType::LEFT;
-	}
-	for (auto &aggr_exp : aggr.expressions) {
-		auto &b_aggr_exp = aggr_exp->Cast<BoundAggregateExpression>();
-		if (!b_aggr_exp.PropagatesNullValues()) {
-			join_type = JoinType::LEFT;
-			break;
-		}
-	}
+	auto join_type = !any_join && propagate_null_values ? JoinType::INNER : JoinType::LEFT;
 
 	unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(join_type);
 	auto left_index = binder.GenerateTableIndex();
@@ -1458,8 +1485,16 @@ FlattenDependentJoins::PushDownCorrelatedNodeInternal(unique_ptr<LogicalOperator
 		return AttachDomainToIndependentSubtree(plan, propagate_null_values);
 	}
 	switch (plan->type) {
-	case LogicalOperatorType::LOGICAL_UNNEST:
 	case LogicalOperatorType::LOGICAL_FILTER: {
+		for (auto &expr : plan->expressions) {
+			if (expr->IsVolatile() || expr->CanThrow()) {
+				propagate_null_values = false;
+				break;
+			}
+		}
+		return PushDownChild(plan, propagate_null_values, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_UNNEST: {
 		return PushDownChild(plan, propagate_null_values, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {

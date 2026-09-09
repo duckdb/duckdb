@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -12,6 +13,22 @@
 #include <algorithm>
 
 namespace duckdb {
+
+bool ExpressionBecomesNull(const Expression &expr,
+                           const std::function<bool(const BoundColumnRefExpression &)> &column_becomes_null) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &column = expr.Cast<BoundColumnRefExpression>();
+		return column_becomes_null(column);
+	}
+	if (!expr.PropagatesNullValues()) {
+		return false;
+	}
+	bool child_becomes_null = false;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		child_becomes_null |= ExpressionBecomesNull(child, column_becomes_null);
+	});
+	return child_becomes_null;
+}
 
 NotNullExpressionAnalyzer::NotNullExpressionAnalyzer(ClientContext &context_p,
                                                      optional_ptr<LogicalOperator> plan_root_p)
