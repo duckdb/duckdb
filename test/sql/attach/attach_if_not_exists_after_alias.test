@@ -1,0 +1,32 @@
+# name: test/sql/attach/attach_if_not_exists_after_alias.test
+# description: ATTACH IF NOT EXISTS <path> after ALTER DATABASE ... SET ALIAS TO must not hang
+# group: [attach]
+
+statement ok
+ATTACH '{TEST_DIR}/attach_alias_repro.db' AS orig_name
+
+statement ok
+CREATE TABLE orig_name.t AS SELECT range AS i FROM range(3)
+
+statement ok
+ALTER DATABASE orig_name SET ALIAS TO other_name
+
+query I
+SELECT count(*) FROM other_name.t
+----
+3
+
+statement error
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_alias_repro.db' AS orig_name
+----
+<REGEX>:.*already attached.*
+
+statement error
+ATTACH '{TEST_DIR}/attach_alias_repro.db' AS orig_name
+----
+<REGEX>:.*already attached.*other_name.*
+
+query I
+SELECT count(*) FROM other_name.t
+----
+3
