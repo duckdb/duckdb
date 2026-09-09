@@ -74,7 +74,11 @@ void BufferManager::SetSwapLimit(optional_idx limit) {
 	throw NotImplementedException("This type of BufferManager can not set a swap limit");
 }
 
-vector<TemporaryFileInformation> BufferManager::GetTemporaryFiles() {
+vector<TemporaryFileInformation> BufferManager::GetTemporaryFiles(bool external) {
+	throw InternalException("This type of BufferManager does not allow temporary files");
+}
+
+vector<TemporaryFileInformation> BufferManager::InitializeTemporaryDirectory(bool sweep, bool silent) {
 	throw InternalException("This type of BufferManager does not allow temporary files");
 }
 

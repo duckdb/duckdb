@@ -110,8 +110,13 @@ public:
 
 	//! Get the block manager used for in-memory data
 	virtual BlockManager &GetTemporaryBlockManager() = 0;
-	//! Get the temporary file information of each temporary file.
-	virtual vector<TemporaryFileInformation> GetTemporaryFiles();
+	//! Get the temporary file information of each temporary file. With external, files that other
+	//! instances sharing the directory own are described too, not only this instance's.
+	virtual vector<TemporaryFileInformation> GetTemporaryFiles(bool external);
+	//! Create and claim the temporary directory now rather than at the first spill, and answer with
+	//! whatever the sweep for abandoned files reclaimed. Throws if it was already initialized, since
+	//! the choice it takes can only be taken once.
+	virtual vector<TemporaryFileInformation> InitializeTemporaryDirectory(bool sweep, bool silent);
 	//! Get the path to the temporary file directory.
 	virtual const string &GetTemporaryDirectory() const;
 	//! Set the path to the temporary file directory.

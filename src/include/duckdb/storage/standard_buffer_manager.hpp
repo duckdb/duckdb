@@ -90,7 +90,8 @@ public:
 	BlockManager &GetTemporaryBlockManager() final;
 
 	//! Returns a list of all temporary files
-	vector<TemporaryFileInformation> GetTemporaryFiles() final;
+	vector<TemporaryFileInformation> GetTemporaryFiles(bool external) final;
+	vector<TemporaryFileInformation> InitializeTemporaryDirectory(bool sweep, bool silent) final;
 
 	const string &GetTemporaryDirectory() const final {
 		return temporary_directory.path;
@@ -154,6 +155,9 @@ protected:
 	void DeleteTemporaryFile(BlockMemory &memory) final;
 
 	void RequireTemporaryDirectory();
+	//! The one place a TemporaryDirectoryHandle is built, so the first spill and an explicit
+	//! initialization cannot drift apart. Caller holds temporary_directory.lock.
+	void CreateTemporaryDirectoryHandle(bool sweep);
 
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle) final;
 

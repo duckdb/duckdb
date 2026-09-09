@@ -1,0 +1,52 @@
+# name: test/sql/storage/temp_directory/cleanup_temporary_directory.test
+# description: cleanup_temporary_directory() never reclaims the files of a live owner
+# group: [temp_directory]
+
+statement ok
+SET temp_directory = '{TEST_DIR}/cleanup_temporary_directory';
+
+# claiming the directory up front puts this instance's own file in it without needing a spill,
+# which is what the assertions below are about - none of them depend on how much memory it takes
+# to make this platform spill, and none of them are weaker for it
+query I
+SELECT count(*) FROM initialize_temporary_directory();
+----
+0
+
+# the claim on an id holds no data, so it is not one of this instance's temporary files: if it
+# were, "did this leave anything behind" could never answer no
+query I
+SELECT count(*) FROM duckdb_temporary_files();
+----
+0
+
+# asking about the whole directory is a different question, and there the claim is one of the
+# things in it
+query I
+SELECT count(*) FROM duckdb_temporary_files(external := true);
+----
+1
+
+query I
+SELECT size FROM duckdb_temporary_files(external := true);
+----
+0
+
+# the only owner here is this process, which is running, so there is nothing to reclaim - the
+# call succeeds and answers with an empty list rather than refusing
+query I
+SELECT count(*) FROM cleanup_temporary_directory();
+----
+0
+
+# and it left the claim alone, so this instance can still use the directory
+query I
+SELECT count(*) FROM duckdb_temporary_files(external := true);
+----
+1
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE FROM cleanup_temporary_directory()) ORDER BY column_name;
+----
+path	VARCHAR
+size	BIGINT

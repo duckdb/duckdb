@@ -1,0 +1,41 @@
+# name: test/sql/storage/temp_directory/initialize_temporary_directory.test
+# description: initialize_temporary_directory() claims the directory up front, once
+# group: [temp_directory]
+
+statement ok
+SET temp_directory = '{TEST_DIR}/initialize_temporary_directory';
+
+# nothing has been abandoned here, so the sweep reclaims nothing - but the call still creates and
+# claims the directory, which is what makes every call after it fail
+query I
+SELECT count(*) FROM initialize_temporary_directory();
+----
+0
+
+# the choice is settled by the first use, so taking it again would be a lie
+statement error
+SELECT count(*) FROM initialize_temporary_directory();
+----
+<REGEX>:.*already in use.*
+
+# and the error names the way out
+statement error
+SELECT count(*) FROM initialize_temporary_directory();
+----
+<REGEX>:.*silent := true.*
+
+statement error
+SELECT count(*) FROM initialize_temporary_directory(cleanup := false);
+----
+<REGEX>:.*already in use.*
+
+# silent forgives being second, but only when the choice was the same one
+query I
+SELECT count(*) FROM initialize_temporary_directory(silent := true);
+----
+0
+
+statement error
+SELECT count(*) FROM initialize_temporary_directory(cleanup := false, silent := true);
+----
+<REGEX>:.*covers being second, not being overruled.*

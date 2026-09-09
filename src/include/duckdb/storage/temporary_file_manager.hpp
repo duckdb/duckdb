@@ -55,13 +55,18 @@ struct TemporaryFileOwner {
 //! "duckdb_temp_<pid>_<instance>_", the start of every temporary file name. It keeps instances
 //! sharing a temp_directory off each other's paths, and says who to ask whether they are still live.
 DUCKDB_API string TemporaryFilePrefix(const TemporaryFileOwner &owner);
-//! An empty file that exists for as long as an instance uses the directory. Creating it exclusively
-//! is what claims an id; no file of an instance's own is proof, since every one of them can be
-//! deleted again while the instance is still live and about to write more.
-DUCKDB_API string TemporaryOwnerMarkerName(const TemporaryFileOwner &owner);
+//! "duckdb_temp_<pid>_<instance>__claim", an empty file that exists for as long as an instance uses
+//! the directory. Creating it exclusively is what claims an id; no file of an instance's own is
+//! proof, since every one of them can be deleted again while the instance is still live and about
+//! to write more.
+DUCKDB_API string TemporaryOwnerClaimName(const TemporaryFileOwner &owner);
 //! Extracts the owner, if the name carries one. Names from a version that did not name files after
 //! their owner do not, and are left alone: a running instance of that version may still own them.
 DUCKDB_API bool TryParseTemporaryFileOwner(const string &file_name, TemporaryFileOwner &owner);
+//! Removes the temporary files in a directory whose owning process is gone, and reports what it
+//! reclaimed. Sizes are read before removal, so every entry named is a file that existed and no
+//! longer does. Never throws - reclaiming disk is not worth failing the caller over.
+DUCKDB_API vector<TemporaryFileInformation> ReapAbandonedTemporaryFiles(FileSystem &fs, const string &temp_directory);
 
 //===--------------------------------------------------------------------===//
 // TemporaryFileIdentifier/TemporaryFileIndex
@@ -375,21 +380,31 @@ private:
 class TemporaryDirectoryHandle {
 public:
 	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, atomic<idx_t> &size_on_disk,
-	                         optional_idx max_swap_space);
+	                         optional_idx max_swap_space, bool sweep);
 	~TemporaryDirectoryHandle();
 
 public:
 	TemporaryFileManager &GetTempFile() const;
+	//! What the sweep at construction reclaimed. Empty when it was declined, and when somebody else
+	//! in this process had already swept the directory.
+	const vector<TemporaryFileInformation> &GetReclaimedFiles() const {
+		return reclaimed_files;
+	}
+	//! Whether this handle was built to reclaim what other processes abandoned. The choice it was
+	//! asked for, not what it found to do - another instance may have swept the directory first.
+	bool AskedToSweep() const {
+		return asked_to_sweep;
+	}
 
 private:
 	//! Removes this instance's temporary files and, if it created it, the directory. May throw; the
 	//! destructor is what guarantees nothing escapes.
 	void CleanupTemporaryDirectory();
-	//! Removes files of instances whose process is gone. Never throws.
-	void SweepAbandonedInstances();
+	//! Removes files of instances whose process is gone, and answers with them. Never throws.
+	vector<TemporaryFileInformation> SweepAbandonedInstances();
 	//! Files in the directory that belong to this instance.
 	vector<string> ListOwnFiles();
-	//! Names this instance after its process, taking an id by creating its marker exclusively.
+	//! Names this instance after its process, taking an id by creating its claim exclusively.
 	//! Sets owner and file_prefix.
 	void ClaimOwner();
 
@@ -406,6 +421,8 @@ private:
 	//! Who this instance is in the directory, and the prefix built from it
 	TemporaryFileOwner owner;
 	string file_prefix;
+	bool asked_to_sweep = false;
+	vector<TemporaryFileInformation> reclaimed_files;
 	unique_ptr<TemporaryFileManager> temp_file;
 };
 

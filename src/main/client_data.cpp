@@ -169,8 +169,11 @@ public:
 	BlockManager &GetTemporaryBlockManager() override {
 		return buffer_manager.GetTemporaryBlockManager();
 	}
-	vector<TemporaryFileInformation> GetTemporaryFiles() override {
-		return buffer_manager.GetTemporaryFiles();
+	vector<TemporaryFileInformation> GetTemporaryFiles(bool external) override {
+		return buffer_manager.GetTemporaryFiles(external);
+	}
+	vector<TemporaryFileInformation> InitializeTemporaryDirectory(bool sweep, bool silent) override {
+		return buffer_manager.InitializeTemporaryDirectory(sweep, silent);
 	}
 	const string &GetTemporaryDirectory() const override {
 		return buffer_manager.GetTemporaryDirectory();
