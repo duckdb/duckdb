@@ -86,6 +86,12 @@ public:
 			mz_inflateEnd(&stream);
 
 			// Update indices
+			// The member's footer has to be inside the buffer. Without this check the subtraction
+			// below underflows, the loop keeps going, and the next iteration reads a gzip header
+			// past the end of the input.
+			if (stream.total_in > compressed_size || compressed_size - stream.total_in < GZIP_FOOTER_SIZE) {
+				FormatException("Failed to decompress GZIP block: incomplete gzip member footer");
+			}
 			compressed_data += GZIP_FOOTER_SIZE + stream.total_in;
 			compressed_size -= GZIP_FOOTER_SIZE + stream.total_in;
 			out_data += stream.total_out;
