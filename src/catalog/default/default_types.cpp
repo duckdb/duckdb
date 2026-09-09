@@ -91,12 +91,12 @@ LogicalType BindVarcharType(BindLogicalTypeInput &input) {
 LogicalType BindCollatedVarcharType(BindLogicalTypeInput &input) {
 	auto &collation = StringValue::Get(input.modifiers[0].GetValue());
 
-	if (!input.context) {
-		throw BinderException(input.query_location, "Cannot bind varchar with collation without a connection");
+	// The collation can only be checked against the catalog when there is a connection. Without one this is a
+	// type that was bound before - re-binding it, for instance to serialize it, must not lose the collation.
+	if (input.context) {
+		// Ensure this is a valid collation
+		ExpressionBinder::TestCollation(*input.context, collation);
 	}
-
-	// Ensure this is a valid collation
-	ExpressionBinder::TestCollation(*input.context, collation);
 
 	return LogicalType::VARCHAR_COLLATION(collation);
 }
