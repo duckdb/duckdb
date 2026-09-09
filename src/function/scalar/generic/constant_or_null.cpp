@@ -97,8 +97,8 @@ bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value
 }
 
 ScalarFunction ConstantOrNullFun::GetFunction() {
-	auto fun = ScalarFunction("constant_or_null", {{"arg1", LogicalType::ANY}, {"arg2", LogicalType::ANY}},
-	                          LogicalType::ANY, ConstantOrNullFunction);
+	auto fun = ScalarFunction("constant_or_null", {}, LogicalType::ANY, ConstantOrNullFunction);
+	fun.GetSignature().AddParameter("arg1", LogicalType::ANY).AddParameter("arg2", LogicalType::ANY);
 	fun.SetBindCallback(ConstantOrNullBind);
 	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
