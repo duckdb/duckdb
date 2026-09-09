@@ -393,7 +393,16 @@ string ChangeColumnTypeInfo::ToString() const {
 	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	if (column_path.empty()) {
+		result += SQLIdentifier(column_name);
+	} else {
+		for (idx_t i = 0; i < column_path.size(); i++) {
+			if (i > 0) {
+				result += ".";
+			}
+			result += SQLIdentifier(column_path[i]);
+		}
+	}
 	result += " TYPE ";
 	if (target_type.IsValid()) {
 		result += target_type.ToString();
@@ -442,7 +451,16 @@ string SetDefaultInfo::ToString() const {
 	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	if (column_path.empty()) {
+		result += SQLIdentifier(column_name);
+	} else {
+		for (idx_t i = 0; i < column_path.size(); i++) {
+			if (i > 0) {
+				result += ".";
+			}
+			result += SQLIdentifier(column_path[i]);
+		}
+	}
 	if (expression) {
 		result += " SET DEFAULT ";
 		result += expression->ToString();
@@ -479,7 +497,16 @@ string SetNotNullInfo::ToString() const {
 	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	if (column_path.empty()) {
+		result += SQLIdentifier(column_name);
+	} else {
+		for (idx_t i = 0; i < column_path.size(); i++) {
+			if (i > 0) {
+				result += ".";
+			}
+			result += SQLIdentifier(column_path[i]);
+		}
+	}
 	result += " SET NOT NULL";
 	result += ";";
 	return result;
@@ -511,7 +538,16 @@ string DropNotNullInfo::ToString() const {
 	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	if (column_path.empty()) {
+		result += SQLIdentifier(column_name);
+	} else {
+		for (idx_t i = 0; i < column_path.size(); i++) {
+			if (i > 0) {
+				result += ".";
+			}
+			result += SQLIdentifier(column_path[i]);
+		}
+	}
 	result += " DROP NOT NULL";
 	result += ";";
 	return result;
