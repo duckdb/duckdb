@@ -1382,10 +1382,8 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 	for (const auto &constraint : prev_table.GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
 			const auto &unique = constraint->Cast<UniqueConstraint>();
-			if (unique.is_primary_key) {
-				auto index_name = unique.GetName(prev_table.name);
-				names.insert(index_name);
-			}
+			auto index_name = unique.GetName(prev_table.name);
+			names.insert(index_name);
 		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 			const auto &fk = constraint->Cast<ForeignKeyConstraint>();
 			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
@@ -1398,9 +1396,6 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 	for (const auto &constraint : GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
 			const auto &unique = constraint->Cast<UniqueConstraint>();
-			if (!unique.IsPrimaryKey()) {
-				continue;
-			}
 			auto index_name = unique.GetName(table.name);
 			if (names.find(index_name) == names.end()) {
 				prev_indexes.RemoveIndex(index_name);
