@@ -84,7 +84,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 }
 
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p) {
-	lock_guard<mutex> l(row_group_lock);
+	annotated_lock_guard l(row_group_lock);
 	// FIXME
 	// MoveToCollection causes any_changes to be set to true because we are changing the start position of the row group
 	// the start position is ONLY written when targeting old serialization versions - as such, we don't actually
@@ -133,7 +133,7 @@ void RowGroup::LoadRowIdColumnData() const {
 	if (row_id_is_loaded) {
 		return;
 	}
-	lock_guard<mutex> l(row_group_lock);
+	annotated_lock_guard l(row_group_lock);
 	if (row_id_column_data) {
 		return;
 	}
@@ -146,7 +146,7 @@ void RowGroup::LoadRowNumberColumnData() const {
 	if (row_number_is_loaded) {
 		return;
 	}
-	lock_guard<mutex> l(row_group_lock);
+	annotated_lock_guard l(row_group_lock);
 	if (row_number_column_data) {
 		return;
 	}
@@ -198,7 +198,7 @@ void RowGroup::LoadColumn(storage_t c) const {
 		D_ASSERT(columns[c]);
 		return;
 	}
-	lock_guard<mutex> l(row_group_lock);
+	annotated_lock_guard l(row_group_lock);
 	if (columns[c]) {
 		// another thread loaded the column while we were waiting for the lock
 		D_ASSERT(is_loaded[c]);
@@ -228,7 +228,7 @@ void RowGroup::UnloadColumn(storage_t c) {
 	if (!ColumnIsLoaded(c)) {
 		throw InternalException("Trying to unload a column that is not loaded");
 	}
-	lock_guard<mutex> l(row_group_lock);
+	annotated_lock_guard l(row_group_lock);
 	if (!is_loaded) {
 		// is_loaded is not set - all columns must be loaded
 		this->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[columns.size()]);
@@ -495,7 +495,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		// in case these don't fit in memory here
 		GetColumns();
 	}
-	unique_lock<mutex> lock(row_group_lock);
+	annotated_unique_lock lock(row_group_lock);
 	auto row_group = CreateNewRowGroupCopy(new_collection, columns.size());
 	// copy existing columns, but swap out the one at changed_idx
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -559,7 +559,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		GetColumns();
 	}
 
-	unique_lock<mutex> lock(row_group_lock);
+	annotated_unique_lock lock(row_group_lock);
 	auto row_group = CreateNewRowGroupCopy(new_collection, columns.size() + 1);
 	// copy existing columns
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -594,7 +594,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 		// in case these don't fit in memory here
 		GetColumns();
 	}
-	unique_lock<mutex> lock(row_group_lock);
+	annotated_unique_lock lock(row_group_lock);
 	auto row_group = CreateNewRowGroupCopy(new_collection, columns.size() - 1);
 	// copy over all columns except for the removed one
 	idx_t target_idx = 0;
@@ -1102,7 +1102,7 @@ optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
 		// deletes are loaded - return the version info
 		return version_info;
 	}
-	lock_guard<mutex> lock(row_group_lock);
+	annotated_lock_guard lock(row_group_lock);
 	// double-check after obtaining the lock whether or not deletes are still not loaded to avoid double load
 	if (!HasUnloadedDeletes()) {
 		return version_info;
@@ -1122,7 +1122,7 @@ void RowGroup::SetVersionInfo(shared_ptr<RowVersionManager> version) {
 
 shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoInternal() {
 	// version info does not exist - need to create it
-	lock_guard<mutex> lock(row_group_lock);
+	annotated_lock_guard lock(row_group_lock);
 	if (!owned_version_info) {
 		auto &buffer_manager = GetBlockManager().GetBufferManager();
 		auto new_info = make_shared_ptr<RowVersionManager>(buffer_manager);
@@ -1201,7 +1201,7 @@ void RowGroup::FetchRows(TransactionData transaction, ColumnFetchState &state, c
 
 void RowGroup::SetCount(idx_t count) {
 	this->count = count;
-	lock_guard<mutex> guard(row_group_lock);
+	annotated_lock_guard guard(row_group_lock);
 	if (row_id_is_loaded) {
 		row_id_column_data->count = count;
 	}
@@ -2103,7 +2103,7 @@ void RowGroup::Verify() {
 			columns[c]->Verify(*this);
 		}
 	}
-	lock_guard<mutex> guard(row_group_lock);
+	annotated_lock_guard guard(row_group_lock);
 	if (row_id_is_loaded) {
 		D_ASSERT(row_id_column_data->count == count);
 	}

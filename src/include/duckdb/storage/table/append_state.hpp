@@ -103,7 +103,8 @@ struct TableAppendState {
 	~TableAppendState();
 
 	RowGroupAppendState row_group_append_state;
-	unique_lock<mutex> append_lock;
+	//! Empty for transaction-local appends; owns DataTable::append_lock during commit.
+	annotated_unique_lock<annotated_mutex> append_lock;
 	shared_ptr<CheckpointLock> table_lock;
 	row_t row_start;
 	row_t current_row;

@@ -271,7 +271,9 @@ bool CollectionScanState::Scan(ScanOptions options, DataChunk &result, optional_
 		}
 		do {
 			if (l) {
-				row_group = GetNextRowGroup(*l, *row_group).get();
+				auto &held_lock = *l;
+				held_lock.AssertHeld();
+				row_group = GetNextRowGroup(held_lock, *row_group).get();
 			} else {
 				row_group = GetNextRowGroup(*row_group).get();
 			}
@@ -299,7 +301,9 @@ bool CollectionScanState::Scan(DataChunk &result, TableScanType type, optional_p
 		}
 		// move to the next row group
 		if (l) {
-			row_group = GetNextRowGroup(*l, *row_group).get();
+			auto &held_lock = *l;
+			held_lock.AssertHeld();
+			row_group = GetNextRowGroup(held_lock, *row_group).get();
 		} else {
 			row_group = GetNextRowGroup(*row_group).get();
 		}

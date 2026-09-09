@@ -114,11 +114,12 @@ public:
 
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
-	SegmentLock Lock() const {
+	SegmentLock Lock() const DUCKDB_ACQUIRE(node_lock) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 		return SegmentLock(node_lock);
 	}
 
-	bool IsEmpty(SegmentLock &l) const {
+	bool IsEmpty(SegmentLock &l) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		return GetRootSegment(l) == nullptr;
 	}
 
@@ -128,14 +129,16 @@ public:
 		return GetRootSegment(l);
 	}
 
-	optional_ptr<SegmentNode<T>> GetRootSegment(SegmentLock &l) const {
+	optional_ptr<SegmentNode<T>> GetRootSegment(SegmentLock &l) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		if (nodes.empty()) {
 			LoadNextSegment(l);
 		}
 		return GetRootSegmentInternal();
 	}
 	//! Obtains ownership of the data of the segment tree
-	vector<unique_ptr<SegmentNode<T>>> MoveSegments(SegmentLock &l) {
+	vector<unique_ptr<SegmentNode<T>>> MoveSegments(SegmentLock &l) DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		LoadAllSegments(l);
 		return std::move(nodes);
 	}
@@ -144,7 +147,8 @@ public:
 		return MoveSegments(l);
 	}
 
-	vector<unique_ptr<SegmentNode<T>>> &ReferenceLoadedSegmentsMutable(SegmentLock &l) {
+	vector<unique_ptr<SegmentNode<T>>> &ReferenceLoadedSegmentsMutable(SegmentLock &l) DUCKDB_REQUIRES(l, node_lock) {
+		l.AssertHeld(node_lock);
 		return nodes;
 	}
 
@@ -152,7 +156,8 @@ public:
 		auto l = Lock();
 		return GetSegmentCount(l);
 	}
-	idx_t GetSegmentCount(SegmentLock &l) const {
+	idx_t GetSegmentCount(SegmentLock &l) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		LoadAllSegments(l);
 		return nodes.size();
 	}
@@ -161,7 +166,8 @@ public:
 		auto l = Lock();
 		return GetSegmentByIndex(l, index);
 	}
-	optional_ptr<SegmentNode<T>> GetSegmentByIndex(SegmentLock &l, int64_t index) const {
+	optional_ptr<SegmentNode<T>> GetSegmentByIndex(SegmentLock &l, int64_t index) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		if (index < 0) {
 			// load all segments
 			LoadAllSegments(l);
@@ -191,7 +197,8 @@ public:
 		auto l = Lock();
 		return GetNextSegment(l, node);
 	}
-	optional_ptr<SegmentNode<T>> GetNextSegment(SegmentLock &l, SegmentNode<T> &node) const {
+	optional_ptr<SegmentNode<T>> GetNextSegment(SegmentLock &l, SegmentNode<T> &node) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 #ifdef DEBUG
 		D_ASSERT(RefersToSameObject(*nodes[node.GetIndex()], node));
 #endif
@@ -199,7 +206,8 @@ public:
 	}
 
 	//! Gets a pointer to the last segment. Useful for appends.
-	optional_ptr<SegmentNode<T>> GetLastSegment(SegmentLock &l) const {
+	optional_ptr<SegmentNode<T>> GetLastSegment(SegmentLock &l) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		LoadAllSegments(l);
 		if (nodes.empty()) {
 			return nullptr;
@@ -211,7 +219,8 @@ public:
 		auto l = Lock();
 		return GetSegment(l, row_number);
 	}
-	optional_ptr<SegmentNode<T>> GetSegment(SegmentLock &l, idx_t row_number) const {
+	optional_ptr<SegmentNode<T>> GetSegment(SegmentLock &l, idx_t row_number) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		return nodes[GetSegmentIndex(l, row_number)].get();
 	}
 
@@ -223,11 +232,13 @@ public:
 		auto l = Lock();
 		AppendSegment(l, std::move(segment), row_start);
 	}
-	void AppendSegment(SegmentLock &l, shared_ptr<T> segment) {
+	void AppendSegment(SegmentLock &l, shared_ptr<T> segment) DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		LoadAllSegments(l);
 		AppendSegmentInternal(l, std::move(segment));
 	}
-	void AppendSegment(SegmentLock &l, shared_ptr<T> segment, idx_t row_start) {
+	void AppendSegment(SegmentLock &l, shared_ptr<T> segment, idx_t row_start) DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		LoadAllSegments(l);
 		AppendSegmentInternal(l, std::move(segment), row_start);
 	}
@@ -236,13 +247,15 @@ public:
 		auto l = Lock();
 		return HasSegment(l, segment);
 	}
-	bool HasSegment(SegmentLock &, SegmentNode<T> &segment) const {
+	bool HasSegment(SegmentLock &l, SegmentNode<T> &segment) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		auto segment_idx = segment.GetIndex();
 		return segment_idx < nodes.size() && RefersToSameObject(*nodes[segment_idx], segment);
 	}
 
 	//! Erase all segments after a specific segment
-	void EraseSegments(SegmentLock &l, idx_t segment_start) {
+	void EraseSegments(SegmentLock &l, idx_t segment_start) DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		LoadAllSegments(l);
 		if (segment_start >= nodes.size()) {
 			return;
@@ -251,7 +264,8 @@ public:
 	}
 
 	//! Get the segment index of the column segment for the given row
-	idx_t GetSegmentIndex(SegmentLock &l, idx_t row_number) const {
+	idx_t GetSegmentIndex(SegmentLock &l, idx_t row_number) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		idx_t segment_index;
 		if (TryGetSegmentIndex(l, row_number, segment_index)) {
 			return segment_index;
@@ -265,7 +279,8 @@ public:
 		throw InternalException("Could not find node in column segment tree!\n%s", error);
 	}
 
-	bool TryGetSegmentIndex(SegmentLock &l, idx_t row_number, idx_t &result) const {
+	bool TryGetSegmentIndex(SegmentLock &l, idx_t row_number, idx_t &result) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		// load segments until the row number is within bounds
 		while (nodes.empty() || (row_number >= nodes.back()->GetRowEnd())) {
 			if (!LoadNextSegment(l)) {
@@ -299,7 +314,9 @@ public:
 		return false;
 	}
 
-	void Verify(SegmentLock &, SegmentTreeVerifyMode mode = SegmentTreeVerifyMode::CONTIGUOUS) const {
+	void Verify(SegmentLock &l, SegmentTreeVerifyMode mode = SegmentTreeVerifyMode::CONTIGUOUS) const
+	    DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 #ifdef DEBUG
 		idx_t current_rowid_end = nodes.empty() ? 0 : nodes[0]->GetRowStart();
 		for (idx_t i = 0; i < nodes.size(); i++) {
@@ -327,7 +344,8 @@ public:
 		return SegmentIterationHelper(*this);
 	}
 
-	SegmentIterationHelper Segments(SegmentLock &l) const {
+	SegmentIterationHelper Segments(SegmentLock &l) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		return SegmentIterationHelper(*this, l);
 	}
 
@@ -335,27 +353,28 @@ public:
 		return SegmentNodeIterationHelper(*this);
 	}
 
-	SegmentNodeIterationHelper SegmentNodes(SegmentLock &l) const {
+	SegmentNodeIterationHelper SegmentNodes(SegmentLock &l) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		return SegmentNodeIterationHelper(*this, l);
 	}
 
 protected:
+	//! Lock to access or modify nodes and lazy-loading state.
+	mutable annotated_mutex node_lock;
 	mutable atomic<bool> finished_loading;
 
 	//! Load the next segment - only used when lazily loading
-	virtual optional<LoadedSegment<T>> LoadSegment() const {
+	virtual optional<LoadedSegment<T>> LoadSegment() const DUCKDB_REQUIRES(node_lock) {
 		return nullopt;
 	}
 
-	optional_ptr<SegmentNode<T>> GetRootSegmentInternal() const {
+	optional_ptr<SegmentNode<T>> GetRootSegmentInternal() const DUCKDB_REQUIRES(node_lock) {
 		return nodes.empty() ? nullptr : nodes[0].get();
 	}
 
 private:
 	//! The nodes in the tree, can be binary searched
-	mutable vector<unique_ptr<SegmentNode<T>>> nodes;
-	//! Lock to access or modify the nodes
-	mutable mutex node_lock;
+	mutable vector<unique_ptr<SegmentNode<T>>> nodes DUCKDB_GUARDED_BY(node_lock);
 	//! Base row id (row id of the first segment)
 	idx_t base_row_id;
 
@@ -373,7 +392,13 @@ private:
 
 	public:
 		void Next() {
-			current = lock ? tree.GetNextSegment(*lock, *current) : tree.GetNextSegment(*current);
+			if (lock) {
+				auto &held_lock = *lock;
+				held_lock.AssertHeld();
+				current = tree.GetNextSegment(held_lock, *current);
+			} else {
+				current = tree.GetNextSegment(*current);
+			}
 		}
 
 		BaseSegmentIterator &operator++() {
@@ -410,8 +435,12 @@ private:
 
 	public:
 		SegmentIterator begin() { // NOLINT: match stl API
-			auto root = lock ? tree.GetRootSegment(*lock) : tree.GetRootSegment();
-			return SegmentIterator(tree, root, lock);
+			if (lock) {
+				auto &held_lock = *lock;
+				held_lock.AssertHeld();
+				return SegmentIterator(tree, tree.GetRootSegment(held_lock), lock);
+			}
+			return SegmentIterator(tree, tree.GetRootSegment(), nullptr);
 		}
 		SegmentIterator end() { // NOLINT: match stl API
 			return SegmentIterator(tree, nullptr, lock);
@@ -443,8 +472,12 @@ private:
 
 	public:
 		SegmentIterator begin() { // NOLINT: match stl API
-			auto root = lock ? tree.GetRootSegment(*lock) : tree.GetRootSegment();
-			return SegmentIterator(tree, root, lock);
+			if (lock) {
+				auto &held_lock = *lock;
+				held_lock.AssertHeld();
+				return SegmentIterator(tree, tree.GetRootSegment(held_lock), lock);
+			}
+			return SegmentIterator(tree, tree.GetRootSegment(), nullptr);
 		}
 		SegmentIterator end() { // NOLINT: match stl API
 			return SegmentIterator(tree, nullptr, lock);
@@ -452,7 +485,8 @@ private:
 	};
 
 	//! Load the next segment, if there are any left to load
-	bool LoadNextSegment(SegmentLock &l) const {
+	bool LoadNextSegment(SegmentLock &l) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		if (!SUPPORTS_LAZY_LOADING) {
 			return false;
 		}
@@ -468,7 +502,8 @@ private:
 	}
 
 	//! Load all segments, if there are any left to load
-	void LoadAllSegments(SegmentLock &l) const {
+	void LoadAllSegments(SegmentLock &l) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		if (!SUPPORTS_LAZY_LOADING) {
 			return;
 		}
@@ -477,7 +512,8 @@ private:
 	}
 
 	//! Append a column segment to the tree
-	void AppendSegmentInternal(SegmentLock &l, shared_ptr<T> segment, idx_t row_start) const {
+	void AppendSegmentInternal(SegmentLock &l, shared_ptr<T> segment, idx_t row_start) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		D_ASSERT(segment);
 		// add the node to the list of nodes
 		auto node = make_uniq<SegmentNode<T>>(row_start, std::move(segment), nodes.size());
@@ -486,7 +522,8 @@ private:
 		}
 		nodes.push_back(std::move(node));
 	}
-	void AppendSegmentInternal(SegmentLock &l, shared_ptr<T> segment) const {
+	void AppendSegmentInternal(SegmentLock &l, shared_ptr<T> segment) const DUCKDB_REQUIRES(l) {
+		l.AssertHeld(node_lock);
 		idx_t row_start;
 		if (nodes.empty()) {
 			row_start = base_row_id;

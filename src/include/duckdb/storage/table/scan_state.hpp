@@ -306,7 +306,8 @@ public:
 	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group) const;
-	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentLock &l, SegmentNode<RowGroup> &row_group) const;
+	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentLock &l, SegmentNode<RowGroup> &row_group) const
+	    DUCKDB_REQUIRES(l);
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool Scan(ScanOptions options, DataChunk &result, optional_ptr<SegmentLock> l = nullptr);
@@ -383,7 +384,7 @@ private:
 
 struct ParallelCollectionScanState {
 	ParallelCollectionScanState();
-	void AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group);
+	void AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group) DUCKDB_REQUIRES(lock);
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups) const;
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(RowGroupSegmentTree &row_groups,
 	                                                    SegmentNode<RowGroup> &row_group) const;
@@ -391,13 +392,13 @@ struct ParallelCollectionScanState {
 	//! The row group collection we are scanning
 	RowGroupCollection *collection;
 	shared_ptr<RowGroupSegmentTree> row_groups;
-	optional_ptr<SegmentNode<RowGroup>> current_row_group;
-	idx_t vector_index;
+	optional_ptr<SegmentNode<RowGroup>> current_row_group DUCKDB_GUARDED_BY(lock);
+	idx_t vector_index DUCKDB_GUARDED_BY(lock);
 	idx_t max_row;
-	idx_t batch_index;
+	idx_t batch_index DUCKDB_GUARDED_BY(lock);
 	atomic<idx_t> processed_rows;
-	optional_idx row_number_base;
-	mutex lock;
+	optional_idx row_number_base DUCKDB_GUARDED_BY(lock);
+	annotated_mutex lock;
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;

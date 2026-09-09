@@ -187,12 +187,12 @@ MetadataManager &RowGroupCollection::GetMetadataManager() {
 }
 
 shared_ptr<RowGroupSegmentTree> RowGroupCollection::GetRowGroups() const {
-	lock_guard<mutex> guard(row_group_pointer_lock);
+	annotated_lock_guard guard(row_group_pointer_lock);
 	return owned_row_groups;
 }
 
 void RowGroupCollection::SetRowGroups(shared_ptr<RowGroupSegmentTree> new_row_groups) {
-	lock_guard<mutex> guard(row_group_pointer_lock);
+	annotated_lock_guard guard(row_group_pointer_lock);
 	owned_row_groups = std::move(new_row_groups);
 }
 
@@ -200,14 +200,15 @@ void RowGroupCollection::SetRowGroups(shared_ptr<RowGroupSegmentTree> new_row_gr
 // Initialize
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Initialize(PersistentTableData &data) {
-	D_ASSERT(owned_row_groups->GetBaseRowId() == 0);
-	auto l = owned_row_groups->Lock();
+	auto row_groups = GetRowGroups();
+	D_ASSERT(row_groups->GetBaseRowId() == 0);
+	auto l = row_groups->Lock();
 	this->total_rows = data.total_rows;
 	this->next_row_id = data.next_row_id;
 	D_ASSERT(this->next_row_id >= this->total_rows);
 	metadata_pointer = data.base_table_pointer;
 	metadata_pointers = data.read_metadata_pointers;
-	owned_row_groups->Initialize(data, metadata_pointers);
+	row_groups->Initialize(data, metadata_pointers);
 	stats.Initialize(types, data);
 }
 
@@ -218,14 +219,15 @@ void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer,
 }
 
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
+	auto row_groups = GetRowGroups();
 	stats.InitializeEmpty(types);
-	auto l = owned_row_groups->Lock();
+	auto l = row_groups->Lock();
 	for (auto &row_group_data : data.row_group_data) {
-		D_ASSERT(row_group_data.start == owned_row_groups->GetBaseRowId() + total_rows.load());
+		D_ASSERT(row_group_data.start == row_groups->GetBaseRowId() + total_rows.load());
 		auto row_group = make_uniq<RowGroup>(*this, row_group_data);
 		row_group->MergeIntoStatistics(stats);
 		total_rows += row_group->count;
-		owned_row_groups->AppendSegment(l, std::move(row_group), row_group_data.start);
+		row_groups->AppendSegment(l, std::move(row_group), row_group_data.start);
 	}
 	next_row_id = total_rows.load();
 }
@@ -256,14 +258,16 @@ ColumnDataType GetColumnDataType(idx_t row_start) {
 }
 
 void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
+	auto row_groups = GetRowGroups();
 	auto new_row_group = make_uniq<RowGroup>(*this, 0U);
 	new_row_group->InitializeEmpty(types, GetColumnDataType(start_row));
-	owned_row_groups->AppendSegment(l, std::move(new_row_group), start_row);
+	row_groups->AppendSegment(l, std::move(new_row_group), start_row);
 	row_group_append_mode = RowGroupAppendMode::APPEND_TO_EXISTING;
 }
 
 optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
-	auto result = owned_row_groups->GetSegmentByIndex(index);
+	auto row_groups = GetRowGroups();
+	auto result = row_groups->GetSegmentByIndex(index);
 	if (!result) {
 		return nullptr;
 	}
@@ -276,7 +280,8 @@ idx_t RowGroupCollection::GetSegmentCount() {
 }
 
 void RowGroupCollection::SetRowGroup(int64_t index, shared_ptr<RowGroup> new_row_group) {
-	auto result = owned_row_groups->GetSegmentByIndex(index);
+	auto row_groups = GetRowGroups();
+	auto result = row_groups->GetSegmentByIndex(index);
 	if (!result) {
 		throw InternalException("RowGroupCollection::SetRowGroup - Segment is out of range");
 	}
@@ -349,7 +354,8 @@ bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, Collec
 	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index);
 }
 
-void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
+// The scan state is initialized before it is shared with worker threads.
+void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	state.collection = this;
 	state.row_groups = GetRowGroups();
 	state.AssignRowGroup(state.GetRootSegment(*state.row_groups));
@@ -369,7 +375,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		optional_ptr<SegmentNode<RowGroup>> row_group;
 		{
 			// select the next row group to scan from the parallel state
-			lock_guard<mutex> l(state.lock);
+			annotated_lock_guard l(state.lock);
 			if (!state.current_row_group) {
 				// no more data left to scan
 				break;
@@ -422,7 +428,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		}
 		return true;
 	}
-	lock_guard<mutex> l(state.lock);
+	annotated_lock_guard l(state.lock);
 	scan_state.batch_index = state.batch_index;
 	return false;
 }
@@ -2083,8 +2089,9 @@ private:
 };
 
 void RowGroupCollection::Destroy() {
-	auto l = owned_row_groups->Lock();
-	auto &segments = owned_row_groups->ReferenceLoadedSegmentsMutable(l);
+	auto row_groups = GetRowGroups();
+	auto l = row_groups->Lock();
+	auto &segments = row_groups->ReferenceLoadedSegmentsMutable(l);
 
 	TaskExecutor executor(TaskScheduler::GetScheduler(GetAttached().GetDatabase()));
 	for (auto &segment : segments) {

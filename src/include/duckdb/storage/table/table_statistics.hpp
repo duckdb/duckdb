@@ -19,12 +19,21 @@ class PersistentTableData;
 class Serializer;
 class Deserializer;
 
-class TableStatisticsLock {
+class DUCKDB_SCOPED_CAPABILITY TableStatisticsLock {
 public:
-	explicit TableStatisticsLock(mutex &l) : guard(l) {
+	explicit TableStatisticsLock(annotated_mutex &l) DUCKDB_ACQUIRE(l) : guard(l), locked_mutex(l) {
+	}
+
+	~TableStatisticsLock() DUCKDB_RELEASE() = default;
+
+	void AssertHeld(const annotated_mutex &expected) const DUCKDB_ASSERT_CAPABILITY(expected) {
+		D_ASSERT(&locked_mutex == &expected);
 	}
 
 	lock_guard<mutex> guard;
+
+private:
+	annotated_mutex &locked_mutex;
 };
 
 class TableStatistics {
@@ -67,8 +76,8 @@ public:
 	void Deserialize(Deserializer &deserializer, ColumnList &columns);
 
 private:
-	//! The statistics lock
-	shared_ptr<mutex> stats_lock;
+	//! Shared by table versions created by ALTER; held until the statistics lock token is destroyed.
+	shared_ptr<annotated_mutex> stats_lock;
 	//! Column statistics
 	vector<shared_ptr<ColumnStatistics>> column_stats;
 	//! The table sample

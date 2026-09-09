@@ -49,7 +49,7 @@ public:
 	void CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info);
 	void CleanupUpdate(UpdateInfo &info);
 
-	unique_ptr<BaseStatistics> GetStatistics();
+	unique_ptr<BaseStatistics> GetStatistics() DUCKDB_EXCLUDES(stats_lock);
 	StringHeap &GetStringHeap() {
 		return heap;
 	}
@@ -60,9 +60,9 @@ private:
 	//! The root node (if any)
 	unique_ptr<UpdateNode> root;
 	//! Update statistics
-	SegmentStatistics stats;
+	SegmentStatistics stats DUCKDB_GUARDED_BY(stats_lock);
 	//! Stats lock
-	mutex stats_lock;
+	annotated_mutex stats_lock;
 	//! Internal type size
 	idx_t type_size;
 	//! String heap, only used for strings

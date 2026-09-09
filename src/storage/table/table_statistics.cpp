@@ -12,7 +12,7 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 	D_ASSERT(Empty());
 	D_ASSERT(!table_sample);
 
-	stats_lock = make_shared_ptr<mutex>();
+	stats_lock = make_shared_ptr<annotated_mutex>();
 	column_stats = std::move(data.table_stats.column_stats);
 	if (data.table_stats.table_sample) {
 		table_sample = std::move(data.table_stats.table_sample);
@@ -29,7 +29,7 @@ void TableStatistics::InitializeEmpty(const TableStatistics &other) {
 	D_ASSERT(Empty());
 	D_ASSERT(!table_sample);
 
-	stats_lock = make_shared_ptr<mutex>();
+	stats_lock = make_shared_ptr<annotated_mutex>();
 	if (other.table_sample) {
 		D_ASSERT(other.table_sample->type == SampleType::RESERVOIR_SAMPLE);
 		auto &res = other.table_sample->Cast<ReservoirSample>();
@@ -56,7 +56,7 @@ void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
 	D_ASSERT(!table_sample);
 
-	stats_lock = make_shared_ptr<mutex>();
+	stats_lock = make_shared_ptr<annotated_mutex>();
 	table_sample = make_uniq<ReservoirSample>(static_cast<idx_t>(FIXED_SAMPLE_SIZE));
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
@@ -68,7 +68,7 @@ void TableStatistics::InitializeAddColumn(TableStatistics &parent, const Logical
 	D_ASSERT(parent.stats_lock);
 
 	stats_lock = parent.stats_lock;
-	lock_guard<mutex> lock(*stats_lock);
+	annotated_lock_guard lock(*stats_lock);
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		column_stats.push_back(parent.column_stats[i]);
 	}
@@ -86,7 +86,7 @@ void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t remo
 	D_ASSERT(parent.stats_lock);
 
 	stats_lock = parent.stats_lock;
-	lock_guard<mutex> lock(*stats_lock);
+	annotated_lock_guard lock(*stats_lock);
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		if (i != removed_column) {
 			column_stats.push_back(parent.column_stats[i]);
@@ -105,7 +105,7 @@ void TableStatistics::InitializeAlterType(TableStatistics &parent, idx_t changed
 	D_ASSERT(parent.stats_lock);
 
 	stats_lock = parent.stats_lock;
-	lock_guard<mutex> lock(*stats_lock);
+	annotated_lock_guard lock(*stats_lock);
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		if (i == changed_idx) {
 			column_stats.push_back(ColumnStatistics::CreateEmptyStats(new_type));
@@ -126,7 +126,7 @@ void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
 	D_ASSERT(parent.stats_lock);
 
 	stats_lock = parent.stats_lock;
-	lock_guard<mutex> lock(*stats_lock);
+	annotated_lock_guard lock(*stats_lock);
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		column_stats.push_back(parent.column_stats[i]);
 	}
@@ -167,10 +167,12 @@ void TableStatistics::MergeStats(idx_t i, BaseStatistics &stats) {
 }
 
 void TableStatistics::MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats, StatsMergeType merge_type) {
+	lock.AssertHeld(*stats_lock);
 	column_stats[i]->Statistics().Merge(stats, merge_type);
 }
 
 ColumnStatistics &TableStatistics::GetStats(TableStatisticsLock &lock, idx_t i) {
+	lock.AssertHeld(*stats_lock);
 	return *column_stats[i];
 }
 
@@ -180,14 +182,17 @@ ColumnStatistics &TableStatistics::GetStats(TableStatisticsLock &lock, idx_t i) 
 //}
 
 unique_ptr<BlockingSample> TableStatistics::GetTableSample(TableStatisticsLock &lock) {
+	lock.AssertHeld(*stats_lock);
 	return std::move(table_sample);
 }
 
 void TableStatistics::SetTableSample(TableStatisticsLock &lock, unique_ptr<BlockingSample> sample) {
+	lock.AssertHeld(*stats_lock);
 	table_sample = std::move(sample);
 }
 
 void TableStatistics::DestroyTableSample(TableStatisticsLock &lock) const {
+	lock.AssertHeld(*stats_lock);
 	if (table_sample) {
 		table_sample->Destroy();
 	}
@@ -200,7 +205,7 @@ void TableStatistics::SetStats(TableStatistics &other) {
 }
 
 unique_ptr<BaseStatistics> TableStatistics::CopyStats(const StorageIndex &index) {
-	lock_guard<mutex> l(*stats_lock);
+	annotated_lock_guard l(*stats_lock);
 
 	auto column_index = index.GetPrimaryIndex();
 	auto &stats = *column_stats[column_index];
@@ -220,8 +225,9 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 }
 
 void TableStatistics::CopyStats(TableStatisticsLock &lock, TableStatistics &other) {
+	lock.AssertHeld(*stats_lock);
 	D_ASSERT(other.Empty());
-	other.stats_lock = make_shared_ptr<mutex>();
+	other.stats_lock = make_shared_ptr<annotated_mutex>();
 	for (auto &stats : column_stats) {
 		other.column_stats.push_back(stats->Copy());
 	}
@@ -276,9 +282,10 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 	}
 }
 
-unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {
+// Ownership escapes in the heap-allocated token, whose destructor releases the mutex.
+unique_ptr<TableStatisticsLock> TableStatistics::GetLock() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	D_ASSERT(stats_lock);
-	return make_uniq<TableStatisticsLock>(*stats_lock);
+	return unique_ptr<TableStatisticsLock>(new TableStatisticsLock(*stats_lock));
 }
 
 bool TableStatistics::Empty() const {

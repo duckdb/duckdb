@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/transaction/local_storage.hpp"
@@ -174,28 +175,31 @@ public:
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	//! Fetches an append lock
-	void AppendLock(DuckTransaction &transaction, TableAppendState &state);
+	void AppendLock(DuckTransaction &transaction, TableAppendState &state) DUCKDB_EXCLUDES(append_lock);
+	//! Verify the state owns this table's append lock, including across helper calls.
+	void VerifyAppendLock(const TableAppendState &state) const DUCKDB_ASSERT_CAPABILITY(append_lock);
 	//! Begin appending structs to this table, obtaining necessary locks, etc
-	void InitializeAppend(DuckTransaction &transaction, TableAppendState &state);
+	void InitializeAppend(DuckTransaction &transaction, TableAppendState &state) DUCKDB_REQUIRES(append_lock);
 	//! Append a chunk to the table using the AppendState obtained from InitializeAppend
-	void Append(DataChunk &chunk, TableAppendState &state);
+	void Append(DataChunk &chunk, TableAppendState &state) DUCKDB_REQUIRES(append_lock);
 	//! Finalize an append
-	void FinalizeAppend(DuckTransaction &transaction, TableAppendState &state);
+	void FinalizeAppend(DuckTransaction &transaction, TableAppendState &state) DUCKDB_REQUIRES(append_lock);
 	//! Commit the append
-	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
+	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) DUCKDB_EXCLUDES(append_lock);
 	//! Write a segment of the table to the WAL
 	void WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
 	                optional_ptr<StorageCommitState> commit_state);
 	//! Revert a set of appends made by the given AppendState, used to revert appends in the event of an error during
 	//! commit (e.g. because of an I/O exception)
-	void RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count);
-	void RevertAppendInternal(idx_t start_row);
+	void RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count) DUCKDB_EXCLUDES(append_lock);
+	void RevertAppendInternal(idx_t start_row) DUCKDB_REQUIRES(append_lock);
 
 	void ScanTableSegment(DuckTransaction &transaction, idx_t start_row, idx_t count,
 	                      const std::function<void(DataChunk &chunk)> &function);
 
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
-	void MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state);
+	void MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state)
+	    DUCKDB_REQUIRES(append_lock);
 
 	//! Remove the row identifiers from all the indexes of the table
 	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
@@ -327,8 +331,8 @@ private:
 	shared_ptr<DataTableInfo> info;
 	//! The set of physical columns stored by this DataTable
 	vector<ColumnDefinition> column_definitions;
-	//! Lock for appending entries to the table
-	mutex append_lock;
+	//! Serializes base-table appends, rollback, and ALTER; held by TableAppendState during commit.
+	annotated_mutex append_lock DUCKDB_ACQUIRED_BEFORE(info->name_lock);
 	//! The row groups of the table
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The version of the data table
