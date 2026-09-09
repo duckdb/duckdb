@@ -179,6 +179,10 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			value = Value::LIST(child_type, values);
 			return true;
 		} else if (function.FunctionName() == "map") {
+			if (function.GetArguments().size() != 2) {
+				return false;
+			}
+
 			Value keys;
 			if (!TryFoldConstantForBackwardsCompatibility(function.GetArguments()[0].GetExpression(), keys)) {
 				return false;
