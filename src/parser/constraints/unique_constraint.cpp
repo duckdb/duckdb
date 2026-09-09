@@ -10,26 +10,14 @@ UniqueConstraint::UniqueConstraint()
       timing(ConstraintTiming::DEFAULT) {
 }
 
-UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key)
-    : UniqueConstraint(index, is_primary_key, ConstraintTiming::DEFAULT) {
-}
-
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key, ConstraintTiming timing)
     : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key), timing(timing) {
-}
-
-UniqueConstraint::UniqueConstraint(const LogicalIndex index, Identifier column_name_p, const bool is_primary_key)
-    : UniqueConstraint(index, std::move(column_name_p), is_primary_key, ConstraintTiming::DEFAULT) {
 }
 
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, Identifier column_name_p, const bool is_primary_key,
                                    ConstraintTiming timing)
     : UniqueConstraint(index, is_primary_key, timing) {
 	columns.emplace_back(std::move(column_name_p));
-}
-
-UniqueConstraint::UniqueConstraint(vector<Identifier> columns, const bool is_primary_key)
-    : UniqueConstraint(std::move(columns), is_primary_key, ConstraintTiming::DEFAULT) {
 }
 
 UniqueConstraint::UniqueConstraint(vector<Identifier> columns, const bool is_primary_key, ConstraintTiming timing)
