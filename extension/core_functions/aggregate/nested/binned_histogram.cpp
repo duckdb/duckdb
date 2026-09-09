@@ -417,8 +417,9 @@ AggregateFunction HistogramExactFun::GetFunction() {
 }
 
 ScalarFunction IsHistogramOtherBinFun::GetFunction() {
-	return ScalarFunction("is_histogram_other_bin", {LogicalType::ANY}, LogicalType::BOOLEAN,
-	                      IsHistogramOtherBinFunction);
+	ScalarFunction fun("is_histogram_other_bin", {}, LogicalType::BOOLEAN, IsHistogramOtherBinFunction);
+	fun.GetSignature().AddParameter("val", LogicalType::ANY);
+	return fun;
 }
 
 } // namespace duckdb
