@@ -108,9 +108,9 @@
       },
       {
         "id": 203,
-        "name": "is_deferred",
-        "type": "bool",
-        "default": "false",
+        "name": "timing",
+        "type": "ConstraintTiming",
+        "default": "ConstraintTiming::DEFAULT",
         "version": "v2.0.0"
       }
     ]

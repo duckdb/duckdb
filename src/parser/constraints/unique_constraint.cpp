@@ -6,20 +6,20 @@
 namespace duckdb {
 
 UniqueConstraint::UniqueConstraint()
-    : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), is_primary_key(false), is_deferred(false) {
+    : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), is_primary_key(false),
+      timing(ConstraintTiming::DEFAULT) {
 }
 
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key)
-    : UniqueConstraint(index, is_primary_key, ConstraintTiming::IMMEDIATE) {
+    : UniqueConstraint(index, is_primary_key, ConstraintTiming::DEFAULT) {
 }
 
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key, ConstraintTiming timing)
-    : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key),
-      is_deferred(timing == ConstraintTiming::DEFERRED) {
+    : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key), timing(timing) {
 }
 
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, Identifier column_name_p, const bool is_primary_key)
-    : UniqueConstraint(index, std::move(column_name_p), is_primary_key, ConstraintTiming::IMMEDIATE) {
+    : UniqueConstraint(index, std::move(column_name_p), is_primary_key, ConstraintTiming::DEFAULT) {
 }
 
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, Identifier column_name_p, const bool is_primary_key,
@@ -29,12 +29,12 @@ UniqueConstraint::UniqueConstraint(const LogicalIndex index, Identifier column_n
 }
 
 UniqueConstraint::UniqueConstraint(vector<Identifier> columns, const bool is_primary_key)
-    : UniqueConstraint(std::move(columns), is_primary_key, ConstraintTiming::IMMEDIATE) {
+    : UniqueConstraint(std::move(columns), is_primary_key, ConstraintTiming::DEFAULT) {
 }
 
 UniqueConstraint::UniqueConstraint(vector<Identifier> columns, const bool is_primary_key, ConstraintTiming timing)
     : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), columns(std::move(columns)),
-      is_primary_key(is_primary_key), is_deferred(timing == ConstraintTiming::DEFERRED) {
+      is_primary_key(is_primary_key), timing(timing) {
 }
 
 string UniqueConstraint::ToString() const {
@@ -46,14 +46,15 @@ string UniqueConstraint::ToString() const {
 		base += SQLIdentifier(columns[i]);
 	}
 	base += ")";
-	if (is_deferred) {
+	if (timing == ConstraintTiming::DEFERRED) {
 		base += " DEFERRED";
+	} else if (timing == ConstraintTiming::IMMEDIATE) {
+		base += " IMMEDIATE";
 	}
 	return base;
 }
 
 unique_ptr<Constraint> UniqueConstraint::Copy() const {
-	auto timing = is_deferred ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
 	if (!HasIndex()) {
 		return make_uniq<UniqueConstraint>(columns, is_primary_key, timing);
 	}
@@ -66,7 +67,7 @@ bool UniqueConstraint::IsPrimaryKey() const {
 }
 
 bool UniqueConstraint::IsDeferred() const {
-	return is_deferred;
+	return timing == ConstraintTiming::DEFERRED;
 }
 
 IndexConstraintType UniqueConstraint::GetIndexConstraintType() const {

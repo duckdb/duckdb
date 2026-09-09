@@ -1,5 +1,5 @@
 # name: test/sql/constraints/deferred/test_deferred_syntax.test
-# description: Test parsing DEFERRED primary key and unique constraints
+# description: Test constraint timing for primary key and unique constraints
 # group: [deferred]
 
 # Deferred constraints must remain deferred after copying or reparsing the statement.
@@ -40,6 +40,202 @@ CREATE TABLE mixed_primary_key(i INTEGER UNIQUE PRIMARY KEY DEFERRED);
 Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
 
 statement ok
+CREATE TABLE timing_test(i INTEGER UNIQUE);
+
+query I
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+----
+UNIQUE(i)
+
+statement ok
+INSERT INTO timing_test VALUES (1);
+
+statement error
+INSERT INTO timing_test VALUES (1);
+----
+Constraint Error: Duplicate key
+
+statement ok
+DROP TABLE timing_test;
+
+statement ok
+CREATE TABLE timing_test(i INTEGER, UNIQUE(i));
+
+query I
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+----
+UNIQUE(i)
+
+statement ok
+INSERT INTO timing_test VALUES (1);
+
+statement error
+INSERT INTO timing_test VALUES (1);
+----
+Constraint Error: Duplicate key
+
+statement ok
+DROP TABLE timing_test;
+
+statement ok
+CREATE TABLE timing_test(i INTEGER PRIMARY KEY);
+
+query I
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+----
+PRIMARY KEY(i)
+
+statement ok
+INSERT INTO timing_test VALUES (1);
+
+statement error
+INSERT INTO timing_test VALUES (1);
+----
+Constraint Error: Duplicate key
+
+statement ok
+DROP TABLE timing_test;
+
+statement ok
+CREATE TABLE timing_test(i INTEGER, PRIMARY KEY(i));
+
+query I
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+----
+PRIMARY KEY(i)
+
+statement ok
+INSERT INTO timing_test VALUES (1);
+
+statement error
+INSERT INTO timing_test VALUES (1);
+----
+Constraint Error: Duplicate key
+
+statement ok
+DROP TABLE timing_test;
+
+statement ok
+CREATE TABLE timing_test(i INTEGER UNIQUE IMMEDIATE);
+
+query I
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+----
+UNIQUE(i) IMMEDIATE
+
+statement ok
+INSERT INTO timing_test VALUES (1);
+
+statement error
+INSERT INTO timing_test VALUES (1);
+----
+Constraint Error: Duplicate key
+
+statement ok
+DROP TABLE timing_test;
+
+statement ok
+CREATE TABLE timing_test(i INTEGER, UNIQUE(i) IMMEDIATE);
+
+query I
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+----
+UNIQUE(i) IMMEDIATE
+
+statement ok
+INSERT INTO timing_test VALUES (1);
+
+statement error
+INSERT INTO timing_test VALUES (1);
+----
+Constraint Error: Duplicate key
+
+statement ok
+DROP TABLE timing_test;
+
+statement ok
+CREATE TABLE timing_test(i INTEGER PRIMARY KEY IMMEDIATE);
+
+query I
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+----
+PRIMARY KEY(i) IMMEDIATE
+
+statement ok
+INSERT INTO timing_test VALUES (1);
+
+statement error
+INSERT INTO timing_test VALUES (1);
+----
+Constraint Error: Duplicate key
+
+statement ok
+DROP TABLE timing_test;
+
+statement ok
+CREATE TABLE timing_test(i INTEGER, PRIMARY KEY(i) IMMEDIATE);
+
+query I
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+----
+PRIMARY KEY(i) IMMEDIATE
+
+statement ok
+INSERT INTO timing_test VALUES (1);
+
+statement error
+INSERT INTO timing_test VALUES (1);
+----
+Constraint Error: Duplicate key
+
+statement ok
+DROP TABLE timing_test;
+
+statement ok
 RESET debug_verify_statement
 
 endloop
+
+# IMMEDIATE remains usable as an unquoted identifier.
+statement ok
+CREATE TABLE immediate(immediate INTEGER UNIQUE IMMEDIATE);
+
+statement ok
+DROP TABLE immediate;
+
+# A constraint accepts only one timing modifier.
+
+statement error
+CREATE TABLE invalid_timing(i INTEGER UNIQUE IMMEDIATE DEFERRED);
+----
+Parser Error:
+
+statement error
+CREATE TABLE invalid_timing(i INTEGER PRIMARY KEY DEFERRED IMMEDIATE);
+----
+Parser Error:
+
+statement error
+CREATE TABLE invalid_timing(i INTEGER UNIQUE IMMEDIATE IMMEDIATE);
+----
+Parser Error:
+
+statement error
+CREATE TABLE invalid_timing(i INTEGER, UNIQUE(i) IMMEDIATE DEFERRED);
+----
+Parser Error:
+
+statement error
+CREATE TABLE invalid_timing(i INTEGER, PRIMARY KEY(i) DEFERRED IMMEDIATE);
+----
+Parser Error:
+
+statement error
+CREATE TABLE mixed_explicit_unique(i INTEGER PRIMARY KEY IMMEDIATE UNIQUE DEFERRED);
+----
+Not implemented Error: Deferred UNIQUE constraints are not implemented yet
+
+statement error
+CREATE TABLE mixed_explicit_primary(i INTEGER UNIQUE IMMEDIATE PRIMARY KEY DEFERRED);
+----
+Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet

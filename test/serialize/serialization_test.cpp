@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/data_pointer.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 
 namespace duckdb {
 
@@ -295,6 +296,27 @@ TEST_CASE("Test DataPointer byte size storage version compatibility", "[serializ
 	stream.Rewind();
 	auto legacy = DeserializeDataPointer(stream, type);
 	REQUIRE(!legacy.byte_size);
+}
+
+TEST_CASE("Constraint timing survives serialization", "[serialization][deferred]") {
+	for (auto timing : {ConstraintTiming::DEFAULT, ConstraintTiming::IMMEDIATE, ConstraintTiming::DEFERRED}) {
+		for (auto primary_key : {false, true}) {
+			UniqueConstraint constraint(vector<Identifier> {Identifier("i")}, primary_key, timing);
+			auto copy = constraint.Copy();
+			REQUIRE(copy->Cast<UniqueConstraint>().timing == timing);
+			REQUIRE(copy->ToString() == constraint.ToString());
+
+			Allocator allocator;
+			MemoryStream stream(allocator);
+			SerializationOptions options;
+			options.storage_compatibility = StorageCompatibility::Latest();
+			BinarySerializer::Serialize(constraint, stream, options);
+			stream.Rewind();
+			auto restored = BinaryDeserializer::Deserialize<Constraint>(stream);
+			REQUIRE(restored->Cast<UniqueConstraint>().timing == timing);
+			REQUIRE(restored->ToString() == constraint.ToString());
+		}
+	}
 }
 
 } // namespace duckdb

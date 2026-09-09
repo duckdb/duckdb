@@ -166,11 +166,9 @@ PEGTransformerFactory::TransformCreateTableColumnList(PEGTransformer &transforme
 				if (constraint_type.type == ConstraintType::NOT_NULL) {
 					result.constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(col_idx)));
 				} else if (constraint_type.type == ConstraintType::UNIQUE) {
-					auto timing =
-					    constraint_type.is_deferred ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
-					result.constraints.push_back(make_uniq<UniqueConstraint>(LogicalIndex(col_idx),
-					                                                         column_result.column_definition.GetName(),
-					                                                         constraint_type.is_primary_key, timing));
+					result.constraints.push_back(
+					    make_uniq<UniqueConstraint>(LogicalIndex(col_idx), column_result.column_definition.GetName(),
+					                                constraint_type.is_primary_key, constraint_type.timing));
 				}
 			}
 			result.columns.AddColumn(std::move(column_result.column_definition));
@@ -358,16 +356,18 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopCheckConstraint(PEGTra
 	return std::move(check_constraint.constraint);
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformTopPrimaryKeyConstraint(
-    PEGTransformer &transformer, const vector<string> &column_id_list, const optional<bool> &deferred_constraint) {
-	auto timing = deferred_constraint.value_or(false) ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
+unique_ptr<Constraint>
+PEGTransformerFactory::TransformTopPrimaryKeyConstraint(PEGTransformer &transformer,
+                                                        const vector<string> &column_id_list,
+                                                        const optional<ConstraintTiming> &constraint_timing) {
+	auto timing = constraint_timing.value_or(ConstraintTiming::DEFAULT);
 	return make_uniq<UniqueConstraint>(StringsToIdentifiers(column_id_list), true, timing);
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTransformer &transformer,
-                                                                           const vector<string> &column_id_list,
-                                                                           const optional<bool> &deferred_constraint) {
-	auto timing = deferred_constraint.value_or(false) ? ConstraintTiming::DEFERRED : ConstraintTiming::IMMEDIATE;
+unique_ptr<Constraint>
+PEGTransformerFactory::TransformTopUniqueConstraint(PEGTransformer &transformer, const vector<string> &column_id_list,
+                                                    const optional<ConstraintTiming> &constraint_timing) {
+	auto timing = constraint_timing.value_or(ConstraintTiming::DEFAULT);
 	return make_uniq<UniqueConstraint>(StringsToIdentifiers(column_id_list), false, timing);
 }
 
@@ -466,24 +466,30 @@ string PEGTransformerFactory::TransformSetDefaultKeyAction(PEGTransformer &trans
 	throw ParserException("FOREIGN KEY constraints cannot use CASCADE, SET NULL or SET DEFAULT");
 }
 
-ColumnConstraintEntry PEGTransformerFactory::TransformPrimaryKeyConstraint(PEGTransformer &transformer,
-                                                                           const optional<bool> &deferred_constraint) {
+ColumnConstraintEntry
+PEGTransformerFactory::TransformPrimaryKeyConstraint(PEGTransformer &transformer,
+                                                     const optional<ConstraintTiming> &constraint_timing) {
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "PrimaryKeyConstraint";
-	entry.constraint_type_info = {true, ConstraintType::UNIQUE, deferred_constraint.value_or(false)};
+	entry.constraint_type_info = {true, ConstraintType::UNIQUE, constraint_timing.value_or(ConstraintTiming::DEFAULT)};
 	return entry;
 }
 
-ColumnConstraintEntry PEGTransformerFactory::TransformUniqueConstraint(PEGTransformer &transformer,
-                                                                       const optional<bool> &deferred_constraint) {
+ColumnConstraintEntry
+PEGTransformerFactory::TransformUniqueConstraint(PEGTransformer &transformer,
+                                                 const optional<ConstraintTiming> &constraint_timing) {
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "UniqueConstraint";
-	entry.constraint_type_info = {false, ConstraintType::UNIQUE, deferred_constraint.value_or(false)};
+	entry.constraint_type_info = {false, ConstraintType::UNIQUE, constraint_timing.value_or(ConstraintTiming::DEFAULT)};
 	return entry;
 }
 
-bool PEGTransformerFactory::TransformDeferredConstraint(PEGTransformer &transformer) {
-	return true;
+ConstraintTiming PEGTransformerFactory::TransformImmediateConstraint(PEGTransformer &transformer) {
+	return ConstraintTiming::IMMEDIATE;
+}
+
+ConstraintTiming PEGTransformerFactory::TransformDeferredConstraint(PEGTransformer &transformer) {
+	return ConstraintTiming::DEFERRED;
 }
 
 bool PEGTransformerFactory::TransformNullConstraint(PEGTransformer &transformer) {
@@ -498,7 +504,8 @@ ColumnConstraintEntry PEGTransformerFactory::TransformNotNullConstraint(PEGTrans
                                                                         const bool &child) {
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "NotNullConstraint";
-	entry.constraint_type_info = {false, child ? ConstraintType::NOT_NULL : ConstraintType::INVALID, false};
+	entry.constraint_type_info = {false, child ? ConstraintType::NOT_NULL : ConstraintType::INVALID,
+	                              ConstraintTiming::DEFAULT};
 	return entry;
 }
 

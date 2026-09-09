@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
@@ -10,7 +11,7 @@ namespace duckdb {
 struct ColumnConstraintTypeInfo {
 	bool is_primary_key = false;
 	ConstraintType type = ConstraintType::INVALID;
-	bool is_deferred = false;
+	ConstraintTiming timing = ConstraintTiming::DEFAULT;
 };
 
 struct ColumnConstraintEntry {

@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-enum class ConstraintTiming : uint8_t { IMMEDIATE, DEFERRED };
+enum class ConstraintTiming : uint8_t { DEFAULT, IMMEDIATE, DEFERRED };
 
 class UniqueConstraint : public Constraint {
 public:
@@ -72,8 +72,8 @@ public:
 	vector<Identifier> columns;
 	//! Whether this is a PRIMARY KEY constraint, or a UNIQUE constraint.
 	bool is_primary_key;
-	//! Whether the constraint was declared with the DEFERRED modifier.
-	bool is_deferred;
+	//! The declared constraint timing, or DEFAULT when no modifier was specified.
+	ConstraintTiming timing;
 };
 
 } // namespace duckdb

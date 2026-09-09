@@ -1757,6 +1757,15 @@ public:
 	static unique_ptr<TransformResultValue> FinalizePrimaryKeyConstraintTrampoline(PEGTransformer &transformer,
 	                                                                               TransformStack &stack,
 	                                                                               TransformStackFrame &frame);
+	static void InitializeConstraintTimingTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeConstraintTimingTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeImmediateConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeImmediateConstraintTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
 	static void InitializeDeferredConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                   TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeDeferredConstraintTrampoline(PEGTransformer &transformer,
@@ -6004,14 +6013,19 @@ public:
 	static unique_ptr<TransformResultValue> TransformUniqueConstraintInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static ColumnConstraintEntry TransformUniqueConstraint(PEGTransformer &transformer,
-	                                                       const optional<bool> &deferred_constraint);
+	                                                       const optional<ConstraintTiming> &constraint_timing);
 	static unique_ptr<TransformResultValue> TransformPrimaryKeyConstraintInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
 	static ColumnConstraintEntry TransformPrimaryKeyConstraint(PEGTransformer &transformer,
-	                                                           const optional<bool> &deferred_constraint);
+	                                                           const optional<ConstraintTiming> &constraint_timing);
+	static unique_ptr<TransformResultValue> TransformConstraintTimingInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformImmediateConstraintInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static ConstraintTiming TransformImmediateConstraint(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDeferredConstraintInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
-	static bool TransformDeferredConstraint(PEGTransformer &transformer);
+	static ConstraintTiming TransformDeferredConstraint(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDefaultValueInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static ColumnConstraintEntry TransformDefaultValue(PEGTransformer &transformer,
@@ -6075,12 +6089,12 @@ public:
 	                                                                                 ParseResult &parse_result);
 	static unique_ptr<Constraint> TransformTopPrimaryKeyConstraint(PEGTransformer &transformer,
 	                                                               const vector<string> &column_id_list,
-	                                                               const optional<bool> &deferred_constraint);
+	                                                               const optional<ConstraintTiming> &constraint_timing);
 	static unique_ptr<TransformResultValue> TransformTopUniqueConstraintInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<Constraint> TransformTopUniqueConstraint(PEGTransformer &transformer,
 	                                                           const vector<string> &column_id_list,
-	                                                           const optional<bool> &deferred_constraint);
+	                                                           const optional<ConstraintTiming> &constraint_timing);
 	static unique_ptr<TransformResultValue> TransformTopForeignKeyConstraintInternal(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
 	static unique_ptr<Constraint> TransformTopForeignKeyConstraint(PEGTransformer &transformer,
