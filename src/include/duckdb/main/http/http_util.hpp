@@ -20,7 +20,7 @@ namespace duckdb {
 class DatabaseInstance;
 class Logger;
 class HTTPUtil;
-class HTTPRetryState;
+class HTTPRetryBudget;
 class HTTPTransportManager;
 class HTTPTransportManagerState;
 class FileOpener;
@@ -201,7 +201,7 @@ struct BaseRequest {
 	//! Whether or not to return failed requests (instead of throwing)
 	bool try_request = false;
 	//! Borrowed operation-local budget; it must outlive all participating requests.
-	optional_ptr<HTTPRetryState> retry_state;
+	optional_ptr<HTTPRetryBudget> retry_budget;
 
 	//! Requests will optionally contain their timings
 	bool have_request_timing = false;

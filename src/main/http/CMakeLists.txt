@@ -10,7 +10,7 @@ add_library_unity(
   duckdb_common_http
   OBJECT
   http_client_pool.cpp
-  http_retry_state.cpp
+  http_retry_budget.cpp
   http_transport_config.cpp
   http_transport_manager.cpp
   http_util.cpp)

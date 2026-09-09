@@ -1,4 +1,4 @@
-#include "duckdb/main/http/http_retry_state.hpp"
+#include "duckdb/main/http/http_retry_budget.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -13,16 +13,45 @@
 
 namespace duckdb {
 
-HTTPRetryState::HTTPRetryState(const HTTPParams &params)
+HTTPRetryDecision HTTPRetryDecision::Finish() {
+	return HTTPRetryDecision(Type::FINISH);
+}
+
+HTTPRetryDecision HTTPRetryDecision::Retry() {
+	return HTTPRetryDecision(Type::RETRY);
+}
+
+HTTPRetryDecision HTTPRetryDecision::Throttled(const string &retry_after) {
+	return HTTPRetryDecision(Type::THROTTLED, retry_after);
+}
+
+HTTPRetryBudget::HTTPRetryBudget(const HTTPParams &params)
     : retries(params.retries), retry_wait_ms(params.retry_wait_ms), retry_backoff(params.retry_backoff) {
 }
 
-bool HTTPRetryState::TryRetry() {
-	return TryRetry(RetryType::NORMAL, string());
+void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt) {
+	Run(attempt, {});
 }
 
-bool HTTPRetryState::TryRetry(RetryType type, const string &retry_after) {
-	const bool throttled = type == RetryType::THROTTLED;
+void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt,
+                          const std::function<void()> &before_retry) {
+	if (!attempt) {
+		throw InternalException("HTTP retry loop requires an attempt callback");
+	}
+	for (;;) {
+		auto decision = attempt();
+		if (decision.type == HTTPRetryDecision::Type::FINISH || !ConsumeAndWait(decision)) {
+			return;
+		}
+		if (before_retry) {
+			before_retry();
+		}
+	}
+}
+
+bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision) {
+	D_ASSERT(decision.type != HTTPRetryDecision::Type::FINISH);
+	const bool throttled = decision.type == HTTPRetryDecision::Type::THROTTLED;
 #ifndef DUCKDB_NO_THREADS
 	static constexpr uint64_t THROTTLE_EXTRA_RETRIES = 5;
 #else
@@ -43,10 +72,10 @@ bool HTTPRetryState::TryRetry(RetryType type, const string &retry_after) {
 		uint64_t sleep_amount = (uint64_t)MinValue<double>(backoff_ms, (double)NumericLimits<int64_t>::Maximum());
 		if (throttled) {
 			sleep_amount = MinValue<uint64_t>(sleep_amount, THROTTLE_MAX_BACKOFF_MS);
-			if (!retry_after.empty()) {
+			if (!decision.retry_after.empty()) {
 				// Honor a numeric Retry-After (seconds), capped like the backoff.
 				uint64_t retry_after_s = 0;
-				if (TryCast::Operation<string_t, uint64_t>(string_t(retry_after), retry_after_s)) {
+				if (TryCast::Operation<string_t, uint64_t>(string_t(decision.retry_after), retry_after_s)) {
 					retry_after_s = MinValue<uint64_t>(retry_after_s, THROTTLE_MAX_BACKOFF_MS / 1000);
 					sleep_amount = MaxValue<uint64_t>(sleep_amount, retry_after_s * 1000);
 				}
