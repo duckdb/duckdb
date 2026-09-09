@@ -111,7 +111,6 @@ ScalarFunctionSet JSONFunctions::GetNormalizeFunction() {
 	func.GetSignature().AddParameter("json", LogicalType::JSON());
 
 	set.AddFunction(std::move(func));
-	set.SetFallible();
 
 	return set;
 }
