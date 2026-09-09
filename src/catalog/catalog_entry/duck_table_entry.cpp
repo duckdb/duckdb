@@ -30,6 +30,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
@@ -147,8 +148,9 @@ virtual_column_map_t DuckTableEntry::GetVirtualColumns() const {
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                shared_ptr<DataTable> inherited_storage, shared_ptr<CatalogSet> inherited_triggers)
-    : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
-      triggers(std::move(inherited_triggers)), column_dependency_manager(std::move(info.column_dependency_manager)) {
+    : TableCatalogEntry(catalog, schema, info.Base()), columns(std::move(info.Base().columns)),
+      storage(std::move(inherited_storage)), triggers(std::move(inherited_triggers)),
+      column_dependency_manager(std::move(info.column_dependency_manager)) {
 	if (!triggers) {
 		triggers = make_shared_ptr<CatalogSet>(catalog);
 	}
@@ -240,8 +242,28 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	}
 }
 
+const ColumnList &DuckTableEntry::GetColumns() const {
+	return columns;
+}
+
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, const StorageIndex &column_id) {
-	return storage->GetStatistics(context, column_id);
+	// Get the committed statistics
+	auto stats = storage->GetStatistics(context, column_id);
+	if (!stats) {
+		return nullptr;
+	}
+	// Merge the transaction-local statistics in so the result describes the transaction-visible data.
+	auto &local_storage = LocalStorage::Get(context, ParentCatalog());
+	auto local_table_storage = local_storage.GetStorage(*storage);
+	if (!local_table_storage) {
+		return stats;
+	}
+	auto local_stats = local_table_storage->GetCollection().CopyStats(column_id);
+	if (!local_stats) {
+		return stats;
+	}
+	stats->Merge(*local_stats);
+	return stats;
 }
 
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, column_t column_id) {
@@ -254,7 +276,7 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 		return nullptr;
 	}
 	auto storage_index = GetStorageIndex(ColumnIndex(column_id));
-	return storage->GetStatistics(context, storage_index);
+	return GetStatistics(context, storage_index);
 }
 
 unique_ptr<BlockingSample> DuckTableEntry::GetSample() {
@@ -1156,6 +1178,14 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
 	auto not_null_idx = GetColumnIndex(info.column_name);
+	if (const auto pk = GetPrimaryKey()) {
+		auto &unique = pk->Cast<UniqueConstraint>();
+		for (const auto &pk_index : unique.GetLogicalIndexes(columns)) {
+			if (pk_index == not_null_idx) {
+				throw CatalogException("column %s is in a primary key", info.column_name);
+			}
+		}
+	}
 
 	auto create_info = GetInfo();
 	auto &table_info = create_info->Cast<CreateTableInfo>();

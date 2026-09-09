@@ -94,28 +94,67 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["allow_empty"] = LogicalType::BOOLEAN;
 }
 
-vector<string> MultiFileReader::ParsePaths(const Value &input) {
+OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
+	if (input.IsNull()) {
+		throw ParserException("%s reader cannot take NULL input as parameter", function_name);
+	}
+	if (input.type().id() == LogicalTypeId::VARCHAR) {
+		return OpenFileInfo(StringValue::Get(input));
+	}
+	if (input.type().id() == LogicalTypeId::VARIANT) {
+		// a VARIANT lets every file carry its own set of open options - unpack it to its logical value
+		// a variant never unpacks to another variant, so this recurses at most once
+		return ParseFileEntry(VariantValue::GetValue(input));
+	}
+	if (input.type().id() != LogicalTypeId::STRUCT) {
+		throw ParserException("%s reader can only take a list of strings, structs or variants as a parameter",
+		                      function_name);
+	}
+	// a file specified as a struct holds the path in the "filename" field - every other field is an open option
+	auto &child_types = StructType::GetChildTypes(input.type());
+	auto &children = StructValue::GetChildren(input);
+	OpenFileInfo result;
+	auto extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	bool found_path = false;
+	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+		auto &name = child_types[child_idx].first;
+		auto &child = children[child_idx];
+		if (name == MultiFileReader::FILE_PATH_FIELD) {
+			if (child.IsNull() || child.type().id() != LogicalTypeId::VARCHAR) {
+				throw ParserException("%s reader requires the \"%s\" field of a file struct to be a non-NULL VARCHAR",
+				                      function_name, MultiFileReader::FILE_PATH_FIELD);
+			}
+			result.path = StringValue::Get(child);
+			found_path = true;
+			continue;
+		}
+		if (child.IsNull()) {
+			// a NULL option is an option that was not specified - a list of structs is typed by unifying the
+			// structs of its entries, which fills the options an entry did not specify with NULL
+			continue;
+		}
+		extended_info->SetUserOption(name.GetIdentifierName(), child);
+	}
+	if (!found_path) {
+		throw ParserException("%s reader requires a file struct to have a \"%s\" field holding the path of the file",
+		                      function_name, MultiFileReader::FILE_PATH_FIELD);
+	}
+	result.extended_info = std::move(extended_info);
+	return result;
+}
+
+vector<OpenFileInfo> MultiFileReader::ParseFileList(const Value &input) {
 	if (input.IsNull()) {
 		throw ParserException("%s cannot take NULL list as parameter", function_name);
 	}
-
-	if (input.type().id() == LogicalTypeId::VARCHAR) {
-		return {StringValue::Get(input)};
-	} else if (input.type().id() == LogicalTypeId::LIST) {
-		vector<string> paths;
-		for (auto &val : ListValue::GetChildren(input)) {
-			if (val.IsNull()) {
-				throw ParserException("%s reader cannot take NULL input as parameter", function_name);
-			}
-			if (val.type().id() != LogicalTypeId::VARCHAR) {
-				throw ParserException("%s reader can only take a list of strings as a parameter", function_name);
-			}
-			paths.push_back(StringValue::Get(val));
-		}
-		return paths;
-	} else {
-		throw InternalException("Unsupported type for MultiFileReader::ParsePaths called with: '%s'");
+	if (input.type().id() != LogicalTypeId::LIST) {
+		return {ParseFileEntry(input)};
 	}
+	vector<OpenFileInfo> files;
+	for (auto &val : ListValue::GetChildren(input)) {
+		files.push_back(ParseFileEntry(val));
+	}
+	return files;
 }
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
@@ -127,10 +166,34 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return std::move(res);
 }
 
+shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, vector<OpenFileInfo> files,
+                                                          const FileGlobInput &glob_input) {
+	bool has_open_options = false;
+	for (auto &file : files) {
+		if (file.extended_info) {
+			has_open_options = true;
+			break;
+		}
+	}
+	if (!has_open_options) {
+		// no per-file open options - dispatch to the path based method so any overrides of it are used
+		vector<string> paths;
+		paths.reserve(files.size());
+		for (auto &file : files) {
+			paths.push_back(std::move(file.path));
+		}
+		return CreateFileList(context, paths, glob_input);
+	}
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(files), glob_input);
+	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
+		throw IOException("%s needs at least one file to read", function_name);
+	}
+	return std::move(res);
+}
+
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
                                                           const FileGlobInput &glob_input) {
-	auto paths = ParsePaths(input);
-	return CreateFileList(context, paths, glob_input);
+	return CreateFileList(context, ParseFileList(input), glob_input);
 }
 
 bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
@@ -543,7 +606,14 @@ TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function
 	TableFunctionSet function_set {table_function.name};
 	function_set.AddFunction(table_function);
 	D_ASSERT(!table_function.GetArguments().empty() && table_function.GetArguments()[0] == LogicalType::VARCHAR);
-	table_function.GetArguments()[0] = LogicalType::LIST(LogicalType::VARCHAR);
+	// the list variant takes ANY as its child type: a file is either a path (VARCHAR) or a STRUCT/VARIANT
+	// holding the path together with the options to open the file with
+	auto list_function = table_function;
+	list_function.GetArguments()[0] = LogicalType::LIST(LogicalType::ANY);
+	function_set.AddFunction(std::move(list_function));
+	// a single file can also be passed as a VARIANT - without this overload it would implicitly cast to VARCHAR
+	// and the stringified variant would be read as a path
+	table_function.GetArguments()[0] = LogicalType::VARIANT();
 	function_set.AddFunction(std::move(table_function));
 	return function_set;
 }

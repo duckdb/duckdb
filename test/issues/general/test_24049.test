@@ -1,0 +1,145 @@
+# name: test/issues/general/test_24049.test
+# description: Correlated aggregates preserve their empty-set result
+# group: [general]
+
+query IIII
+WITH t1(id, k) AS (VALUES (11,1), (22,2), (33,3), (44,4)),
+     t2(id, k) AS (VALUES (101,1), (301,3), (302,3), (303,3))
+SELECT id,
+       (SELECT regr_count(1.0, 1.0) FROM t2 WHERE t2.k=t1.k),
+       (SELECT approx_count_distinct(t2.id) FROM t2 WHERE t2.k=t1.k),
+       (SELECT round(entropy(t2.id), 6) FROM t2 WHERE t2.k=t1.k)
+FROM t1
+ORDER BY id;
+----
+11	1	1	0.0
+22	0	0	0.0
+33	3	3	1.584963
+44	0	0	0.0
+
+# Existing NULL-on-empty and count semantics must remain unchanged.
+query III
+WITH outer_t(k) AS (VALUES (1), (2)),
+     inner_t(k, v) AS (VALUES (1, 10))
+SELECT k,
+       (SELECT countif(v > 0) FROM inner_t WHERE inner_t.k=outer_t.k),
+       (SELECT sum(v) FROM inner_t WHERE inner_t.k=outer_t.k)
+FROM outer_t
+ORDER BY k;
+----
+1	1	10
+2	NULL	NULL
+
+# State-export aggregates retain their bound state type and empty result.
+query II
+WITH outer_t(k) AS (VALUES (1), (2)),
+     inner_t(k, v) AS (VALUES (1, 10))
+SELECT k,
+       finalize((SELECT count(*) EXPORT_STATE
+                 FROM inner_t WHERE inner_t.k=outer_t.k))
+FROM outer_t
+ORDER BY k;
+----
+1	1
+2	0
+
+# Rewrite multiple aggregate references inside a single scalar-subquery expression.
+query II
+WITH outer_t(k) AS (VALUES (1), (2)),
+     inner_t(k, v) AS (VALUES (1, 10))
+SELECT k,
+       (SELECT row(regr_count(v, v), approx_count_distinct(v))
+        FROM inner_t WHERE inner_t.k=outer_t.k)
+FROM outer_t
+ORDER BY k;
+----
+1	(1, 1)
+2	(0, 0)
+
+# DISTINCT, FILTER, and an outer expression retain the empty aggregate value.
+query II
+WITH outer_t(k) AS (VALUES (1), (2)),
+     inner_t(k, v) AS (VALUES (1, 10))
+SELECT k,
+       5 + (SELECT approx_count_distinct(DISTINCT v) FILTER (WHERE v > 0)
+            FROM inner_t WHERE inner_t.k=outer_t.k)
+FROM outer_t
+ORDER BY k;
+----
+1	6
+2	5
+
+# A NULL correlation key can be a present group, so the aggregate result and join key are not safe presence markers.
+query II
+WITH outer_t(k) AS (VALUES (NULL::INTEGER), (2)),
+     inner_t(k, v) AS (VALUES (NULL::INTEGER, 10))
+SELECT k IS NULL,
+       (SELECT approx_count_distinct(v)
+        FROM inner_t WHERE inner_t.k IS NOT DISTINCT FROM outer_t.k)
+FROM outer_t
+ORDER BY k NULLS FIRST;
+----
+true	1
+false	0
+
+# A present group whose aggregate filter rejects every row is not a missing group.
+query III
+WITH outer_t(k) AS (VALUES (1), (2)),
+     inner_t(k, v) AS (VALUES (1, 10))
+SELECT k,
+       (SELECT regr_count(v, v) FILTER (WHERE false)
+        FROM inner_t WHERE inner_t.k=outer_t.k),
+       (SELECT approx_count_distinct(v) FILTER (WHERE false)
+        FROM inner_t WHERE inner_t.k=outer_t.k)
+FROM outer_t
+ORDER BY k;
+----
+1	0	0
+2	0	0
+
+# A LIST correlation key exercises the perform_delim=false path where correlated
+# values are carried through the first aggregation rather than the deliminator.
+query II
+WITH outer_t(k) AS (VALUES ([1]), ([2])),
+     inner_t(k, v) AS (VALUES ([1], 10))
+SELECT k,
+       (SELECT approx_count_distinct(v) FROM inner_t WHERE inner_t.k=outer_t.k)
+FROM outer_t
+ORDER BY k;
+----
+[1]	1
+[2]	0
+
+# GROUP BY and HAVING can suppress the aggregate row; that remains NULL rather than an empty-input result.
+query III
+WITH outer_t(k) AS (VALUES (1), (2)),
+     inner_t(k, v) AS (VALUES (1, 10))
+SELECT k,
+       (SELECT regr_count(v, v)
+        FROM inner_t WHERE inner_t.k=outer_t.k GROUP BY inner_t.k),
+       (SELECT approx_count_distinct(v)
+        FROM inner_t WHERE inner_t.k=outer_t.k HAVING false)
+FROM outer_t
+ORDER BY k;
+----
+1	1	NULL
+2	NULL	NULL
+
+# The LIST path also applies the replacement in HAVING and retains ungrouped-aggregate semantics under an explicit GROUP BY ().
+query III
+WITH outer_t(k) AS (VALUES ([1]), ([2])),
+     inner_t(k, v) AS (VALUES ([1], 10))
+SELECT k,
+       (SELECT regr_count(v, v)
+        FROM inner_t
+        WHERE inner_t.k = outer_t.k
+        HAVING regr_count(v, v) = 0),
+       (SELECT regr_count(v, v)
+        FROM inner_t
+        WHERE inner_t.k = outer_t.k
+        GROUP BY ())
+FROM outer_t
+ORDER BY k;
+----
+[1]	NULL	1
+[2]	0	0

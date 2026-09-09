@@ -8,6 +8,9 @@ unzip data/storage/corrupt/alp_corrupt_header_undercount.db.gz {TEST_DIR}/alp_co
 
 load {TEST_DIR}/alp_corrupt_header_undercount.db readonly
 
+statement ok
+USE alp_corrupt_header_undercount
+
 query I
 SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALP';
 ----

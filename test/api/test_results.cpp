@@ -3,8 +3,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp"
-#include "duckdb/execution/operator/helper/physical_buffered_collector.hpp"
+#include "duckdb/execution/operator/helper/physical_result_sink.hpp"
 #include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
@@ -160,12 +159,14 @@ TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 	// now insert one non-numeric value
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello')"));
 
-	// now create a streaming result
+	// now create a streaming result: the bad row sits in a later chunk, so the error surfaces on the drain
 	auto result = con.SendQuery("SELECT CAST(v AS INTEGER) FROM strings");
+	while (result->Fetch()) {
+	}
 	REQUIRE_FAIL(result);
 }
 
-TEST_CASE("Buffered collectors reject results after the connection closes", "[api]") {
+TEST_CASE("Streaming result sinks reject results after the connection closes", "[api]") {
 	DuckDB db(nullptr);
 
 	auto test_collector = [&](bool batched) {
@@ -180,12 +181,9 @@ TEST_CASE("Buffered collectors reject results after the connection closes", "[ap
 		auto &root = data.physical_plan->Make<PhysicalDummyScan>(data.types, 0);
 		data.physical_plan->SetRoot(root);
 
-		unique_ptr<PhysicalResultCollector> collector;
-		if (batched) {
-			collector = make_uniq<PhysicalBufferedBatchCollector>(*data.physical_plan, data);
-		} else {
-			collector = make_uniq<PhysicalBufferedCollector>(*data.physical_plan, data, false);
-		}
+		const auto ordering = batched ? ResultOrdering::BATCH_INDEX_ORDERED : ResultOrdering::SOURCE_ORDERED;
+		unique_ptr<PhysicalResultCollector> collector =
+		    make_uniq<PhysicalResultSink>(*data.physical_plan, data, ResultLifetime::DRAINING, ordering);
 		auto sink_state = collector->GetGlobalSinkState(*connection->context);
 
 		connection.reset();
