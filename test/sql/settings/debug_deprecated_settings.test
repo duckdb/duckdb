@@ -1,0 +1,28 @@
+# name: test/sql/settings/debug_deprecated_settings.test
+# description: Check that debug and deprecated settings are mutually exclusive
+# group: [settings]
+
+query I
+SELECT list_count(
+    list_intersect(
+        (SELECT list(name) FROM duckdb_settings(debug := true)),
+        (SELECT list(name) FROM duckdb_settings(debug := false))
+    )
+);
+----
+0
+
+query I
+SELECT list_count(
+    list_intersect(
+        (SELECT list(name) FROM duckdb_settings(deprecated := true)),
+        (SELECT list(name) FROM duckdb_settings(deprecated := false))
+    )
+);
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_settings(debug := true, deprecated := true);
+----
+0
