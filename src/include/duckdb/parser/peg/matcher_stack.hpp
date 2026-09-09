@@ -23,15 +23,13 @@ class MatchStack;
 struct MatchStateReference {
 	explicit MatchStateReference(MatchState &state_p) : external_state(state_p) {
 	}
-	MatchStateReference(match_frame_index_t frame_index_p, idx_t frame_offset_p)
-	    : frame_index(frame_index_p), frame_offset(frame_offset_p) {
+	explicit MatchStateReference(idx_t frame_offset_p) : frame_offset(frame_offset_p) {
 	}
 
-	MatchState &Get(MatchStack &stack);
+	MatchState &Get(MatchStack &stack, match_frame_index_t frame_index);
 
 private:
 	optional_ptr<MatchState> external_state;
-	optional_idx frame_index;
 	idx_t frame_offset = 0;
 };
 
@@ -55,7 +53,7 @@ public:
 
 public:
 	bool IsInitialized() const;
-	MatchState &GetMatchState(MatchStack &stack);
+	MatchState &GetMatchState(MatchStack &stack, match_frame_index_t frame_index);
 
 public:
 	const Matcher &matcher;
@@ -86,10 +84,10 @@ private:
 	void SetActiveFrameSegment(idx_t segment_index);
 	data_ptr_t GetFrameSlot(match_frame_index_t frame_index) const;
 	MatchStackFrame &GetFrame(match_frame_index_t frame_index) const;
-	MatchStateReference CreateStateReference(MatchState &state, optional_idx parent_frame) const;
+	MatchStateReference CreateStateReference(MatchState &state) const;
 	MatcherResult ExecuteAtomicMatcher(MatchInput input);
 	void DestroyTopFrame();
-	void PushFrame(MatchInput input, optional_idx parent_frame = optional_idx());
+	void PushFrame(MatchInput input);
 	void InitializeFrame(MatchStackFrame &frame);
 	//! Returns true when the frame has completed.
 	bool ExecuteFrame(MatchStackFrame &frame);

@@ -23,14 +23,13 @@ private:
 
 } // namespace
 
-MatchState &MatchStateReference::Get(MatchStack &stack) {
-	if (!frame_index.IsValid()) {
-		D_ASSERT(external_state);
+MatchState &MatchStateReference::Get(MatchStack &stack, match_frame_index_t frame_index) {
+	if (external_state) {
 		return *external_state;
 	}
-	D_ASSERT(!external_state);
+	D_ASSERT(frame_index > 0);
 	D_ASSERT(frame_offset < MatchStack::FrameSlotSize());
-	auto frame_slot = stack.GetFrameSlot(frame_index.GetIndex());
+	auto frame_slot = stack.GetFrameSlot(frame_index - 1);
 	return *reinterpret_cast<MatchState *>(frame_slot + frame_offset);
 }
 
@@ -96,13 +95,13 @@ MatchStackFrame &MatchStack::GetFrame(match_frame_index_t frame_index) const {
 	return *reinterpret_cast<MatchStackFrame *>(GetFrameSlot(frame_index));
 }
 
-MatchStateReference MatchStack::CreateStateReference(MatchState &state, optional_idx parent_frame) const {
-	if (parent_frame.IsValid()) {
-		auto frame_slot = GetFrameSlot(parent_frame.GetIndex());
+MatchStateReference MatchStack::CreateStateReference(MatchState &state) const {
+	if (frame_count > 0) {
+		auto frame_slot = GetFrameSlot(frame_count - 1);
 		auto state_address = reinterpret_cast<uintptr_t>(&state);
 		auto slot_address = reinterpret_cast<uintptr_t>(frame_slot);
 		if (state_address >= slot_address && state_address < slot_address + FrameSlotSize()) {
-			return MatchStateReference(parent_frame.GetIndex(), state_address - slot_address);
+			return MatchStateReference(state_address - slot_address);
 		}
 	}
 	return MatchStateReference(state);
@@ -155,8 +154,8 @@ bool MatchStackFrame::IsInitialized() const {
 	return process || result;
 }
 
-MatchState &MatchStackFrame::GetMatchState(MatchStack &stack) {
-	return match_state.Get(stack);
+MatchState &MatchStackFrame::GetMatchState(MatchStack &stack, match_frame_index_t frame_index) {
+	return match_state.Get(stack, frame_index);
 }
 
 MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
@@ -178,7 +177,7 @@ MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
 	return result;
 }
 
-void MatchStack::PushFrame(MatchInput input, optional_idx parent_frame) {
+void MatchStack::PushFrame(MatchInput input) {
 	input.state.rule = input.matcher.GetRule();
 	auto frame_index = frame_count;
 	auto segment_index = frame_index / FRAME_SEGMENT_CAPACITY;
@@ -187,7 +186,7 @@ void MatchStack::PushFrame(MatchInput input, optional_idx parent_frame) {
 	}
 	auto frame_slot = GetFrameSlot(frame_index);
 	auto process_storage = frame_slot + FrameHeaderSize();
-	auto state_reference = CreateStateReference(input.state, parent_frame);
+	auto state_reference = CreateStateReference(input.state);
 	new (frame_slot) MatchStackFrame(input.matcher, state_reference, process_storage, BuiltinMatchProcessSize(),
 	                                 BuiltinMatchProcessAlignment());
 	frame_count++;
@@ -195,7 +194,7 @@ void MatchStack::PushFrame(MatchInput input, optional_idx parent_frame) {
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 	auto &matcher = frame.matcher;
-	auto &state = frame.GetMatchState(*this);
+	auto &state = frame.GetMatchState(*this, frame_count - 1);
 	if (PackratMatchState::IsEnabled(matcher, state)) {
 		auto cached_result = frame.packrat_state.TryLoadCachedResult(matcher, state);
 		if (cached_result) {
@@ -227,7 +226,7 @@ bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 		frame.child_result = ExecuteAtomicMatcher(*child);
 		return false;
 	}
-	PushFrame(*child, optional_idx(frame_count - 1));
+	PushFrame(*child);
 	return false;
 }
 
@@ -237,7 +236,7 @@ MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
 	}
 	auto result = *frame.result;
 	auto &matcher = frame.matcher;
-	auto &state = frame.GetMatchState(*this);
+	auto &state = frame.GetMatchState(*this, frame_count - 1);
 	frame.packrat_state.StoreResult(matcher, state, result);
 	return result;
 }
