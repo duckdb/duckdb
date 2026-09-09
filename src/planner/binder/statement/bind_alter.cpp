@@ -288,7 +288,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	}
 	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 
-	if (stmt.info->IsAddPrimaryKey()) {
+	if (stmt.info->IsAddUniqueConstraint()) {
 		return BindAlterAddIndex(result, *entry, std::move(stmt.info));
 	}
 
