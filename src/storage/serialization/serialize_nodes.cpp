@@ -431,6 +431,7 @@ void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(107, "allow_empty", allow_empty);
 	serializer.WritePropertyWithDefault<idx_t>(108, "maximum_sample_files", maximum_sample_files, 1);
 	serializer.WritePropertyWithDefault<bool>(109, "sampled_schema_is_union", sampled_schema_is_union, true);
+	serializer.WritePropertyWithDefault<optional_idx>(110, "hive_sample_size", hive_sample_size, optional_idx());
 }
 
 MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
@@ -445,6 +446,7 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(107, "allow_empty", result.allow_empty);
 	deserializer.ReadPropertyWithExplicitDefault<idx_t>(108, "maximum_sample_files", result.maximum_sample_files, 1);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(109, "sampled_schema_is_union", result.sampled_schema_is_union, true);
+	deserializer.ReadPropertyWithExplicitDefault<optional_idx>(110, "hive_sample_size", result.hive_sample_size, optional_idx());
 	return result;
 }
 
