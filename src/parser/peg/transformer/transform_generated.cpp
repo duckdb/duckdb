@@ -11012,7 +11012,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNameListInterna
 }
 
 void PEGTransformerFactory::RegisterGenerated() {
-	static const TransformRule builtin_transform_rules[] = {
+	static const TransformFinalizeRule builtin_transform_rules[] = {
 	    {"AlterStatement", &PEGTransformerFactory::TransformAlterStatementInternal},
 	    {"AlterOptions", &PEGTransformerFactory::TransformAlterOptionsInternal},
 	    {"AlterTableStmt", &PEGTransformerFactory::TransformAlterTableStmtInternal},
@@ -12038,7 +12038,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"NameList", &PEGTransformerFactory::TransformNameListInternal},
 	};
 	for (const auto &rule : builtin_transform_rules) {
-		grammar.SetTransform(rule.name, rule.transform);
+		Register(rule.name, rule.finalize);
 	}
 }
 

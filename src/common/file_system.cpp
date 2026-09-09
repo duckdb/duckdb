@@ -573,11 +573,11 @@ bool FileSystem::IsDirectory(const OpenFileInfo &info) {
 	if (!info.extended_info) {
 		return false;
 	}
-	auto entry = info.extended_info->options.find("type");
-	if (entry == info.extended_info->options.end()) {
+	string type;
+	if (!info.extended_info->TryGetOption("type", type)) {
 		return false;
 	}
-	return StringValue::Get(entry->second) == "directory";
+	return type == "directory";
 }
 
 bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,

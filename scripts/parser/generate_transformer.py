@@ -335,7 +335,7 @@ def _emit_string_result_extraction(var_name, source_expr, result_type="string"):
 def generate_choice_internal_full(rule_name, return_type, return_by_value):
     """
     Fully auto-generated Internal for a pure-transformer choice rule.
-    Static class member matching transform_function_t for the static TransformRule table.
+    Static class member matching transform_finalize_t for the static TransformFinalizeRule table.
     """
     return (
         f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
@@ -411,7 +411,7 @@ def generate_choice_internal_with_default_alternatives(rule_name, return_type, r
 def generate_choice_internal_with_body(rule_name, return_type, return_by_value):
     """
     Internal for a choice rule that has identifier-override alternatives.
-    Static class member matching transform_function_t for the static TransformRule table.
+    Static class member matching transform_finalize_t for the static TransformFinalizeRule table.
     """
     return (
         f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
@@ -872,7 +872,7 @@ def generate_choice_body_stub(rule_name, return_type):
 def generate_sequence_internal(rule_name, return_type, return_by_value, rule_types, elements):
     """
     Generate the Internal static class member for a sequence rule.
-    Returns unique_ptr<TransformResultValue> matching transform_function_t for the static table.
+    Returns unique_ptr<TransformResultValue> matching transform_finalize_t for the static table.
     Extracts typed args from parse_result, calls the hand-written body, then boxes via TypedTransformResult.
     """
     semantic = [e for e in elements if not e.skip]
@@ -1165,11 +1165,11 @@ def generate_table_and_register(all_registrations):
     entries = "".join("\t\t" + e.lstrip() for e in all_registrations)
     return (
         "void PEGTransformerFactory::RegisterGenerated() {\n"
-        + "\tstatic const TransformRule builtin_transform_rules[] = {\n"
+        + "\tstatic const TransformFinalizeRule builtin_transform_rules[] = {\n"
         + entries
         + "\t};\n"
         + "\tfor (const auto &rule : builtin_transform_rules) {\n"
-        + "\t\tgrammar.SetTransform(rule.name, rule.transform);\n"
+        + "\t\tRegister(rule.name, rule.finalize);\n"
         + "\t}\n"
         + "}\n"
     )
