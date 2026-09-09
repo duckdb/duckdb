@@ -18,6 +18,7 @@ class BufferManager;
 class CommitDropState;
 class DuckTransaction;
 class StorageCommitState;
+struct LocalStorageCommitState;
 class WriteAheadLog;
 struct UndoBufferPointer;
 struct CommitInfo;
@@ -59,9 +60,11 @@ public:
 	void WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state);
 	//! Iterate the undo buffer and commit each entry. Deferred drop side effects accumulate in
 	//! info.drop_state so they can be applied after the commit chain succeeds.
-	void Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info);
+	void Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info,
+	            optional_ptr<LocalStorageCommitState> local_commit_state);
 	//! Revert committed changes made in the UndoBuffer up until the currently committed state
-	void RevertCommit(UndoBuffer::IteratorState &iterator_state, transaction_t transaction_id);
+	void RevertCommit(UndoBuffer::IteratorState &iterator_state, transaction_t transaction_id,
+	                  optional_ptr<LocalStorageCommitState> local_commit_state);
 	//! Rollback the changes made in this UndoBuffer: should be called on
 	//! rollback
 	void Rollback();

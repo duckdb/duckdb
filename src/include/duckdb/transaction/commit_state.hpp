@@ -24,6 +24,7 @@ class DataChunk;
 class DuckTransaction;
 class WriteAheadLog;
 class ClientContext;
+struct LocalStorageCommitState;
 
 struct DataTableInfo;
 class DataTable;
@@ -87,7 +88,8 @@ private:
 class CommitState {
 public:
 	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id,
-	                     ActiveTransactionState transaction_state, CommitMode commit_mode);
+	                     ActiveTransactionState transaction_state, CommitMode commit_mode,
+	                     optional_ptr<LocalStorageCommitState> local_commit_state = nullptr);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info);
@@ -103,6 +105,7 @@ private:
 private:
 	DuckTransaction &transaction;
 	transaction_t commit_id;
+	optional_ptr<LocalStorageCommitState> local_commit_state;
 	IndexDataRemover index_data_remover;
 };
 
