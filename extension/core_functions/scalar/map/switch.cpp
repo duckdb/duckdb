@@ -154,13 +154,17 @@ ScalarFunctionSet SwitchFun::GetFunctions() {
 	auto val_type = LogicalType::TEMPLATE("V");
 	ScalarFunctionSet func_set;
 
-	vector<vector<LogicalType>> function_variations = {{key_type, LogicalType::MAP(key_type, val_type)},
-	                                                   {key_type, LogicalType::MAP(key_type, val_type), val_type},
-	                                                   {LogicalType::MAP(key_type, val_type), val_type},
-	                                                   {LogicalType::MAP(key_type, val_type)}};
+	vector<vector<pair<Identifier, LogicalType>>> function_variations = {
+	    {{"key", key_type}, {"map", LogicalType::MAP(key_type, val_type)}},
+	    {{"key", key_type}, {"map", LogicalType::MAP(key_type, val_type)}, {"value", val_type}},
+	    {{"map", LogicalType::MAP(key_type, val_type)}, {"value", val_type}},
+	    {{"map", LogicalType::MAP(key_type, val_type)}}};
 
 	for (const auto &variation : function_variations) {
-		auto switch_expression = ScalarFunction(variation, val_type, nullptr, SwitchBindReturnType, nullptr);
+		auto switch_expression = ScalarFunction({}, val_type, nullptr, SwitchBindReturnType, nullptr);
+		for (const auto &param : variation) {
+			switch_expression.GetSignature().AddParameter(param.first, param.second);
+		}
 		switch_expression.SetBindExpressionCallback(SwitchBindExpression);
 		func_set.AddFunction(std::move(switch_expression));
 	}
