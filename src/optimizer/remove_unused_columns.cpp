@@ -1136,19 +1136,25 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 			filter_expr = std::move(column_ref);
 		}
 		filter_expressions.push_back(std::move(filter_expr));
-		//! Now visit the filter to add to the 'column_references'
-		VisitExpression(&filter_expressions.back());
 	}
+	//! Now visit the filters to add to the 'column_references'
+	//! These references point into the list, so it can only be visited once it is complete
+	for (auto &filter_expression : filter_expressions) {
+		VisitExpression(&filter_expression);
+	}
+	//! The 'column_references' hold references to these expressions, so they have to stay alive
+	vector<unique_ptr<Expression>> multi_filter_columns;
 	for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
 		const auto &expression_filter = ExpressionFilter::GetExpressionFilter(*filter, "RemoveUnusedColumns::VisitGet");
 		for (const auto &filter_idx : expression_filter.column_indexes) {
 			const auto &col_id = get.GetColumnIndex(filter_idx);
 			auto column_type = get.GetColumnType(col_id);
 			ColumnBinding filter_binding(get.table_index, filter_idx);
-			unique_ptr<Expression> column_ref =
-			    make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
-			VisitExpression(&column_ref);
+			multi_filter_columns.push_back(make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding));
 		}
+	}
+	for (auto &column_ref : multi_filter_columns) {
+		VisitExpression(&column_ref);
 	}
 
 	//! Check with the LogicalGet whether pushdown-extract is supported
