@@ -518,7 +518,8 @@ VersionCompressionResult ChunkVectorInfo::CompressVersionIds(VisibilityBound low
 					continue;
 				}
 				if (deleted[i] >= lowest_visibility_bound) {
-					// deleted, but the delete is not yet visible to all transactions
+					// deleted, but the delete is not yet visible to all transactions - the ids can
+					// compress once the lowest visibility bound advances past the delete id
 					deletes_pending = true;
 					if (!IsCommitted(deleted[i])) {
 						// the delete is not even committed yet - the array must be kept

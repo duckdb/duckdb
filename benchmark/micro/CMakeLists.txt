@@ -6,6 +6,7 @@ add_library(
   bulkupdate.cpp
   cast.cpp
   executor.cpp
+  group_commit.cpp
   in.cpp
   storage.cpp
   string_serialize.cpp)

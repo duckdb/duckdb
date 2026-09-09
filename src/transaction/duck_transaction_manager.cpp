@@ -1,4 +1,6 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+
+#include <chrono>
 #include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/main/client_data.hpp"
@@ -20,6 +22,7 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -63,6 +66,10 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 }
 
 DuckTransactionManager::~DuckTransactionManager() {
+	// a committing thread keeps the AttachedDatabase alive until it leaves SyncUpTo, so no commit
+	// can still be pending here - unless a sync failed, which leaves its entry behind and
+	// invalidates the database
+	D_ASSERT(unsynced_commits.empty() || durability_failed);
 }
 
 DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
@@ -89,14 +96,17 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the start time and transaction ID of this transaction
 	transaction_t start_time = current_start_timestamp++;
 	transaction_t transaction_id = current_transaction_id++;
-	// the transaction sees its own writes, and every commit before its start time
-	SnapshotView view(transaction_id, VisibilityBound::Before(start_time));
+	// snapshots must not observe commits that are not yet durable, nor a newer catalog version
+	auto caps = GetDurabilityCaps();
+	// the transaction sees its own writes, and every durable commit before its start time
+	SnapshotView view(transaction_id, VisibilityBound::Min(VisibilityBound::Before(start_time), caps.visibility_bound));
+	auto catalog_version = MinValue<idx_t>(last_committed_version, caps.catalog_version);
 	if (active_transactions.empty()) {
 		lowest_visibility_bound = view.visibility_bound;
 	}
 
 	// create the actual transaction
-	auto transaction = make_uniq<DuckTransaction>(*this, context, start_time, view, last_committed_version);
+	auto transaction = make_uniq<DuckTransaction>(*this, context, start_time, view, catalog_version);
 	auto &transaction_ref = *transaction;
 
 	// store it in the set of active transactions
@@ -123,6 +133,10 @@ DuckTransactionManager::CheckpointDecision::~CheckpointDecision() {
 }
 
 bool DuckTransactionManager::HasOtherTransactions(DuckTransaction &transaction) {
+	if (HasUnsyncedCommits()) {
+		// commits pending durability behave like active transactions (see UnsyncedCommit)
+		return true;
+	}
 	for (auto &active_transaction : active_transactions) {
 		if (!RefersToSameObject(*active_transaction, transaction)) {
 			return true;
@@ -166,8 +180,7 @@ DuckTransactionManager::GetCheckpointType(DuckTransaction &transaction, const Un
 	bool has_other_transactions = HasOtherTransactions(transaction);
 	if (has_other_transactions) {
 		if (undo_properties.has_updates || undo_properties.has_dropped_entries) {
-			// if we have made updates/catalog changes in this transaction we cannot checkpoint
-			// in the presence of other transactions
+			// other transactions - or snapshots bounded below pending commits - may need older data
 			string other_transactions;
 			for (auto &active_transaction : active_transactions) {
 				if (!RefersToSameObject(*active_transaction, transaction)) {
@@ -177,22 +190,17 @@ DuckTransactionManager::GetCheckpointType(DuckTransaction &transaction, const Un
 					other_transactions += "[" + to_string(active_transaction->GetTransactionId()) + "]";
 				}
 			}
-			if (!other_transactions.empty()) {
-				// there are other transactions!
-				// these active transactions might need data from BEFORE this transaction
-				// we might need to change our strategy here based on what changes THIS transaction has made
-				if (undo_properties.has_dropped_entries) {
-					// this transaction has changed the catalog - we cannot checkpoint
-					return CheckpointDecision(
-					    "Transaction has dropped catalog entries and there are other transactions "
-					    "active\nActive transactions: " +
-					    other_transactions);
-				}
-				// this transaction has performed updates - we cannot checkpoint
-				return CheckpointDecision(
-				    "Transaction has performed updates and there are other transactions active\nActive transactions: " +
-				    other_transactions);
+			if (other_transactions.empty()) {
+				other_transactions = "[commits pending durability]";
 			}
+			if (undo_properties.has_dropped_entries) {
+				return CheckpointDecision("Transaction has dropped catalog entries and there are other transactions "
+				                          "active\nActive transactions: " +
+				                          other_transactions);
+			}
+			return CheckpointDecision(
+			    "Transaction has performed updates and there are other transactions active\nActive transactions: " +
+			    other_transactions);
 		}
 		// otherwise - we need to do a concurrent checkpoint
 		checkpoint_type = CheckpointType::CONCURRENT_CHECKPOINT;
@@ -209,6 +217,11 @@ DuckTransactionManager::GetCheckpointType(DuckTransaction &transaction, const Un
 void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	if (ValidChecker::IsInvalidated(db)) {
 		throw IOException("%s", ValidChecker::InvalidatedMessage(db));
+	}
+	// drain pending commits here, where the query is still cancellable: inside the checkpoint an
+	// exception would invalidate the database. The authoritative drain under the WAL lock follows
+	if (!db.IsSystem() && db.HasStorageManager() && !db.GetStorageManager().InMemory()) {
+		WaitForDurability(context);
 	}
 	auto &storage_manager = db.GetStorageManager();
 	auto current = Transaction::TryGet(context, db);
@@ -278,6 +291,113 @@ transaction_t DuckTransactionManager::GetCommitTimestamp() {
 	return current_start_timestamp++;
 }
 
+bool DuckTransactionManager::HasUnsyncedCommits() {
+	lock_guard<mutex> guard(durability_lock);
+	return !unsynced_commits.empty();
+}
+
+DuckTransactionManager::DurabilityCaps DuckTransactionManager::GetDurabilityCaps() {
+	lock_guard<mutex> guard(durability_lock);
+	DurabilityCaps caps;
+	for (auto &entry : unsynced_commits) {
+		if (entry.commit_id <= durable_commit_bound) {
+			// durable already - its own thread has not removed the entry yet
+			continue;
+		}
+		// the first commit that is not durable: a snapshot stops below it, and the catalog version
+		// recorded just before it published is exactly the one that snapshot observes
+		caps.visibility_bound = VisibilityBound::Before(entry.commit_id);
+		caps.catalog_version = entry.catalog_version;
+		break;
+	}
+	return caps;
+}
+
+void DuckTransactionManager::RegisterUnsyncedCommit(transaction_t commit_id, idx_t wal_offset, idx_t catalog_version) {
+	lock_guard<mutex> guard(durability_lock);
+	if (unsynced_commits.empty()) {
+		// nothing pending: everything below this commit is durable
+		durable_commit_bound = commit_id - 1;
+	}
+	// the front entry may sit at or below the bound, but a new commit always registers above it
+	D_ASSERT(wal_offset > 0);
+	D_ASSERT(commit_id > durable_commit_bound);
+	D_ASSERT(unsynced_commits.empty() || unsynced_commits.back().wal_offset <= wal_offset);
+	unsynced_commits.push_back(UnsyncedCommit {commit_id, wal_offset, catalog_version});
+}
+
+bool DuckTransactionManager::FinishCommitDurability(transaction_t commit_id, idx_t synced_offset) {
+	unique_lock<mutex> guard(durability_lock);
+	// advance over every commit the sync covered, including ones whose threads have not woken up
+	// yet, so that an ack implies observability; then drop this thread's entry
+	auto new_bound = durable_commit_bound;
+	for (auto it = unsynced_commits.begin(); it != unsynced_commits.end(); it++) {
+		if (it->wal_offset > synced_offset) {
+			break;
+		}
+		new_bound = MaxValue<transaction_t>(new_bound, it->commit_id);
+		if (it->commit_id == commit_id) {
+			unsynced_commits.erase(it);
+			break;
+		}
+	}
+	bool advanced = new_bound > durable_commit_bound;
+	durable_commit_bound = new_bound;
+#ifdef DEBUG
+	// offsets are registered in flush order, so the walk always reaches this thread's entry
+	for (auto &entry : unsynced_commits) {
+		D_ASSERT(entry.commit_id != commit_id);
+	}
+#endif
+	if (unsynced_commits.empty()) {
+		// notify without holding the lock, so waiters do not wake up into a held mutex
+		guard.unlock();
+		durability_cv.notify_all();
+	}
+	return advanced;
+}
+
+void DuckTransactionManager::GarbageCollectDurableTransactions() {
+	// composed and queued under the transaction lock, as cleanups must run in commit order
+	lock_guard<mutex> t_lock(transaction_lock);
+	auto cleanup_info = CreateCleanupInfo();
+	UpdateLowestVisibilityBound(nullptr);
+	cleanup_info->lowest_visibility_bound = LowestVisibilityBound();
+	SweepCommittedTransactions(*cleanup_info);
+	QueueCleanup(std::move(cleanup_info));
+}
+
+void DuckTransactionManager::MarkDurabilityFailed() {
+	{
+		lock_guard<mutex> guard(durability_lock);
+		durability_failed = true;
+	}
+	durability_cv.notify_all();
+}
+
+void DuckTransactionManager::WaitForDurability(optional_ptr<ClientContext> context) {
+	unique_lock<mutex> guard(durability_lock);
+	auto drained = [&]() {
+		return unsynced_commits.empty() || durability_failed;
+	};
+	while (!drained()) {
+		if (!context) {
+			// nothing to cancel (shutdown, or inside a checkpoint where throwing would invalidate)
+			durability_cv.wait(guard);
+			continue;
+		}
+		// this waits on fsyncs issued by other connections, so poll rather than block outright
+		if (!durability_cv.wait_for(guard, std::chrono::milliseconds(10), drained)) {
+			guard.unlock();
+			context->InterruptCheck();
+			guard.lock();
+		}
+	}
+	if (durability_failed && !unsynced_commits.empty()) {
+		throw IOException("Cannot wait for WAL durability: a WAL sync has failed");
+	}
+}
+
 void DuckTransactionManager::CleanupTransactions() {
 	lock_guard<mutex> c_lock(cleanup_lock);
 	while (true) {
@@ -317,6 +437,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	auto checkpoint_decision = CanCheckpoint(transaction, lock, undo_properties);
 	unique_lock<mutex> held_wal_lock;
 	unique_ptr<StorageCommitState> commit_state;
+	optional_ptr<WriteAheadLog> commit_wal;
+	bool commit_registered = false;
 	bool skip_wal_write_due_to_checkpoint = false;
 	bool wal_written = false;
 	if (checkpoint_decision.can_checkpoint) {
@@ -384,7 +506,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	// commit the UndoBuffer of the transaction
 	if (!error.HasError()) {
-		if (HasOtherTransactions(transaction)) {
+		if (HasOtherTransactions(transaction) || wal_written) {
+			// bounded snapshots can still start below a WAL-written commit and need its old state
 			info.active_transactions = ActiveTransactionState::OTHER_TRANSACTIONS;
 		} else {
 			info.active_transactions = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
@@ -408,27 +531,48 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	} else {
 		DUCKDB_LOG(context, TransactionLogType, db, "Commit", info.commit_id);
 		last_commit = info.commit_id;
+		if (wal_written && info.wal_sync_offset > 0) {
+			// published but not yet durable: track it until the sync below. No flush marker
+			// (offset 0) means nothing reached the WAL, so there is nothing to wait for
+			commit_wal = db.GetStorageManager().GetWAL();
+			if (commit_wal) {
+				// registration precedes this commit's own catalog-version bump below
+				RegisterUnsyncedCommit(info.commit_id, info.wal_sync_offset, last_committed_version);
+				commit_registered = true;
+			}
+		}
 
 		// check if catalog changes were made
 		if (transaction.catalog_version >= TRANSACTION_ID_START) {
 			transaction.catalog_version = ++last_committed_version;
 		}
 	}
-	OnCommitCheckpointDecision(checkpoint_decision, transaction);
+	try {
+		OnCommitCheckpointDecision(checkpoint_decision, transaction);
 
-	if (!checkpoint_decision.can_checkpoint && lock) {
-		// we won't checkpoint after all due to an error during commit: unlock the checkpoint lock again
-		skip_wal_write_due_to_checkpoint = false;
-		lock.reset();
+		if (!checkpoint_decision.can_checkpoint && lock) {
+			// we won't checkpoint after all due to an error during commit: unlock the checkpoint lock again
+			skip_wal_write_due_to_checkpoint = false;
+			lock.reset();
+		}
+
+		// commit successful: remove the transaction id from the list of active transactions
+		// potentially resulting in garbage collection
+		bool store_transaction = undo_properties.has_updates || undo_properties.has_index_deletes ||
+		                         undo_properties.has_catalog_changes || error.HasError();
+
+		// Remove the transaction from the list of active transactions and gather cleanup information.
+		QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
+	} catch (...) {
+		if (commit_registered) {
+			// the registered commit can never be finished: its entry would pin the visibility bound
+			// and hang every checkpoint, so invalidate rather than leave a healthy-looking database
+			MarkDurabilityFailed();
+			ValidChecker::Invalidate(db,
+			                         "Failed to finish committing a transaction whose WAL write is not yet durable");
+		}
+		throw;
 	}
-
-	// commit successful: remove the transaction id from the list of active transactions
-	// potentially resulting in garbage collection
-	bool store_transaction = undo_properties.has_updates || undo_properties.has_index_deletes ||
-	                         undo_properties.has_catalog_changes || error.HasError();
-
-	// Remove the transaction from the list of active transactions and gather cleanup information.
-	QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
 
 	// We do not need to hold the transaction lock during cleanup of transactions,
 	// as they (1) have been removed, or (2) enter cleanup_info.
@@ -439,7 +583,46 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		held_wal_lock.unlock();
 	}
 
+	if (commit_registered) {
+		// make the commit durable before acknowledging it; one fsync can cover many commits. The
+		// WAL pointer stays valid without the lock: checkpoints destroy it only after draining
+		D_ASSERT(!error.HasError());
+		try {
+			commit_wal->SyncUpTo(info.wal_sync_offset);
+			if (FinishCommitDurability(info.commit_id, info.wal_sync_offset)) {
+				// the bound advanced: sweep the transactions it was pinning
+				GarbageCollectDurableTransactions();
+			}
+		} catch (std::exception &ex) {
+			// published and no longer revertable, but not durable: poison first so drains fail and
+			// release the WAL lock, then drop the never-durable tail so a restart cannot replay it
+			error = ErrorData(ex);
+			MarkDurabilityFailed();
+			try {
+				auto wal_guard = db.GetStorageManager().GetWALLock();
+				commit_wal->TruncateUnsyncedTail();
+			} catch (...) { // NOLINT: the database is being invalidated regardless
+			}
+			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing: " + error.Message());
+		} catch (...) {
+			// as above - nothing may escape leaving the commit registered but unfinished
+			MarkDurabilityFailed();
+			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing (unknown error)");
+			throw;
+		}
+	}
+
 	CleanupTransactions();
+
+	if (checkpoint_decision.can_checkpoint && (undo_properties.has_updates || undo_properties.has_dropped_entries) &&
+	    GetLastCommit() >= LowestVisibilityBound()) {
+		// a snapshot bounded below this commit started during the sync window and still needs the
+		// pre-commit state - skip the checkpoint, as GetCheckpointType would have. The skip-wal
+		// case holds the WAL lock and registers nothing, so no bounded snapshot can exist there
+		D_ASSERT(!skip_wal_write_due_to_checkpoint);
+		checkpoint_decision = CheckpointDecision("snapshots bounded below this commit need its pre-commit state");
+		lock.reset();
+	}
 
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
@@ -554,6 +737,9 @@ idx_t DuckTransactionManager::UpdateLowestVisibilityBound(optional_ptr<DuckTrans
 		computed_lowest_visibility_bound =
 		    VisibilityBound::Min(computed_lowest_visibility_bound, active_transactions[i]->view.visibility_bound);
 	}
+	// commits pending durability pin the bound: snapshots capped below them may need the old versions
+	computed_lowest_visibility_bound =
+	    VisibilityBound::Min(computed_lowest_visibility_bound, GetDurabilityCaps().visibility_bound);
 	lowest_visibility_bound = computed_lowest_visibility_bound;
 	return exclude_index;
 }

@@ -31,6 +31,8 @@ struct CommitInfo {
 	transaction_t commit_id;
 	ActiveTransactionState active_transactions = ActiveTransactionState::UNSET;
 	optional_ptr<CommitDropState> drop_state;
+	//! WAL offset covering the commit's flush marker (0 if no WAL was written)
+	idx_t wal_sync_offset = 0;
 };
 
 class DuckTransaction : public Transaction {

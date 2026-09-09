@@ -1,0 +1,48 @@
+# name: test/sql/storage/wal/group_commit_concurrent_replay.test_slow
+# description: Group commit: many concurrent commits are durable and fully replayed from the WAL
+# group: [wal]
+
+# force WAL-only (no checkpoint) so reopening must replay the WAL
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+ATTACH '{TEST_DIR}/group_commit_concurrent_replay.db' AS gc
+
+statement ok
+CREATE TABLE gc.integers(i INTEGER)
+
+# 10 threads x 100 single-row autocommit inserts => 1000 concurrent commits sharing group-commit fsyncs
+concurrentloop threadid 0 10
+
+loop x 0 100
+
+statement ok
+INSERT INTO gc.integers VALUES ({threadid} * 100 + {x})
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM gc.integers
+----
+1000	499500
+
+# reopen: the committed rows must come back purely from WAL replay
+statement ok
+DETACH gc
+
+statement ok
+ATTACH '{TEST_DIR}/group_commit_concurrent_replay.db' AS gc
+
+query II
+SELECT COUNT(*), SUM(i) FROM gc.integers
+----
+1000	499500
+
+statement ok
+DETACH gc
