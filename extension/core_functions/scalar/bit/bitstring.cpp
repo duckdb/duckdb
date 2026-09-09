@@ -78,7 +78,9 @@ static void BitStringSortKeyFunction(DataChunk &args, ExpressionState &state, Ve
 }
 
 ScalarFunction BitStringSortKeyFun::GetFunction() {
-	return ScalarFunction({{"bitstring", LogicalType::BIT}}, LogicalType::BLOB, BitStringSortKeyFunction);
+	ScalarFunction func({}, LogicalType::BLOB, BitStringSortKeyFunction);
+	func.GetSignature().AddParameter("bitstring", LogicalType::BIT);
+	return func;
 }
 
 //===--------------------------------------------------------------------===//
@@ -154,8 +156,10 @@ struct BitPositionOperator {
 } // namespace
 
 ScalarFunction BitPositionFun::GetFunction() {
-	return ScalarFunction({{"substring", LogicalType::BIT}, {"bitstring", LogicalType::BIT}}, LogicalType::INTEGER,
-	                      ScalarFunction::BinaryFunction<string_t, string_t, int32_t, BitPositionOperator>);
+	ScalarFunction func({}, LogicalType::INTEGER,
+	                    ScalarFunction::BinaryFunction<string_t, string_t, int32_t, BitPositionOperator>);
+	func.GetSignature().AddParameter("substring", LogicalType::BIT).AddParameter("bitstring", LogicalType::BIT);
+	return func;
 }
 
 } // namespace duckdb
