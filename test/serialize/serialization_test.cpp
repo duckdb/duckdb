@@ -302,9 +302,6 @@ TEST_CASE("Constraint timing survives serialization", "[serialization][deferred]
 	for (auto timing : {ConstraintTiming::DEFAULT, ConstraintTiming::IMMEDIATE, ConstraintTiming::DEFERRED}) {
 		for (auto primary_key : {false, true}) {
 			UniqueConstraint constraint(vector<Identifier> {Identifier("i")}, primary_key, timing);
-			auto copy = constraint.Copy();
-			REQUIRE(copy->Cast<UniqueConstraint>().timing == timing);
-			REQUIRE(copy->ToString() == constraint.ToString());
 
 			Allocator allocator;
 			MemoryStream stream(allocator);

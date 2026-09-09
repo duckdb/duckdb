@@ -1,0 +1,92 @@
+# name: test/sql/constraints/deferred/test_constraint_timing_storage_version.test
+# description: Require compatible storage for explicit constraint timing
+# group: [deferred]
+
+load {TEST_DIR}/constraint_timing_old_storage.db readwrite v1.5.0
+
+statement ok
+CREATE TABLE default_timing(i INTEGER UNIQUE, j INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO default_timing VALUES (1, 2);
+
+statement error
+CREATE TABLE explicit_unique(i INTEGER UNIQUE IMMEDIATE);
+----
+Binder Error: Explicit constraint timing is only supported for storage versions v2.0.0 and higher.
+
+statement error
+CREATE TABLE explicit_primary(i INTEGER, PRIMARY KEY(i) IMMEDIATE);
+----
+Binder Error: Explicit constraint timing is only supported for storage versions v2.0.0 and higher.
+
+statement error
+CREATE TABLE deferred_unique(i INTEGER UNIQUE DEFERRED);
+----
+Not implemented Error: Deferred UNIQUE constraints are not implemented yet
+
+statement ok
+CREATE TABLE alter_timing(i INTEGER, j INTEGER);
+
+statement error
+ALTER TABLE alter_timing ADD UNIQUE(i) IMMEDIATE;
+----
+Binder Error: Explicit constraint timing is only supported for storage versions v2.0.0 and higher.
+
+statement error
+ALTER TABLE alter_timing ADD PRIMARY KEY(j) IMMEDIATE;
+----
+Binder Error: Explicit constraint timing is only supported for storage versions v2.0.0 and higher.
+
+statement error
+ALTER TABLE alter_timing ADD PRIMARY KEY(j) DEFERRED;
+----
+Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
+
+# Failed ALTER statements leave the table available for ordinary constraints.
+statement ok
+ALTER TABLE alter_timing ADD UNIQUE(i);
+
+statement ok
+ALTER TABLE alter_timing ADD PRIMARY KEY(j);
+
+statement ok
+CREATE TEMP TABLE temp_timing(i INTEGER UNIQUE IMMEDIATE, j INTEGER);
+
+statement ok
+ALTER TABLE temp_timing ADD PRIMARY KEY(j) IMMEDIATE;
+
+# Check the target database, even when the default database uses older storage.
+statement ok
+ATTACH ':memory:' AS mem;
+
+statement ok
+CREATE TABLE mem.timing(i INTEGER UNIQUE IMMEDIATE, j INTEGER);
+
+statement ok
+ALTER TABLE mem.timing ADD PRIMARY KEY(j) IMMEDIATE;
+
+statement ok
+ATTACH '{TEST_DIR}/constraint_timing_new_storage.db' AS modern (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+CREATE TABLE modern.timing(i INTEGER UNIQUE IMMEDIATE, j INTEGER);
+
+statement ok
+ALTER TABLE modern.timing ADD PRIMARY KEY(j) IMMEDIATE;
+
+restart
+
+statement ok
+INSERT INTO default_timing VALUES (3, 4);
+
+query I
+SELECT count(*) FROM default_timing;
+----
+2
+
+query I rowsort
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'alter_timing' AND constraint_type <> 'NOT NULL';
+----
+PRIMARY KEY(j)
+UNIQUE(i)

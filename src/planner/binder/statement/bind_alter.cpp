@@ -40,6 +40,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 
 	auto bound_constraint =
 	    BindUniqueConstraint(*constraint_info.constraint, table_info.GetQualifiedName().Name(), column_list);
+	VerifyConstraintTiming(*constraint_info.constraint, table.ParentCatalog(), table.temporary);
 	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
 	auto &unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 

@@ -267,6 +267,7 @@ public:
 	                                           const ColumnList &columns);
 	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
 	                                                 const ColumnList &columns);
+	static void VerifyConstraintTiming(const Constraint &constraint, Catalog &catalog, bool temporary);
 
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
 
