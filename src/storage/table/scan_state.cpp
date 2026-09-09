@@ -256,8 +256,12 @@ optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetRootSegment() const 
 }
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
+	return Scan(ScanOptions(TransactionData(transaction)), result);
+}
+
+bool CollectionScanState::Scan(ScanOptions options, DataChunk &result, optional_ptr<SegmentLock> l) {
 	while (row_group) {
-		row_group->GetNode().Scan(TransactionData(transaction), *this, result);
+		row_group->GetNode().Scan(options, *this, result);
 		if (result.size() > 0) {
 			return true;
 		}
@@ -266,7 +270,11 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 			return false;
 		}
 		do {
-			row_group = GetNextRowGroup(*row_group).get();
+			if (l) {
+				row_group = GetNextRowGroup(*l, *row_group).get();
+			} else {
+				row_group = GetNextRowGroup(*row_group).get();
+			}
 			if (row_group) {
 				if (row_group->GetRowStart() >= max_row) {
 					row_group = nullptr;

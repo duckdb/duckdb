@@ -8,6 +8,7 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
+#include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -15,13 +16,47 @@
 
 using namespace duckdb;
 
-static unique_ptr<TransformResultValue> TransformGrammarExtensionTestAtom(PEGTransformer &, ParseResult &) {
-	auto statement = make_uniq<SelectStatement>();
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
-	select_node->from_table = make_uniq<EmptyTableRef>();
-	statement->node = std::move(select_node);
-	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement));
+class GrammarExtensionTestValueTransformProcess final : public TransformProcess {
+public:
+	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override {
+		D_ASSERT(!child_result);
+		return TransformStep::Complete(make_uniq<TypedTransformResult<bool>>(true));
+	}
+};
+
+class GrammarExtensionTestTransformProcess final : public TransformProcess {
+public:
+	GrammarExtensionTestTransformProcess(PEGTransformer &transformer_p, ParseResult &parse_result_p)
+	    : transformer(transformer_p), parse_result(parse_result_p) {
+	}
+
+	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override {
+		if (!child_result) {
+			auto &list = parse_result.Cast<ListParseResult>();
+			return TransformStep::Child({transformer.GetRule("GrammarExtensionTestValue"), list.GetChild(0)});
+		}
+		D_ASSERT(TryGetTransformResult<bool>(*child_result));
+		auto statement = make_uniq<SelectStatement>();
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
+		select_node->from_table = make_uniq<EmptyTableRef>();
+		statement->node = std::move(select_node);
+		return TransformStep::Complete(
+		    make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement)));
+	}
+
+private:
+	PEGTransformer &transformer;
+	ParseResult &parse_result;
+};
+
+static unique_ptr<TransformProcess> StartGrammarExtensionTestValueTransform(PEGTransformer &, ParseResult &) {
+	return make_uniq<GrammarExtensionTestValueTransformProcess>();
+}
+
+static unique_ptr<TransformProcess> StartGrammarExtensionTestTransform(PEGTransformer &transformer,
+                                                                       ParseResult &parse_result) {
+	return make_uniq<GrammarExtensionTestTransformProcess>(transformer, parse_result);
 }
 
 class GrammarExtensionTestMatchProcess final : public MatchProcess {
@@ -78,7 +113,8 @@ public:
 
 	vector<GrammarChange> GetChanges() const override {
 		vector<GrammarChange> changes;
-		changes.push_back(GrammarChange::AddRule("GrammarExtensionTestValue <- 'WRONG'"));
+		changes.push_back(
+		    GrammarChange::AddRule("GrammarExtensionTestValue <- 'WRONG'", StartGrammarExtensionTestValueTransform));
 		changes.push_back(GrammarChange::AddChoice("UnreservedKeyword", "'ANSWER'"));
 		changes.push_back(GrammarChange::AddTerminalRuleOverride(
 		    "GrammarExtensionTestValue", [](const PEGKeywordHelper &keyword_helper) {
@@ -99,7 +135,7 @@ public:
 	vector<GrammarChange> GetChanges() const override {
 		vector<GrammarChange> changes;
 		changes.push_back(GrammarChange::AddRule("GrammarExtensionTestAtom <- GrammarExtensionTestValue",
-		                                         TransformGrammarExtensionTestAtom));
+		                                         StartGrammarExtensionTestTransform));
 		changes.push_back(
 		    GrammarChange::PrependChoice("SelectAtom", "GrammarExtensionTestAtom", [](const PEGExpression &expression) {
 			    return expression.type == PEGExpression::Type::REFERENCE &&
@@ -132,6 +168,171 @@ TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_exten
 	CheckGrammarExtensionTestSyntax(con);
 	REQUIRE_NO_FAIL(*con.Query("SET heap_based_parser = true"));
 	CheckGrammarExtensionTestSyntax(con);
+}
+
+struct MatchProcessLifetimeState {
+	idx_t active = 0;
+	idx_t started = 0;
+	idx_t depth = 0;
+	bool throw_at_leaf = false;
+	bool fail_at_leaf = false;
+	bool create_result = false;
+	bool state_valid = true;
+	idx_t root_children = 1;
+	vector<idx_t> destroyed;
+};
+
+class NestedTestMatchProcess final : public MatchProcess {
+public:
+	NestedTestMatchProcess(const Matcher &matcher_p, MatchState &state, MatchProcessLifetimeState &lifetime_p)
+	    : matcher(matcher_p), input_state(state), child_state(state), lifetime(lifetime_p), depth(++lifetime.active) {
+		lifetime.started++;
+	}
+
+	~NestedTestMatchProcess() override {
+		lifetime.state_valid &= &input_state.context == &child_state.context;
+		lifetime.destroyed.push_back(depth);
+		lifetime.active--;
+	}
+
+	MatchStep Resume(optional<MatcherResult> child_result) override {
+		if (child_result) {
+			if (depth == 1 && ++completed_children < lifetime.root_children) {
+				return MatchStep::Child({matcher, child_state});
+			}
+			return MatchStep::Complete(*child_result);
+		}
+		if (depth < lifetime.depth) {
+			return MatchStep::Child({matcher, child_state});
+		}
+		if (lifetime.throw_at_leaf) {
+			throw InvalidInputException("Nested matcher test failure");
+		}
+		if (lifetime.fail_at_leaf) {
+			return MatchStep::Complete(MatcherResult::Failure());
+		}
+		if (lifetime.create_result) {
+			return MatchStep::Complete(child_state.AllocateParseResult<ListParseResult>(
+			    vector<reference<ParseResult>>(), string("nested result"), optional_idx()));
+		}
+		return MatchStep::Complete(MatcherResult::Success());
+	}
+
+private:
+	const Matcher &matcher;
+	MatchState &input_state;
+	MatchState child_state;
+	MatchProcessLifetimeState &lifetime;
+	idx_t depth;
+	idx_t completed_children = 0;
+};
+
+class NestedTestMatcher final : public Matcher {
+public:
+	explicit NestedTestMatcher(MatchProcessLifetimeState &lifetime_p)
+	    : Matcher(MatcherType::LIST), lifetime(lifetime_p) {
+	}
+
+	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		return make_uniq<NestedTestMatchProcess>(*this, state, lifetime);
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &) const override {
+		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		return "NestedTestMatcher";
+	}
+
+private:
+	MatchProcessLifetimeState &lifetime;
+};
+
+TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api][grammar_extension]") {
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_token_index = 0;
+	MatchContext context(suggestions, allocator, max_token_index);
+	MatchState state(iterator, context);
+	MatchProcessLifetimeState lifetime;
+	lifetime.destroyed.reserve(2049);
+	NestedTestMatcher matcher(lifetime);
+
+	SECTION("Completed frames are reused across vector growth boundaries") {
+		MatchStack stack;
+		lifetime.create_result = true;
+		for (idx_t depth : {idx_t(1), idx_t(64), idx_t(65), idx_t(128), idx_t(129), idx_t(256), idx_t(257), idx_t(1025),
+		                    idx_t(33), idx_t(130)}) {
+			lifetime.depth = depth;
+			lifetime.started = 0;
+			lifetime.destroyed.clear();
+			auto result = stack.Execute({matcher, state});
+			REQUIRE(result.IsSuccess());
+			REQUIRE(result.HasParseResult());
+			REQUIRE(result.GetParseResult()->name == "nested result");
+			REQUIRE(lifetime.active == 0);
+			REQUIRE(lifetime.state_valid);
+			REQUIRE(lifetime.started == depth);
+			REQUIRE(lifetime.destroyed.size() == depth);
+			for (idx_t i = 0; i < depth; i++) {
+				REQUIRE(lifetime.destroyed[i] == depth - i);
+			}
+		}
+	}
+
+	SECTION("Exceptions destroy child processes before their parents") {
+		lifetime.depth = 1025;
+		lifetime.throw_at_leaf = true;
+		{
+			MatchStack stack;
+			REQUIRE_THROWS_AS(stack.Execute({matcher, state}), InvalidInputException);
+		}
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == lifetime.depth);
+		REQUIRE(lifetime.destroyed.size() == lifetime.depth);
+		for (idx_t i = 0; i < lifetime.depth; i++) {
+			REQUIRE(lifetime.destroyed[i] == lifetime.depth - i);
+		}
+	}
+
+	SECTION("A waiting parent resumes after multiple deep children") {
+		lifetime.depth = 1025;
+		lifetime.root_children = 2;
+		MatchStack stack;
+		REQUIRE(stack.Execute({matcher, state}).IsSuccess());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == 1 + 2 * (lifetime.depth - 1));
+		REQUIRE(lifetime.destroyed.size() == lifetime.started);
+		for (idx_t sibling = 0; sibling < 2; sibling++) {
+			for (idx_t i = 0; i < lifetime.depth - 1; i++) {
+				REQUIRE(lifetime.destroyed[sibling * (lifetime.depth - 1) + i] == lifetime.depth - i);
+			}
+		}
+		REQUIRE(lifetime.destroyed.back() == 1);
+	}
+
+	SECTION("Failed matches leave the vector ready for another execution") {
+		lifetime.depth = 1025;
+		lifetime.fail_at_leaf = true;
+		MatchStack stack;
+		REQUIRE_FALSE(stack.Execute({matcher, state}).IsSuccess());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == lifetime.depth);
+		REQUIRE(lifetime.destroyed.size() == lifetime.depth);
+		lifetime.fail_at_leaf = false;
+		lifetime.started = 0;
+		lifetime.destroyed.clear();
+		REQUIRE(stack.Execute({matcher, state}).IsSuccess());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(lifetime.started == lifetime.depth);
+	}
 }
 
 TEST_CASE("Grammar changes expose structured metadata", "[api][grammar_extension]") {

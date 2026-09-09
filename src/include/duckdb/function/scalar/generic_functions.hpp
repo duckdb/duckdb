@@ -45,6 +45,16 @@ struct ErrorFun {
 	static ScalarFunction GetFunction();
 };
 
+struct BarrierFun {
+	static constexpr const char *Name = "__internal_barrier";
+	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Description = "Returns arg unchanged, and marks it as an optimizer barrier: the expression is never evaluated on rows removed by the operators around it";
+	static constexpr const char *Example = "__internal_barrier(s::INTEGER = 42)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CreateSortKeyFun {
 	static constexpr const char *Name = "create_sort_key";
 	static constexpr const char *Parameters = "parameters...";

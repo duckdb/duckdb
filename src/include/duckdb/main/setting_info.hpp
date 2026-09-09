@@ -95,11 +95,14 @@ struct ConfigurationOption {
 	const char *default_value;
 	set_callback_t set_callback;
 	optional_idx setting_idx;
+	bool is_debug = false;
+	bool is_deprecated = false;
 };
 
 struct ConfigurationAlias {
 	const char *alias;
-	idx_t option_index;
+	//! The name of the setting this alias refers to
+	const char *setting_name;
 };
 
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);

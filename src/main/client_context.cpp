@@ -686,7 +686,12 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 }
 
 void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result) {
-	active_query->executor->WaitForTask();
+	auto &executor = *active_query->executor;
+	if (executor.HasTaskInProgress()) {
+		// This thread is holding a partially processed task, the next step resumes it without waiting.
+		return;
+	}
+	executor.WaitForTask();
 }
 
 bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
