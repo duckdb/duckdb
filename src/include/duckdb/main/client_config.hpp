@@ -30,13 +30,6 @@ struct ReplacementScan;
 typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
 
-struct GrammarConfiguration {
-	enum class Type { UNSET, GRAMMAR_EXTENSION, DIALECT_EXTENSION };
-	Type type;
-	std::mutex lock;
-	shared_ptr<CompiledGrammar> grammar;
-};
-
 struct ClientConfig {
 	//! If the query profiler is enabled or not.
 	bool enable_profiler = false;
