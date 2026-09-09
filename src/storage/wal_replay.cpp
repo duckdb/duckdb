@@ -38,6 +38,7 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/main/profiler/metrics.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -1325,6 +1326,10 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 		throw InternalException("Corrupt WAL: insert without table");
 	}
 	auto &storage = state.current_table->GetStorage();
+	auto &transaction = DuckTransaction::Get(context, db);
+	TableAppendState append_state;
+	storage.AppendLock(transaction, append_state);
+	storage.VerifyAppendLock(append_state);
 	auto &table_info = storage.GetDataTableInfo();
 	auto base_row = storage.GetNextRowId();
 	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), base_row);
@@ -1333,7 +1338,6 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	// if we have any indexes - scan the row groups and add data to the indexes
 	auto &indexes = table_info->GetIndexes();
 	if (!indexes.Empty()) {
-		auto &transaction = DuckTransaction::Get(context, db);
 		// we have indexes - append
 		vector<StorageIndex> column_ids;
 		for (auto &col : state.current_table->GetColumns().Physical()) {
