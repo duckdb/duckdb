@@ -140,8 +140,13 @@ bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const
 
 void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {
 	this->name = function.name;
-	this->schema_name = function.GetSchemaName();
-	this->catalog_name = function.GetCatalogName();
+	// The replacement is a specialized implementation of the function we were bound from, and is usually built by
+	// a factory rather than handed out by a catalog entry. Only take its qualification when it has one, so that
+	// specializing an implementation does not drop the catalog and schema name of the definition.
+	if (!function.GetCatalogName().empty() || !function.GetSchemaName().empty()) {
+		this->schema_name = function.GetSchemaName();
+		this->catalog_name = function.GetCatalogName();
+	}
 	this->return_type = function.GetReturnType();
 	this->properties = function.GetProperties();
 	this->callbacks = function.GetCallbacks();
