@@ -16,7 +16,7 @@
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
-#include "json_multi_file_info.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
@@ -334,15 +334,22 @@ static BoundStatement CopyToGeoJSONPlan(Binder &binder, CopyStatement &stmt) {
 	return CopyToJSONPlanInternal(binder, stmt, JSONCopyToFormat::GEOJSON);
 }
 
+//! COPY ... FROM reads through the multi-file wrapper around read_single_json_file. COPY takes its columns from
+//! the target table, so the reader binds every file against those columns instead of auto-detecting a schema
+static void SetJSONCopyFromFunction(CopyFunction &function, Identifier name) {
+	function.copy_from_bind = TableFunctionMultiFileWrapper::MultiFileBindCopy;
+	function.copy_from_function = JSONFunctions::GetJSONTableFunction(
+	    std::move(name), make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT,
+	                                                   JSONRecordType::RECORDS, false));
+}
+
 CopyFunction JSONFunctions::GetGeoJSONCopyFunction() {
 	CopyFunction function("geojson");
 	function.extension = "geojson";
 
 	function.plan = CopyToGeoJSONPlan;
 
-	function.copy_from_bind = MultiFileFunction<JSONMultiFileInfo>::MultiFileBindCopy;
-	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
-	    JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
+	SetJSONCopyFromFunction(function, "read_json");
 
 	return function;
 }
@@ -352,10 +359,7 @@ CopyFunction JSONFunctions::GetJSONCopyFunction() {
 	function.extension = "json";
 
 	function.plan = CopyToJSONPlan;
-
-	function.copy_from_bind = MultiFileFunction<JSONMultiFileInfo>::MultiFileBindCopy;
-	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
-	    JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
+	SetJSONCopyFromFunction(function, "read_json");
 
 	return function;
 }
