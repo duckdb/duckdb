@@ -2505,9 +2505,7 @@ ScalarFunctionSet TimezoneFun::GetFunctions() {
 	//	PG also defines timezone(INTERVAL, TIME_TZ) => TIME_TZ
 	ScalarFunction function({}, LogicalType::TIME_TZ,
 	                        DatePart::TimezoneOperator::BinaryFunction<interval_t, dtime_tz_t, dtime_tz_t>);
-	function.GetSignature()
-	    .AddParameter("offset", LogicalType::INTERVAL)
-	    .AddParameter("time_tz", LogicalType::TIME_TZ);
+	function.GetSignature().AddParameter("offset", LogicalType::INTERVAL).AddParameter("time_tz", LogicalType::TIME_TZ);
 
 	operator_set.AddFunction(function);
 
@@ -2682,8 +2680,7 @@ ScalarFunctionSet MonthNameFun::GetFunctions() {
 	ScalarFunction date_fun({}, LogicalType::VARCHAR, DatePart::UnaryFunction<date_t, string_t, MonthNameOperator>);
 	date_fun.GetSignature().AddParameter("ts", LogicalType::DATE);
 	monthname.AddFunction(date_fun);
-	ScalarFunction ts_fun({}, LogicalType::VARCHAR,
-	                      DatePart::UnaryFunction<timestamp_t, string_t, MonthNameOperator>);
+	ScalarFunction ts_fun({}, LogicalType::VARCHAR, DatePart::UnaryFunction<timestamp_t, string_t, MonthNameOperator>);
 	ts_fun.GetSignature().AddParameter("ts", LogicalType::TIMESTAMP);
 	monthname.AddFunction(ts_fun);
 	return monthname;
@@ -2726,24 +2723,18 @@ static ScalarFunction NamePartTsArguments(ScalarFunction fun, const LogicalType 
 
 ScalarFunctionSet DatePartFun::GetFunctions() {
 	ScalarFunctionSet date_part;
-	date_part.AddFunction(
-	    NamePartTsArguments(ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<date_t>, DatePartBind),
-	                        LogicalType::DATE));
-	date_part.AddFunction(
-	    NamePartTsArguments(ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<timestamp_t>, DatePartBind),
-	                        LogicalType::TIMESTAMP));
-	date_part.AddFunction(
-	    NamePartTsArguments(ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<dtime_t>, DatePartBind),
-	                        LogicalType::TIME));
-	date_part.AddFunction(
-	    NamePartTsArguments(ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<dtime_ns_t>, DatePartBind),
-	                        LogicalType::TIME_NS));
-	date_part.AddFunction(
-	    NamePartTsArguments(ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<interval_t>, DatePartBind),
-	                        LogicalType::INTERVAL));
-	date_part.AddFunction(
-	    NamePartTsArguments(ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<dtime_tz_t>, DatePartBind),
-	                        LogicalType::TIME_TZ));
+	date_part.AddFunction(NamePartTsArguments(
+	    ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<date_t>, DatePartBind), LogicalType::DATE));
+	date_part.AddFunction(NamePartTsArguments(
+	    ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<timestamp_t>, DatePartBind), LogicalType::TIMESTAMP));
+	date_part.AddFunction(NamePartTsArguments(
+	    ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<dtime_t>, DatePartBind), LogicalType::TIME));
+	date_part.AddFunction(NamePartTsArguments(
+	    ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<dtime_ns_t>, DatePartBind), LogicalType::TIME_NS));
+	date_part.AddFunction(NamePartTsArguments(
+	    ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<interval_t>, DatePartBind), LogicalType::INTERVAL));
+	date_part.AddFunction(NamePartTsArguments(
+	    ScalarFunction({}, LogicalType::DOUBLE, DatePartFunction<dtime_tz_t>, DatePartBind), LogicalType::TIME_TZ));
 
 	// struct variants
 	date_part.AddFunction(StructDatePart::GetFunction<date_t>(LogicalType::DATE));

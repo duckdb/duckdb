@@ -407,10 +407,10 @@ template <class OP>
 AggregateFunction GetGenericArgMinMaxFunction(const ArgMinMaxNullHandling null_handling) {
 	using STATE = ArgMinMaxSortKeyState<OP::ORDER>;
 	auto bind = GetBindFunction<OP>(null_handling);
-	auto function = AggregateFunction(
-	    {}, LogicalType::ANY, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
-	    OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
-	    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
+	auto function = AggregateFunction({}, LogicalType::ANY, AggregateFunction::StateSize<STATE>,
+	                                  AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
+	                                  AggregateFunction::StateCombine<STATE, OP>,
+	                                  AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
 	function.GetSignature().AddParameter("arg", LogicalType::ANY).AddParameter("val", LogicalType::ANY);
 	AggregateFunction::WireStructStateType<STATE>(function);
 	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
@@ -423,10 +423,10 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 #if !DUCKDB_SMALLER_BINARY(arg_min_max_types)
 	using STATE = ArgMinMaxVectorState<OP::ORDER, BY_TYPE>;
 	auto bind = GetBindFunction<OP>(null_handling);
-	auto function = AggregateFunction({}, type, AggregateFunction::StateSize<STATE>,
-	                                  AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
-	                                  AggregateFunction::StateCombine<STATE, OP>,
-	                                  AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
+	auto function =
+	    AggregateFunction({}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+	                      OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
+	                      AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
 	function.GetSignature().AddParameter("arg", type).AddParameter("val", by_type);
 	AggregateFunction::WireStructStateType<STATE>(function);
 	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);

@@ -274,8 +274,8 @@ ScalarFunctionSet ParseDirnameFun::GetFunctions() {
 
 ScalarFunctionSet ParseDirpathFun::GetFunctions() {
 	ScalarFunctionSet parse_dirpath;
-	ScalarFunction func({}, LogicalType::VARCHAR, ParseDirpathFunction, nullptr, nullptr, nullptr,
-	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	ScalarFunction func({}, LogicalType::VARCHAR, ParseDirpathFunction, nullptr, nullptr, nullptr, LogicalType::INVALID,
+	                    FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	func.GetSignature().AddParameter("path", LogicalType::VARCHAR);
 	parse_dirpath.AddFunction(func);
 	// separator options
@@ -308,8 +308,8 @@ ScalarFunctionSet ParseFilenameFun::GetFunctions() {
 	    .AddParameter("trim_extension", LogicalType::BOOLEAN);
 	parse_filename.AddFunction(with_trim);
 
-	ScalarFunction with_trim_and_separator({}, LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr,
-	                                       nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT,
+	ScalarFunction with_trim_and_separator({}, LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr, nullptr,
+	                                       LogicalType::INVALID, FunctionStability::CONSISTENT,
 	                                       FunctionNullHandling::SPECIAL_HANDLING);
 	with_trim_and_separator.GetSignature()
 	    .AddParameter("string", LogicalType::VARCHAR)

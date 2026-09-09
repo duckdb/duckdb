@@ -299,8 +299,7 @@ ScalarFunctionSet DecimalDivisionFun::GetFunctions() {
 	two_arg.SetFallible();
 	set.AddFunction(two_arg);
 
-	ScalarFunction three_arg({}, decimal_type, DecimalDivExecute<hugeint_t, hugeint_t, hugeint_t>,
-	                         DecimalDivisionBind);
+	ScalarFunction three_arg({}, decimal_type, DecimalDivExecute<hugeint_t, hugeint_t, hugeint_t>, DecimalDivisionBind);
 	three_arg.GetSignature()
 	    .AddParameter("x", decimal_type)
 	    .AddParameter("y", decimal_type)

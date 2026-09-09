@@ -402,10 +402,7 @@ AggregateFunction GetLTTBFunction(const LogicalType &x_type, const LogicalType &
 	                      AggregateFunction::StateSize<LTTBState>,
 	                      AggregateFunction::StateInitialize<LTTBState, LTTBFunction>, LTTBUpdate,
 	                      ListCombineFunction<LTTBFunction>, LTTBFinalize<XTYPE, YTYPE>, LTTBClusterUpdate, LTTBBind);
-	fun.GetSignature()
-	    .AddParameter("x", x_type)
-	    .AddParameter("y", y_type)
-	    .AddParameter("n", LogicalType::BIGINT);
+	fun.GetSignature().AddParameter("x", x_type).AddParameter("y", y_type).AddParameter("n", LogicalType::BIGINT);
 	fun.SetSerializeCallback(LTTBSerialize);
 	fun.SetDeserializeCallback(LTTBDeserialize);
 	fun.SetStructStateExport(LTTBStateLayout);

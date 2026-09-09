@@ -37,8 +37,7 @@ static void ChrFunction(DataChunk &args, ExpressionState &state, Vector &result)
 #endif
 
 ScalarFunction ChrFun::GetFunction() {
-	ScalarFunction function("chr", {},
-	                        LogicalType::VARCHAR,
+	ScalarFunction function("chr", {}, LogicalType::VARCHAR,
 #ifdef DUCKDB_DEBUG_NO_INLINE
 	                        ChrFunction
 #else

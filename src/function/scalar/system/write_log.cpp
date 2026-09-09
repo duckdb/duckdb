@@ -153,7 +153,7 @@ ScalarFunctionSet WriteLogFun::GetFunctions() {
 	ScalarFunctionSet set("write_log");
 
 	ScalarFunction fun({}, LogicalType::ANY, WriteLogFunction, WriteLogBind, nullptr, nullptr, LogicalType::ANY,
-	                  FunctionStability::VOLATILE);
+	                   FunctionStability::VOLATILE);
 	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
 	set.AddFunction(std::move(fun));
 

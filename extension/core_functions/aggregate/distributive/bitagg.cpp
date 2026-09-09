@@ -41,8 +41,7 @@ AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 		return NameArgParameter(
 		    AggregateFunction::UnaryAggregate<BitState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type));
 	case LogicalTypeId::UTINYINT:
-		return NameArgParameter(
-		    AggregateFunction::UnaryAggregate<BitState<uint8_t>, uint8_t, uint8_t, OP>(type, type));
+		return NameArgParameter(AggregateFunction::UnaryAggregate<BitState<uint8_t>, uint8_t, uint8_t, OP>(type, type));
 	case LogicalTypeId::USMALLINT:
 		return NameArgParameter(
 		    AggregateFunction::UnaryAggregate<BitState<uint16_t>, uint16_t, uint16_t, OP>(type, type));
@@ -258,8 +257,8 @@ AggregateFunctionSet BitAndFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_and.AddFunction(GetBitfieldUnaryAggregate<BitAndOperation>(type));
 	}
-	bit_and.AddFunction(NameArgParameter(
-	    AggregateFunction::UnaryAggregate<BitStringState, string_t, string_t, BitStringAndOperation>(
+	bit_and.AddFunction(
+	    NameArgParameter(AggregateFunction::UnaryAggregate<BitStringState, string_t, string_t, BitStringAndOperation>(
 	        LogicalType::BIT, LogicalType::BIT)));
 	return bit_and;
 }
@@ -280,8 +279,8 @@ AggregateFunctionSet BitXorFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_xor.AddFunction(GetBitfieldUnaryAggregate<BitXorOperation>(type));
 	}
-	bit_xor.AddFunction(NameArgParameter(
-	    AggregateFunction::UnaryAggregate<BitStringState, string_t, string_t, BitStringXorOperation>(
+	bit_xor.AddFunction(
+	    NameArgParameter(AggregateFunction::UnaryAggregate<BitStringState, string_t, string_t, BitStringXorOperation>(
 	        LogicalType::BIT, LogicalType::BIT)));
 	return bit_xor;
 }

@@ -290,9 +290,8 @@ ScalarFunctionSet LengthFun::GetFunctions() {
 
 ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 	ScalarFunctionSet length_grapheme("length_grapheme");
-	ScalarFunction fun({}, LogicalType::BIGINT,
-	                   ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>, nullptr,
-	                   LengthPropagateStats<false>);
+	ScalarFunction fun({}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
+	                   nullptr, LengthPropagateStats<false>);
 	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
 	length_grapheme.AddFunction(fun);
 	return (length_grapheme);
@@ -316,8 +315,9 @@ ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 }
 
 ScalarFunction StrlenFun::GetFunction() {
-	ScalarFunction fun("strlen", {}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>,
-	                   nullptr, ByteLengthPropagateStats);
+	ScalarFunction fun("strlen", {}, LogicalType::BIGINT,
+	                   ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>, nullptr,
+	                   ByteLengthPropagateStats);
 	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
 	return fun;
 }

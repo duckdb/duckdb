@@ -448,12 +448,12 @@ static ScalarFunction NamePartStartEndArguments(ScalarFunction fun, const Logica
 
 ScalarFunctionSet DateDiffFun::GetFunctions() {
 	ScalarFunctionSet date_diff("date_diff");
-	date_diff.AddFunction(
-	    NamePartStartEndArguments(ScalarFunction({}, LogicalType::BIGINT, DateDiffFunction<date_t>), LogicalType::DATE));
+	date_diff.AddFunction(NamePartStartEndArguments(ScalarFunction({}, LogicalType::BIGINT, DateDiffFunction<date_t>),
+	                                                LogicalType::DATE));
 	date_diff.AddFunction(NamePartStartEndArguments(
 	    ScalarFunction({}, LogicalType::BIGINT, DateDiffFunction<timestamp_t>), LogicalType::TIMESTAMP));
-	date_diff.AddFunction(
-	    NamePartStartEndArguments(ScalarFunction({}, LogicalType::BIGINT, DateDiffFunction<dtime_t>), LogicalType::TIME));
+	date_diff.AddFunction(NamePartStartEndArguments(ScalarFunction({}, LogicalType::BIGINT, DateDiffFunction<dtime_t>),
+	                                                LogicalType::TIME));
 	// throws for unsupported date parts, and when the difference overflows
 	date_diff.SetFallible();
 	date_diff.SetArgProperties(1, ArgProperties().NonIncreasing());

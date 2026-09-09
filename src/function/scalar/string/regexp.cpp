@@ -410,8 +410,8 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 static ScalarFunction MakeRegexFunction(const vector<pair<Identifier, LogicalType>> &params, LogicalType return_type,
                                         scalar_function_t function, bind_scalar_function_t bind,
                                         init_local_state_t init_state = nullptr) {
-	ScalarFunction fun({}, std::move(return_type), std::move(function), bind, nullptr, init_state,
-	                   LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	ScalarFunction fun({}, std::move(return_type), std::move(function), bind, nullptr, init_state, LogicalType::INVALID,
+	                   FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	for (auto &param : params) {
 		fun.GetSignature().AddParameter(param.first, param.second);
 	}
@@ -493,9 +493,9 @@ ScalarFunctionSet RegexpExtractFun::GetFunctions() {
 
 ScalarFunctionSet RegexpExtractAllFun::GetFunctions() {
 	ScalarFunctionSet regexp_extract_all("regexp_extract_all");
-	regexp_extract_all.AddFunction(MakeRegexFunction({{"string", LogicalType::VARCHAR}, {"regex", LogicalType::VARCHAR}},
-	                                                 LogicalType::LIST(LogicalType::VARCHAR), RegexpExtractAll::Execute,
-	                                                 RegexpExtractAll::Bind, RegexpExtractAll::InitLocalState));
+	regexp_extract_all.AddFunction(MakeRegexFunction(
+	    {{"string", LogicalType::VARCHAR}, {"regex", LogicalType::VARCHAR}}, LogicalType::LIST(LogicalType::VARCHAR),
+	    RegexpExtractAll::Execute, RegexpExtractAll::Bind, RegexpExtractAll::InitLocalState));
 	regexp_extract_all.AddFunction(MakeRegexFunction(
 	    {{"string", LogicalType::VARCHAR}, {"regex", LogicalType::VARCHAR}, {"group", LogicalType::INTEGER}},
 	    LogicalType::LIST(LogicalType::VARCHAR), RegexpExtractAll::Execute, RegexpExtractAll::Bind,

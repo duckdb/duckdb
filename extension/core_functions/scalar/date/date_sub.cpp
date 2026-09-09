@@ -445,12 +445,12 @@ static ScalarFunction NameDateSubPartStartEndArguments(ScalarFunction fun, const
 
 ScalarFunctionSet DateSubFun::GetFunctions() {
 	ScalarFunctionSet date_sub("date_sub");
-	date_sub.AddFunction(
-	    NameDateSubPartStartEndArguments(ScalarFunction({}, LogicalType::BIGINT, DateSubFunction<date_t>), LogicalType::DATE));
+	date_sub.AddFunction(NameDateSubPartStartEndArguments(
+	    ScalarFunction({}, LogicalType::BIGINT, DateSubFunction<date_t>), LogicalType::DATE));
 	date_sub.AddFunction(NameDateSubPartStartEndArguments(
 	    ScalarFunction({}, LogicalType::BIGINT, DateSubFunction<timestamp_t>), LogicalType::TIMESTAMP));
-	date_sub.AddFunction(
-	    NameDateSubPartStartEndArguments(ScalarFunction({}, LogicalType::BIGINT, DateSubFunction<dtime_t>), LogicalType::TIME));
+	date_sub.AddFunction(NameDateSubPartStartEndArguments(
+	    ScalarFunction({}, LogicalType::BIGINT, DateSubFunction<dtime_t>), LogicalType::TIME));
 	// throws for unsupported date parts, and when the difference overflows
 	date_sub.SetFallible();
 	date_sub.SetArgProperties(1, ArgProperties().NonIncreasing());

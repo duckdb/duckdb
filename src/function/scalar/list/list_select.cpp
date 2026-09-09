@@ -166,8 +166,8 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 } // namespace
 
 ScalarFunction ListWhereFun::GetFunction() {
-	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalType::TEMPLATE("T")),
-	                          ListSelectFunction<SetSelectionVectorWhere>);
+	auto fun =
+	    ScalarFunction({}, LogicalType::LIST(LogicalType::TEMPLATE("T")), ListSelectFunction<SetSelectionVectorWhere>);
 	fun.GetSignature()
 	    .AddParameter("value_list", LogicalType::LIST(LogicalType::TEMPLATE("T")))
 	    .AddParameter("mask_list", LogicalType::LIST(LogicalType::BOOLEAN));
@@ -177,8 +177,8 @@ ScalarFunction ListWhereFun::GetFunction() {
 }
 
 ScalarFunction ListSelectFun::GetFunction() {
-	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalType::TEMPLATE("T")),
-	                          ListSelectFunction<SetSelectionVectorSelect>);
+	auto fun =
+	    ScalarFunction({}, LogicalType::LIST(LogicalType::TEMPLATE("T")), ListSelectFunction<SetSelectionVectorSelect>);
 	fun.GetSignature()
 	    .AddParameter("value_list", LogicalType::LIST(LogicalType::TEMPLATE("T")))
 	    .AddParameter("index_list", LogicalType::LIST(LogicalType::BIGINT));
