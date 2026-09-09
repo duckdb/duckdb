@@ -70,3 +70,30 @@ Catalog Error: Cannot drop this column: an index depends on a column after it
 
 statement ok
 ROLLBACK
+
+# inserting after dropping an index and its column must not use the dropped physical index
+statement ok
+CREATE TABLE transactional_drop_index_insert(i INTEGER, j INTEGER, k INTEGER)
+
+statement ok
+CREATE INDEX transactional_drop_index_insert_idx ON transactional_drop_index_insert(k)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DROP INDEX transactional_drop_index_insert_idx
+
+statement ok
+ALTER TABLE transactional_drop_index_insert DROP COLUMN k
+
+statement ok
+INSERT INTO transactional_drop_index_insert VALUES (1, 2)
+
+statement ok
+COMMIT
+
+query II
+SELECT * FROM transactional_drop_index_insert
+----
+1	2
