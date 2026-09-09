@@ -895,12 +895,19 @@ struct WKBAnalysis {
 	bool any_m = false;
 	bool any_unknown = false;
 	bool any_ewkb = false;
+	bool has_trailing_data = false;
 };
 
 WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 	WKBAnalysis result;
+	if (reader.IsAtEnd()) {
+		return result;
+	}
+	// Collection children are complete WKB objects embedded in the root object.
+	uint64_t geometries_remaining = 1;
 
-	while (!reader.IsAtEnd()) {
+	while (geometries_remaining > 0) {
+		geometries_remaining--;
 		const auto le = reader.Read<uint8_t>() == 1;
 
 		const auto meta = reader.Read<uint32_t>(le);
@@ -957,7 +964,8 @@ WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 		case 5:   // MULTILINESTRING
 		case 6:   // MULTIPOLYGON
 		case 7: { // GEOMETRYCOLLECTION
-			reader.Skip(sizeof(uint32_t));
+			const auto part_count = reader.Read<uint32_t>(le);
+			geometries_remaining += part_count;
 			result.size += sizeof(uint32_t); // part count
 		} break;
 		default: {
@@ -966,6 +974,7 @@ WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 		}
 		}
 	}
+	result.has_trailing_data = !reader.IsAtEnd();
 	return result;
 }
 
@@ -1051,7 +1060,23 @@ constexpr const idx_t Geometry::MAX_RECURSION_DEPTH;
 bool Geometry::FromBinary(const string_t &wkb, string_t &result, StringHeap &heap, bool strict) {
 	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
 
-	const auto analysis = AnalyzeWKB(reader);
+	WKBAnalysis analysis;
+	try {
+		analysis = AnalyzeWKB(reader);
+	} catch (InvalidInputException &) {
+		// Truncated input (e.g. a collection declaring more children than are present) must
+		// uphold the non-strict contract: report failure instead of throwing.
+		if (strict) {
+			throw;
+		}
+		return false;
+	}
+	if (analysis.has_trailing_data) {
+		if (strict) {
+			throw InvalidInputException("Unexpected trailing data at position %zu", reader.GetPosition());
+		}
+		return false;
+	}
 	if (analysis.any_unknown) {
 		if (strict) {
 			throw InvalidInputException("Unsupported geometry type in WKB");
