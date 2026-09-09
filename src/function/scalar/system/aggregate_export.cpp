@@ -831,16 +831,18 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 }
 
 ScalarFunction FinalizeFun::GetFunction() {
-	auto function = ScalarFunction("finalize", {LogicalTypeId::ANY}, LogicalTypeId::INVALID, AggregateStateFinalize,
-	                               BindAggregateState, nullptr, InitFinalizeState);
+	auto function = ScalarFunction("finalize", {}, LogicalTypeId::INVALID, AggregateStateFinalize, BindAggregateState,
+	                               nullptr, InitFinalizeState);
+	function.GetSignature().AddParameter("col0", LogicalTypeId::ANY);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return function;
 }
 
 ScalarFunction CombineFun::GetFunction() {
-	auto function = ScalarFunction("combine", {LogicalTypeId::ANY, LogicalTypeId::ANY}, LogicalTypeId::ANY,
-	                               AggregateStateCombine, BindAggregateState, nullptr, InitCombineState);
+	auto function = ScalarFunction("combine", {}, LogicalTypeId::ANY, AggregateStateCombine, BindAggregateState,
+	                               nullptr, InitCombineState);
+	function.GetSignature().AddParameter("col0", LogicalTypeId::ANY).AddParameter("col1", LogicalTypeId::ANY);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
 }

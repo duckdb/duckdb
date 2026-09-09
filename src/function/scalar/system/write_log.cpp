@@ -152,8 +152,10 @@ void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 ScalarFunctionSet WriteLogFun::GetFunctions() {
 	ScalarFunctionSet set("write_log");
 
-	set.AddFunction(ScalarFunction({{"string", LogicalType::VARCHAR}}, LogicalType::ANY, WriteLogFunction, WriteLogBind,
-	                               nullptr, nullptr, LogicalType::ANY, FunctionStability::VOLATILE));
+	ScalarFunction fun({}, LogicalType::ANY, WriteLogFunction, WriteLogBind, nullptr, nullptr, LogicalType::ANY,
+	                  FunctionStability::VOLATILE);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	set.AddFunction(std::move(fun));
 
 	return set;
 }
