@@ -267,8 +267,10 @@ static unique_ptr<BaseStatistics> VariantNormalizeStats(ClientContext &context, 
 
 ScalarFunction VariantNormalizeFun::GetFunction() {
 	auto variant_type = LogicalType::VARIANT();
-	return ScalarFunction("variant_normalize", {variant_type}, variant_type, VariantNormalizeFunction, nullptr,
-	                      VariantNormalizeStats);
+	ScalarFunction fun("variant_normalize", {}, variant_type, VariantNormalizeFunction, nullptr,
+	                   VariantNormalizeStats);
+	fun.GetSignature().AddParameter("input_variant", variant_type);
+	return fun;
 }
 
 } // namespace duckdb
