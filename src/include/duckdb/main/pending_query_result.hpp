@@ -11,10 +11,10 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/main/client_context_lock.hpp"
 
 namespace duckdb {
 class ClientContext;
-class ClientContextLock;
 class PreparedStatementData;
 
 class PendingQueryResult : public BaseQueryResult {
@@ -40,16 +40,16 @@ public:
 	//! If this returns NO_TASKS_AVAILABLE, this means currently no meaningful work can be done by the current executor,
 	//!	    but tasks may become available in the future.
 	//! The error message can be obtained by calling GetError() on the PendingQueryResult.
-	DUCKDB_API PendingExecutionResult ExecuteTask();
-	DUCKDB_API PendingExecutionResult CheckPulse();
+	DUCKDB_API PendingExecutionResult ExecuteTask() DUCKDB_EXCLUDES(GetContextMutex());
+	DUCKDB_API PendingExecutionResult CheckPulse() DUCKDB_EXCLUDES(GetContextMutex());
 	//! Halt execution of the thread until a Task is ready to be executed (use with caution)
-	void WaitForTask();
+	void WaitForTask() DUCKDB_EXCLUDES(GetContextMutex());
 
 	//! Returns the result of the query as an actual query result.
 	//! This returns (mostly) instantly if ExecuteTask has been called until RESULT_READY was returned.
-	DUCKDB_API unique_ptr<QueryResult> Execute();
+	DUCKDB_API unique_ptr<QueryResult> Execute() DUCKDB_EXCLUDES(GetContextMutex());
 
-	DUCKDB_API void Close();
+	DUCKDB_API void Close() DUCKDB_EXCLUDES(GetContextMutex());
 
 	//! Function to determine whether execution is considered finished
 	DUCKDB_API static bool IsResultReady(PendingExecutionResult result);
@@ -60,11 +60,11 @@ private:
 	bool allow_stream_result;
 
 private:
-	void CheckExecutableInternal(ClientContextLock &lock);
+	void CheckExecutableInternal(ClientContextLock &lock) DUCKDB_REQUIRES(lock);
 
-	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock);
-	unique_ptr<QueryResult> ExecuteInternal(ClientContextLock &lock);
-	unique_ptr<ClientContextLock> LockContext();
+	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock) DUCKDB_REQUIRES(lock);
+	unique_ptr<QueryResult> ExecuteInternal(ClientContextLock &lock) DUCKDB_REQUIRES(lock);
+	annotated_mutex &GetContextMutex() const;
 };
 
 } // namespace duckdb

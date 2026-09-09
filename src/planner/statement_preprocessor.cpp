@@ -137,8 +137,8 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 		return;
 	}
 
-	context.RunFunctionInTransactionInternal(lock,
-	                                         [&] { PreprocessInternal(lock, statements, transaction_context_state); });
+	context.RunFunctionInTransactionInternal(
+	    lock, [&]() DUCKDB_REQUIRES(lock) { PreprocessInternal(lock, statements, transaction_context_state); });
 }
 
 void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
