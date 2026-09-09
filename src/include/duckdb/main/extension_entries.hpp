@@ -1230,6 +1230,8 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
     {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMPTZ]>BIGINT"},
     {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[VARCHAR,TIMESTAMP]>TIMESTAMPTZ"},
     {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[VARCHAR,TIMESTAMPTZ]>TIMESTAMP"},
+    {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[VARCHAR,TIMESTAMPTZ_NS]>TIMESTAMP_NS"},
+    {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[VARCHAR,TIMESTAMP_NS]>TIMESTAMPTZ_NS"},
     {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[VARCHAR,TIMETZ]>TIMETZ"},
     {"timezone_hour", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[DATE]>BIGINT"},
     {"timezone_hour", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[INTERVAL]>BIGINT"},
