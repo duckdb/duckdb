@@ -3,26 +3,26 @@
 # group: [deferred]
 
 statement ok
-CREATE TABLE timing_test(i INTEGER, j INTEGER);
+CREATE TABLE t(i INTEGER, j INTEGER);
 
 statement error
-ALTER TABLE timing_test ADD UNIQUE(i) DEFERRED;
+ALTER TABLE t ADD UNIQUE(i) DEFERRED;
 ----
 Not implemented Error: Deferred UNIQUE constraints are not implemented yet
 
 statement error
-ALTER TABLE timing_test ADD PRIMARY KEY(j) DEFERRED;
+ALTER TABLE t ADD PRIMARY KEY(j) DEFERRED;
 ----
 Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
 
 statement ok
-ALTER TABLE timing_test ADD UNIQUE(i) IMMEDIATE;
+ALTER TABLE t ADD UNIQUE(i) IMMEDIATE;
 
 statement ok
-ALTER TABLE timing_test ADD PRIMARY KEY(j) IMMEDIATE;
+ALTER TABLE t ADD PRIMARY KEY(j) IMMEDIATE;
 
 query I rowsort
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 't' AND constraint_type <> 'NOT NULL';
 ----
 PRIMARY KEY(j) IMMEDIATE
 UNIQUE(i) IMMEDIATE

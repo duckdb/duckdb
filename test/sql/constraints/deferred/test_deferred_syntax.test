@@ -2,130 +2,90 @@
 # description: Test constraint timing for primary key and unique constraints
 # group: [deferred]
 
-# Deferred constraints must remain deferred after copying or reparsing the statement.
+# Preserve timing when copying or reparsing statements.
 foreach mode NONE COPY_STATEMENT REPARSE_STATEMENT
 
 statement ok
 SET debug_verify_statement='{mode}'
 
 statement error
-CREATE TABLE deferred_column_unique(i INTEGER UNIQUE DEFERRED);
+CREATE TABLE t(i INTEGER UNIQUE DEFERRED);
 ----
 Not implemented Error: Deferred UNIQUE constraints are not implemented yet
 
 statement error
-CREATE TABLE deferred_column_primary_key(i INTEGER PRIMARY KEY DEFERRED);
+CREATE TABLE t(i INTEGER PRIMARY KEY DEFERRED);
 ----
 Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
 
 statement error
-CREATE TABLE deferred_table_unique(i INTEGER, UNIQUE(i) DEFERRED);
+CREATE TABLE t(i INTEGER, UNIQUE(i) DEFERRED);
 ----
 Not implemented Error: Deferred UNIQUE constraints are not implemented yet
 
 statement error
-CREATE TABLE deferred_table_primary_key(i INTEGER, PRIMARY KEY(i) DEFERRED);
+CREATE TABLE t(i INTEGER, PRIMARY KEY(i) DEFERRED);
 ----
 Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
 
-# Keep the deferred modifier attached to the correct constraint on the same column.
+# Timing belongs to each constraint, not the column.
 statement error
-CREATE TABLE mixed_unique(i INTEGER PRIMARY KEY UNIQUE DEFERRED);
+CREATE TABLE t(i INTEGER PRIMARY KEY UNIQUE DEFERRED);
 ----
 Not implemented Error: Deferred UNIQUE constraints are not implemented yet
 
 statement error
-CREATE TABLE mixed_primary_key(i INTEGER UNIQUE PRIMARY KEY DEFERRED);
+CREATE TABLE t(i INTEGER UNIQUE PRIMARY KEY DEFERRED);
 ----
 Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
 
 statement ok
-CREATE TABLE timing_test(i INTEGER UNIQUE);
+CREATE TABLE t(i INTEGER UNIQUE, j INTEGER PRIMARY KEY);
 
-query I
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+query I rowsort
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 't' AND constraint_type <> 'NOT NULL';
 ----
+PRIMARY KEY(j)
 UNIQUE(i)
 
 statement ok
-DROP TABLE timing_test;
+DROP TABLE t;
 
 statement ok
-CREATE TABLE timing_test(i INTEGER, UNIQUE(i));
+CREATE TABLE t(i INTEGER, j INTEGER, UNIQUE(i), PRIMARY KEY(j));
 
-query I
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+query I rowsort
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 't' AND constraint_type <> 'NOT NULL';
 ----
+PRIMARY KEY(j)
 UNIQUE(i)
 
 statement ok
-DROP TABLE timing_test;
+DROP TABLE t;
 
 statement ok
-CREATE TABLE timing_test(i INTEGER PRIMARY KEY);
+CREATE TABLE t(i INTEGER UNIQUE IMMEDIATE, j INTEGER PRIMARY KEY IMMEDIATE);
 
-query I
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+query I rowsort
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 't' AND constraint_type <> 'NOT NULL';
 ----
-PRIMARY KEY(i)
-
-statement ok
-DROP TABLE timing_test;
-
-statement ok
-CREATE TABLE timing_test(i INTEGER, PRIMARY KEY(i));
-
-query I
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
-----
-PRIMARY KEY(i)
-
-statement ok
-DROP TABLE timing_test;
-
-statement ok
-CREATE TABLE timing_test(i INTEGER UNIQUE IMMEDIATE);
-
-query I
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
-----
+PRIMARY KEY(j) IMMEDIATE
 UNIQUE(i) IMMEDIATE
 
 statement ok
-DROP TABLE timing_test;
+DROP TABLE t;
 
 statement ok
-CREATE TABLE timing_test(i INTEGER, UNIQUE(i) IMMEDIATE);
+CREATE TABLE t(i INTEGER, j INTEGER, UNIQUE(i) IMMEDIATE, PRIMARY KEY(j) IMMEDIATE);
 
-query I
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
+query I rowsort
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 't' AND constraint_type <> 'NOT NULL';
 ----
+PRIMARY KEY(j) IMMEDIATE
 UNIQUE(i) IMMEDIATE
 
 statement ok
-DROP TABLE timing_test;
-
-statement ok
-CREATE TABLE timing_test(i INTEGER PRIMARY KEY IMMEDIATE);
-
-query I
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
-----
-PRIMARY KEY(i) IMMEDIATE
-
-statement ok
-DROP TABLE timing_test;
-
-statement ok
-CREATE TABLE timing_test(i INTEGER, PRIMARY KEY(i) IMMEDIATE);
-
-query I
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
-----
-PRIMARY KEY(i) IMMEDIATE
-
-statement ok
-DROP TABLE timing_test;
+DROP TABLE t;
 
 statement ok
 RESET debug_verify_statement
@@ -142,36 +102,36 @@ DROP TABLE immediate;
 # A constraint accepts only one timing modifier.
 
 statement error
-CREATE TABLE invalid_timing(i INTEGER UNIQUE IMMEDIATE DEFERRED);
+CREATE TABLE t(i INTEGER UNIQUE IMMEDIATE DEFERRED);
 ----
 Parser Error:
 
 statement error
-CREATE TABLE invalid_timing(i INTEGER PRIMARY KEY DEFERRED IMMEDIATE);
+CREATE TABLE t(i INTEGER PRIMARY KEY DEFERRED IMMEDIATE);
 ----
 Parser Error:
 
 statement error
-CREATE TABLE invalid_timing(i INTEGER UNIQUE IMMEDIATE IMMEDIATE);
+CREATE TABLE t(i INTEGER UNIQUE IMMEDIATE IMMEDIATE);
 ----
 Parser Error:
 
 statement error
-CREATE TABLE invalid_timing(i INTEGER, UNIQUE(i) IMMEDIATE DEFERRED);
+CREATE TABLE t(i INTEGER, UNIQUE(i) IMMEDIATE DEFERRED);
 ----
 Parser Error:
 
 statement error
-CREATE TABLE invalid_timing(i INTEGER, PRIMARY KEY(i) DEFERRED IMMEDIATE);
+CREATE TABLE t(i INTEGER, PRIMARY KEY(i) DEFERRED IMMEDIATE);
 ----
 Parser Error:
 
 statement error
-CREATE TABLE mixed_explicit_unique(i INTEGER PRIMARY KEY IMMEDIATE UNIQUE DEFERRED);
+CREATE TABLE t(i INTEGER PRIMARY KEY IMMEDIATE UNIQUE DEFERRED);
 ----
 Not implemented Error: Deferred UNIQUE constraints are not implemented yet
 
 statement error
-CREATE TABLE mixed_explicit_primary(i INTEGER UNIQUE IMMEDIATE PRIMARY KEY DEFERRED);
+CREATE TABLE t(i INTEGER UNIQUE IMMEDIATE PRIMARY KEY DEFERRED);
 ----
 Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
