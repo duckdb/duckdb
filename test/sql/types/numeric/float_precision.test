@@ -47,25 +47,25 @@ DOUBLE
 statement error
 SELECT CAST(NULL AS FLOAT(0));
 ----
-<REGEX>:Parser Error.*precision for type float must be at least 1 bit.*
+<REGEX>:Binder Error.*precision for type float must be at least 1 bit.*
 
 statement error
 SELECT CAST(NULL AS FLOAT(54));
 ----
-<REGEX>:Parser Error.*precision for type float must be less than 54 bits.*
+<REGEX>:Binder Error.*precision for type float must be less than 54 bits.*
 
 statement error
 CREATE TABLE float_precision_too_low(i FLOAT(0));
 ----
-<REGEX>:Parser Error.*precision for type float must be at least 1 bit.*
+<REGEX>:Binder Error.*precision for type float must be at least 1 bit.*
 
 statement error
 CREATE TABLE float_precision_too_high(i FLOAT(54));
 ----
-<REGEX>:Parser Error.*precision for type float must be less than 54 bits.*
+<REGEX>:Binder Error.*precision for type float must be less than 54 bits.*
 
 # Non-integral precision is rejected instead of being truncated
 statement error
 SELECT CAST(NULL AS FLOAT(1.5));
 ----
-<REGEX>:Parser Error.*precision for type float must be an integer.*
+<REGEX>:Binder Error.*does not accept type parameters.*
