@@ -7,6 +7,7 @@
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/function/window/value_functions.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -240,10 +241,9 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	}
 
 	// Add a synthetic primary integer key to the probe relation using streaming windowing.
-	auto row_number = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
 	vector<unique_ptr<Expression>> window_select;
 
-	auto pk = RowNumberFun::GetFunction().Bind(context);
+	auto pk = GetBuiltinWindowFunction(context, RowNumberFun::Name, {})->Bind(context);
 	D_ASSERT(pk->GetReturnType() == pk_type);
 
 	pk->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;

@@ -1,4 +1,5 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
 
@@ -413,7 +414,7 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
                                                        vector<BoundOrderByNode> orders = {}) {
 	auto window = make_uniq<LogicalWindow>(table_index);
 
-	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
+	auto row_number = GetBuiltinWindowFunction(binder.context, RowNumberFun::Name, {})->Bind(binder.context);
 	row_number->PartitionsMutable() = std::move(partitions);
 	row_number->OrderByMutable() = std::move(orders);
 	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
