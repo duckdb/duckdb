@@ -8,6 +8,8 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/collation_binding.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
@@ -370,6 +372,20 @@ void FilterPushdown::Filter::ExtractBindings() {
 
 void FilterPushdown::Filter::ExtractBarrier() {
 	has_barrier = ExpressionBarrier::Contains(*filter);
+}
+
+bool FilterPushdown::FilterUsesCollation(const Filter &filter) {
+	bool uses_collation = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    *filter.filter, [&](const BoundColumnRefExpression &colref) {
+		    unique_ptr<Expression> reference =
+		        make_uniq<BoundReferenceExpression>(colref.GetReturnType(), colref.Binding().column_index);
+		    if (CollationBinding::Get(optimizer.context)
+		            .PushCollation(optimizer.context, reference, colref.GetReturnType(), CollationType::ALL_COLLATIONS)) {
+			    uses_collation = true;
+		    }
+	    });
+	return uses_collation;
 }
 
 } // namespace duckdb
