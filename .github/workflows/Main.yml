@@ -1,4 +1,10 @@
 name: Main
+run-name: >-
+  ${{
+    github.event_name == 'workflow_dispatch' &&
+    format('Main ({0})', inputs.duckdb_version || format('alpha{0}', github.run_number)) ||
+    ''
+  }}
 on:
   workflow_dispatch:
     inputs:
