@@ -136,3 +136,17 @@ FROM read_csv('{DATA_DIR}/csv/comments/simple.csv', auto_detect=false, delim=';'
 ----
 1	3
 6	7
+
+# A column name carrying ' has to come back escaped, or the Prompt does not parse
+statement ok
+COPY (SELECT 1 AS "id", 2 AS "it's") TO '{TEST_DIR}/quote_in_name.csv' (HEADER);
+
+query I
+SELECT Prompt FROM sniff_csv('{TEST_DIR}/quote_in_name.csv');
+----
+FROM read_csv('{TEST_DIR}/quote_in_name.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'id': 'BIGINT', 'it''s': 'BIGINT'});
+
+query II
+FROM read_csv('{TEST_DIR}/quote_in_name.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'id': 'BIGINT', 'it''s': 'BIGINT'})
+----
+1	2
