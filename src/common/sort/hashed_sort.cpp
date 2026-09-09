@@ -395,7 +395,7 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 	}
 }
 
-void HashedSort::Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const {
+void HashedSort::Synchronize(ClientContext &client, const GlobalSinkState &source, GlobalSinkState &target) const {
 	auto &src = source.Cast<HashedSortGlobalSinkState>();
 	auto &tgt = target.Cast<HashedSortGlobalSinkState>();
 	tgt.SyncPartitioning(src);
