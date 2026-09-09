@@ -67,7 +67,8 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 } // namespace
 
 ScalarFunction PathJoinFun::GetFunction() {
-	ScalarFunction path_join(PathJoinFun::Name, {LogicalType::VARCHAR}, LogicalType::VARCHAR, PathJoinFunction);
+	ScalarFunction path_join(PathJoinFun::Name, {}, LogicalType::VARCHAR, PathJoinFunction);
+	path_join.GetSignature().AddParameter("path", LogicalType::VARCHAR);
 	path_join.SetVarArgs(LogicalType::VARCHAR);
 	path_join.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	// throws if the paths that are joined are incompatible

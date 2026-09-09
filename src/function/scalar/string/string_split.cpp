@@ -140,7 +140,10 @@ void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &r
 ScalarFunction StringSplitFun::GetFunction() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
-	ScalarFunction string_split({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitFunction);
+	ScalarFunction string_split({}, varchar_list_type, StringSplitFunction);
+	string_split.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("separator", LogicalType::VARCHAR);
 	string_split.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return string_split;
 }
@@ -148,12 +151,13 @@ ScalarFunction StringSplitFun::GetFunction() {
 ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	ScalarFunctionSet regexp_split;
-	ScalarFunction regex_fun({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitRegexFunction,
-	                         RegexpMatchesBind, nullptr, RegexInitLocalState, LogicalType::INVALID,
-	                         FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	ScalarFunction regex_fun({}, varchar_list_type, StringSplitRegexFunction, RegexpMatchesBind, nullptr,
+	                         RegexInitLocalState, LogicalType::INVALID, FunctionStability::CONSISTENT,
+	                         FunctionNullHandling::SPECIAL_HANDLING);
+	regex_fun.GetSignature().AddParameter("string", LogicalType::VARCHAR).AddParameter("regex", LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
 	// regexp options
-	regex_fun.GetSignature().AddParameter(LogicalType::VARCHAR);
+	regex_fun.GetSignature().AddParameter("options", LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
 	regexp_split.SetFallible();
 	return regexp_split;
