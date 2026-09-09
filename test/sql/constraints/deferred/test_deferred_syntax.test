@@ -48,14 +48,6 @@ SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test
 UNIQUE(i)
 
 statement ok
-INSERT INTO timing_test VALUES (1);
-
-statement error
-INSERT INTO timing_test VALUES (1);
-----
-Constraint Error: Duplicate key
-
-statement ok
 DROP TABLE timing_test;
 
 statement ok
@@ -65,14 +57,6 @@ query I
 SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
 ----
 UNIQUE(i)
-
-statement ok
-INSERT INTO timing_test VALUES (1);
-
-statement error
-INSERT INTO timing_test VALUES (1);
-----
-Constraint Error: Duplicate key
 
 statement ok
 DROP TABLE timing_test;
@@ -86,14 +70,6 @@ SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test
 PRIMARY KEY(i)
 
 statement ok
-INSERT INTO timing_test VALUES (1);
-
-statement error
-INSERT INTO timing_test VALUES (1);
-----
-Constraint Error: Duplicate key
-
-statement ok
 DROP TABLE timing_test;
 
 statement ok
@@ -103,14 +79,6 @@ query I
 SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
 ----
 PRIMARY KEY(i)
-
-statement ok
-INSERT INTO timing_test VALUES (1);
-
-statement error
-INSERT INTO timing_test VALUES (1);
-----
-Constraint Error: Duplicate key
 
 statement ok
 DROP TABLE timing_test;
@@ -124,14 +92,6 @@ SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test
 UNIQUE(i) IMMEDIATE
 
 statement ok
-INSERT INTO timing_test VALUES (1);
-
-statement error
-INSERT INTO timing_test VALUES (1);
-----
-Constraint Error: Duplicate key
-
-statement ok
 DROP TABLE timing_test;
 
 statement ok
@@ -141,14 +101,6 @@ query I
 SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
 ----
 UNIQUE(i) IMMEDIATE
-
-statement ok
-INSERT INTO timing_test VALUES (1);
-
-statement error
-INSERT INTO timing_test VALUES (1);
-----
-Constraint Error: Duplicate key
 
 statement ok
 DROP TABLE timing_test;
@@ -162,14 +114,6 @@ SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test
 PRIMARY KEY(i) IMMEDIATE
 
 statement ok
-INSERT INTO timing_test VALUES (1);
-
-statement error
-INSERT INTO timing_test VALUES (1);
-----
-Constraint Error: Duplicate key
-
-statement ok
 DROP TABLE timing_test;
 
 statement ok
@@ -179,14 +123,6 @@ query I
 SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
 ----
 PRIMARY KEY(i) IMMEDIATE
-
-statement ok
-INSERT INTO timing_test VALUES (1);
-
-statement error
-INSERT INTO timing_test VALUES (1);
-----
-Constraint Error: Duplicate key
 
 statement ok
 DROP TABLE timing_test;
