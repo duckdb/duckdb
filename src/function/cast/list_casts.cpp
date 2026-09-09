@@ -41,27 +41,76 @@ unique_ptr<FunctionLocalState> ListBoundCastData::InitListLocalState(CastLocalSt
 bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 
-	// only handle constant and flat vectors here for now
-	auto source_data = source.Values<list_entry_t>();
-	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
+	auto &source_cc = ListVector::GetChildMutable(source);
+	auto &append_vector = ListVector::GetChildMutable(result);
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
+
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		auto source_data = ConstantVector::GetData<list_entry_t>(source);
+		auto result_data = FlatVector::Writer<list_entry_t>(result, count);
+		for (idx_t r = 0; r < count; r++) {
+			if (ConstantVector::IsNull(source)) {
+				result_data.WriteNull();
+			} else {
+				result_data.WriteValue(source_data[0]);
+			}
+		}
+		auto source_size = ListVector::GetListSize(source);
+		ListVector::Reserve(result, source_size);
+		bool all_succeeded = cast_data.child_cast_info.Cast(source_cc, append_vector, source_size, child_parameters);
+		ListVector::SetListSize(result, source_size);
+		return all_succeeded;
+	}
+
+	source.Flatten();
+	auto source_data = FlatVector::GetData<list_entry_t>(source);
+	idx_t child_count = 0;
 	for (idx_t r = 0; r < count; r++) {
-		auto source_list = source_data[r];
-		if (!source_list.IsValid()) {
+		if (FlatVector::IsNull(source, r)) {
+			continue;
+		}
+		child_count += source_data[r].length;
+	}
+
+	bool cast_child_directly = child_count == ListVector::GetListSize(source);
+	idx_t expected_offset = 0;
+	for (idx_t r = 0; cast_child_directly && r < count; r++) {
+		if (FlatVector::IsNull(source, r)) {
+			continue;
+		}
+		if (source_data[r].offset != expected_offset) {
+			cast_child_directly = false;
+		}
+		expected_offset += source_data[r].length;
+	}
+
+	SelectionVector child_sel(cast_child_directly ? 0 : child_count);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
+	idx_t child_offset = 0;
+	for (idx_t r = 0; r < count; r++) {
+		if (FlatVector::IsNull(source, r)) {
 			result_data.WriteNull();
 			continue;
 		}
-		result_data.WriteValue(source_list.GetValue());
+		auto &source_list = source_data[r];
+		result_data.WriteValue(list_entry_t(child_offset, source_list.length));
+		for (idx_t child_idx = 0; child_idx < source_list.length; child_idx++) {
+			if (!cast_child_directly) {
+				child_sel.set_index(child_offset, source_list.offset + child_idx);
+			}
+			child_offset++;
+		}
 	}
-	auto &source_cc = ListVector::GetChildMutable(source);
-	auto source_size = ListVector::GetListSize(source);
 
-	ListVector::Reserve(result, source_size);
-	auto &append_vector = ListVector::GetChildMutable(result);
-
-	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
-	bool all_succeeded = cast_data.child_cast_info.Cast(source_cc, append_vector, source_size, child_parameters);
-	ListVector::SetListSize(result, source_size);
-	D_ASSERT(ListVector::GetListSize(result) == source_size);
+	ListVector::Reserve(result, child_count);
+	if (cast_child_directly) {
+		bool all_succeeded = cast_data.child_cast_info.Cast(source_cc, append_vector, child_count, child_parameters);
+		ListVector::SetListSize(result, child_count);
+		return all_succeeded;
+	}
+	Vector source_slice(source_cc, child_sel, child_count);
+	bool all_succeeded = cast_data.child_cast_info.Cast(source_slice, append_vector, child_count, child_parameters);
+	ListVector::SetListSize(result, child_count);
 	return all_succeeded;
 }
 

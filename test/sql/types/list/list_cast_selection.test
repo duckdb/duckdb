@@ -1,0 +1,111 @@
+# name: test/sql/types/list/list_cast_selection.test
+# description: LIST casts only convert child values referenced by selected rows
+# group: [list]
+
+statement ok
+CREATE TABLE list_casts(id INTEGER, values VARCHAR[]);
+
+statement ok
+INSERT INTO list_casts VALUES (1, ['invalid']), (2, ['1', '2']), (3, NULL), (4, []), (5, ['3', NULL]);
+
+query II
+SELECT id, values::INTEGER[] FROM list_casts WHERE id > 1 ORDER BY id;
+----
+2	[1, 2]
+3	NULL
+4	[]
+5	[3, NULL]
+
+# A selection containing no child values still produces valid NULL and empty lists
+query II
+SELECT id, values::INTEGER[] FROM list_casts WHERE id BETWEEN 3 AND 4 ORDER BY id;
+----
+3	NULL
+4	[]
+
+# Dictionary selections can reference the same list more than once
+query I
+SELECT values::INTEGER[] FROM list_casts, range(3) WHERE id=2;
+----
+[1, 2]
+[1, 2]
+[1, 2]
+
+# Selected conversion errors still follow TRY_CAST's element-wise semantics
+query I
+SELECT TRY_CAST(values AS INTEGER[]) FROM list_casts WHERE id IN (1, 2) ORDER BY id;
+----
+[NULL]
+[1, 2]
+
+# Pack disjoint child ranges with different lengths
+query II
+SELECT id, values::INTEGER[] FROM list_casts WHERE id IN (2, 4, 5) ORDER BY id;
+----
+2	[1, 2]
+4	[]
+5	[3, NULL]
+
+statement ok
+CREATE TABLE nested_list_casts(id INTEGER, values VARCHAR[][]);
+
+statement ok
+INSERT INTO nested_list_casts VALUES (1, [['invalid']]), (2, [['1', '2'], [], NULL]), (3, NULL);
+
+query II
+SELECT id, values::INTEGER[][] FROM nested_list_casts WHERE id > 1 ORDER BY id;
+----
+2	[[1, 2], [], NULL]
+3	NULL
+
+# Selected STRUCT children must be materialised before the recursive cast
+statement ok
+CREATE TABLE struct_list_casts(id INTEGER, values STRUCT(a VARCHAR)[]);
+
+statement ok
+INSERT INTO struct_list_casts VALUES (1, [{'a': 'invalid'}]), (2, [{'a': '3'}]);
+
+query I
+SELECT ((values::STRUCT(a INTEGER)[])[1]).a FROM struct_list_casts WHERE id=2;
+----
+3
+
+# MAP is represented as a LIST of key/value STRUCTs and takes the same path
+statement ok
+CREATE TABLE map_casts(id INTEGER, values MAP(VARCHAR, VARCHAR));
+
+statement ok
+INSERT INTO map_casts VALUES (1, map(['invalid'], ['invalid'])), (2, map(['4'], ['5']));
+
+query I
+SELECT map_extract_value(values::MAP(INTEGER, INTEGER), 4) FROM map_casts WHERE id=2;
+----
+5
+
+# ARRAY children also propagate the packed parent selection to their children
+statement ok
+CREATE TABLE array_list_casts(id INTEGER, values VARCHAR[2][]);
+
+statement ok
+INSERT INTO array_list_casts VALUES
+    (1, [array_value('invalid', 'invalid')]),
+    (2, [array_value('6', '7')]);
+
+query I
+SELECT ((values::INTEGER[2][])[1])[2] FROM array_list_casts WHERE id=2;
+----
+7
+
+# Constant lists can share their child data between result rows
+query I
+SELECT ['1', '2']::INTEGER[] FROM range(3);
+----
+[1, 2]
+[1, 2]
+[1, 2]
+
+query I
+SELECT NULL::VARCHAR[]::INTEGER[] FROM range(2);
+----
+NULL
+NULL
