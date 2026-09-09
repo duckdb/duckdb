@@ -14,21 +14,17 @@
 
 namespace duckdb {
 
-//! Pattern symbols share a namespace with the input columns, so they are qualified with this prefix in
-//! the plan to keep a DEFINE from resolving to a base table column of the same name.
+//! Prefix that keeps a pattern symbol's plan column apart from an input column of the same name
 constexpr const char *MATCH_RECOGNIZE_DEFINE_PREFIX = "__mr_define_";
 
-//! The column MATCH_NUMBER() reads in a DEFINE condition. The matcher overwrites it for every match
-//! it attempts, which is what lets a DEFINE depend on the match being assembled.
+//! The column MATCH_NUMBER() reads, which the matcher rewrites for every match it attempts
 constexpr const char *MATCH_RECOGNIZE_MATCH_NUMBER_COLUMN = "__mr_match_number";
 
-//! RUNNING and FINAL are carried from the parser to the binder as these markers, which wrap the
-//! measure they applied to and are unwrapped once the frame has been decided.
+//! RUNNING and FINAL reach the binder as these markers, wrapping the measure they applied to
 constexpr const char *MATCH_RECOGNIZE_RUNNING_MARKER = "__mr_running";
 constexpr const char *MATCH_RECOGNIZE_FINAL_MARKER = "__mr_final";
 
-//! The plan column a pattern variable is qualified with, so that a DEFINE naming it cannot resolve
-//! to a base table column of the same name
+//! The plan column a pattern variable is qualified with
 inline string MatchRecognizeDefineColumn(const string &symbol) {
 	return MATCH_RECOGNIZE_DEFINE_PREFIX + symbol;
 }
@@ -42,12 +38,12 @@ inline string MatchRecognizeSymbolName(const string &column_name) {
 	return column_name;
 }
 
-//! What a node of a pattern is. The four of them are the pattern algebra: a variable to match, an
-//! anchor that matches a place rather than a row, and the ways of putting parts together.
+//! The pattern algebra: a variable, an anchor that matches a place rather than a row, and the ways of
+//! putting parts together
 enum class MatchRecognizePatternType : uint8_t { SYMBOL, ANCHOR, ALTERNATION, CONCATENATION, QUANTIFIER };
 
-//! The pattern the matcher walks. It is a tree of its own, owned by the bind data below and compiled
-//! into the matcher's program: nothing about it is an SQL expression, and it is never evaluated as one.
+//! The pattern the matcher walks, owned by the bind data below and compiled into the matcher's
+//! program. Nothing about it is an SQL expression.
 struct MatchRecognizePattern {
 	explicit MatchRecognizePattern(MatchRecognizePatternType type_p) : type(type_p) {
 	}
@@ -101,15 +97,13 @@ struct MatchRecognizePattern {
 
 struct MatchRecognizeFunctionData : FunctionData {
 	unique_ptr<MatchRecognizePattern> pattern;
-	//! One condition per pattern symbol, evaluated by the matcher rather than precomputed. Column
-	//! references are BoundReferenceExpressions into the window's argument list.
+	//! One condition per pattern symbol, reading the window's arguments by position
 	vector<unique_ptr<Expression>> conditions;
 	//! The symbol each condition defines, in the same order
 	vector<string> symbols;
 	//! Whether any condition reads MATCH_NUMBER(), which is what forces re-evaluation per match
 	bool depends_on_match_number = false;
-	//! Where the number of the match being assembled sits among the values a condition reads. The
-	//! matcher supplies it rather than the plan, so it comes after the columns it is handed.
+	//! Where the match number sits among the values a condition reads, after the plan's own columns
 	idx_t match_number_field = 0;
 	//! FIRST()/LAST() calls, resolved against the match being assembled
 	struct Navigation {

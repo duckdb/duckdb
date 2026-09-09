@@ -6,10 +6,10 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
@@ -47,9 +47,8 @@ static unique_ptr<ParsedExpression> OnlyWhenMatched(const string &state, unique_
 	return std::move(result);
 }
 
-//! struct_pack(v := <value>) is never NULL, so a NULL the value itself holds stays apart from the NULL
-//! that masks a row the variable did not match - which is the NULL that MatchScopedValue walks back over.
-//! An empty match covers no rows, so the row that carries it has no value to report and is masked too.
+//! struct_pack(v := <value>) is never NULL, which keeps a NULL the value holds apart from the NULL that
+//! masks a row the variable did not match - the one MatchScopedValue walks back over
 static unique_ptr<ParsedExpression> PackValue(const string &state, unique_ptr<ParsedExpression> value) {
 	value->SetAlias(Identifier(MATCH_RECOGNIZE_VALUE_FIELD));
 	vector<unique_ptr<ParsedExpression>> fields;
@@ -90,9 +89,8 @@ static unique_ptr<ParsedExpression> ClassifiedValue(const string &state, const v
 	return std::move(result);
 }
 
-//! An ordering as the sorter will actually apply it, with the session's defaults filled in. A
-//! reversed window has to spell both out, because "the opposite of the default" is not something the
-//! enums can say.
+//! An ordering as the sorter will apply it: a reversed window has to spell both out, because "the
+//! opposite of the default" is not something the enums can say
 static void ResolveOrder(ClientContext &context, OrderType &type, OrderByNullType &null_order) {
 	auto &config = DBConfig::GetConfig(context);
 	type = config.ResolveOrder(context, type);
@@ -115,9 +113,7 @@ static void ScopeToMatch(ClientContext &context, const string &state, WindowExpr
 		window.PartitionsMutable().push_back(expr->Copy());
 	}
 	window.PartitionsMutable().push_back(CreateStructExtract(state, "match_number"));
-	// Every window says which way round it walks, rather than leaning on the order its input happens
-	// to arrive in. Windows that leave it unsaid are free to be grouped with one that says the
-	// opposite, and then they walk that way too.
+	// windows that leave the order unsaid can be grouped with one that says the opposite
 	for (auto &order : config.order_by_expressions) {
 		auto type = order.type;
 		auto null_order = order.null_order;
@@ -129,16 +125,14 @@ static void ScopeToMatch(ClientContext &context, const string &state, WindowExpr
 		}
 		window.OrderByMutable().emplace_back(type, null_order, order.expression->Copy());
 	}
-	// A stable descending sort is not the exact reverse of a stable ascending one, so tied rows would
-	// land in a different order in the two directions and FIRST(x, n) and LAST(x, n) would disagree
-	// about which of them is which. The row's place in the partition is unique, so ordering on it last
-	// leaves nothing tied.
+	// a stable descending sort is not the reverse of a stable ascending one, so ordering on the row's
+	// place in the partition last is what leaves the two directions nothing tied to disagree about
 	window.OrderByMutable().emplace_back(reversed ? OrderType::DESCENDING : OrderType::ASCENDING,
 	                                     OrderByNullType::NULLS_LAST, CreateStructExtract(state, "row_index"));
 }
 
-//! Takes a value packed by PackValue and reports it from the first or last row of the match that carries
-//! one. IGNORE NULLS is what makes it that row rather than the first or last row of the match.
+//! Reports a packed value from the first or last row of the match that carries one, which is what
+//! IGNORE NULLS makes it rather than the first or last row of the match
 static unique_ptr<ParsedExpression> MatchScopedValue(ClientContext &context, const string &state,
                                                      const MatchRecognizeConfig &config,
                                                      unique_ptr<ParsedExpression> packed, bool running,
@@ -164,11 +158,6 @@ static bool HasAggregateModifiers(const FunctionExpression &function) {
 	return function.Distinct() || function.Filter() || (function.OrderBy() && !function.OrderBy()->orders.empty());
 }
 
-//! What a DEFINE condition needs from the plan below the matcher: one column per value the matcher
-//! cannot compute itself, and the descriptors telling it what to do with them.
-//! FIRST() and LAST() count from the end of the match they read from, by a constant the two clauses
-//! spell the same way. A NULL constant casts to a NULL offset rather than failing, so it is turned
-//! away here rather than read as a number further down.
 idx_t MatchRecognizeNavigationOffset(const string &function_name, const ParsedExpression &offset_expr) {
 	if (offset_expr.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 		throw BinderException("The offset of %s() must be a constant", function_name);
@@ -189,8 +178,6 @@ idx_t MatchRecognizeNavigationOffset(const string &function_name, const ParsedEx
 	return NumericCast<idx_t>(offset);
 }
 
-//! Everything a reference names behind its first name is navigation into the column, so dropping a
-//! qualifier drops that one name and keeps the rest: X.c.f is field f of column c, not column f.
 unique_ptr<ParsedExpression> MatchRecognizeWithoutQualifier(const ColumnRefExpression &colref) {
 	auto copy = colref.Copy();
 	auto &copied = copy->Cast<ColumnRefExpression>();
@@ -201,6 +188,68 @@ unique_ptr<ParsedExpression> MatchRecognizeWithoutQualifier(const ColumnRefExpre
 	return copy;
 }
 
+bool MatchRecognizeLambdaParameters(const ParsedExpression &expr, identifier_set_t &parameters) {
+	auto &lambda = expr.Cast<LambdaExpression>();
+	if (lambda.GetLambdaSyntaxType() != LambdaSyntaxType::LAMBDA_KEYWORD) {
+		return false;
+	}
+	string error;
+	auto column_refs = lambda.ExtractColumnRefExpressions(error);
+	if (!error.empty()) {
+		return false;
+	}
+	for (auto &column_ref : column_refs) {
+		auto &names = column_ref.get().Cast<ColumnRefExpression>().ColumnNames();
+		if (names.size() != 1) {
+			return false;
+		}
+		parameters.insert(names[0]);
+	}
+	return true;
+}
+
+//! What a value that is not the candidate row is being computed for, for the message that says so
+static const char *ScopeName(MatchRecognizeScope scope) {
+	switch (scope) {
+	case MatchRecognizeScope::WINDOW:
+		return "a window function, which is computed over the whole partition before there is a match";
+	case MatchRecognizeScope::NAVIGATED:
+		return "the expression a navigation reads, which is computed for every row of the input";
+	case MatchRecognizeScope::PARTITION_BY:
+		return "PARTITION BY, which the matcher walks rather than produces";
+	case MatchRecognizeScope::ORDER_BY:
+		return "ORDER BY, which the matcher walks rather than produces";
+	default:
+		throw InternalException("MATCH_RECOGNIZE has no name for this scope");
+	}
+}
+
+//! Binds one expression in a scope of its own, leaving the enclosing one behind afterwards
+struct ScopedScope {
+	ScopedScope(MatchRecognizeScope &current, MatchRecognizeScope scope) : current(current), saved(current) {
+		current = scope;
+	}
+	~ScopedScope() {
+		current = saved;
+	}
+	MatchRecognizeScope &current;
+	const MatchRecognizeScope saved;
+};
+
+//! Whether an enclosing lambda binds this name. A pattern variable and a lambda parameter can be
+//! spelled the same way, and the lambda's is the one in scope.
+static bool BoundByLambda(optional_ptr<vector<DummyBinding>> lambda_bindings, const Identifier &name) {
+	if (!lambda_bindings) {
+		return false;
+	}
+	for (auto &binding : *lambda_bindings) {
+		if (binding.HasMatchingBinding(name)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 //===--------------------------------------------------------------------===//
 // DEFINE
 //===--------------------------------------------------------------------===//
@@ -209,20 +258,18 @@ unique_ptr<Expression> MatchRecognizeConditionInputs::Project(unique_ptr<Express
 }
 
 unique_ptr<Expression> MatchRecognizeConditionInputs::ProjectAs(unique_ptr<Expression> value, const string &name) {
-	// A projection computes its columns from what its child produces, so what is added here can read
-	// the input and the windows below it and nothing else: not a column of this projection, which
-	// only exists for whoever reads the projection, and not a field only the matcher supplies, which
-	// only exists while a match is being assembled. The binder decides both of those where the
-	// expression is bound; this is the boundary that holds it to the decision.
+	// A projection reads what its child produces: the input and the windows below it. Neither a column
+	// of this projection nor a field only the matcher supplies is one, and the binder decides that
+	// where the expression is bound - this is the boundary that holds it to the decision.
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(*value, [&](const BoundColumnRefExpression &column) {
 		if (column.Binding().table_index == projection_index) {
 			throw InternalException("MATCH_RECOGNIZE projected \"%s\" from another column of the same projection",
 			                        name);
 		}
-	});
-	ExpressionIterator::VisitExpression<BoundReferenceExpression>(*value, [&](const BoundReferenceExpression &) {
-		throw InternalException("MATCH_RECOGNIZE projected \"%s\", which reads a field only the matcher supplies",
-		                        name);
+		if (column.Binding().table_index == match_number_index) {
+			throw InternalException("MATCH_RECOGNIZE projected \"%s\", which reads a field only the matcher supplies",
+			                        name);
+		}
 	});
 	auto type = value->GetReturnType();
 	const auto index = select_list.size();
@@ -251,26 +298,20 @@ BindResult MatchRecognizeDefineBinder::BindExpression(unique_ptr<ParsedExpressio
 		auto &function = expr.Cast<FunctionExpression>();
 		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
 		if (function_name == "CLASSIFIER" && function.GetArguments().empty()) {
-			if (!outside.empty()) {
-				OutsideMatch("CLASSIFIER()");
-			}
+			OutsideMatch("CLASSIFIER()");
 			// the row being tested is the one this DEFINE decides on, so it classifies as this symbol
 			expr_ptr = make_uniq<ConstantExpression>(Value(define_name));
 			return SelectBinder::BindExpression(expr_ptr, depth, root_expression);
 		}
 		if (function_name == "MATCH_NUMBER" && function.GetArguments().empty()) {
-			if (!outside.empty()) {
-				// the matcher writes the number per attempt, so it is not a value the plan below the
-				// matcher - or the frame it walks - has anything to compute
-				OutsideMatch("MATCH_NUMBER()");
-			}
+			OutsideMatch("MATCH_NUMBER()");
 			return BindResult(match_number->Copy());
 		}
 		if (function_name == "PREV" || function_name == "NEXT") {
-			if (frame) {
+			if (scope == MatchRecognizeScope::PARTITION_BY || scope == MatchRecognizeScope::ORDER_BY) {
 				throw BinderException("%s() reads a neighbour in the order the matcher walks, so it cannot be part "
 				                      "of %s",
-				                      function_name, outside);
+				                      function_name, ScopeName(scope));
 			}
 			return BindNeighbour(function, function_name, expr_ptr, depth);
 		}
@@ -279,21 +320,15 @@ BindResult MatchRecognizeDefineBinder::BindExpression(unique_ptr<ParsedExpressio
 		}
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
-		// A window walks the ordered partition rather than the match, so it is computed below the
-		// matcher like the navigation the clause writes as one. What binding it returns is the window
-		// operator's own output, which is a child of the projection the conditions are evaluated over
-		// - so it is left as it is, and the projection column for it is appended once, by the
-		// remapping every other reference into the input goes through.
-		const auto saved = outside;
-		outside = "a window function, which is computed over the whole partition before there is a match";
-		auto bound = SelectBinder::BindExpression(expr_ptr, depth, root_expression);
-		outside = saved;
-		return bound;
+		// a window's binding is the window operator's own output, which the projection over it can read
+		const ScopedScope window(scope, MatchRecognizeScope::WINDOW);
+		return SelectBinder::BindExpression(expr_ptr, depth, root_expression);
 	}
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		auto &names = colref.ColumnNames();
-		const auto qualifier = names.size() >= 2 ? names[0].GetIdentifierName() : string();
+		const auto qualifier =
+		    names.size() >= 2 && !BoundByLambda(lambda_bindings, names[0]) ? names[0].GetIdentifierName() : string();
 		if (!qualifier.empty() && StringUtil::CIEquals(qualifier, define_name)) {
 			// the variable being defined is the row being tested, so it is the row itself
 			expr_ptr = MatchRecognizeWithoutQualifier(colref);
@@ -319,9 +354,11 @@ string MatchRecognizeDefineBinder::UnsupportedAggregateMessage() {
 }
 
 void MatchRecognizeDefineBinder::OutsideMatch(const string &what) const {
-	D_ASSERT(!outside.empty());
+	if (scope == MatchRecognizeScope::CANDIDATE_ROW) {
+		return;
+	}
 	throw BinderException("%s only means something while the matcher is assembling a match, so it cannot be part of %s",
-	                      what, outside);
+	                      what, ScopeName(scope));
 }
 
 BindResult MatchRecognizeDefineBinder::BindNeighbour(FunctionExpression &function, const string &function_name,
@@ -364,18 +401,15 @@ BindResult MatchRecognizeDefineBinder::BindNavigation(FunctionExpression &functi
 
 BindResult MatchRecognizeDefineBinder::BindNavigated(unique_ptr<ParsedExpression> inner, string symbol, bool last,
                                                      idx_t offset, idx_t depth) {
-	if (navigated) {
+	if (scope == MatchRecognizeScope::NAVIGATED) {
 		throw BinderException("Nested row pattern navigation is not supported");
 	}
-	if (!outside.empty()) {
-		OutsideMatch("Reading a row of the match");
+	OutsideMatch("Reading a row of the match");
+	BindResult bound;
+	{
+		const ScopedScope navigated(scope, MatchRecognizeScope::NAVIGATED);
+		bound = BindExpression(inner, depth, false);
 	}
-	navigated = true;
-	const auto saved = outside;
-	outside = "the expression a navigation reads, which is computed for every row of the input";
-	auto bound = BindExpression(inner, depth, false);
-	outside = saved;
-	navigated = false;
 	if (bound.HasError()) {
 		return bound;
 	}
@@ -388,22 +422,37 @@ BindResult MatchRecognizeDefineBinder::BindNavigated(unique_ptr<ParsedExpression
 //===--------------------------------------------------------------------===//
 // MEASURES
 //===--------------------------------------------------------------------===//
-//! An aggregate in MEASURES aggregates the rows of the match that its arguments name a variable for.
-//! The variable belongs to this clause's namespace rather than the input's, so it is resolved here
-//! and the reference is left as the column it names.
+//! An aggregate in MEASURES aggregates the rows of the match its arguments name a variable for. The
+//! variable is this clause's name rather than the input's, so it is resolved here.
 static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const case_insensitive_map_t<vector<string>> &symbols,
-                            case_insensitive_set_t &scope) {
+                            case_insensitive_set_t &scope, vector<identifier_set_t> &lambda_parameters) {
+	if (expr->GetExpressionClass() == ExpressionClass::LAMBDA) {
+		identifier_set_t parameters;
+		if (MatchRecognizeLambdaParameters(*expr, parameters)) {
+			lambda_parameters.push_back(std::move(parameters));
+			ScopeToVariable(expr->Cast<LambdaExpression>().RightMutable(), symbols, scope, lambda_parameters);
+			lambda_parameters.pop_back();
+			return;
+		}
+	}
 	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr->Cast<ColumnRefExpression>();
 		auto &names = colref.ColumnNames();
-		if (names.size() >= 2 && symbols.find(names[0].GetIdentifierName()) != symbols.end()) {
+		if (names.size() >= 2 && !LambdaExpression::IsLambdaParameter(lambda_parameters, names[0]) &&
+		    symbols.find(names[0].GetIdentifierName()) != symbols.end()) {
 			scope.insert(names[0].GetIdentifierName());
 			expr = MatchRecognizeWithoutQualifier(colref);
 		}
 		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { ScopeToVariable(child, symbols, scope); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { ScopeToVariable(child, symbols, scope, lambda_parameters); });
+}
+
+static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const case_insensitive_map_t<vector<string>> &symbols,
+                            case_insensitive_set_t &scope) {
+	vector<identifier_set_t> lambda_parameters;
+	ScopeToVariable(expr, symbols, scope, lambda_parameters);
 }
 
 MatchRecognizeMeasureBinder::MatchRecognizeMeasureBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
@@ -420,9 +469,8 @@ BindResult MatchRecognizeMeasureBinder::BindExpression(unique_ptr<ParsedExpressi
 	if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function = expr.Cast<FunctionExpression>();
 		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
-		// RUNNING and FINAL choose how much of the match the measure below them sees. ONE ROW PER
-		// MATCH reports a finished match, so its current row is the last one: the two are the same
-		// thing there and the keywords make no difference.
+		// RUNNING and FINAL choose how much of the match the measure sees, which ONE ROW PER MATCH
+		// makes the same thing: its current row is the last one
 		const auto is_running = function.FunctionName() == MATCH_RECOGNIZE_RUNNING_MARKER;
 		if (is_running || function.FunctionName() == MATCH_RECOGNIZE_FINAL_MARKER) {
 			expr_ptr = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
@@ -440,21 +488,19 @@ BindResult MatchRecognizeMeasureBinder::BindExpression(unique_ptr<ParsedExpressi
 			expr_ptr = StateField("match_number");
 			return BindGenerated(expr_ptr, depth, root_expression);
 		}
-		// logical navigation over the rows of the match. LAST(X.c) is what an unadorned X.c already
-		// means, so both share the masking; only the end they read from differs.
+		// LAST(X.c) is what an unadorned X.c already means, so only the end they read from differs
 		if ((function_name == "FIRST" || function_name == "LAST") && !function.GetArguments().empty() &&
 		    function.GetArguments().size() <= 2) {
 			return BindNavigation(function, function_name, expr_ptr, depth, root_expression);
 		}
-		// DISTINCT, FILTER and an argument ORDER BY only mean anything to an aggregate, so a call
-		// carrying one is one - including a macro standing for one, which the window unfolds. An
-		// aggregate written without them reaches the hook below instead, once the ordinary binder
-		// has resolved what it is.
+		// only an aggregate can carry these, so a call that does is one - including a macro standing
+		// for one, which the window unfolds. Without them it reaches BindAggregate below instead.
 		if (HasAggregateModifiers(function)) {
 			return BindOverMatch(function, depth);
 		}
 	}
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF && !scoped) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF && !scoped &&
+	    !BoundByLambda(lambda_bindings, expr.Cast<ColumnRefExpression>().ColumnNames()[0])) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		auto &names = colref.ColumnNames();
 		auto entry = names.size() >= 2 ? symbols.find(names[0].GetIdentifierName()) : symbols.end();
@@ -467,10 +513,8 @@ BindResult MatchRecognizeMeasureBinder::BindExpression(unique_ptr<ParsedExpressi
 			return BindGenerated(expr_ptr, depth, root_expression);
 		}
 		if (ClaimsAlias(colref)) {
-			// A measure may name an earlier measure, the way a select list may name an earlier column,
-			// and a column of the input takes precedence over one. Which of the two this is only shows
-			// once it has been bound - and if it is the column, binding it again below costs nothing
-			// because a column reference leaves nothing behind.
+			// A measure may name an earlier measure, but a column of the input takes precedence, and
+			// which of the two this is only shows once it is bound. Binding a column ref twice is free.
 			auto probe = expr_ptr->Copy();
 			auto bound = SelectBinder::BindExpression(probe, depth, root_expression);
 			if (bound.HasError() || bound.expression->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
@@ -517,14 +561,12 @@ BindResult MatchRecognizeMeasureBinder::BindOverMatch(FunctionExpression &expr, 
 	                                qualified.Name().GetIdentifierName());
 	window->GetArgumentsMutable() = std::move(expr.GetArgumentsMutable());
 	window->DistinctMutable() = expr.Distinct();
-	// the ordering of an ordered aggregate's input is its own, and the order the match was found
-	// in is no substitute for it
+	// an ordered aggregate's input order is its own, and match order is no substitute
 	if (expr.OrderByMutable()) {
 		window->ArgOrdersMutable() = std::move(expr.OrderByMutable()->orders);
 	}
-	// an empty match covers no rows, so the row carrying it must not reach the aggregate. Dropping
-	// the rows a variable did not match is not the same as passing them as NULL: an aggregate that
-	// keeps NULLs would see them.
+	// the row carrying an empty match must not reach the aggregate at all: passed as NULL, an aggregate
+	// that keeps NULLs would still see it
 	unique_ptr<ParsedExpression> in_match =
 	    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, StateField("is_empty"));
 	if (!scope.empty()) {
@@ -541,8 +583,7 @@ BindResult MatchRecognizeMeasureBinder::BindOverMatch(FunctionExpression &expr, 
 	}
 	ScopeToMatch(context, state, *window, config, running);
 
-	// the aggregate reads the rows of the match through the frame above, so what it reads is not
-	// also masked one value at a time
+	// the frame above already restricts the rows, so the values are not masked as well
 	const auto saved = scoped;
 	scoped = true;
 	auto result = BindWindowExpression(*window, depth);

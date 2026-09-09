@@ -53,10 +53,8 @@ struct MatchRecognizeSubset {
 	static MatchRecognizeSubset Deserialize(Deserializer &deserializer);
 };
 
-//! One clause of a MATCH_RECOGNIZE body. The clauses may be written in any order, so the parser
-//! collects them and the transformer sorts out which is which.
-//! Which clause of a MATCH_RECOGNIZE body this is. Named rather than nested, because the enum
-//! utilities generate from the name alone and a nested one reads as a type of its own.
+//! Which clause of a MATCH_RECOGNIZE body this is. The clauses may be written in any order, so the
+//! parser collects them and the transformer sorts out which is which.
 enum class MatchRecognizeClauseKind : uint8_t { PARTITION, ORDER_BY, MEASURES, ROWS, SKIP, PATTERN, SUBSET, DEFINE };
 
 struct MatchRecognizeClause {

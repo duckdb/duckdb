@@ -16,9 +16,8 @@
 
 namespace duckdb {
 
-//! Names for the columns a MATCH_RECOGNIZE clause generates. The input is bound before any of them
-//! is handed out, so a generated name is one the input does not already have rather than one it is
-//! hoped not to have - and no two of them are the same either.
+//! Names for the columns a MATCH_RECOGNIZE clause generates. The input is bound first, so a generated
+//! name is one the input demonstrably does not have, and no two of them are the same.
 struct GeneratedNames {
 	explicit GeneratedNames(case_insensitive_set_t taken_p) : taken(std::move(taken_p)) {
 	}
@@ -35,8 +34,7 @@ struct GeneratedNames {
 	case_insensitive_set_t taken;
 };
 
-//! A FIRST()/LAST() call in a DEFINE condition. These navigate the rows of the match being assembled,
-//! so the matcher resolves them per row rather than the plan computing them up front.
+//! A FIRST()/LAST() call in a DEFINE condition, which the matcher resolves per row
 struct MatchRecognizeNavigation {
 	bool last;
 	//! The pattern variable navigated, empty for the match as a whole
@@ -47,10 +45,12 @@ struct MatchRecognizeNavigation {
 };
 
 //! What a DEFINE condition needs from the plan below the matcher: one column per value the matcher
-//! cannot compute itself, and the descriptors telling it what to do with them.
+//! cannot compute itself, plus the descriptors telling it what to do with them
 struct MatchRecognizeConditionInputs {
 	//! The projection the matcher reads from, built as the conditions are bound
 	TableIndex projection_index;
+	//! The table a matcher-supplied field is a column of, which no operator produces
+	TableIndex match_number_index;
 	vector<unique_ptr<Expression>> &select_list;
 	vector<Identifier> &names;
 	vector<LogicalType> &types;
@@ -64,32 +64,39 @@ struct MatchRecognizeConditionInputs {
 	unique_ptr<Expression> ProjectAs(unique_ptr<Expression> value, const string &name);
 };
 
+//! Where the value being bound is evaluated, which is what decides whether it may read the state the
+//! matcher holds while it assembles a match.
+enum class MatchRecognizeScope : uint8_t {
+	//! The row the matcher is testing
+	CANDIDATE_ROW,
+	//! A window over the ordered partition
+	WINDOW,
+	//! The expression a navigation reads off a row of the match
+	NAVIGATED,
+	//! The partitioning the matcher walks
+	PARTITION_BY,
+	//! The ordering the matcher walks
+	ORDER_BY
+};
+
 //! Binds a DEFINE condition. The matcher settles a condition one candidate row at a time, so
-//! everything a condition reads that is not the row being tested - a navigation over the match, a
-//! neighbour in the ordered partition, the number of the match - becomes a column of the projection
-//! below it, and the condition reads that column.
-//!
-//! Deciding this while binding rather than before it is what lets a navigation reached through a
-//! macro be seen at all: by the time the hooks below are reached, the ordinary binder has expanded it.
+//! anything a condition reads that is not the row being tested - a navigation over the match, a
+//! neighbour in the ordered partition - becomes a column of the projection below it.
 class MatchRecognizeDefineBinder : public SelectBinder {
 public:
 	MatchRecognizeDefineBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
 	                           MatchRecognizeConditionInputs &inputs, const WindowExpression &window_template,
 	                           const case_insensitive_set_t &symbols, const unique_ptr<Expression> &match_number);
 
-	//! The variable whose condition is being bound. A condition is decided on the row the matcher is
-	//! testing, which is the one place the matcher's own state can be read from.
+	//! Bind the condition of this variable, which is decided on the row the matcher is testing
 	void BeginDefine(const string &name) {
 		define_name = name;
-		outside.clear();
-		frame = false;
+		scope = MatchRecognizeScope::CANDIDATE_ROW;
 	}
-	//! Bind the partitioning or the ordering instead. The matcher walks those, so they are settled
-	//! before there is a match for anything here to read.
-	void BeginFrame(const string &clause) {
+	//! Bind the partitioning or the ordering, which the matcher walks rather than produces
+	void BeginFrame(MatchRecognizeScope frame) {
 		define_name.clear();
-		outside = clause + ", which the matcher walks rather than produces";
-		frame = true;
+		scope = frame;
 	}
 
 protected:
@@ -98,13 +105,11 @@ protected:
 	string UnsupportedAggregateMessage() override;
 
 private:
-	//! PREV()/NEXT() walk the ordered partition rather than the match, so they do not depend on the
-	//! match at all and are computed once, below the matcher
+	//! PREV()/NEXT() walk the ordered partition rather than the match, so they are ordinary windows
 	BindResult BindNeighbour(FunctionExpression &function, const string &function_name,
 	                         unique_ptr<ParsedExpression> &expr_ptr, idx_t depth);
-	//! FIRST()/LAST() navigate the rows of the match being assembled, so the matcher resolves them per
-	//! row: what the plan supplies is the expression navigated, and the matcher reads it off the row
-	//! it navigated to
+	//! FIRST()/LAST() read a row of the match being assembled, so the plan supplies the expression and
+	//! the matcher reads it off the row it navigated to
 	BindResult BindNavigation(FunctionExpression &function, const string &function_name, idx_t depth);
 	BindResult BindNavigated(unique_ptr<ParsedExpression> inner, string symbol, bool last, idx_t offset, idx_t depth);
 	//! Reject something that only means anything while the matcher is assembling a match
@@ -114,27 +119,17 @@ private:
 	const WindowExpression &window_template;
 	//! Every pattern variable the clause declares
 	const case_insensitive_set_t &symbols;
-	//! The column the matcher rewrites with the number of the match it is assembling
+	//! What the matcher's own match number reads as until the plan is built
 	const unique_ptr<Expression> &match_number;
 	//! The variable whose condition is being bound
 	string define_name;
-	//! Whether what is being bound is read off a row other than the one being tested
-	bool navigated = false;
-	//! What the value being bound is computed for, when that is not the row the matcher is testing:
-	//! a window over the partition, the expression a navigation reads, or the frame the matcher
-	//! walks. Empty exactly where the matcher's own state is available.
-	string outside;
-	//! Whether what is being bound is the partitioning or the ordering, which cannot read a
-	//! neighbour in the very order they are defining
-	bool frame = false;
+	MatchRecognizeScope scope = MatchRecognizeScope::CANDIDATE_ROW;
 };
 
-//! Binds the MEASURES clause. Everything MATCH_RECOGNIZE adds to an expression is decided here -
-//! which rows of the match a value is read from, what a pattern variable in front of a column means,
-//! and how much of the match RUNNING and FINAL let it see - and everything else is ordinary binding.
-//!
-//! An aggregate arrives at the hook below only once the ordinary binder has expanded the macros and
-//! chosen the overload, so what the frame is applied to is the aggregate that is really being called.
+//! Binds the MEASURES clause: which rows of the match a value is read from, what a pattern variable in
+//! front of a column means, and how much of the match RUNNING and FINAL let it see. Everything else is
+//! ordinary binding, so an aggregate reaches the hook below only once the macros are expanded and the
+//! overload chosen.
 class MatchRecognizeMeasureBinder : public SelectBinder {
 public:
 	MatchRecognizeMeasureBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, string state,
@@ -150,8 +145,7 @@ private:
 	BindResult BindOverMatch(FunctionExpression &expr, idx_t depth);
 	//! One field of the matcher's state, as it stands where the measures are projected
 	unique_ptr<ParsedExpression> StateField(const string &field);
-	//! Bind an expression this binder built. Its own parts are not the clause's to interpret again,
-	//! and the user's expression inside it has already been through here.
+	//! Bind an expression this binder built, whose own parts are not the clause's to interpret again
 	BindResult BindGenerated(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
 	BindResult BindNavigation(FunctionExpression &function, const string &function_name,
 	                          unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
@@ -179,5 +173,9 @@ idx_t MatchRecognizeNavigationOffset(const string &function_name, const ParsedEx
 
 //! One field of the matcher's state, read from the column it travels in
 unique_ptr<ParsedExpression> MatchRecognizeStateField(const string &state, const string &field);
+
+//! The names a lambda binds for its body, or false when the expression is only spelled like one: the
+//! arrow form is also the JSON operator, and which it is only settles when the function is bound.
+bool MatchRecognizeLambdaParameters(const ParsedExpression &expr, identifier_set_t &parameters);
 
 } // namespace duckdb

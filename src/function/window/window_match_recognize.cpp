@@ -24,8 +24,7 @@ namespace duckdb {
 //! The result's list child, in the order ResultType() declares its fields
 using SpanStruct = VectorStructType<string_t, uint64_t, bool, bool, uint64_t, uint64_t, bool, bool, uint64_t>;
 
-//! One membership of a row in a match. Overlapping matches each give the rows they cover one of
-//! these, so there are as many as there are (row, match) pairs and not as many as there are rows.
+//! One membership of a row in a match: there is one per (row, match) pair, not one per row
 struct MatchRecognizeSpan {
 	idx_t symbol;
 	idx_t match_number;
@@ -49,12 +48,9 @@ struct MatchRecognizeRowSpans {
 	idx_t count = 0;
 };
 
-//! Appends memberships on behalf of one thread. The rows of a partition belong to the thread that
-//! took it, so the arena below is the thread's own; the state it writes into owns it from the start,
-//! so the memberships outlive the walk however it ends.
-//!
-//! The arena allocates through the buffer manager, so storage that grows with the memberships rather
-//! than with the rows grows against the memory limit and not outside it.
+//! Appends memberships on behalf of one thread. The arena is that thread's own but owned by the global
+//! state, so the memberships outlive the walk however it ends, and it allocates through the buffer
+//! manager so that they count against the memory limit.
 struct MatchRecognizeSpanWriter {
 	explicit MatchRecognizeSpanWriter(ArenaAllocator &arena_p) : arena(arena_p) {
 	}
@@ -94,8 +90,7 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 		D_ASSERT(executor.wexpr.GetReturnType().id() == LogicalTypeId::LIST);
 	}
 
-	//! An arena for a thread to fill. The state owns it from the start, so what is written into it is
-	//! still there whether the walk that wrote it finished or was cut short.
+	//! An arena for a thread to fill, owned here so that what it holds survives a cut-short walk
 	ArenaAllocator &SpanArena(ClientContext &client) {
 		lock_guard<mutex> guard(state_lock);
 		span_arenas.push_back(make_uniq<ArenaAllocator>(BufferManager::GetBufferManager(client).GetBufferAllocator()));
@@ -112,21 +107,20 @@ struct WindowMatchRecognizeGlobalState : WindowExecutorGlobalState {
 	vector<idx_t> classifiers;
 	//! Whether the pattern matched each row inside a {- -}, written alongside the classifier above
 	vector<uint8_t> excluded_rows;
-	//! One boolean per symbol per row. Sink fills these as rows arrive, over disjoint ranges, so the
-	//! threads do not need to coordinate.
+	//! One boolean per symbol per row, filled by Sink over disjoint ranges
 	vector<vector<uint8_t>> condition_values;
 
 	//! What each symbol reports as its classifier
 	vector<string> classifier_names;
-	//! Where each row's memberships start, and how many of them there are
+	//! Where each row's memberships start, and how many there are
 	vector<MatchRecognizeRowSpans> row_spans;
 	//! The arenas the memberships above live in, one per thread that wrote any
 	vector<unique_ptr<ArenaAllocator>> span_arenas;
 };
 
 LogicalType WindowMatchRecognizeExecutor::ResultType() {
-	// One entry per match a row takes part in: overlapping matches each keep their own, and the plan
-	// unnests the list. Rows that matched nothing get an empty list, which unnest drops.
+	// One entry per match a row takes part in; the plan unnests the list, which drops the rows that
+	// matched nothing
 	return LogicalType::LIST(LogicalType::STRUCT({{"classifier", LogicalType::VARCHAR},
 	                                              {"match_number", LogicalType::UBIGINT},
 	                                              {"is_match_start", LogicalType::BOOLEAN},
@@ -144,8 +138,8 @@ LogicalType WindowMatchRecognizeExecutor::ResultType() {
 // Binding
 //===--------------------------------------------------------------------===//
 unique_ptr<FunctionData> WindowMatchRecognizeExecutor::Bind(BindWindowFunctionInput &input) {
-	// The MATCH_RECOGNIZE binder builds this function's configuration itself and hands it over as bind
-	// data, so nothing that reaches here came from a MATCH_RECOGNIZE clause.
+	// the MATCH_RECOGNIZE binder hands its configuration over as bind data, so nothing reaching here
+	// came from a MATCH_RECOGNIZE clause
 	throw BinderException("%s is how the MATCH_RECOGNIZE clause is planned rather than a function to call, so it "
 	                      "cannot be used directly",
 	                      MatchRecognizeFun::Name);
@@ -242,7 +236,7 @@ void WindowMatchRecognizeExecutor::GetSharing(WindowExecutor &executor, WindowSh
 	for (auto &child : executor.wexpr.GetChildren()) {
 		executor.child_idx.emplace_back(shared.RegisterSink(child));
 	}
-	// conditions settled per candidate row need the group kept around to read arbitrary rows from
+	// a condition settled per candidate row reads arbitrary rows, so the group has to stay
 	auto per_row = !config.navigations.empty();
 	for (auto scoped : config.row_scoped) {
 		per_row = per_row || scoped;
@@ -269,8 +263,7 @@ public:
 	    : WindowExecutorLocalState(context, gstate) {
 		auto &config = gstate.executor.wexpr.BindInfo()->Cast<MatchRecognizeFunctionData>();
 		for (idx_t i = 0; i < config.conditions.size(); i++) {
-			// a condition that depends on the match being assembled has no answer yet, and evaluating
-			// it here would raise its errors against a match state that does not exist
+			// a condition that depends on the match being assembled has no answer yet
 			if (config.row_scoped[i]) {
 				continue;
 			}
@@ -372,9 +365,7 @@ static idx_t SkipTo(const MatchRecognizeFunctionData &config, idx_t skip_symbol,
 	return MaxValue(resume, match_start + 1);
 }
 
-// this gets called per partition
-//! Work out where the partitions are. Every thread that reaches Finalize shares them, so this
-//! happens once.
+//! Work out where the partitions are, once, for every thread that reaches Finalize
 static void PrepareHashGroup(WindowMatchRecognizeGlobalState &gstate) {
 	lock_guard<mutex> lock(gstate.state_lock);
 	if (gstate.prepared) {
@@ -393,7 +384,6 @@ static void PrepareHashGroup(WindowMatchRecognizeGlobalState &gstate) {
 	}
 }
 
-//! Match the partitions of the hash group, taking them from the shared cursor until they run out.
 //! Decides whether a row can be a given symbol. Conditions that do not depend on the match were
 //! settled in Sink; the rest are evaluated here, against the match being assembled.
 class RowConditions {
@@ -405,9 +395,8 @@ public:
 		for (auto &condition : config.conditions) {
 			conditions.push_back(condition->Copy());
 		}
-		// Which field of the condition input each condition reads, and where that field's value comes
-		// from. Resolving both once is what lets a row be assembled by copying only the values the
-		// condition being decided actually reads.
+		// resolving where each field's value comes from once is what lets a row be assembled by copying
+		// only the fields the condition being decided reads
 		for (auto &condition : config.conditions) {
 			ExpressionIterator::VisitExpression<BoundReferenceExpression>(
 			    *condition, [&](const BoundReferenceExpression &bound_ref) {
@@ -461,10 +450,9 @@ public:
 
 	bool Matches(idx_t index, idx_t row) {
 		D_ASSERT(index < config.symbols.size());
-		// Every classification passes through here, so the occurrence positions FIRST()/LAST() need
-		// can be kept as the match assembles instead of rescanning it per row. Testing a row again
-		// discards what was recorded from there on: those classifications belonged to an attempt the
-		// matcher has abandoned.
+		// The positions FIRST()/LAST() need are recorded as the match assembles rather than rescanned.
+		// Testing a row again discards what was recorded from there on, which belonged to an attempt
+		// the matcher has abandoned.
 		if (!navigation_positions.empty()) {
 			D_ASSERT(row <= next_row);
 			if (row < next_row) {
@@ -488,16 +476,13 @@ public:
 		if (!ready) {
 			Initialize();
 		}
-		// Copying a value into a vector *appends* to that vector's storage - a string onto its heap,
-		// a list's elements onto its child - so writing row zero again does not take the previous
-		// value back. A row that was only overwritten would carry every value the conditions were
-		// ever decided on, which is why the row is given back before it is assembled again.
+		// release the variable-size values of the previous evaluation: copying into a vector appends to
+		// its storage rather than replacing what is there
 		if (row_grows) {
 			ResetRow();
 		}
 
-		// The row is assembled a field at a time out of the collection, so what is held here is one
-		// row of the fields the conditions read rather than a copy of everything that was collected.
+		// one row of the fields this condition reads, rather than a copy of everything collected
 		for (auto field : condition_fields[index]) {
 			auto &plan = field_plan[field];
 			auto &target = row_chunk.data[field];
@@ -546,14 +531,12 @@ private:
 		for (auto column_idx : columns_idx) {
 			types.push_back(collection.GetTypes()[column_idx]);
 		}
-		// the matcher rewrites the number of the match it is assembling, so the plan supplies no
-		// column for it and it sits after the ones the plan does supply
+		// the matcher supplies its own field, which sits after the ones the plan does
 		types.resize(MaxValue<idx_t>(types.size(), config.match_number_field + 1), LogicalType::UBIGINT);
 		row_chunk.Initialize(context.client, types, 1);
 		// one expression is evaluated at a time here, so the result holds a single column
 		row_result.Initialize(context.client, vector<LogicalType> {LogicalType::BOOLEAN}, 1);
-		// only a field that carries its values somewhere other than the vector's own data can grow,
-		// so a condition over fixed-width fields pays nothing for the reset below
+		// only a field holding values outside the vector's own data can grow
 		for (auto &type : types) {
 			row_grows = row_grows || !TypeIsConstantSize(type.InternalType());
 		}
@@ -575,16 +558,15 @@ private:
 		row_chunk.Reset();
 		// the vectors carry their own size, and reading one row out of them means saying so here
 		row_chunk.SetChildCardinality(1);
-		// A condition only writes the fields it reads, so the rest never hold anything. Starting them
-		// as NULL keeps what the allocation happened to contain out of the chunk entirely.
+		// a condition only writes the fields it reads, so the rest must read as NULL rather than as
+		// whatever the allocation held
 		for (auto &field : row_chunk.data) {
 			field.SetVectorType(VectorType::FLAT_VECTOR);
 			FlatVector::ValidityMutable(field).SetInvalid(0);
 		}
 	}
 
-	//! Copy one field of one collected row. Seeking can replace the cursor's chunk, so the value is
-	//! taken out of it here rather than referenced out of it.
+	//! Copy one field of one collected row: seeking can replace the cursor's chunk, so it is a copy
 	static void CopyField(WindowCursor &cursor, idx_t field, idx_t row, Vector &target) {
 		const auto index = cursor.Seek(row);
 		VectorOperations::Copy(cursor.chunk.data[field], target, index + 1, index, 0);
@@ -594,9 +576,8 @@ private:
 	optional_idx Navigate(const MatchRecognizeFunctionData::Navigation &navigation, idx_t navigation_idx,
 	                      idx_t row) const {
 		if (navigation.symbol.empty()) {
-			// The match as a whole, counted from whichever end. The rows it covers so far are
-			// [match_start, row], so the offset is compared against how many there are rather than
-			// added to an end first - added first it would wrap and land back inside the match.
+			// the match covers [match_start, row], so the offset is compared against how many rows
+			// that is; added to an end first it would wrap and land back inside the match
 			const auto matched = row - match_start;
 			if (navigation.offset > matched) {
 				return optional_idx();
@@ -651,16 +632,14 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 		return row_conditions.Matches(index, row);
 	};
 
-	// a condition that reads MATCH_NUMBER(), or navigates the match at all, depends on which attempt
-	// it is being tested in
+	// a condition that reads MATCH_NUMBER(), or navigates at all, depends on the attempt
 	auto memo = PatternMemo::PARTITION;
 	for (auto scoped : config.row_scoped) {
 		memo = scoped ? PatternMemo::ATTEMPT : memo;
 	}
 	for (auto &navigation : config.navigations) {
-		// navigating the match as a whole reads where it started, which the attempt fixes. Navigating a
-		// variable's rows reads which rows were matched to it, and that is what differs between two
-		// ways of reaching the same state.
+		// the match as a whole starts where the attempt does, but which rows were matched to a variable
+		// differs between two ways of reaching the same state
 		memo = navigation.symbol.empty() ? memo : PatternMemo::HISTORY;
 	}
 
@@ -669,8 +648,7 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 	program.Finish();
 	PatternMatcher matcher(context.client, program, symbol_matches, classifiers, gstate.excluded_rows, memo);
 
-	// Partitions are independent, so every thread that reaches Finalize takes them from a shared
-	// cursor rather than one thread doing the whole hash group.
+	// partitions are independent, so the threads reaching Finalize share them out
 	while (true) {
 		const auto partition_idx = gstate.next_partition++;
 		if (partition_idx >= gstate.partitions.size()) {
@@ -680,8 +658,7 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 		const auto partition_end = gstate.partitions[partition_idx].second;
 		matcher.BeginPartition();
 
-		// scan the partition left to right, applying AFTER MATCH SKIP after every match. Rows that are
-		// not part of any match keep a NULL struct, which filters them out downstream.
+		// scan left to right, applying AFTER MATCH SKIP after every match
 		idx_t match_number = 0;
 		auto row = partition_start;
 		while (row <= partition_end) {
@@ -691,9 +668,8 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 				row++;
 				continue;
 			}
-			// a pattern that can match nothing produces an empty match, which covers no rows. It is
-			// still a match and still reported, but the span only marks where it happened, and the
-			// scan has to step past it rather than skip, or it would never move.
+			// an empty match is still reported, but covers no rows - the scan steps past it rather than
+			// skipping, or it would never move
 			if (matcher.match_end <= row) {
 				match_number++;
 				writer.Append(gstate.row_spans[row], MatchRecognizeSpan {0, match_number, row, row, true, false, true});
@@ -729,9 +705,8 @@ void WindowMatchRecognizeExecutor::Finalize(ExecutionContext &context, optional_
 void WindowMatchRecognizeExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                            Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gstate = sink.global_state.Cast<WindowMatchRecognizeGlobalState>();
-	// The list is built for the rows being read rather than for the whole input, so the memberships are
-	// laid out flat a chunk at a time and never all at once. Matching is over by the time anything
-	// reads here - every thread has left Finalize - so this only reads shared state.
+	// one chunk of memberships at a time rather than the whole input. Matching is over by now - every
+	// thread has left Finalize - so the shared state below is only read.
 	const auto count = bounds.size();
 	auto writer = FlatVector::Writer<VectorListType<SpanStruct>>(result, count);
 	for (idx_t i = 0; i < count; i++) {
@@ -764,8 +739,7 @@ void WindowMatchRecognizeExecutor::GetData(ExecutionContext &context, DataChunk 
 }
 
 WindowFunction MatchRecognizeFun::GetFunction() {
-	// The columns the conditions read are what this is called with; everything else about the match
-	// is configuration the MATCH_RECOGNIZE binder builds and hands over as bind data.
+	// called with the columns the conditions read; everything else arrives as bind data
 	WindowFunction fun(Name, {LogicalType::ANY}, WindowMatchRecognizeExecutor::ResultType(),
 	                   ExpressionType::WINDOW_FUNCTION, WindowMatchRecognizeExecutor::Bind,
 	                   WindowMatchRecognizeExecutor::GetBounds, WindowMatchRecognizeExecutor::GetSharing,

@@ -107,8 +107,7 @@ MatchRecognizeClause PEGTransformerFactory::TransformMRDefine(PEGTransformer &tr
 	return result;
 }
 
-//! The clauses may arrive in any order, so which one is which is settled here rather than by the
-//! shape of the grammar. That also lets a repeated or missing clause be named in the error.
+//! The clauses may arrive in any order, so which is which is settled here rather than by the grammar
 unique_ptr<TableRef>
 PEGTransformerFactory::TransformMatchRecognizeBody(PEGTransformer &transformer,
                                                    vector<MatchRecognizeClause> match_recognize_clause) {
@@ -155,8 +154,7 @@ PEGTransformerFactory::TransformMatchRecognizeBody(PEGTransformer &transformer,
 			break;
 		}
 	}
-	// only the pattern is required. A variable with no condition matches any row, so leaving out
-	// DEFINE asks for the pattern's shape alone, and leaving out MEASURES reports the rows themselves.
+	// only the pattern is required: a variable with no condition matches any row
 	if (!seen[static_cast<idx_t>(MatchRecognizeClauseKind::PATTERN)]) {
 		throw ParserException("MATCH_RECOGNIZE requires a PATTERN clause");
 	}
@@ -309,14 +307,12 @@ PEGTransformerFactory::TransformRowPatternFactor(PEGTransformer &transformer,
 	                                                              quantifier.max_count, false, quantifier.reluctant);
 }
 
-//! PERMUTE(A, B, C) matches its parts in any order, which is the alternation of every arrangement of
-//! them taken in lexicographic order of the list as written. Expanding it here keeps the matcher's
-//! program the only thing that has to understand a pattern.
+//! PERMUTE(A, B, C) is the alternation of every arrangement of its parts, in lexicographic order of the
+//! list as written. Expanding it here keeps it out of the matcher.
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformRowPatternPermute(PEGTransformer &transformer,
                                                   vector<unique_ptr<ParsedExpression>> row_pattern) {
-	// every arrangement is spelled out, so the program grows with the factorial of the list and the
-	// matcher's record of explored states grows with it
+	// every arrangement is spelled out, so the program grows with the factorial of the list
 	static constexpr idx_t MAX_PERMUTE_PARTS = 6;
 	if (row_pattern.size() > MAX_PERMUTE_PARTS) {
 		throw ParserException("PERMUTE takes at most %llu parts, because it stands for every order of them",

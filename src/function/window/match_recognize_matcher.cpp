@@ -6,9 +6,7 @@
 
 namespace duckdb {
 
-//! The fewest rows a pattern node can match. A repetition of it can only be reached that many times
-//! fewer than there are rows, which is what keeps a counted quantifier around one from expanding into
-//! repetitions that could never be taken.
+//! The fewest rows a pattern node can match, which bounds how often a repetition of it is reachable
 static idx_t MinConsumption(const MatchRecognizePattern &node) {
 	const auto saturating_add = [](idx_t left, idx_t right) {
 		return left > NumericLimits<idx_t>::Maximum() - right ? NumericLimits<idx_t>::Maximum() : left + right;
@@ -75,8 +73,7 @@ void PatternProgram::Compile(const MatchRecognizePattern &node, idx_t limit, boo
 	case MatchRecognizePatternType::QUANTIFIER: {
 		auto &child_node = *node.children[0];
 		const auto inner = excluded || node.excluded;
-		// one repetition past what the rows allow already makes the program unsatisfiable, which is
-		// what every further one would have been too
+		// one repetition past what the rows allow is already unsatisfiable, as every further one is
 		const idx_t declared_min = node.min_count.IsValid() ? node.min_count.GetIndex() : 0;
 		const idx_t consumption = MinConsumption(child_node);
 		const idx_t reachable = consumption == 0 ? limit + 1 : limit / consumption + 1;
@@ -84,8 +81,7 @@ void PatternProgram::Compile(const MatchRecognizePattern &node, idx_t limit, boo
 		for (idx_t i = 0; i < min_count; i++) {
 			Compile(child_node, limit, inner);
 		}
-		// the matcher takes a split's target before its alternative, so which of the two is the
-		// repetition and which is the way out is what greedy and reluctant come down to
+		// a split's target is taken before its alternative, which is what greedy and reluctant swap
 		const auto reluctant = node.reluctant;
 		if (!node.max_count.IsValid()) {
 			const auto loop = code.size();
@@ -144,8 +140,7 @@ PatternMatcher::PatternMatcher(ClientContext &context_p, const PatternProgram &p
     : context(context_p), program(program_p), symbol_matches(symbol_matches_p), classifiers(classifiers_p),
       excluded_rows(excluded_rows_p), memo(memo_p), row_count(classifiers_p.size()) {
 	if (memo == PatternMemo::HISTORY) {
-		// no row is matched within a scope, so every state it marks sits at the same row and one
-		// mark per instruction is enough
+		// no row is matched within a scope, so one mark per instruction is enough
 		history_marks.assign(program.code.size(), 0);
 		return;
 	}
@@ -183,8 +178,7 @@ bool PatternMatcher::Match(idx_t start, idx_t partition_start, idx_t input_size)
 		pending.pop_back();
 		auto pc = state.pc;
 		auto offset = state.offset;
-		// this alternative was left behind on a path that has since walked on; the marks it may
-		// read are the ones that path had taken when it was pushed
+		// the marks this alternative may read are the ones its path had taken when it was pushed
 		UnwindHistory(state.trail_size);
 		auto walk = state.scope;
 		while (true) {
@@ -198,9 +192,8 @@ bool PatternMatcher::Match(idx_t start, idx_t partition_start, idx_t input_size)
 			}
 			auto &instruction = program.code[pc];
 			if (instruction.op == PatternOp::MATCH) {
-				// a record is only proof of a dead end when its subtree was searched to
-				// exhaustion. This search stopped early, so a later start must be free to walk
-				// these states again - persisting them would hide its matches.
+				// a record only proves a dead end once its subtree was searched to exhaustion,
+				// and this search stopped early
 				for (auto mark : attempt_marks) {
 					explored.get()[mark] = 0;
 				}
@@ -227,8 +220,7 @@ bool PatternMatcher::Match(idx_t start, idx_t partition_start, idx_t input_size)
 			if (offset >= input_size) {
 				break;
 			}
-			// the row is tentatively this symbol while its condition is evaluated, which is what
-			// lets LAST(X.c) see the row being tested
+			// the row is tentatively this symbol while its condition runs, so LAST(X.c) sees it
 			classifiers[offset] = instruction.symbol;
 			if (!symbol_matches(instruction.symbol, offset)) {
 				break;
@@ -273,9 +265,8 @@ void PatternMatcher::NextEpoch() {
 	}
 }
 
-//! Open the stretch of the walk that starts where the last row was matched. Scope 0 is the one no
-//! mark was ever taken in, so counting up hands out an identity nothing can already be holding
-//! and a 64 bit counter never comes back round to one that is.
+//! Open the stretch of the walk that starts where the last row was matched. Scope 0 is the one no mark
+//! was ever taken in, and a 64 bit counter never comes back round to a scope still in use.
 idx_t PatternMatcher::NextScope() {
 	return memo == PatternMemo::HISTORY ? ++history_scope : 0;
 }

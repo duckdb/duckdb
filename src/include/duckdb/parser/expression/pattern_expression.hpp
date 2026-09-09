@@ -13,8 +13,8 @@
 
 namespace duckdb {
 
-//! The nodes a PATTERN is built from. They only ever appear inside a MATCH_RECOGNIZE pattern, so they all
-//! share ExpressionClass::PATTERN and are told apart by their expression type.
+//! The nodes a PATTERN is built from. They share ExpressionClass::PATTERN and are told apart by their
+//! expression type.
 class PatternExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::PATTERN;
@@ -24,8 +24,7 @@ public:
 	}
 
 public:
-	//! One entry point for the three pattern nodes, which the generated ParsedExpression switch cannot tell
-	//! apart because they share an expression class
+	//! One entry point for the three, which share an expression class
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 };
 
@@ -49,8 +48,7 @@ public:
 	vector<unique_ptr<ParsedExpression>> children;
 };
 
-//! A*, A+, A{2,4}: the part matches a bounded number of times. An unset bound means "unbounded" in that
-//! direction.
+//! A*, A+, A{2,4}: an unset bound means "unbounded" in that direction
 class QuantifiedExpression : public PatternExpression {
 public:
 	QuantifiedExpression(unique_ptr<ParsedExpression> child_p, optional_idx min_count_p, optional_idx max_count_p,
@@ -116,7 +114,6 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
-	// TODO should this be a child list too?
 	unique_ptr<ParsedExpression> child_left;
 	unique_ptr<ParsedExpression> child_right;
 };

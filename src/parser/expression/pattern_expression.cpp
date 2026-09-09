@@ -146,8 +146,8 @@ unique_ptr<ParsedExpression> QuantifiedExpression::Deserialize(Deserializer &des
 // Alternation
 //===--------------------------------------------------------------------===//
 string AlternationExpression::ToString() const {
-	// the parentheses keep a quantifier on the alternation from binding to its right hand side alone, and the
-	// spaces keep the bar from being read as part of a neighbouring quantifier
+	// the parentheses keep a quantifier from binding to the right hand side alone, and the spaces keep
+	// the bar out of a neighbouring quantifier
 	return StringUtil::Format("(%s | %s)", child_left->ToString(), child_right->ToString());
 }
 
