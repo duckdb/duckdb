@@ -166,8 +166,11 @@ static FilterPropagateResult ContainsFilterPrune(const FunctionStatisticsPruneIn
 }
 
 ScalarFunction GetStringContains() {
-	ScalarFunction string_fun("contains", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	ScalarFunction string_fun("contains", {}, LogicalType::BOOLEAN,
 	                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
+	string_fun.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("search_string", LogicalType::VARCHAR);
 	string_fun.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	string_fun.SetFilterPruneCallback(ContainsFilterPrune);
 	return string_fun;
