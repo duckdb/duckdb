@@ -7,9 +7,15 @@
 
 using namespace duckdb;
 
-static unique_ptr<TransformResultValue> TransformDialectDemoExpression(PEGTransformer &, ParseResult &) {
+static unique_ptr<TransformResultValue> TransformDialectDemoExpression(PEGTransformer &transformer,
+                                                                       ParseResult &parse_result) {
 	auto result = make_uniq<ConstantExpression>(Value("Hello from the dialect extension demo"));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+static unique_ptr<TransformProcess> TransformDialectDemoProcess(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	return make_uniq<FinalizeTransformProcess>(transformer, parse_result, TransformDialectDemoExpression);
 }
 
 class LoadableDialectExtensionDemo final : public DialectExtension {
@@ -18,7 +24,7 @@ public:
 	}
 
 	void ApplyGrammarChanges(GrammarChangesInput &input) override {
-		input.parsed_grammar.AddRule("DialectDemoExpression <- 'DIALECT_DEMO'", TransformDialectDemoExpression);
+		input.parsed_grammar.AddRule("DialectDemoExpression <- 'DIALECT_DEMO'", TransformDialectDemoProcess);
 		input.parsed_grammar.PrependChoice("SingleExpression", "DialectDemoExpression");
 	}
 };

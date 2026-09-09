@@ -70,10 +70,10 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 	auto result = make_uniq<DuckDBSettingsData>();
 	auto &bind_data = input.bind_data->Cast<DuckDBSettingsBindData>();
 
-	unordered_map<idx_t, vector<Value>> aliases;
+	identifier_map_t<vector<Value>> aliases;
 	for (idx_t i = 0; i < DBConfig::GetAliasCount(); i++) {
 		auto alias = DBConfig::GetAliasByIndex(i);
-		aliases[alias->option_index].emplace_back(alias->alias);
+		aliases[alias->setting_name].emplace_back(alias->alias);
 	}
 
 	auto &config = DBConfig::GetConfig(context);
@@ -103,7 +103,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		value.description = option->description;
 		value.input_type = option->parameter_type;
 		value.scope = EnumUtil::ToString(scope);
-		auto entry = aliases.find(i);
+		auto entry = aliases.find(option->name);
 		if (entry != aliases.end()) {
 			value.aliases = std::move(entry->second);
 		}

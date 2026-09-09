@@ -40,7 +40,7 @@ shared_ptr<CompiledGrammar> DialectExtension::GetCompiledGrammar(const ClientCon
 	compiled_rules_map_t rules;
 	for (auto &entry : parsed_grammar.rules) {
 		auto &rule = *entry.second;
-		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform));
+		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process));
 	}
 	auto terminal_rule_overrides = parsed_grammar.BuildTerminalRuleOverrides(*keyword_helper);
 	CreateMatcherFactoryInput matcher_factory_input {allocator, parsed_grammar, rules, *keyword_helper,
@@ -52,7 +52,7 @@ shared_ptr<CompiledGrammar> DialectExtension::GetCompiledGrammar(const ClientCon
 
 	auto result = shared_ptr<CompiledGrammar>(new CompiledGrammar(std::move(allocator), std::move(keyword_helper),
 	                                                              std::move(tokenizer), std::move(rules),
-	                                                              program_matcher, top_level_statement_matcher, true));
+	                                                              program_matcher, top_level_statement_matcher));
 
 	lock_guard<mutex> guard(lock);
 	if (!cache) {
