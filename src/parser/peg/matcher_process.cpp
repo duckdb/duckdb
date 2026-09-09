@@ -256,4 +256,20 @@ arena_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state) const {
 	return state.Make<RepeatMatchProcess>(*this, state);
 }
 
+idx_t BuiltinMatchProcessSize() {
+	idx_t result = sizeof(ListMatchProcess);
+	result = MaxValue<idx_t>(result, sizeof(ChoiceMatchProcess));
+	result = MaxValue<idx_t>(result, sizeof(OptionalMatchProcess));
+	result = MaxValue<idx_t>(result, sizeof(RepeatMatchProcess));
+	return result;
+}
+
+idx_t BuiltinMatchProcessAlignment() {
+	idx_t result = alignof(ListMatchProcess);
+	result = MaxValue<idx_t>(result, alignof(ChoiceMatchProcess));
+	result = MaxValue<idx_t>(result, alignof(OptionalMatchProcess));
+	result = MaxValue<idx_t>(result, alignof(RepeatMatchProcess));
+	return result;
+}
+
 } // namespace duckdb
