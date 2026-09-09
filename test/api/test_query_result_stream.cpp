@@ -301,52 +301,17 @@ TEST_CASE("InterruptAndNotify wakes a consumer waiting on an idle engine", "[api
 	REQUIRE(channel.Wait(seen));
 	interrupter.join();
 
-	unique_ptr<DataChunk> chunk;
-	REQUIRE(stream->TryFetch(chunk) == QueryResultState::EXECUTION_ERROR);
-	REQUIRE(StringUtil::Contains(stream->GetError(), "INTERRUPT"));
-
-	con.context->ClearInterrupt();
-	auto next = con.Query("SELECT 42");
-	REQUIRE(CHECK_COLUMN(next, 0, {42}));
-}
-
-TEST_CASE("Poll observes an interrupt on an idle engine", "[api][query_result_stream]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	// No worker threads: no task reaches an interrupt check, so only the poll itself can observe the flag
-	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
-
-	auto stream = OpenStream(con, "SELECT i FROM range(1000000) t(i)");
-	con.Interrupt();
+	// No task ran to reach an interrupt check: the poll itself observes the flag
 	REQUIRE(stream->Poll() == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(StringUtil::Contains(stream->GetError(), "INTERRUPT"));
 	REQUIRE(!stream->IsOpen());
 	// The terminal state keeps repeating
-	REQUIRE(stream->Poll() == QueryResultState::EXECUTION_ERROR);
+	unique_ptr<DataChunk> chunk;
+	REQUIRE(stream->TryFetch(chunk) == QueryResultState::EXECUTION_ERROR);
 
 	con.context->ClearInterrupt();
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
-}
-
-TEST_CASE("Poll reports READY for a buffered chunk while no producer is parked", "[api][query_result_stream]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	// The whole result fits the buffer, so no producer parks and the engine never waits on the consumer
-	auto stream = OpenStream(con, "SELECT i FROM range(5000) t(i)");
-	auto &buffered = stream->GetBufferedData();
-	Deadline deadline;
-	while (!buffered.HasObservableChunk()) {
-		REQUIRE(!deadline.Passed());
-		std::this_thread::sleep_for(std::chrono::microseconds(100));
-	}
-	REQUIRE(!buffered.WaitsOnConsumer());
-	REQUIRE(stream->Poll() == QueryResultState::READY);
-	unique_ptr<DataChunk> chunk;
-	REQUIRE(stream->TryFetch(chunk) == QueryResultState::READY);
-	REQUIRE(chunk);
-	REQUIRE(chunk->size() > 0);
 }
 
 TEST_CASE("An error after the first chunk surfaces at the consumer's next call", "[api][query_result_stream]") {

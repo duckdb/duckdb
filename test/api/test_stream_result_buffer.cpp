@@ -402,37 +402,52 @@ TEST_CASE("A parked read-ahead batch does not report the batched buffer waiting 
 	REQUIRE(!buffered.WaitsOnConsumer());
 }
 
-TEST_CASE("Poll on a draining batched stream reports READY only with a chunk to pop", "[api][stream_buffer]") {
+TEST_CASE("Poll on a draining stream reports READY exactly when a chunk is poppable", "[api][stream_buffer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(2000000)"));
-	// A small buffer keeps read-ahead batches parking for the whole drain
+	// A small buffer keeps producers parking for the whole drain
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='64KB'"));
 
-	auto result = ExecuteStreaming(con, "SELECT i FROM t");
-	auto &stream = *result;
-	auto &buffered = stream.GetBufferedData().Cast<BatchedBufferedData>();
-	Deadline deadline;
-	idx_t row_count = 0;
-	while (true) {
-		unique_ptr<DataChunk> chunk;
-		auto state = stream.TryFetch(chunk);
-		if (state == QueryResultState::READY) {
-			row_count += chunk->size();
-			continue;
+	// The unordered plan uses the simple store, the table scan the batched one
+	for (auto query : {"SELECT i FROM range(2000000) t(i)", "SELECT i FROM t"}) {
+		auto result = ExecuteStreaming(con, query);
+		auto &stream = *result;
+		auto &buffered = stream.GetBufferedData();
+		Deadline deadline;
+		idx_t row_count = 0;
+		idx_t unparked_polls = 0;
+		while (true) {
+			// Nothing but this thread pops, so a chunk observed here is still there for the poll
+			const bool observable = buffered.HasObservableChunk();
+			const bool engine_waits = buffered.WaitsOnConsumer();
+			const auto polled = stream.Poll();
+			if (observable) {
+				REQUIRE(polled == QueryResultState::READY);
+				if (!engine_waits) {
+					unparked_polls++;
+				}
+			}
+			if (polled == QueryResultState::READY) {
+				REQUIRE(buffered.HasObservableChunk());
+			}
+			unique_ptr<DataChunk> chunk;
+			auto state = stream.TryFetch(chunk);
+			if (state == QueryResultState::READY) {
+				row_count += chunk->size();
+				continue;
+			}
+			if (IsTerminal(state)) {
+				REQUIRE(state == QueryResultState::FINISHED);
+				break;
+			}
+			REQUIRE(!deadline.Passed());
 		}
-		if (IsTerminal(state)) {
-			REQUIRE(state == QueryResultState::FINISHED);
-			break;
-		}
-		REQUIRE(!deadline.Passed());
-		// READY is the engine waiting on this consumer, and nothing but this thread pops, so a chunk
-		// announced here is still there to check
-		if (stream.Poll() == QueryResultState::READY) {
-			REQUIRE(buffered.HasObservableChunk());
-		}
+		REQUIRE(row_count == 2000000);
+		// The engine reports READY only for a parked producer: the trailing chunks of a finished
+		// execution are poppable with no producer left, and only the buffer's poll announces them
+		REQUIRE(unparked_polls > 0);
 	}
-	REQUIRE(row_count == 2000000);
 }
 
 TEST_CASE("Submit returns before any chunk is buffered", "[api][stream_buffer]") {

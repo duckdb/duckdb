@@ -132,10 +132,8 @@ QueryResultState BufferedData::Participate(ClientContextLock &context_lock, Quer
 	if (ReplenishSatisfied()) {
 		return QueryResultState::READY;
 	}
-	if (execution_result == QueryResultState::BLOCKED || execution_result == QueryResultState::READY) {
-		// The engine is waiting on the consumer but nothing is poppable yet (!ReplenishSatisfied())
-		return QueryResultState::BLOCKED;
-	}
+	// Engine READY means a parked producer with a chunk to pop, which satisfies the replenish above
+	D_ASSERT(execution_result != QueryResultState::READY);
 	return execution_result;
 }
 
@@ -164,9 +162,8 @@ QueryResultState BufferedData::Poll(ClientContextLock &context_lock, QueryResult
 	if (HasObservableChunk()) {
 		return QueryResultState::READY;
 	}
-	if (execution_result == QueryResultState::BLOCKED || execution_result == QueryResultState::READY) {
-		return QueryResultState::BLOCKED;
-	}
+	// Engine READY means a parked producer with a chunk to pop, which the check above would have seen
+	D_ASSERT(execution_result != QueryResultState::READY);
 	return execution_result;
 }
 
