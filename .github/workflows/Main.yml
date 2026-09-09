@@ -1,4 +1,10 @@
 name: Main
+run-name: >-
+  ${{
+    github.event_name == 'workflow_dispatch' &&
+    format('Main ({0})', inputs.duckdb_version || format('alpha{0}', github.run_number)) ||
+    ''
+  }}
 on:
   workflow_dispatch:
     inputs:
@@ -451,10 +457,11 @@ jobs:
 
     - uses: emscripten-core/setup-emsdk@v16
       with:
-        version: latest
+        version: '6.0.9'
 
     - uses: ./.github/actions/ccache-action
       with:
+        key: wasm-eh-emscripten-6.0.9
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Build
@@ -590,13 +597,8 @@ jobs:
         fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
           make gather-libs
-          zip -r -j static-libs-${{ matrix.config.artifact_suffix }}.zip \
-            src/include/duckdb.h \
-            src/include/duckdb_v2.h \
-            src/include/duckdb_extension.h \
-            src/include/duckdb_extension_v2.h \
-            build/release/libs/
-          assets+=(static-libs-${{ matrix.config.artifact_suffix }}.zip)
+          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/libs/*"
+          assets+=(duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
           make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
@@ -620,8 +622,8 @@ jobs:
     - uses: actions/upload-artifact@v7
       if: ${{ matrix.config.publish_static }}
       with:
-        name: duckdb-static-libs-${{ matrix.config.artifact_suffix }}
-        path: static-libs-${{ matrix.config.artifact_suffix }}.zip
+        path: duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
+        archive: false
 
     - name: ARM64 release tests
       if: ${{ matrix.config.run_arm_tests && !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -816,7 +818,12 @@ jobs:
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
         make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz
+        make gather-libs
+        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/libs/*"
+        ./scripts/upload-assets-to-staging.sh github_release \
+          duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz \
+          duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz \
+          duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
@@ -826,6 +833,11 @@ jobs:
     - uses: actions/upload-artifact@v7
       with:
         path: duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
 
     - name: Release tests
@@ -979,6 +991,8 @@ jobs:
       # Job-level on purpose: the Test step's `make unittest_release` depends on `release`, so a
       # step-scoped flag would silently reconfigure and rebuild WITH rtti and test the wrong binary.
       DISABLE_RTTI: 1
+      # Compile with C++23 to test compatibility with the newer standard.
+      CXX_STANDARD: 23
       EXTENSION_CONFIGS: .github/config/in_tree_extensions.cmake
       DUCKDB_TEST_DESCRIPTION: 'Compiled with DISABLE_RTTI=1 (-fno-rtti).'
 
@@ -1209,6 +1223,8 @@ jobs:
           DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
           STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
+          CURRENT_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           is_release_event=false
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
@@ -1225,8 +1241,13 @@ jobs:
             run_release_dispatch=true
           fi
 
+          is_default_branch=false
+          if [[ "$CURRENT_REF" == "refs/heads/$DEFAULT_BRANCH" ]]; then
+            is_default_branch=true
+          fi
+
           publish_latest_alpha=false
-          if [[ "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$STAGED_VERSION" ]]; then
+          if [[ "$is_duckdb_repo" == "true" && "$is_default_branch" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$STAGED_VERSION" ]]; then
             publish_latest_alpha=true
           fi
 
@@ -1239,6 +1260,9 @@ jobs:
           echo "  is_duckdb_repo=$is_duckdb_repo"
           echo "  run_release_dispatch=$run_release_dispatch"
           echo "  staged_version=$STAGED_VERSION"
+          echo "  current_ref=$CURRENT_REF"
+          echo "  default_branch=$DEFAULT_BRANCH"
+          echo "  is_default_branch=$is_default_branch"
           echo "  publish_latest_alpha=$publish_latest_alpha"
 
           {

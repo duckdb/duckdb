@@ -41,6 +41,8 @@ static const MetricDescriptor internal_metrics[] = {
 	DUCKDB_METRIC(MetricSystemTotalMemoryAllocated),
 	DUCKDB_METRIC(MetricIOTotalBytesRead),
 	DUCKDB_METRIC(MetricIOTotalBytesWritten),
+	DUCKDB_METRIC(MetricIOTotalReadOperations),
+	DUCKDB_METRIC(MetricIOTotalWriteOperations),
 	DUCKDB_METRIC(MetricStorageAttachLoadStorageLatency),
 	DUCKDB_METRIC(MetricStorageAttachReplayWALLatency),
 	DUCKDB_METRIC(MetricStorageCheckpointLatency),

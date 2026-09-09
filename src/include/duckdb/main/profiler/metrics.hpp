@@ -124,6 +124,20 @@ struct MetricIOTotalBytesWritten {
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
+struct MetricIOTotalReadOperations {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "io.total_read_operations";
+	static constexpr const char *Description = "The total number of read operations issued to storage";
+	static constexpr const char *Unit = "operations";
+	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricIOTotalWriteOperations {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "io.total_write_operations";
+	static constexpr const char *Description = "The total number of write operations issued to storage";
+	static constexpr const char *Unit = "operations";
+	static constexpr const char *TypeStr = "uint64";
+};
 
 // Storage metrics
 struct MetricStorageAttachLoadStorageLatency {

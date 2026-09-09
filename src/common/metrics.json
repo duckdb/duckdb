@@ -73,10 +73,20 @@
 			"description": "The total amount of bytes read from storage",
 			"unit": "bytes"
 		},
+		"total_read_operations": {
+			"metric_type": "uint64",
+			"description": "The total number of read operations issued to storage",
+			"unit": "operations"
+		},
 		"total_bytes_written": {
 			"metric_type": "uint64",
 			"description": "The total amount of bytes written to storage",
 			"unit": "bytes"
+		},
+		"total_write_operations": {
+			"metric_type": "uint64",
+			"description": "The total number of write operations issued to storage",
+			"unit": "operations"
 		}
 	},
 	"storage": {

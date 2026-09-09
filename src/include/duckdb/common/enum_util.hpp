@@ -278,6 +278,8 @@ enum class HTTPClientCachePolicy : uint8_t;
 
 enum class HTTPStatusCode : uint16_t;
 
+enum class HTTPTransportReusePolicy : uint8_t;
+
 enum class IdentifierCaseMode : uint8_t;
 
 enum class IndexAppendMode : uint8_t;
@@ -589,8 +591,6 @@ enum class TransactionInvalidationPolicy : uint8_t;
 enum class TransactionModifierType : uint8_t;
 
 enum class TransactionType : uint8_t;
-
-enum class TransformFrameState : uint8_t;
 
 enum class TriggerEventType : uint8_t;
 
@@ -1011,6 +1011,9 @@ const char* EnumUtil::ToChars<HTTPClientCachePolicy>(HTTPClientCachePolicy value
 
 template<>
 const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
+
+template<>
+const char* EnumUtil::ToChars<HTTPTransportReusePolicy>(HTTPTransportReusePolicy value);
 
 template<>
 const char* EnumUtil::ToChars<IdentifierCaseMode>(IdentifierCaseMode value);
@@ -1481,9 +1484,6 @@ template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
 
 template<>
-const char* EnumUtil::ToChars<TransformFrameState>(TransformFrameState value);
-
-template<>
 const char* EnumUtil::ToChars<TriggerEventType>(TriggerEventType value);
 
 template<>
@@ -1927,6 +1927,9 @@ HTTPClientCachePolicy EnumUtil::FromString<HTTPClientCachePolicy>(const char *va
 
 template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);
+
+template<>
+HTTPTransportReusePolicy EnumUtil::FromString<HTTPTransportReusePolicy>(const char *value);
 
 template<>
 IdentifierCaseMode EnumUtil::FromString<IdentifierCaseMode>(const char *value);
@@ -2395,9 +2398,6 @@ TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);
-
-template<>
-TransformFrameState EnumUtil::FromString<TransformFrameState>(const char *value);
 
 template<>
 TriggerEventType EnumUtil::FromString<TriggerEventType>(const char *value);

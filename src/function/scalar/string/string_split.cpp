@@ -155,6 +155,7 @@ ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	// regexp options
 	regex_fun.GetSignature().AddParameter(LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
+	regexp_split.SetFallible();
 	return regexp_split;
 }
 

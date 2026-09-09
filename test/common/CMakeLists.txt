@@ -13,6 +13,7 @@ add_library_unity(
   test_caching_file_system_wrapper.cpp
   test_external_file_cache.cpp
   test_hyperlog.cpp
+  test_http_transport_manager.cpp
   test_lru_cache.cpp
   test_numeric_utils.cpp
   test_parse_expression.cpp
@@ -34,7 +35,8 @@ add_library_unity(
   test_utf8_codepoint_oob.cpp
   test_temporary_memory_manager.cpp
   test_versioning_utils.cpp
-  test_value_to_sql_string.cpp)
+  test_value_to_sql_string.cpp
+  test_musl_stack_size.cpp)
 
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_common>
