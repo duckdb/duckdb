@@ -552,18 +552,8 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 	}
 	if (error) {
 		if (print_error) {
-			std::ostringstream oss;
-			logger.PrintErrorHeader("Wrong result in query!");
-			logger.PrintLineSep();
-			logger.PrintSQL();
-			logger.PrintLineSep();
-			oss << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
-			    << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
-			    << termcolor::reset;
-			oss << lvalue_str << " <> " << rvalue_str << std::endl;
-			logger.LogFailure(oss.str());
-			logger.PrintLineSep();
-			logger.PrintResultError(result_values, values, expected_column_count, row_wise);
+			logger.ValueMismatch(result, lvalue_str, rvalue_str, current_row, current_column, result_values, values,
+			                     expected_column_count, row_wise);
 		}
 		return false;
 	}
@@ -577,13 +567,7 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_st
 	options.set_dot_nl(true);
 	RE2 re(regex_str, options);
 	if (!re.ok()) {
-		std::ostringstream oss;
-		logger.PrintErrorHeader("Test error!");
-		logger.PrintLineSep();
-		oss << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
-		    << std::endl;
-		logger.LogFailure(oss.str());
-		logger.PrintLineSep();
+		logger.TestError("Test error!", "Failed to parse regex: " + re.error());
 		return false;
 	}
 	bool regex_matches = RE2::FullMatch(lvalue_str, re);
