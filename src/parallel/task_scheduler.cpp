@@ -40,6 +40,7 @@ TaskScheduler::~TaskScheduler() {
 		for (auto &pool : pools) {
 			pool->RelaunchThreads(*this, true);
 		}
+		BlockAllocator::Get(db).FlushAll();
 	} catch (...) {
 		// nothing we can do in the destructor if this fails
 	}
