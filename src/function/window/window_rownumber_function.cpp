@@ -228,10 +228,11 @@ public:
 };
 
 WindowFunction NtileFun::GetFunction() {
-	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
+	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
 	                   WindowNtileExecutor::GetBounds, WindowNtileExecutor::GetSharing, WindowNtileExecutor::GetGlobal,
 	                   WindowNtileExecutor::GetLocal, WindowNtileLocalState::Sinker, WindowNtileLocalState::Finalizer,
 	                   WindowNtileExecutor::GetData);
+	fun.GetSignature().AddParameter("num_buckets", LogicalType::BIGINT);
 	return fun;
 }
 
