@@ -14,7 +14,7 @@ CALL dbgen(sf=1);
 CALL enable_logging(storage_path='${BENCHMARK_DIR}/duckdb_persistent_q1_with_default_logging')
 
 run
-ATTACH '${BENCHMARK_DIR}/duckdb_persistent_q1_with_default_logging.db' as my_db "..", "..", "..",;
+ATTACH '${BENCHMARK_DIR}/duckdb_persistent_q1_with_default_logging.db' as my_db;
 CREATE OR REPLACE TABLE my_db.lineitem AS FROM memory.lineitem;
 use my_db;
 PRAGMA tpch(1);
