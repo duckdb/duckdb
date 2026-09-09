@@ -755,6 +755,10 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			if (info.from_residual_predicate) {
 				continue;
 			}
+			if (info.must_remain_at_root) {
+				// the filter carries a barrier - it is only placed once the full join tree is built
+				continue;
+			}
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
 			if (info.join_type == JoinType::LEFT) {

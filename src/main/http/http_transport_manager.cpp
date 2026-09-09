@@ -1,4 +1,4 @@
-#include "duckdb/common/http_transport_manager.hpp"
+#include "duckdb/main/http/http_transport_manager.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
@@ -235,7 +235,7 @@ optional_idx HTTPTransportManager::GetFileDescriptorLimit() {
 		return optional_idx();
 	}
 	if (limit.rlim_cur >= NumericLimits<idx_t>::Maximum()) {
-		return optional_idx(NumericLimits<idx_t>::Maximum());
+		return optional_idx();
 	}
 	return optional_idx(static_cast<idx_t>(limit.rlim_cur));
 #else
@@ -373,6 +373,7 @@ void HTTPTransportManager::ValidateStateLocked(const HTTPTransportManagerState &
 
 HTTPTransportManager::Reservation
 HTTPTransportManager::ReserveClientLocked(HTTPTransportManagerState &state, ClientKey key, const string &origin,
+                                          const HTTPTransportConfig &transport_config,
                                           annotated_unique_lock<annotated_mutex> &guard) {
 	D_ASSERT(state.reuse_policy != HTTPTransportReusePolicy::CLIENT_FREE);
 	ValidateStateLocked(state);
@@ -383,7 +384,7 @@ HTTPTransportManager::ReserveClientLocked(HTTPTransportManagerState &state, Clie
 	const bool cacheable = state.provider_epoch == current_provider_epoch && !state.reuse_poisoned &&
 	                       (state.reuse_policy == HTTPTransportReusePolicy::SESSION_LOCAL ||
 	                        state.reuse_policy == HTTPTransportReusePolicy::SHARED);
-	auto result = clients.Reserve(key, origin, cacheable);
+	auto result = clients.Reserve(key, origin, transport_config, cacheable);
 	HTTPTransportCapacityGuard::MarkCurrentCapacityOwned(*this);
 	return result;
 }
@@ -409,22 +410,24 @@ void HTTPTransportManager::PrepareClient(Reservation &reservation, HTTPTransport
 HTTPTransportManager::Lease HTTPTransportManager::Acquire(Session &session, HTTPParams &params, const string &origin) {
 	auto &state = *session.state;
 	D_ASSERT(state.reuse_policy != HTTPTransportReusePolicy::CLIENT_FREE);
+	const HTTPTransportConfig transport_config(params);
 	ClientKey key;
 	key.provider_epoch = state.provider_epoch;
 	key.session_id =
 	    state.reuse_policy == HTTPTransportReusePolicy::SESSION_LOCAL ? session.session_id : DConstants::INVALID_INDEX;
 	key.reuse_domain = params.GetTransportReuseDomain();
 	key.origin_hash = std::hash<string> {}(origin);
+	key.transport_config_hash = transport_config.Hash();
 
 	Reservation reservation;
 	{
 		annotated_unique_lock<annotated_mutex> guard(lock);
-		reservation = ReserveClientLocked(state, key, origin, guard);
+		reservation = ReserveClientLocked(state, key, origin, transport_config, guard);
 	}
 	try {
-		if (reservation.PrepareBucket(origin)) {
+		if (reservation.PrepareBucket(origin, transport_config)) {
 			annotated_lock_guard<annotated_mutex> guard(lock);
-			clients.AdoptPreparedBucket(reservation, origin);
+			clients.AdoptPreparedBucket(reservation);
 		}
 		PrepareClient(reservation, state, params, origin);
 	} catch (...) {

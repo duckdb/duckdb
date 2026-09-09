@@ -999,19 +999,21 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 		result.last_position.buffer_pos++;
 	}
 	if (result.number_of_columns == 1) {
-		for (idx_t i = 0; i < result.null_str_count; i++) {
-			if (result.null_str_size[i] == 0) {
-				bool empty = false;
-				if (!result.state_machine.options.force_not_null.empty()) {
-					empty = result.state_machine.options.force_not_null[0];
-				}
-				if (empty) {
-					static_cast<string_t *>(result.vector_ptr[0])[result.number_of_rows] = string_t();
-				} else {
-					result.validity_mask[0]->SetInvalid(static_cast<idx_t>(result.number_of_rows));
-				}
-				result.number_of_rows++;
+		bool empty_is_null = false;
+		for (idx_t i = 0; i < result.null_str_count && !empty_is_null; i++) {
+			empty_is_null = result.null_str_size[i] == 0;
+		}
+		if (empty_is_null) {
+			bool empty = false;
+			if (!result.state_machine.options.force_not_null.empty()) {
+				empty = result.state_machine.options.force_not_null[0];
 			}
+			if (empty) {
+				static_cast<string_t *>(result.vector_ptr[0])[result.number_of_rows] = string_t();
+			} else {
+				result.validity_mask[0]->SetInvalid(static_cast<idx_t>(result.number_of_rows));
+			}
+			result.number_of_rows++;
 		}
 		if (static_cast<idx_t>(result.number_of_rows) >= result.result_size) {
 			// We have a full chunk

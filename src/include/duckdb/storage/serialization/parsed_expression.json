@@ -115,14 +115,15 @@
       {
         "id": 201,
         "name": "cast_type",
-        "type": "LogicalType"
+        "type": "TypeExpression*"
       },
       {
         "id": 202,
         "name": "try_cast",
         "type": "bool"
       }
-    ]
+    ],
+    "custom_implementation": true
   },
   {
     "class": "CollateExpression",
