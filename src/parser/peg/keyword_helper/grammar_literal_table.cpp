@@ -49,7 +49,7 @@ void GrammarLiteralTable::Register(const string &text, PEGKeywordCategory catego
 		if (literals.size() >= LiteralInfo::MAX_LITERAL_ID) {
 			throw InvalidInputException("Grammar has too many distinct literals");
 		}
-		auto id = static_cast<uint32_t>(literals.size() + 1);
+		auto id = static_cast<uint16_t>(literals.size() + 1);
 		entry = literals.emplace(text, LiteralInfo(id)).first;
 	}
 	entry->second.AddCategory(category);

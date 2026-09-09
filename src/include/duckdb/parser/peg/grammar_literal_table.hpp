@@ -17,44 +17,44 @@ class DefaultKeywordMaps;
 //! A grammar-local literal ID and the word's overlapping keyword categories.
 class LiteralInfo {
 public:
-	static constexpr uint32_t MAX_LITERAL_ID = 0x00FFFFFF;
+	static constexpr uint16_t MAX_LITERAL_ID = 0xFFFF;
 
 public:
 	LiteralInfo() = default;
-	explicit LiteralInfo(uint32_t literal_id) : value(literal_id) {
-		D_ASSERT(literal_id <= MAX_LITERAL_ID);
+	explicit LiteralInfo(uint16_t literal_id_p) : literal_id(literal_id_p) {
 	}
 
-	uint32_t LiteralId() const {
-		return value & MAX_LITERAL_ID;
+	uint16_t LiteralId() const {
+		return literal_id;
 	}
 
 	bool IsKeyword() const {
-		return (value >> 24) != 0;
+		return category_flags != 0;
 	}
 
 	bool HasCategory(PEGKeywordCategory category) const {
-		return (value & CategoryMask(category)) != 0;
+		return (category_flags & CategoryMask(category)) != 0;
 	}
 
 	void AddCategory(PEGKeywordCategory category) {
-		value |= CategoryMask(category);
+		category_flags |= CategoryMask(category);
 	}
 
 	bool operator==(const LiteralInfo &other) const {
-		return value == other.value;
+		return literal_id == other.literal_id && category_flags == other.category_flags;
 	}
 
 private:
-	static uint32_t CategoryMask(PEGKeywordCategory category) {
+	static uint8_t CategoryMask(PEGKeywordCategory category) {
 		if (category == PEGKeywordCategory::KEYWORD_NONE || category > PEGKeywordCategory::KEYWORD_TYPE_NAME) {
 			return 0;
 		}
-		return uint32_t(1) << (23 + static_cast<uint8_t>(category));
+		return uint8_t(1) << (static_cast<uint8_t>(category) - 1);
 	}
 
 private:
-	uint32_t value = 0;
+	uint16_t literal_id = 0;
+	uint8_t category_flags = 0;
 };
 
 //! Immutable after construction, including literals only present in keyword-category rules.

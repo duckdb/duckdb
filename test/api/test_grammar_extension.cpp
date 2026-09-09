@@ -204,6 +204,55 @@ TEST_CASE("Literal dispatch leaves mixed and unregistered alternatives unchanged
 	}
 }
 
+TEST_CASE("Literal IDs and category flags are independent", "[api][grammar_extension]") {
+	REQUIRE(sizeof(LiteralInfo) == sizeof(uint32_t));
+	REQUIRE(sizeof(LiteralInfo().LiteralId()) == sizeof(uint16_t));
+	LiteralInfo missing;
+	REQUIRE(missing.LiteralId() == 0);
+	REQUIRE_FALSE(missing.IsKeyword());
+	LiteralInfo literal(LiteralInfo::MAX_LITERAL_ID);
+	LiteralInfo original(literal);
+	REQUIRE(literal.LiteralId() == 65535);
+	REQUIRE_FALSE(literal.IsKeyword());
+	for (auto category : {PEGKeywordCategory::KEYWORD_UNRESERVED, PEGKeywordCategory::KEYWORD_RESERVED,
+	                      PEGKeywordCategory::KEYWORD_TYPE_FUNC, PEGKeywordCategory::KEYWORD_COL_NAME,
+	                      PEGKeywordCategory::KEYWORD_TYPE_NAME}) {
+		REQUIRE_FALSE(literal.HasCategory(category));
+		literal.AddCategory(category);
+		REQUIRE(literal.HasCategory(category));
+		REQUIRE(literal.IsKeyword());
+		REQUIRE(literal.LiteralId() == original.LiteralId());
+	}
+	REQUIRE_FALSE(literal == original);
+	LiteralInfo copy(literal);
+	REQUIRE(copy == literal);
+	copy.AddCategory(PEGKeywordCategory::KEYWORD_NONE);
+	copy.AddCategory(static_cast<PEGKeywordCategory>(255));
+	REQUIRE(copy == literal);
+	REQUIRE_FALSE(copy.HasCategory(PEGKeywordCategory::KEYWORD_NONE));
+	REQUIRE_FALSE(copy.HasCategory(static_cast<PEGKeywordCategory>(255)));
+}
+
+TEST_CASE("Grammar literal IDs reject overflow", "[api][grammar_extension]") {
+	auto grammar = ParsedGrammar::Parse("LiteralTest <- '('");
+	DefaultKeywordMaps categories;
+	for (idx_t i = 1; i < LiteralInfo::MAX_LITERAL_ID; i++) {
+		categories.unreserved_keyword_map.insert("literal_limit_" + to_string(i));
+	}
+	categories.typename_keyword_map.insert("literal_limit_1");
+	GrammarLiteralTable table(grammar, categories);
+	idx_t max_id = table.Lookup("(").LiteralId();
+	for (auto &word : categories.unreserved_keyword_map) {
+		max_id = MaxValue<idx_t>(max_id, table.Lookup(word).LiteralId());
+	}
+	REQUIRE(max_id == LiteralInfo::MAX_LITERAL_ID);
+	REQUIRE(table.Lookup("literal_limit_1").HasCategory(PEGKeywordCategory::KEYWORD_UNRESERVED));
+	REQUIRE(table.Lookup("literal_limit_1").HasCategory(PEGKeywordCategory::KEYWORD_TYPE_NAME));
+	categories.unreserved_keyword_map.insert("one_literal_too_many");
+	REQUIRE_THROWS_WITH(GrammarLiteralTable(grammar, categories),
+	                    Catch::Matchers::Contains("Grammar has too many distinct literals"));
+}
+
 TEST_CASE("Grammar literal IDs include category-only words and overlapping categories", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SELECT' / 'select' / '('");
 	DefaultKeywordMaps categories;
