@@ -1,0 +1,50 @@
+# name: test/extension/concurrent_install_extension.test
+# description: Concurrent INSTALL into a shared extension directory must not race (issue #12589)
+# group: [extension]
+
+# Multi-connection concurrentloop covers same-process races (fcntl is process-scoped; in-process
+# mutex + file lock). True multi-process install is covered by the same lock path but not exercised
+# here (no network; would need separate duckdb processes).
+
+require notmingw
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+# Isolated extension dir shared across concurrent connections
+statement ok
+SET extension_directory='{TEMP_DIR}/concurrent_install_ext';
+
+# Warm path: parallel FORCE INSTALL of the same local extension binary
+concurrentloop i 0 10
+
+statement ok
+FORCE INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement ok
+LOAD loadable_extension_demo;
+
+endloop
+
+# Extension is loadable after the storm
+statement ok
+LOAD loadable_extension_demo;
+
+query I
+SELECT count(*) > 0
+FROM duckdb_extensions()
+WHERE extension_name = 'loadable_extension_demo' AND installed = true;
+----
+true
+
+# Non-force INSTALL is a NOP when already present (including under concurrency)
+concurrentloop i 0 10
+
+statement ok
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+endloop
+
+statement ok
+LOAD loadable_extension_demo;
