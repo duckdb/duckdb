@@ -328,7 +328,7 @@ void CSVReaderOptions::SetReadOption(const Identifier &loption, const Value &val
 			auto &children = ListValue::GetChildren(value);
 			for (auto &child : children) {
 				auto col_name = child.GetValue<string>();
-				force_not_null_names.insert(col_name);
+				force_not_null_names.insert(Identifier(col_name));
 			}
 		}
 
