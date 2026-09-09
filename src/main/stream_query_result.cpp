@@ -35,7 +35,7 @@ string StreamQueryResult::ToString() {
 	return result;
 }
 
-annotated_mutex &StreamQueryResult::GetContextMutex() const {
+ClientContext &StreamQueryResult::GetClientContext() const {
 	if (!context) {
 		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
 		if (HasError()) {
@@ -43,7 +43,7 @@ annotated_mutex &StreamQueryResult::GetContextMutex() const {
 		}
 		throw InvalidInputException(error_str);
 	}
-	return context->context_lock;
+	return *context;
 }
 
 StreamExecutionResult StreamQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
@@ -51,12 +51,12 @@ StreamExecutionResult StreamQueryResult::ExecuteTaskInternal(ClientContextLock &
 }
 
 StreamExecutionResult StreamQueryResult::ExecuteTask() {
-	ClientContextLock lock(GetContextMutex());
+	ClientContextLock lock(GetClientContext());
 	return ExecuteTaskInternal(lock);
 }
 
 void StreamQueryResult::WaitForTask() {
-	ClientContextLock lock(GetContextMutex());
+	ClientContextLock lock(GetClientContext());
 	// Nothing to wait for on a result being materialized; ExecuteTask reports it
 	if (buffered_data->Decide(ResultLifetime::DRAINING) != ResultLifetime::DRAINING) {
 		return;
@@ -112,7 +112,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchNextInternal(ClientContextLock &lo
 unique_ptr<DataChunk> StreamQueryResult::FetchInternal() {
 	unique_ptr<DataChunk> chunk;
 	{
-		ClientContextLock lock(GetContextMutex());
+		ClientContextLock lock(GetClientContext());
 		CheckExecutableInternal(lock);
 		chunk = FetchNextInternal(lock);
 	}
@@ -179,7 +179,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	bool retained;
 	unique_ptr<QueryResult> result;
 	{
-		ClientContextLock lock(GetContextMutex());
+		ClientContextLock lock(GetClientContext());
 		CheckExecutableInternal(lock);
 		retained = buffered_data->Decide(ResultLifetime::RETAINED) == ResultLifetime::RETAINED;
 		if (retained) {
@@ -232,14 +232,14 @@ bool StreamQueryResult::IsOpen() {
 	if (HasError() || !context) {
 		return false;
 	}
-	ClientContextLock lock(GetContextMutex());
+	ClientContextLock lock(GetClientContext());
 	return IsOpenInternal(lock);
 }
 
 void StreamQueryResult::Close() {
 	buffered_data->Close();
 	if (context) {
-		ClientContextLock lock(GetContextMutex());
+		ClientContextLock lock(GetClientContext());
 		if (context->IsActiveResult(lock, *this)) {
 			// Abandoned before the stream was fully drained: release the active-query state now
 			// (matching InitialCleanup) instead of leaking it until the next query or context teardown.

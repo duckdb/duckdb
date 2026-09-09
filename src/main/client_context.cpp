@@ -1,4 +1,5 @@
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_lock.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -267,7 +268,7 @@ static unique_ptr<SQLStatement> WrapAsSelect(unique_ptr<TableRef> from_ref) {
 }
 
 void ClientContext::Destroy() {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	if (transaction.HasActiveTransaction()) {
 		transaction.ResetActiveQuery();
 		if (!transaction.IsAutoCommit()) {
@@ -293,7 +294,7 @@ unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 }
 
 void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStatement &statement) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
 	auto &db_inst = DatabaseInstance::GetDatabase(*this);
@@ -339,7 +340,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
                                           optional_ptr<ErrorData> previous_error) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	if (active_query->executor) {
 		active_query->executor->CancelTasks();
 	}
@@ -393,7 +394,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 }
 
 void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *result, bool invalidate_transaction) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	if (!active_query) {
 		// no query currently active
 		return;
@@ -447,7 +448,7 @@ connection_t ClientContext::GetConnectionId() const {
 }
 
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(pending));
 	D_ASSERT(active_query->prepared);
@@ -480,7 +481,7 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock,
                                                                                  unique_ptr<SQLStatement> statement,
                                                                                  PendingQueryParameters parameters) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	StatementType statement_type = statement->type;
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
@@ -549,7 +550,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock,
                                                                          unique_ptr<SQLStatement> statement,
                                                                          PendingQueryParameters parameters) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
 	for (auto &state : registered_state->States()) {
@@ -637,7 +638,7 @@ unique_ptr<PendingQueryResult>
 ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
                                                 shared_ptr<PreparedStatementData> statement_data_p,
                                                 const PendingQueryParameters &parameters) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	D_ASSERT(active_query);
 	auto &statement_data = *statement_data_p;
 	BindPreparedStatementParameters(*this, statement_data, parameters);
@@ -689,7 +690,7 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 }
 
 void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	auto &executor = *active_query->executor;
 	if (executor.HasTaskInProgress()) {
 		// This thread is holding a partially processed task, the next step resumes it without waiting.
@@ -710,7 +711,7 @@ bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
 
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
                                                           bool dry_run) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(result));
 	bool invalidate_transaction = true;
@@ -758,7 +759,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 }
 
 void ClientContext::InitialCleanup(ClientContextLock &lock) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	//! Cleanup any open results and reset the interrupted flag
 	CleanupInternal(lock);
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
@@ -775,12 +776,12 @@ StatementIterator ClientContext::IterateStatements(const string &query) {
 void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer,
                                          optional_ptr<ClientContextLock> lock) {
 	if (!lock) {
-		ClientContextLock own_lock(context_lock);
+		ClientContextLock own_lock(*this);
 		PreprocessStatements(buffer, own_lock);
 		return;
 	}
 	auto &held_lock = *lock;
-	held_lock.AssertHeld(context_lock);
+	held_lock.AssertHeld(*this);
 	StatementPreprocessor preprocessor(*this);
 	const CurrentTransactionState transaction_state =
 	    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
@@ -788,7 +789,7 @@ void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffe
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	try {
 		QueryProfiler::Get(*this).StartQuery(query);
 
@@ -811,7 +812,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 }
 
 unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 
 	auto statements = ParseStatementsInternal(lock, query);
 	if (statements.size() != 1) {
@@ -859,7 +860,7 @@ static PreparedStatementInfo GetPreparedStatementInfo(PreparedStatementData &dat
 
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	auto statement_query = statement->query;
 	// prepare the statement under a generated name - the returned PreparedStatement only refers to that name
 	auto name = "duckdb_prepare_internal_" + UUID::ToString(UUID::GenerateRandomUUID());
@@ -884,12 +885,12 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 }
 
 void ClientContext::RemovePreparedStatement(const string &name) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	client_data->prepared_statements.erase(Identifier(name));
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	// Store the query in case of an error.
 	auto query = statement->query;
 
@@ -903,7 +904,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 }
 
 StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> statement) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	auto named_param_map = statement->named_param_map;
 	StatementSignature signature;
 	ErrorData bind_error;
@@ -947,7 +948,7 @@ StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> stateme
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	// prepare the query
 	try {
 		InitialCleanup(lock);
@@ -969,7 +970,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientContextLock &lock,
                                                                        unique_ptr<SQLStatement> statement,
                                                                        const PendingQueryParameters &parameters) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	// prepare the query for execution
 	if (!statement->named_param_map.empty() && parameters.parameters) {
 		PreparedStatement::VerifyParameters(*parameters.parameters, statement->named_param_map, this);
@@ -990,7 +991,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 
 unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
                                                             const PendingQueryParameters &parameters, bool verify) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	auto pending = PendingQueryInternal(lock, std::move(statement), parameters, verify);
 	if (pending->HasError()) {
 		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
@@ -999,7 +1000,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &l
 }
 
 bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &result) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	if (!active_query) {
 		return false;
 	}
@@ -1017,7 +1018,7 @@ static bool HasBoundParameterValues(const SQLStatement &statement) {
 unique_ptr<PendingQueryResult> ClientContext::PendingStatement(ClientContextLock &lock,
                                                                unique_ptr<SQLStatement> statement,
                                                                const PendingQueryParameters &parameters) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	// CONNECT chokepoint: when connected, non-control SQL is rewritten in place and falls through to
 	// the normal pipeline. No recursion — the rewrite goes through PendingStatementInternal, not back here.
 	if (is_connected) {
@@ -1092,7 +1093,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatement(ClientContextLock
 }
 
 void ClientContext::LogQueryInternal(ClientContextLock &lock, const string &query) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	if (!client_data->log_query_writer) {
 #ifdef DUCKDB_FORCE_QUERY_LOG
 		try {
@@ -1125,7 +1126,7 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 }
 
 unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameters query_parameters) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	// The lazy path bypasses ParseStatementsInternal → InitialCleanup, so clear leftover query state
 	// (interrupt flag, etc.) ourselves.
 	InitialCleanup(lock);
@@ -1250,7 +1251,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, PendingQueryParameters parameters) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	try {
 		InitialCleanup(lock);
 
@@ -1273,7 +1274,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
                                                            identifier_map_t<BoundParameterData> &values,
                                                            QueryParameters parameters) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	try {
 		InitialCleanup(lock);
 
@@ -1289,7 +1290,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 
 unique_ptr<QueryResult> ClientContext::RunInternalStatement(unique_ptr<SQLStatement> statement,
                                                             const PendingQueryParameters &parameters) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	try {
 		InitialCleanup(lock);
 	} catch (std::exception &ex) {
@@ -1304,7 +1305,7 @@ unique_ptr<QueryResult> ClientContext::RunInternalStatement(unique_ptr<SQLStatem
 
 unique_ptr<PendingQueryResult> ClientContext::PendingInternalStatement(unique_ptr<SQLStatement> statement,
                                                                        const PendingQueryParameters &parameters) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	try {
 		InitialCleanup(lock);
 	} catch (std::exception &ex) {
@@ -1317,7 +1318,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
                                                                    unique_ptr<SQLStatement> statement,
                                                                    const PendingQueryParameters &parameters,
                                                                    bool verify) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	if (verify) {
 		try {
 			StatementVerification(lock, statement, parameters);
@@ -1330,7 +1331,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
 }
 
 unique_ptr<QueryResult> ClientContext::ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	return query.ExecuteInternal(lock);
 }
 
@@ -1369,18 +1370,18 @@ void ClientContext::InterruptCheck() const {
 }
 
 void ClientContext::CancelTransaction() {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	InitialCleanup(lock);
 }
 
 void ClientContext::EnableProfiling() {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	auto &client_config = ClientConfig::GetConfig(*this);
 	client_config.enable_profiler = true;
 }
 
 void ClientContext::DisableProfiling() {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	auto &client_config = ClientConfig::GetConfig(*this);
 	client_config.enable_profiler = false;
 }
@@ -1406,7 +1407,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 
 void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
                                                      bool requires_valid_transaction) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
 	    ValidChecker::IsInvalidated(ActiveTransaction())) {
 		throw TransactionException(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
@@ -1444,7 +1445,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 }
 
 void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fun, bool requires_valid_transaction) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	RunFunctionInTransactionInternal(lock, fun, requires_valid_transaction);
 }
 
@@ -1510,7 +1511,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 }
 
 unordered_set<string> ClientContext::GetTableNames(const string &query, const bool qualified) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 
 	// Preprocess before binding so PRAGMA reparse / macro expansion happens up front — GetTableNames
 	// extracts names from the *underlying* query (e.g. `PRAGMA tpch(1)` -> the TPC-H SELECT, whose
@@ -1535,7 +1536,7 @@ unordered_set<string> ClientContext::GetTableNames(const string &query, const bo
 unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,
                                                                    const shared_ptr<Relation> &relation,
                                                                    QueryParameters query_parameters) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	InitialCleanup(lock);
 
 #ifdef DEBUG
@@ -1552,12 +1553,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const shared_ptr<Relation> &relation,
                                                            QueryParameters query_parameters) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	return PendingQueryInternal(lock, relation, query_parameters);
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	auto &expected_columns = relation->Columns();
 	auto pending = PendingQueryInternal(lock, relation, false);
 	if (pending->HasError()) {
@@ -1673,7 +1674,7 @@ bool ClientContext::ExecutionIsFinished() {
 }
 
 LogicalType ClientContext::ParseLogicalType(const string &type) {
-	ClientContextLock lock(context_lock);
+	ClientContextLock lock(*this);
 	LogicalType logical_type;
 	RunFunctionInTransactionInternal(lock,
 	                                 [&]() { logical_type = TypeManager::Get(*db).ParseLogicalType(type, *this); });

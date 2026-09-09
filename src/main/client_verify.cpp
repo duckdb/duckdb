@@ -1,5 +1,6 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_lock.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/enums/debug_statement_verification.hpp"
@@ -75,7 +76,7 @@ static void ReplaceStatement(unique_ptr<SQLStatement> &statement, unique_ptr<SQL
 
 void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
                                           PendingQueryParameters query_parameters) {
-	lock.AssertHeld(context_lock);
+	lock.AssertHeld(*this);
 	auto verification = Settings::Get<DebugVerifyStatementSetting>(*this);
 	if (verification == DebugStatementVerification::COPY_STATEMENT) {
 		if (statement->type == StatementType::LOGICAL_PLAN_STATEMENT) {

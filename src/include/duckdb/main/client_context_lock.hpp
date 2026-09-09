@@ -10,13 +10,14 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
 class DUCKDB_CAPABILITY("mutex") DUCKDB_SCOPED_CAPABILITY ClientContextLock {
 public:
-	explicit ClientContextLock(annotated_mutex &context_lock) DUCKDB_ACQUIRE(context_lock)
-	    : client_guard(context_lock), locked_mutex(context_lock) {
+	explicit ClientContextLock(ClientContext &context) DUCKDB_ACQUIRE(context.context_lock)
+	    : client_guard(context.context_lock), locked_context(context) {
 	}
 	~ClientContextLock() DUCKDB_RELEASE() = default;
 
@@ -24,14 +25,14 @@ public:
 	ClientContextLock &operator=(const ClientContextLock &) = delete;
 
 	//! Verify that a borrowed guard holds this context's mutex.
-	void AssertHeld(const annotated_mutex &context_lock) const DUCKDB_ASSERT_CAPABILITY(this)
-	    DUCKDB_ASSERT_CAPABILITY(context_lock) {
-		D_ASSERT(&locked_mutex == &context_lock);
+	void AssertHeld(const ClientContext &context) const DUCKDB_ASSERT_CAPABILITY(this)
+	    DUCKDB_ASSERT_CAPABILITY(context.context_lock) {
+		D_ASSERT(&locked_context == &context);
 	}
 
 private:
 	lock_guard<mutex> client_guard;
-	annotated_mutex &locked_mutex;
+	ClientContext &locked_context;
 };
 
 } // namespace duckdb

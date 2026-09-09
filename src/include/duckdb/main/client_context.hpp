@@ -23,17 +23,20 @@
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/external_dependencies.hpp"
-#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/common/query_context.hpp"
 #include "duckdb/common/query_parameters.hpp"
-#include "duckdb/main/client_context_lock.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class Logger;
 
+class DUCKDB_CAPABILITY("mutex") DUCKDB_SCOPED_CAPABILITY ClientContextLock;
+class BaseQueryResult;
+class QueryResult;
+class PendingQueryResult;
 class Appender;
 class AttachedDatabase;
 class Catalog;
@@ -88,6 +91,7 @@ enum class ClientInterruptState : uint8_t { NOT_INTERRUPTED, INTERRUPTED, INTERR
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext : public enable_shared_from_this<ClientContext> {
+	friend class ClientContextLock;   // context_lock
 	friend class PendingQueryResult;  // context_lock
 	friend class BufferedData;        // ExecuteTaskInternal
 	friend class SimpleBufferedData;  // ExecuteTaskInternal

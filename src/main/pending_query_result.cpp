@@ -20,7 +20,7 @@ PendingQueryResult::PendingQueryResult(ErrorData error)
 PendingQueryResult::~PendingQueryResult() {
 }
 
-annotated_mutex &PendingQueryResult::GetContextMutex() const {
+ClientContext &PendingQueryResult::GetClientContext() const {
 	if (!context) {
 		if (HasError()) {
 			throw InvalidInputException(
@@ -28,7 +28,7 @@ annotated_mutex &PendingQueryResult::GetContextMutex() const {
 		}
 		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result");
 	}
-	return context->context_lock;
+	return *context;
 }
 
 void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
@@ -46,17 +46,17 @@ void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 }
 
 void PendingQueryResult::WaitForTask() {
-	ClientContextLock lock(GetContextMutex());
+	ClientContextLock lock(GetClientContext());
 	context->WaitForTask(lock, *this);
 }
 
 PendingExecutionResult PendingQueryResult::ExecuteTask() {
-	ClientContextLock lock(GetContextMutex());
+	ClientContextLock lock(GetClientContext());
 	return ExecuteTaskInternal(lock);
 }
 
 PendingExecutionResult PendingQueryResult::CheckPulse() {
-	ClientContextLock lock(GetContextMutex());
+	ClientContextLock lock(GetClientContext());
 	CheckExecutableInternal(lock);
 	return context->ExecuteTaskInternal(lock, *this, true);
 }
@@ -94,13 +94,13 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 }
 
 unique_ptr<QueryResult> PendingQueryResult::Execute() {
-	ClientContextLock lock(GetContextMutex());
+	ClientContextLock lock(GetClientContext());
 	return ExecuteInternal(lock);
 }
 
 void PendingQueryResult::Close() {
 	if (context) {
-		ClientContextLock lock(GetContextMutex());
+		ClientContextLock lock(GetClientContext());
 		if (context->IsActiveResult(lock, *this)) {
 			// Abandoned before execution finished: release the active-query state now (matching
 			// InitialCleanup) instead of leaking it until the next query or context teardown.
