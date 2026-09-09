@@ -214,13 +214,13 @@ QueryResultState QueryResult::Poll() {
 	if (!IsOpenInternal(*lock)) {
 		return Cancelled();
 	}
-	return context->ExecuteTaskInternal(*lock, *this, true);
+	return context->PollInternal(*lock, *this);
 }
 
 QueryResultState QueryResult::ExecuteTask() {
 	auto lock = LockContext();
 	CheckExecutableInternal(*lock);
-	return context->ExecuteTaskInternal(*lock, *this, false);
+	return context->ExecuteTaskInternal(*lock, *this);
 }
 
 void QueryResult::WaitForTask() {

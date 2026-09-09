@@ -62,7 +62,10 @@ public:
 	bool HasTaskInProgress() const {
 		return task != nullptr;
 	}
-	QueryResultState ExecuteTask(bool dry_run = false);
+	//! Run one partial task slice on the calling thread and report the resulting state
+	QueryResultState ExecuteTask();
+	//! Report the execution state without running any task
+	QueryResultState Poll();
 	void WaitForTask();
 	void SignalTaskRescheduled(lock_guard<mutex> &);
 
@@ -154,6 +157,12 @@ private:
 	                                          vector<bool> &visited, vector<bool> &recursion_stack);
 
 	bool NextExecutor();
+	//! The state to report when this thread has no task to run
+	QueryResultState IdleState();
+	//! Cancel all tasks and throw the recorded error
+	void FailExecution();
+	//! Advance to the next executor, or record and return FINISHED
+	QueryResultState FinishExecution();
 
 	shared_ptr<Pipeline> CreateChildPipeline(Pipeline &current, PhysicalOperator &op);
 

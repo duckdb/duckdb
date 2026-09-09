@@ -82,9 +82,9 @@ enum class ClientInterruptState : uint8_t { NOT_INTERRUPTED, INTERRUPTED, INTERR
 //! during execution
 class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class QueryResult;         // LockContext
-	friend class BufferedData;        // ExecuteTaskInternal
-	friend class SimpleBufferedData;  // ExecuteTaskInternal
-	friend class BatchedBufferedData; // ExecuteTaskInternal
+	friend class BufferedData;        // ExecuteTaskInternal, PollInternal
+	friend class SimpleBufferedData;  // ExecuteTaskInternal, PollInternal
+	friend class BatchedBufferedData; // ExecuteTaskInternal, PollInternal
 	friend class ConnectionManager;
 
 public:
@@ -325,7 +325,13 @@ private:
 
 	//! Wait until a task is available to execute
 	void WaitForTask(ClientContextLock &lock, BaseQueryResult &result);
-	QueryResultState ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result, bool dry_run = false);
+	//! Run one partial task slice of the open result on the calling thread
+	QueryResultState ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result);
+	//! Report the execution state of the open result without running any task
+	QueryResultState PollInternal(ClientContextLock &lock, BaseQueryResult &result);
+	//! Record the error on the result, end the query and report EXECUTION_ERROR
+	QueryResultState FailQueryInternal(ClientContextLock &lock, BaseQueryResult &result, ErrorData error);
+	void UpdateProgressInternal(QueryResultState state);
 
 	unique_ptr<QueryResult> SubmitInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
 	                                       const QueryParameters &query_parameters);

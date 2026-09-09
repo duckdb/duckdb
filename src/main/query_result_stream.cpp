@@ -1,5 +1,6 @@
 #include "duckdb/main/query_result_stream.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -38,30 +39,37 @@ bool QueryResultStream::IsOpen() {
 	return handle->IsOpen();
 }
 
-QueryResultState QueryResultStream::Poll() {
-	return handle->Poll();
-}
-
-QueryResultState QueryResultStream::ExecuteTask() {
+QueryResultState
+QueryResultStream::GuardedInternal(const char *name,
+                                   const std::function<QueryResultState(ClientContextLock &lock)> &call) {
 	if (!handle->context) {
 		// The stream already ended. Keep reporting the terminal state
 		return handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
 	}
-	QueryResultState state;
-	{
-		auto lock = handle->LockContext();
-		try {
-			state = handle->buffer->ExecuteTaskInternal(*handle, *lock);
-		} catch (std::exception &ex) {
-			// A pending interrupt reaches the consumer as an error on the stream, never as a throw
-			handle->HandleFetchFailure(*lock, ErrorData(ex));
-			state = QueryResultState::EXECUTION_ERROR;
-		} catch (...) { // LCOV_EXCL_START
-			handle->SetError(ErrorData("Unhandled exception in ExecuteTask"));
-			handle->EndQuery(*lock, true);
-			state = QueryResultState::EXECUTION_ERROR;
-		} // LCOV_EXCL_STOP
+	auto lock = handle->LockContext();
+	try {
+		return call(*lock);
+	} catch (std::exception &ex) {
+		// A pending interrupt reaches the consumer as an error on the stream, never as a throw
+		handle->HandleFetchFailure(*lock, ErrorData(ex));
+	} catch (...) { // LCOV_EXCL_START
+		handle->SetError(ErrorData(StringUtil::Format("Unhandled exception in %s", name)));
+		handle->EndQuery(*lock, true);
+	} // LCOV_EXCL_STOP
+	return QueryResultState::EXECUTION_ERROR;
+}
+
+QueryResultState QueryResultStream::Poll() {
+	auto state = GuardedInternal("Poll", [&](ClientContextLock &lock) { return handle->buffer->Poll(lock, *handle); });
+	if (state == QueryResultState::EXECUTION_ERROR) {
+		Close();
 	}
+	return state;
+}
+
+QueryResultState QueryResultStream::ExecuteTask() {
+	auto state = GuardedInternal("ExecuteTask",
+	                             [&](ClientContextLock &lock) { return handle->buffer->Participate(lock, *handle); });
 	if (state == QueryResultState::EXECUTION_ERROR) {
 		// A finished execution can still hold trailing chunks, so only an error ends the stream here
 		Close();
@@ -79,44 +87,32 @@ void QueryResultStream::WaitForTask() {
 
 QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
 	out_chunk.reset();
-	if (!handle->context) {
-		// The stream already ended. Keep reporting the terminal state
-		return handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
-	}
-	auto &buffer = *handle->buffer;
-	QueryResultState state;
-	{
-		auto lock = handle->LockContext();
-		try {
-			state = buffer.Pulse(*handle, *lock);
-			if (state != QueryResultState::EXECUTION_ERROR) {
-				if (state == QueryResultState::READY) {
-					out_chunk = buffer.Scan();
-				}
-				if (out_chunk && out_chunk->size() != 0) {
-					return QueryResultState::READY;
-				}
-				out_chunk.reset();
-				if (state == QueryResultState::FINISHED) {
-					// The buffer is drained and execution is done: this is the end of the stream
-					buffer.AssertNoBlockedSinks();
-					handle->EndQuery(*lock);
-					// Cleanup can fail on an autocommit commit. It records the error without throwing
-					state = handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
-				} else if (state == QueryResultState::READY) {
-					// A chunk was announced but the scan came up empty: the stream has not ended yet
-					state = QueryResultState::NOT_READY;
-				}
-			}
-		} catch (std::exception &ex) {
-			handle->HandleFetchFailure(*lock, ErrorData(ex));
-			state = QueryResultState::EXECUTION_ERROR;
-		} catch (...) { // LCOV_EXCL_START
-			handle->SetError(ErrorData("Unhandled exception in TryFetch"));
-			handle->EndQuery(*lock, true);
-			state = QueryResultState::EXECUTION_ERROR;
-		} // LCOV_EXCL_STOP
-	}
+	auto state = GuardedInternal("TryFetch", [&](ClientContextLock &lock) {
+		auto &buffer = *handle->buffer;
+		auto state = buffer.Poll(lock, *handle);
+		if (state == QueryResultState::EXECUTION_ERROR) {
+			return state;
+		}
+		if (state == QueryResultState::READY) {
+			out_chunk = buffer.Scan();
+		}
+		if (out_chunk && out_chunk->size() != 0) {
+			return QueryResultState::READY;
+		}
+		out_chunk.reset();
+		if (state == QueryResultState::FINISHED) {
+			// The buffer is drained and execution is done: this is the end of the stream
+			buffer.AssertNoBlockedSinks();
+			handle->EndQuery(lock);
+			// Cleanup can fail on an autocommit commit. It records the error without throwing
+			return handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
+		}
+		if (state == QueryResultState::READY) {
+			// A chunk was announced but the scan came up empty: the stream has not ended yet
+			return QueryResultState::NOT_READY;
+		}
+		return state;
+	});
 	if (IsTerminal(state)) {
 		Close();
 	}
@@ -127,7 +123,7 @@ unique_ptr<DataChunk> QueryResultStream::FetchInternal(ClientContextLock &lock) 
 	auto &buffer = *handle->buffer;
 	unique_ptr<DataChunk> chunk;
 	try {
-		auto state = buffer.ReplenishBuffer(*handle, lock);
+		auto state = buffer.ReplenishBuffer(lock, *handle);
 		if (state == QueryResultState::EXECUTION_ERROR) {
 			return nullptr;
 		}

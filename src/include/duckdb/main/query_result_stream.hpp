@@ -11,6 +11,8 @@
 #include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/main/query_result.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 //! A stream of chunks, opened from the handle of a submitted query. Opening the stream settles the
@@ -37,7 +39,8 @@ public:
 	//! clean end it keeps returning null; after an error it throws
 	DUCKDB_API unique_ptr<DataChunk> Fetch();
 
-	//! Reports where execution stands. Runs no task
+	//! Reports READY while a chunk is poppable, else where execution stands. Runs no task. An interrupt
+	//! or an execution error is recorded on the stream and reported as EXECUTION_ERROR
 	DUCKDB_API QueryResultState Poll();
 	//! Executes a single task of the query on the calling thread. An interrupt or an execution error
 	//! is recorded on the stream and reported as EXECUTION_ERROR
@@ -71,6 +74,10 @@ public:
 
 private:
 	unique_ptr<DataChunk> FetchInternal(ClientContextLock &lock);
+	//! Runs a buffer call under the context lock and maps any failure onto the stream as
+	//! EXECUTION_ERROR. Once the stream has ended it keeps reporting the terminal state
+	QueryResultState GuardedInternal(const char *name,
+	                                 const std::function<QueryResultState(ClientContextLock &lock)> &call);
 
 private:
 	//! The handle of the query this stream drains. Never handed out

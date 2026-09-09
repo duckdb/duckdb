@@ -69,11 +69,12 @@ public:
 	bool WaitsOnConsumer();
 	//! Blocking call that executes tasks on the calling thread until a chunk is buffered or execution reaches a
 	//! terminal state.
-	QueryResultState ReplenishBuffer(QueryResult &result, ClientContextLock &context_lock);
-	//! One blocking replenish step: run executor tasks until a chunk is poppable
-	QueryResultState ExecuteTaskInternal(QueryResult &result, ClientContextLock &context_lock);
-	//! Non-blocking. Reports the observable state without running tasks
-	QueryResultState Pulse(QueryResult &result, ClientContextLock &context_lock);
+	QueryResultState ReplenishBuffer(ClientContextLock &context_lock, QueryResult &result);
+	//! Lend the calling thread to production: settle draining, wake parked producers and run at most one
+	//! task slice. Reports whether a chunk is poppable. Never waits
+	QueryResultState Participate(ClientContextLock &context_lock, QueryResult &result);
+	//! Reports whether a chunk is poppable, else where execution stands. Runs no task, never waits
+	QueryResultState Poll(ClientContextLock &context_lock, QueryResult &result);
 	virtual unique_ptr<DataChunk> Scan() = 0;
 	virtual void UnblockSinks() = 0;
 	shared_ptr<ClientContext> GetContext() {

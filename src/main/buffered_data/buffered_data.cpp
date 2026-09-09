@@ -103,7 +103,7 @@ idx_t BufferedData::LowWaterMark(idx_t capacity) {
 	return MaxValue<idx_t>(capacity / 2, 1);
 }
 
-QueryResultState BufferedData::ExecuteTaskInternal(QueryResult &result, ClientContextLock &context_lock) {
+QueryResultState BufferedData::Participate(ClientContextLock &context_lock, QueryResult &result) {
 	auto cc = context.lock();
 	if (!cc) {
 		return Cancelled(result);
@@ -133,14 +133,13 @@ QueryResultState BufferedData::ExecuteTaskInternal(QueryResult &result, ClientCo
 		return QueryResultState::READY;
 	}
 	if (execution_result == QueryResultState::BLOCKED || execution_result == QueryResultState::READY) {
-		// The engine is waiting on the consumer but nothing is poppable yet: a woken producer has
-		// not re-delivered. Its deposit rings the notifier
+		// The engine is waiting on the consumer but nothing is poppable yet (!ReplenishSatisfied())
 		return QueryResultState::BLOCKED;
 	}
 	return execution_result;
 }
 
-QueryResultState BufferedData::Pulse(QueryResult &result, ClientContextLock &context_lock) {
+QueryResultState BufferedData::Poll(ClientContextLock &context_lock, QueryResult &result) {
 	auto cc = context.lock();
 	if (!cc) {
 		return Cancelled(result);
@@ -157,8 +156,7 @@ QueryResultState BufferedData::Pulse(QueryResult &result, ClientContextLock &con
 	if (!interrupted && HasObservableChunk()) {
 		return QueryResultState::READY;
 	}
-	// Observe the execution state without running tasks
-	auto execution_result = cc->ExecuteTaskInternal(context_lock, result, true);
+	auto execution_result = cc->PollInternal(context_lock, result);
 	if (execution_result == QueryResultState::EXECUTION_ERROR) {
 		Close();
 		return QueryResultState::EXECUTION_ERROR;
@@ -172,14 +170,14 @@ QueryResultState BufferedData::Pulse(QueryResult &result, ClientContextLock &con
 	return execution_result;
 }
 
-QueryResultState BufferedData::ReplenishBuffer(QueryResult &result, ClientContextLock &context_lock) {
+QueryResultState BufferedData::ReplenishBuffer(ClientContextLock &context_lock, QueryResult &result) {
 	auto cc = context.lock();
 	if (!cc) {
 		return Cancelled(result);
 	}
 
 	QueryResultState execution_result;
-	while (!IsObservable(execution_result = ExecuteTaskInternal(result, context_lock))) {
+	while (!IsObservable(execution_result = Participate(context_lock, result))) {
 		if (execution_result == QueryResultState::BLOCKED) {
 			UnblockSinks();
 			cc->WaitForTask(context_lock, result);

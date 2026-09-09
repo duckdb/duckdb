@@ -748,46 +748,64 @@ bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
 	}
 }
 
-QueryResultState ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result, bool dry_run) {
+QueryResultState ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(result));
-	bool invalidate_transaction = true;
 	try {
 		// Surface a pending interrupt even when this thread runs no task that reaches InterruptCheck.
 		// IsInterrupted() rather than InterruptCheck(): we must not enforce query_deadline here.
-		if (!dry_run && IsInterrupted()) {
+		if (IsInterrupted()) {
 			throw InterruptException();
 		}
 		// Producer tasks can run on this thread below. Their notifications are suppressed: this
 		// caller observes the state itself, through the return value
-		shared_ptr<QueryResultNotifier> notifier;
-		if (!dry_run) {
-			notifier = active_query->executor->GetResultNotifier();
-		}
+		auto notifier = active_query->executor->GetResultNotifier();
 		QueryResultNotifier::ParticipationGuard participation(notifier.get());
-		auto query_result = active_query->executor->ExecuteTask(dry_run);
-		if (active_query->progress_bar) {
-			// todo: this is not correct for streaming results
-			auto is_finished = IsObservable(query_result);
-			active_query->progress_bar->Update(is_finished);
-			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
-		}
-		return query_result;
+		auto state = active_query->executor->ExecuteTask();
+		UpdateProgressInternal(state);
+		return state;
 	} catch (std::exception &ex) {
-		auto error = ErrorData(ex);
-		if (error.Type() == ExceptionType::INTERRUPT) {
-			auto &executor = *active_query->executor;
-			if (!executor.HasError()) {
-				// Interrupted by the user
-				result.SetError(ex);
-				invalidate_transaction = true;
-			} else {
-				// Interrupted by an exception caused in a worker thread
-				error = executor.GetError();
-				invalidate_transaction = ErrorInvalidatesTransaction(error.Type());
-				result.SetError(error);
-			}
-		} else if (!ErrorInvalidatesTransaction(error.Type())) {
+		return FailQueryInternal(lock, result, ErrorData(ex));
+	} catch (...) { // LCOV_EXCL_START
+		return FailQueryInternal(lock, result, ErrorData("Unhandled exception in ExecuteTaskInternal"));
+	} // LCOV_EXCL_STOP
+}
+
+QueryResultState ClientContext::PollInternal(ClientContextLock &lock, BaseQueryResult &result) {
+	D_ASSERT(active_query);
+	D_ASSERT(active_query->IsOpenResult(result));
+	try {
+		auto state = active_query->executor->Poll();
+		UpdateProgressInternal(state);
+		return state;
+	} catch (std::exception &ex) {
+		return FailQueryInternal(lock, result, ErrorData(ex));
+	} catch (...) { // LCOV_EXCL_START
+		return FailQueryInternal(lock, result, ErrorData("Unhandled exception in PollInternal"));
+	} // LCOV_EXCL_STOP
+}
+
+void ClientContext::UpdateProgressInternal(QueryResultState state) {
+	if (!active_query->progress_bar) {
+		return;
+	}
+	// todo: this is not correct for streaming results
+	active_query->progress_bar->Update(IsObservable(state));
+	query_progress = active_query->progress_bar->GetDetailedQueryProgress();
+}
+
+QueryResultState ClientContext::FailQueryInternal(ClientContextLock &lock, BaseQueryResult &result, ErrorData error) {
+	bool invalidate_transaction = true;
+	if (error.Type() == ExceptionType::INTERRUPT) {
+		auto &executor = *active_query->executor;
+		if (executor.HasError()) {
+			// Interrupted by an exception caused in a worker thread
+			error = executor.GetError();
+			invalidate_transaction = ErrorInvalidatesTransaction(error.Type());
+		}
+		result.SetError(error);
+	} else {
+		if (!ErrorInvalidatesTransaction(error.Type())) {
 			invalidate_transaction = false;
 		} else if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			// fatal exceptions invalidate the entire database
@@ -796,9 +814,7 @@ QueryResultState ClientContext::ExecuteTaskInternal(ClientContextLock &lock, Bas
 		}
 		ProcessError(error, active_query->query);
 		result.SetError(std::move(error));
-	} catch (...) { // LCOV_EXCL_START
-		result.SetError(ErrorData("Unhandled exception in ExecuteTaskInternal"));
-	} // LCOV_EXCL_STOP
+	}
 	EndQueryInternal(lock, false, invalidate_transaction, result.GetErrorObject());
 	return QueryResultState::EXECUTION_ERROR;
 }

@@ -444,48 +444,26 @@ bool Executor::ExecutionIsFinished() {
 	return completed_pipelines >= total_pipelines || HasError();
 }
 
-QueryResultState Executor::ExecuteTask(bool dry_run) {
+QueryResultState Executor::ExecuteTask() {
 	// Only executor should return NO_TASKS_AVAILABLE
 	D_ASSERT(execution_result != QueryResultState::NO_TASKS_AVAILABLE);
 	if (execution_result != QueryResultState::NOT_READY && ExecutionIsFinished()) {
 		return execution_result;
 	}
-	// check if there are any incomplete pipelines
-	auto &scheduler = TaskScheduler::GetScheduler(context);
 	if (completed_pipelines < total_pipelines) {
-		// there are! if we don't already have a task, fetch one
-		auto current_task = task.get();
-		if (dry_run) {
-			// Pretend we have no task, we don't want to execute anything
-			current_task = nullptr;
-		} else {
-			if (!task) {
-				scheduler.GetTaskFromProducer(*producer, task);
-			}
-			current_task = task.get();
+		if (!task) {
+			TaskScheduler::GetScheduler(context).GetTaskFromProducer(*producer, task);
 		}
-
-		if (!current_task && !HasError()) {
-			// there are no tasks to be scheduled and there are tasks blocked
-			lock_guard<mutex> l(executor_lock);
-			if (to_be_rescheduled_tasks.empty()) {
-				return QueryResultState::NO_TASKS_AVAILABLE;
-			}
-			// At least one task is blocked
-			if (ResultCollectorIsBlocked()) {
-				return QueryResultState::READY;
-			}
-			return QueryResultState::BLOCKED;
+		if (!task && !HasError()) {
+			return IdleState();
 		}
-
-		if (current_task) {
-			// if we have a task, partially process it
+		if (task) {
+			// partially process the task
 			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
 			if (result == TaskExecutionResult::TASK_BLOCKED) {
 				task->Deschedule();
 				task.reset();
 			} else if (result == TaskExecutionResult::TASK_FINISHED) {
-				// if the task is finished, clean it up
 				task.reset();
 			} else if (result == TaskExecutionResult::TASK_ERROR) {
 				if (!HasError()) {
@@ -505,15 +483,47 @@ QueryResultState Executor::ExecuteTask(bool dry_run) {
 			}
 			return QueryResultState::NOT_READY;
 		}
-		execution_result = QueryResultState::EXECUTION_ERROR;
-
-		// an exception has occurred executing one of the pipelines
-		// we need to cancel all tasks associated with this executor
-		CancelTasks();
-		ThrowException();
+		FailExecution();
 	}
-	D_ASSERT(!task);
+	return FinishExecution();
+}
 
+QueryResultState Executor::Poll() {
+	D_ASSERT(execution_result != QueryResultState::NO_TASKS_AVAILABLE);
+	if (execution_result != QueryResultState::NOT_READY && ExecutionIsFinished()) {
+		return execution_result;
+	}
+	if (completed_pipelines < total_pipelines) {
+		if (!HasError()) {
+			return IdleState();
+		}
+		FailExecution();
+	}
+	return FinishExecution();
+}
+
+QueryResultState Executor::IdleState() {
+	lock_guard<mutex> l(executor_lock);
+	if (to_be_rescheduled_tasks.empty()) {
+		return QueryResultState::NO_TASKS_AVAILABLE;
+	}
+	// At least one task is blocked
+	if (ResultCollectorIsBlocked()) {
+		return QueryResultState::READY;
+	}
+	return QueryResultState::BLOCKED;
+}
+
+void Executor::FailExecution() {
+	execution_result = QueryResultState::EXECUTION_ERROR;
+	// an exception has occurred executing one of the pipelines
+	// we need to cancel all tasks associated with this executor
+	CancelTasks();
+	ThrowException();
+}
+
+QueryResultState Executor::FinishExecution() {
+	D_ASSERT(!task);
 	lock_guard<mutex> elock(executor_lock);
 	pipelines.clear();
 	NextExecutor();
