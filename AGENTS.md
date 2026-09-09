@@ -33,6 +33,62 @@ build/reldebug/test/unittest "*"
 
 It is recommended to use `make reldebug` and `build/reldebug/test/unittest` unless a good reason exists to use the debug build - the debug build is much slower than the reldebug build.
 
+Multiple filters go in **one** invocation, comma-separated. Space-separated filters are concatenated
+into a single (usually unmatchable) pattern rather than OR-ed:
+
+```bash
+# correct - runs both
+build/reldebug/test/unittest "test/sql/order/test_limit.test,test/sql/order/limit_union.test"
+
+# wrong - looks for one test named "...test_limit.testtest/sql/order/limit_union.test"
+build/reldebug/test/unittest "test/sql/order/test_limit.test" "test/sql/order/limit_union.test"
+```
+
+Progress lines go to stdout and failure output to stderr, so `2>/dev/null` keeps only progress and
+`1>/dev/null` keeps only failures.
+
+### Machine-Readable Output (`--output=json`)
+
+`--output=json` replaces the human-readable output with JSON Lines on stdout: a `test` object for
+every test case that did not pass, then one `summary` object. Nothing else is written to stdout, so
+the stream can be piped straight into a parser. The process exit code is unchanged.
+
+Passing tests are counted in the summary but not emitted individually - they are ~99% of the lines on
+a full run and carry nothing to act on. A whole green run is 73 lines instead of 6274. Pass Catch's
+`-s`/`--success` to get them back. Skipped tests are always emitted: they are few, and a test that
+silently did not run is usually worth knowing about.
+
+```bash
+build/reldebug/test/unittest "test/sql/order/*" --output=json
+```
+
+```json
+{"event":"test","name":"test/sql/x.test","status":"skip","duration":0.015,"assertions":{"passed":0,"failed":0},"skip_reason":"require notarealextension"}
+{"event":"summary","total":35,"passed":34,"failed":0,"skipped":1,"assertions":{"passed":9355,"failed":0},"failed_tests":[],"skip_reasons":{"require notarealextension":1}}
+```
+
+`status` is `pass`, `fail` or `skip`. A failing test carries a `failure` object with the structured
+detail - `kind` (e.g. `wrong_row_count`, `value_mismatch`, `unexpected_statement`), `file`, `line`,
+`query`, and the `expected` / `actual` values as flat row-major arrays over `columns` columns.
+`mismatch_rows` lists the zero-based rows that differ, computed over the **full** result even when
+the value arrays themselves are capped (`expected_truncated` / `actual_truncated`).
+
+The `summary` object closes every run and names every failure, so a single invocation answers "what
+failed" without a second pass - do not run one invocation per test group and stitch the results
+together with `grep`. A filter that matches nothing emits `{"event":"no_matching_tests",...}`, which
+distinguishes a typo'd filter from a genuinely empty run.
+
+```bash
+# just the verdict - the summary is always the last line
+build/reldebug/test/unittest "*" --output=json | tail -1
+
+# include passing tests too
+build/reldebug/test/unittest "*" --output=json -s
+```
+
+The default output is unaffected by this flag. `--emit-test-events` (`[TEST_EVENT] ` lines on stderr)
+is a separate, narrower mechanism and still behaves as before.
+
 ### Time-Limiting Queries
 
 Use the `max_execution_time` setting (milliseconds, `0` = no limit) to abort a query that runs too long:
