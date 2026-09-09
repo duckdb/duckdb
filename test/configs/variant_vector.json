@@ -14,7 +14,8 @@
 		{
 			"reason": "Roundtrip is not possible (MAP type)",
 			"paths": [
-				"test/parquet/test_parquet_schema.test"
+				"test/parquet/test_parquet_schema.test",
+				"test/parquet/test_parquet_schema_incompatible_nested_types.test"
 			]
 		}
 	]

@@ -560,8 +560,8 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	auto &local_column = local_columns[local_idx];
 	auto mapping_idx = is_root ? top_level_index : local_idx;
 	auto mapping = make_uniq<MultiFileIndexMapping>(mapping_idx);
-	if (global_column.children.empty()) {
-		// not a struct - map the column directly
+	if (global_column.children.empty() || !local_column.type.IsNested()) {
+		// Map directly when no child remapping is needed or the source requires a scalar cast.
 		result.column_map = Value(local_column.name);
 		result.column_index = make_uniq<ColumnIndex>(global_index.RemapRootIndex(local_idx.GetIndex()));
 		result.mapping = std::move(mapping);
@@ -571,6 +571,11 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 
 	// nested type - check if the field identifiers match and if we need to remap
 	D_ASSERT(global_column.type.IsNested());
+	if (global_column.type.id() != local_column.type.id()) {
+		throw BinderException("Failed to map file-column of type '%s' to result-column of type '%s'", local_column.type,
+		                      global_column.type);
+	}
+
 	switch (global_column.type.id()) {
 	case LogicalTypeId::STRUCT:
 		return MapColumnStruct(context, global_column, global_index, local_column, local_idx, mapper,
