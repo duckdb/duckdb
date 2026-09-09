@@ -746,6 +746,12 @@
         "id": 111,
         "name": "file_row_number",
         "type": "bool"
+      },
+      {
+        "id": 112,
+        "name": "hive_sample_size",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "pointer_type": "none"
