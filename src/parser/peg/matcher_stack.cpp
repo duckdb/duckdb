@@ -147,7 +147,7 @@ void PackratMatchState::StoreResult(const Matcher &matcher, MatchState &state, c
 
 MatchStackFrame::MatchStackFrame(const Matcher &matcher_p, MatchStateReference match_state_p,
                                  data_ptr_t process_storage_p, idx_t process_capacity, idx_t process_alignment)
-    : matcher(matcher_p), match_state(std::move(match_state_p)),
+    : matcher(matcher_p), match_state(match_state_p),
       process_inline_storage(process_storage_p, process_capacity, process_alignment) {
 }
 
@@ -188,8 +188,8 @@ void MatchStack::PushFrame(MatchInput input, optional_idx parent_frame) {
 	auto frame_slot = GetFrameSlot(frame_index);
 	auto process_storage = frame_slot + FrameHeaderSize();
 	auto state_reference = CreateStateReference(input.state, parent_frame);
-	new (frame_slot) MatchStackFrame(input.matcher, std::move(state_reference), process_storage,
-	                                 BuiltinMatchProcessSize(), BuiltinMatchProcessAlignment());
+	new (frame_slot) MatchStackFrame(input.matcher, state_reference, process_storage, BuiltinMatchProcessSize(),
+	                                 BuiltinMatchProcessAlignment());
 	frame_count++;
 }
 
