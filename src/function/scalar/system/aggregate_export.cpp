@@ -831,16 +831,18 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 }
 
 ScalarFunction FinalizeFun::GetFunction() {
-	auto function = ScalarFunction("finalize", {LogicalTypeId::ANY}, LogicalTypeId::INVALID, AggregateStateFinalize,
-	                               BindAggregateState, nullptr, InitFinalizeState);
+	auto function = ScalarFunction("finalize", {}, LogicalTypeId::INVALID, AggregateStateFinalize, BindAggregateState,
+	                               nullptr, InitFinalizeState);
+	function.GetSignature().AddParameter("col0", LogicalTypeId::ANY);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return function;
 }
 
 ScalarFunction CombineFun::GetFunction() {
-	auto function = ScalarFunction("combine", {LogicalTypeId::ANY, LogicalTypeId::ANY}, LogicalTypeId::ANY,
-	                               AggregateStateCombine, BindAggregateState, nullptr, InitCombineState);
+	auto function = ScalarFunction("combine", {}, LogicalTypeId::ANY, AggregateStateCombine, BindAggregateState,
+	                               nullptr, InitCombineState);
+	function.GetSignature().AddParameter("col0", LogicalTypeId::ANY).AddParameter("col1", LogicalTypeId::ANY);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
 }
@@ -877,10 +879,10 @@ ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
 }
 
 AggregateFunction CombineAggrFun::GetFunction() {
-	auto function =
-	    AggregateFunction("combine_aggr", {LogicalTypeId::ANY}, LogicalTypeId::ANY, nullptr, nullptr, CombineAggrUpdate,
-	                      nullptr, CombineAggrFinalize, FunctionNullHandling::SPECIAL_HANDLING, nullptr,
-	                      CombineAggrBind, nullptr, nullptr, nullptr);
+	auto function = AggregateFunction("combine_aggr", {}, LogicalTypeId::ANY, nullptr, nullptr, CombineAggrUpdate,
+	                                  nullptr, CombineAggrFinalize, FunctionNullHandling::SPECIAL_HANDLING, nullptr,
+	                                  CombineAggrBind, nullptr, nullptr, nullptr);
+	function.GetSignature().AddParameter("arg", LogicalTypeId::ANY);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
 }
@@ -888,10 +890,10 @@ AggregateFunction CombineAggrFun::GetFunction() {
 AggregateFunctionSet CombineAggrFun::GetFunctions() {
 	AggregateFunctionSet set("combine_aggr");
 	set.AddFunction(GetFunction());
-	auto repeated =
-	    AggregateFunction("combine_aggr", {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalTypeId::ANY, nullptr,
-	                      nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize,
-	                      FunctionNullHandling::SPECIAL_HANDLING, nullptr, CombineAggrBind, nullptr, nullptr, nullptr);
+	auto repeated = AggregateFunction("combine_aggr", {}, LogicalTypeId::ANY, nullptr, nullptr, CombineAggrUpdate,
+	                                  nullptr, CombineAggrFinalize, FunctionNullHandling::SPECIAL_HANDLING, nullptr,
+	                                  CombineAggrBind, nullptr, nullptr, nullptr);
+	repeated.GetSignature().AddParameter("arg", LogicalTypeId::ANY).AddParameter("multiplicities", LogicalType::BIGINT);
 	repeated.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	set.AddFunction(std::move(repeated));
 	return set;
