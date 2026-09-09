@@ -1,0 +1,83 @@
+# name: test/sql/collate/collate_distinct_aggregate.test
+# description: Test collations in the arguments of DISTINCT aggregates
+# group: [collate]
+
+statement ok
+CREATE TABLE tbl(g INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'a'), (1, 'A'), (1, 'Z'), (2, 'b'), (2, 'B');
+
+# the collation decides which argument values are duplicates of each other
+query I
+SELECT count(DISTINCT s COLLATE NOCASE) FROM tbl
+----
+3
+
+query I
+SELECT count(DISTINCT s) FROM tbl
+----
+5
+
+# ... including per group
+query II
+SELECT g, count(DISTINCT s COLLATE NOCASE) FROM tbl GROUP BY g ORDER BY g
+----
+1	2
+2	1
+
+# a collation only defines equality: the aggregate still sees the original values, not the collation keys
+query I
+SELECT list_sort(list(DISTINCT s COLLATE NOCASE)) FROM (VALUES ('x'), ('Z')) t(s)
+----
+[x, Z]
+
+query I
+SELECT string_agg(DISTINCT s COLLATE NOCASE, ',' ORDER BY s COLLATE NOCASE) FROM (VALUES ('x'), ('Z')) t(s)
+----
+x,Z
+
+# aggregates that disagree on the collation of their argument do not share a deduplication
+query II
+SELECT count(DISTINCT s COLLATE NOCASE), count(DISTINCT s) FROM (VALUES ('a'), ('A'), ('Z')) t(s)
+----
+2	3
+
+# FILTER is applied before the deduplication
+query I
+SELECT count(DISTINCT s COLLATE NOCASE) FILTER (WHERE g = 1) FROM tbl
+----
+2
+
+# NULL values are not affected by the collation
+query I
+SELECT count(DISTINCT s COLLATE NOCASE) FROM (VALUES ('a'), ('A'), (NULL)) t(s)
+----
+1
+
+query I
+SELECT list_sort(list(DISTINCT s COLLATE NOCASE)) FROM (VALUES ('x'), (NULL), ('Z')) t(s)
+----
+[x, Z, NULL]
+
+# the default collation applies to arguments without an explicit COLLATE
+statement ok
+SET default_collation='nocase'
+
+query I
+SELECT count(DISTINCT s) FROM tbl
+----
+3
+
+query I
+SELECT list_sort(list(DISTINCT s)) FROM (VALUES ('x'), ('Z')) t(s)
+----
+[x, Z]
+
+statement ok
+SET default_collation='binary'
+
+query I
+SELECT count(DISTINCT s) FROM tbl
+----
+5
