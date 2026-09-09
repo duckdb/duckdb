@@ -8,6 +8,9 @@ unzip data/storage/corrupt/alp_corrupt_offset_unordered.db.gz {TEST_DIR}/alp_cor
 
 load {TEST_DIR}/alp_corrupt_offset_unordered.db readonly
 
+statement ok
+USE alp_corrupt_offset_unordered
+
 query I
 SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALP';
 ----

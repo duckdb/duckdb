@@ -2961,6 +2961,26 @@ HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value) {
 	return static_cast<HTTPStatusCode>(StringUtil::StringToEnum(GetHTTPStatusCodeValues(), 64, "HTTPStatusCode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetHTTPTransportReusePolicyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(HTTPTransportReusePolicy::CLIENT_FREE), "CLIENT_FREE" },
+		{ static_cast<uint32_t>(HTTPTransportReusePolicy::EPHEMERAL), "EPHEMERAL" },
+		{ static_cast<uint32_t>(HTTPTransportReusePolicy::SESSION_LOCAL), "SESSION_LOCAL" },
+		{ static_cast<uint32_t>(HTTPTransportReusePolicy::SHARED), "SHARED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<HTTPTransportReusePolicy>(HTTPTransportReusePolicy value) {
+	return StringUtil::EnumToString(GetHTTPTransportReusePolicyValues(), 4, "HTTPTransportReusePolicy", static_cast<uint32_t>(value));
+}
+
+template<>
+HTTPTransportReusePolicy EnumUtil::FromString<HTTPTransportReusePolicy>(const char *value) {
+	return static_cast<HTTPTransportReusePolicy>(StringUtil::StringToEnum(GetHTTPTransportReusePolicyValues(), 4, "HTTPTransportReusePolicy", value));
+}
+
 const StringUtil::EnumStringLiteral *GetIdentifierCaseModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(IdentifierCaseMode::PRESERVE_CASE), "PRESERVE_CASE" },
