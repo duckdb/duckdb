@@ -507,19 +507,18 @@ ScalarFunctionSet RegexpExtractAllFun::GetFunctions() {
 	                                                 LogicalType::LIST(LogicalType::VARCHAR), RegexpExtractAll::Execute,
 	                                                 RegexpExtractAll::Bind, RegexpExtractAll::InitLocalState));
 	// Struct multi-match variant(s): pattern must be constant due to bind-time struct shape inference
+	// return type is temporary, replaced in bind
 	regexp_extract_all.AddFunction(MakeRegexFunction({{"string", LogicalType::VARCHAR},
 	                                                  {"regex", LogicalType::VARCHAR},
 	                                                  {"name_list", LogicalType::LIST(LogicalType::VARCHAR)}},
-	                                                 LogicalType::LIST(LogicalType::VARCHAR), // temporary, replaced
-	                                                                                          // in bind
+	                                                 LogicalType::LIST(LogicalType::VARCHAR),
 	                                                 RegexpExtractAllStruct::Execute, RegexpExtractAllStruct::Bind,
 	                                                 RegexpExtractAllStruct::InitLocalState));
 	regexp_extract_all.AddFunction(MakeRegexFunction({{"string", LogicalType::VARCHAR},
 	                                                  {"regex", LogicalType::VARCHAR},
 	                                                  {"name_list", LogicalType::LIST(LogicalType::VARCHAR)},
 	                                                  {"options", LogicalType::VARCHAR}},
-	                                                 LogicalType::LIST(LogicalType::VARCHAR), // temporary, replaced
-	                                                                                          // in bind
+	                                                 LogicalType::LIST(LogicalType::VARCHAR),
 	                                                 RegexpExtractAllStruct::Execute, RegexpExtractAllStruct::Bind,
 	                                                 RegexpExtractAllStruct::InitLocalState));
 	// throws when accessing a group that the pattern does not have
