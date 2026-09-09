@@ -67,6 +67,12 @@ namespace {
 
 using ExportResult = LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>;
 
+static void RequireCastTarget(const ParsedExpression &expression, const LogicalType &type) {
+	auto &cast = expression.Cast<CastExpression>();
+	CastExpression expected(type, cast.Child().Copy(), cast.IsTryCast());
+	REQUIRE(cast.Equals(expected));
+}
+
 static unique_ptr<LogicalOperator> OptimizeExportQuery(Connection &connection, const string &query) {
 	Parser parser(connection.context->GetParserOptions());
 	parser.ParseQuery(query);
@@ -558,7 +564,7 @@ TEST_CASE("Bound expression SQL export preserves exact constant types and values
 			REQUIRE(result.GetValue()->GetExpressionClass() == ExpressionClass::CONSTANT);
 		} else {
 			REQUIRE(result.GetValue()->GetExpressionClass() == ExpressionClass::CAST);
-			REQUIRE(result.GetValue()->Cast<CastExpression>().TargetType() == value.type());
+			RequireCastTarget(*result.GetValue(), value.type());
 		}
 		auto rebound = connection.Query("SELECT " + result.GetValue()->ToString());
 		INFO("type=" << value.type().ToString());
@@ -927,7 +933,7 @@ TEST_CASE("Bound expression SQL export reconstructs structural expression forms"
 	auto cast_result = BoundExpressionSQLExporter::Export(*cast, context);
 	REQUIRE(cast_result.IsSuccess());
 	REQUIRE(cast_result.GetValue()->Cast<CastExpression>().IsTryCast());
-	REQUIRE(cast_result.GetValue()->Cast<CastExpression>().TargetType() == LogicalType::BIGINT);
+	RequireCastTarget(*cast_result.GetValue(), LogicalType::BIGINT);
 	auto serialized_cast = BinaryRoundTrip(*connection.context, *cast);
 	RequireRoundTrip(connection, *serialized_cast, context, string(), "TRY_CAST(CAST(42 AS INTEGER) AS BIGINT)");
 
@@ -1981,7 +1987,7 @@ TEST_CASE("Live optimized decimal sum exports its logical result", "[bound_expre
 	auto exported = BoundExpressionSQLExporter::Export(aggregate, context);
 	REQUIRE(exported.IsSuccess());
 	auto &cast = exported.GetValue()->Cast<CastExpression>();
-	REQUIRE(cast.TargetType() == LogicalType::DECIMAL(38, 2));
+	RequireCastTarget(cast, LogicalType::DECIMAL(38, 2));
 	REQUIRE(cast.Child().Cast<FunctionExpression>().FunctionName() == "sum");
 	DuckDB receiving_db;
 	Connection receiving_connection(receiving_db);
@@ -2552,7 +2558,7 @@ TEST_CASE("Bound expression SQL export owns outputs and propagates resolver exce
 		return BoundExpressionSQLExporter::Export(expression, context);
 	}();
 	REQUIRE(success.IsSuccess());
-	REQUIRE(success.GetValue()->Cast<CastExpression>().TargetType() == LogicalType::SMALLINT);
+	RequireCastTarget(*success.GetValue(), LogicalType::SMALLINT);
 
 	auto failure = []() {
 		BoundColumnRefExpression expression(LogicalType::INTEGER, ColumnBinding(TableIndex(88), ProjectionIndex(7)));
