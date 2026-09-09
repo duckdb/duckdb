@@ -39,6 +39,11 @@ RETRY_PATTERNS = (
     'jsonrpc',
 )
 
+# clangd-tidy reports every diagnostic with its code in trailing brackets. clang-tidy checks are named
+# "group-check-name", while clangd reports the diagnostics of the compiler itself under clang's internal
+# names, which never contain a dash - e.g. "[undeclared_var_use]".
+DIAGNOSTIC_CODE_REGEX = re.compile(r'^\S+:\d+:\d+: \w+: .*\[([A-Za-z0-9_.-]+)\]\s*$')
+
 
 def color_text(text, color):
     if not FORCE_COLOR_OUTPUT:
@@ -153,12 +158,24 @@ def reset_pch_dir(pch_dir):
     os.makedirs(pch_dir, exist_ok=True)
 
 
+def has_compiler_diagnostics(text):
+    for line in (text or '').splitlines():
+        match = DIAGNOSTIC_CODE_REGEX.match(line)
+        if match and '-' not in match.group(1):
+            return True
+    return False
+
+
 def is_retryable_failure(result):
     if result.returncode == 0:
         return False
     text = (result.stdout or '') + '\n' + (result.stderr or '')
     lower = text.lower()
-    return any(pattern in lower for pattern in RETRY_PATTERNS)
+    if any(pattern in lower for pattern in RETRY_PATTERNS):
+        return True
+    # a file that does not compile here does compile in every build job - the translation unit was parsed
+    # against a broken preamble, which happens when the runner runs out of room for the preamble caches
+    return has_compiler_diagnostics(text)
 
 
 def print_output_tail(label, text):
@@ -204,6 +221,9 @@ def run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_roo
         pch_size = format_bytes(directory_size(pch_dir))
         print_status(f'attempt {attempt_id} finished exit={result.returncode} in {elapsed:.1f}s; pch size: {pch_size}')
         if result.returncode == 0:
+            # Clear the preambles before the next chunk. They are not reused across chunks, and letting them
+            # accumulate fills the runner's disk, after which clangd reports phantom diagnostics.
+            reset_pch_dir(pch_dir)
             return None
         retryable = is_retryable_failure(result)
         if retries >= MAX_RETRIES or not retryable:
@@ -212,11 +232,9 @@ def run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_roo
                     f'retry limit reached after attempt {attempt_id}; '
                     f'not retrying. stdout: {stdout_path}; stderr: {stderr_path}'
                 )
-                reset_pch_dir(pch_dir)
-            else:
-                print_output_tail('stdout', result.stdout)
-                print_output_tail('stderr', result.stderr)
-                reset_pch_dir(pch_dir)
+            print_output_tail('stdout', result.stdout)
+            print_output_tail('stderr', result.stderr)
+            reset_pch_dir(pch_dir)
             return {
                 'attempt_id': attempt_id,
                 'stdout_path': stdout_path,

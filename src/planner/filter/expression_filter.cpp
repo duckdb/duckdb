@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
@@ -227,6 +228,10 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 
+		if (ExpressionBarrier::IsBarrier(func)) {
+			// the barrier returns its argument unchanged
+			return TryGetExpressionStats(context_p, *func.GetChildren()[0], input_stats, owned_stats);
+		}
 		if (BoundCastExpression::IsCast(func)) {
 			auto &cast_child = BoundCastExpression::Child(func);
 			auto child_stats = TryGetExpressionStats(context_p, cast_child, input_stats, owned_stats);
@@ -535,6 +540,10 @@ static FilterPropagateResult CheckBetweenStatistics(optional_ptr<ClientContext> 
 static FilterPropagateResult CheckFunctionStatistics(optional_ptr<ClientContext> context_p,
                                                      const BoundFunctionExpression &func_expr,
                                                      array_ptr<const BaseStatistics> input_stats) {
+	if (ExpressionBarrier::IsBarrier(func_expr)) {
+		// pruning never evaluates the expression, and only ever removes rows - the barrier can be seen through
+		return ExpressionFilter::CheckExpressionStatistics(context_p, *func_expr.GetChildren()[0], input_stats);
+	}
 	if (func_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
 		return CheckBetweenStatistics(context_p, func_expr, input_stats);
 	}
@@ -623,7 +632,7 @@ static FilterPropagateResult CheckInOperatorStatistics(optional_ptr<ClientContex
 		result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && filter_stats->CanHaveNull()) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		return FilterPropagateResult::FILTER_TRUE_OR_NULL;
 	}
 	return result;
 }
@@ -678,9 +687,12 @@ static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientConte
 	}
 	// a child matching every row makes NOT match no row - the converse does not hold, since a child
 	// that matches no row may be NULL rather than false, and NOT NULL does not match either
-	if (ExpressionFilter::CheckExpressionStatistics(context_p, child, input_stats) ==
-	    FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+	auto child_result = ExpressionFilter::CheckExpressionStatistics(context_p, child, input_stats);
+	if (child_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (child_result == FilterPropagateResult::FILTER_TRUE_OR_NULL) {
+		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }

@@ -7,9 +7,11 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/execution/index/index_type.hpp"
 
 namespace duckdb {
@@ -89,9 +91,8 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	lstate.key_chunk.ReferenceColumns(chunk, indexed_columns);
 	lstate.row_chunk.ReferenceColumns(chunk, rowid_column);
 
-	// Check for NULLs, if we are creating a PRIMARY KEY.
-	// FIXME: Later, we want to ensure that we skip the NULL check for any non-PK alter.
-	if (alter_table_info) {
+	// PRIMARY KEY columns cannot be NULL. UNIQUE allows NULLs.
+	if (alter_table_info && info->constraint_type == IndexConstraintType::PRIMARY) {
 		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
 			if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
 				throw ConstraintException("NOT NULL constraint failed: %s", info->GetIndexName());
@@ -165,6 +166,15 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		if (indexes.Contains(info->GetIndexName())) {
 			throw CatalogException("an index with that name already exists for this table: %s",
 			                       SQLIdentifier(info->GetIndexName()));
+		}
+
+		// PRIMARY KEY columns cannot be NULL.
+		if (info->constraint_type == IndexConstraintType::PRIMARY) {
+			auto &local_storage = LocalStorage::Get(context, storage.db);
+			for (const auto &column_id : storage_ids) {
+				BoundNotNullConstraint not_null {PhysicalIndex(column_id)};
+				local_storage.VerifyNewConstraint(storage, not_null);
+			}
 		}
 
 		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());

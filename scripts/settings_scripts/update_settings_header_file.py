@@ -11,13 +11,20 @@ START_MARKER = (
 END_MARKER = "// End of the auto-generated list of settings structures"
 
 
+# escape a plain-text value so it can be emitted as a C++ string literal
+def escape_cpp_string(value: str) -> str:
+    return value.replace('\\', '\\\\').replace('"', '\\"')
+
+
 def extract_declarations(setting) -> str:
     definition = (
         f"struct {setting.struct_name} {{\n"
         f"    using RETURN_TYPE = {setting.return_type};\n"
         f"    static constexpr const char *Name = \"{setting.name}\";\n"
-        f"    static constexpr const char *Description = \"{setting.description}\";\n"
+        f"    static constexpr const char *Description = \"{escape_cpp_string(setting.description)}\";\n"
         f"    static constexpr const char *InputType = \"{setting.sql_type}\";\n"
+        f"    static constexpr bool IsDebug = {'true' if setting.is_debug else 'false'};\n"
+        f"    static constexpr bool IsDeprecated = {'true' if setting.is_deprecated else 'false'};\n"
     )
     if not setting.is_generic_setting:
         # non-generic setting

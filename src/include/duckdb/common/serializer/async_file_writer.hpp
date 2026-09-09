@@ -14,6 +14,8 @@
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/query_context.hpp"
 
+#include <exception>
+
 namespace duckdb {
 
 class ClientContext;

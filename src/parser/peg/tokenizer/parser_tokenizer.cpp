@@ -12,6 +12,11 @@ ParserTokenizerBehavior::ParserTokenizerBehavior(const string &sql, vector<Match
 }
 
 void ParserTokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
+	if (type == TokenType::COMMENT && unterminated) {
+		auto comment = sql.substr(start, end - start);
+		throw ParserException::SyntaxError(sql, "unterminated /* comment at or near \"" + comment + "\"",
+		                                   optional_idx(start));
+	}
 	if (IsEmptyQuotedIdentifier(sql, start, end, type)) {
 		throw ParserException::SyntaxError(sql, "zero-length delimited identifier", optional_idx(start));
 	}

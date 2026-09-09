@@ -1,26 +1,64 @@
 #include "duckdb/main/buffered_data/simple_buffered_data.hpp"
-#include "duckdb/common/printer.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
-SimpleBufferedData::SimpleBufferedData(ClientContext &context) : BufferedData(BufferedData::Type::SIMPLE, context) {
-	buffered_count = 0;
-	buffer_size = total_buffer_size;
+SimpleBufferedData::SimpleBufferedData(ClientContext &context, ResultLifetime lifetime)
+    : BufferedData(BufferedData::Type::SIMPLE, context, lifetime), buffered_count(0), buffer_size(total_buffer_size) {
 }
 
 SimpleBufferedData::~SimpleBufferedData() {
 }
 
-void SimpleBufferedData::BlockSink(const InterruptState &blocked_sink) {
-	lock_guard<mutex> lock(glock);
-	blocked_sinks.push(blocked_sink);
+bool SimpleBufferedData::BufferSaturated() {
+	annotated_lock_guard<annotated_mutex> lock(glock);
+	return buffered_count >= BufferSize() || !blocked_sinks.empty();
 }
 
-bool SimpleBufferedData::BufferIsFull() {
-	return buffered_count >= BufferSize();
+idx_t SimpleBufferedData::PeakBufferedBytes() {
+	annotated_lock_guard<annotated_mutex> lock(glock);
+	return peak_buffered_bytes;
+}
+
+bool SimpleBufferedData::HasBlockedSink() {
+	annotated_lock_guard<annotated_mutex> lock(glock);
+	return !blocked_sinks.empty();
+}
+
+void SimpleBufferedData::CollectRestartableSinks(annotated_lock_guard<annotated_mutex> &lock,
+                                                 vector<BlockedSink> &to_unblock) {
+	D_ASSERT(to_unblock.empty());
+	// Reserve first so a failed allocation loses no blocked sink
+	to_unblock.reserve(blocked_sinks.size());
+	while (!blocked_sinks.empty()) {
+		auto &front = blocked_sinks.front();
+		// Sinks restart in FIFO order. Stop at the first chunk that does not fit yet
+		if (buffered_count > 0 && buffered_count + front.pending_bytes > BufferSize()) {
+			break;
+		}
+		// Deposit the parked copy, so the chunk is visible before the producer wakes.
+		// Parks always carry their copy; the guard keeps a null from corrupting the queue
+		if (front.pending_chunk) {
+			buffered_count += front.pending_bytes;
+			unread_chunks.push(BufferedChunk {std::move(front.pending_chunk), front.pending_bytes});
+			peak_buffered_bytes = MaxValue<idx_t>(peak_buffered_bytes, buffered_count);
+			front.pending_bytes = 0;
+		}
+		to_unblock.push_back(std::move(front));
+		blocked_sinks.pop();
+	}
+}
+
+void SimpleBufferedData::InvokeUnblocks(const vector<BlockedSink> &to_unblock) {
+	// Invoked outside glock. Callback() takes the executor lock. A throw here
+	// terminates the query, and teardown reclaims the parked tasks
+	for (auto &blocked : to_unblock) {
+		blocked.state.Callback();
+	}
 }
 
 void SimpleBufferedData::UnblockSinks() {
@@ -34,61 +72,19 @@ void SimpleBufferedData::UnblockSinks() {
 		return;
 	}
 	// Reschedule enough blocked sinks to populate the buffer
-	lock_guard<mutex> lock(glock);
-	while (!blocked_sinks.empty()) {
-		auto &blocked_sink = blocked_sinks.front();
-		if (buffered_count >= BufferSize()) {
-			// We have unblocked enough sinks already
-			break;
-		}
-		blocked_sink.Callback();
-		blocked_sinks.pop();
+	vector<BlockedSink> to_unblock;
+	{
+		annotated_lock_guard<annotated_mutex> lock(glock);
+		CollectRestartableSinks(lock, to_unblock);
 	}
+	InvokeUnblocks(to_unblock);
 }
 
-StreamExecutionResult SimpleBufferedData::ExecuteTaskInternal(StreamQueryResult &result,
-                                                              ClientContextLock &context_lock) {
-	auto cc = context.lock();
-	if (!cc) {
-		return StreamExecutionResult::EXECUTION_CANCELLED;
-	}
-	if (!cc->IsActiveResult(context_lock, result)) {
-		return StreamExecutionResult::EXECUTION_CANCELLED;
-	}
-	// Check for interrupt even if the buffer is full.
-	// Without this check, cancel requests would not be detected until the buffer is drained.
-	if (cc->interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED) {
-		throw InterruptException();
-	}
-	if (BufferIsFull()) {
-		// The buffer isn't empty yet, just return
-		return StreamExecutionResult::CHUNK_READY;
-	}
-	UnblockSinks();
-	// Let the executor run until the buffer is no longer empty
-	auto execution_result = cc->ExecuteTaskInternal(context_lock, result);
-	if (buffered_count >= BufferSize()) {
-		return StreamExecutionResult::CHUNK_READY;
-	}
-	if (execution_result == PendingExecutionResult::BLOCKED ||
-	    execution_result == PendingExecutionResult::RESULT_READY) {
-		return StreamExecutionResult::BLOCKED;
-	}
-	if (result.HasError()) {
-		Close();
-	}
-	switch (execution_result) {
-	case PendingExecutionResult::NO_TASKS_AVAILABLE:
-	case PendingExecutionResult::RESULT_NOT_READY:
-		return StreamExecutionResult::CHUNK_NOT_READY;
-	case PendingExecutionResult::EXECUTION_FINISHED:
-		return StreamExecutionResult::EXECUTION_FINISHED;
-	case PendingExecutionResult::EXECUTION_ERROR:
-		return StreamExecutionResult::EXECUTION_ERROR;
-	default:
-		throw InternalException("No conversion from PendingExecutionResult (%s) -> StreamExecutionResult",
-		                        EnumUtil::ToString(execution_result));
-	}
+void SimpleBufferedData::AssertNoBlockedSinks() {
+#ifdef D_ASSERT_IS_ENABLED
+	annotated_lock_guard<annotated_mutex> lock(glock);
+	D_ASSERT(blocked_sinks.empty());
+#endif
 }
 
 unique_ptr<DataChunk> SimpleBufferedData::Scan() {
@@ -96,30 +92,42 @@ unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 		return nullptr;
 	}
 
-	lock_guard<mutex> lock(glock);
-	if (buffered_chunks.empty()) {
-		Close();
-		return nullptr;
+	unique_ptr<DataChunk> chunk;
+	vector<BlockedSink> to_unblock;
+	{
+		annotated_lock_guard<annotated_mutex> lock(glock);
+		if (unread_chunks.empty()) {
+			Close();
+			return nullptr;
+		}
+		auto ref = std::move(unread_chunks.front());
+		unread_chunks.pop();
+		chunk = std::move(ref.chunk);
+		buffered_count -= ref.data_size;
+		// The pop restarts blocked producers below the low-water mark
+		if (buffered_count < LowWaterMark(BufferSize())) {
+			CollectRestartableSinks(lock, to_unblock);
+		}
 	}
-	auto chunk = std::move(buffered_chunks.front());
-	buffered_chunks.pop();
-
-	if (chunk) {
-		auto allocation_size = chunk->GetDataSize();
-		buffered_count -= allocation_size;
-	}
+	InvokeUnblocks(to_unblock);
 	return chunk;
 }
 
-void SimpleBufferedData::Append(const DataChunk &to_append) {
-	auto chunk = make_uniq<DataChunk>();
-	chunk->Initialize(Allocator::DefaultAllocator(), to_append.GetTypes());
-	to_append.Copy(*chunk, 0);
-	auto allocation_size = chunk->GetDataSize();
-
-	unique_lock<mutex> lock(glock);
-	buffered_count += allocation_size;
-	buffered_chunks.push(std::move(chunk));
+bool SimpleBufferedData::AppendOrBlock(DataChunk &to_append, const InterruptState &blocked_sink) {
+	// Copied outside the lock: both outcomes need the copy, and parallel producers copy concurrently
+	auto copy = CopyForBuffering(to_append);
+	const idx_t chunk_data_size = copy->GetDataSize();
+	annotated_lock_guard<annotated_mutex> lock(glock);
+	// The buffer admits a chunk that fits, and always one chunk when empty
+	if (buffered_count > 0 && buffered_count + chunk_data_size > BufferSize()) {
+		// Park holding the finished copy. Restart selection deposits it at wake time
+		blocked_sinks.push(BlockedSink {blocked_sink, chunk_data_size, std::move(copy)});
+		return true;
+	}
+	unread_chunks.push(BufferedChunk {std::move(copy), chunk_data_size});
+	buffered_count += chunk_data_size;
+	peak_buffered_bytes = MaxValue<idx_t>(peak_buffered_bytes, buffered_count);
+	return false;
 }
 
 } // namespace duckdb
