@@ -19,6 +19,21 @@
 #include <utility>
 
 namespace duckdb {
+
+//! True if op can emit more rows than it consumes while passing through its child's bindings.
+//! PIVOT multiplies rows but uses its own bindings; WINDOW passes bindings through but keeps the row count.
+static bool CanDuplicateChildBindings(const LogicalOperator &op) {
+	return op.type == LogicalOperatorType::LOGICAL_UNNEST;
+}
+
+void JoinElimination::AddDistinctGroup(TableIndex table_index, column_binding_set_t distinct_group) {
+	if (pipe_info.has_duplicate_child_bindings) {
+		// the distinct group may not remain unique at the join
+		return;
+	}
+	pipe_info.distinct_groups[table_index] = std::move(distinct_group);
+}
+
 void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<LogicalOperator> parent, idx_t idx) {
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		if (!parent) {
@@ -58,7 +73,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 			D_ASSERT(table_idx == col_ref.Binding().table_index);
 		}
 		if (can_add) {
-			pipe_info.distinct_groups[table_idx] = std::move(distinct_group);
+			AddDistinctGroup(table_idx, std::move(distinct_group));
 		}
 		break;
 	}
@@ -74,7 +89,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 			distinct_group.insert(ColumnBinding(aggr.group_index, ProjectionIndex(i)));
 		}
 		if (!distinct_group.empty()) {
-			pipe_info.distinct_groups[table_idx] = std::move(distinct_group);
+			AddDistinctGroup(table_idx, std::move(distinct_group));
 		}
 		break;
 	}
@@ -110,7 +125,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 				new_distinct_group.insert(col_ref.Binding());
 			}
 			if (could_add) {
-				pipe_info.distinct_groups[ref_id] = std::move(new_distinct_group);
+				AddDistinctGroup(ref_id, std::move(new_distinct_group));
 			}
 		}
 		break;
@@ -127,7 +142,13 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 	}
 
 	if (op.children.size() == 1) {
+		// uniqueness is only lost below this operator
+		auto old_has_duplicate_child_bindings = pipe_info.has_duplicate_child_bindings;
+		if (CanDuplicateChildBindings(op)) {
+			pipe_info.has_duplicate_child_bindings = true;
+		}
 		OptimizeChildren(*op.children[0], op, idx);
+		pipe_info.has_duplicate_child_bindings = old_has_duplicate_child_bindings;
 	} else {
 		children_root = op;
 		for (auto &child : op.children) {
@@ -165,7 +186,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		}
 		for (auto &refs : ref_table_columns) {
 			if (refs.second.ref_column_ids.empty()) {
-				pipe_info.distinct_groups[projection.table_index] = std::move(refs.second.distinct_group);
+				AddDistinctGroup(projection.table_index, std::move(refs.second.distinct_group));
 			}
 		}
 		break;

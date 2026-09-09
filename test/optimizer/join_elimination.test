@@ -244,3 +244,43 @@ query II
 explain select a.ida from b right join (select ida from a group by ida) as a on ida < idb;
 ----
 physical_plan	<REGEX>:.*JOIN.*
+
+# unnest repeats the key, so the distinct group below it does not survive
+# https://github.com/duckdb/duckdb/issues/25213
+
+statement ok
+CREATE TABLE dup_keys(k INTEGER);
+
+statement ok
+INSERT INTO dup_keys VALUES (1),(1),(2),(3);
+
+statement ok
+CREATE TABLE probe_keys(idb INTEGER);
+
+statement ok
+INSERT INTO probe_keys VALUES (1),(1),(2),(3),(4),(NULL),(2),(3);
+
+query I
+SELECT count(*) FROM probe_keys LEFT JOIN (SELECT k, unnest([1,2,3]) e FROM (SELECT DISTINCT k FROM dup_keys) s) t
+ON t.k = probe_keys.idb;
+----
+20
+
+query II
+explain SELECT count(*) FROM probe_keys LEFT JOIN (SELECT k, unnest([1,2,3]) e FROM (SELECT DISTINCT k FROM dup_keys) s) t
+ON t.k = probe_keys.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# a group by establishes the same distinct group, and loses it to the unnest the same way
+
+query II
+explain select b.* from b left join (select ida, unnest([1,2,3]) as e from (select ida from a group by ida) s) t on t.ida = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# a distinct above the unnest restores uniqueness, so that join is still eliminated
+query II
+explain select b.* from b left join (select ida from (select distinct ida from (select ida, unnest([1,2,3]) e from a))) t on t.ida = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
