@@ -426,7 +426,7 @@ static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, 
 		auto &source_mask = ConstantVector::Validity(source);
 		auto &result_mask = FlatVector::ValidityMutable(result);
 		auto ret = T::StringToNestedTypeCastLoop(source_data, source_mask, result, result_mask, 1, parameters, nullptr);
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		result.FlattenAndSetConstant();
 		return ret;
 	}
 	default: {
