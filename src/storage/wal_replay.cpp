@@ -924,7 +924,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
 	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
-	if ((!alter_info.IsAddPrimaryKey()) && (!alter_info.IsAddForeignKey())) {
+	if (!alter_info.IsAddUniqueConstraint() && !alter_info.IsAddForeignKey()) {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
@@ -944,10 +944,10 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	// Resolve the indexed columns and constraint type based on the constraint kind.
 	vector<LogicalIndex> logical_indexes;
 	IndexConstraintType constraint_type;
-	if (alter_info.IsAddPrimaryKey()) {
+	if (alter_info.IsAddUniqueConstraint()) {
 		auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 		logical_indexes = unique_info.GetLogicalIndexes(column_list);
-		constraint_type = IndexConstraintType::PRIMARY;
+		constraint_type = unique_info.GetIndexConstraintType();
 	} else {
 		auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
 		for (const auto &physical_index : fk.info.fk_keys) {

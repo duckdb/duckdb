@@ -552,7 +552,7 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	WriteAheadLogSerializer serializer(*this, WALType::ALTER_INFO);
 	serializer.WriteProperty(101, "info", &info);
 
-	if (!info.IsAddPrimaryKey() && !info.IsAddForeignKey()) {
+	if (!info.IsAddUniqueConstraint() && !info.IsAddForeignKey()) {
 		return serializer.End();
 	}
 
@@ -564,9 +564,10 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	auto &parent_info = parent.GetStorage().GetDataTableInfo();
 	auto &list = parent_info->GetIndexes();
 
-	auto name = info.IsAddPrimaryKey() ? constraint_info.constraint->Cast<UniqueConstraint>().GetName(parent.name)
-	                                   : Identifier(constraint_info.constraint->Cast<ForeignKeyConstraint>().GetName(
-	                                         parent.name.GetIdentifierName()));
+	auto name = info.IsAddUniqueConstraint()
+	                ? constraint_info.constraint->Cast<UniqueConstraint>().GetName(parent.name)
+	                : Identifier(constraint_info.constraint->Cast<ForeignKeyConstraint>().GetName(
+	                      parent.name.GetIdentifierName()));
 	auto &database = GetDatabase();
 	SerializeIndex(database, serializer, list, name);
 	serializer.End();
