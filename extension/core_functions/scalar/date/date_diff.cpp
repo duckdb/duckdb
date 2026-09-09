@@ -437,14 +437,23 @@ void DateDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 } // namespace
 
+// Names the "part,startdate,enddate" triple shared by date_diff's per-type overloads.
+static ScalarFunction NamePartStartEndArguments(ScalarFunction fun, const LogicalType &type) {
+	fun.GetSignature()
+	    .AddParameter("part", LogicalType::VARCHAR)
+	    .AddParameter("startdate", type)
+	    .AddParameter("enddate", type);
+	return fun;
+}
+
 ScalarFunctionSet DateDiffFun::GetFunctions() {
 	ScalarFunctionSet date_diff("date_diff");
-	date_diff.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE, LogicalType::DATE},
-	                                     LogicalType::BIGINT, DateDiffFunction<date_t>));
-	date_diff.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP},
-	                                     LogicalType::BIGINT, DateDiffFunction<timestamp_t>));
-	date_diff.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME, LogicalType::TIME},
-	                                     LogicalType::BIGINT, DateDiffFunction<dtime_t>));
+	date_diff.AddFunction(
+	    NamePartStartEndArguments(ScalarFunction({}, LogicalType::BIGINT, DateDiffFunction<date_t>), LogicalType::DATE));
+	date_diff.AddFunction(NamePartStartEndArguments(
+	    ScalarFunction({}, LogicalType::BIGINT, DateDiffFunction<timestamp_t>), LogicalType::TIMESTAMP));
+	date_diff.AddFunction(
+	    NamePartStartEndArguments(ScalarFunction({}, LogicalType::BIGINT, DateDiffFunction<dtime_t>), LogicalType::TIME));
 	// throws for unsupported date parts, and when the difference overflows
 	date_diff.SetFallible();
 	date_diff.SetArgProperties(1, ArgProperties().NonIncreasing());

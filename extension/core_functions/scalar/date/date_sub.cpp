@@ -434,14 +434,23 @@ void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 } // namespace
 
+// Names the "part,startdate,enddate" triple shared by date_sub's per-type overloads.
+static ScalarFunction NameDateSubPartStartEndArguments(ScalarFunction fun, const LogicalType &type) {
+	fun.GetSignature()
+	    .AddParameter("part", LogicalType::VARCHAR)
+	    .AddParameter("startdate", type)
+	    .AddParameter("enddate", type);
+	return fun;
+}
+
 ScalarFunctionSet DateSubFun::GetFunctions() {
 	ScalarFunctionSet date_sub("date_sub");
-	date_sub.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE, LogicalType::DATE},
-	                                    LogicalType::BIGINT, DateSubFunction<date_t>));
-	date_sub.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP},
-	                                    LogicalType::BIGINT, DateSubFunction<timestamp_t>));
-	date_sub.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME, LogicalType::TIME},
-	                                    LogicalType::BIGINT, DateSubFunction<dtime_t>));
+	date_sub.AddFunction(
+	    NameDateSubPartStartEndArguments(ScalarFunction({}, LogicalType::BIGINT, DateSubFunction<date_t>), LogicalType::DATE));
+	date_sub.AddFunction(NameDateSubPartStartEndArguments(
+	    ScalarFunction({}, LogicalType::BIGINT, DateSubFunction<timestamp_t>), LogicalType::TIMESTAMP));
+	date_sub.AddFunction(
+	    NameDateSubPartStartEndArguments(ScalarFunction({}, LogicalType::BIGINT, DateSubFunction<dtime_t>), LogicalType::TIME));
 	// throws for unsupported date parts, and when the difference overflows
 	date_sub.SetFallible();
 	date_sub.SetArgProperties(1, ArgProperties().NonIncreasing());
