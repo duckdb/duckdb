@@ -1,0 +1,144 @@
+# name: test/optimizer/redundant_distinct.test
+# description: DISTINCT is removed when an operator above it already discards duplicates
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE a(v INTEGER);
+
+statement ok
+INSERT INTO a VALUES (1), (1), (2), (3), (NULL), (NULL);
+
+statement ok
+CREATE TABLE b(v INTEGER);
+
+statement ok
+INSERT INTO b VALUES (2), (2), (3), (4), (NULL);
+
+# --- results are unchanged by a branch DISTINCT under set semantics
+
+query I
+(SELECT DISTINCT v FROM a) UNION (SELECT v FROM b) ORDER BY v
+----
+1
+2
+3
+4
+NULL
+
+query I
+(SELECT v FROM a) UNION (SELECT DISTINCT v FROM b) ORDER BY v
+----
+1
+2
+3
+4
+NULL
+
+query I
+(SELECT DISTINCT v FROM a) INTERSECT (SELECT v FROM b) ORDER BY v
+----
+2
+3
+NULL
+
+query I
+(SELECT DISTINCT v FROM a) EXCEPT (SELECT v FROM b) ORDER BY v
+----
+1
+
+# --- the ALL variants are defined on multisets, so a branch DISTINCT still matters there
+
+query I
+(SELECT DISTINCT v FROM a) UNION ALL (SELECT v FROM b) ORDER BY v
+----
+1
+2
+2
+2
+3
+3
+4
+NULL
+NULL
+
+query I
+(SELECT DISTINCT v FROM a) INTERSECT ALL (SELECT v FROM b) ORDER BY v
+----
+2
+3
+NULL
+
+query I
+(SELECT DISTINCT v FROM a) EXCEPT ALL (SELECT v FROM b) ORDER BY v
+----
+1
+
+# --- DISTINCT ON picks particular rows, so it is not redundant
+
+query II
+(SELECT DISTINCT ON (v) v, v + 10 FROM a) UNION (SELECT v, v + 10 FROM b) ORDER BY 1
+----
+1	11
+2	12
+3	13
+4	14
+NULL	NULL
+
+# --- the redundant branch DISTINCT is actually gone from the plan
+# The operator renders as DISTINCT while its parameter line renders as "Distinct Targets", so a
+# case sensitive match counts operators rather than parameters.
+
+# only the set operation's own DISTINCT is left, not the branch one
+query II
+EXPLAIN (SELECT DISTINCT v FROM a) UNION (SELECT v FROM b)
+----
+logical_opt	<!REGEX>:(?s).*DISTINCT.*DISTINCT.*
+
+query II
+EXPLAIN (SELECT DISTINCT v FROM a) INTERSECT (SELECT v FROM b)
+----
+logical_opt	<!REGEX>:(?s).*DISTINCT.*DISTINCT.*
+
+query II
+EXPLAIN (SELECT DISTINCT v FROM a) EXCEPT (SELECT v FROM b)
+----
+logical_opt	<!REGEX>:(?s).*DISTINCT.*DISTINCT.*
+
+# UNION ALL has no dedup of its own, so the branch DISTINCT has to stay
+query II
+EXPLAIN (SELECT DISTINCT v FROM a) UNION ALL (SELECT v FROM b)
+----
+logical_opt	<REGEX>:(?s).*DISTINCT.*
+
+# turning the optimizer off brings the second DISTINCT back, which is what pins the removal on it
+statement ok
+SET disabled_optimizers = 'redundant_distinct';
+
+query II
+EXPLAIN (SELECT DISTINCT v FROM a) UNION (SELECT v FROM b)
+----
+logical_opt	<REGEX>:(?s).*DISTINCT.*DISTINCT.*
+
+statement ok
+RESET disabled_optimizers;
+
+# --- cases where the DISTINCT is doing real work and has to survive
+
+# a LIMIT decides which rows leave the branch, so removing the DISTINCT under it would change which
+# rows the LIMIT picks
+query II
+EXPLAIN (SELECT DISTINCT v FROM a LIMIT 2) UNION (SELECT v FROM b)
+----
+logical_opt	<REGEX>:(?s).*DISTINCT.*DISTINCT.*
+
+# a volatile expression is evaluated once per row, so feeding it fewer rows changes what it produces
+query II
+EXPLAIN (SELECT (random() > 2)::INTEGER AS z FROM (SELECT DISTINCT v FROM a)) UNION (SELECT v FROM b)
+----
+logical_opt	<REGEX>:(?s).*DISTINCT.*DISTINCT.*
