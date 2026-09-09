@@ -56,11 +56,12 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
 
 AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) {
 	auto fun = AggregateFunction(
-	    {input_type}, LogicalTypeId::BIGINT, AggregateFunction::StateSize<ApproxDistinctCountState>,
+	    {}, LogicalTypeId::BIGINT, AggregateFunction::StateSize<ApproxDistinctCountState>,
 	    AggregateFunction::StateInitialize<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctUpdateFunction,
 	    AggregateFunction::StateCombine<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>, nullptr);
+	fun.GetSignature().AddParameter("any", input_type);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
