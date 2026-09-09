@@ -1,4 +1,4 @@
-#include "duckdb/common/http_util.hpp"
+#include "duckdb/main/http/http_util.hpp"
 
 namespace duckdb {
 
