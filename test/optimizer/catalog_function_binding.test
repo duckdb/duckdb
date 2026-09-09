@@ -253,8 +253,14 @@ SELECT avg(i) FROM integers WHERE i IS NULL
 ----
 NULL
 
-# pruning every aggregate expression makes the optimizer push a count_star of its own
+# pruning the unreferenced sum leaves an aggregate with no expressions, and the optimizer replaces it
+# with a count_star of its own - the filter keeps it from being folded away first
 query I
-SELECT 1 FROM (SELECT sum(i) FROM integers) t
+SELECT 1 FROM (SELECT sum(i) FROM integers WHERE random() > 0.5) t
 ----
 1
+
+query II
+EXPLAIN SELECT 1 FROM (SELECT sum(i) FROM integers WHERE random() > 0.5) t
+----
+physical_plan	<REGEX>:.*count_star\(\).*

@@ -7,7 +7,9 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/planner.hpp"
 
 using namespace duckdb;
@@ -53,6 +55,22 @@ void CollectIdentityFunctions(const LogicalOperator &op, vector<BoundFunctionInf
 	    op, [&](const unique_ptr<Expression> *expr) { CollectIdentityFunctions(**expr, result); });
 	for (auto &child : op.children) {
 		CollectIdentityFunctions(*child, result);
+	}
+}
+
+//! The join filter pushdown aggregates hang off the join rather than being plan expressions, so
+//! EnumerateExpressions does not reach them
+void CollectJoinFilterAggregates(const LogicalOperator &op, vector<BoundFunctionInfo> &result) {
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.filter_pushdown) {
+			for (auto &aggregate : join.filter_pushdown->min_max_aggregates) {
+				CollectIdentityFunctions(*aggregate, result);
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		CollectJoinFilterAggregates(*child, result);
 	}
 }
 
@@ -193,14 +211,17 @@ TEST_CASE("Aggregate rewrites keep the definition of the aggregates they introdu
 TEST_CASE("Column pruning keeps the definition of count_star()", "[optimizer][function_identity]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE structs AS SELECT i AS id, {'a': i, 'b': i::VARCHAR} AS s "
-	                          "FROM range(100) _(i)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers AS SELECT i::INTEGER AS i FROM range(100) t(i)"));
 
 	con.BeginTransaction();
-	// pushing the referenced fields down through a projection rebuilds them as struct_extract calls, but those
-	// are consumed again by the pushdown, so only the aggregate side is observable in the final plan
-	RequireIdentityFunction(PlanIdentityFunctions(con, "SELECT id % 10, count(*) FROM structs GROUP BY 1"),
-	                        "count_star");
+	// pruning the unreferenced sum leaves an aggregate with no expressions, which the optimizer replaces with a
+	// count_star of its own. The filter keeps the aggregate from being folded away before that happens.
+	auto functions = PlanIdentityFunctions(con, "SELECT 1 FROM (SELECT sum(i) FROM integers WHERE random() > 0.5) t");
+	auto &count_star = RequireIdentityFunction(functions, "count_star");
+	REQUIRE(count_star.is_aggregate);
+	REQUIRE(count_star.return_type == LogicalType::BIGINT);
+	REQUIRE(count_star.arguments.empty());
+	REQUIRE(FindIdentityFunction(functions, "sum").IsValid() == false);
 	con.Rollback();
 }
 
@@ -263,5 +284,23 @@ TEST_CASE("Compressed materialization keeps its internal functions unqualified",
 	REQUIRE(compression_functions > 0);
 	// count_star is introduced by the planner here, and is qualified like any catalog-bound aggregate
 	RequireIdentityFunction(functions, "count_star");
+	con.Rollback();
+}
+
+TEST_CASE("Join filter pushdown keeps the definition of min() and max()", "[optimizer][function_identity]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// the build side keys are spread out, so the min/max filters cannot be resolved from statistics alone
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE big AS SELECT i::INTEGER AS k FROM range(100000) t(i)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE small AS SELECT (i * 7)::INTEGER AS k FROM range(50) t(i)"));
+
+	con.BeginTransaction();
+	auto plan = OptimizeIdentityQuery(con, "SELECT count(*) FROM big JOIN small USING (k)");
+
+	vector<BoundFunctionInfo> functions;
+	CollectJoinFilterAggregates(*plan, functions);
+	auto &min_function = RequireIdentityFunction(functions, "min");
+	REQUIRE(min_function.is_aggregate);
+	RequireIdentityFunction(functions, "max");
 	con.Rollback();
 }
