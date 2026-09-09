@@ -102,7 +102,7 @@ public:
 	virtual void Truncate();
 
 	//! Register a block with the given block id in the base file
-	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id);
+	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id) DUCKDB_EXCLUDES(blocks_lock);
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
 	//! If mode is set to destructive (default) - the old_block will be destroyed as part of this method
 	//! This can only be safely used when there is no other (lingering) usage of old_block
@@ -116,7 +116,7 @@ public:
 
 	void UnregisterPersistentBlock(BlockHandle &block);
 	//! UnregisterBlock, only accepts non-temporary block ids
-	virtual void UnregisterBlock(block_id_t id);
+	virtual void UnregisterBlock(block_id_t id) DUCKDB_EXCLUDES(blocks_lock);
 
 	//! Returns a reference to the metadata manager of this block manager.
 	MetadataManager &GetMetadataManager();
@@ -167,8 +167,8 @@ public:
 	}
 
 protected:
-	bool BlockIsRegistered(block_id_t block_id);
-	shared_ptr<BlockHandle> TryGetBlock(block_id_t block_id);
+	bool BlockIsRegistered(block_id_t block_id) DUCKDB_EXCLUDES(blocks_lock);
+	shared_ptr<BlockHandle> TryGetBlock(block_id_t block_id) DUCKDB_EXCLUDES(blocks_lock);
 
 public:
 	template <class TARGET>
@@ -187,11 +187,13 @@ protected:
 	//! Relevant for some Windows edge cases.
 	bool in_destruction = false;
 
-private:
+	//! Acquired after SingleFileBlockManager::single_file_block_lock when both are needed.
 	//! The lock for the set of blocks
-	mutex blocks_lock;
+	annotated_mutex blocks_lock;
+
+private:
 	//! A mapping of block id -> BlockHandle
-	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
+	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks DUCKDB_GUARDED_BY(blocks_lock);
 	//! The metadata manager
 	unique_ptr<MetadataManager> metadata_manager;
 	//! The allocation size of blocks managed by this block manager. Defaults to DEFAULT_BLOCK_ALLOC_SIZE

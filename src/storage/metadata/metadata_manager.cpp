@@ -55,7 +55,7 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	// check if there is any free space left in an existing block
 	// if not allocate a new block
 	MetadataPointer pointer;
-	unique_lock<mutex> guard(block_lock);
+	annotated_unique_lock guard(block_lock);
 	block_id_t free_block = INVALID_BLOCK;
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
@@ -103,7 +103,7 @@ MetadataHandle MetadataManager::Pin(const QueryContext &context, const MetadataP
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	shared_ptr<BlockHandle> block_handle;
 	{
-		lock_guard<mutex> guard(block_lock);
+		annotated_lock_guard guard(block_lock);
 		auto entry = blocks.find(UnsafeNumericCast<int64_t>(pointer.block_index));
 		if (entry == blocks.end()) {
 			throw InternalException("Trying to pin block %llu - but the block did not exist", pointer.block_index);
@@ -127,10 +127,12 @@ MetadataHandle MetadataManager::Pin(const QueryContext &context, const MetadataP
 	return handle;
 }
 
-void MetadataManager::ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &metadata_block) {
-	D_ASSERT(block_lock.owns_lock());
+// Clang cannot track the caller-owned scoped lock across unlock/relock through a reference.
+void MetadataManager::ConvertToTransient(annotated_unique_lock<annotated_mutex> &guard,
+                                         MetadataBlock &metadata_block) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
+	D_ASSERT(guard.owns_lock());
 	auto old_block = metadata_block.block;
-	block_lock.unlock();
+	guard.unlock();
 	// pin the old block
 	auto old_buffer = buffer_manager.Pin(old_block);
 
@@ -144,13 +146,15 @@ void MetadataManager::ConvertToTransient(unique_lock<mutex> &block_lock, Metadat
 	// unregister the old block
 	block_manager.UnregisterBlock(metadata_block.block_id);
 
-	block_lock.lock();
+	guard.lock();
 	metadata_block.block = std::move(new_block);
 	metadata_block.dirty = true;
 }
 
-block_id_t MetadataManager::AllocateNewBlock(unique_lock<mutex> &block_lock) {
-	D_ASSERT(!block_lock.owns_lock());
+// Clang cannot track the caller-owned scoped lock across unlock/relock through a reference.
+block_id_t
+MetadataManager::AllocateNewBlock(annotated_unique_lock<annotated_mutex> &guard) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
+	D_ASSERT(!guard.owns_lock());
 	auto new_block_id = GetNextBlockId();
 
 	MetadataBlock new_block;
@@ -164,13 +168,13 @@ block_id_t MetadataManager::AllocateNewBlock(unique_lock<mutex> &block_lock) {
 	// zero-initialize the handle
 	memset(handle.GetDataMutable(), 0, block_manager.GetBlockSize());
 
-	block_lock.lock();
-	AddBlock(block_lock, std::move(new_block));
+	guard.lock();
+	AddBlock(guard, std::move(new_block));
 	return new_block_id;
 }
 
-void MetadataManager::AddBlock(unique_lock<mutex> &block_lock, MetadataBlock new_block, bool if_exists) {
-	D_ASSERT(block_lock.owns_lock());
+void MetadataManager::AddBlock(annotated_unique_lock<annotated_mutex> &guard, MetadataBlock new_block, bool if_exists) {
+	D_ASSERT(guard.owns_lock());
 	if (blocks.find(new_block.block_id) != blocks.end()) {
 		if (if_exists) {
 			return;
@@ -180,17 +184,19 @@ void MetadataManager::AddBlock(unique_lock<mutex> &block_lock, MetadataBlock new
 	blocks[new_block.block_id] = std::move(new_block);
 }
 
-void MetadataManager::AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block) {
+// Clang cannot track the caller-owned scoped lock across unlock/relock through a reference.
+void MetadataManager::AddAndRegisterBlock(annotated_unique_lock<annotated_mutex> &guard,
+                                          MetadataBlock block) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	if (block.block) {
 		throw InternalException("Calling AddAndRegisterBlock on block that already exists");
 	}
 	if (block.block_id >= MAXIMUM_BLOCK) {
 		throw InternalException("AddAndRegisterBlock called with a transient block id");
 	}
-	block_lock.unlock();
+	guard.unlock();
 	block.block = block_manager.RegisterBlock(block.block_id);
-	block_lock.lock();
-	AddBlock(block_lock, std::move(block), true);
+	guard.lock();
+	AddBlock(guard, std::move(block), true);
 }
 
 MetaBlockPointer MetadataManager::GetDiskPointer(const MetadataPointer &pointer, uint32_t offset) {
@@ -208,11 +214,12 @@ uint32_t MetaBlockPointer::GetBlockIndex() const {
 }
 
 MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
-	unique_lock<mutex> guard(block_lock);
+	annotated_unique_lock guard(block_lock);
 	return FromDiskPointerInternal(guard, pointer);
 }
 
-MetadataPointer MetadataManager::FromDiskPointerInternal(unique_lock<mutex> &block_lock, MetaBlockPointer pointer) {
+MetadataPointer MetadataManager::FromDiskPointerInternal(annotated_unique_lock<annotated_mutex> &guard,
+                                                         MetaBlockPointer pointer) {
 	auto block_id = pointer.GetBlockId();
 	auto index = pointer.GetBlockIndex();
 	if (index >= METADATA_BLOCK_COUNT) {
@@ -231,7 +238,7 @@ MetadataPointer MetadataManager::FromDiskPointerInternal(unique_lock<mutex> &blo
 }
 
 MetadataPointer MetadataManager::RegisterDiskPointer(MetaBlockPointer pointer) {
-	unique_lock<mutex> guard(block_lock);
+	annotated_unique_lock guard(block_lock);
 
 	auto block_id = pointer.GetBlockId();
 	MetadataBlock block;
@@ -278,7 +285,7 @@ void MetadataManager::Flush(QueryContext context) {
 	// Write the blocks of the metadata manager to disk.
 	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;
 
-	unique_lock<mutex> guard(block_lock, std::defer_lock);
+	annotated_unique_lock guard(block_lock, std::defer_lock);
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		if (!block.dirty) {
@@ -324,7 +331,7 @@ void MetadataManager::Read(ReadStream &source) {
 	for (idx_t i = 0; i < block_count; i++) {
 		auto block = MetadataBlock::Read(source);
 
-		unique_lock<mutex> guard(block_lock);
+		annotated_unique_lock guard(block_lock);
 		auto entry = blocks.find(block.block_id);
 		if (entry == blocks.end()) {
 			// block does not exist yet
@@ -384,7 +391,7 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 }
 
 void MetadataManager::MarkBlocksAsModified() {
-	unique_lock<mutex> guard(block_lock);
+	annotated_unique_lock guard(block_lock);
 	// for any blocks that were modified in the last checkpoint - set them to free blocks currently
 	for (auto &kv : modified_blocks) {
 		auto block_id = kv.first;
@@ -422,7 +429,7 @@ void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointe
 	if (pointers.empty()) {
 		return;
 	}
-	unique_lock<mutex> guard(block_lock);
+	annotated_unique_lock guard(block_lock);
 	for (auto &pointer : pointers) {
 		auto block_id = pointer.GetBlockId();
 		auto block_index = pointer.GetBlockIndex();
@@ -437,7 +444,7 @@ void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointe
 }
 
 bool MetadataManager::BlockIsModified(const MetaBlockPointer &pointer) {
-	unique_lock<mutex> guard(block_lock);
+	annotated_unique_lock guard(block_lock);
 	auto block_id = pointer.GetBlockId();
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) {
@@ -448,7 +455,7 @@ bool MetadataManager::BlockIsModified(const MetaBlockPointer &pointer) {
 }
 
 bool MetadataManager::BlockHasBeenCleared(const MetaBlockPointer &pointer) {
-	unique_lock<mutex> guard(block_lock);
+	annotated_unique_lock guard(block_lock);
 	auto block_id = pointer.GetBlockId();
 	auto block_index = pointer.GetBlockIndex();
 	auto entry = modified_blocks.find(block_id);
@@ -461,7 +468,7 @@ bool MetadataManager::BlockHasBeenCleared(const MetaBlockPointer &pointer) {
 
 vector<MetadataBlockInfo> MetadataManager::GetMetadataInfo() const {
 	vector<MetadataBlockInfo> result;
-	unique_lock<mutex> guard(block_lock);
+	annotated_unique_lock guard(block_lock);
 	for (auto &block : blocks) {
 		MetadataBlockInfo block_info;
 		block_info.block_id = block.second.block_id;
@@ -479,7 +486,7 @@ vector<MetadataBlockInfo> MetadataManager::GetMetadataInfo() const {
 
 vector<shared_ptr<BlockHandle>> MetadataManager::GetBlocks() const {
 	vector<shared_ptr<BlockHandle>> result;
-	unique_lock<mutex> guard(block_lock);
+	annotated_unique_lock guard(block_lock);
 	for (auto &entry : blocks) {
 		result.push_back(entry.second.block);
 	}

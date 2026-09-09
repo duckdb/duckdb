@@ -83,27 +83,27 @@ public:
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
 	unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) override;
 	//! Return the next free block id
-	block_id_t GetFreeBlockId() override;
+	block_id_t GetFreeBlockId() DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! Return the next free block id
-	block_id_t GetFreeBlockIdForCheckpoint() override;
+	block_id_t GetFreeBlockIdForCheckpoint() DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! Check the next free block id - but do not assign or allocate it
-	block_id_t PeekFreeBlockId() override;
+	block_id_t PeekFreeBlockId() DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! Returns whether or not a specified block is the root block
 	bool IsRootBlock(MetaBlockPointer root) override;
 	//! Mark a block as included in a checkpoint
-	void MarkBlockAsCheckpointed(block_id_t block_id) override;
+	void MarkBlockAsCheckpointed(block_id_t block_id) DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! Mark a block as used (no longer re-writeable)
-	void MarkBlockAsUsed(block_id_t block_id) override;
+	void MarkBlockAsUsed(block_id_t block_id) DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! Mark a block as modified (re-writeable after a checkpoint)
-	void MarkBlockAsModified(block_id_t block_id) override;
+	void MarkBlockAsModified(block_id_t block_id) DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! Increase the reference count of a block. The block should hold at least one reference
-	void IncreaseBlockReferenceCount(block_id_t block_id) override;
+	void IncreaseBlockReferenceCount(block_id_t block_id) DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! UnregisterBlock, only accepts non-temporary block ids
-	void UnregisterBlock(block_id_t id) override;
+	void UnregisterBlock(block_id_t id) DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! Return the meta block id
 	idx_t GetMetaBlock() override;
 	//! Read the content of the block from disk
-	void Read(QueryContext context, Block &block) override;
+	void Read(QueryContext context, Block &block) DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 
 	//! Read individual blocks
 	void ReadBlock(Block &block, bool skip_block_header = false) const;
@@ -115,19 +115,20 @@ public:
 	//! Write the block to disk.
 	void Write(QueryContext context, FileBuffer &buffer, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
-	void WriteHeader(QueryContext context, DatabaseHeader header) override;
+	void WriteHeader(QueryContext context, DatabaseHeader header)
+	    DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! Sync changes to the underlying file
 	void FileSync() override;
 	//! Truncate the underlying database file after a checkpoint
-	void Truncate() override;
+	void Truncate() DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 
 	bool InMemory() override {
 		return false;
 	}
 	//! Returns the number of total blocks
-	idx_t TotalBlocks() override;
+	idx_t TotalBlocks() DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! Returns the number of free blocks
-	idx_t FreeBlocks() override;
+	idx_t FreeBlocks() DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 	//! Whether or not the attached database is a remote file
 	bool IsRemote() override;
 	//! Whether or not to prefetch
@@ -179,20 +180,22 @@ private:
 	void CheckAndAddEncryptionKey(MainHeader &main_header);
 
 	//! Return the blocks to which we will write the free list and modified blocks
-	vector<MetadataHandle> GetFreeListBlocks();
-	void TrimFreeBlocks(const set<block_id_t> &blocks);
+	vector<MetadataHandle> GetFreeListBlocks() DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock);
+	void TrimFreeBlocks(const set<block_id_t> &blocks) DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock);
 	void TrimFreeBlockRange(block_id_t start, block_id_t end);
 
-	void IncreaseBlockReferenceCountInternal(block_id_t block_id);
+	void IncreaseBlockReferenceCountInternal(block_id_t block_id) DUCKDB_REQUIRES(single_file_block_lock);
 
 	//! Verify the block usage count
-	void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) override;
+	void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count)
+	    DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock) override;
 
 	void AddStorageVersionTag();
 
-	block_id_t GetFreeBlockIdInternal(FreeBlockType type);
+	block_id_t GetFreeBlockIdInternal(FreeBlockType type) DUCKDB_EXCLUDES(single_file_block_lock, blocks_lock);
 	//! Adds a free block to the free_list, returns true if it was added to the regular free_list
-	bool AddFreeBlock(unique_lock<mutex> &lock, block_id_t block_id);
+	bool AddFreeBlock(annotated_unique_lock<annotated_mutex> &lock, block_id_t block_id)
+	    DUCKDB_REQUIRES(single_file_block_lock);
 
 private:
 	AttachedDatabase &db;
@@ -205,21 +208,21 @@ private:
 	//! The buffer used to read/write to the headers
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently
-	set<block_id_t> free_list;
+	set<block_id_t> free_list DUCKDB_GUARDED_BY(single_file_block_lock);
 	//! The list of blocks that have been freed, but cannot yet be re-used because they are still in-use
-	set<block_id_t> free_blocks_in_use;
+	set<block_id_t> free_blocks_in_use DUCKDB_GUARDED_BY(single_file_block_lock);
 	//! The list of blocks that are in-use, but haven't been written as part of a checkpoint yet
-	set<block_id_t> newly_used_blocks;
+	set<block_id_t> newly_used_blocks DUCKDB_GUARDED_BY(single_file_block_lock);
 	//! The list of multi-use blocks (i.e. blocks that have >1 reference in the file)
 	//! When a multi-use block is marked as modified, the reference count is decreased by 1 instead of directly
 	//! Appending the block to the modified_blocks list
-	unordered_map<block_id_t, uint32_t> multi_use_blocks;
+	unordered_map<block_id_t, uint32_t> multi_use_blocks DUCKDB_GUARDED_BY(single_file_block_lock);
 	//! The list of blocks that are no longer in-use, but cannot be re-used until the next checkpoint
-	unordered_set<block_id_t> modified_blocks;
+	unordered_set<block_id_t> modified_blocks DUCKDB_GUARDED_BY(single_file_block_lock);
 	//! The current meta block id
 	idx_t meta_block;
 	//! The current maximum block id, this id will be given away first after the free_list runs out
-	block_id_t max_block;
+	block_id_t max_block DUCKDB_GUARDED_BY(single_file_block_lock);
 	//! The block id where the free list can be found
 	idx_t free_list_id;
 	//! The current header iteration count.
@@ -227,6 +230,6 @@ private:
 	//! The storage manager options
 	StorageManagerOptions options;
 	//! Lock for performing various operations in the single file block manager
-	mutex single_file_block_lock;
+	annotated_mutex single_file_block_lock DUCKDB_ACQUIRED_BEFORE(blocks_lock);
 };
 } // namespace duckdb

@@ -200,7 +200,7 @@ TemporaryFileHandle::TemporaryFileHandle(TemporaryFileManager &manager, Temporar
 TemporaryFileHandle::~TemporaryFileHandle() {
 }
 
-TemporaryFileHandle::TemporaryFileLock::TemporaryFileLock(mutex &mutex) : lock(mutex) {
+TemporaryFileHandle::TemporaryFileLock::TemporaryFileLock(annotated_mutex &mutex) : lock(mutex) {
 }
 
 TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex(idx_t block_header_size) {
@@ -503,7 +503,7 @@ TemporaryFileManager::~TemporaryFileManager() {
 	files.Clear();
 }
 
-TemporaryFileManager::TemporaryFileManagerLock::TemporaryFileManagerLock(mutex &mutex) : lock(mutex) {
+TemporaryFileManager::TemporaryFileManagerLock::TemporaryFileManagerLock(annotated_mutex &mutex) : lock(mutex) {
 }
 
 idx_t TemporaryFileManager::WriteTemporaryBuffer(QueryContext context, block_id_t block_id, FileBuffer &buffer) {
@@ -583,7 +583,7 @@ TemporaryFileManager::CompressBuffer(TemporaryFileCompressionAdaptivity &compres
 }
 
 bool TemporaryFileManager::HasTemporaryBuffer(block_id_t block_id) {
-	lock_guard<mutex> lock(manager_lock);
+	annotated_lock_guard lock(manager_lock);
 	return used_blocks.find(block_id) != used_blocks.end();
 }
 
@@ -689,7 +689,7 @@ idx_t TemporaryFileManager::DeleteTemporaryBuffer(block_id_t id) {
 }
 
 vector<TemporaryFileInformation> TemporaryFileManager::GetTemporaryFiles() {
-	lock_guard<mutex> lock(manager_lock);
+	annotated_lock_guard lock(manager_lock);
 	vector<TemporaryFileInformation> result;
 	for (auto &size : TemporaryBufferSizes()) {
 		for (const auto &file : files.GetMapForSize(size)) {

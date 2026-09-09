@@ -150,9 +150,10 @@ public:
 	~TemporaryFileHandle();
 
 public:
-	struct TemporaryFileLock {
+	struct DUCKDB_SCOPED_CAPABILITY TemporaryFileLock {
 	public:
-		explicit TemporaryFileLock(mutex &mutex);
+		explicit TemporaryFileLock(annotated_mutex &mutex) DUCKDB_ACQUIRE(mutex);
+		~TemporaryFileLock() DUCKDB_RELEASE() = default;
 
 	public:
 		lock_guard<mutex> lock;
@@ -160,9 +161,9 @@ public:
 
 public:
 	//! Try to get an index of where to write in this file. Returns an invalid index if full
-	TemporaryFileIndex TryGetBlockIndex(idx_t block_header_size);
+	TemporaryFileIndex TryGetBlockIndex(idx_t block_header_size) DUCKDB_EXCLUDES(file_lock);
 	//! Remove block index from this TemporaryFileHandle
-	void EraseBlockIndex(block_id_t block_index);
+	void EraseBlockIndex(block_id_t block_index) DUCKDB_EXCLUDES(file_lock);
 
 	//! Read/Write temporary buffers at given positions in this file (potentially compressed)
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, const TemporaryFileIndex &index_in_file,
@@ -171,16 +172,16 @@ public:
 	                          AllocatedData &compressed_buffer) const;
 
 	//! Deletes the file if there are no more blocks
-	bool DeleteIfEmpty();
+	bool DeleteIfEmpty() DUCKDB_EXCLUDES(file_lock);
 	bool IsEncrypted() const;
 	//! Get information about this temporary file
-	TemporaryFileInformation GetTemporaryFile();
+	TemporaryFileInformation GetTemporaryFile() DUCKDB_EXCLUDES(file_lock);
 
 private:
 	//! Create temporary file if it did not exist yet
-	void CreateFileIfNotExists(TemporaryFileLock &);
+	void CreateFileIfNotExists(TemporaryFileLock &) DUCKDB_REQUIRES(file_lock);
 	//! Remove block index from this file
-	void RemoveTempBlockIndex(TemporaryFileLock &, idx_t index);
+	void RemoveTempBlockIndex(TemporaryFileLock &, idx_t index) DUCKDB_REQUIRES(file_lock);
 	//! Get the position of a block in the file
 	idx_t GetPositionInFile(idx_t index) const;
 
@@ -191,12 +192,12 @@ private:
 	const TemporaryFileIdentifier identifier;
 	//! The maximum allowed index
 	const idx_t max_allowed_index;
-	//! File path/handle
 	const string path;
+	//! File I/O uses an allocated block index to keep the handle alive without file_lock.
 	unique_ptr<FileHandle> handle;
 	//! Lock for concurrent access and block index manager
-	mutex file_lock;
-	BlockIndexManager index_manager;
+	annotated_mutex file_lock;
+	BlockIndexManager index_manager DUCKDB_GUARDED_BY(file_lock);
 };
 
 //===--------------------------------------------------------------------===//
@@ -296,24 +297,27 @@ private:
 	};
 
 public:
-	struct TemporaryFileManagerLock {
+	struct DUCKDB_SCOPED_CAPABILITY TemporaryFileManagerLock {
 	public:
-		explicit TemporaryFileManagerLock(mutex &mutex);
+		explicit TemporaryFileManagerLock(annotated_mutex &mutex) DUCKDB_ACQUIRE(mutex);
+		~TemporaryFileManagerLock() DUCKDB_RELEASE() = default;
 
 	public:
 		lock_guard<mutex> lock;
 	};
 
 	//! Create/Read/Update/Delete operations for temporary buffers
-	idx_t WriteTemporaryBuffer(QueryContext context, block_id_t block_id, FileBuffer &buffer);
-	bool HasTemporaryBuffer(block_id_t block_id);
+	idx_t WriteTemporaryBuffer(QueryContext context, block_id_t block_id, FileBuffer &buffer)
+	    DUCKDB_EXCLUDES(manager_lock);
+	bool HasTemporaryBuffer(block_id_t block_id) DUCKDB_EXCLUDES(manager_lock);
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, block_id_t id,
-	                                           unique_ptr<FileBuffer> reusable_buffer, idx_t *eviction_size = nullptr);
-	idx_t DeleteTemporaryBuffer(block_id_t id);
+	                                           unique_ptr<FileBuffer> reusable_buffer, idx_t *eviction_size = nullptr)
+	    DUCKDB_EXCLUDES(manager_lock);
+	idx_t DeleteTemporaryBuffer(block_id_t id) DUCKDB_EXCLUDES(manager_lock);
 	bool IsEncrypted() const;
 
 	//! Get the list of temporary files and their sizes
-	vector<TemporaryFileInformation> GetTemporaryFiles();
+	vector<TemporaryFileInformation> GetTemporaryFiles() DUCKDB_EXCLUDES(manager_lock);
 
 	//! Get/set maximum swap space
 	optional_idx GetMaxSwapSpace() const;
@@ -335,14 +339,16 @@ private:
 	string CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const;
 
 	//! Get/erase a temporary block
-	TemporaryFileIndex GetTempBlockIndex(TemporaryFileManagerLock &, block_id_t id);
+	TemporaryFileIndex GetTempBlockIndex(TemporaryFileManagerLock &, block_id_t id) DUCKDB_REQUIRES(manager_lock);
 	void EraseUsedBlock(TemporaryFileManagerLock &lock, block_id_t id, TemporaryFileHandle &handle,
-	                    TemporaryFileIndex index);
+	                    TemporaryFileIndex index) DUCKDB_REQUIRES(manager_lock);
 
 	//! Get/erase a temporary file handle
 	optional_ptr<TemporaryFileHandle> GetFileHandle(TemporaryFileManagerLock &,
-	                                                const TemporaryFileIdentifier &identifier);
-	void EraseFileHandle(TemporaryFileManagerLock &, const TemporaryFileIdentifier &identifier);
+	                                                const TemporaryFileIdentifier &identifier)
+	    DUCKDB_REQUIRES(manager_lock);
+	void EraseFileHandle(TemporaryFileManagerLock &, const TemporaryFileIdentifier &identifier)
+	    DUCKDB_REQUIRES(manager_lock);
 
 private:
 	//! Reference to the DB instance
@@ -351,14 +357,14 @@ private:
 	DatabaseInstance &db;
 	//! The temporary directory
 	string temp_directory;
-	//! Lock for parallel access
-	mutex manager_lock;
+	//! Acquire before a TemporaryFileHandle::file_lock; release before buffer I/O.
+	annotated_mutex manager_lock;
 	//! The set of active temporary file handles
-	TemporaryFileMap files;
+	TemporaryFileMap files DUCKDB_GUARDED_BY(manager_lock);
 	//! Map of block_id -> temporary file position
-	unordered_map<block_id_t, TemporaryFileIndex> used_blocks;
+	unordered_map<block_id_t, TemporaryFileIndex> used_blocks DUCKDB_GUARDED_BY(manager_lock);
 	//! Map of TemporaryBufferSize -> manager of in-use temporary file indexes
-	unordered_map<TemporaryBufferSize, BlockIndexManager, EnumClassHash> index_managers;
+	unordered_map<TemporaryBufferSize, BlockIndexManager, EnumClassHash> index_managers DUCKDB_GUARDED_BY(manager_lock);
 	//! The size in bytes of the temporary files that are currently alive
 	atomic<idx_t> &size_on_disk;
 	//! The max amount of disk space that can be used

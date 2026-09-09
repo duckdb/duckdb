@@ -513,7 +513,8 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 	return CheckAndAddEncryptionKey(main_header, *options.encryption_options.user_key);
 }
 
-void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
+// Initialization runs before this block manager is shared with other threads.
+void SingleFileBlockManager::CreateNewDatabase(QueryContext context) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	auto encryption_enabled = options.encryption_options.encryption_enabled;
 	if (encryption_enabled) {
 		// Check if we can read/write the encrypted database
@@ -813,7 +814,9 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 	}
 }
 
-void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {
+// Initialization runs before this block manager is shared with other threads.
+void SingleFileBlockManager::Initialize(const DatabaseHeader &header,
+                                        const optional_idx block_alloc_size) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	try {
 		Storage::VerifyBlockAllocSize(header.block_alloc_size);
 	} catch (const InvalidInputException &) {
@@ -867,7 +870,8 @@ void SingleFileBlockManager::RewriteMainHeader(QueryContext &context, StorageVer
 	handle->Sync();
 }
 
-void SingleFileBlockManager::LoadFreeList(QueryContext context) {
+// Initialization runs before this block manager is shared with other threads.
+void SingleFileBlockManager::LoadFreeList(QueryContext context) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	MetaBlockPointer free_pointer(free_list_id, 0);
 	if (!free_pointer.IsValid()) {
 		// no free list
@@ -896,7 +900,7 @@ bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {
 }
 
 block_id_t SingleFileBlockManager::GetFreeBlockIdInternal(FreeBlockType type) {
-	lock_guard<mutex> lock(single_file_block_lock);
+	annotated_lock_guard lock(single_file_block_lock);
 	block_id_t block_id;
 	if (!free_list.empty()) {
 		// The free list is not empty, so we take its first element.
@@ -925,7 +929,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockIdForCheckpoint() {
 }
 
 block_id_t SingleFileBlockManager::PeekFreeBlockId() {
-	lock_guard<mutex> lock(single_file_block_lock);
+	annotated_lock_guard lock(single_file_block_lock);
 	if (!free_list.empty()) {
 		return *free_list.begin();
 	} else {
@@ -934,13 +938,13 @@ block_id_t SingleFileBlockManager::PeekFreeBlockId() {
 }
 
 void SingleFileBlockManager::MarkBlockAsCheckpointed(block_id_t block_id) {
-	lock_guard<mutex> lock(single_file_block_lock);
+	annotated_lock_guard lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	newly_used_blocks.erase(block_id);
 }
 
 void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
-	lock_guard<mutex> lock(single_file_block_lock);
+	annotated_lock_guard lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	if (max_block <= block_id) {
 		// the block is past the current max_block
@@ -962,7 +966,7 @@ void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
 }
 
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
-	unique_lock<mutex> lock(single_file_block_lock);
+	annotated_unique_lock lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	D_ASSERT(block_id < max_block);
 
@@ -1012,7 +1016,7 @@ void SingleFileBlockManager::IncreaseBlockReferenceCountInternal(block_id_t bloc
 
 void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
 	// probably don't need this?
-	lock_guard<mutex> lock(single_file_block_lock);
+	annotated_lock_guard lock(single_file_block_lock);
 	// all blocks should be accounted for - either in the block_usage_count, or in the free list
 	set<block_id_t> referenced_blocks;
 	for (auto &block : block_usage_count) {
@@ -1101,7 +1105,7 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 }
 
 void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
-	lock_guard<mutex> lock(single_file_block_lock);
+	annotated_lock_guard lock(single_file_block_lock);
 	IncreaseBlockReferenceCountInternal(block_id);
 }
 
@@ -1110,12 +1114,12 @@ idx_t SingleFileBlockManager::GetMetaBlock() {
 }
 
 idx_t SingleFileBlockManager::TotalBlocks() {
-	lock_guard<mutex> lock(single_file_block_lock);
+	annotated_lock_guard lock(single_file_block_lock);
 	return NumericCast<idx_t>(max_block);
 }
 
 idx_t SingleFileBlockManager::FreeBlocks() {
-	lock_guard<mutex> lock(single_file_block_lock);
+	annotated_lock_guard lock(single_file_block_lock);
 	return free_list.size();
 }
 
@@ -1189,7 +1193,12 @@ void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) con
 
 void SingleFileBlockManager::Read(QueryContext context, Block &block) {
 	D_ASSERT(block.id >= 0);
-	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
+#ifdef D_ASSERT_IS_ENABLED
+	{
+		annotated_lock_guard lock(single_file_block_lock);
+		D_ASSERT(free_list.find(block.id) == free_list.end());
+	}
+#endif
 	ReadAndChecksum(context, block, GetBlockLocation(block.id));
 }
 
@@ -1222,7 +1231,7 @@ void SingleFileBlockManager::Write(QueryContext context, FileBuffer &buffer, blo
 void SingleFileBlockManager::Truncate() {
 	BlockManager::Truncate();
 
-	lock_guard<mutex> guard(single_file_block_lock);
+	annotated_lock_guard guard(single_file_block_lock);
 	idx_t blocks_to_truncate = 0;
 	// reverse iterate over the free-list
 	for (auto entry = free_list.rbegin(); entry != free_list.rend(); entry++) {
@@ -1255,7 +1264,7 @@ vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 		idx_t free_list_count;
 		idx_t multi_use_blocks_count;
 		{
-			lock_guard<mutex> guard(single_file_block_lock);
+			annotated_lock_guard guard(single_file_block_lock);
 			free_list_count =
 			    free_list.size() + modified_blocks.size() + free_blocks_in_use.size() + newly_used_blocks.size();
 			multi_use_blocks_count = multi_use_blocks.size();
@@ -1297,7 +1306,9 @@ protected:
 	}
 };
 
-bool SingleFileBlockManager::AddFreeBlock(unique_lock<mutex> &lock, block_id_t block_id) {
+// Clang cannot track the caller-owned scoped lock across unlock/relock through a reference.
+bool SingleFileBlockManager::AddFreeBlock(annotated_unique_lock<annotated_mutex> &lock,
+                                          block_id_t block_id) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	if (!lock.owns_lock()) {
 		throw InternalException("AddFreeBlock must be called while holding the lock");
 	}
@@ -1325,7 +1336,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	// add all modified blocks to the free list: they can now be written to again
 	metadata_manager.MarkBlocksAsModified();
 
-	unique_lock<mutex> lock(single_file_block_lock);
+	annotated_unique_lock lock(single_file_block_lock);
 	// set the iteration count
 	header.iteration = ++iteration_count;
 
@@ -1410,7 +1421,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	handle->Sync();
 	set<block_id_t> fully_freed_blocks;
 	{
-		unique_lock<mutex> release_lock(single_file_block_lock);
+		annotated_unique_lock release_lock(single_file_block_lock);
 		for (auto &block : checkpoint_freed_blocks) {
 			modified_blocks.erase(block);
 			if (AddFreeBlock(release_lock, block)) {
@@ -1430,7 +1441,7 @@ void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
 	// perform the actual unregistration
 	BlockManager::UnregisterBlock(id);
 	// check if it is part of the newly free list
-	lock_guard<mutex> lock(single_file_block_lock);
+	annotated_lock_guard lock(single_file_block_lock);
 	auto entry = free_blocks_in_use.find(id);
 	if (entry != free_blocks_in_use.end()) {
 		// it is! move it to the regular free list so the block can be re-used
@@ -1450,7 +1461,7 @@ void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {
 	if (!DBConfig::Get(db).options.trim_free_blocks) {
 		return;
 	}
-	lock_guard<mutex> lock(single_file_block_lock);
+	annotated_lock_guard lock(single_file_block_lock);
 	for (auto itr = blocks.begin(); itr != blocks.end(); ++itr) {
 		if (!free_list.count(*itr)) {
 			continue;

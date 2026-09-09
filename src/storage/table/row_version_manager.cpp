@@ -13,7 +13,7 @@ RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
 }
 
 idx_t RowVersionManager::GetRowCount(ScanOptions options, idx_t count) {
-	lock_guard<mutex> l(version_lock);
+	annotated_lock_guard l(version_lock);
 	idx_t total_count = 0;
 	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
 		idx_t segment_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
@@ -40,7 +40,7 @@ optional_ptr<ChunkVectorInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) 
 
 idx_t RowVersionManager::GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector,
                                       idx_t max_count) {
-	lock_guard<mutex> l(version_lock);
+	annotated_lock_guard l(version_lock);
 	auto chunk_info = GetChunkInfo(vector_idx);
 	if (!chunk_info) {
 		return max_count;
@@ -53,7 +53,7 @@ idx_t RowVersionManager::GetVisibleRows(TransactionData transaction, const idx_t
 	if (count == 0) {
 		return 0;
 	}
-	const lock_guard<mutex> lock(version_lock);
+	const annotated_lock_guard lock(version_lock);
 	idx_t visible_count = 0;
 	idx_t idx = 0;
 	while (idx < count) {
@@ -96,7 +96,7 @@ void RowVersionManager::FillVectorInfo(idx_t vector_idx) {
 
 void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start,
                                           idx_t row_group_end) {
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	needs_compression_check = true;
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
@@ -131,7 +131,7 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 	}
 	idx_t row_group_end = row_group_start + count;
 
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
@@ -149,7 +149,7 @@ void RowVersionManager::CleanupAppend(VisibilityBound lowest_visibility_bound, i
 	}
 	idx_t row_group_end = row_group_start + count;
 
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
@@ -173,7 +173,7 @@ void RowVersionManager::CleanupAppend(VisibilityBound lowest_visibility_bound, i
 }
 
 void RowVersionManager::RevertAppend(idx_t new_count) {
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	idx_t start_vector_idx = (new_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < vector_info.size(); vector_idx++) {
 		vector_info[vector_idx].reset();
@@ -191,13 +191,13 @@ ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 }
 
 idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	needs_compression_check = true;
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	needs_compression_check = true;
 	if (!uncheckpointed_delete_commit.IsValid() || commit_id > uncheckpointed_delete_commit.GetIndex()) {
 		uncheckpointed_delete_commit = commit_id;
@@ -206,7 +206,7 @@ void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, 
 }
 
 void RowVersionManager::CompressVersionIds(VisibilityBound lowest_visibility_bound) {
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	if (!needs_compression_check) {
 		// no version ids were modified since the last pass, and the last pass left nothing
 		// that could still become compressible - nothing to do
@@ -236,7 +236,7 @@ void RowVersionManager::CompressVersionIds(VisibilityBound lowest_visibility_bou
 }
 
 vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	auto &manager = *writer.GetMetadataManager();
 	auto options = writer.GetCheckpointOptions();
 	if (!uncheckpointed_delete_commit.IsValid()) {
@@ -282,11 +282,12 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 	return storage_pointers;
 }
 
-shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer delete_pointer,
-                                                             MetadataManager &manager) {
+shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager)
+    DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	if (!delete_pointer.IsValid()) {
 		return nullptr;
 	}
+	// The new manager is not published until deserialization completes.
 	auto version_info = make_shared_ptr<RowVersionManager>(manager.GetBufferManager());
 	MetadataReader source(manager, delete_pointer, &version_info->storage_pointers);
 	auto chunk_count = source.Read<idx_t>();
@@ -313,12 +314,12 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 }
 
 bool RowVersionManager::HasUnserializedChanges() {
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	return uncheckpointed_delete_commit.IsValid();
 }
 
 bool RowVersionManager::HasDeletes() {
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	for (auto &info : vector_info) {
 		if (info && info->AnyDeleted()) {
 			return true;
@@ -328,7 +329,7 @@ bool RowVersionManager::HasDeletes() {
 }
 
 bool RowVersionManager::HasUncommittedChanges() {
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	for (auto &info : vector_info) {
 		if (info && info->HasUncommittedChanges()) {
 			return true;
@@ -338,7 +339,7 @@ bool RowVersionManager::HasUncommittedChanges() {
 }
 
 vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {
-	lock_guard<mutex> lock(version_lock);
+	annotated_lock_guard lock(version_lock);
 	D_ASSERT(!uncheckpointed_delete_commit.IsValid());
 	return storage_pointers;
 }

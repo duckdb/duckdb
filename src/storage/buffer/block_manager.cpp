@@ -15,7 +15,7 @@ BlockManager::BlockManager(BufferManager &buffer_manager, const optional_idx blo
 }
 
 bool BlockManager::BlockIsRegistered(block_id_t block_id) {
-	lock_guard<mutex> lock(blocks_lock);
+	annotated_lock_guard lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) {
@@ -26,7 +26,7 @@ bool BlockManager::BlockIsRegistered(block_id_t block_id) {
 }
 
 shared_ptr<BlockHandle> BlockManager::TryGetBlock(block_id_t block_id) {
-	lock_guard<mutex> lock(blocks_lock);
+	annotated_lock_guard lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) {
@@ -38,7 +38,7 @@ shared_ptr<BlockHandle> BlockManager::TryGetBlock(block_id_t block_id) {
 }
 
 shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
-	lock_guard<mutex> lock(blocks_lock);
+	annotated_lock_guard lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
 	if (entry != blocks.end()) {
@@ -127,7 +127,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 
 void BlockManager::UnregisterBlock(block_id_t id) {
 	D_ASSERT(id < MAXIMUM_BLOCK);
-	lock_guard<mutex> lock(blocks_lock);
+	annotated_lock_guard lock(blocks_lock);
 	// on-disk block: erase from list of blocks in manager
 	blocks.erase(id);
 }
