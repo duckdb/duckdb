@@ -14,7 +14,17 @@ PRIMARY KEY(c) IMMEDIATE
 UNIQUE(a)
 UNIQUE(b) IMMEDIATE
 
+query I
+SELECT sql FROM duckdb_tables() WHERE table_name = 'timing_test';
+----
+CREATE TABLE timing_test(a INTEGER UNIQUE, b INTEGER UNIQUE IMMEDIATE, c INTEGER PRIMARY KEY IMMEDIATE);
+
 restart
+
+query I
+SELECT sql FROM duckdb_tables() WHERE table_name = 'timing_test';
+----
+CREATE TABLE timing_test(a INTEGER UNIQUE, b INTEGER UNIQUE IMMEDIATE, c INTEGER PRIMARY KEY IMMEDIATE);
 
 query I rowsort
 SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 'timing_test' AND constraint_type <> 'NOT NULL';
