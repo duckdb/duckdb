@@ -8,12 +8,13 @@
 
 #pragma once
 
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/common/enums/order_type.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 enum class TopNPayloadType { SINGLE_COLUMN, STRUCT_PACK };
 
@@ -63,7 +64,7 @@ private:
 	void AddStructExtractExprs(vector<unique_ptr<Expression>> &exprs, const LogicalType &struct_type,
 	                           const unique_ptr<BoundColumnRefExpression> &aggregate_column_ref) const;
 	unique_ptr<LogicalOperator>
-	UpdateTopmostBindings(idx_t window_idx, unique_ptr<LogicalOperator> op, const vector<LogicalType> &types,
+	UpdateTopmostBindings(TableIndex window_idx, unique_ptr<LogicalOperator> op, const vector<LogicalType> &types,
 	                      const map<idx_t, idx_t> &group_idxs, const vector<ColumnBinding> &topmost_bindings,
 	                      vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer,
 	                      const TopNWindowEliminationParameters &params);
@@ -75,11 +76,11 @@ private:
 	unique_ptr<LogicalOperator> TryPrepareLateMaterialization(const LogicalWindow &window,
 	                                                          vector<unique_ptr<Expression>> &args,
 	                                                          TopNWindowEliminationParameters &params);
-	unique_ptr<LogicalOperator> ConstructLHS(LogicalGet &rhs, vector<idx_t> &projections) const;
+	unique_ptr<LogicalOperator> ConstructLHS(LogicalGet &rhs, vector<ProjectionIndex> &projections) const;
 	unique_ptr<LogicalOperator> ConstructJoin(unique_ptr<LogicalOperator> lhs, unique_ptr<LogicalOperator> rhs,
 	                                          idx_t aggregate_offset, const TopNWindowEliminationParameters &params);
 	bool CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
-	                               vector<idx_t> &projections, vector<reference<LogicalOperator>> &stack,
+	                               vector<ProjectionIndex> &projections, vector<reference<LogicalOperator>> &stack,
 	                               TopNWindowEliminationParameters &params);
 	bool ExtractSingleBinding(unique_ptr<Expression> *expr, ColumnBinding &binding,
 	                          bool require_direct_column_ref = false);

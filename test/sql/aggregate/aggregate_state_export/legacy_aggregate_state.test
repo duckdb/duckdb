@@ -1,0 +1,16 @@
+# name: test/sql/aggregate/aggregate_state_export/legacy_aggregate_state.test
+# description: Test legacy aggregate state
+# group: [aggregate_state_export]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+unzip data/storage/legacy_aggregate_state.db.gz {TEST_DIR}/legacy_aggregate_state.db
+
+statement ok
+ATTACH '{TEST_DIR}/legacy_aggregate_state.db' AS legacy
+
+query I
+FROM legacy.t
+----
+\x01\x00\x00\x00\x00\x00\x00\x00*\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00

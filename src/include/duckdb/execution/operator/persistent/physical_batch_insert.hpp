@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 
 namespace duckdb {
+class DuckTableEntry;
 
 class PhysicalBatchInsert : public PhysicalOperator {
 public:
@@ -18,14 +19,14 @@ public:
 
 public:
 	//! INSERT INTO
-	PhysicalBatchInsert(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &table,
+	PhysicalBatchInsert(PhysicalPlan &physical_plan, vector<LogicalType> types, DuckTableEntry &table,
 	                    vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality);
 	//! CREATE TABLE AS
 	PhysicalBatchInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema,
 	                    unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality);
 
 	//! The table to insert into
-	optional_ptr<TableCatalogEntry> insert_table;
+	optional_ptr<DuckTableEntry> insert_table;
 	//! The insert types
 	vector<LogicalType> insert_types;
 	//! The bound constraints for the table
@@ -34,6 +35,8 @@ public:
 	optional_ptr<SchemaCatalogEntry> schema;
 	//! Create table info, in case of CREATE TABLE AS
 	unique_ptr<BoundCreateTableInfo> info;
+	//! Preferred input batch size
+	optional_idx preferred_batch_size;
 
 public:
 	// Source interface
@@ -49,14 +52,13 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
+	SinkNextBatchType UpdateMinBatchIndex(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 
-	OperatorPartitionInfo RequiredPartitionInfo() const override {
-		return OperatorPartitionInfo::BatchIndex();
-	}
+	OperatorPartitionInfo RequiredPartitionInfo() const override;
 
 	bool IsSink() const override {
 		return true;
@@ -64,6 +66,10 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
+	}
+
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
 	}
 
 private:

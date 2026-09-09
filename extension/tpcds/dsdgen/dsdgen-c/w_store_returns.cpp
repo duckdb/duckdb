@@ -46,8 +46,8 @@
 #include "nulls.h"
 #include "tdefs.h"
 
-struct W_STORE_RETURNS_TBL g_w_store_returns;
-extern struct W_STORE_SALES_TBL g_w_store_sales;
+thread_local struct W_STORE_RETURNS_TBL g_w_store_returns;
+extern thread_local struct W_STORE_SALES_TBL g_w_store_sales;
 
 /*
  * Routine: mk_store_returns()
@@ -69,7 +69,7 @@ int mk_w_store_returns(void *row, ds_key_t index) {
 	struct W_STORE_SALES_TBL *sale = &g_w_store_sales;
 	tdef *pT = getSimpleTdefsByNumber(STORE_RETURNS);
 
-	static decimal_t dMin, dMax;
+	static thread_local decimal_t dMin, dMax;
 	/* begin locals declarations */
 
 	if (row == NULL)

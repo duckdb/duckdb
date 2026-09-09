@@ -1,0 +1,10 @@
+# name: test/sql/copy/parquet/encryption/plaintext_footer_encryption.test
+# description: Test unsupported plaintext-footer Parquet encryption
+# group: [encryption]
+
+require parquet
+
+statement error
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/plaintext_footer_crypto_metadata.parquet')
+----
+Invalid Input Error: File is encrypted but no file crypto metadata is set

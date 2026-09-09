@@ -5,24 +5,72 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/tree_renderer/base_tree_renderer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
+#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/main/profiling_utils.hpp"
-#include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
+#include "duckdb/main/profiler/gathered_metrics.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
-#include "yyjson.hpp"
-#include "yyjson_utils.hpp"
+#include "duckdb/common/json_document.hpp"
 
 #include <utility>
 
-using namespace duckdb_yyjson; // NOLINT
-
 namespace duckdb {
+
+void QueryProfileResult::AddValue(const string &k, Value val) {
+	D_ASSERT(kind == QueryProfileResultKind::OBJECT);
+	auto child = make_uniq<QueryProfileResult>();
+	child->kind = QueryProfileResultKind::VALUE;
+	child->key = k;
+	child->value = std::move(val);
+	children.push_back(std::move(child));
+}
+
+QueryProfileResult &QueryProfileResult::AddObject(const string &k) {
+	D_ASSERT(kind == QueryProfileResultKind::OBJECT);
+	auto child = make_uniq<QueryProfileResult>();
+	child->kind = QueryProfileResultKind::OBJECT;
+	child->key = k;
+	auto &ref = *child;
+	children.push_back(std::move(child));
+	return ref;
+}
+
+QueryProfileResult &QueryProfileResult::AddList(const string &k) {
+	D_ASSERT(kind == QueryProfileResultKind::OBJECT);
+	auto child = make_uniq<QueryProfileResult>();
+	child->kind = QueryProfileResultKind::LIST;
+	child->key = k;
+	auto &ref = *child;
+	children.push_back(std::move(child));
+	return ref;
+}
+
+QueryProfileResult &QueryProfileResult::AppendObject() {
+	D_ASSERT(kind == QueryProfileResultKind::LIST);
+	auto child = make_uniq<QueryProfileResult>();
+	child->kind = QueryProfileResultKind::OBJECT;
+	auto &ref = *child;
+	children.push_back(std::move(child));
+	return ref;
+}
+
+QueryProfileResult &QueryProfileResult::AppendList() {
+	auto child = make_uniq<QueryProfileResult>();
+	child->kind = QueryProfileResultKind::LIST;
+	auto &ref = *child;
+	children.push_back(std::move(child));
+	return ref;
+}
 
 QueryProfiler::QueryProfiler(ClientContext &context_p)
     : context(context_p), running(false), query_requires_profiling(false), is_explain_analyze(false),
@@ -33,57 +81,33 @@ bool QueryProfiler::IsEnabled() const {
 	return is_explain_analyze || ClientConfig::GetConfig(context).enable_profiler;
 }
 
-bool QueryProfiler::IsDetailedEnabled() const {
-	return !is_explain_analyze && ClientConfig::GetConfig(context).enable_detailed_profiling;
+unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
+	return TreeRenderer::CreateRenderer(context, name);
 }
 
-ProfilerPrintFormat QueryProfiler::GetPrintFormat(ExplainFormat format) const {
-	auto print_format = ClientConfig::GetConfig(context).profiler_print_format;
-	switch (format) {
-	case ExplainFormat::DEFAULT:
-		if (print_format != ProfilerPrintFormat::NO_OUTPUT) {
-			return print_format;
-		}
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case ExplainFormat::TEXT:
-		return ProfilerPrintFormat::QUERY_TREE;
-	case ExplainFormat::JSON:
-		return ProfilerPrintFormat::JSON;
-	case ExplainFormat::HTML:
-		return ProfilerPrintFormat::HTML;
-	case ExplainFormat::GRAPHVIZ:
-		return ProfilerPrintFormat::GRAPHVIZ;
-	case ExplainFormat::MERMAID:
-		return ProfilerPrintFormat::MERMAID;
-	default:
-		throw NotImplementedException("No mapping from ExplainFormat::%s to ProfilerPrintFormat",
-		                              EnumUtil::ToString(format));
+unique_ptr<TreeRenderer> QueryProfiler::GetRenderer(const ProfilerPrintFormat &format) const {
+	if (format == ProfilerPrintFormat::Default()) {
+		// use the configured default profiler format; "no_output" still renders as a query tree when explicitly asked
+		// for output (e.g. EXPLAIN ANALYZE), so fall back to it here
+		auto name = ClientConfig::GetConfig(context).profiler_print_format;
+		return CreateProfiler(name == "no_output" ? "query_tree" : name);
 	}
-}
-
-ExplainFormat QueryProfiler::GetExplainFormat(ProfilerPrintFormat format) const {
-	switch (format) {
-	case ProfilerPrintFormat::QUERY_TREE:
-	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
-		return ExplainFormat::TEXT;
-	case ProfilerPrintFormat::JSON:
-		return ExplainFormat::JSON;
-	case ProfilerPrintFormat::HTML:
-		return ExplainFormat::HTML;
-	case ProfilerPrintFormat::GRAPHVIZ:
-		return ExplainFormat::GRAPHVIZ;
-	case ProfilerPrintFormat::MERMAID:
-		return ExplainFormat::MERMAID;
-	case ProfilerPrintFormat::NO_OUTPUT:
-		throw InternalException("Should not attempt to get ExplainFormat for ProfilerPrintFormat::NO_OUTPUT");
-	default:
-		throw NotImplementedException("No mapping from ProfilePrintFormat::%s to ExplainFormat",
-		                              EnumUtil::ToString(format));
-	}
+	// resolve the explain format name (text/json/html/...) and create the matching renderer
+	return CreateProfiler(format.ToString());
 }
 
 bool QueryProfiler::PrintOptimizerOutput() const {
-	return GetPrintFormat() == ProfilerPrintFormat::QUERY_TREE_OPTIMIZER || IsDetailedEnabled();
+	if (metrics) {
+		return metrics->MetricIsTracked("optimizer.join_order");
+	}
+	// Fall back to checking tracked_metrics patterns directly
+	auto &config = ClientConfig::GetConfig(context);
+	for (const auto &pattern : config.tracked_metrics) {
+		if (pattern == "*" || StringUtil::StartsWith(pattern, "optimizer")) {
+			return true;
+		}
+	}
+	return false;
 }
 
 string QueryProfiler::GetSaveLocation() const {
@@ -97,22 +121,25 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
-	query_metrics.query_name = query;
-	query_metrics.latency_timer = make_uniq<ActiveTimer>(StartTimer(MetricType::LATENCY));
+	query_metrics.query_sql = query;
+	query_metrics.latency_timer = make_uniq<MetricsTimer>(StartTimer<MetricQueryTotalTime>());
 }
 
 void QueryProfiler::Reset() {
 	tree_map.clear();
 	root = nullptr;
-	phase_timings.clear();
-	phase_stack.clear();
+	metrics.reset();
 	running = false;
 	query_metrics.Reset();
+	result_tree.reset();
 	metrics_finalized = false;
 }
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
+	// Always reset byte counters at the start of each query so the progress bar shows per-query values
+	query_metrics.bytes_read = 0;
+	query_metrics.bytes_written = 0;
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -124,11 +151,23 @@ void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, b
 		return;
 	}
 	if (running) {
-		// Called while already running: this should only happen when we print optimizer output
+		// Called while already running: this happens when statement setup follows parser timing,
+		// or when we print optimizer output.
 		// D_ASSERT(PrintOptimizerOutput());
+		query_metrics.query_sql = query;
 		return;
 	}
 	Start(query);
+}
+void QueryProfiler::AddParserTime(const Profiler &parser_timer) {
+	if (!running || !IsEnabled()) {
+		return;
+	}
+	auto parser_time_ns = parser_timer.ElapsedNanos();
+	if (!parser_time_ns) {
+		return;
+	}
+	query_metrics.UpdateMetric(MetricParserTotalTime::Name, parser_time_ns);
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
@@ -165,29 +204,16 @@ bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type
 	case PhysicalOperatorType::LEFT_DELIM_JOIN:
 	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
 	case PhysicalOperatorType::UNION:
+	case PhysicalOperatorType::CTE:
+	case PhysicalOperatorType::CTE_SCAN:
 	case PhysicalOperatorType::RECURSIVE_CTE:
 	case PhysicalOperatorType::RECURSIVE_KEY_CTE:
+	case PhysicalOperatorType::RECURSIVE_KEY_JOIN:
 	case PhysicalOperatorType::EMPTY_RESULT:
 	case PhysicalOperatorType::EXTENSION:
 		return true;
 	default:
 		return false;
-	}
-}
-
-void QueryProfiler::Finalize(ProfilingNode &node) {
-	for (idx_t i = 0; i < node.GetChildCount(); i++) {
-		auto child = node.GetChild(i);
-		Finalize(*child);
-
-		auto &info = node.GetProfilingInfo();
-		auto type = PhysicalOperatorType(info.GetMetricValue<uint8_t>(MetricType::OPERATOR_TYPE));
-		if (type == PhysicalOperatorType::UNION &&
-		    info.Enabled(info.expanded_settings, MetricType::OPERATOR_CARDINALITY)) {
-			auto &child_info = child->GetProfilingInfo();
-			auto value = child_info.metrics[MetricType::OPERATOR_CARDINALITY].GetValue<idx_t>();
-			info.MetricSum(MetricType::OPERATOR_CARDINALITY, value);
-		}
 	}
 }
 
@@ -197,7 +223,11 @@ void QueryProfiler::StartExplainAnalyze() {
 
 void QueryProfiler::EndQuery() {
 	unique_lock<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+	if (!running) {
+		return;
+	}
+	if (!IsEnabled()) {
+		Reset();
 		return;
 	}
 
@@ -206,26 +236,27 @@ void QueryProfiler::EndQuery() {
 	bool emit_output = false;
 
 	// Print or output the query profiling after query termination.
-	// EXPLAIN ANALYZE output is not written by the profiler.
-	if (IsEnabled() && !is_explain_analyze && ClientConfig::GetConfig(context).emit_profiler_output) {
+	// EXPLAIN ANALYZE output is not written by the profiler, and the "no_output" format emits no output.
+	if (!is_explain_analyze && ClientConfig::GetConfig(context).profiler_print_format != "no_output") {
 		emit_output = true;
 	}
 
 	is_explain_analyze = false;
 
+	// To log is inexpensive, whether to log or not depends on whether logging is active
+	ToLogInternal();
+
 	guard.unlock();
 
-	// To log is inexpensive, whether to log or not depends on whether logging is active
-	ToLog();
-
 	if (emit_output) {
-		string tree = ToString();
 		auto save_location = GetSaveLocation();
-
 		if (save_location.empty()) {
-			Printer::Print(tree);
+			// print directly through the renderer's print sink
+			auto renderer = GetRenderer();
+			PrintProfilerOutput(renderer.get());
 			Printer::Print("\n");
 		} else {
+			string tree = ToString();
 			WriteToFile(save_location.c_str(), tree);
 		}
 	}
@@ -236,141 +267,157 @@ void QueryProfiler::FinalizeMetrics() {
 	FinalizeMetricsInternal();
 }
 
-void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
+void QueryProfiler::TrackBytesRead(const idx_t amount) {
+	query_metrics.UpdateBytesRead(amount);
+}
+
+void QueryProfiler::TrackBytesWritten(const idx_t amount) {
+	query_metrics.UpdateBytesWritten(amount);
+}
+
+void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
+	query_metrics.UpdateTotalMemoryAllocated(amount);
+}
+
+void QueryProfiler::AddToMetricCounter(const string &key, const idx_t amount) {
 	if (IsEnabled()) {
-		query_metrics.UpdateMetric(type, amount);
+		query_metrics.UpdateMetricCounter(key, amount);
 	}
+}
+
+void QueryProfiler::SetMetric(const string &key, Value new_value) {
+	if (!IsEnabled()) {
+		return;
+	}
+	metrics->SetMetric(key, std::move(new_value));
+}
+
+bool QueryProfiler::MetricIsTracked(const string &key) const {
+	if (!IsEnabled()) {
+		return false;
+	}
+	return metrics->MetricIsTracked(key);
 }
 
 idx_t QueryProfiler::GetBytesRead() const {
-	return query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_READ);
+	return query_metrics.GetBytesRead();
 }
 
 idx_t QueryProfiler::GetBytesWritten() const {
-	return query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_WRITTEN);
+	return query_metrics.GetBytesWritten();
 }
 
-ActiveTimer QueryProfiler::StartTimer(const MetricType type) {
-	return ActiveTimer(query_metrics, type, IsEnabled());
+MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
+	return MetricsTimer(query_metrics, key, IsEnabled());
 }
 
-string QueryProfiler::ToString(ExplainFormat explain_format) const {
-	return ToString(GetPrintFormat(explain_format));
+string QueryProfiler::ToString(const ProfilerPrintFormat &format) const {
+	auto renderer = GetRenderer(format);
+	return RenderProfilerOutput(renderer.get());
 }
 
-string QueryProfiler::ToString(ProfilerPrintFormat format) const {
-	if (!IsEnabled()) {
-		return RenderDisabledMessage(format);
+string QueryProfiler::ToString(const string &profiler_format_name) const {
+	auto renderer = CreateProfiler(profiler_format_name);
+	return RenderProfilerOutput(renderer.get());
+}
+
+//! Strip a leading EXPLAIN [ANALYZE] [(...)] wrapper so only the underlying query remains.
+static string StripExplainPrefix(const string &sql) {
+	auto is_space = [](char c) {
+		return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+	};
+	idx_t start = 0;
+	while (start < sql.size() && is_space(sql[start])) {
+		start++;
 	}
-	switch (format) {
-	case ProfilerPrintFormat::QUERY_TREE:
-	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
-		return QueryTreeToString();
-	case ProfilerPrintFormat::JSON:
-		return ToJSON();
-	case ProfilerPrintFormat::NO_OUTPUT:
-		return "";
-	case ProfilerPrintFormat::HTML:
-	case ProfilerPrintFormat::GRAPHVIZ:
-	case ProfilerPrintFormat::MERMAID: {
-		lock_guard<std::mutex> guard(lock);
-		// checking the tree to ensure the query is really empty
-		// the query string is empty when a logical plan is deserialized
-		if (query_metrics.query_name.empty() || !root) {
-			return "";
+	string rest = sql.substr(start);
+	if (!StringUtil::StartsWith(StringUtil::Upper(rest), "EXPLAIN")) {
+		return sql;
+	}
+	idx_t pos = 7; // past "EXPLAIN"
+	while (pos < rest.size() && is_space(rest[pos])) {
+		pos++;
+	}
+	if (StringUtil::StartsWith(StringUtil::Upper(rest.substr(pos)), "ANALYZE")) {
+		pos += 7;
+		while (pos < rest.size() && is_space(rest[pos])) {
+			pos++;
 		}
-		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
-		stringstream str;
-		renderer->Render(*root, str);
-		return str.str();
 	}
-	default:
-		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", EnumUtil::ToString(format));
+	if (pos < rest.size() && rest[pos] == '(') {
+		idx_t depth = 0;
+		while (pos < rest.size()) {
+			char c = rest[pos++];
+			if (c == '(') {
+				depth++;
+			} else if (c == ')' && --depth == 0) {
+				break;
+			}
+		}
+		while (pos < rest.size() && is_space(rest[pos])) {
+			pos++;
+		}
 	}
+	return rest.substr(pos);
 }
 
-void QueryProfiler::StartPhase(MetricType phase_metric) {
-	lock_guard<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
-		return;
-	}
-
-	// start a new phase
-	phase_stack.push_back(phase_metric);
-	// restart the timer
-	phase_profiler.Start();
+string QueryProfiler::GetQuerySQL() const {
+	auto sql = StripExplainPrefix(query_metrics.query_sql);
+	return sql.empty() ? query_metrics.query_sql : sql;
 }
 
-void QueryProfiler::EndPhase() {
-	lock_guard<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+string QueryProfiler::RenderProfile(const string &format) const {
+	auto renderer = CreateProfiler(format);
+	if (!renderer) {
+		return string();
+	}
+	StringTreeRenderer ss;
+	renderer->RenderProfiler(*this, ss);
+	renderer->Finish();
+	return ss.str();
+}
+
+string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
+	if (!renderer) {
+		// "no_output" format: nothing is rendered, enabled or not
+		return "";
+	}
+	if (!IsEnabled()) {
+		return renderer->RenderProfilerDisabled();
+	}
+	StringTreeRenderer ss;
+	renderer->RenderProfiler(*this, ss);
+	renderer->Finish();
+	return ss.str();
+}
+
+void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
+	if (!renderer) {
+		// "no_output" format: nothing is rendered, enabled or not
 		return;
 	}
-	D_ASSERT(!phase_stack.empty());
-
-	// end the timer
-	phase_profiler.End();
-	// add the timing to all currently active phases
-	for (auto &phase : phase_stack) {
-		phase_timings[phase] += phase_profiler.Elapsed();
+	// only created now that we are actually printing
+	auto sink = renderer->GetPrintRenderer();
+	if (!IsEnabled()) {
+		*sink << renderer->RenderProfilerDisabled();
+		return;
 	}
-	// now remove the last added phase
-	phase_stack.pop_back();
+	renderer->RenderProfiler(*this, *sink);
+	renderer->Finish();
+}
 
-	if (!phase_stack.empty()) {
-		phase_profiler.Start();
+void QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const {
+	lock_guard<std::mutex> guard(lock);
+	// checking the tree to ensure the query is really empty
+	// the query string is empty when a logical plan is deserialized
+	if (query_metrics.query_sql.empty() || !root) {
+		return;
 	}
+	renderer.Render(*root, ss);
 }
 
 OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 	enabled = QueryProfiler::Get(context).IsEnabled();
-	auto &context_metrics = ClientConfig::GetConfig(context).profiler_settings;
-
-	// Expand.
-	for (const auto metric : context_metrics) {
-		settings.insert(metric);
-		ProfilingInfo::Expand(settings, metric);
-	}
-
-	// Reduce.
-	auto root_metrics = MetricsUtils::GetRootScopeMetrics();
-	for (const auto metric : root_metrics) {
-		settings.erase(metric);
-	}
-}
-
-static constexpr MetricType TABLE_SCAN_METRICS[] = {MetricType::OPERATOR_ROWS_SCANNED,
-                                                    MetricType::OPERATOR_ROW_GROUPS_SCANNED,
-                                                    MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN};
-
-static bool TableScanMetricsEnabled(const profiler_settings_t &settings) {
-	for (const auto metric_type : TABLE_SCAN_METRICS) {
-		if (ProfilingInfo::Enabled(settings, metric_type)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-static bool TryAddTableScanMetric(OperatorInformation &info, const profiler_metrics_t &metrics,
-                                  const MetricType metric_type) {
-	auto metric = metrics.find(metric_type);
-	if (metric == metrics.end()) {
-		return false;
-	}
-	info.AddMetric(metric_type, metric->second.GetValue<idx_t>());
-	return true;
-}
-
-static void AddEstimatedTableScanRowsScanned(ClientContext &context, OperatorInformation &info,
-                                             const PhysicalTableScan &table_scan) {
-	auto &bind_data = table_scan.bind_data;
-	if (bind_data && table_scan.function.cardinality) {
-		auto cardinality = table_scan.function.cardinality(context, &(*bind_data));
-		if (cardinality && cardinality->has_estimated_cardinality) {
-			info.AddMetric(MetricType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
-		}
-	}
 }
 
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
@@ -382,21 +429,55 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	}
 	active_operator = phys_op;
 
-	if (!settings.empty()) {
-		if (ProfilingInfo::Enabled(settings, MetricType::EXTRA_INFO)) {
-			if (!OperatorInfoIsInitialized(*active_operator)) {
-				// first time calling into this operator - fetch the info
-				auto &info = GetOperatorInfo(*active_operator);
-				auto params = active_operator->ParamsToString();
-				info.extra_info = params;
-			}
-		}
-
-		// Start the timing of the current operator.
-		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_TIMING)) {
-			op.Start();
-		}
+	if (!OperatorMetricsIsInitialized(*active_operator)) {
+		// first time calling into this operator - fetch the info
+		auto &info = GetOperatorMetrics(*active_operator);
+		info.SetExtraInfo(active_operator->ParamsToString());
 	}
+
+	// Start the timing of the current operator.
+	op.Start();
+}
+
+void OperatorMetrics::GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk) {
+	time += elapsed_time;
+	if (chunk) {
+		elements_returned += chunk->size();
+		intermediate_size_bytes += LossyNumericCast<idx_t>(chunk->GetDataSize());
+	}
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	auto used_memory = buffer_manager.GetBufferPool().GetUsedMemory(false);
+	if (used_memory > system_peak_buffer_manager_memory) {
+		system_peak_buffer_manager_memory = used_memory;
+	}
+	auto used_swap = buffer_manager.GetUsedSwap();
+	if (used_swap > system_peak_temp_directory_size) {
+		system_peak_temp_directory_size = used_swap;
+	}
+}
+
+void OperatorMetrics::MergeInternal(const OperatorMetrics &other) {
+	time += other.time;
+	elements_returned += other.elements_returned;
+	intermediate_size_bytes += other.intermediate_size_bytes;
+	rows_scanned += other.rows_scanned;
+	row_groups_scanned += other.row_groups_scanned;
+	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
+		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
+	}
+	if (other.system_peak_temp_directory_size > system_peak_temp_directory_size) {
+		system_peak_temp_directory_size = other.system_peak_temp_directory_size;
+	}
+}
+
+void OperatorMetrics::Accumulate(const OperatorMetrics &other) {
+	MergeInternal(other);
+	total_row_groups_to_scan += other.total_row_groups_to_scan;
+}
+
+void OperatorMetrics::Merge(const OperatorMetrics &other) {
+	MergeInternal(other);
+	total_row_groups_to_scan = MaxValue<idx_t>(total_row_groups_to_scan, other.total_row_groups_to_scan);
 }
 
 void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
@@ -407,124 +488,57 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while no operator is active");
 	}
 
-	if (!settings.empty()) {
-		auto &info = GetOperatorInfo(*active_operator);
-		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_TIMING)) {
-			op.End();
-			info.AddMetric(MetricType::OPERATOR_TIMING, op.Elapsed());
-		}
-		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_CARDINALITY) && chunk) {
-			info.AddMetric(MetricType::OPERATOR_CARDINALITY, chunk->size());
-		}
-		if (ProfilingInfo::Enabled(settings, MetricType::RESULT_SET_SIZE) && chunk) {
-			auto result_set_size = chunk->GetAllocationSize();
-			info.AddMetric(MetricType::RESULT_SET_SIZE, result_set_size);
-		}
-		if (ProfilingInfo::Enabled(settings, MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
-			auto used_memory = BufferManager::GetBufferManager(context).GetBufferPool().GetUsedMemory(false);
-			info.AddMetric(MetricType::SYSTEM_PEAK_BUFFER_MEMORY, used_memory);
-		}
-		if (ProfilingInfo::Enabled(settings, MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
-			auto used_swap = BufferManager::GetBufferManager(context).GetUsedSwap();
-			info.AddMetric(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE, used_swap);
-		}
-	}
+	auto &info = GetOperatorMetrics(*active_operator);
+	op.End();
+	info.GatherMetrics(context, op.Elapsed(), chunk);
 	active_operator = nullptr;
 }
 
-void OperatorProfiler::FinalizeSourceProfiling(GlobalSourceState &gstate, LocalSourceState &lstate,
-                                               const PhysicalOperator &phys_op, const bool source_exhausted) {
+void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate) {
 	if (!enabled) {
 		return;
 	}
-	if (settings.empty()) {
-		return;
+	if (!active_operator) {
+		throw InternalException("OperatorProfiler: Attempting to call FinishSource while no operator is active");
 	}
+	FinishSource(*active_operator, gstate, lstate);
+}
 
-	if (ProfilingInfo::Enabled(settings, MetricType::EXTRA_INFO)) {
-		auto extra_info = phys_op.ExtraSourceParams(gstate, lstate);
-		if (!extra_info.empty()) {
-			auto &info = GetOperatorInfo(phys_op);
-			for (auto &new_info : extra_info) {
-				const auto entry = info.extra_info.find(new_info.first);
-				if (entry != info.extra_info.end()) {
-					// entry exists - override
-					entry->second = std::move(new_info.second);
-				} else {
-					// entry does not exist yet - insert
-					info.extra_info.insert(std::move(new_info));
-				}
-			}
-		}
-	}
-
-	if (phys_op.type == PhysicalOperatorType::TABLE_SCAN && TableScanMetricsEnabled(settings)) {
+void OperatorProfiler::FinishSource(const PhysicalOperator &phys_op, GlobalSourceState &gstate,
+                                    LocalSourceState &lstate) {
+	if (phys_op.type == PhysicalOperatorType::TABLE_SCAN) {
 		const auto &table_scan = phys_op.Cast<PhysicalTableScan>();
-		profiler_metrics_t metrics;
-		table_scan.GetMetrics(context, gstate, lstate, settings, metrics);
-		auto &info = GetOperatorInfo(phys_op);
-		for (const auto metric_type : TABLE_SCAN_METRICS) {
-			if (!ProfilingInfo::Enabled(settings, metric_type)) {
-				continue;
-			}
-			if (metric_type == MetricType::OPERATOR_ROWS_SCANNED) {
-				// If the source is not exhausted we cannot make a reliable guess based on the cardinality estimate.
-				if (!TryAddTableScanMetric(info, metrics, metric_type) && source_exhausted) {
-					// Use the cardinality estimate if no exact rows-scanned metric is available.
-					AddEstimatedTableScanRowsScanned(context, info, table_scan);
-				}
-				continue;
-			}
-			TryAddTableScanMetric(info, metrics, metric_type);
-		}
+		auto &scan_metrics = GetOperatorMetrics(phys_op);
+		table_scan.GetMetrics(context, gstate, lstate, scan_metrics);
 	}
 }
 
-bool OperatorProfiler::OperatorInfoIsInitialized(const PhysicalOperator &phys_op) {
-	auto entry = operator_infos.find(phys_op);
-	return entry != operator_infos.end();
+bool OperatorProfiler::OperatorMetricsIsInitialized(const PhysicalOperator &phys_op) {
+	auto entry = operator_metrics.find(phys_op);
+	return entry != operator_metrics.end();
 }
 
-OperatorInformation &OperatorProfiler::GetOperatorInfo(const PhysicalOperator &phys_op) {
-	auto entry = operator_infos.find(phys_op);
-	if (entry != operator_infos.end()) {
+OperatorMetrics &OperatorProfiler::GetOperatorMetrics(const PhysicalOperator &phys_op) {
+	auto entry = operator_metrics.find(phys_op);
+	if (entry != operator_metrics.end()) {
 		return entry->second;
 	}
 
 	// Add a new entry.
-	operator_infos[phys_op] = OperatorInformation();
-	return operator_infos[phys_op];
+	operator_metrics[phys_op] = OperatorMetrics();
+	return operator_metrics[phys_op];
 }
 
 void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
-	auto entry = operator_infos.find(phys_op);
-	if (entry == operator_infos.end()) {
+	auto entry = operator_metrics.find(phys_op);
+	if (entry == operator_metrics.end()) {
 		return;
 	}
 
-	auto &info = operator_infos.find(phys_op)->second;
-	info.name = phys_op.GetName();
-}
-
-// MetricType::EXTRA_INFO is metadata rather than a delta metric, so we do not overwrite the entire object.
-// Instead, we merge with the global object instance so subsequent flushes do not erase existing metadata.
-static void MergeOperatorExtraInfo(const InsertionOrderPreservingMap<string> &local_extra_info,
-                                   Value &global_extra_info) {
-	InsertionOrderPreservingMap<string> merged;
-	const auto &children = MapValue::GetChildren(global_extra_info);
-	for (const auto &child : children) {
-		const auto &struct_children = StructValue::GetChildren(child);
-		const auto key = struct_children[0].GetValue<string>();
-		const auto value = struct_children[1].GetValue<string>();
-
-		merged[key] = value;
+	auto &info = entry->second;
+	if (info.name.empty()) {
+		info.name = EnumUtil::ToString(phys_op.type);
 	}
-
-	for (const auto &entry : local_extra_info) {
-		merged[entry.first] = entry.second;
-	}
-
-	global_extra_info = Value::MAP(merged);
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
@@ -532,47 +546,31 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	if (!IsEnabled() || !running) {
 		return;
 	}
-	for (auto &node : profiler.operator_infos) {
+	for (auto &node : profiler.operator_metrics) {
 		auto &op = node.first.get();
 		auto entry = tree_map.find(op);
+		// all profiled operators should be registered in the tree
 		D_ASSERT(entry != tree_map.end());
-
+		if (entry == tree_map.end()) {
+			continue;
+		}
 		auto &tree_node = entry->second.get();
-		auto &info = tree_node.GetProfilingInfo();
+		auto &info = tree_node.GetOperatorMetrics();
+		info.Merge(node.second);
+		// Update extra_info from the per-thread metrics: these are set during execution (StartOperator),
+		// so they capture runtime values like dynamic filters that aren't known at plan-creation time.
+		if (!node.second.GetExtraInfo().empty()) {
+			info.SetExtraInfo(node.second.GetExtraInfo());
+		}
 
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_TIMING)) {
-			info.MetricSum<double>(MetricType::OPERATOR_TIMING, node.second.time);
+		if (node.second.system_peak_buffer_manager_memory > query_metrics.system_peak_buffer_memory) {
+			query_metrics.system_peak_buffer_memory = node.second.system_peak_buffer_manager_memory;
 		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_CARDINALITY)) {
-			info.MetricSum<idx_t>(MetricType::OPERATOR_CARDINALITY, node.second.elements_returned);
+		if (node.second.system_peak_temp_directory_size > query_metrics.system_peak_temp_dir_size) {
+			query_metrics.system_peak_temp_dir_size = node.second.system_peak_temp_directory_size;
 		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_ROWS_SCANNED)) {
-			info.MetricSum<idx_t>(MetricType::OPERATOR_ROWS_SCANNED, node.second.rows_scanned);
-		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_ROW_GROUPS_SCANNED)) {
-			info.MetricSum<idx_t>(MetricType::OPERATOR_ROW_GROUPS_SCANNED, node.second.row_groups_scanned);
-		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN) &&
-		    node.second.total_row_groups_to_scan.IsValid()) {
-			info.metrics[MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN] =
-			    Value::UBIGINT(node.second.total_row_groups_to_scan.GetIndex());
-		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::RESULT_SET_SIZE)) {
-			info.MetricSum<idx_t>(MetricType::RESULT_SET_SIZE, node.second.result_set_size);
-		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::EXTRA_INFO) && !node.second.extra_info.empty()) {
-			MergeOperatorExtraInfo(node.second.extra_info, info.metrics[MetricType::EXTRA_INFO]);
-		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
-			query_metrics.query_global_info.MetricMax(MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
-			                                          node.second.system_peak_buffer_manager_memory);
-		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
-			query_metrics.query_global_info.MetricMax(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
-			                                          node.second.system_peak_temp_directory_size);
-		}
+		node.second.ResetMetrics();
 	}
-	profiler.operator_infos.clear();
 }
 
 void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
@@ -581,10 +579,15 @@ void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
 		return;
 	}
 
-	auto &info = root->GetProfilingInfo();
-	if (info.Enabled(info.expanded_settings, MetricType::BLOCKED_THREAD_TIME)) {
-		query_metrics.query_global_info.metrics[MetricType::BLOCKED_THREAD_TIME] = blocked_thread_time;
+	query_metrics.blocked_thread_time = blocked_thread_time;
+}
+
+void QueryProfiler::SetStreamingPeakBufferSize(idx_t peak_bytes) {
+	lock_guard<std::mutex> guard(lock);
+	if (!IsEnabled() || !running) {
+		return;
 	}
+	query_metrics.system_peak_streaming_buffer_size = peak_bytes;
 }
 
 string QueryProfiler::DrawPadded(const string &str, idx_t width) {
@@ -596,20 +599,6 @@ string QueryProfiler::DrawPadded(const string &str, idx_t width) {
 		auto extra_left_space = NumericCast<idx_t>(width % 2 != 0 ? 1 : 0);
 		return string(half_spaces + extra_left_space, ' ') + str + string(half_spaces, ' ');
 	}
-}
-
-static string RenderTitleCase(string str) {
-	str = StringUtil::Lower(str);
-	str[0] = NumericCast<char>(toupper(str[0]));
-	for (idx_t i = 0; i < str.size(); i++) {
-		if (str[i] == '_') {
-			str[i] = ' ';
-			if (i + 1 < str.size()) {
-				str[i + 1] = NumericCast<char>(toupper(str[i + 1]));
-			}
-		}
-	}
-	return str;
 }
 
 static string RenderTiming(double timing) {
@@ -625,109 +614,66 @@ static string RenderTiming(double timing) {
 }
 
 string QueryProfiler::QueryTreeToString() const {
-	duckdb::stringstream str;
-	QueryTreeToStream(str);
-	return str.str();
-}
-
-void RenderPhaseTimings(std::ostream &ss, const pair<string, double> &head, map<string, double> &timings, idx_t width) {
-	ss << "┌────────────────────────────────────────────────┐\n";
-	ss << "│" + QueryProfiler::DrawPadded(RenderTitleCase(head.first) + ": " + RenderTiming(head.second), width - 2) +
-	          "│\n";
-	ss << "│┌──────────────────────────────────────────────┐│\n";
-
-	for (const auto &entry : timings) {
-		ss << "││" +
-		          QueryProfiler::DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
-		                                    width - 4) +
-		          "││\n";
-	}
-	ss << "│└──────────────────────────────────────────────┘│\n";
-	ss << "└────────────────────────────────────────────────┘\n";
-}
-
-void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_t width) {
-	map<string, double> optimizer_timings;
-	map<string, double> planner_timings;
-	map<string, double> physical_planner_timings;
-
-	pair<string, double> optimizer_head;
-	pair<string, double> planner_head;
-	pair<string, double> physical_planner_head;
-
-	for (const auto &entry : info.metrics) {
-		if (MetricsUtils::IsOptimizerMetric(entry.first)) {
-			optimizer_timings[EnumUtil::ToString(entry.first).substr(10)] = entry.second.GetValue<double>();
-		} else if (MetricsUtils::IsPhaseTimingMetric(entry.first)) {
-			switch (entry.first) {
-			case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
-				continue;
-			case MetricType::ALL_OPTIMIZERS:
-				optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
-				break;
-			case MetricType::PHYSICAL_PLANNER:
-				physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
-				break;
-			case MetricType::PLANNER:
-				planner_head = {"Planner", entry.second.GetValue<double>()};
-				break;
-			default:
-				break;
-			}
-
-			auto metric = EnumUtil::ToString(entry.first);
-			if (StringUtil::StartsWith(metric, "PHYSICAL_PLANNER") && entry.first != MetricType::PHYSICAL_PLANNER) {
-				physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
-			} else if (StringUtil::StartsWith(metric, "PLANNER") && entry.first != MetricType::PLANNER) {
-				planner_timings[metric.substr(8)] = entry.second.GetValue<double>();
-			}
-		}
-	}
-
-	RenderPhaseTimings(ss, optimizer_head, optimizer_timings, width);
-	RenderPhaseTimings(ss, physical_planner_head, physical_planner_timings, width);
-	RenderPhaseTimings(ss, planner_head, planner_timings, width);
+	StringTreeRenderer ss;
+	RenderQueryTree(ss);
+	return ss.str();
 }
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
+	StringTreeRenderer renderer;
+	RenderQueryTree(renderer);
+	ss << renderer.str();
+}
+
+void QueryProfiler::RenderQueryTree(BaseTreeRenderer &ss) const {
 	lock_guard<std::mutex> guard(lock);
 
-	bool show_query_name = false;
-	if (root) {
-		auto &info = root->GetProfilingInfo();
-		auto &settings = info.expanded_settings;
-		show_query_name = info.Enabled(settings, MetricType::QUERY_NAME);
-	}
-	ss << "┌─────────────────────────────────────┐\n";
-	ss << "│┌───────────────────────────────────┐│\n";
-	ss << "││    Query Profiling Information    ││\n";
-	ss << "│└───────────────────────────────────┘│\n";
-	ss << "└─────────────────────────────────────┘\n";
-	ss << (show_query_name ? StringUtil::Replace(query_metrics.query_name, "\n", " ") : "") + "\n";
-
-	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
-	if (query_metrics.query_name.empty() && !root) {
+	if (query_metrics.query_sql.empty() && !root) {
 		return;
 	}
 
+	// the registered states write profiling info through an ostream - capture it and emit as layout text
+	duckdb::stringstream state_info;
 	for (auto &state : context.registered_state->States()) {
-		state->WriteProfilingInformation(ss);
+		state->WriteProfilingInformation(state_info);
 	}
+	ss << state_info.str();
 
-	constexpr idx_t TOTAL_BOX_WIDTH = 50;
-	ss << "┌────────────────────────────────────────────────┐\n";
-	ss << "│┌──────────────────────────────────────────────┐│\n";
-	string total_time = "Total Time: " + RenderTiming(query_metrics.GetMetricInSeconds(MetricType::LATENCY));
-	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
-	ss << "│└──────────────────────────────────────────────┘│\n";
-	ss << "└────────────────────────────────────────────────┘\n";
+	// summary box, styled to match the operator boxes (rounded corners, title in the top border)
+	const string title = "Summary";
+	vector<pair<string, string>> rows;
+	rows.emplace_back("Total Time: ", RenderTiming(query_metrics.GetStringMetricInSeconds("query.total_time")));
+	auto bytes_read = query_metrics.GetBytesRead();
+	if (bytes_read > 0) {
+		rows.emplace_back("Data Read: ", StringUtil::BytesToHumanReadableString(bytes_read, 1000));
+	}
+	auto bytes_written = query_metrics.GetBytesWritten();
+	if (bytes_written > 0) {
+		rows.emplace_back("Data Written: ", StringUtil::BytesToHumanReadableString(bytes_written, 1000));
+	}
+	idx_t content_width = title.size() + 2;
+	for (auto &row : rows) {
+		content_width = MaxValue<idx_t>(content_width, row.first.size() + row.second.size());
+	}
+	idx_t box_width = content_width + 4;
+	// top border: ╭─ Summary ─╮
+	ss << "╭─ ";
+	ss.Render(title, TreeRenderType::HEADER);
+	ss << " " + StringUtil::Repeat("─", box_width - 5 - title.size()) + "╮\n";
+	// content rows with the values right-aligned (pad between the key and the value)
+	for (auto &row : rows) {
+		idx_t row_width = row.first.size() + row.second.size();
+		ss << "│ ";
+		ss.Render(row.first, TreeRenderType::KEY);
+		ss << string(content_width - row_width, ' ');
+		ss.Render(row.second, TreeRenderType::VALUE);
+		ss << " │\n";
+	}
+	// bottom border
+	ss << "╰" + StringUtil::Repeat("─", box_width - 2) + "╯\n";
 	// render the main operator tree
 	if (root) {
-		// print phase timings
-		if (PrintOptimizerOutput()) {
-			PrintPhaseTimingsToStream(ss, root->GetProfilingInfo(), TOTAL_BOX_WIDTH);
-		}
 		Render(*root, ss);
 	}
 }
@@ -786,76 +732,286 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 	return result;
 }
 
-static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, ProfilingNode &node) {
-	auto result_obj = yyjson_mut_obj(doc);
-	auto &profiling_info = node.GetProfilingInfo();
-
-	if (profiling_info.Enabled(profiling_info.settings, MetricType::EXTRA_INFO)) {
-		profiling_info.metrics[MetricType::EXTRA_INFO] =
-		    QueryProfiler::JSONSanitize(profiling_info.metrics.at(MetricType::EXTRA_INFO));
+profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) const {
+	profiler_metrics_t result;
+	if (info.MetricIsTracked<MetricOperatorType>()) {
+		result["type"] = Value(EnumUtil::ToString(operator_type));
 	}
-
-	profiling_info.WriteMetricsToJSON(doc, result_obj);
-
-	auto children_list = yyjson_mut_arr(doc);
-	for (idx_t i = 0; i < node.GetChildCount(); i++) {
-		auto child = ToJSONRecursive(doc, *node.GetChild(i));
-		yyjson_mut_arr_add_val(children_list, child);
+	if (info.MetricIsTracked<MetricOperatorTiming>()) {
+		result["timing"] = Value::DOUBLE(time);
 	}
-	yyjson_mut_obj_add_val(doc, result_obj, "children", children_list);
-	return result_obj;
+	if (info.MetricIsTracked<MetricOperatorIntermediateRows>()) {
+		result["intermediate_rows"] = Value::UBIGINT(elements_returned);
+	}
+	if (info.MetricIsTracked<MetricOperatorIntermediateSizeBytes>()) {
+		result["intermediate_size_bytes"] = Value::UBIGINT(intermediate_size_bytes);
+	}
+	if (info.MetricIsTracked<MetricOperatorRowsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
+		result["rows_scanned"] = Value::UBIGINT(rows_scanned);
+	}
+	if (info.MetricIsTracked<MetricOperatorRowGroupsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
+		result["row_groups_scanned"] = Value::UBIGINT(row_groups_scanned);
+	}
+	if (info.MetricIsTracked<MetricOperatorTotalRowGroupsToScan>() &&
+	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
+		result["total_row_groups_to_scan"] = Value::UBIGINT(total_row_groups_to_scan);
+	}
+	if (info.MetricIsTracked<MetricOperatorExtraInfo>()) {
+		result["extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
+	}
+	return result;
 }
 
-static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val *object) {
-	json_holder.stringified_json = yyjson_mut_val_write_opts(
-	    object, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr, nullptr, nullptr);
-	if (!json_holder.stringified_json) {
-		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
+static JSONMutableValue ValueToJSON(JSONWriter &writer, const Value &val) {
+	if (val.IsNull()) {
+		return writer.CreateNull();
 	}
-	auto result = string(json_holder.stringified_json);
-	return result;
+	auto &type = val.type();
+	if (type.id() == LogicalTypeId::MAP) {
+		// MAP values (e.g. extra_info) become JSON objects; multiline string values become arrays
+		auto obj = writer.CreateObject();
+		for (auto &child : MapValue::GetChildren(val)) {
+			auto kv = StructValue::GetChildren(child);
+			auto k = kv[0].GetValue<string>();
+			auto v = kv[1].GetValue<string>();
+			auto splits = StringUtil::Split(v, "\n");
+			if (splits.size() > 1) {
+				auto arr = writer.CreateArray();
+				for (auto &s : splits) {
+					arr.AppendString(s);
+				}
+				obj.Add(k, arr);
+			} else {
+				obj.AddString(k, v);
+			}
+		}
+		return obj;
+	}
+	if (type.IsIntegral()) {
+		return writer.CreateUnsignedInteger(val.GetValue<uint64_t>());
+	}
+	if (type.IsNumeric()) {
+		return writer.CreateDouble(val.GetValue<double>());
+	}
+	return writer.CreateString(val.GetValue<string>());
+}
+
+static JSONMutableValue QueryProfileResultToJSON(JSONWriter &writer, const QueryProfileResult &node) {
+	switch (node.kind) {
+	case QueryProfileResultKind::VALUE:
+		return ValueToJSON(writer, node.value);
+	case QueryProfileResultKind::LIST: {
+		auto arr = writer.CreateArray();
+		for (auto &child : node.children) {
+			arr.Append(QueryProfileResultToJSON(writer, *child));
+		}
+		return arr;
+	}
+	case QueryProfileResultKind::OBJECT: {
+		auto obj = writer.CreateObject();
+		// Sort children alphabetically by key for deterministic output
+		vector<reference<const QueryProfileResult>> sorted_children;
+		sorted_children.reserve(node.children.size());
+		for (auto &child : node.children) {
+			sorted_children.push_back(*child);
+		}
+		std::sort(sorted_children.begin(), sorted_children.end(),
+		          [](const QueryProfileResult &a, const QueryProfileResult &b) {
+			          if (a.IsNested() != b.IsNested()) {
+				          return !a.IsNested();
+			          }
+			          return a.key < b.key;
+		          });
+		for (const QueryProfileResult &child : sorted_children) {
+			D_ASSERT(!child.key.empty());
+			obj.Add(child.key, QueryProfileResultToJSON(writer, child));
+		}
+		return obj;
+	}
+	default:
+		throw InternalException("Unknown QueryProfileResultKind");
+	}
+}
+
+void QueryProfiler::ToLogInternal() const {
+	if (!root) {
+		return;
+	}
+	metrics->WriteMetricsToLog(context);
 }
 
 void QueryProfiler::ToLog() const {
 	lock_guard<std::mutex> guard(lock);
+	ToLogInternal();
+}
 
-	if (!root) {
-		// No root, not much to do
-		return;
+static void OperatorToResultTree(const GatheredMetrics &settings, ProfilingNode &node, QueryProfileResult &result) {
+	auto operator_metrics = node.GetOperatorMetrics().GetMetrics(settings);
+	for (auto &entry : operator_metrics) {
+		result.AddValue(entry.first, std::move(entry.second));
+	}
+	if (node.GetChildCount() > 0) {
+		auto &children_list = result.AddList("children");
+		for (idx_t i = 0; i < node.GetChildCount(); i++) {
+			auto &child_result = children_list.AppendObject();
+			OperatorToResultTree(settings, *node.GetChild(i), child_result);
+		}
+	}
+}
+
+struct LegacyCumulative {
+	double timing = 0;
+	uint64_t cardinality = 0;
+	uint64_t rows_scanned = 0;
+};
+
+static LegacyCumulative LegacyOperatorToResultTree(const GatheredMetrics &info, ProfilingNode &node,
+                                                   QueryProfileResult &result) {
+	auto operator_metrics = node.GetOperatorMetrics().GetMetrics(info);
+
+	auto emit_as = [&](const string &old_key, const string &new_key) {
+		auto it = operator_metrics.find(old_key);
+		if (it != operator_metrics.end()) {
+			result.AddValue(new_key, it->second);
+		}
+	};
+
+	emit_as("type", "operator_type");
+	emit_as("timing", "operator_timing");
+	emit_as("rows_scanned", "operator_rows_scanned");
+	emit_as("intermediate_rows", "operator_cardinality");
+	emit_as("intermediate_size_bytes", "result_set_size");
+
+	auto it_extra = operator_metrics.find("extra_info");
+	if (it_extra != operator_metrics.end()) {
+		result.AddValue("extra_info", it_extra->second);
+	}
+	result.AddValue("system_peak_buffer_memory", Value::UBIGINT(0));
+	result.AddValue("system_peak_streaming_buffer_size", Value::UBIGINT(0));
+	result.AddValue("system_peak_temp_dir_size", Value::UBIGINT(0));
+
+	LegacyCumulative cumulative;
+	auto timing_it = operator_metrics.find("timing");
+	if (timing_it != operator_metrics.end()) {
+		cumulative.timing = timing_it->second.GetValue<double>();
+	}
+	auto card_it = operator_metrics.find("intermediate_rows");
+	if (card_it != operator_metrics.end()) {
+		cumulative.cardinality = card_it->second.GetValue<uint64_t>();
+	}
+	auto rows_it = operator_metrics.find("rows_scanned");
+	if (rows_it != operator_metrics.end()) {
+		cumulative.rows_scanned = rows_it->second.GetValue<uint64_t>();
 	}
 
-	auto &settings = root->GetProfilingInfo();
+	if (node.GetChildCount() > 0) {
+		auto &children_list = result.AddList("children");
+		for (idx_t i = 0; i < node.GetChildCount(); i++) {
+			auto &child_result = children_list.AppendObject();
+			auto child_cum = LegacyOperatorToResultTree(info, *node.GetChild(i), child_result);
+			cumulative.timing += child_cum.timing;
+			cumulative.cardinality += child_cum.cardinality;
+			cumulative.rows_scanned += child_cum.rows_scanned;
+		}
+	}
 
-	settings.WriteMetricsToLog(context);
+	result.AddValue("cpu_time", Value::DOUBLE(cumulative.timing));
+	result.AddValue("cumulative_cardinality", Value::UBIGINT(cumulative.cardinality));
+	result.AddValue("cumulative_rows_scanned", Value::UBIGINT(cumulative.rows_scanned));
+	return cumulative;
+}
+
+unique_ptr<QueryProfileResult> QueryProfiler::ToLegacyResultTree() const {
+	auto result = make_uniq<QueryProfileResult>();
+	if (!root) {
+		result->AddValue("result", Value(query_metrics.query_sql.empty() ? "empty" : "error"));
+		return result;
+	}
+
+	const auto &gathered = metrics->GetMetrics();
+
+	auto emit = [&](const string &new_key, const string &old_key) {
+		auto it = gathered.find(old_key);
+		if (it != gathered.end()) {
+			result->AddValue(new_key, it->second);
+		}
+	};
+
+	emit("total_memory_allocated", "system.total_memory_allocated");
+	emit("total_bytes_written", "io.total_bytes_written");
+	emit("total_bytes_read", "io.total_bytes_read");
+	emit("system_peak_temp_dir_size", "system.peak_temp_dir_size");
+	emit("system_peak_buffer_memory", "system.peak_buffer_memory");
+	emit("system_peak_streaming_buffer_size", "system.peak_streaming_buffer_size");
+
+	// rows_returned = root operator's elements_returned (rows sent to client)
+	{
+		auto root_op_metrics = root->GetOperatorMetrics().GetMetrics(*metrics);
+		auto it = root_op_metrics.find("intermediate_rows");
+		if (it != root_op_metrics.end()) {
+			result->AddValue("rows_returned", it->second);
+		}
+	}
+
+	emit("result_set_size", "query.total_intermediate_size_bytes");
+	emit("latency", "query.total_time");
+	emit("wal_replay_entry_count", "storage.wal_replay_entry_count");
+	result->AddValue("extra_info", Value::MAP(InsertionOrderPreservingMap<string>()));
+	emit("commit_local_storage_latency", "storage.commit_local_storage_latency");
+	emit("attach_load_storage_latency", "storage.attach_load_storage_latency");
+	emit("query_name", "query.sql");
+	emit("cpu_time", "query.cpu_time");
+	emit("checkpoint_latency", "storage.checkpoint_latency");
+	emit("cumulative_cardinality", "query.total_intermediate_rows");
+	emit("waiting_to_attach_latency", "storage.waiting_to_attach_latency");
+	emit("write_to_wal_latency", "storage.write_to_wal_latency");
+	emit("attach_replay_wal_latency", "storage.attach_replay_wal_latency");
+	emit("blocked_thread_time", "system.blocked_thread_time");
+	emit("cumulative_rows_scanned", "query.total_rows_scanned");
+	emit("total_vacuum_time", "storage.total_vacuum_time");
+
+	auto &children_list = result->AddList("children");
+	auto &root_node = children_list.AppendObject();
+	LegacyOperatorToResultTree(*metrics, *root, root_node);
+	return result;
+}
+
+unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree() const {
+	if (Settings::Get<LegacyMetricsFormatSetting>(context)) {
+		return ToLegacyResultTree();
+	}
+	auto result = make_uniq<QueryProfileResult>();
+	if (!root) {
+		result->AddValue("result", Value(query_metrics.query_sql.empty() ? "empty" : "error"));
+		return result;
+	}
+	metrics->MetricsToProfileResult(*result);
+	if (metrics->AnyOperatorMetricTracked()) {
+		auto &op_list = result->AddList("operator");
+		auto &op_node = op_list.AppendObject();
+		OperatorToResultTree(*metrics, *root, op_node);
+	}
+	return result;
+}
+
+QueryProfileResult &QueryProfiler::GetResult() {
+	lock_guard<std::mutex> guard(lock);
+	if (!result_tree) {
+		result_tree = ToResultTree();
+	}
+	return *result_tree;
+}
+
+bool QueryProfiler::HasRoot() const {
+	return root != nullptr;
 }
 
 string QueryProfiler::ToJSON() const {
 	lock_guard<std::mutex> guard(lock);
-	ConvertedJSONHolder json_holder;
-
-	json_holder.doc = yyjson_mut_doc_new(nullptr);
-	auto result_obj = yyjson_mut_obj(json_holder.doc);
-	yyjson_mut_doc_set_root(json_holder.doc, result_obj);
-
-	if (query_metrics.query_name.empty() && !root) {
-		yyjson_mut_obj_add_str(json_holder.doc, result_obj, "result", "empty");
-		return StringifyAndFree(json_holder, result_obj);
-	}
-	if (!root) {
-		yyjson_mut_obj_add_str(json_holder.doc, result_obj, "result", "error");
-		return StringifyAndFree(json_holder, result_obj);
-	}
-
-	auto &settings = root->GetProfilingInfo();
-
-	settings.WriteMetricsToJSON(json_holder.doc, result_obj);
-
-	// recursively print the physical operator tree
-	auto children_list = yyjson_mut_arr(json_holder.doc);
-	yyjson_mut_obj_add_val(json_holder.doc, result_obj, "children", children_list);
-	auto child = ToJSONRecursive(json_holder.doc, *root->GetChild(0));
-	yyjson_mut_arr_add_val(children_list, child);
-	return StringifyAndFree(json_holder, result_obj);
+	JSONWriter writer;
+	auto result = ToResultTree();
+	writer.SetRoot(QueryProfileResultToJSON(writer, *result));
+	return writer.ToString(JSONWriteFlags::ALLOW_INF_AND_NAN | JSONWriteFlags::PRETTY);
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {
@@ -866,94 +1022,34 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	file->Close();
 }
 
-profiler_settings_t EraseQueryRootSettings(profiler_settings_t settings) {
-	profiler_settings_t phase_timing_settings_to_erase;
-
-	for (auto &setting : settings) {
-		if (MetricsUtils::IsOptimizerMetric(setting) || MetricsUtils::IsPhaseTimingMetric(setting) ||
-		    MetricsUtils::IsRootScopeMetric(setting)) {
-			phase_timing_settings_to_erase.insert(setting);
-		}
-	}
-
-	for (auto &setting : phase_timing_settings_to_erase) {
-		settings.erase(setting);
-	}
-
-	return settings;
-}
-
-unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root_p, const profiler_settings_t &settings,
-                                                    const idx_t depth) {
+unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root_p, const idx_t depth) {
 	if (OperatorRequiresProfiling(root_p.type)) {
 		query_requires_profiling = true;
 	}
 
-	unique_ptr<ProfilingNode> node = make_uniq<ProfilingNode>();
-	auto &info = node->GetProfilingInfo();
-	info = ProfilingInfo(settings, depth);
-	auto child_settings = settings;
-	if (depth == 0) {
-		child_settings = EraseQueryRootSettings(child_settings);
-	}
+	auto node = make_uniq<ProfilingNode>();
+	auto &info = node->GetOperatorMetrics();
 	node->depth = depth;
 
-	if (depth != 0) {
-		info.metrics[MetricType::OPERATOR_NAME] = root_p.GetName();
-		info.MetricSum<uint8_t>(MetricType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
-	}
-	if (info.Enabled(info.settings, MetricType::EXTRA_INFO)) {
-		info.metrics[MetricType::EXTRA_INFO] = Value::MAP(root_p.ParamsToString());
-	}
+	info.name = EnumUtil::ToString(root_p.type);
+	info.operator_type = root_p.type;
+	auto params = root_p.ParamsToString();
+	info.SetExtraInfo(std::move(params));
 
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root_p), reference<ProfilingNode>(*node)));
+	if (root_p.type == PhysicalOperatorType::CTE_SCAN) {
+		auto &cte_scan = root_p.Cast<PhysicalColumnDataScan>();
+		if (cte_scan.cte_source) {
+			tree_map.insert(
+			    make_pair(reference<const PhysicalOperator>(*cte_scan.cte_source), reference<ProfilingNode>(*node)));
+		}
+	}
 	auto children = root_p.GetChildren();
 	for (auto &child : children) {
-		auto child_node = CreateTree(child.get(), child_settings, depth + 1);
+		auto child_node = CreateTree(child.get(), depth + 1);
 		node->AddChild(std::move(child_node));
 	}
 	return node;
-}
-
-string QueryProfiler::RenderDisabledMessage(ProfilerPrintFormat format) const {
-	switch (format) {
-	case ProfilerPrintFormat::NO_OUTPUT:
-		return "";
-	case ProfilerPrintFormat::QUERY_TREE:
-	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
-		return "Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!";
-	case ProfilerPrintFormat::HTML:
-		return R"(
-				<!DOCTYPE html>
-                <html lang="en"><head/><body>
-                  Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!
-                </body></html>
-			)";
-	case ProfilerPrintFormat::GRAPHVIZ:
-		return R"(
-				digraph G {
-				    node [shape=box, style=rounded, fontname="Courier New", fontsize=10];
-				    node_0_0 [label="Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!"];
-				}
-			)";
-	case ProfilerPrintFormat::MERMAID:
-		return R"(flowchart TD
-    node_0_0["`**DISABLED**
-Query profiling is disabled.
-Use 'PRAGMA enable_profiling;' to enable profiling!`"]
-)";
-	case ProfilerPrintFormat::JSON: {
-		ConvertedJSONHolder json_holder;
-		json_holder.doc = yyjson_mut_doc_new(nullptr);
-		auto result_obj = yyjson_mut_obj(json_holder.doc);
-		yyjson_mut_doc_set_root(json_holder.doc, result_obj);
-
-		yyjson_mut_obj_add_str(json_holder.doc, result_obj, "result", "disabled");
-		return StringifyAndFree(json_holder, result_obj);
-	}
-	default:
-		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", EnumUtil::ToString(format));
-	}
 }
 
 void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
@@ -962,71 +1058,87 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 		return;
 	}
 	query_requires_profiling = false;
-	ClientConfig &config = ClientConfig::GetConfig(context);
-	root = CreateTree(root_op, config.profiler_settings, 0);
+	root = CreateTree(root_op, 0);
 	if (!query_requires_profiling) {
 		// query does not require profiling: disable profiling for this query
 		running = false;
 		tree_map.clear();
 		root = nullptr;
-		phase_timings.clear();
-		phase_stack.clear();
+	} else {
+		auto &client_config = ClientConfig::GetConfig(context);
+		metrics = make_uniq<GatheredMetrics>(client_config.tracked_metrics);
 	}
 }
 
-void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
+void QueryProfiler::Render(const ProfilingNode &node, BaseTreeRenderer &ss) const {
 	TextTreeRenderer renderer;
-	if (IsDetailedEnabled()) {
-		renderer.EnableDetailed();
-	} else {
-		renderer.EnableStandard();
-	}
+	renderer.Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
 	renderer.Render(node, ss);
 }
 
 void QueryProfiler::Print() {
-	Printer::Print(QueryTreeToString());
+	// print the framed text query tree directly through the renderer's print sink
+	auto renderer = CreateProfiler("query_tree");
+	PrintProfilerOutput(renderer.get());
 }
 
-void QueryProfiler::MoveOptimizerPhasesToRoot() {
-	auto &root_info = root->GetProfilingInfo();
-	auto &root_metrics = root_info.metrics;
+static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &result) {
+	// merge in this layer
+	result.Accumulate(root.GetOperatorMetrics());
+	// recurse into children
+	for (idx_t i = 0; i < root.GetChildCount(); i++) {
+		auto child = root.GetChild(i);
+		MergeOperatorMeasurements(*child, result);
+	}
+}
 
-	for (auto &entry : phase_timings) {
-		auto &phase = entry.first;
-		auto &timing = entry.second;
-		if (root_info.Enabled(root_info.expanded_settings, phase)) {
-			root_metrics[phase] = Value::CreateValue(timing);
-		}
+static double SumSubtreeTime(ProfilingNode &node) {
+	auto result = node.GetOperatorMetrics().time;
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		result += SumSubtreeTime(*node.GetChild(i));
+	}
+	return result;
+}
+
+//! Drop the operators of a secure view, keeping only the metrics that describe the view as a whole: the time spent
+//! in it (accumulated over its operators) and the rows it returned, which are observable regardless. The remaining
+//! metrics of the operators inside the view are discarded rather than accumulated, because their sum describes the
+//! contents of the view - how many rows it processed internally, how much of the table it scanned.
+//! This runs before any profiling output is produced, so every consumer (EXPLAIN ANALYZE in any format, the
+//! profiling output, the query profile result) sees the collapsed tree.
+static void CollapseSecureViews(ProfilingNode &node) {
+	if (node.GetOperatorMetrics().operator_type == PhysicalOperatorType::SECURE_VIEW) {
+		node.GetOperatorMetrics().time = SumSubtreeTime(node);
+		node.children.clear();
+		return;
+	}
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		CollapseSecureViews(*node.GetChild(i));
 	}
 }
 
 void QueryProfiler::FinalizeMetricsInternal() {
-	if (metrics_finalized || !IsEnabled() || !root) {
+	if (metrics_finalized || !IsEnabled() || !metrics) {
 		return;
 	}
-
 	if (query_metrics.latency_timer) {
 		query_metrics.latency_timer->EndTimer();
 	}
-
-	auto &info = root->GetProfilingInfo();
-	if (info.Enabled(info.expanded_settings, MetricType::OPERATOR_CARDINALITY)) {
-		Finalize(*root->GetChild(0));
+	if (root) {
+		// collapse secure views first - the query-wide totals are sums over the operator tree, so leaving the
+		// operators of the view in would expose how much of the table behind it was scanned. The time of the view
+		// is accumulated onto its boundary node, so the total CPU time still covers the whole query.
+		CollapseSecureViews(*root);
+		OperatorMetrics cumulative_metrics;
+		MergeOperatorMeasurements(*root, cumulative_metrics);
+		metrics->SetMetric<MetricQueryCPUTime>(cumulative_metrics.time);
+		metrics->SetMetric<MetricQueryTotalIntermediateRows>(cumulative_metrics.elements_returned);
+		metrics->SetMetric<MetricQueryTotalRowsScanned>(cumulative_metrics.rows_scanned);
+		metrics->SetMetric<MetricQueryTotalIntermediateSizeBytes>(cumulative_metrics.intermediate_size_bytes);
+		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
+		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
 	}
-
-	auto &child_info = root->children[0]->GetProfilingInfo();
-	const auto &settings = info.expanded_settings;
-	for (const auto &global_info_entry : query_metrics.query_global_info.metrics) {
-		info.metrics[global_info_entry.first] = global_info_entry.second;
-	}
-
-	MoveOptimizerPhasesToRoot();
-	for (auto &metric : info.metrics) {
-		if (info.Enabled(settings, metric.first)) {
-			ProfilingUtils::CollectMetrics(metric.first, query_metrics, metric.second, *root, child_info);
-		}
-	}
+	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;
 }
 

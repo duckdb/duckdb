@@ -4,18 +4,18 @@
 loop j 0 100
 
 statement ok
-ATTACH '__TEST_DIR__/bla_${j}.db' AS db${j};
+ATTACH '{TEST_DIR}/bla_{j}.db' AS db{j};
 
 statement ok
-CREATE TABLE db${j}.tbl (key INTEGER PRIMARY KEY);
+CREATE TABLE db{j}.tbl (key INTEGER PRIMARY KEY);
 
 concurrentloop i 0 20
 
 statement ok
-INSERT INTO db${j}.tbl VALUES (${i})
+INSERT INTO db{j}.tbl VALUES ({i})
 
 query I
-SELECT COUNT(*) FROM db${j}.tbl where key = ${i}
+SELECT COUNT(*) FROM db{j}.tbl where key = {i}
 ----
 1
 

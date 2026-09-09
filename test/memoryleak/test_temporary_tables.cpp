@@ -8,7 +8,6 @@
 #include "test_config.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test in-memory database scanning from tables", "[memoryleak]") {
 	if (!TestConfiguration::TestMemoryLeaks()) {

@@ -7,19 +7,16 @@ namespace duckdb {
 
 namespace regexp_util {
 
-bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string) {
-	if (!expr.IsFoldable()) {
+bool TryParseConstantPattern(optional<Value> pattern_value, string &constant_string) {
+	if (!pattern_value || pattern_value->IsNull() || pattern_value->type().id() != LogicalTypeId::VARCHAR) {
 		return false;
 	}
-	Value pattern_str = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!pattern_str.IsNull() && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
-		constant_string = StringValue::Get(pattern_str);
-		return true;
-	}
-	return false;
+	constant_string = StringValue::Get(*pattern_value);
+	return true;
 }
 
-void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace) {
+void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace,
+                       bool *no_match_returns_input) {
 	for (idx_t i = 0; i < options.size(); i++) {
 		switch (options[i]) {
 		case 'c':
@@ -52,6 +49,14 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
 				throw InvalidInputException("Option 'g' (global replace) is only valid for regexp_replace");
 			}
 			break;
+		case 'k':
+			// keep (return) the input on no match instead of an empty string (regexp_extract only)
+			if (no_match_returns_input) {
+				*no_match_returns_input = true;
+			} else {
+				throw InvalidInputException("Option 'k' (keep input on no match) is only valid for regexp_extract");
+			}
+			break;
 		case ' ':
 		case '\t':
 		case '\n':
@@ -63,33 +68,20 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
 	}
 }
 
-void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace) {
-	if (expr.HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!expr.IsFoldable()) {
-		throw InvalidInputException("Regex options field must be a constant");
-	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(context, expr);
+void ParseRegexOptions(const Value &options_str, RE2::Options &target, bool *global_replace,
+                       bool *no_match_returns_input) {
 	if (options_str.IsNull()) {
 		throw InvalidInputException("Regex options field must not be NULL");
 	}
 	if (options_str.type().id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("Regex options field must be a string");
 	}
-	ParseRegexOptions(StringValue::Get(options_str), target, global_replace);
+	ParseRegexOptions(StringValue::Get(options_str), target, global_replace, no_match_returns_input);
 }
 
-void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,
-                        const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
-                        vector<string> &out_names, child_list_t<LogicalType> &out_struct_children) {
-	if (group_expr.HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!group_expr.IsFoldable()) {
-		throw InvalidInputException("Group specification field must be a constant list");
-	}
-	Value list_val = ExpressionExecutor::EvaluateScalar(context, group_expr);
+void ParseGroupNameList(const string &function_name, const Value &list_val, const string &pattern_string,
+                        RE2::Options &options, bool require_constant_pattern, vector<string> &out_names,
+                        child_list_t<LogicalType> &out_struct_children) {
 	if (list_val.IsNull() || list_val.type().id() != LogicalTypeId::LIST) {
 		throw BinderException("Group specification must be a non-NULL LIST");
 	}
@@ -97,16 +89,16 @@ void ParseGroupNameList(ClientContext &context, const string &function_name, Exp
 	if (children.empty()) {
 		throw BinderException("Group name list must be non-empty");
 	}
-	case_insensitive_set_t name_set;
+	identifier_set_t name_set;
 	for (auto &child : children) {
 		if (child.IsNull()) {
 			throw BinderException("NULL group name in %s", function_name);
 		}
 		auto name = child.ToString();
-		if (name_set.find(name) != name_set.end()) {
+		if (name_set.find(Identifier(name)) != name_set.end()) {
 			throw BinderException("Duplicate group name '%s' in %s", name, function_name);
 		}
-		name_set.insert(name);
+		name_set.insert(Identifier(name));
 		out_names.push_back(name);
 		out_struct_children.emplace_back(make_pair(name, LogicalType::VARCHAR));
 	}

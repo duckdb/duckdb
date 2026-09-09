@@ -2,9 +2,6 @@
 # description: Window functions typing issue
 # group: [afl]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT rank() OVER (), lag(NULL) OVER ();
 ----

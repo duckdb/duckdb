@@ -8,7 +8,7 @@ CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));
 loop i 1 300
 
 statement ok
-INSERT INTO test VALUES (${i}, 'hello');
+INSERT INTO test VALUES ({i}, 'hello');
 
 endloop
 
@@ -17,7 +17,7 @@ endloop
 loop i 1 300
 
 statement error
-INSERT INTO test VALUES (${i}, 'hello');
+INSERT INTO test VALUES ({i}, 'hello');
 ----
 <REGEX>:Constraint Error.*violates primary key constraint.*
 
@@ -31,7 +31,7 @@ UPDATE test SET a = a + 1000;
 loop i 1 300
 
 statement ok
-INSERT INTO test VALUES (${i}, 'hello');
+INSERT INTO test VALUES ({i}, 'hello');
 
 endloop
 

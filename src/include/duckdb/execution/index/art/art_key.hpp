@@ -14,6 +14,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -56,7 +57,7 @@ public:
 		return ARTKey(new_data, len);
 	}
 
-	static ARTKey CreateKey(ArenaAllocator &allocator, Value &value, optional_idx storage_version);
+	static ARTKey CreateKey(ArenaAllocator &allocator, Value &value, StorageVersion storage_version);
 
 public:
 	data_t &operator[](idx_t i) {

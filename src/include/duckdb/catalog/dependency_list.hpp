@@ -26,12 +26,14 @@ class LogicalDependencyList;
 struct LogicalDependency {
 public:
 	CatalogEntryInfo entry;
-	string catalog;
+	Identifier catalog;
+	//! Whether this dependency is automatically satisfied and must never block a DROP/ALTER of the entry it depends on
+	DependencyDependentFlags flags = DependencyDependentFlags().SetBlocking();
 
 public:
 	explicit LogicalDependency(CatalogEntry &entry);
 	LogicalDependency();
-	LogicalDependency(optional_ptr<Catalog> catalog, CatalogEntryInfo entry, string catalog_str);
+	LogicalDependency(optional_ptr<Catalog> catalog, CatalogEntryInfo entry, Identifier catalog_str);
 	bool operator==(const LogicalDependency &other) const;
 
 public:
@@ -54,11 +56,12 @@ class LogicalDependencyList {
 
 public:
 	DUCKDB_API void AddDependency(CatalogEntry &entry);
+	DUCKDB_API void AddDependency(CatalogEntry &entry, DependencyDependentFlags flags);
 	DUCKDB_API void AddDependency(const LogicalDependency &entry);
 	DUCKDB_API bool Contains(CatalogEntry &entry);
 
 public:
-	DUCKDB_API void VerifyDependencies(Catalog &catalog, const string &name);
+	DUCKDB_API void VerifyDependencies(Catalog &catalog, const Identifier &name);
 	void Serialize(Serializer &serializer) const;
 	static LogicalDependencyList Deserialize(Deserializer &deserializer);
 	bool operator==(const LogicalDependencyList &other) const;

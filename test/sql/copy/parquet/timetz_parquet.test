@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 query II
 select * from '{DATA_DIR}/parquet-testing/timetz_4byte_stats.parquet' order by 1;
 ----

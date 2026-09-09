@@ -2,9 +2,6 @@
 # description: Issue 590
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Comparison with a DATE yields an incorrect result
 statement ok
 CREATE TABLE t0(c0 VARCHAR);

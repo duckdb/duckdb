@@ -64,7 +64,7 @@
       {
         "id": 100,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 101,
@@ -112,7 +112,7 @@
         "name": "row_start",
         "type": "uint64_t",
         "status": "deleted",
-        "version": "7"
+        "version": "v1.5.0"
       },
       {
         "id": 101,
@@ -138,6 +138,12 @@
         "id": 105,
         "name": "segment_state",
         "type": "ColumnSegmentState*"
+      },
+      {
+        "id": 106,
+        "name": "byte_size",
+        "type": "optional<uint32_t>",
+        "version": "v2.0.0"
       }
     ],
     "set_parameters": ["compression_type"],

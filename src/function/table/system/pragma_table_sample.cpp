@@ -31,12 +31,13 @@ struct DuckDBTableSampleOperatorData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBTableSampleBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	// look up the table name in the catalog
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
-	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
+	CatalogEntryRetriever retriever(context);
+	qname = Binder::BindTableName(retriever, qname);
 
-	auto &entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
+	auto &entry = Catalog::GetEntry<TableCatalogEntry>(context, qname);
 	if (entry.type != CatalogType::TABLE_ENTRY) {
 		throw NotImplementedException("Invalid Catalog type passed to table_sample()");
 	}
@@ -51,6 +52,7 @@ static unique_ptr<FunctionData> DuckDBTableSampleBind(ClientContext &context, Ta
 		names.push_back(col.GetName());
 	}
 
+	Binder::RegisterEntryRead(input.binder, context, entry);
 	return make_uniq<DuckDBTableSampleFunctionData>(entry);
 }
 

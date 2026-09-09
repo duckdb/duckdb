@@ -1,0 +1,67 @@
+# name: test/sql/timezone/test_icu_timezone_properties.test
+# description: Properties that must hold for every time zone, checked over a sweep of the weeks that hold the transitions
+# group: [timezone]
+
+require icu
+
+statement ok
+SET TimeZone='UTC';
+
+# An hourly sweep through the weeks that hold nearly every daylight savings transition in the
+# world, for every zone. The windows are two days long, so a transition inside one always has
+# the hours on either side of it in the sweep as well.
+statement ok
+CREATE TEMP TABLE windows AS
+SELECT ('2015-01-01'::DATE + (y * INTERVAL 1 YEAR) + (d * INTERVAL 1 DAY))::TIMESTAMPTZ AS start,
+       y * 1000 + d AS id
+FROM range(10) a(y), (VALUES (0),(59),(80),(100),(120),(170),(260),(280),(300),(310),(330),(364)) b(d);
+
+statement ok
+CREATE TEMP TABLE instants AS
+SELECT start + (h * INTERVAL 1 HOUR) AS ts, id FROM windows, range(48) c(h);
+
+statement ok
+CREATE TEMP TABLE converted AS
+SELECT name, id, ts, timezone(name, ts) AS local FROM pg_timezone_names(), instants;
+
+query II
+SELECT count(*), count(DISTINCT name) FROM converted;
+----
+3674880	638
+
+# An instant survives a round trip through the wall clock time of a zone. A wall clock time that
+# occurs twice can only come back as one of the two, and the later one is the documented choice,
+# so those are the only ones that do not return the instant they started from.
+query III
+SELECT count(*) FILTER (WHERE timezone(name, local) <> ts),
+       count(*) FILTER (WHERE timezone(name, local) < ts),
+       max(epoch(timezone(name, local) - ts))
+FROM converted;
+----
+573	0	7200.0
+
+# The two hour shift is Antarctica/Troll, which is the only zone that puts its clocks forward
+# by more than an hour.
+query II
+SELECT name, max(epoch(timezone(name, local) - ts)) shift FROM converted
+WHERE timezone(name, local) <> ts GROUP BY name HAVING shift > 3600 ORDER BY 1;
+----
+Antarctica/Troll	7200.0
+
+# Between two consecutive hours the wall clock can stand still, jump forward over a gap or fall
+# back over a repeat, but it never moves by more than the largest shift in either direction.
+query IIII
+SELECT count(*), min(step), max(step), count(*) FILTER (WHERE step <> 3600)
+FROM (SELECT epoch(local - lag(local) OVER (PARTITION BY name, id ORDER BY ts)) AS step FROM converted)
+WHERE step IS NOT NULL;
+----
+3598320	-3600.0	7200.0	578
+
+# The offset of a zone is always less than a day, and always a whole number of seconds. The
+# largest one is Pacific/Kiritimati at fourteen hours.
+query II
+SELECT max(abs(epoch(local - ts::TIMESTAMP))),
+       count(*) FILTER (WHERE epoch(local - ts::TIMESTAMP) <> floor(epoch(local - ts::TIMESTAMP)))
+FROM converted;
+----
+50400.0	0

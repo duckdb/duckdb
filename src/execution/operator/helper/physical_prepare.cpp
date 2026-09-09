@@ -8,7 +8,7 @@ SourceResultType PhysicalPrepare::GetDataInternal(ExecutionContext &context, Dat
 	auto &client = context.client;
 
 	// store the prepared statement in the context
-	ClientData::Get(client).prepared_statements[name.ToStdString()] = prepared;
+	ClientData::Get(client).prepared_statements[Identifier(name.ToStdString())] = prepared;
 
 	return SourceResultType::FINISHED;
 }

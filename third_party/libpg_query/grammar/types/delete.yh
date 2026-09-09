@@ -1,3 +1,0 @@
-%type <range> relation_expr_opt_alias
-%type <node> where_or_current_clause
-%type <list> using_clause

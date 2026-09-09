@@ -32,7 +32,7 @@ statement ok
 SELECT * FROM read_csv(
     '{DATA_DIR}/csv/rejects/maximum_line/max_10.csv',
     columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
-    store_rejects = true, auto_detect=false, header = 1, max_line_size=10, buffer_size=${buffer_size});
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=10, buffer_size={buffer_size});
 
 query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;

@@ -1,6 +1,8 @@
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/compression/compression_segment_reader.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -175,20 +177,19 @@ const validity_t ValidityUncompressed::UPPER_MASKS[] = {0x0,
 // Analyze
 //===--------------------------------------------------------------------===//
 struct ValidityAnalyzeState : public AnalyzeState {
-	explicit ValidityAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), count(0) {
+	explicit ValidityAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager), count(0) {
 	}
 
 	idx_t count;
 };
 
 unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<ValidityAnalyzeState>(info);
+	return make_uniq<ValidityAnalyzeState>(col_data.GetBlockManager());
 }
 
-bool ValidityAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool ValidityAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<ValidityAnalyzeState>();
-	state.count += count;
+	state.count += input.size();
 	return true;
 }
 
@@ -201,27 +202,44 @@ idx_t ValidityFinalAnalyze(AnalyzeState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 struct ValidityScanState : public SegmentScanState {
+	explicit ValidityScanState(BufferHandle handle_p, ColumnSegment &segment)
+	    : handle(std::move(handle_p)),
+	      reader(CompressionSegmentReader::FromSegment(handle, segment, "validity segment")),
+	      block_id(segment.GetBlockHandle()->BlockId()) {
+	}
+
 	BufferHandle handle;
+	CompressionSegmentReader reader;
 	block_id_t block_id;
 };
 
+static idx_t ValidityEntryCount(idx_t count) {
+	return count / ValidityMask::BITS_PER_VALUE + (count % ValidityMask::BITS_PER_VALUE != 0);
+}
+
+static unsafe_array_ptr<const validity_t> ValidityScanData(const CompressionSegmentReader &reader, idx_t start,
+                                                           idx_t scan_count) {
+	D_ASSERT(scan_count > 0);
+	auto entry_start = start / ValidityMask::BITS_PER_VALUE;
+	auto entry_end = (start + scan_count - 1) / ValidityMask::BITS_PER_VALUE;
+	return reader.GetArraySlice<validity_t>(0, entry_start, entry_end - entry_start + 1);
+}
+
 unique_ptr<SegmentScanState> ValidityInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto result = make_uniq<ValidityScanState>();
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	result->handle = buffer_manager.Pin(segment.block);
-	result->block_id = segment.block->BlockId();
-	return std::move(result);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
+	return make_uniq<ValidityScanState>(std::move(handle), segment);
 }
 
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
 
-void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx_t input_start, Vector &result,
-                                         idx_t result_offset, idx_t scan_count) {
+void ValidityUncompressed::UnalignedScan(unsafe_array_ptr<const validity_t> input, idx_t input_size, idx_t input_start,
+                                         ValidityMask &result_mask, idx_t result_offset, idx_t scan_count) {
 	D_ASSERT(input_start < input_size);
-	auto &result_mask = FlatVector::Validity(result);
-	auto input_data = reinterpret_cast<validity_t *>(input);
+	D_ASSERT(scan_count <= input_size - input_start);
+	D_ASSERT(ValidityEntryCount(input_size) <= input.size());
 
 #ifdef DEBUG
 	// save boundary entries to verify we don't corrupt surrounding bits later.
@@ -249,10 +267,11 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 #if STANDARD_VECTOR_SIZE < 128
 	// fallback for tiny vector sizes
 	// the bitwise ops we use below don't work if the vector size is too small
-	ValidityMask source_mask128(input_data, input_size);
 	for (idx_t i = 0; i < scan_count; i++) {
-		if (!source_mask128.RowIsValid(input_start + i)) {
-			if (result_mask.AllValid()) {
+		idx_t source_idx = input_start + i;
+		if (!ValidityMask::RowIsValid(input[source_idx / ValidityMask::BITS_PER_VALUE],
+		                              source_idx % ValidityMask::BITS_PER_VALUE)) {
+			if (result_mask.CannotHaveNull()) {
 				result_mask.Initialize();
 			}
 			result_mask.SetInvalid(result_offset + i);
@@ -306,7 +325,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	// now start the bit games
 	idx_t pos = 0;
 	while (pos < scan_count) {
-		validity_t input_mask = input_data[input_entry];
+		validity_t input_mask = input[input_entry];
 		idx_t bits_left = scan_count - pos;
 
 		// these are bits left within the current entries (possibly extra than what we need).
@@ -403,10 +422,11 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 
 #ifdef DEBUG
 	// verify in-range bits.
-	ValidityMask source_mask(input_data, input_size);
 	for (idx_t i = 0; i < scan_count; i++) {
 		bool original_valid = debug_original_result.RowIsValid(i);
-		bool input_valid = source_mask.RowIsValid(input_start + i);
+		idx_t source_idx = input_start + i;
+		bool input_valid = ValidityMask::RowIsValid(input[source_idx / ValidityMask::BITS_PER_VALUE],
+		                                            source_idx % ValidityMask::BITS_PER_VALUE);
 		bool result_valid = result_mask.RowIsValid(result_offset + i);
 		D_ASSERT(result_valid == (original_valid && input_valid));
 	}
@@ -431,19 +451,20 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 #endif
 }
 
-void ValidityUncompressed::AlignedScan(data_ptr_t input, idx_t input_start, Vector &result, idx_t scan_count) {
+void ValidityUncompressed::AlignedScan(unsafe_array_ptr<const validity_t> input, idx_t input_start,
+                                       ValidityMask &result_mask, idx_t scan_count) {
 	D_ASSERT(input_start % ValidityMask::BITS_PER_VALUE == 0);
 
 	// aligned scan: no need to do anything fancy
 	// note: this is only an optimization which avoids having to do messy bitshifting in the common case
 	// it is not required for correctness
-	auto &result_mask = FlatVector::Validity(result);
-	auto input_data = reinterpret_cast<validity_t *>(input);
 	auto result_data = result_mask.GetData();
 	idx_t start_offset = input_start / ValidityMask::BITS_PER_VALUE;
-	idx_t entry_scan_count = (scan_count + ValidityMask::BITS_PER_VALUE - 1) / ValidityMask::BITS_PER_VALUE;
+	idx_t entry_scan_count = ValidityEntryCount(scan_count);
+	D_ASSERT(start_offset <= input.size());
+	D_ASSERT(entry_scan_count <= input.size() - start_offset);
 	for (idx_t i = 0; i < entry_scan_count; i++) {
-		auto input_entry = input_data[start_offset + i];
+		auto input_entry = input[start_offset + i];
 		if (!result_data && input_entry == ValidityMask::ValidityBuffer::MAX_ENTRY) {
 			continue;
 		}
@@ -458,25 +479,37 @@ void ValidityUncompressed::AlignedScan(data_ptr_t input, idx_t input_start, Vect
 void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                          idx_t result_offset) {
 	auto start = state.GetPositionInSegment();
+	if (scan_count == 0) {
+		return;
+	}
+	D_ASSERT(start <= segment.count && scan_count <= segment.count - start);
 
 	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
-	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	D_ASSERT(scan_state.block_id == segment.block->BlockId());
-	ValidityUncompressed::UnalignedScan(buffer_ptr, segment.count, start, result, result_offset, scan_count);
+	auto input_data = ValidityScanData(scan_state.reader, start, scan_count);
+	D_ASSERT(scan_state.block_id == segment.GetBlockHandle()->BlockId());
+	auto &result_mask = FlatVector::ValidityMutable(result);
+	auto input_start = start % ValidityMask::BITS_PER_VALUE;
+	ValidityUncompressed::UnalignedScan(input_data, input_start + scan_count, input_start, result_mask, result_offset,
+	                                    scan_count);
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	result.Flatten(scan_count);
-
 	auto start = state.GetPositionInSegment();
+	if (scan_count == 0) {
+		return;
+	}
+	D_ASSERT(start <= segment.count && scan_count <= segment.count - start);
+
+	result.Flatten();
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
 		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
-		auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
-		D_ASSERT(scan_state.block_id == segment.block->BlockId());
-		ValidityUncompressed::AlignedScan(buffer_ptr, start, result, scan_count);
+		auto input_data = ValidityScanData(scan_state.reader, start, scan_count);
+		D_ASSERT(scan_state.block_id == segment.GetBlockHandle()->BlockId());
+		auto &result_mask = FlatVector::ValidityMutable(result);
+		ValidityUncompressed::AlignedScan(input_data, 0, result_mask, scan_count);
 	} else {
 		// unaligned scan: fall back to scan_partial which does bitshift tricks
 		ValidityScanPartial(segment, state, scan_count, result, 0);
@@ -486,20 +519,26 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 //===--------------------------------------------------------------------===//
 // Select
 //===--------------------------------------------------------------------===//
-void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vector &result, const SelectionVector &sel,
-                    idx_t sel_count) {
-	result.Flatten(sel_count);
+void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+                    const SelectionVector &sel, idx_t sel_count) {
+	auto start = state.GetPositionInSegment();
+	if (sel_count == 0) {
+		return;
+	}
+	D_ASSERT(start <= segment.count && vector_count <= segment.count - start);
+	D_ASSERT(sel_count <= vector_count);
+
+	result.Flatten();
 
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
-	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	auto &result_mask = FlatVector::Validity(result);
-	auto input_data = reinterpret_cast<validity_t *>(buffer_ptr);
-
-	auto start = state.GetPositionInSegment();
-	ValidityMask source_mask(input_data, segment.count);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	for (idx_t i = 0; i < sel_count; i++) {
-		auto source_idx = start + sel.get_index(i);
-		if (!source_mask.RowIsValidUnsafe(source_idx)) {
+		auto selected_index = sel.get_index(i);
+		D_ASSERT(selected_index < vector_count);
+		auto source_idx = start + selected_index;
+		auto entry_offset = source_idx / ValidityMask::BITS_PER_VALUE * sizeof(validity_t);
+		auto entry = scan_state.reader.Get<validity_t>(entry_offset);
+		if (!ValidityMask::RowIsValid(entry, source_idx % ValidityMask::BITS_PER_VALUE)) {
 			result_mask.SetInvalid(i);
 		}
 	}
@@ -510,12 +549,14 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vecto
 //===--------------------------------------------------------------------===//
 void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	D_ASSERT(row_id >= 0 && row_id < row_t(segment.count));
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
-	auto dataptr = handle.Ptr() + segment.GetBlockOffset();
-	ValidityMask mask(reinterpret_cast<validity_t *>(dataptr), segment.count);
-	auto &result_mask = FlatVector::Validity(result);
-	if (!mask.RowIsValidUnsafe(NumericCast<idx_t>(row_id))) {
+	auto row_index = NumericCast<idx_t>(row_id);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
+	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "validity segment");
+	auto entry_offset = row_index / ValidityMask::BITS_PER_VALUE * sizeof(validity_t);
+	auto entry = reader.Get<validity_t>(entry_offset);
+	auto &result_mask = FlatVector::ValidityMutable(result);
+	if (!ValidityMask::RowIsValid(entry, row_index % ValidityMask::BITS_PER_VALUE)) {
 		result_mask.SetInvalid(result_idx);
 	}
 }
@@ -524,36 +565,34 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 // Append
 //===--------------------------------------------------------------------===//
 static unique_ptr<CompressionAppendState> ValidityInitAppend(ColumnSegment &segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 
 unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id,
                                                        optional_ptr<ColumnSegmentState> segment_state) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	if (block_id == INVALID_BLOCK) {
-		auto handle = buffer_manager.Pin(segment.block);
-		memset(handle.Ptr(), 0xFF, segment.SegmentSize());
+		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+		auto buffer_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
+		memset(buffer_ptr, 0xFF, segment.SegmentSize());
 	}
 	return nullptr;
 }
 
-idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
+idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, BaseStatistics &validity_stats,
                      UnifiedVectorFormat &data, idx_t offset, idx_t vcount) {
-	D_ASSERT(segment.GetBlockOffset() == 0);
-	auto &validity_stats = stats.statistics;
-
 	auto max_tuples = segment.SegmentSize() / ValidityMask::STANDARD_MASK_SIZE * STANDARD_VECTOR_SIZE;
 	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - segment.count);
-	if (data.validity.AllValid()) {
+	if (data.validity.CannotHaveNull()) {
 		// no null values: skip append
 		segment.count += append_count;
 		validity_stats.SetHasNoNullFast();
 		return append_count;
 	}
 
-	ValidityMask mask(reinterpret_cast<validity_t *>(append_state.handle.Ptr()), max_tuples);
+	ValidityMask mask(reinterpret_cast<validity_t *>(append_state.handle.GetDataMutable()), max_tuples);
 	for (idx_t i = 0; i < append_count; i++) {
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
@@ -567,21 +606,22 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 	return append_count;
 }
 
-idx_t ValidityFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
+idx_t ValidityFinalizeAppend(ColumnSegment &segment, BaseStatistics &stats) {
 	return ((segment.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE) * ValidityMask::STANDARD_MASK_SIZE;
 }
 
 void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 	idx_t start_bit = new_count;
 
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+	auto buffer_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
 	idx_t revert_start;
 	if (start_bit % 8 != 0) {
 		// handle sub-bit stuff (yay)
 		idx_t byte_pos = start_bit / 8;
 		idx_t bit_end = (byte_pos + 1) * 8;
-		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr()), segment.count);
+		ValidityMask mask(reinterpret_cast<validity_t *>(buffer_ptr), segment.count);
 		for (idx_t i = start_bit; i < bit_end; i++) {
 			mask.SetValid(i);
 		}
@@ -590,7 +630,7 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 		revert_start = start_bit / 8;
 	}
 	// for the rest, we just memset
-	memset(handle.Ptr() + revert_start, 0xFF, segment.SegmentSize() - revert_start);
+	memset(buffer_ptr + revert_start, 0xFF, segment.SegmentSize() - revert_start);
 }
 
 //===--------------------------------------------------------------------===//

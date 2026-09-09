@@ -3,9 +3,6 @@
 # group: [parser]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create or replace table my_table as
 select 'test1' as column1, 1 as column2, 'quack' as column3
 union all

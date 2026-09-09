@@ -2,11 +2,6 @@
 # description: Test order nested list
 # group: [order]
 
-require notmusl
-
-statement ok
-PRAGMA enable_verification
-
 statement ok
 CREATE TABLE test(col1 INT, col2 INT2[][][][][][]);
 

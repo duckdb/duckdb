@@ -2,9 +2,6 @@
 # description: Test the list_value function
 # group: [list]
 
-statement ok
-pragma enable_verification
-
 # nested lists
 query I
 SELECT LIST_VALUE([1, 7], [2], [3]);

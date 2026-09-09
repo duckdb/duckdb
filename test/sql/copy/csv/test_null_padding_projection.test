@@ -2,9 +2,6 @@
 # description: Test CSV with nullpading interoping with other options and projection pushdown
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # Test simple null_padding, this will fail because we have a row with more columns that defined
 statement error
 from read_csv('{DATA_DIR}/csv/nullpadding.csv',null_padding=true, columns={

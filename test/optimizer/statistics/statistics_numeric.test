@@ -3,6 +3,9 @@
 # group: [statistics]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok
@@ -18,10 +21,10 @@ SELECT ABS(i) FROM integers ORDER BY i
 1
 10
 
-query I
-SELECT STATS(ABS(i)) FROM integers LIMIT 1
+query II
+SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
 ----
-<REGEX>:.*1.*10.*
+1	10
 
 # verify that the call to abs gets removed by the optimizer out
 query II
@@ -34,10 +37,10 @@ logical_opt	<!REGEX>:.*abs.*
 statement ok
 INSERT INTO integers VALUES (-5)
 
-query I
-SELECT STATS(ABS(i)) FROM integers LIMIT 1
+query II
+SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
 ----
-<REGEX>:.*0.*10.*
+0	10
 
 query I
 SELECT ABS(i) FROM integers ORDER BY i
@@ -56,10 +59,10 @@ logical_opt	<REGEX>:.*abs.*
 statement ok
 INSERT INTO integers VALUES (-15)
 
-query I
-SELECT STATS(ABS(i)) FROM integers LIMIT 1
+query II
+SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
 ----
-<REGEX>:.*0.*15.*
+0	15
 
 query I
 SELECT ABS(i) FROM integers ORDER BY i
@@ -72,10 +75,10 @@ SELECT ABS(i) FROM integers ORDER BY i
 statement ok
 INSERT INTO integers VALUES (0)
 
-query I
-SELECT STATS(ABS(i)) FROM integers LIMIT 1
+query II
+SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
 ----
-<REGEX>:.*0.*15.*
+0	15
 
 query I
 SELECT ABS(i) FROM integers ORDER BY i
@@ -96,7 +99,235 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 INSERT INTO integers VALUES (-1), (-10);
 
-query I
-SELECT STATS(ABS(i)) FROM integers LIMIT 1
+query II
+SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
 ----
-<REGEX>:.*1.*10.*
+1	10
+
+# negate: i in [-10, -1] -> -i in [1, 10]
+query II
+SELECT s.min, s.max FROM (SELECT STATS(-i) s FROM integers LIMIT 1)
+----
+1	10
+
+# impossible filter folds away
+query II
+EXPLAIN SELECT count(*) FROM integers WHERE -i < 0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# floor: non-decreasing, x in [1.5, 9.7] -> floor(x) in [1.0, 9.0]
+statement ok
+CREATE TABLE doubles(x DOUBLE);
+
+statement ok
+INSERT INTO doubles VALUES (1.5), (9.7);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(floor(x)) s FROM doubles LIMIT 1)
+----
+1.0	9.0
+
+# year(date) is non-decreasing: corner eval succeeds when min/max are finite dates
+statement ok
+CREATE TABLE finite_dates AS SELECT (DATE '2020-01-01' + INTERVAL (range) DAY)::DATE AS dt FROM range(2048);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(year(dt)) s FROM finite_dates LIMIT 1)
+----
+2020	2025
+
+# year(infinity) is NULL: corner eval returns NULL, propagator bails (no derived stats)
+statement ok
+CREATE TABLE inf_dates(dt DATE);
+
+statement ok
+INSERT INTO inf_dates VALUES (DATE '2021-01-01'), ('infinity'::DATE);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(year(dt)) s FROM inf_dates LIMIT 1)
+----
+NULL	NULL
+
+# i: [-10, -1] with a NULL; x: [0.0, 1.0] finite; x_nan: NaN present (stats max = NaN)
+statement ok
+CREATE TABLE mixed(i INTEGER, x DOUBLE, x_nan DOUBLE);
+
+statement ok
+INSERT INTO mixed VALUES (-10, 0.0, 0.0), (-1, 1.0, 'nan'::DOUBLE), (NULL, NULL, NULL);
+
+# nullable input: null flag propagates but bounds are still derived
+query II
+SELECT s.min, s.max FROM (SELECT STATS(-i) s FROM mixed LIMIT 1)
+----
+1	10
+
+# impossible filter still folds even though input column has nulls
+query II
+EXPLAIN SELECT count(*) FROM mixed WHERE -i < 0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# NaN in column: corner eval returns NaN, is_unusable fires, no bounds derived
+query II
+SELECT s.min, s.max FROM (SELECT STATS(exp(x_nan)) s FROM mixed LIMIT 1)
+----
+NULL	NULL
+
+# finite column: exp bounds propagate correctly
+query II
+SELECT s.min, s.max FROM (SELECT STATS(exp(x)) s FROM mixed LIMIT 1)
+----
+1.0	2.718281828459045
+
+# sqrt is strictly increasing: perfect squares round exactly, so bounds are exact
+statement ok
+CREATE TABLE squares(x DOUBLE);
+
+statement ok
+INSERT INTO squares VALUES (4.0), (16.0);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(sqrt(x)) s FROM squares LIMIT 1)
+----
+2.0	4.0
+
+# sqrt of a negative corner throws/NaN: propagator bails, no derived bounds
+statement ok
+CREATE TABLE maybe_negative(x DOUBLE);
+
+statement ok
+INSERT INTO maybe_negative VALUES (-5.0), (10.0);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(sqrt(x)) s FROM maybe_negative LIMIT 1)
+----
+NULL	NULL
+
+# ln of a negative corner throws/NaN: propagator bails
+query II
+SELECT s.min, s.max FROM (SELECT STATS(ln(x)) s FROM maybe_negative LIMIT 1)
+----
+NULL	NULL
+
+# monotone logs: derived output range prunes impossible filters
+statement ok
+CREATE TABLE positives(x DOUBLE);
+
+statement ok
+INSERT INTO positives VALUES (1.0), (100.0);
+
+# ln(x) for x in [1, 100] is in [0, ln(100)]: ln(x) < -1 is impossible
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE ln(x) < -1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# log10(x) for x in [1, 100] is in [0, 2]: log10(x) > 3 is impossible
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE log10(x) > 3;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# log2(x) for x in [1, 100] is in [0, log2(100)]: log2(x) > 7 is impossible
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE log2(x) > 7;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# degrees is strictly increasing: degrees(x) for x in [1, 100] < 50 is impossible (degrees(1) ~= 57.3)
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE degrees(x) < 50;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# radians is strictly increasing: radians(x) for x in [1, 100] > 2 is impossible (radians(100) ~= 1.75)
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE radians(x) > 2;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# statistics propagation for decimals backed by hugeints
+statement ok
+CREATE TABLE decimal_stats(a DECIMAL(18,2), b DECIMAL(18,2), c DECIMAL(19,2), d DECIMAL(2,0));
+
+statement ok
+INSERT INTO decimal_stats VALUES
+	(1000000000000000.00, 0.02, 10000000000000000.00, -2),
+	(2000000000000000.00, 0.03, 20000000000000000.00, 3);
+
+query III
+SELECT type, s.min, s.max
+FROM (SELECT typeof(a + b) type, stats(a + b) s FROM decimal_stats LIMIT 1)
+----
+DECIMAL(19,2)	1000000000000000.02	2000000000000000.03
+
+query III
+SELECT type, s.min, s.max
+FROM (SELECT typeof(a - b) type, stats(a - b) s FROM decimal_stats LIMIT 1)
+----
+DECIMAL(19,2)	999999999999999.97	1999999999999999.98
+
+query III
+SELECT type, s.min, s.max
+FROM (SELECT typeof(c * d) type, stats(c * d) s FROM decimal_stats LIMIT 1)
+----
+DECIMAL(21,2)	-40000000000000000.00	60000000000000000.00
+
+# statistics propagation for hugeints
+statement ok
+CREATE TABLE hugeint_stats(a HUGEINT, b HUGEINT);
+
+statement ok
+INSERT INTO hugeint_stats VALUES (10000000000000000000, -2), (20000000000000000000, 3);
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(a + b) s FROM hugeint_stats LIMIT 1)
+----
+9999999999999999998	20000000000000000003
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(a - b) s FROM hugeint_stats LIMIT 1)
+----
+9999999999999999997	20000000000000000002
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(a * b) s FROM hugeint_stats LIMIT 1)
+----
+-40000000000000000000	60000000000000000000
+
+# potentially overflowing hugeint statistics keep the checked operator
+statement ok
+CREATE TABLE hugeint_stats_overflow(
+	add_left HUGEINT,
+	add_right HUGEINT,
+	subtract_left HUGEINT,
+	subtract_right HUGEINT,
+	multiply_left HUGEINT,
+	multiply_right HUGEINT
+);
+
+statement ok
+INSERT INTO hugeint_stats_overflow VALUES (
+	170141183460469231731687303715884105727,
+	1,
+	-170141183460469231731687303715884105728,
+	1,
+	170141183460469231731687303715884105727,
+	2
+);
+
+statement error
+SELECT add_left + add_right FROM hugeint_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in addition of INT128.*
+
+statement error
+SELECT subtract_left - subtract_right FROM hugeint_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in subtraction of INT128.*
+
+statement error
+SELECT multiply_left * multiply_right FROM hugeint_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in multiplication of INT128.*

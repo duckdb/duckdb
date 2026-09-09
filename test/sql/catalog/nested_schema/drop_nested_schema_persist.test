@@ -1,0 +1,83 @@
+# name: test/sql/catalog/nested_schema/drop_nested_schema_persist.test
+# description: Persisting nested-schema drops (checkpoint + WAL) on storage v2.0.0
+# group: [nested_schema]
+
+load {TEST_DIR}/drop_nested_persist.db readwrite v2.0.0
+
+statement ok
+CREATE SCHEMA parent;
+
+statement ok
+CREATE SCHEMA parent.child;
+
+statement ok
+CREATE SCHEMA parent.child.grandchild;
+
+statement ok
+CREATE SCHEMA parent.sibling;
+
+# drop a leaf schema, then checkpoint so the drop goes through storage serialization (not just the WAL)
+statement ok
+DROP SCHEMA parent.child.grandchild;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas()
+WHERE schema_name IN ('parent','child','grandchild','sibling') ORDER BY schema_name;
+----
+child	parent
+parent	NULL
+sibling	parent
+
+# cascade-drop a nested subtree and do NOT checkpoint - exercise the WAL replay path
+statement ok
+CREATE SCHEMA parent.child.gc1;
+
+statement ok
+CREATE SCHEMA parent.child.gc2;
+
+statement ok
+DROP SCHEMA parent.child CASCADE;
+
+restart
+
+# parent.child and all of its descendants are gone after WAL replay; the sibling remains
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas()
+WHERE schema_name IN ('parent','child','grandchild','gc1','gc2','sibling') ORDER BY schema_name;
+----
+parent	NULL
+sibling	parent
+
+# RESTRICT still blocks dropping a schema that has nested schemas after a restart
+statement ok
+CREATE SCHEMA parent.child
+
+statement ok
+CREATE SCHEMA parent.child.leaf
+
+restart
+
+statement error
+DROP SCHEMA parent.child;
+----
+<REGEX>:.*Cannot drop entry "child" because there are entries that depend on it.*
+
+# cascade dropping the whole top-level subtree, checkpoint, and verify after restart
+statement ok
+DROP SCHEMA parent CASCADE;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT count(*) FROM duckdb_schemas()
+WHERE schema_name IN ('parent','child','grandchild','gc1','gc2','sibling','leaf');
+----
+0

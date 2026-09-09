@@ -4,6 +4,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/helper/physical_limit.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
 
@@ -162,6 +163,21 @@ SourceResultType PhysicalLimitPercent::GetDataInternal(ExecutionContext &context
 	PhysicalLimit::HandleOffset(chunk, current_offset, 0, limit.GetIndex());
 
 	return SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+InsertionOrderPreservingMap<string> PhysicalLimitPercent::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	if (limit_val.Type() == LimitNodeType::CONSTANT_PERCENTAGE) {
+		result["Limit"] = to_string(limit_val.GetConstantPercentage()) + "%";
+	}
+	if (offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		auto offset = offset_val.GetConstantValue();
+		if (offset > 0) {
+			result["Offset"] = to_string(offset);
+		}
+	}
+	SetEstimatedCardinality(result, estimated_cardinality);
+	return result;
 }
 
 } // namespace duckdb

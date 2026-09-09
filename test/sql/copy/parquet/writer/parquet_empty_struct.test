@@ -1,0 +1,23 @@
+# name: test/sql/copy/parquet/writer/parquet_empty_struct.test
+# description: Empty STRUCT columns cannot be written to Parquet
+# group: [writer]
+
+require parquet
+
+# empty struct at the top level
+statement error
+COPY (SELECT empty_struct FROM test_all_types()) TO '{TEST_DIR}/empty_struct.parquet' (FORMAT PARQUET);
+----
+Empty STRUCT columns are not supported in the Parquet format
+
+# empty struct nested inside another struct
+statement error
+COPY (SELECT {'a': empty_struct} AS s FROM test_all_types()) TO '{TEST_DIR}/empty_struct.parquet' (FORMAT PARQUET);
+----
+Empty STRUCT columns are not supported in the Parquet format
+
+# empty struct nested inside a list
+statement error
+COPY (SELECT [empty_struct] AS l FROM test_all_types()) TO '{TEST_DIR}/empty_struct.parquet' (FORMAT PARQUET);
+----
+Empty STRUCT columns are not supported in the Parquet format

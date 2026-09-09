@@ -1,4 +1,5 @@
 #include "sqllogic_command.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "result_helper.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -12,7 +13,7 @@
 #include "test_helpers.hpp"
 #include "test_config.hpp"
 #include "sqllogic_test_logger.hpp"
-#include "catch.hpp"
+#include "test_reporter.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -39,7 +40,7 @@ static Connection &GetConnection(SQLLogicTestRunner &runner, DuckDB &db,
 		if (!init_cmd.empty()) {
 			auto res = con->Query(runner.ReplaceKeywords(init_cmd));
 			if (res->HasError()) {
-				FAIL("Startup queries provided via on_new_connection failed: " + res->GetError());
+				TEST_FAIL("Startup queries provided via on_new_connection failed: " + res->GetError());
 			}
 		}
 		auto &res = *con;
@@ -47,7 +48,38 @@ static Connection &GetConnection(SQLLogicTestRunner &runner, DuckDB &db,
 		named_connection_map[con_name] = std::move(con);
 		return res;
 	}
+	if (!RefersToSameObject(*entry->second->context->db, *db.instance)) {
+		TEST_FAIL("Named connection has been started with different target databases");
+	}
 	return *entry->second;
+}
+static Connection &GetConnection(SQLLogicTestRunner &runner,
+                                 unordered_map<string, duckdb::unique_ptr<Connection>> &named_connection_map,
+                                 const string &con_name) {
+	if (StringUtil::Contains(con_name, ":")) {
+		auto splits = StringUtil::Split(con_name, ":");
+		if (splits.size() != 2) {
+			TEST_FAIL("Expected either connection name or database:connection");
+		}
+		auto &db_name = splits[0];
+		auto &con_name = splits[1];
+		auto db_map = runner.named_db.find(db_name);
+		if (db_map != runner.named_db.end()) {
+			// we already have a database - connect to it
+			return GetConnection(runner, *db_map->second, named_connection_map, con_name);
+		}
+		// no database - create it
+		if (runner.named_connection_map.find(con_name) != runner.named_connection_map.end()) {
+			TEST_FAIL("Database did not exist, but named connection already existed");
+		}
+		auto result = runner.CreateDatabase(":memory:", true);
+		auto &result_con = *result.con;
+		runner.named_db[db_name] = std::move(result.db);
+		runner.named_connection_map[con_name] = std::move(result.con);
+		return result_con;
+	} else {
+		return GetConnection(runner, *runner.db, named_connection_map, con_name);
+	}
 }
 
 Command::Command(SQLLogicTestRunner &runner) : runner(runner) {
@@ -70,7 +102,7 @@ Connection &Command::CommandConnection(ExecuteContext &context) const {
 					if (context.is_parallel) {
 						throw std::runtime_error(error_msg);
 					} else {
-						FAIL(error_msg);
+						TEST_FAIL(error_msg);
 					}
 				}
 			}
@@ -84,7 +116,7 @@ Connection &Command::CommandConnection(ExecuteContext &context) const {
 		if (context.is_parallel) {
 			throw std::runtime_error("Named connections not supported in parallel loop");
 		}
-		return GetConnection(runner, *runner.db, runner.named_connection_map, connection_name);
+		return GetConnection(runner, runner.named_connection_map, connection_name);
 	}
 }
 
@@ -154,7 +186,7 @@ void Command::RestartDatabase(ExecuteContext &context, reference<Connection> &co
 	}
 	bool query_fail = false;
 	try {
-		connection.get().context->ParseStatements(sql_query);
+		connection.get().ExtractStatements(sql_query);
 	} catch (...) {
 		query_fail = true;
 	}
@@ -184,11 +216,11 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 		parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
 		auto ccontext = connection.get().context;
 		auto result = ccontext->Query(context.sql_query, parameters);
-		if (result->type == QueryResultType::STREAM_RESULT) {
+		if (result->GetResultType() == QueryResultType::STREAM_RESULT) {
 			auto &stream_result = result->Cast<StreamQueryResult>();
 			return stream_result.Materialize();
 		} else {
-			D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+			D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 			return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 		}
 #else
@@ -280,18 +312,39 @@ void Command::Execute(ExecuteContext &context) const {
 		return;
 	}
 	if (!CheckLoopCondition(context, conditions)) {
-		// condition excludes this file
+		// a loop-variable onlyif/skipif excludes this statement — a per-execution skip, counted like
+		// a mode-skip so the tally accounts for it instead of dropping it
+		if (IsCountableStatement()) {
+			runner.CountSkipMode();
+		}
 		return;
 	}
 	if (context.running_loops.empty()) {
 		context.sql_query = base_sql_query;
+	} else {
+		// perform the string replacement
+		context.sql_query = runner.LoopReplacement(base_sql_query, context.running_loops);
+	}
+	// Per-statement outcome events (--emit-test-events): count + emit pass/fail for the countable
+	// command kinds (statement/query); infrastructure commands run untracked. A failing statement
+	// throws (Catch FAIL) — record the fail, then rethrow so the failure still propagates.
+	if (!IsCountableStatement()) {
 		ExecuteInternal(context);
 		return;
 	}
-	// perform the string replacement
-	context.sql_query = runner.LoopReplacement(base_sql_query, context.running_loops);
-	// execute the iterated statement
-	ExecuteInternal(context);
+	// In parallel (concurrentloop) execution a failing statement does NOT throw — the worker records
+	// the failure into the context (error_file) and unwinds normally, to be re-raised after join. So
+	// besides the throwing (serial) path, treat a newly-set error_file as a fail; otherwise a
+	// concurrent failure is miscounted as a pass.
+	const bool had_error = !context.error_file.empty();
+	try {
+		ExecuteInternal(context);
+	} catch (...) {
+		runner.CountStatement(false);
+		throw;
+	}
+	const bool newly_failed = !had_error && !context.error_file.empty();
+	runner.CountStatement(!newly_failed);
 }
 
 Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {
@@ -308,7 +361,7 @@ void ResetLabel::ExecuteInternal(ExecuteContext &context) const {
 		auto it = map.find(query_label);
 		//! should we allow this to be missing at all?
 		if (it == map.end()) {
-			FAIL_LINE(file_name, query_line, 0);
+			TEST_FAIL_LINE(file_name, query_line, "");
 		}
 		map.erase(it);
 	});
@@ -390,9 +443,195 @@ static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
 	}
 }
 
+bool SQLLogicTestRunner::IsVariableReplacement(const string &token_name) {
+	return StringUtil::StartsWith(token_name, "<variable:");
+}
+
+Value SQLLogicTestRunner::GetVariableReplacement(const string &token_name, string &variable_name) {
+	// variable - get variable name
+	auto var_size = string("<variable:").size();
+	if (token_name.back() != '>') {
+		throw InvalidInputException("Expected <variable:var_name>, got %s", token_name);
+	}
+	auto var_section = token_name.substr(var_size, token_name.size() - var_size - 1);
+	auto variable_components = StringUtil::Split(var_section, ":");
+	optional_ptr<Connection> var_con;
+	string connection_name;
+	if (variable_components.size() == 1) {
+		// no connection specified
+		connection_name = "main connection";
+		var_con = con.get();
+		variable_name = var_section;
+	} else if (variable_components.size() == 2) {
+		connection_name = variable_components[0];
+		variable_name = variable_components[1];
+		auto entry = named_connection_map.find(connection_name);
+		if (entry == named_connection_map.end()) {
+			throw InvalidInputException(
+			    "Attempting to find variable %s in connection %s - but could not find this connection", variable_name,
+			    connection_name);
+		}
+		var_con = entry->second.get();
+	} else {
+		throw InvalidInputException("Expected either <variable:variable_name> or <variable:connection:variable_name>");
+	}
+	Value value;
+	if (!ClientConfig::GetConfig(*var_con->context).GetUserVariable(variable_name, value)) {
+		throw InvalidInputException("Variable with name \"%s\" was not defined in connection %s", variable_name,
+		                            connection_name);
+	}
+	return value;
+}
+
+bool LoopCommand::ForEachTokenReplace(const string &parameter, vector<string> &result) const {
+	if (parameter.empty()) {
+		return true;
+	}
+	auto token_name = StringUtil::Lower(parameter);
+	StringUtil::Trim(token_name);
+	bool collection = false;
+	bool is_compression = token_name == "<compression>";
+	bool is_all = token_name == "<alltypes>";
+	bool is_numeric = is_all || token_name == "<numeric>";
+	bool is_integral = is_numeric || token_name == "<integral>";
+	bool is_signed = is_integral || token_name == "<signed>";
+	bool is_unsigned = is_integral || token_name == "<unsigned>";
+	bool is_all_types_column = token_name == "<all_types_columns>";
+	if (token_name[0] == '!') {
+		// !token tries to remove the token from the list of tokens
+		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
+		if (entry == result.end()) {
+			// not found - insert as-is
+			return false;
+		}
+		// found - erase the entry
+		result.erase(entry);
+		collection = true;
+	}
+	if (runner.IsVariableReplacement(token_name)) {
+		string variable_name;
+		auto value = runner.GetVariableReplacement(token_name, variable_name);
+		if (value.IsNull()) {
+			throw InvalidInputException("Variable with name \"%s\" is NULL - cannot iterate over this", variable_name);
+		}
+		auto list_val = value.CastAs(*runner.con->context, LogicalType::LIST(LogicalType::VARCHAR));
+		for (auto &val : ListValue::GetChildren(list_val)) {
+			result.push_back(StringValue::Get(val));
+		}
+		collection = true;
+	}
+	if (is_signed) {
+		result.push_back("tinyint");
+		result.push_back("smallint");
+		result.push_back("integer");
+		result.push_back("bigint");
+		result.push_back("hugeint");
+		collection = true;
+	}
+	if (is_unsigned) {
+		result.push_back("utinyint");
+		result.push_back("usmallint");
+		result.push_back("uinteger");
+		result.push_back("ubigint");
+		result.push_back("uhugeint");
+		collection = true;
+	}
+	if (is_numeric) {
+		result.push_back("float");
+		result.push_back("double");
+		collection = true;
+	}
+	if (is_all) {
+		result.push_back("bool");
+		result.push_back("interval");
+		result.push_back("varchar");
+		collection = true;
+	}
+	if (is_compression) {
+		result.push_back("none");
+		result.push_back("uncompressed");
+		result.push_back("rle");
+		result.push_back("bitpacking");
+		result.push_back("dictionary");
+		result.push_back("fsst");
+		result.push_back("dict_fsst");
+		result.push_back("alp");
+		result.push_back("alprd");
+		collection = true;
+	}
+	if (is_all_types_column) {
+		result.push_back("bool");
+		result.push_back("tinyint");
+		result.push_back("smallint");
+		result.push_back("int");
+		result.push_back("bigint");
+		result.push_back("hugeint");
+		result.push_back("uhugeint");
+		result.push_back("utinyint");
+		result.push_back("usmallint");
+		result.push_back("uint");
+		result.push_back("ubigint");
+		result.push_back("date");
+		result.push_back("time");
+		result.push_back("timestamp");
+		result.push_back("timestamp_s");
+		result.push_back("timestamp_ms");
+		result.push_back("timestamp_ns");
+		result.push_back("time_tz");
+		result.push_back("timestamp_tz");
+		result.push_back("float");
+		result.push_back("double");
+		result.push_back("dec_4_1");
+		result.push_back("dec_9_4");
+		result.push_back("dec_18_6");
+		result.push_back("dec38_10");
+		result.push_back("uuid");
+		result.push_back("interval");
+		result.push_back("varchar");
+		result.push_back("blob");
+		result.push_back("bit");
+		result.push_back("small_enum");
+		result.push_back("medium_enum");
+		result.push_back("large_enum");
+		result.push_back("int_array");
+		result.push_back("double_array");
+		result.push_back("date_array");
+		result.push_back("timestamp_array");
+		result.push_back("timestamptz_array");
+		result.push_back("varchar_array");
+		result.push_back("nested_int_array");
+		result.push_back("struct");
+		result.push_back("struct_of_arrays");
+		result.push_back("array_of_structs");
+		result.push_back("map");
+		result.push_back("union");
+		result.push_back("fixed_int_array");
+		result.push_back("fixed_varchar_array");
+		result.push_back("fixed_nested_int_array");
+		result.push_back("fixed_nested_varchar_array");
+		result.push_back("fixed_struct_array");
+		result.push_back("struct_of_fixed_array");
+		result.push_back("fixed_array_of_int_list");
+		result.push_back("list_of_fixed_int_array");
+		collection = true;
+	}
+	return collection;
+}
+
 void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 	LoopDefinition loop_def = definition;
 	loop_def.loop_idx = definition.loop_start;
+
+	if (!loop_def.tokens.empty()) {
+		loop_def.tokens.clear();
+		// expand any parameters in the loop definition
+		for (auto &token : definition.tokens) {
+			if (!ForEachTokenReplace(token, loop_def.tokens)) {
+				loop_def.tokens.push_back(token);
+			}
+		}
+		loop_def.loop_end = loop_def.tokens.size();
+	}
 	if (loop_def.is_parallel) {
 		for (auto &running_loop : context.running_loops) {
 			if (running_loop.is_parallel) {
@@ -449,16 +688,19 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 		}
 		for (auto &execute_context : contexts) {
 			if (!execute_context.success) {
+				// error_file/error_line hold the failing command's location on both the thrown and the
+				// error_file paths — same source as the serial fail sites, so the locator is consistent
+				runner.test_failure_locator =
+				    StringUtil::Format("%s:%d", execute_context.error_file, execute_context.error_line);
 				if (!execute_context.error_message.empty()) {
-					FAIL(execute_context.error_message);
+					TEST_FAIL(execute_context.error_message);
 				} else {
-					FAIL_LINE(execute_context.error_file, execute_context.error_line, 0);
+					TEST_FAIL_LINE(execute_context.error_file, execute_context.error_line, "");
 				}
 			}
 		}
 	} else {
-		bool finished = false;
-		while (!finished && !runner.finished_processing_file) {
+		while (!runner.finished_processing_file) {
 			// execute the current iteration of the loop
 			idx_t loop_index = context.running_loops.size();
 			context.running_loops.push_back(loop_def);
@@ -525,7 +767,8 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 			context.error_file = file_name;
 			context.error_line = query_line;
 		} else {
-			FAIL_LINE(file_name, query_line, 0);
+			runner.test_failure_locator = StringUtil::Format("%s:%d", file_name, query_line);
+			TEST_FAIL_LINE(file_name, query_line, "");
 		}
 	}
 }
@@ -639,7 +882,8 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			context.error_file = file_name;
 			context.error_line = query_line;
 		} else {
-			FAIL_LINE(file_name, query_line, 0);
+			runner.test_failure_locator = StringUtil::Format("%s:%d", file_name, query_line);
+			TEST_FAIL_LINE(file_name, query_line, "");
 		}
 	}
 }
@@ -693,15 +937,14 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 	if (runner.db) {
 		if (version.empty()) {
 			//! No version was provided, use the default of the main db.
-			runner.config->options.serialization_compatibility =
-			    runner.db->instance->config.options.serialization_compatibility;
+			runner.config->options.storage_compatibility = runner.db->instance->config.options.storage_compatibility;
 		} else {
 			try {
-				runner.config->options.serialization_compatibility = SerializationCompatibility::FromString(version);
+				runner.config->options.storage_compatibility = StorageCompatibility::FromString(version);
 			} catch (std::exception &ex) {
 				ErrorData err(ex);
 				SQLLogicTestLogger::LoadDatabaseFail(runner.file_name, dbpath, err.Message());
-				FAIL();
+				TEST_FAIL("");
 			}
 		}
 	}

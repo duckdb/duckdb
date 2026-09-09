@@ -23,6 +23,9 @@ hugeint_t GetPreviousPowerOfTen(hugeint_t input) {
 enum class NiceRounding { CEILING, ROUND };
 
 hugeint_t RoundToNumber(hugeint_t input, hugeint_t num, NiceRounding rounding) {
+	if (num == 0) {
+		return input;
+	}
 	if (rounding == NiceRounding::ROUND) {
 		return (input + (num / 2)) / num * num;
 	} else {
@@ -130,6 +133,10 @@ struct EquiWidthBinsInteger {
 
 		const hugeint_t span = max - min;
 		hugeint_t step = span / Hugeint::Convert(bin_count);
+		if (step == 0) {
+			// the bin count exceeds the number of boundaries in the range - clamp to the smallest possible step
+			step = 1;
+		}
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
 			hugeint_t new_step = MakeNumberNice(step, step, NiceRounding::ROUND);
@@ -186,11 +193,13 @@ struct EquiWidthBinsDouble {
 			// we allow for more bins when doing nice rounding since the bin count is approximate
 			bin_count *= 2;
 		}
-		if (step == 0) {
-			throw InternalException("step is 0!?");
-		}
 
 		const double round_multiplication = 10 / step_power_of_ten;
+		if (max - step >= max || (nice_rounding && !Value::IsFinite(round_multiplication))) {
+			// the span is too small to compute a step size - return only the max boundary
+			result.push_back(max);
+			return result;
+		}
 		for (double bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			// because floating point addition adds inaccuracies, we add rounding at every step
 			double real_boundary = bin_boundary;
@@ -405,12 +414,13 @@ struct EquiWidthBinsTimestamp {
 	}
 };
 
-unique_ptr<FunctionData> BindEquiWidthFunction(ClientContext &, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindEquiWidthFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// while internally the bins are computed over a unified type
 	// the equi_width_bins function returns the same type as the input MAX
 	LogicalType child_type;
-	switch (arguments[1]->return_type.id()) {
+	switch (arguments[1]->GetReturnType().id()) {
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::SQLNULL:
 		return nullptr;
@@ -419,7 +429,7 @@ unique_ptr<FunctionData> BindEquiWidthFunction(ClientContext &, ScalarFunction &
 		child_type = LogicalType::DOUBLE;
 		break;
 	default:
-		child_type = arguments[1]->return_type;
+		child_type = arguments[1]->GetReturnType();
 		break;
 	}
 	bound_function.SetReturnType(LogicalType::LIST(child_type));
@@ -429,15 +439,15 @@ unique_ptr<FunctionData> BindEquiWidthFunction(ClientContext &, ScalarFunction &
 template <class T, class OP>
 void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	static constexpr int64_t MAX_BIN_COUNT = 1000000;
-	auto &min_arg = args.data[0];
-	auto &max_arg = args.data[1];
-	auto &bin_count = args.data[2];
-	auto &nice_rounding = args.data[3];
+	const auto &min_arg = args.data[0];
+	const auto &max_arg = args.data[1];
+	const auto &bin_count = args.data[2];
+	const auto &nice_rounding = args.data[3];
 
 	Vector intermediate_result(LogicalType::LIST(OP::LOGICAL_TYPE));
 	GenericExecutor::ExecuteQuaternary<PrimitiveType<T>, PrimitiveType<T>, PrimitiveType<int64_t>, PrimitiveType<bool>,
 	                                   GenericListType<PrimitiveType<T>>>(
-	    min_arg, max_arg, bin_count, nice_rounding, intermediate_result, args.size(),
+	    min_arg, max_arg, bin_count, nice_rounding, intermediate_result,
 	    [&](PrimitiveType<T> min_p, PrimitiveType<T> max_p, PrimitiveType<int64_t> bins_p,
 	        PrimitiveType<bool> nice_rounding_p) {
 		    if (max_p.val < min_p.val) {
@@ -473,11 +483,11 @@ void UnsupportedEquiWidth(DataChunk &args, ExpressionState &state, Vector &) {
 	throw BinderException(state.expr, "Unsupported type \"%s\" for equi_width_bins", args.data[0].GetType());
 }
 
-void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const ScalarFunction &) {
+void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const BoundScalarFunction &) {
 	return;
 }
 
-unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 	function.SetReturnType(deserializer.Get<const LogicalType &>());
 	return nullptr;
 }
@@ -501,11 +511,11 @@ ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	    ScalarFunction({LogicalType::ANY_PARAMS(LogicalType::ANY, 150), LogicalType::ANY_PARAMS(LogicalType::ANY, 150),
 	                    LogicalType::BIGINT, LogicalType::BOOLEAN},
 	                   LogicalType::LIST(LogicalType::ANY), UnsupportedEquiWidth, BindEquiWidthFunction));
-	for (auto &function : functions.functions) {
+	functions.ApplyToFunctions([](ScalarFunction &function) {
 		function.SetSerializeCallback(EquiWidthBinSerialize);
 		function.SetDeserializeCallback(EquiWidthBinDeserialize);
 		function.SetFallible();
-	}
+	});
 	return functions;
 }
 

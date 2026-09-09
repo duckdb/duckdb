@@ -5,7 +5,9 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
@@ -18,7 +20,7 @@ static bool IsCompareDistinct(ExpressionType type) {
 bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val) {
 	Value expr_value;
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		expr_value = expr.Cast<BoundConstantExpression>().value;
+		expr_value = expr.Cast<BoundConstantExpression>().GetValue();
 	} else if (expr.IsFoldable()) {
 		if (!ExpressionExecutor::TryEvaluateScalar(context, expr, expr_value)) {
 			return false;
@@ -157,19 +159,20 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 	}
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &right, ExpressionType comparison_type) {
+void StatisticsPropagator::UpdateFilterStatistics(const Expression &left, const Expression &right,
+                                                  ExpressionType comparison_type) {
 	// first check if either side is a bound column ref
 	// any column ref involved in a comparison will not be null after the comparison
 	bool compare_distinct = IsCompareDistinct(comparison_type);
 	if (!compare_distinct && left.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).binding);
+		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).Binding());
 	}
 	if (!compare_distinct && right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).binding);
+		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).Binding());
 	}
 	// check if this is a comparison between a constant and a column ref
-	optional_ptr<BoundConstantExpression> constant;
-	optional_ptr<BoundColumnRefExpression> columnref;
+	optional_ptr<const BoundConstantExpression> constant;
+	optional_ptr<const BoundColumnRefExpression> columnref;
 	if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
 	    right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		constant = &left.Cast<BoundConstantExpression>();
@@ -184,8 +187,8 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 		// comparison between two column refs
 		auto &left_column_ref = left.Cast<BoundColumnRefExpression>();
 		auto &right_column_ref = right.Cast<BoundColumnRefExpression>();
-		auto lentry = statistics_map.find(left_column_ref.binding);
-		auto rentry = statistics_map.find(right_column_ref.binding);
+		auto lentry = statistics_map.find(left_column_ref.Binding());
+		auto rentry = statistics_map.find(right_column_ref.Binding());
 		if (lentry == statistics_map.end() || rentry == statistics_map.end()) {
 			return;
 		}
@@ -196,53 +199,117 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 	}
 	if (constant && columnref) {
 		// comparison between columnref
-		auto entry = statistics_map.find(columnref->binding);
+		auto entry = statistics_map.find(columnref->Binding());
 		if (entry == statistics_map.end()) {
 			return;
 		}
-		UpdateFilterStatistics(*entry->second, comparison_type, constant->value);
+		UpdateFilterStatistics(*entry->second, comparison_type, constant->GetValue());
 	}
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
+void StatisticsPropagator::UpdateFilterStatistics(const Expression &condition) {
 	// in filters, we check for constant comparisons with bound columns
 	// if we find a comparison in the form of e.g. "i=3", we can update our statistics for that column
-	switch (condition.GetExpressionClass()) {
-	case ExpressionClass::BOUND_BETWEEN: {
-		auto &between = condition.Cast<BoundBetweenExpression>();
-		UpdateFilterStatistics(*between.input, *between.lower, between.LowerComparisonType());
-		UpdateFilterStatistics(*between.input, *between.upper, between.UpperComparisonType());
-		break;
+	if (condition.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+		auto &between = condition.Cast<BoundFunctionExpression>();
+		auto &input = BoundBetweenExpression::Input(between);
+		auto &lower_bound = BoundBetweenExpression::LowerBound(between);
+		auto &upper_bound = BoundBetweenExpression::UpperBound(between);
+		auto lower_comparison = BoundBetweenExpression::LowerComparisonType(between);
+		auto upper_comparison = BoundBetweenExpression::UpperComparisonType(between);
+		UpdateFilterStatistics(input, lower_bound, lower_comparison);
+		UpdateFilterStatistics(input, upper_bound, upper_comparison);
 	}
-	case ExpressionClass::BOUND_COMPARISON: {
-		auto &comparison = condition.Cast<BoundComparisonExpression>();
-		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.GetExpressionType());
-		break;
-	}
-	default:
-		break;
+	if (BoundComparisonExpression::IsComparison(condition)) {
+		auto &comparison = condition.Cast<BoundFunctionExpression>();
+		auto &left = BoundComparisonExpression::Left(comparison);
+		auto &right = BoundComparisonExpression::Right(comparison);
+		UpdateFilterStatistics(left, right, comparison.GetExpressionType());
 	}
 }
 
-FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> &condition) {
-	PropagateExpression(condition);
-
-	if (ExpressionIsConstant(*condition, Value::BOOLEAN(true))) {
+FilterPropagateResult StatisticsPropagator::ClassifyFilter(Expression &condition) {
+	if (ExpressionIsConstant(condition, Value::BOOLEAN(true))) {
 		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 
-	if (ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(true))) {
+	if (ExpressionIsConstantOrNull(condition, Value::BOOLEAN(true))) {
 		return FilterPropagateResult::FILTER_TRUE_OR_NULL;
 	}
 
-	if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
-	    ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
+	if (ExpressionIsConstant(condition, Value::BOOLEAN(false))) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	} else if (ExpressionIsConstantOrNull(condition, Value::BOOLEAN(false))) {
 		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
 
-	// cannot prune this filter: propagate statistics from the filter
-	UpdateFilterStatistics(*condition);
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+static unordered_set<TableIndex> GetFilterBindings(const Expression &condition) {
+	unordered_set<TableIndex> bindings;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    condition, [&](const BoundColumnRefExpression &column_ref) {
+		    if (column_ref.Depth() == 0) {
+			    bindings.insert(column_ref.Binding().table_index);
+		    }
+	    });
+	return bindings;
+}
+
+bool StatisticsPropagator::SimplifyFilter(unique_ptr<Expression> &condition) {
+	if (condition->GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
+		return false;
+	}
+	auto &conjunction = condition->Cast<BoundConjunctionExpression>();
+	auto &children = conjunction.GetChildrenMutable();
+	const auto is_and = conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
+	bool changed = false;
+
+	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+		auto &child = children[child_idx];
+		changed |= SimplifyFilter(child);
+
+		const auto is_true = ExpressionIsConstant(*child, Value::BOOLEAN(true));
+		const auto is_false = ExpressionIsConstant(*child, Value::BOOLEAN(false));
+		const auto is_false_or_null = ExpressionIsConstantOrNull(*child, Value::BOOLEAN(false));
+		if ((is_and && (is_false || is_false_or_null)) || (!is_and && is_true)) {
+			condition = make_uniq<BoundConstantExpression>(Value::BOOLEAN(!is_and));
+			return true;
+		}
+		if ((is_and && is_true) || (!is_and && (is_false || is_false_or_null))) {
+			children.erase_at(child_idx);
+			child_idx--;
+			changed = true;
+		}
+	}
+	if (children.empty()) {
+		condition = make_uniq<BoundConstantExpression>(Value::BOOLEAN(is_and));
+		return true;
+	}
+	if (children.size() == 1) {
+		condition = std::move(children[0]);
+		return true;
+	}
+	return changed;
+}
+
+FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> &condition) {
+	unordered_set<TableIndex> original_bindings;
+	if (mode == StatisticsPropagationMode::FILTER_SIMPLIFICATION) {
+		original_bindings = GetFilterBindings(*condition);
+	}
+	PropagateExpression(condition);
+	if (mode == StatisticsPropagationMode::FILTER_SIMPLIFICATION) {
+		SimplifyFilter(condition);
+		filter_bindings_changed |= original_bindings != GetFilterBindings(*condition);
+	}
+	auto prune_result = ClassifyFilter(*condition);
+	if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		// cannot prune this filter: propagate statistics from the filter
+		UpdateFilterStatistics(*condition);
+	}
+	return prune_result;
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilter &filter,
@@ -262,6 +329,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			filter.expressions.erase_at(i);
+			removed_expressions = true;
 			i--;
 			if (filter.expressions.empty()) {
 				// if there is a projection map, we should keep the filter
@@ -272,7 +340,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 				}
 				break;
 			}
-		} else if (prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		           prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(node_ptr);
 			return make_uniq<NodeStatistics>(0U, 0U);

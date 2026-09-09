@@ -24,7 +24,7 @@ public:
 	friend class ClientContext;
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
-	                                   vector<string> names, unique_ptr<ColumnDataCollection> collection,
+	                                   vector<Identifier> names, unique_ptr<ColumnDataCollection> collection,
 	                                   ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit MaterializedQueryResult(ErrorData error);
@@ -32,7 +32,7 @@ public:
 public:
 	//! Converts the QueryResult to a string
 	DUCKDB_API string ToString() override;
-	DUCKDB_API string ToBox(ClientContext &context, const BoxRendererConfig &config) override;
+	DUCKDB_API string ToBox(BoxRendererContext &context, const BoxRendererConfig &config) override;
 
 	//! Gets the (index) value of the (column index) column.
 	//! Note: this is very slow. Scanning over the underlying collection is much faster.

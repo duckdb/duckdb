@@ -3,9 +3,6 @@
 # group: [topn]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl AS SELECT {'i': i} l FROM range(1000) tbl(i) UNION ALL SELECT NULL l FROM range(3)
 
 loop i 0 2

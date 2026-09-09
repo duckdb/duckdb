@@ -1,0 +1,53 @@
+# name: test/sql/optimizer/plan/test_equivalent_filter_mirroring.test
+# description: Test that filters are mirrored across equivalent columns in joins
+# group: [plan]
+
+statement ok
+CREATE TABLE tmp AS SELECT * FROM range(1000);
+
+query II
+EXPLAIN
+SELECT *
+FROM tmp AS t1
+NATURAL JOIN tmp AS t2
+WHERE t1.range * t1.range = 0
+----
+physical_plan	<REGEX>:.*range.*range.*
+
+statement ok
+CREATE TABLE t (f VARCHAR);
+
+statement ok
+INSERT INTO t (f) VALUES ('42'), ('43');
+
+# right(...) should be pushed to both scans
+query II
+explain SELECT *
+FROM t AS t1
+JOIN t AS t2 on t1.f = t2.f
+WHERE right(t1.f, 1) = '2'
+----
+physical_plan	<REGEX>:.*right.*right.*
+
+
+# same for a LEFT join. The filter must be pushed to the right side
+query II
+explain SELECT *
+FROM t AS t1
+LEFT JOIN t AS t2 on t1.f = t2.f
+WHERE right(t1.f, 1) = '2'
+----
+physical_plan	<REGEX>:.*right.*right.*
+
+
+# volatile expressions must NOT be propagated across the join
+statement ok
+CREATE TABLE tbl(x INTEGER);
+
+statement ok
+INSERT INTO tbl VALUES (1), (2), (3);
+
+query II
+EXPLAIN SELECT * FROM tbl n1 JOIN tbl n2 ON n1.x = n2.x WHERE n1.x + (random() * 0)::INTEGER = 1;
+----
+physical_plan	<!REGEX>:.*random.*random.*

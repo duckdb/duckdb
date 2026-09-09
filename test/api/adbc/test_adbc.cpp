@@ -793,7 +793,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	input_data.get_next(&input_data, &prepared_array);
 
 	// Create the schema
-	db.Query("CREATE SCHEMA " + KeywordHelper::WriteOptionallyQuoted(schema_name));
+	db.Query("CREATE SCHEMA " + SQLIdentifier(schema_name));
 
 	// Create ADBC statement that will create a table called "test"
 	AdbcStatement adbc_stmt;
@@ -827,8 +827,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	}
 
 	// Check we can query
-	auto schema_table =
-	    KeywordHelper::WriteOptionallyQuoted(schema_name) + "." + KeywordHelper::WriteOptionallyQuoted(table_name);
+	auto schema_table = SQLIdentifier(schema_name) + "." + SQLIdentifier(table_name);
 	auto res = db.Query("select * from " + schema_table);
 	for (size_t i = 0; i < column_names.size(); i++) {
 		REQUIRE((res->ColumnName(i) == column_names.at(i)));
@@ -2159,7 +2158,8 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	// Test Catalog Name
 	REQUIRE(!SUCCESS(
 	    AdbcConnectionGetTableSchema(&adbc_connection, "bla", "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
-	REQUIRE(StringUtil::Contains(adbc_error.message, "Catalog \"bla\" does not exist"));
+	// "bla" is not an attached database, so "bla.main" is interpreted as a (nested) schema path
+	REQUIRE(StringUtil::Contains(adbc_error.message, "schema \"bla.main\" does not exist"));
 	adbc_error.release(&adbc_error);
 
 	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, "system", "main", "duckdb_indexes", &arrow_schema,
@@ -3464,7 +3464,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	}
 	// 6. Test constraints
 	//
-	// Available constraints: https://duckdb.org/docs/stable/sql/constraints.html
+	// Available constraints: https://duckdb.org/docs/current/sql/constraints.html
 	{
 		ADBCTestDatabase db("test_constraints");
 		// Create table 'foreign_table'
@@ -3663,7 +3663,7 @@ TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
 		                                         "nonexistent_table", nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		auto res = db.Query(R"(
-			SELECT list_transform(catalog_db_schemas, s -> s.db_schema_tables) AS tables
+			SELECT list_transform(catalog_db_schemas, lambda s: s.db_schema_tables) AS tables
 			FROM result WHERE catalog_name = 'test_empty_list'
 		)");
 		REQUIRE(res->RowCount() == 1);
@@ -4037,6 +4037,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 	}
 
 	// Test file://localhost/<abs path> is accepted
+#ifndef _WIN32
 	{
 		auto abs_path = TestCreatePath("test_uri_localhost.db");
 		if (!abs_path.empty() && abs_path[0] != '/') {
@@ -4056,6 +4057,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 		REQUIRE(file_exists(abs_path.c_str()));
 		std::remove(abs_path.c_str());
 	}
+#endif
 
 	// Test file://<non-localhost>/<abs path> is rejected
 	{

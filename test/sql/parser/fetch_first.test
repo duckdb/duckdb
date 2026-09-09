@@ -1,0 +1,48 @@
+# name: test/sql/parser/fetch_first.test
+# description: SQL-standard FETCH FIRST n ROWS ONLY clause is not recognised by the PEG parser
+# group: [parser]
+
+statement ok
+CREATE TABLE t(a INT);
+
+statement ok
+INSERT INTO t VALUES (1), (2), (3);
+
+query I
+SELECT * FROM t ORDER BY a FETCH FIRST 2 ROWS ONLY
+----
+1
+2
+
+query I
+SELECT * FROM t ORDER BY a FETCH NEXT 1 ROW ONLY
+----
+1
+
+query I
+SELECT * FROM t ORDER BY a FETCH FIRST 1 ROW ONLY
+----
+1
+
+query I
+SELECT * FROM t ORDER BY a FETCH NEXT 2 ROWS ONLY
+----
+1
+2
+
+query I
+SELECT * FROM t ORDER BY a OFFSET 1 ROW FETCH FIRST 1 ROW ONLY
+----
+2
+
+query I
+SELECT * FROM t ORDER BY a OFFSET 1 ROWS FETCH NEXT 2 ROWS ONLY
+----
+2
+3
+
+query I
+SELECT * FROM t ORDER BY a FETCH FIRST (1 + 1) ROWS ONLY
+----
+1
+2

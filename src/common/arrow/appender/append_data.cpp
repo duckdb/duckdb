@@ -6,7 +6,7 @@ void ArrowAppendData::AppendValidity(UnifiedVectorFormat &format, idx_t from, id
 	// resize the buffer, filling the validity buffer with all valid values
 	idx_t size = to - from;
 	ResizeValidity(GetValidityBuffer(), row_count + size);
-	if (format.validity.AllValid()) {
+	if (format.validity.CannotHaveNull()) {
 		// if all values are valid we don't need to do anything else
 		return;
 	}
@@ -26,7 +26,7 @@ void ArrowAppendData::AppendValidity(UnifiedVectorFormat &format, idx_t from, id
 	}
 }
 
-void ArrowAppendData::AppendChild(Vector &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowAppendData::AppendChild(const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 	if (extension_data && extension_data->duckdb_to_arrow) {
 		// Convert the DuckDB-typed input into the extension's internal Arrow type before
 		// handing it to the (internal-typed) child appender. Size the internal vector to the

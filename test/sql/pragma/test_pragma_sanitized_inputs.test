@@ -2,9 +2,6 @@
 # description: Test that pragma functions are properly sanitized
 # group: [pragma]
 
-statement ok
-PRAGMA enable_verification
-
 # Create a test table for pragma_table_info and pragma_storage_info
 statement ok
 CREATE TABLE test_table(i INTEGER, j VARCHAR)
@@ -19,7 +16,7 @@ foreach pragma_func table_info storage_info "show"
 
 # Ensure we correctly sanitize the input
 statement error
-PRAGMA ${pragma_func}('test_table''); DROP TABLE test_table; --')
+PRAGMA {pragma_func}('test_table''); DROP TABLE test_table; --')
 ----
 Catalog Error
 

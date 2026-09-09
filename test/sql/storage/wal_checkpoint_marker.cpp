@@ -130,7 +130,7 @@ TEST_CASE("Reject a checkpoint marker that is not at the end of the WAL", "[stor
 		DuckDB db(database_path, config.get());
 	} catch (std::exception &ex) {
 		threw = true;
-		REQUIRE(ErrorData(ex).Type() == ExceptionType::IO);
+		REQUIRE(ErrorData(ex).Type() == ExceptionType::DATA_CORRUPTION);
 		REQUIRE(StringUtil::Contains(ex.what(), "WAL checkpoint marker must be at the end of the WAL"));
 	}
 	REQUIRE(threw);
@@ -179,7 +179,7 @@ TEST_CASE("Recover a missing or torn WAL flush following a checkpoint marker", "
 			REQUIRE(CHECK_COLUMN(result, 0, {42}));
 		}
 
-		REQUIRE(fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ)->GetFileSize() < marker_end);
+		REQUIRE(fs.GetFileSize(*fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ)) < marker_end);
 		REQUIRE_FALSE(fs.FileExists(database_path + ".wal.recovery"));
 
 		DeleteDatabase(database_path);
@@ -227,7 +227,7 @@ TEST_CASE("Reject a mismatched WAL generation before truncating its checkpoint m
 	auto config = GetTestConfig();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->options.checkpoint_on_shutdown = false;
-	config->options.serialization_compatibility = SerializationCompatibility::FromString("v1.4.0");
+	config->options.storage_compatibility = StorageCompatibility::FromString("v1.4.0");
 
 	auto database_path = TestCreatePath("mismatched_checkpoint_marker");
 	auto wal_path = database_path + ".wal";
@@ -303,7 +303,7 @@ TEST_CASE("Reject multiple checkpoint markers before changing WAL files", "[stor
 		DuckDB db(database_path, config.get());
 	} catch (std::exception &ex) {
 		threw = true;
-		REQUIRE(ErrorData(ex).Type() == ExceptionType::IO);
+		REQUIRE(ErrorData(ex).Type() == ExceptionType::DATA_CORRUPTION);
 		REQUIRE(StringUtil::Contains(ex.what(), "WAL cannot contain more than one checkpoint marker"));
 	}
 	REQUIRE(threw);

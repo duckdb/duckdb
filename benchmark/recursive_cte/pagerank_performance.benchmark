@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/pagerank_performance.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=pagerank
+BENCHMARK_NAME=Recursive CTE PageRank performance
+DESCRIPTION=Run the medium PageRank workload

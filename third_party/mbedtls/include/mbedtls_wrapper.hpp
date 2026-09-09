@@ -25,6 +25,7 @@ class MbedTlsWrapper {
 public:
 	static void ComputeSha256Hash(const char *in, size_t in_len, char *out);
 	static std::string ComputeSha256Hash(const std::string &file_content);
+	static bool IsValidRSA2048PublicKey(const std::string &pubkey);
 	static bool IsValidSha256Signature(const std::string &pubkey, const std::string &signature,
 	                                   const std::string &sha256_hash);
 	static void Hmac256(const char *key, size_t key_len, const char *message, size_t message_len, char *out);
@@ -116,6 +117,16 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 
 			return mbedtls_state;
 		}
+
+		DUCKDB_API void Hash(duckdb::CryptoHashFunction function, duckdb::const_data_ptr_t input,
+		                     duckdb::idx_t input_len, duckdb::data_ptr_t output) const override;
+		DUCKDB_API duckdb::unique_ptr<duckdb::CryptoHashState>
+		CreateHashState(duckdb::CryptoHashFunction function) const override;
+		DUCKDB_API void Hmac(duckdb::CryptoHashFunction function, duckdb::const_data_ptr_t key, duckdb::idx_t key_len,
+		                     duckdb::const_data_ptr_t input, duckdb::idx_t input_len,
+		                     duckdb::data_ptr_t output) const override;
+		DUCKDB_API bool SupportsHash(duckdb::CryptoHashFunction function) const override;
+		DUCKDB_API bool SupportsHmac(duckdb::CryptoHashFunction function) const override;
 
 		~AESStateMBEDTLSFactory() override {} //
 

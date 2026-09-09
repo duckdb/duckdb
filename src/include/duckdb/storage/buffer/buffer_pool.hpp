@@ -16,6 +16,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/temporary_file_information.hpp"
 
 namespace duckdb {
 
@@ -31,8 +32,7 @@ struct BufferEvictionNode {
 	weak_ptr<BlockMemory> memory_p;
 	idx_t handle_sequence_number;
 
-	bool CanUnload(BlockMemory &memory);
-	shared_ptr<BlockMemory> TryGetBlockMemory();
+	bool IsDeadNode(optional_idx debug_sleep_micros = optional_idx());
 };
 
 //! The BufferPool is in charge of handling memory management for one or more databases. It defines memory limits
@@ -63,9 +63,11 @@ public:
 
 	idx_t GetMaxMemory() const;
 
-	virtual idx_t GetQueryMaxMemory() const;
+	virtual idx_t GetOperatorMemoryLimit() const;
 
 	TemporaryMemoryManager &GetTemporaryMemoryManager();
+
+	vector<EvictionQueueInformation> GetEvictionQueueInfo() const;
 
 	//! Take per-database ObjectCache under buffer pool's memory management.
 	//! Notice, object cache should be registered for at most once, otherwise InvalidInput exception is thrown.
@@ -87,10 +89,11 @@ protected:
 		bool success;
 		TempBufferPoolReservation reservation;
 	};
-	virtual EvictionResult EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
+	virtual EvictionResult EvictBlocks(QueryContext context, MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
 	                                   unique_ptr<FileBuffer> *buffer = nullptr);
-	virtual EvictionResult EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
-	                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
+	virtual EvictionResult EvictBlocksInternal(QueryContext context, EvictionQueue &queue, MemoryTag tag,
+	                                           idx_t extra_memory, idx_t memory_limit,
+	                                           unique_ptr<FileBuffer> *buffer = nullptr);
 
 	//! Evict object cache entries if needed.
 	EvictionResult EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit);
@@ -102,8 +105,8 @@ protected:
 	//! Garbage collect dead nodes in the eviction queue.
 	void PurgeQueue(const BlockHandle &handle);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
-	//! ready to be purged, and false otherwise.
-	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
+	//! ready to be purged, and false otherwise. Requires the handle's block lock.
+	bool AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &handle);
 	//! Gets the eviction queue for the specified type
 	EvictionQueue &GetEvictionQueueForBlockMemory(const BlockMemory &memory);
 	//! Increments the dead nodes for the queue with specified type

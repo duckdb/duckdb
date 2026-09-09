@@ -18,7 +18,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/chunk_scan_state/batched_data_collection.hpp"
 #include "duckdb/execution/executor.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/arrow/arrow_query_result.hpp"
@@ -29,8 +28,7 @@ namespace duckdb {
 class ArrowBatchTask : public ExecutorTask {
 public:
 	ArrowBatchTask(ArrowQueryResult &result, vector<idx_t> record_batch_indices, Executor &executor,
-	               shared_ptr<Event> event_p, BatchCollectionChunkScanState scan_state, vector<string> names,
-	               idx_t batch_size);
+	               shared_ptr<Event> event_p, BatchCollectionChunkScanState scan_state, idx_t batch_size);
 	void ProduceRecordBatches();
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
@@ -41,9 +39,7 @@ public:
 private:
 	ArrowQueryResult &result;
 	vector<idx_t> record_batch_indices;
-	shared_ptr<Event> event;
 	idx_t batch_size;
-	vector<string> names;
 	BatchCollectionChunkScanState scan_state;
 };
 

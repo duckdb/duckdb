@@ -3,6 +3,9 @@
 # group: [pushdown]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE tbl2 as SELECT i as id1, [i-3, i+1, i+2] as somelist FROM generate_series(1, 10_000) s(i);
 
 statement ok

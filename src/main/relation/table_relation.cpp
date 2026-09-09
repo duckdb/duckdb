@@ -28,14 +28,12 @@ unique_ptr<QueryNode> TableRelation::GetQueryNode() {
 
 unique_ptr<TableRef> TableRelation::GetTableRef() {
 	auto table_ref = make_uniq<BaseTableRef>();
-	table_ref->schema_name = description->schema;
-	table_ref->table_name = description->table;
-	table_ref->catalog_name = description->database;
+	table_ref->SetQualifiedName(description->qualified_name);
 	return std::move(table_ref);
 }
 
-string TableRelation::GetAlias() {
-	return description->table;
+Identifier TableRelation::GetAlias() {
+	return description->qualified_name.Name();
 }
 
 const vector<ColumnDefinition> &TableRelation::Columns() {
@@ -44,7 +42,7 @@ const vector<ColumnDefinition> &TableRelation::Columns() {
 
 string TableRelation::ToString(idx_t depth) {
 	return RenderWhitespace(depth) + "Scan Table [" +
-	       ParseInfo::QualifierToString(description->database, description->schema, description->table) + "]";
+	       description->qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA) + "]";
 }
 
 static unique_ptr<ParsedExpression> ParseCondition(ClientContext &context, const string &condition) {
@@ -61,44 +59,47 @@ static unique_ptr<ParsedExpression> ParseCondition(ClientContext &context, const
 
 void TableRelation::Update(vector<string> names, vector<unique_ptr<ParsedExpression>> &&update,
                            unique_ptr<ParsedExpression> condition) {
-	vector<string> update_columns = std::move(names);
+	vector<Identifier> update_columns = StringsToIdentifiers(names);
 	vector<unique_ptr<ParsedExpression>> expressions = std::move(update);
 
-	auto update_relation =
-	    make_shared_ptr<UpdateRelation>(context, std::move(condition), description->database, description->schema,
-	                                    description->table, std::move(update_columns), std::move(expressions));
+	auto update_relation = make_shared_ptr<UpdateRelation>(
+	    context, std::move(condition), description->qualified_name.Catalog(), description->qualified_name.Schema(),
+	    description->qualified_name.Name(), std::move(update_columns), std::move(expressions));
 	update_relation->Execute();
 }
 
 void TableRelation::Update(const string &update_list, const string &condition) {
-	vector<string> update_columns;
+	vector<Identifier> update_columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
 	auto cond = ParseCondition(*context->GetContext(), condition);
 	Parser::ParseUpdateList(update_list, update_columns, expressions, context->GetContext()->GetParserOptions());
-	auto update =
-	    make_shared_ptr<UpdateRelation>(context, std::move(cond), description->database, description->schema,
-	                                    description->table, std::move(update_columns), std::move(expressions));
+	auto update = make_shared_ptr<UpdateRelation>(
+	    context, std::move(cond), description->qualified_name.Catalog(), description->qualified_name.Schema(),
+	    description->qualified_name.Name(), std::move(update_columns), std::move(expressions));
 	update->Execute();
 }
 
 void TableRelation::Delete(const string &condition) {
 	auto cond = ParseCondition(*context->GetContext(), condition);
-	auto del = make_shared_ptr<DeleteRelation>(context, std::move(cond), description->database, description->schema,
-	                                           description->table);
+	auto del =
+	    make_shared_ptr<DeleteRelation>(context, std::move(cond), description->qualified_name.Catalog(),
+	                                    description->qualified_name.Schema(), description->qualified_name.Name());
 	del->Execute();
 }
 
 void TableRelation::Insert(const vector<vector<Value>> &values) {
 	vector<string> column_names;
 	auto rel = make_shared_ptr<ValueRelation>(context->GetContext(), values, std::move(column_names), "values");
-	rel->Insert(description->database, description->schema, description->table);
+	rel->Insert(description->qualified_name.Catalog(), description->qualified_name.Schema(),
+	            description->qualified_name.Name());
 }
 
 void TableRelation::Insert(vector<vector<unique_ptr<ParsedExpression>>> &&expressions) {
 	vector<string> column_names;
 	auto rel = make_shared_ptr<ValueRelation>(context->GetContext(), std::move(expressions), std::move(column_names),
 	                                          "values");
-	rel->Insert(description->database, description->schema, description->table);
+	rel->Insert(description->qualified_name.Catalog(), description->qualified_name.Schema(),
+	            description->qualified_name.Name());
 }
 
 } // namespace duckdb

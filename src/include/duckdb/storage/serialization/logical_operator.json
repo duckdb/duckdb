@@ -34,7 +34,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -60,7 +60,7 @@
       {
         "id": 201,
         "name": "projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       }
     ]
   },
@@ -77,17 +77,17 @@
       {
         "id": 201,
         "name": "group_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
         "name": "aggregate_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 203,
         "name": "groupings_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 204,
@@ -102,7 +102,7 @@
       {
         "id": 206,
         "name": "grouping_functions",
-        "type": "vector<unsafe_vector<idx_t>>"
+        "type": "vector<unsafe_vector<ProjectionIndex>>"
       },
       {
         "id": 207,
@@ -125,7 +125,7 @@
       {
         "id": 200,
         "name": "window_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -145,7 +145,7 @@
       {
         "id": 200,
         "name": "unnest_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -191,7 +191,7 @@
       {
         "id": 201,
         "name": "projections",
-        "type": "vector<idx_t>",
+        "type": "vector<ProjectionIndex>",
         "property": "projection_map"
       }
     ],
@@ -265,6 +265,23 @@
     ]
   },
   {
+    "class": "LogicalSecureView",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_SECURE_VIEW",
+    "members": [
+      {
+        "id": 200,
+        "name": "view_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "pushed_filters",
+        "type": "vector<string>"
+      }
+    ]
+  },
+  {
     "class": "LogicalColumnDataGet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_CHUNK_GET",
@@ -272,7 +289,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -283,13 +300,19 @@
         "id": 202,
         "name": "collection",
         "type": "optionally_owned_ptr<ColumnDataCollection>"
+      },
+      {
+        "id": 203,
+        "name": "column_ids",
+        "type": "vector<column_t>"
       }
     ],
     "constructor": [
       "table_index",
       "chunk_types",
       "collection"
-    ]
+    ],
+    "custom_implementation": true
   },
   {
     "class": "LogicalDelimGet",
@@ -299,7 +322,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -320,7 +343,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -347,7 +370,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       }
     ],
     "constructor": [
@@ -379,12 +402,12 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
         "name": "cte_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -394,7 +417,7 @@
       {
         "id": 203,
         "name": "bound_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 204,
@@ -432,17 +455,17 @@
       {
         "id": 201,
         "name": "mark_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
         "name": "left_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 203,
         "name": "right_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 204,
@@ -468,7 +491,8 @@
       {
         "id": 208,
         "name": "predicate",
-        "type": "Expression*"
+        "type": "Expression*",
+        "status": "deleted"
       }
     ],
     "constructor": [
@@ -489,17 +513,17 @@
       {
         "id": 201,
         "name": "mark_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
         "name": "left_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 203,
         "name": "right_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 204,
@@ -537,7 +561,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -578,12 +602,12 @@
       {
         "id": 201,
         "name": "ctename",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 203,
@@ -599,6 +623,16 @@
         "id": 205,
         "name": "ref_recurring",
         "type": "bool"
+      },
+      {
+        "id": 206,
+        "name": "payload_aggregates",
+        "type": "vector<Expression*>"
+      },
+      {
+        "id": 207,
+        "name": "internal_types",
+        "type": "vector<LogicalType>"
       }
     ]
   },
@@ -610,7 +644,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -620,7 +654,7 @@
       {
         "id": 202,
         "name": "ctename",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
@@ -653,7 +687,9 @@
       {
         "id": 202,
         "name": "column_index_map",
-        "type": "IndexVector<idx_t, PhysicalIndex>"
+        "type": "IndexVector<idx_t, PhysicalIndex>",
+        "default": "IndexVector<idx_t, PhysicalIndex>()",
+        "required_until": "v2.0.0"
       },
       {
         "id": 203,
@@ -663,7 +699,7 @@
       {
         "id": 204,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 205,
@@ -720,7 +756,7 @@
       {
         "id": 214,
         "name": "excluded_table_index",
-        "type": "idx_t",
+        "type": "TableIndex",
         "property": "on_conflict_info.excluded_table_index"
       },
       {
@@ -768,7 +804,7 @@
       {
         "id": 201,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -779,6 +815,11 @@
         "id": 203,
         "name": "expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 204,
+        "name": "return_columns",
+        "type": "vector<idx_t>"
       }
     ],
     "constructor": [
@@ -800,7 +841,7 @@
       {
         "id": 201,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -826,6 +867,23 @@
         "id": 206,
         "name": "update_is_del_and_insert",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "capture_old_rows",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 208,
+        "name": "old_row_columns",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 209,
+        "name": "row_id_handling",
+        "type": "RowIdHandling",
+        "default": "RowIdHandling::ASSUME_UNIQUE"
       }
     ],
     "constructor": [
@@ -847,7 +905,7 @@
       {
         "id": 201,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -873,6 +931,11 @@
         "id": 206,
         "name": "return_chunk",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "delete_return_columns",
+        "type": "vector<idx_t>"
       }
     ],
     "constructor": ["$ClientContext", "table_info&"]
@@ -903,7 +966,9 @@
       {
         "id": 204,
         "name": "column_index_map",
-        "type": "IndexVector<idx_t, PhysicalIndex>"
+        "type": "IndexVector<idx_t, PhysicalIndex>",
+        "default": "IndexVector<idx_t, PhysicalIndex>()",
+        "required_until": "v2.0.0"
       },
       {
         "id": 205,
@@ -937,7 +1002,8 @@
       "LOGICAL_CREATE_VIEW",
       "LOGICAL_CREATE_SCHEMA",
       "LOGICAL_CREATE_MACRO",
-      "LOGICAL_CREATE_TYPE"
+      "LOGICAL_CREATE_TYPE",
+      "LOGICAL_CREATE_TRIGGER"
     ],
     "members": [
       {
@@ -990,7 +1056,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -1017,7 +1083,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -1031,25 +1097,148 @@
     ]
   },
   {
-    "class": "LogicalSimple",
+    "class": "LogicalAlter",
     "base": "LogicalOperator",
-    "enum": [
-      "LOGICAL_ALTER",
-      "LOGICAL_LOAD",
-      "LOGICAL_ATTACH",
-      "LOGICAL_TRANSACTION",
-      "LOGICAL_DROP",
-      "LOGICAL_DETACH"
-    ],
+    "enum": "LOGICAL_ALTER",
     "members": [
       {
         "id": 200,
         "name": "info",
-        "type": "ParseInfo*"
+        "type": "AlterInfo*",
+        "base": "ParseInfo"
       }
     ],
     "constructor": [
-      "type",
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalLoad",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_LOAD",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "LoadInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalAttach",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_ATTACH",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "AttachInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalTransaction",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_TRANSACTION",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "TransactionInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalDrop",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DROP",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "DropInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalDetach",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DETACH",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "DetachInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalConnect",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CONNECT",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "ConnectInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalExternalResource",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXTERNAL_RESOURCE",
+    "includes": [
+      "duckdb/planner/operator/logical_external_resource.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "data",
+        "type": "BoundExternalResource"
+      }
+    ],
+    "constructor": [
+      "data"
+    ]
+  },
+  {
+    "class": "LogicalDisconnect",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DISCONNECT",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "DisconnectInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
       "info"
     ]
   },
@@ -1061,7 +1250,7 @@
       {
         "id": 200,
         "name": "pivot_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,

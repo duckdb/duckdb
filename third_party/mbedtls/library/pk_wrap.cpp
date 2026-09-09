@@ -33,6 +33,7 @@
 #if defined(MBEDTLS_RSA_C)
 #include "pkwrite.h"
 #include "rsa_internal.h"
+#include "constant_time_internal.h"
 #endif
 
 #if defined(MBEDTLS_PK_CAN_ECDSA_SOME)
@@ -71,7 +72,7 @@ static int rsa_verify_wrap(mbedtls_pk_context *pk, mbedtls_md_type_t md_alg,
     mbedtls_svc_key_id_t key_id = MBEDTLS_SVC_KEY_ID_INIT;
     psa_status_t status;
     int key_len;
-    unsigned char buf[MBEDTLS_PK_RSA_PUB_DER_MAX_BYTES];
+    unsigned char buf[PSA_KEY_EXPORT_RSA_PUBLIC_KEY_MAX_SIZE(PSA_VENDOR_RSA_MAX_KEY_BITS)];
     unsigned char *p = buf + sizeof(buf);
     psa_algorithm_t psa_alg_md;
     size_t rsa_len = mbedtls_rsa_get_len(rsa);
@@ -287,9 +288,6 @@ static int rsa_decrypt_wrap(mbedtls_pk_context *pk,
     psa_algorithm_t psa_md_alg, decrypt_alg;
     psa_status_t status;
     int key_len;
-    unsigned char buf[MBEDTLS_PK_RSA_PRV_DER_MAX_BYTES];
-    unsigned char *p = buf + sizeof(buf);
-
     ((void) f_rng);
     ((void) p_rng);
 
@@ -297,6 +295,13 @@ static int rsa_decrypt_wrap(mbedtls_pk_context *pk,
         return MBEDTLS_ERR_RSA_BAD_INPUT_DATA;
     }
 
+    const size_t key_bits = mbedtls_pk_get_bitlen(pk);
+    /* mbedtls_rsa_write_key() uses the same format as PSA export, which
+     * actually calls it under the hood, so we can use the PSA size macro. */
+    const size_t buf_size = PSA_KEY_EXPORT_RSA_KEY_PAIR_MAX_SIZE(key_bits);
+    unsigned char *buf = mbedtls_calloc(1, buf_size);
+
+    unsigned char *p = buf + buf_size;
     key_len = mbedtls_rsa_write_key(rsa, buf, &p);
     if (key_len <= 0) {
         return MBEDTLS_ERR_PK_BAD_INPUT_DATA;
@@ -313,7 +318,7 @@ static int rsa_decrypt_wrap(mbedtls_pk_context *pk,
     psa_set_key_algorithm(&attributes, decrypt_alg);
 
     status = psa_import_key(&attributes,
-                            buf + sizeof(buf) - key_len, key_len,
+                            buf + buf_size - key_len, key_len,
                             &key_id);
     if (status != PSA_SUCCESS) {
         ret = PSA_PK_TO_MBEDTLS_ERR(status);
@@ -324,21 +329,33 @@ static int rsa_decrypt_wrap(mbedtls_pk_context *pk,
                                     input, ilen,
                                     NULL, 0,
                                     output, osize, olen);
-    if (status != PSA_SUCCESS) {
-        ret = PSA_PK_RSA_TO_MBEDTLS_ERR(status);
-        goto cleanup;
-    }
 
-    ret = 0;
+#if defined(MBEDTLS_PKCS1_V15)
+    /* Translate error codes from PSA to legacy
+     * Success vs INVALID_PADDING vs BUFFER_TOO_SMALL is sensitive
+     * (padding oracle attack), so we take care to translate that
+     * part in constant time.
+     */
+    int problem;
+    status = mbedtls_rsa_decrypt_decompose_ret(
+        PSA_ERROR_INVALID_PADDING, MBEDTLS_ERR_RSA_INVALID_PADDING,
+        PSA_ERROR_BUFFER_TOO_SMALL, MBEDTLS_ERR_RSA_OUTPUT_TOO_LARGE,
+        status, &problem);
+    ret = PSA_PK_RSA_TO_MBEDTLS_ERR(status);
+    ret |= problem;
+#else
+    ret = PSA_PK_RSA_TO_MBEDTLS_ERR(status);
+#endif
 
 cleanup:
-    mbedtls_platform_zeroize(buf, sizeof(buf));
+    mbedtls_zeroize_and_free(buf, buf_size);
     status = psa_destroy_key(key_id);
-    if (ret == 0 && status != PSA_SUCCESS) {
-        ret = PSA_PK_TO_MBEDTLS_ERR(status);
-    }
-
-    return ret;
+    /* Don't branch on ret as it is a sensitive value
+     * (it reveals whether padding was valid).
+     * Instead branch on status. That means when both ret and
+     * status were errors, we'll return the unlock status while we would
+     * normally return the first error, but that's better than leaking info. */
+    return (status != PSA_SUCCESS) ? PSA_PK_TO_MBEDTLS_ERR(status) : ret;
 }
 #else /* MBEDTLS_USE_PSA_CRYPTO */
 static int rsa_decrypt_wrap(mbedtls_pk_context *pk,
@@ -370,7 +387,7 @@ static int rsa_encrypt_wrap(mbedtls_pk_context *pk,
     psa_algorithm_t psa_md_alg, psa_encrypt_alg;
     psa_status_t status;
     int key_len;
-    unsigned char buf[MBEDTLS_PK_RSA_PUB_DER_MAX_BYTES];
+    unsigned char buf[PSA_KEY_EXPORT_RSA_PUBLIC_KEY_MAX_SIZE(PSA_VENDOR_RSA_MAX_KEY_BITS)];
     unsigned char *p = buf + sizeof(buf);
 
     ((void) f_rng);
@@ -505,10 +522,10 @@ const mbedtls_pk_info_t mbedtls_rsa_info = {
     /* .ctx_alloc_func = */ rsa_alloc_wrap,
     /* .ctx_free_func = */ rsa_free_wrap,
 #if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
-	/* .rs_alloc_func = */ NULL,
-	/* .rs_free_func = */ NULL,
-#endif
-	/* .debug_func = */ rsa_debug
+    /* .rs_alloc_func = */ NULL,
+    /* .rs_free_func = */ NULL,
+#endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
+    /* .debug_func = */ rsa_debug,
 };
 #endif /* MBEDTLS_RSA_C */
 
@@ -1112,37 +1129,39 @@ static void eckey_debug(mbedtls_pk_context *pk, mbedtls_pk_debug_item *items)
 }
 
 const mbedtls_pk_info_t mbedtls_eckey_info = {
-    .type = MBEDTLS_PK_ECKEY,
-    .name = "EC",
-    .get_bitlen = eckey_get_bitlen,
-    .can_do = eckey_can_do,
+    /* .type = */ MBEDTLS_PK_ECKEY,
+    /* .name = */ "EC",
+    /* .get_bitlen = */ eckey_get_bitlen,
+    /* .can_do = */ eckey_can_do,
 #if defined(MBEDTLS_PK_CAN_ECDSA_VERIFY)
-    .verify_func = ecdsa_verify_wrap,   /* Compatible key structures */
+    /* .verify_func = */ ecdsa_verify_wrap,   /* Compatible key structures */
 #else /* MBEDTLS_PK_CAN_ECDSA_VERIFY */
-    .verify_func = NULL,
+    /* .verify_func = */ NULL,
 #endif /* MBEDTLS_PK_CAN_ECDSA_VERIFY */
 #if defined(MBEDTLS_PK_CAN_ECDSA_SIGN)
-    .sign_func = ecdsa_sign_wrap,   /* Compatible key structures */
+    /* .sign_func = */ ecdsa_sign_wrap,   /* Compatible key structures */
 #else /* MBEDTLS_PK_CAN_ECDSA_VERIFY */
-    .sign_func = NULL,
+    /* .sign_func = */ NULL,
 #endif /* MBEDTLS_PK_CAN_ECDSA_VERIFY */
 #if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
-    .verify_rs_func = eckey_verify_rs_wrap,
-    .sign_rs_func = eckey_sign_rs_wrap,
-    .rs_alloc_func = eckey_rs_alloc,
-    .rs_free_func = eckey_rs_free,
+    /* .verify_rs_func = */ eckey_verify_rs_wrap,
+    /* .sign_rs_func = */ eckey_sign_rs_wrap,
 #endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
-    .decrypt_func = NULL,
-    .encrypt_func = NULL,
-    .check_pair_func = eckey_check_pair_wrap,
+    /* .decrypt_func = */ NULL,
+    /* .encrypt_func = */ NULL,
+    /* .check_pair_func = */ eckey_check_pair_wrap,
 #if defined(MBEDTLS_PK_USE_PSA_EC_DATA)
-    .ctx_alloc_func = NULL,
-    .ctx_free_func = NULL,
+    /* .ctx_alloc_func = */ NULL,
+    /* .ctx_free_func = */ NULL,
 #else /* MBEDTLS_PK_USE_PSA_EC_DATA */
-    .ctx_alloc_func = eckey_alloc_wrap,
-    .ctx_free_func = eckey_free_wrap,
+    /* .ctx_alloc_func = */ eckey_alloc_wrap,
+    /* .ctx_free_func = */ eckey_free_wrap,
 #endif /* MBEDTLS_PK_USE_PSA_EC_DATA */
-    .debug_func = eckey_debug,
+#if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
+    /* .rs_alloc_func = */ eckey_rs_alloc,
+    /* .rs_free_func = */ eckey_rs_free,
+#endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
+    /* .debug_func = */ eckey_debug,
 };
 
 /*
@@ -1155,27 +1174,31 @@ static int eckeydh_can_do(mbedtls_pk_type_t type)
 }
 
 const mbedtls_pk_info_t mbedtls_eckeydh_info = {
-    .type = MBEDTLS_PK_ECKEY_DH,
-    .name = "EC_DH",
-    .get_bitlen = eckey_get_bitlen,         /* Same underlying key structure */
-    .can_do = eckeydh_can_do,
-    .verify_func = NULL,
-    .sign_func = NULL,
+    /* .type = */ MBEDTLS_PK_ECKEY_DH,
+    /* .name = */ "EC_DH",
+    /* .get_bitlen = */ eckey_get_bitlen,         /* Same underlying key structure */
+    /* .can_do = */ eckeydh_can_do,
+    /* .verify_func = */ NULL,
+    /* .sign_func = */ NULL,
 #if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
-    .verify_rs_func = NULL,
-    .sign_rs_func = NULL,
+    /* .verify_rs_func = */ NULL,
+    /* .sign_rs_func = */ NULL,
 #endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
-    .decrypt_func = NULL,
-    .encrypt_func = NULL,
-    .check_pair_func = eckey_check_pair_wrap,
+    /* .decrypt_func = */ NULL,
+    /* .encrypt_func = */ NULL,
+    /* .check_pair_func = */ eckey_check_pair_wrap,
 #if defined(MBEDTLS_PK_USE_PSA_EC_DATA)
-    .ctx_alloc_func = NULL,
-    .ctx_free_func = NULL,
+    /* .ctx_alloc_func = */ NULL,
+    /* .ctx_free_func = */ NULL,
 #else /* MBEDTLS_PK_USE_PSA_EC_DATA */
-    .ctx_alloc_func = eckey_alloc_wrap,   /* Same underlying key structure */
-    .ctx_free_func = eckey_free_wrap,    /* Same underlying key structure */
+    /* .ctx_alloc_func = */ eckey_alloc_wrap,   /* Same underlying key structure */
+    /* .ctx_free_func = */ eckey_free_wrap,    /* Same underlying key structure */
 #endif /* MBEDTLS_PK_USE_PSA_EC_DATA */
-    .debug_func = eckey_debug,            /* Same underlying key structure */
+#if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
+    /* .rs_alloc_func = */ NULL,
+    /* .rs_free_func = */ NULL,
+#endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
+    /* .debug_func = */ eckey_debug,            /* Same underlying key structure */
 };
 
 #if defined(MBEDTLS_PK_CAN_ECDSA_SOME)
@@ -1237,37 +1260,39 @@ static void ecdsa_rs_free(void *ctx)
 #endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
 
 const mbedtls_pk_info_t mbedtls_ecdsa_info = {
-    .type = MBEDTLS_PK_ECDSA,
-    .name = "ECDSA",
-    .get_bitlen = eckey_get_bitlen,     /* Compatible key structures */
-    .can_do = ecdsa_can_do,
+    /* .type = */ MBEDTLS_PK_ECDSA,
+    /* .name = */ "ECDSA",
+    /* .get_bitlen = */ eckey_get_bitlen,     /* Compatible key structures */
+    /* .can_do = */ ecdsa_can_do,
 #if defined(MBEDTLS_PK_CAN_ECDSA_VERIFY)
-    .verify_func = ecdsa_verify_wrap,   /* Compatible key structures */
+    /* .verify_func = */ ecdsa_verify_wrap,   /* Compatible key structures */
 #else /* MBEDTLS_PK_CAN_ECDSA_VERIFY */
-    .verify_func = NULL,
+    /* .verify_func = */ NULL,
 #endif /* MBEDTLS_PK_CAN_ECDSA_VERIFY */
 #if defined(MBEDTLS_PK_CAN_ECDSA_SIGN)
-    .sign_func = ecdsa_sign_wrap,   /* Compatible key structures */
+    /* .sign_func = */ ecdsa_sign_wrap,   /* Compatible key structures */
 #else /* MBEDTLS_PK_CAN_ECDSA_SIGN */
-    .sign_func = NULL,
+    /* .sign_func = */ NULL,
 #endif /* MBEDTLS_PK_CAN_ECDSA_SIGN */
 #if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
-    .verify_rs_func = ecdsa_verify_rs_wrap,
-    .sign_rs_func = ecdsa_sign_rs_wrap,
-    .rs_alloc_func = ecdsa_rs_alloc,
-    .rs_free_func = ecdsa_rs_free,
+    /* .verify_rs_func = */ ecdsa_verify_rs_wrap,
+    /* .sign_rs_func = */ ecdsa_sign_rs_wrap,
 #endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
-    .decrypt_func = NULL,
-    .encrypt_func = NULL,
-    .check_pair_func = eckey_check_pair_wrap,   /* Compatible key structures */
+    /* .decrypt_func = */ NULL,
+    /* .encrypt_func = */ NULL,
+    /* .check_pair_func = */ eckey_check_pair_wrap,   /* Compatible key structures */
 #if defined(MBEDTLS_PK_USE_PSA_EC_DATA)
-    .ctx_alloc_func = NULL,
-    .ctx_free_func = NULL,
+    /* .ctx_alloc_func = */ NULL,
+    /* .ctx_free_func = */ NULL,
 #else /* MBEDTLS_PK_USE_PSA_EC_DATA */
-    .ctx_alloc_func = eckey_alloc_wrap,   /* Compatible key structures */
-    .ctx_free_func = eckey_free_wrap,   /* Compatible key structures */
+    /* .ctx_alloc_func = */ eckey_alloc_wrap,   /* Compatible key structures */
+    /* .ctx_free_func = */ eckey_free_wrap,   /* Compatible key structures */
 #endif /* MBEDTLS_PK_USE_PSA_EC_DATA */
-    .debug_func = eckey_debug,        /* Compatible key structures */
+#if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
+    /* .rs_alloc_func = */ ecdsa_rs_alloc,
+    /* .rs_free_func = */ ecdsa_rs_free,
+#endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
+    /* .debug_func = */ eckey_debug,        /* Compatible key structures */
 };
 #endif /* MBEDTLS_PK_CAN_ECDSA_SOME */
 #endif /* MBEDTLS_PK_HAVE_ECC_KEYS */
@@ -1337,7 +1362,6 @@ static int rsa_alt_check_pair(mbedtls_pk_context *pub, mbedtls_pk_context *prv,
                               int (*f_rng)(void *, unsigned char *, size_t),
                               void *p_rng)
 {
-    unsigned char sig[MBEDTLS_MPI_MAX_SIZE];
     unsigned char hash[32];
     size_t sig_len = 0;
     int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
@@ -1346,21 +1370,29 @@ static int rsa_alt_check_pair(mbedtls_pk_context *pub, mbedtls_pk_context *prv,
         return MBEDTLS_ERR_RSA_KEY_CHECK_FAILED;
     }
 
+    size_t sig_size = (rsa_get_bitlen(pub) + 7) / 8;
+    unsigned char *sig = mbedtls_calloc(1, sig_size);
+    if (sig == NULL) {
+        return MBEDTLS_ERR_PK_ALLOC_FAILED;
+    }
+
     memset(hash, 0x2a, sizeof(hash));
 
     if ((ret = rsa_alt_sign_wrap(prv, MBEDTLS_MD_NONE,
                                  hash, sizeof(hash),
-                                 sig, sizeof(sig), &sig_len,
+                                 sig, sig_size, &sig_len,
                                  f_rng, p_rng)) != 0) {
-        return ret;
+        goto cleanup;
     }
 
     if (rsa_verify_wrap(pub, MBEDTLS_MD_NONE,
                         hash, sizeof(hash), sig, sig_len) != 0) {
-        return MBEDTLS_ERR_RSA_KEY_CHECK_FAILED;
+        ret = MBEDTLS_ERR_RSA_KEY_CHECK_FAILED;
     }
 
-    return 0;
+cleanup:
+    mbedtls_zeroize_and_free(sig, sig_size);
+    return ret;
 }
 #endif /* MBEDTLS_RSA_C */
 
@@ -1381,28 +1413,30 @@ static void rsa_alt_free_wrap(void *ctx)
 }
 
 const mbedtls_pk_info_t mbedtls_rsa_alt_info = {
-    .type = MBEDTLS_PK_RSA_ALT,
-    .name = "RSA-alt",
-    .get_bitlen = rsa_alt_get_bitlen,
-    .can_do = rsa_alt_can_do,
-    .verify_func = NULL,
-    .sign_func = rsa_alt_sign_wrap,
+    /* .type = */ MBEDTLS_PK_RSA_ALT,
+    /* .name = */ "RSA-alt",
+    /* .get_bitlen = */ rsa_alt_get_bitlen,
+    /* .can_do = */ rsa_alt_can_do,
+    /* .verify_func = */ NULL,
+    /* .sign_func = */ rsa_alt_sign_wrap,
 #if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
-    .verify_rs_func = NULL,
-    .sign_rs_func = NULL,
-    .rs_alloc_func = NULL,
-    .rs_free_func = NULL,
+    /* .verify_rs_func = */ NULL,
+    /* .sign_rs_func = */ NULL,
 #endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
-    .decrypt_func = rsa_alt_decrypt_wrap,
-    .encrypt_func = NULL,
+    /* .decrypt_func = */ rsa_alt_decrypt_wrap,
+    /* .encrypt_func = */ NULL,
 #if defined(MBEDTLS_RSA_C)
-    .check_pair_func = rsa_alt_check_pair,
+    /* .check_pair_func = */ rsa_alt_check_pair,
 #else
-    .check_pair_func = NULL,
+    /* .check_pair_func = */ NULL,
 #endif
-    .ctx_alloc_func = rsa_alt_alloc_wrap,
-    .ctx_free_func = rsa_alt_free_wrap,
-    .debug_func = NULL,
+    /* .ctx_alloc_func = */ rsa_alt_alloc_wrap,
+    /* .ctx_free_func = */ rsa_alt_free_wrap,
+#if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
+    /* .rs_alloc_func = */ NULL,
+    /* .rs_free_func = */ NULL,
+#endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
+    /* .debug_func = */ NULL,
 };
 #endif /* MBEDTLS_PK_RSA_ALT_SUPPORT */
 
@@ -1429,32 +1463,34 @@ static int ecdsa_opaque_can_do(mbedtls_pk_type_t type)
 }
 
 const mbedtls_pk_info_t mbedtls_ecdsa_opaque_info = {
-    .type = MBEDTLS_PK_OPAQUE,
-    .name = "Opaque",
-    .get_bitlen = opaque_get_bitlen,
-    .can_do = ecdsa_opaque_can_do,
+    /* .type = */ MBEDTLS_PK_OPAQUE,
+    /* .name = */ "Opaque",
+    /* .get_bitlen = */ opaque_get_bitlen,
+    /* .can_do = */ ecdsa_opaque_can_do,
 #if defined(MBEDTLS_PK_CAN_ECDSA_VERIFY)
-    .verify_func = ecdsa_opaque_verify_wrap,
+    /* .verify_func = */ ecdsa_opaque_verify_wrap,
 #else /* MBEDTLS_PK_CAN_ECDSA_VERIFY */
-    .verify_func = NULL,
+    /* .verify_func = */ NULL,
 #endif /* MBEDTLS_PK_CAN_ECDSA_VERIFY */
 #if defined(MBEDTLS_PK_CAN_ECDSA_SIGN)
-    .sign_func = ecdsa_opaque_sign_wrap,
+    /* .sign_func = */ ecdsa_opaque_sign_wrap,
 #else /* MBEDTLS_PK_CAN_ECDSA_SIGN */
-    .sign_func = NULL,
+    /* .sign_func = */ NULL,
 #endif /* MBEDTLS_PK_CAN_ECDSA_SIGN */
 #if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
-    .verify_rs_func = NULL,
-    .sign_rs_func = NULL,
-    .rs_alloc_func = NULL,
-    .rs_free_func = NULL,
+    /* .verify_rs_func = */ NULL,
+    /* .sign_rs_func = */ NULL,
 #endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
-    .decrypt_func = NULL,
-    .encrypt_func = NULL,
-    .check_pair_func = ecdsa_opaque_check_pair_wrap,
-    .ctx_alloc_func = NULL,
-    .ctx_free_func = NULL,
-    .debug_func = NULL,
+    /* .decrypt_func = */ NULL,
+    /* .encrypt_func = */ NULL,
+    /* .check_pair_func = */ ecdsa_opaque_check_pair_wrap,
+    /* .ctx_alloc_func = */ NULL,
+    /* .ctx_free_func = */ NULL,
+#if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
+    /* .rs_alloc_func = */ NULL,
+    /* .rs_free_func = */ NULL,
+#endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
+    /* .debug_func = */ NULL,
 };
 #endif /* MBEDTLS_PK_HAVE_ECC_KEYS */
 
@@ -1493,11 +1529,21 @@ static int rsa_opaque_decrypt(mbedtls_pk_context *pk,
     }
 
     status = psa_asymmetric_decrypt(pk->priv_id, alg, input, ilen, NULL, 0, output, osize, olen);
-    if (status != PSA_SUCCESS) {
-        return PSA_PK_RSA_TO_MBEDTLS_ERR(status);
-    }
-
-    return 0;
+#if defined(MBEDTLS_PKCS1_V15)
+    /* Translate error codes from PSA to legacy
+     * Success vs INVALID_PADDING vs BUFFER_TOO_SMALL is sensitive
+     * (padding oracle attack), so we take care to translate that
+     * part in constant time.
+     */
+    int problem;
+    status = mbedtls_rsa_decrypt_decompose_ret(
+        PSA_ERROR_INVALID_PADDING, MBEDTLS_ERR_RSA_INVALID_PADDING,
+        PSA_ERROR_BUFFER_TOO_SMALL, MBEDTLS_ERR_RSA_OUTPUT_TOO_LARGE,
+        status, &problem);
+    return PSA_PK_RSA_TO_MBEDTLS_ERR(status) | problem;
+#else
+    return PSA_PK_RSA_TO_MBEDTLS_ERR(status);
+#endif
 }
 #endif /* PSA_WANT_KEY_TYPE_RSA_KEY_PAIR_BASIC */
 
@@ -1556,28 +1602,30 @@ static int rsa_opaque_sign_wrap(mbedtls_pk_context *pk, mbedtls_md_type_t md_alg
 }
 
 const mbedtls_pk_info_t mbedtls_rsa_opaque_info = {
-    .type = MBEDTLS_PK_OPAQUE,
-    .name = "Opaque",
-    .get_bitlen = opaque_get_bitlen,
-    .can_do = rsa_opaque_can_do,
-    .verify_func = NULL,
-    .sign_func = rsa_opaque_sign_wrap,
+    /* .type = */ MBEDTLS_PK_OPAQUE,
+    /* .name = */ "Opaque",
+    /* .get_bitlen = */ opaque_get_bitlen,
+    /* .can_do = */ rsa_opaque_can_do,
+    /* .verify_func = */ NULL,
+    /* .sign_func = */ rsa_opaque_sign_wrap,
 #if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
-    .verify_rs_func = NULL,
-    .sign_rs_func = NULL,
-    .rs_alloc_func = NULL,
-    .rs_free_func = NULL,
+    /* .verify_rs_func = */ NULL,
+    /* .sign_rs_func = */ NULL,
 #endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
 #if defined(PSA_WANT_KEY_TYPE_RSA_KEY_PAIR_BASIC)
-    .decrypt_func = rsa_opaque_decrypt,
+    /* .decrypt_func = */ rsa_opaque_decrypt,
 #else /* PSA_WANT_KEY_TYPE_RSA_KEY_PAIR_BASIC */
-    .decrypt_func = NULL,
+    /* .decrypt_func = */ NULL,
 #endif /* PSA_WANT_KEY_TYPE_RSA_KEY_PAIR_BASIC */
-    .encrypt_func = NULL,
-    .check_pair_func = NULL,
-    .ctx_alloc_func = NULL,
-    .ctx_free_func = NULL,
-    .debug_func = NULL,
+    /* .encrypt_func = */ NULL,
+    /* .check_pair_func = */ NULL,
+    /* .ctx_alloc_func = */ NULL,
+    /* .ctx_free_func = */ NULL,
+#if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
+    /* .rs_alloc_func = */ NULL,
+    /* .rs_free_func = */ NULL,
+#endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
+    /* .debug_func = */ NULL,
 };
 
 #endif /* MBEDTLS_USE_PSA_CRYPTO */

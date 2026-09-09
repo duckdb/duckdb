@@ -2,10 +2,7 @@
 # description: Test LATERAL UNNEST
 # group: [lateral]
 
-statement ok
-PRAGMA enable_verification
-
-mode skip
+mode skip instable
 
 # FIXME: this causes an internal exception to be thrown
 statement ok

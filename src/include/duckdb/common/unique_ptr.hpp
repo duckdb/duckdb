@@ -23,7 +23,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(null)) {
-			throw duckdb::InternalException("Attempted to dereference unique_ptr that is NULL!");
+			ThrowNullUniquePtrDereference();
 		}
 #endif
 	}
@@ -67,7 +67,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(null)) {
-			throw duckdb::InternalException("Attempted to dereference unique_ptr that is NULL!");
+			ThrowNullUniquePtrDereference();
 		}
 #endif
 	}
@@ -94,7 +94,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(null)) {
-			throw duckdb::InternalException("Attempted to dereference unique_ptr that is NULL!");
+			ThrowNullUniquePtrDereference();
 		}
 #endif
 	}

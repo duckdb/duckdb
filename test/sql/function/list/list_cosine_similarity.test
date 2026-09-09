@@ -4,12 +4,12 @@
 foreach type FLOAT DOUBLE
 
 query I
-SELECT list_cosine_similarity([1, 2, 3]::${type}[], [1, 2, 3]::${type}[]);
+SELECT list_cosine_similarity([1, 2, 3]::{type}[], [1, 2, 3]::{type}[]);
 ----
 1.0
 
 statement ok
-CREATE OR REPLACE TABLE lists (l ${type}[]);
+CREATE OR REPLACE TABLE lists (l {type}[]);
 
 statement ok
 INSERT INTO lists VALUES ([1, 2, 3]), ([4, 5, 6]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
@@ -24,17 +24,17 @@ SELECT list_cosine_similarity(l, [1, 2, 3]) FROM lists;
 NULL
 
 statement error
-SELECT list_cosine_similarity([1, NULL, 3]::${type}[], [1, 2, 3]::${type}[]);
+SELECT list_cosine_similarity([1, NULL, 3]::{type}[], [1, 2, 3]::{type}[]);
 ----
 left argument can not contain NULL values
 
 statement error
-SELECT list_cosine_similarity([1, 2, 3]::${type}[], [1, NULL, 3]::${type}[]);
+SELECT list_cosine_similarity([1, 2, 3]::{type}[], [1, NULL, 3]::{type}[]);
 ----
 right argument can not contain NULL values
 
 statement error
-SELECT list_cosine_similarity([1, 2, 3]::${type}[], [1, 2, 3, 4]::${type}[]);
+SELECT list_cosine_similarity([1, 2, 3]::{type}[], [1, 2, 3, 4]::{type}[]);
 ----
 list dimensions must be equal, got left length '3' and right length '4'
 
@@ -44,7 +44,7 @@ SELECT list_cosine_similarity([], []);
 NULL
 
 query I
-SELECT list_cosine_distance([1, 2, 3]::${type}[], [1, 2, 3]::${type}[]) = 1 - list_cosine_similarity([1, 2, 3]::${type}[], [1, 2, 3]::${type}[]);
+SELECT list_cosine_distance([1, 2, 3]::{type}[], [1, 2, 3]::{type}[]) = 1 - list_cosine_similarity([1, 2, 3]::{type}[], [1, 2, 3]::{type}[]);
 ----
 true
 

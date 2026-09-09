@@ -8,7 +8,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/fast_mem.hpp"
 
 namespace duckdb {
 
@@ -193,10 +192,9 @@ void ContainerCompressionState::Reset() {
 //===--------------------------------------------------------------------===//
 RoaringCompressState::RoaringCompressState(ColumnDataCheckpointData &checkpoint_data,
                                            unique_ptr<AnalyzeState> analyze_state_p)
-    : CompressionState(analyze_state_p->info), owned_analyze_state(std::move(analyze_state_p)),
-      analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()), container_state(),
-      container_metadata(analyze_state.container_metadata), checkpoint_data(checkpoint_data),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
+    : StandardCompressionState(checkpoint_data, CompressionType::COMPRESSION_ROARING),
+      owned_analyze_state(std::move(analyze_state_p)), analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()),
+      container_state(), container_metadata(analyze_state.container_metadata) {
 	CreateEmptySegment();
 	total_count = 0;
 	InitializeContainer();
@@ -208,11 +206,11 @@ idx_t RoaringCompressState::GetContainerIndex() {
 }
 
 idx_t RoaringCompressState::GetUsedDataSpace() {
-	return static_cast<idx_t>(data_ptr - (handle.Ptr() + sizeof(idx_t)));
+	return static_cast<idx_t>(data_ptr - (handle.GetDataMutable() + sizeof(idx_t)));
 }
 
 idx_t RoaringCompressState::GetAvailableSpace() {
-	return static_cast<idx_t>(metadata_ptr - (handle.Ptr() + sizeof(idx_t)));
+	return static_cast<idx_t>(metadata_ptr - (handle.GetDataMutable() + sizeof(idx_t)));
 }
 
 bool RoaringCompressState::CanStore(idx_t container_size_in_tuples, const ContainerMetadata &metadata) {
@@ -274,7 +272,7 @@ void RoaringCompressState::InitializeContainer() {
 	// Override the pointer to write directly into the block
 	if (metadata.IsUncompressed()) {
 		data_ptr = reinterpret_cast<data_ptr_t>(AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr)));
-		FastMemset(data_ptr, ~0, sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
+		memset(data_ptr, ~0, sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
 		container_state.OverrideUncompressed(data_ptr);
 	} else if (metadata.IsRun()) {
 		auto number_of_runs = metadata.NumberOfRuns();
@@ -288,23 +286,14 @@ void RoaringCompressState::InitializeContainer() {
 }
 
 void RoaringCompressState::CreateEmptySegment() {
-	auto &db = checkpoint_data.GetDatabase();
-	auto &type = checkpoint_data.GetType();
-
-	auto compressed_segment =
-	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-	current_segment = std::move(compressed_segment);
-
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	handle = buffer_manager.Pin(current_segment->block);
-	data_ptr = handle.Ptr();
+	CreateAndPinNewSegment();
+	data_ptr = handle.GetDataMutable();
 	data_ptr += sizeof(idx_t);
-	metadata_ptr = handle.Ptr() + info.GetBlockSize();
+	metadata_ptr = handle.GetDataMutable() + info.GetBlockSize();
 }
 
 void RoaringCompressState::FlushSegment() {
-	auto &state = checkpoint_data.GetCheckpointState();
-	auto base_ptr = handle.Ptr();
+	auto base_ptr = handle.GetDataMutable();
 	// +======================================+
 	// |x|ddddddddddddddd||mmm|               |
 	// +======================================+
@@ -339,9 +328,13 @@ void RoaringCompressState::FlushSegment() {
 		throw InternalException("metadata start outside of block size during RoaringCompressState::FlushSegment");
 	}
 
-	Store<idx_t>(metadata_start, handle.Ptr());
+	Store<idx_t>(metadata_start, handle.GetDataMutable());
 	auto total_segment_size = sizeof(idx_t) + data_size + metadata_size;
-	state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
+	if (GetType().id() == LogicalTypeId::BOOLEAN) {
+		FlushCurrentSegment(bool_stats_writer, total_segment_size);
+	} else {
+		FlushCurrentSegment(stats_writer, total_segment_size);
+	}
 }
 
 void RoaringCompressState::Finalize() {
@@ -414,10 +407,10 @@ void RoaringCompressState::FlushContainer() {
 	bool has_nulls = container_state.null_count != 0;
 	bool has_non_nulls = container_state.null_count != container_state.appended_count;
 	if (has_nulls || container_state.uncompressed) {
-		current_segment->stats.statistics.SetHasNullFast();
+		stats_writer.SetHasNull();
 	}
 	if (has_non_nulls || container_state.uncompressed) {
-		current_segment->stats.statistics.SetHasNoNullFast();
+		stats_writer.SetHasValid();
 	}
 	current_segment->count += container_state.appended_count;
 	container_state.Reset();
@@ -486,30 +479,32 @@ void RoaringCompressState::Flush(RoaringCompressState &state) {
 	state.NextContainer();
 }
 template <>
-void RoaringCompressState::Compress<PhysicalType::BIT>(Vector &input, idx_t count) {
+void RoaringCompressState::Compress<PhysicalType::BIT>(const Vector &input) {
 	auto &self = *this;
-	RoaringStateAppender<RoaringCompressState>::AppendVector(self, input, count);
+	RoaringStateAppender<RoaringCompressState>::AppendVector(self, input);
 }
 template <>
-void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t count) {
+void RoaringCompressState::Compress<PhysicalType::BOOL>(const Vector &input) {
 	auto &self = *this;
-	input.Flatten(count);
+	const auto count = input.size();
+	input.Flatten();
 	const bool *src = FlatVector::GetData<bool>(input);
 
 	Vector bitpacked_vector(LogicalType::UBIGINT, count);
-	auto &bitpacked_vector_validity = FlatVector::Validity(bitpacked_vector);
+	FlatVector::SetSize(bitpacked_vector, count);
+	auto &bitpacked_vector_validity = FlatVector::ValidityMutable(bitpacked_vector);
 	bitpacked_vector_validity.EnsureWritable();
 	const auto dst = data_ptr_cast(bitpacked_vector_validity.GetData());
 
 	const auto &validity = FlatVector::Validity(input);
 	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
 	// mask.
-	if (validity.AllValid()) {
-		BitPackBooleans<true, true>(dst, src, count, &validity, &this->current_segment->stats.statistics);
+	if (validity.CannotHaveNull()) {
+		BitPackBooleans<true, true>(dst, src, count, &validity, &bool_stats_writer);
 	} else {
-		BitPackBooleans<true, false>(dst, src, count, &validity, &this->current_segment->stats.statistics);
+		BitPackBooleans<true, false>(dst, src, count, &validity, &bool_stats_writer);
 	}
-	RoaringStateAppender<RoaringCompressState>::AppendVector(self, bitpacked_vector, count);
+	RoaringStateAppender<RoaringCompressState>::AppendVector(self, bitpacked_vector);
 }
 
 } // namespace roaring

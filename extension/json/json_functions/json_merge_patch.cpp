@@ -14,20 +14,17 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 	return yyjson_mut_merge_patch(doc, orig, patch);
 }
 
-static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_val *objs[], const idx_t count) {
-	UnifiedVectorFormat input_data;
-	auto &input_vector = input;
-	input_vector.ToUnifiedFormat(count, input_data);
-	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
+static inline void ReadObjects(yyjson_mut_doc *doc, const Vector &input, yyjson_mut_val *objs[]) {
+	auto entries = input.Values<string_t>();
 
 	// Read the documents
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = input_data.sel->get_index(i);
-		if (!input_data.validity.RowIsValid(idx)) {
+	for (idx_t i = 0; i < input.size(); i++) {
+		auto entry = entries[i];
+		if (!entry.IsValid()) {
 			objs[i] = nullptr;
 		} else {
-			objs[i] =
-			    yyjson_val_mut_copy(doc, JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, &doc->alc)->root);
+			objs[i] = yyjson_val_mut_copy(
+			    doc, JSONCommon::ReadDocument(entry.GetValue(), JSONCommon::READ_FLAG, &doc->alc)->root);
 		}
 	}
 }
@@ -42,12 +39,12 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// Read the first json arg
 	auto origs = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
-	ReadObjects(doc, args.data[0], origs, count);
+	ReadObjects(doc, args.data[0], origs);
 
 	// Read the next json args one by one and merge them into the first json arg
 	auto patches = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
 	for (idx_t arg_idx = 1; arg_idx < args.data.size(); arg_idx++) {
-		ReadObjects(doc, args.data[arg_idx], patches, count);
+		ReadObjects(doc, args.data[arg_idx], patches);
 		for (idx_t i = 0; i < count; i++) {
 			if (patches[i] == nullptr) {
 				// Next json arg is NULL, obj becomes NULL
@@ -63,27 +60,21 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 
 	// Write to result vector
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (origs[i] == nullptr) {
-			result_validity.SetInvalid(i);
+			result_data.WriteNull();
 		} else {
-			result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc);
+			result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc));
 		}
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	JSONAllocator::AddBuffer(result, alc);
 }
 
 ScalarFunctionSet JSONFunctions::GetMergePatchFunction() {
 	ScalarFunction fun("json_merge_patch", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   MergePatchFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::JSON();
+	                   MergePatchFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	fun.SetVarArgs(LogicalType::JSON());
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return ScalarFunctionSet(fun);

@@ -1,0 +1,58 @@
+# name: test/sql/copy/parquet/read_ahead/readahead_depth_learning.test
+# description: Recycled scan states keep learning across read-ahead jobs
+# group: [read_ahead]
+
+require parquet
+
+require vector_size 2048
+
+# at depth 4 the first 4 row groups are scheduled with fresh scan states before anything decodes;
+# every later row group is scheduled with a recycled state that has seen a fully-selective filter,
+# and must switch from whole_group to prefetch_filters
+statement ok
+SET threads=1
+
+statement ok
+SET read_ahead_depth=4
+
+statement ok
+SET parquet_prefetch_column_gap=16384
+
+statement ok
+COPY (
+    SELECT i AS a,
+        i + 10 AS b,
+        CASE
+            WHEN i % 100 = 50 THEN 51
+            ELSE i % 100
+        END AS c,
+        i % 1000 AS g
+    FROM RANGE(24576) t(i)
+) TO '{TEST_DIR}/ra_learn.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+CALL enable_logging('ParquetPrefetch')
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/ra_learn.parquet')
+WHERE c = 50
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%ra_learn.parquet'
+ORDER BY row_group_id
+----
+0	true	whole_group	[[a, b, c, g]]
+1	true	whole_group	[[a, b, c, g]]
+2	true	whole_group	[[a, b, c, g]]
+3	true	whole_group	[[a, b, c, g]]
+4	true	prefetch_filters	[[c], [a, b, *c*, g]]
+5	true	prefetch_filters	[[c], [a, b, *c*, g]]
+6	true	prefetch_filters	[[c], [a, b, *c*, g]]
+7	true	prefetch_filters	[[c], [a, b, *c*, g]]
+8	true	prefetch_filters	[[c], [a, b, *c*, g]]
+9	true	prefetch_filters	[[c], [a, b, *c*, g]]
+10	true	prefetch_filters	[[c], [a, b, *c*, g]]
+11	true	prefetch_filters	[[c], [a, b, *c*, g]]

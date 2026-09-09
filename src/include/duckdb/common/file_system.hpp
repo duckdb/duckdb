@@ -11,11 +11,13 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
+#include "duckdb/common/enums/file_write_mode.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
@@ -38,8 +40,33 @@ class FileOpener;
 class FileSystem;
 class Logger;
 class ClientContext;
+class CompressedFileSystem;
 class QueryContext;
+class MemoryMappedFile;
+struct MMapOptions;
 class MultiFileList;
+
+enum class CreateDirectoryMode : uint8_t {
+	//! Create the target directory only; its parent directory must already exist.
+	SINGLE,
+	//! Create the target directory and any missing parent directories.
+	RECURSIVE
+};
+
+enum class RemoveDirectoryMode : uint8_t {
+	//! Remove the target only; return false if it is missing or non-empty and never remove its contents.
+	SINGLE,
+	//! Remove the target directory and all files and directories contained in it.
+	RECURSIVE
+};
+
+struct CreateDirectoryOptions {
+	CreateDirectoryMode mode = CreateDirectoryMode::SINGLE;
+};
+
+struct RemoveDirectoryOptions {
+	RemoveDirectoryMode mode = RemoveDirectoryMode::SINGLE;
+};
 
 enum class FileType {
 	//! Regular file
@@ -64,9 +91,25 @@ struct FileMetadata {
 	int64_t file_size = -1;
 	timestamp_t last_modification_time = timestamp_t::ninfinity();
 	FileType file_type = FileType::FILE_TYPE_INVALID;
+	optional_idx device_id;
+	optional_idx file_id;
+	//! Optional: tag that uniquely identifies the version of the file (e.g., HTTP ETag).
+	//! Empty if the storage backend does not provide one.
+	string version_tag;
+	//! Time until which (inclusive) cached data may be served without revalidation.
+	//! Unset means the backend provides no freshness information; infinities mean always valid/invalid.
+	optional<timestamp_t> cache_valid_until;
 
 	// A key-value pair of the extended file metadata, which could store any attributes.
 	unordered_map<string, Value> extended_file_info;
+};
+
+//! Measured network throughput for a (remote) file handle. Used to size prefetch coalescing gaps.
+struct NetworkThroughputEstimate {
+	//! Round-trip latency + request setup, in seconds
+	double latency_seconds = 0;
+	//! Single-stream throughput, in bytes per second
+	double bandwidth_bytes_per_s = 0;
 };
 
 struct FileHandle {
@@ -91,15 +134,20 @@ public:
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Sync();
 	DUCKDB_API void Truncate(int64_t new_size);
+	//! Abandon an incomplete write without publishing any buffered or staged data.
+	DUCKDB_API void AbortWrite();
 	DUCKDB_API string ReadLine();
 	DUCKDB_API string ReadLine(QueryContext context);
 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
 	DUCKDB_API virtual idx_t GetProgress();
 	DUCKDB_API virtual FileCompressionType GetFileCompressionType();
 
-	DUCKDB_API bool CanSeek();
+	DUCKDB_API virtual bool CanSeek();
+	DUCKDB_API FileWriteMode GetWriteMode();
 	DUCKDB_API bool IsPipe();
 	DUCKDB_API bool OnDiskFile();
+	//! Try to obtain a network throughput estimate (Local files return false).
+	DUCKDB_API bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API FileType GetType();
 	DUCKDB_API FileMetadata Stats();
@@ -134,6 +182,10 @@ public:
 	FileOpenFlags flags;
 
 	shared_ptr<Logger> logger;
+	//! Whether reads/writes through this handle are counted in the query's I/O metrics. Set to false for
+	//! wrapper handles (e.g. compressed files) that delegate the real on-disk I/O to a child handle, so that
+	//! the bytes are attributed to the child handle (the actual disk I/O) and not double-counted.
+	bool track_io = true;
 };
 
 class FileSystem {
@@ -148,8 +200,13 @@ public:
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                                   optional_ptr<FileOpener> opener = nullptr);
-	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
 	                                           optional_ptr<FileOpener> opener = nullptr);
+
+	//! Open a memory-mapped view of [path]. Throws if not supported by this filesystem.
+	DUCKDB_API virtual unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
+	                                                              const MMapOptions &options,
+	                                                              optional_ptr<FileOpener> opener = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
@@ -173,6 +230,8 @@ public:
 	//! Returns a tag that uniquely identifies the version of the file,
 	//! used for checking cache invalidation for CachingFileSystem httpfs files
 	DUCKDB_API virtual string GetVersionTag(FileHandle &handle);
+	//! Returns the current cache freshness deadline, if provided by the file system
+	DUCKDB_API virtual optional<timestamp_t> GetCacheValidUntil(FileHandle &handle);
 	//! Returns the file type of the attached handle
 	DUCKDB_API virtual FileType GetFileType(FileHandle &handle);
 	//! Returns the file stats of the attached handle.
@@ -185,10 +244,16 @@ public:
 	DUCKDB_API virtual bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Create a directory if it does not exist
 	DUCKDB_API virtual void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Create one directory or a directory tree. Returns whether this call is known to have created the target.
+	DUCKDB_API virtual bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+	                                                optional_ptr<FileOpener> opener = nullptr);
 	//! Helper function that uses DirectoryExists and CreateDirectory to ensure all directories in path are created
 	DUCKDB_API virtual void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr);
 	//! Recursively remove a directory and all files in it
 	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Remove an empty directory or a directory tree. Returns whether the target was removed.
+	DUCKDB_API virtual bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                                                optional_ptr<FileOpener> opener = nullptr);
 
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	DUCKDB_API virtual bool ListFiles(const string &directory,
@@ -203,16 +268,18 @@ public:
 	                                 optional_ptr<FileOpener> opener = nullptr);
 	//! Check if a file exists
 	DUCKDB_API virtual bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr);
-	//! Check if path is pipe
+	//! Check if path is a pipe or character device
 	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
-	//! Remvoe a file from disk if it exists - if it does not exist, return false
+	//! Remove a file from disk if it exists - if it does not exist, return false
 	DUCKDB_API virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove multiple files from disk - does not error if any file does not exist
 	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
+	//! Abandon an incomplete write represented by this file handle.
+	DUCKDB_API virtual void AbortFileWrite(FileHandle &handle);
 	//! Sets the working directory
 	DUCKDB_API static void SetWorkingDirectory(const string &path);
 	//! Gets the working directory
@@ -265,12 +332,13 @@ public:
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
-	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
+	//! Register a compression filesystem (both built-in and provided by extensions), keyed by its compression type
+	DUCKDB_API virtual void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs);
 
 	//! Unregister a sub-filesystem by name
 	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
 
-	// !Extract a sub-filesystem by name, with ownership transfered, return nullptr if not registered or the subsystem
+	// !Extract a sub-filesystem by name, with ownership transferred, return nullptr if not registered or the subsystem
 	// has been disabled.
 	DUCKDB_API virtual unique_ptr<FileSystem> ExtractSubSystem(const string &name);
 
@@ -288,11 +356,16 @@ public:
 
 	//! If FS was manually set by the user
 	DUCKDB_API virtual bool IsManuallySet();
+	//! Return the write ordering contract for this handle.
+	DUCKDB_API virtual FileWriteMode GetWriteMode(FileHandle &handle);
 	//! Whether or not we can seek into the file
 	DUCKDB_API virtual bool CanSeek();
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	DUCKDB_API virtual bool OnDiskFile(FileHandle &handle);
+	//! Try to obtain a measured network throughput estimate. Default: not supported (returns false).
+	//! Used for file systems
+	DUCKDB_API virtual bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
 	                                                             bool write);
@@ -303,7 +376,7 @@ public:
 	//! Whether this is a LocalFileSystem instance.
 	DUCKDB_API virtual bool IsLocalFileSystem() const;
 
-	//! Return the name of the filesytem. Used for forming diagnosis messages.
+	//! Return the name of the filesystem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
 
 	//! Whether or not a file is remote or local, based only on file path

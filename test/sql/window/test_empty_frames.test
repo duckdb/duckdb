@@ -3,9 +3,6 @@
 # group: [window]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1 (id INTEGER, ch CHAR(1)) ;
 
 statement ok
@@ -24,7 +21,7 @@ INSERT INTO t1 VALUES (NULL, 'B');
 foreach agg count(*) count_star()
 
 query II
-SELECT id, ${agg} OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
+SELECT id, {agg} OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
 FROM t1
 ORDER BY 1;
 ----
@@ -34,13 +31,127 @@ NULL	0
 
 endloop
 
-#
+#  Reversed frames are empty, so COUNT must be 0 (not negative)
+foreach agg count(*) count_star()
+
+query I
+SELECT {agg} OVER (ROWS BETWEEN 1 FOLLOWING AND 1 PRECEDING) AS actual
+FROM range(1);
+----
+0
+
+endloop
+
+query II
+SELECT id, count(*) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	0
+2	0
+NULL	0
+
+foreach agg count(*) count_star()
+
+# Check aggregates
+query I
+SELECT {agg} OVER (ROWS BETWEEN 1 FOLLOWING AND 1 PRECEDING EXCLUDE TIES) AS actual
+FROM range(1);
+----
+0
+
+endloop
+
+# Check value functions
+query II
+SELECT id, lead(id ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	NULL
+2	NULL
+NULL	NULL
+
+# Check ranking functions
+query II
+SELECT id, rank() OVER (ORDER BY id ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	1
+2	2
+NULL	3
+
+# Reversed frames
+foreach func cume_dist percent_rank
+
+query II
+SELECT id, {func}(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	0.0
+2	0.0
+NULL	0.0
+
+endloop
+
+query II
+SELECT id, ntile(2 ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	NULL
+2	NULL
+NULL	NULL
+
+query II
+SELECT id, rank(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	1
+2	1
+NULL	1
+
+# Empty frames
+foreach func cume_dist percent_rank
+
+query II
+SELECT id, {func}(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 1 FOLLOWING AND CURRENT ROW)
+FROM t1
+ORDER BY 1;
+----
+1	0.0
+2	0.0
+NULL	0.0
+
+endloop
+
+query II
+SELECT id, ntile(2 ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 1 FOLLOWING AND CURRENT ROW)
+FROM t1
+ORDER BY 1;
+----
+1	NULL
+2	NULL
+NULL	NULL
+
+query II
+SELECT id, rank(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 1 FOLLOWING AND CURRENT ROW)
+FROM t1
+ORDER BY 1;
+----
+1	1
+2	1
+NULL	1
+
 # All zeroes
 #
 foreach agg approx_count_distinct count entropy
 
 query II
-SELECT id, ${agg}(id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
+SELECT id, {agg}(id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
 FROM t1
 ORDER BY 1;
 ----
@@ -56,7 +167,7 @@ endloop
 foreach agg any_value arbitrary avg bit_and bit_or bit_xor favg first fsum group_concat histogram kahan_sum kurtosis last listagg mad max mean median min mode product sem skewness stddev stddev_pop stddev_samp sum sumkahan var_pop var_samp variance
 
 query II
-SELECT id, ${agg}(id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
+SELECT id, {agg}(id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
 FROM t1
 ORDER BY 1;
 ----
@@ -74,7 +185,7 @@ endloop
 foreach agg approx_quantile quantile quantile_cont quantile_disc reservoir_quantile
 
 query II
-SELECT id, ${agg}(id, 0.5) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
+SELECT id, {agg}(id, 0.5) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
 FROM t1
 ORDER BY 1;
 ----
@@ -88,7 +199,7 @@ endloop
 foreach agg arg_max arg_min argmax argmin max_by min_by
 
 query II
-SELECT id, ${agg}(id, ch) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
+SELECT id, {agg}(id, ch) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
 FROM t1
 ORDER BY 1;
 ----
@@ -101,7 +212,7 @@ endloop
 foreach agg array_agg list
 
 query II
-SELECT id, ${agg}(id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
+SELECT id, {agg}(id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
 FROM t1
 ORDER BY 1;
 ----
@@ -115,7 +226,7 @@ endloop
 foreach agg bool_and bool_or
 
 query II
-SELECT id, ${agg}(id > 0) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
+SELECT id, {agg}(id > 0) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
 FROM t1
 ORDER BY 1;
 ----
@@ -129,7 +240,7 @@ endloop
 foreach agg corr covar_pop covar_samp regr_avgx regr_avgy regr_intercept regr_r2 regr_slope regr_sxx regr_sxy regr_syy
 
 query II
-SELECT id, ${agg}(id, id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
+SELECT id, {agg}(id, id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
 FROM t1
 ORDER BY 1;
 ----
@@ -143,7 +254,7 @@ endloop
 foreach agg regr_count
 
 query II
-SELECT id, ${agg}(id, id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
+SELECT id, {agg}(id, id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
 FROM t1
 ORDER BY 1;
 ----

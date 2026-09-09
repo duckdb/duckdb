@@ -5,9 +5,9 @@
 require parquet
 
 statement ok
-copy (select '-infinity'::double ninf) to '__TEST_DIR__/ninf.parquet';
+copy (select '-infinity'::double ninf) to '{TEST_DIR}/ninf.parquet';
 
 query II
-SELECT stats_min, stats_max FROM parquet_metadata('__TEST_DIR__/ninf.parquet')
+SELECT stats_min, stats_max FROM parquet_metadata('{TEST_DIR}/ninf.parquet')
 ----
 NULL	NULL

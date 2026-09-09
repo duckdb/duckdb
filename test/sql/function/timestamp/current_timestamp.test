@@ -11,9 +11,6 @@ SET Calendar = 'gregorian';
 statement ok
 SET TimeZone = 'America/Chihuahua';
 
-statement ok
-PRAGMA enable_verification
-
 # get the millennium of the current date
 # FIXME: this needs to be updated in 982 years
 query I
@@ -29,7 +26,7 @@ True
 foreach func now get_current_timestamp transaction_timestamp
 
 query I
-SELECT SUFFIX(${func}()::VARCHAR, '-06');
+SELECT SUFFIX({func}()::VARCHAR, '-06');
 ----
 True
 
@@ -41,8 +38,8 @@ foreach unit millennia century decade year month day hour minute second
 
 query II
 select 
-	current_timestamp - interval 1 ${unit} = ago(interval 1 ${unit}),
-	current_timestamp - interval 1 ${unit} = ago('1 ${unit}');
+	current_timestamp - interval 1 {unit} = ago(interval 1 {unit}),
+	current_timestamp - interval 1 {unit} = ago('1 {unit}');
 ----
 True	True
 

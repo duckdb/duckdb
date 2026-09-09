@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <string>
 #include "decimal.h"
 #include "date.h"
 #include "genrand.h"
@@ -57,15 +58,10 @@
  * Side Effects:
  * TODO: None
  */
-static int used_space = 0; /* current length of the sentence being built */
-#define SPACE_INCREMENT 100
-
-static char *mk_sentence(int stream) {
-	static char *verbiage = NULL;
-	static int allocated_space = 0;
-	int word_len;
+static void mk_sentence(std::string &verbiage, int stream) {
 	char *syntax, *cp, *word = NULL, temp[2];
 
+	verbiage.clear();
 	temp[1] = '\0';
 	pick_distribution(&syntax, "sentences", 1, 1, stream);
 
@@ -100,26 +96,13 @@ static char *mk_sentence(int stream) {
 			break;
 		}
 
-		if (word == NULL)
-			word_len = 1;
-		else
-			word_len = strlen(word);
-
-		if (used_space + word_len >= allocated_space) {
-			verbiage = (char *)realloc(verbiage, allocated_space + SPACE_INCREMENT);
-			MALLOC_CHECK(verbiage);
-			allocated_space += SPACE_INCREMENT;
+		if (word == NULL) {
+			verbiage.append(temp, 1);
+		} else {
+			verbiage.append(word);
 		}
-
-		if (word == NULL)
-			strcpy(&verbiage[used_space], temp);
-		else
-			strcpy(&verbiage[used_space], word);
-		used_space += word_len;
 		word = NULL;
 	}
-
-	return (verbiage);
 }
 
 /*
@@ -139,9 +122,8 @@ static char *mk_sentence(int stream) {
  */
 char *gen_text(char *dest, int min, int max, int stream) {
 	int target_len, generated_length, capitalize = 1;
-	char *s;
+	std::string sentence;
 
-	used_space = 0;
 	genrand_integer(&target_len, DIST_UNIFORM, min, max, 0, stream);
 	if (dest)
 		*dest = '\0';
@@ -151,15 +133,14 @@ char *gen_text(char *dest, int min, int max, int stream) {
 	}
 
 	while (target_len > 0) {
-		used_space = 0;
-		s = mk_sentence(stream);
+		mk_sentence(sentence, stream);
 		if (capitalize)
-			*s = toupper(*s);
-		generated_length = strlen(s);
-		capitalize = (s[generated_length - 1] == '.');
+			sentence[0] = static_cast<char>(toupper(sentence[0]));
+		generated_length = static_cast<int>(sentence.size());
+		capitalize = (sentence[generated_length - 1] == '.');
 		if (target_len <= generated_length)
-			s[target_len] = '\0';
-		strcat(dest, s);
+			sentence.resize(target_len);
+		strcat(dest, sentence.c_str());
 		target_len -= generated_length;
 		if (target_len > 0) {
 			strcat(dest, " ");

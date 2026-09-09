@@ -1,10 +1,12 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
 
@@ -14,33 +16,22 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	if (map.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
+	map.Flatten();
 
-	auto count = args.size();
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	auto child = get_child_vector(map);
+	auto &child = get_child_vector(map);
 
-	auto &entries = ListVector::GetEntry(result);
+	auto &entries = ListVector::GetChildMutable(result);
 	entries.Reference(child);
 
-	UnifiedVectorFormat map_data;
-	map.ToUnifiedFormat(count, map_data);
-
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	FlatVector::SetData(result, map_data.data);
-	FlatVector::SetValidity(result, map_data.validity);
+	FlatVector::SetData(result, FlatVector::GetDataMutable(map), count_t(args.size()));
+	FlatVector::SetValidity(result, FlatVector::ValidityMutable(map));
 	auto list_size = ListVector::GetListSize(map);
 	ListVector::SetListSize(result, list_size);
-	if (map.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		result.Slice(*map_data.sel, count);
-	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
+	result.Verify();
 }
 
 static void MapKeysFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -49,6 +40,20 @@ static void MapKeysFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 static void MapValuesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	MapKeyValueFunction(args, state, result, MapVector::GetValues);
+}
+
+static unique_ptr<BaseStatistics> MapValuesStats(ClientContext &, FunctionStatisticsInput &input) {
+	if (input.child_stats.size() != 1 || input.child_stats[0].GetStatsType() != StatisticsType::LIST_STATS) {
+		return nullptr;
+	}
+	auto &entry_stats = ListStats::GetChildStats(input.child_stats[0]);
+	if (entry_stats.GetStatsType() != StatisticsType::STRUCT_STATS) {
+		return nullptr;
+	}
+	auto result = ListStats::CreateEmpty(input.expr.GetReturnType());
+	result.CopyValidity(input.child_stats[0]);
+	ListStats::GetChildStats(result).Copy(StructStats::GetChildStats(entry_stats, 1));
+	return result.ToUnique();
 }
 
 ScalarFunction MapKeysFun::GetFunction() {
@@ -69,6 +74,7 @@ ScalarFunction MapValuesFun::GetFunction() {
 
 	ScalarFunction function({LogicalType::MAP(key_type, val_type)}, LogicalType::LIST(val_type), MapValuesFunction);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	function.SetStatisticsCallback(MapValuesStats);
 
 	function.SetFallible();
 	return function;

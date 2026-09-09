@@ -24,7 +24,7 @@ public:
 	explicit LogicalOrder(vector<BoundOrderByNode> orders);
 
 	vector<BoundOrderByNode> orders;
-	vector<idx_t> projection_map;
+	vector<ProjectionIndex> projection_map;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

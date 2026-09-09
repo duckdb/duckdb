@@ -11,9 +11,6 @@ SELECT arg_min(CAST(ref_19."varchar" AS VARCHAR), CAST(ref_3."varchar" AS VARCHA
 ----
 
 statement ok
-pragma enable_verification
-
-statement ok
 SELECT count_star() 
 OVER (PARTITION BY ref_1.hugeint, ref_1."timestamp" ORDER BY subq_0.c0) AS c0 
 FROM 

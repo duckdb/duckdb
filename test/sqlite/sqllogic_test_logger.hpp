@@ -23,6 +23,9 @@ public:
 	~SQLLogicTestLogger();
 
 	static void Log(const string &annotation, const string &str);
+	static void PrintSkip(const string &file_name, const string &reason);
+	//! Emit the parseable skip marker and record the skip with the reporter
+	static void ReportSkip(const string &file_name, const string &reason);
 	void PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise);
 	static void PrintLineSep();
 	static void PrintHeader(string header);
@@ -54,6 +57,8 @@ public:
 	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
 	void InternalException(MaterializedQueryResult &result);
 	static void LoadDatabaseFail(const string &file_name, const string &dbpath, const string &message);
+	//! Write a machine-readable event line: "[TEST_EVENT] <json>" (--emit-test-events). Caller gates.
+	static void EmitTestEvent(const string &json_payload);
 
 	static void AppendFailure(const string &log_message);
 	static void LogFailure(const string &log_message);

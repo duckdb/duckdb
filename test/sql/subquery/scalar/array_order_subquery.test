@@ -18,20 +18,20 @@ select
 
 # correlated
 query I
-select array(select unnest(l) AS i order by i desc nulls last) as a from (values ([NULL, 1, 2, 3, 4]), ([5, 6, NULL, 7, 8]), ([]), ([10, 11, 12])) t(l);
+select array(select unnest(l) AS i order by i desc nulls last) as a from (values ([NULL, 1, 2, 3, 4]), ([5, 6, NULL, 7, 8]), ([]), ([10, 11, 12])) t(l) ORDER BY ALL;
 ----
+[]
 [4, 3, 2, 1, NULL]
 [8, 7, 6, 5, NULL]
-[]
 [12, 11, 10]
 
 query I
-select array(select unnest(l) AS i order by i desc nulls first) as a from (values ([NULL, 1, 2, 3, 4]), ([5, 6, NULL, 7, 8]), ([]), ([10, 11, 12])) t(l);
+select array(select unnest(l) AS i order by i desc nulls first) as a from (values ([NULL, 1, 2, 3, 4]), ([5, 6, NULL, 7, 8]), ([]), ([10, 11, 12])) t(l) ORDER BY ALL;
 ----
-[NULL, 4, 3, 2, 1]
-[NULL, 8, 7, 6, 5]
 []
 [12, 11, 10]
+[NULL, 4, 3, 2, 1]
+[NULL, 8, 7, 6, 5]
 
 # row id
 query I

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
@@ -26,16 +27,16 @@ public:
 
 	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex index) const;
 	DUCKDB_API const ColumnDefinition &GetColumn(PhysicalIndex index) const;
-	DUCKDB_API const ColumnDefinition &GetColumn(const string &name) const;
+	DUCKDB_API const ColumnDefinition &GetColumn(const Identifier &name) const;
 	DUCKDB_API ColumnDefinition &GetColumnMutable(LogicalIndex index);
 	DUCKDB_API ColumnDefinition &GetColumnMutable(PhysicalIndex index);
-	DUCKDB_API ColumnDefinition &GetColumnMutable(const string &name);
+	DUCKDB_API ColumnDefinition &GetColumnMutable(const Identifier &name);
 	DUCKDB_API vector<string> GetColumnNames() const;
 	DUCKDB_API vector<LogicalType> GetColumnTypes() const;
 
-	DUCKDB_API bool ColumnExists(const string &name) const;
+	DUCKDB_API bool ColumnExists(const Identifier &name) const;
 
-	DUCKDB_API LogicalIndex GetColumnIndex(string &column_name) const;
+	DUCKDB_API LogicalIndex GetColumnIndex(Identifier &column_name) const;
 	DUCKDB_API PhysicalIndex LogicalToPhysical(LogicalIndex index) const;
 	DUCKDB_API LogicalIndex PhysicalToLogical(PhysicalIndex index) const;
 
@@ -63,7 +64,7 @@ public:
 private:
 	vector<ColumnDefinition> columns;
 	//! A map of column name to column index
-	case_insensitive_map_t<column_t> name_map;
+	identifier_map_t<column_t> name_map;
 	//! The set of physical columns
 	vector<idx_t> physical_columns;
 	//! Allow duplicate names or not

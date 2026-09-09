@@ -100,12 +100,12 @@ SettingLookupResult GlobalUserSettings::TryGetSetting(idx_t setting_index, Value
 	return SettingLookupResult();
 }
 
-bool GlobalUserSettings::HasExtensionOption(const string &name) const {
+bool GlobalUserSettings::HasExtensionOption(const Identifier &name) const {
 	lock_guard<mutex> l(lock);
 	return extension_parameters.find(name) != extension_parameters.end();
 }
 
-idx_t GlobalUserSettings::AddExtensionOption(const string &name, ExtensionOption extension_option) {
+idx_t GlobalUserSettings::AddExtensionOption(const Identifier &name, ExtensionOption extension_option) {
 	lock_guard<mutex> l(lock);
 	const auto new_option = extension_parameters.emplace(make_pair(name, std::move(extension_option)));
 	const auto did_insert = new_option.second;
@@ -121,14 +121,14 @@ idx_t GlobalUserSettings::AddExtensionOption(const string &name, ExtensionOption
 	return setting_index;
 }
 
-case_insensitive_map_t<ExtensionOption> GlobalUserSettings::GetExtensionSettings() const {
+identifier_map_t<ExtensionOption> GlobalUserSettings::GetExtensionSettings() const {
 	lock_guard<mutex> l(lock);
 	return extension_parameters;
 }
 
-bool GlobalUserSettings::TryGetExtensionOption(const String &name, ExtensionOption &result) const {
+bool GlobalUserSettings::TryGetExtensionOption(const Identifier &name, ExtensionOption &result) const {
 	lock_guard<mutex> l(lock);
-	auto entry = extension_parameters.find(name.ToStdString());
+	auto entry = extension_parameters.find(name);
 	if (entry == extension_parameters.end()) {
 		return false;
 	}
@@ -146,7 +146,7 @@ CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
 	thread_local CachedGlobalSettings current_cache;
 #endif
 
-	const auto current_version = settings_version.load(std::memory_order_relaxed);
+	const auto current_version = settings_version.load(std::memory_order_acquire);
 	if (!current_cache.global_user_settings || this != current_cache.global_user_settings.get() ||
 	    current_cache.uuid != uuid || current_cache.version != current_version) {
 		// out-of-date, refresh the cache

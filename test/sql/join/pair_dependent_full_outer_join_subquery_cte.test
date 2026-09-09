@@ -1,0 +1,196 @@
+# name: test/sql/join/pair_dependent_full_outer_join_subquery_cte.test
+# description: Test CTE evaluation and plan shapes for pair-dependent FULL OUTER joins
+# group: [join]
+
+statement ok
+CREATE TABLE pair_l(a INTEGER, x INTEGER);
+
+statement ok
+CREATE TABLE pair_r(b INTEGER, y INTEGER);
+
+statement ok
+CREATE TABLE pair_s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_l VALUES (1, 10), (1, 11), (2, 20), (3, 30);
+
+statement ok
+INSERT INTO pair_r VALUES (10, 100), (20, 200), (30, 300), (40, 400);
+
+statement ok
+INSERT INTO pair_s VALUES (1, 10), (1, 20), (2, 20), (NULL, 30), (3, NULL);
+
+# Prepared parameters can appear inside generated side CTEs and the
+# pair-dependent predicate.
+statement ok
+PREPARE pair_prepared_full AS
+SELECT l.a, r.b
+FROM (SELECT * FROM pair_l WHERE x >= $1) l
+FULL OUTER JOIN pair_r r ON EXISTS (
+	SELECT 1
+	FROM pair_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.a <= $2
+)
+ORDER BY l.a NULLS LAST, r.b NULLS LAST;
+
+query II
+EXECUTE pair_prepared_full(20, 2);
+----
+2	20
+3	NULL
+NULL	10
+NULL	30
+NULL	40
+
+# The generated side CTEs must preserve single evaluation of side-effecting
+# expressions from the original join inputs.
+statement ok
+CREATE SEQUENCE pair_effect_seq START 1;
+
+statement ok
+CREATE TABLE pair_effect_l(a INTEGER);
+
+statement ok
+CREATE TABLE pair_effect_r(b BIGINT);
+
+statement ok
+INSERT INTO pair_effect_l VALUES (1), (2);
+
+statement ok
+INSERT INTO pair_effect_r VALUES (1), (2), (3);
+
+query II
+WITH q AS (
+	SELECT count(*)::INTEGER AS count_value
+	FROM (SELECT a, nextval('pair_effect_seq') AS v FROM pair_effect_l) l
+	FULL OUTER JOIN pair_effect_r r ON EXISTS (
+		SELECT 1 WHERE l.v = r.b
+	)
+)
+SELECT count_value, currval('pair_effect_seq') FROM q;
+----
+3	2
+
+# LIST-valued free variables can form the duplicate-free match domain. The
+# payload rows remain distinct even when they share the same domain value.
+statement ok
+CREATE TABLE pair_list_domain_l(v INTEGER[], payload INTEGER);
+
+statement ok
+CREATE TABLE pair_list_domain_r(v INTEGER[], payload INTEGER);
+
+statement ok
+CREATE TABLE pair_list_domain_s(lv INTEGER[], rv INTEGER[]);
+
+statement ok
+INSERT INTO pair_list_domain_l VALUES ([1, 2], 1), ([1, 2], 2), ([3], 3);
+
+statement ok
+INSERT INTO pair_list_domain_r VALUES ([10], 10), ([20], 20);
+
+statement ok
+INSERT INTO pair_list_domain_s VALUES ([1, 2], [10]);
+
+query II rowsort
+SELECT l.payload, r.payload
+FROM pair_list_domain_l l
+FULL OUTER JOIN pair_list_domain_r r ON EXISTS (
+	SELECT 1
+	FROM pair_list_domain_s s
+	WHERE s.lv = l.v
+	  AND s.rv = r.v
+);
+----
+1	10
+2	10
+3	NULL
+NULL	20
+
+# GROUP BY already makes each side unique on the predicate free variables, so
+# match-domain construction can project those variables without another group.
+statement ok
+CREATE TABLE pair_unique_domain_l(a INTEGER, x INTEGER);
+
+statement ok
+CREATE TABLE pair_unique_domain_r(b INTEGER, y INTEGER);
+
+statement ok
+CREATE TABLE pair_unique_domain_s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_unique_domain_l VALUES (1, 5), (1, 7), (2, 9), (3, 11);
+
+statement ok
+INSERT INTO pair_unique_domain_r VALUES (10, 100), (10, 110), (20, 200), (30, 300);
+
+statement ok
+INSERT INTO pair_unique_domain_s VALUES (1, 10), (2, 20);
+
+query IIII rowsort
+SELECT l.a, l.x, r.b, r.y
+FROM (SELECT a, max(x)::INTEGER AS x FROM pair_unique_domain_l GROUP BY a) l
+FULL OUTER JOIN (SELECT b, max(y)::INTEGER AS y FROM pair_unique_domain_r GROUP BY b) r ON EXISTS (
+	SELECT 1
+	FROM pair_unique_domain_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+);
+----
+1	7	10	110
+2	9	20	200
+3	11	NULL	NULL
+NULL	NULL	30	300
+
+# The executable pair domain deduplicates each raw side before forming the
+# intended cross product. Payload columns are not part of either domain key.
+query II
+EXPLAIN SELECT l.a, l.x, r.b, r.y
+FROM pair_unique_domain_l l
+FULL OUTER JOIN pair_unique_domain_r r ON EXISTS (
+	SELECT 1
+	FROM pair_unique_domain_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+);
+----
+physical_plan	<REGEX>:.*Cross Product.*Hash Group By.*Hash Group By.*
+
+query II
+EXPLAIN SELECT l.a, l.x, r.b, r.y
+FROM pair_unique_domain_l l
+FULL OUTER JOIN pair_unique_domain_r r ON EXISTS (
+	SELECT 1
+	FROM pair_unique_domain_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+);
+----
+physical_plan	<!REGEX>:.*Cross Product.*Groups: #0, #1.*
+
+query II
+EXPLAIN SELECT l.a, l.x, r.b, r.y
+FROM pair_unique_domain_l l
+FULL OUTER JOIN pair_unique_domain_r r ON EXISTS (
+	SELECT 1
+	FROM pair_unique_domain_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+);
+----
+physical_plan	<!REGEX>:.*ROW_NUMBER.*
+
+# Domain construction follows the same explicit deduplication path even when
+# an input is already grouped on the complete free-variable key.
+query II
+EXPLAIN SELECT l.a, l.x, r.b, r.y
+FROM (SELECT a, max(x)::INTEGER AS x FROM pair_unique_domain_l GROUP BY a) l
+FULL OUTER JOIN (SELECT b, max(y)::INTEGER AS y FROM pair_unique_domain_r GROUP BY b) r ON EXISTS (
+	SELECT 1
+	FROM pair_unique_domain_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+);
+----
+physical_plan	<REGEX>:.*Cross Product.*Hash Group By.*Hash Group By.*

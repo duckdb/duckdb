@@ -9,6 +9,9 @@
 #pragma once
 
 #include "duckdb/common/enums/file_glob_options.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/execution/partition_info.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -26,6 +29,58 @@ class ClientContext;
 class DataChunk;
 
 enum class ReaderInitializeType { INITIALIZED, SKIP_READING_FILE };
+
+struct MultiFileDynamicPushdownInfo {
+	MultiFileDynamicPushdownInfo(ClientContext &context, const MultiFileOptions &options,
+	                             const vector<Identifier> &column_names, const vector<LogicalType> &column_types,
+	                             const vector<ColumnIndex> &column_indexes, TableFilterSet &filters);
+	ClientContext &context;
+	const MultiFileOptions &options;
+	const vector<Identifier> &column_names;
+	const vector<LogicalType> &column_types;
+	const vector<ColumnIndex> &column_indexes;
+	vector<column_t> column_ids;
+	TableFilterSet &filters;
+};
+
+struct MultiFileReaderVirtualColumnBinding {
+public:
+	enum class VirtualColumnBindingType : uint8_t { COLUMN_REFERENCE, EXPRESSION, CONSTANT };
+
+public:
+	explicit MultiFileReaderVirtualColumnBinding(Value constant)
+	    : type(VirtualColumnBindingType::CONSTANT), constant(std::move(constant)) {
+	}
+	MultiFileReaderVirtualColumnBinding(unique_ptr<Expression> &&expr, vector<idx_t> &&virtual_column_ids)
+	    : type(VirtualColumnBindingType::EXPRESSION), expression(std::move(expr)),
+	      local_virtual_column_ids(std::move(virtual_column_ids)) {
+	}
+	explicit MultiFileReaderVirtualColumnBinding(const MultiFileColumnDefinition &column_ref)
+	    : type(VirtualColumnBindingType::COLUMN_REFERENCE), global_column_reference(column_ref) {
+	}
+
+public:
+	VirtualColumnBindingType GetType() const {
+		return type;
+	}
+
+public:
+	VirtualColumnBindingType type;
+	//! CONSTANT state:
+	//! The constant value to replace the virtual column with
+	Value constant;
+
+	//! EXPRESSION state:
+	//! The expression to replace the virtual column with
+	unique_ptr<Expression> expression;
+	//! The column id(s) to provide to the reader to produce the input(s) for the 'expression'
+	vector<idx_t> local_virtual_column_ids;
+	vector<idx_t> local_column_ids;
+
+	//! COLUMN_REFERENCE state:
+	//! The column reference to replace the virtual column with
+	optional_ptr<const MultiFileColumnDefinition> global_column_reference;
+};
 
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
 struct MultiFileReader {
@@ -45,6 +100,8 @@ public:
 	static constexpr int32_t ROW_ID_FIELD_ID = 2147483540;
 	// Reserved field id used for the "_last_updated_sequence_number" field according to the iceberg spec
 	static constexpr int32_t LAST_UPDATED_SEQUENCE_NUMBER_ID = 2147483539;
+	//! The field of a file STRUCT that holds the path of the file - all other fields are open options
+	static constexpr const char *FILE_PATH_FIELD = "filename";
 
 public:
 	virtual ~MultiFileReader();
@@ -62,37 +119,43 @@ public:
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
 	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 
-	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
-	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
+	//! Parse a Value containing 1 or more files into a vector of files. A file is specified either as a path
+	//! (VARCHAR) or as a STRUCT/VARIANT holding the path together with the options to open the file with
+	DUCKDB_API virtual vector<OpenFileInfo> ParseFileList(const Value &input);
+	//! Parse a single entry of a file list - see ParseFileList
+	DUCKDB_API OpenFileInfo ParseFileEntry(const Value &input);
 	//! Create a MultiFileList from a vector of paths. Any globs will be expanded using the default filesystem
 	DUCKDB_API virtual shared_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const vector<string> &paths,
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
-	//! Shorthand for ParsePaths + CreateFileList
+	//! Create a MultiFileList from a vector of files. Files that carry explicit open options are used as-is,
+	//! any other paths are expanded using the default filesystem
+	DUCKDB_API virtual shared_ptr<MultiFileList>
+	CreateFileList(ClientContext &context, vector<OpenFileInfo> files,
+	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
+	//! Shorthand for ParseFileList + CreateFileList
 	DUCKDB_API shared_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const Value &input,
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
-	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileOptions &options,
+	DUCKDB_API virtual bool ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
 	                                    ClientContext &context);
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
 	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
 	                                                                   const MultiFileOptions &options,
 	                                                                   MultiFilePushdownInfo &info,
 	                                                                   vector<unique_ptr<Expression>> &filters);
-	DUCKDB_API virtual unique_ptr<MultiFileList>
-	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileOptions &options,
-	                      const vector<string> &names, const vector<LogicalType> &types,
-	                      const vector<column_t> &column_ids, TableFilterSet &filters);
+	DUCKDB_API virtual unique_ptr<MultiFileList> DynamicFilterPushdown(const MultiFileList &files,
+	                                                                   MultiFileDynamicPushdownInfo &pushdown_info);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
 	//! directly.
 	DUCKDB_API virtual bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
-	                             vector<string> &names, MultiFileReaderBindData &bind_data);
+	                             vector<Identifier> &names, MultiFileReaderBindData &bind_data);
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required
 	DUCKDB_API virtual void BindOptions(MultiFileOptions &options, MultiFileList &files,
-	                                    vector<LogicalType> &return_types, vector<string> &names,
+	                                    vector<LogicalType> &return_types, vector<Identifier> &names,
 	                                    MultiFileReaderBindData &bind_data);
 
 	//! Initialize global state used by the MultiFileReader
@@ -141,12 +204,12 @@ public:
 	                                         virtual_column_map_t &result);
 
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
-	                                        vector<string> &names, MultiFileList &files, MultiFileBindData &result,
+	                                        vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
 	                                        BaseFileReaderOptions &options, MultiFileOptions &file_options);
 
-	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                                   MultiFileList &files, MultiFileBindData &result, BaseFileReaderOptions &options,
-	                                   MultiFileOptions &file_options);
+	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types,
+	                                   vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
+	                                   BaseFileReaderOptions &options, MultiFileOptions &file_options);
 
 	DUCKDB_API virtual ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data,
 	                                                         const MultiFileBindData &bind_data,
@@ -156,6 +219,13 @@ public:
 	                                                         ClientContext &context, MultiFileGlobalState &gstate);
 
 	static void PruneReaders(MultiFileBindData &data, MultiFileList &file_list);
+
+	//! Returns true iff pre-open-knowable filters (filename, file_index, hive) reject this file.
+	DUCKDB_API static bool CanSkipFileFromFilters(ClientContext &context, const OpenFileInfo &file, idx_t file_list_idx,
+	                                              const MultiFileOptions &file_options,
+	                                              const MultiFileReaderBindData &reader_bind,
+	                                              const vector<ColumnIndex> &global_column_ids,
+	                                              optional_ptr<TableFilterSet> filters);
 
 	DUCKDB_API virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                                           BaseUnionData &union_data,
@@ -179,11 +249,10 @@ public:
 	                                                                   idx_t column_id, const LogicalType &type);
 
 	//! Gets an expression to evaluate the given virtual column
-	DUCKDB_API virtual unique_ptr<Expression>
+	DUCKDB_API virtual MultiFileReaderVirtualColumnBinding
 	GetVirtualColumnExpression(ClientContext &context, MultiFileReaderData &reader_data,
-	                           const vector<MultiFileColumnDefinition> &local_columns, idx_t &column_id,
-	                           const LogicalType &type, MultiFileLocalIndex local_index,
-	                           optional_ptr<MultiFileColumnDefinition> &global_column_reference);
+	                           const vector<MultiFileColumnDefinition> &local_columns, const idx_t column_id,
+	                           const LogicalType &type, MultiFileLocalIndex local_index);
 
 	DUCKDB_API virtual unique_ptr<MultiFileReader> Copy() const;
 
@@ -191,7 +260,7 @@ public:
 
 protected:
 	//! Used in errors to report which function is using this MultiFileReader
-	string function_name;
+	Identifier function_name;
 
 public:
 	template <class TARGET>

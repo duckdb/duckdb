@@ -13,18 +13,25 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
-#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/common/column_index.hpp"
-#include "duckdb/common/enums/metric_type.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
-#include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
+enum class TablePartitionInfo : uint8_t;
+struct PartitionStatistics;
+
+//! Controls how a table function manages parallelism.
+enum class TableFunctionParallelism : uint8_t {
+	SELF_MANAGED_PARALLELISM = 0, //! Source handles its own parallelism (default)
+	SEQUENTIAL = 1,               //! Sequential source, benefits from external parallelization
+	FORCE_SINGLE_THREADED = 2     //! Sequential source, prefers single-threaded execution
+};
 
 class BaseStatistics;
 class LogicalDependencyList;
@@ -37,9 +44,13 @@ class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
+struct OperatorMetrics;
 enum class OrderByColumnType : uint8_t;
 enum class OrderType : uint8_t;
 enum class OrderByStatistics : uint8_t;
+struct RowGroupOrderOptions;
+class LogicalOperator;
+class Binder;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -97,21 +108,24 @@ struct LocalTableFunctionState {
 
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
-	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+	                       vector<LogicalType> &input_table_types, vector<Identifier> &input_table_names,
 	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
-	                       TableFunction &table_function, const TableFunctionRef &ref)
+	                       TableFunction &table_function, const TableFunctionRef &ref,
+	                       optional_ptr<unique_ptr<LogicalOperator>> input_plan = nullptr)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref) {
+	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref),
+	      input_plan(input_plan) {
 	}
 
 	vector<Value> &inputs;
 	named_parameter_map_t &named_parameters;
 	vector<LogicalType> &input_table_types;
-	vector<string> &input_table_names;
+	vector<Identifier> &input_table_names;
 	optional_ptr<TableFunctionInfo> info;
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
+	optional_ptr<unique_ptr<LogicalOperator>> input_plan;
 };
 
 struct TableFunctionInitInput {
@@ -168,11 +182,17 @@ public:
 	}
 
 public:
+	//! Handles a BLOCKED result per the execution mode, returns true when the function must return to yield
+	DUCKDB_API bool HandleBlocked(AsyncResult &blocked_result);
+
+public:
 	optional_ptr<const FunctionData> bind_data;
 	optional_ptr<LocalTableFunctionState> local_state;
 	optional_ptr<GlobalTableFunctionState> global_state;
 	AsyncResult async_result {};
 	AsyncResultsExecutionMode results_execution_mode {AsyncResultsExecutionMode::SYNCHRONOUS};
+	//! Interrupt state of the calling task, so the function might park and wake-up by returning a taskless Blocked res
+	optional_ptr<const InterruptState> interrupt_state;
 };
 
 struct TableFunctionPartitionInput {
@@ -184,26 +204,19 @@ struct TableFunctionPartitionInput {
 	const vector<column_t> &partition_ids;
 };
 
+struct TableFunctionProjectionExpressionInput {
+	const LogicalGet &get;
+	const Expression &expr;
+	//! Position of pushed down column within get, usage: get.GetColumnIds()[column_index]
+	ProjectionIndex column_index;
+};
+
 struct TableFunctionToStringInput {
 	TableFunctionToStringInput(const TableFunction &table_function_p, optional_ptr<const FunctionData> bind_data_p)
 	    : table_function(table_function_p), bind_data(bind_data_p) {
 	}
 	const TableFunction &table_function;
 	optional_ptr<const FunctionData> bind_data;
-};
-
-struct TableFunctionDynamicToStringInput {
-	TableFunctionDynamicToStringInput(const TableFunction &table_function_p,
-	                                  optional_ptr<const FunctionData> bind_data_p,
-	                                  optional_ptr<LocalTableFunctionState> local_state_p,
-	                                  optional_ptr<GlobalTableFunctionState> global_state_p)
-	    : table_function(table_function_p), bind_data(bind_data_p), local_state(local_state_p),
-	      global_state(global_state_p) {
-	}
-	const TableFunction &table_function;
-	optional_ptr<const FunctionData> bind_data;
-	optional_ptr<LocalTableFunctionState> local_state;
-	optional_ptr<GlobalTableFunctionState> global_state;
 };
 
 struct TableFunctionGetPartitionInput {
@@ -241,6 +254,23 @@ struct GetPartitionStatsInput {
 
 	const TableFunction &table_function;
 	optional_ptr<const FunctionData> bind_data;
+};
+
+struct TableFunctionGetMetricsInput {
+public:
+	TableFunctionGetMetricsInput(ClientContext &context, optional_ptr<const FunctionData> bind_data_p,
+	                             optional_ptr<LocalTableFunctionState> local_state_p,
+	                             optional_ptr<GlobalTableFunctionState> global_state_p, OperatorMetrics &metrics_p)
+	    : context(context), bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p),
+	      operator_metrics(metrics_p) {
+	}
+
+public:
+	ClientContext &context;
+	optional_ptr<const FunctionData> bind_data;
+	optional_ptr<LocalTableFunctionState> local_state;
+	optional_ptr<GlobalTableFunctionState> global_state;
+	OperatorMetrics &operator_metrics;
 };
 
 enum class ScanType : uint8_t { TABLE, PARQUET, EXTERNAL };
@@ -286,11 +316,12 @@ public:
 };
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
-                                                          vector<LogicalType> &return_types, vector<string> &names);
+                                                          vector<LogicalType> &return_types, vector<Identifier> &names);
 typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
 typedef unique_ptr<LogicalOperator> (*table_function_bind_operator_t)(ClientContext &context,
-                                                                      TableFunctionBindInput &input, idx_t bind_index,
-                                                                      vector<string> &return_names);
+                                                                      TableFunctionBindInput &input,
+                                                                      TableIndex bind_index,
+                                                                      vector<Identifier> &return_names);
 typedef unique_ptr<GlobalTableFunctionState> (*table_function_init_global_t)(ClientContext &context,
                                                                              TableFunctionInitInput &input);
 typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(ExecutionContext &context,
@@ -316,31 +347,27 @@ typedef bool (*table_function_supports_pushdown_type_t)(const FunctionData &bind
 
 typedef bool (*table_function_supports_pushdown_extract_t)(const FunctionData &bind_data, const LogicalIndex &col_idx);
 
+//! Whether repeated executions with the same bound data are stable within one query.
+typedef bool (*table_function_is_repeatable_t)(optional_ptr<const FunctionData> bind_data);
+
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
 typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
-typedef idx_t (*table_function_rows_scanned_t)(GlobalTableFunctionState &global_state,
-                                               LocalTableFunctionState &local_state);
-typedef void (*table_function_get_metrics_t)(ClientContext &context, const FunctionData *bind_data,
-                                             GlobalTableFunctionState &global_state,
-                                             LocalTableFunctionState &local_state,
-                                             const profiler_settings_t &requested_metrics, profiler_metrics_t &metrics);
+typedef void (*table_function_get_metrics_t)(TableFunctionGetMetricsInput &input);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef bool (*table_function_pushdown_expression_t)(ClientContext &context, const LogicalGet &get, Expression &expr);
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
-typedef InsertionOrderPreservingMap<string> (*table_function_dynamic_to_string_t)(
-    TableFunctionDynamicToStringInput &input);
 
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
 
-typedef void (*table_function_type_pushdown_t)(ClientContext &context, optional_ptr<FunctionData> bind_data,
-                                               const unordered_map<idx_t, LogicalType> &new_column_types);
+typedef bool (*table_function_projection_expression_pushdown_t)(ClientContext &context,
+                                                                const TableFunctionProjectionExpressionInput &input);
 typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext &context,
                                                                   TableFunctionPartitionInput &input);
 
@@ -356,15 +383,20 @@ typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &con
 typedef void (*table_function_set_scan_order)(unique_ptr<RowGroupOrderOptions> order_options,
                                               optional_ptr<FunctionData> bind_data);
 
+typedef void (*table_function_set_partitions_to_scan_t)(vector<idx_t> partition_indices,
+                                                        optional_ptr<FunctionData> bind_data);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
+
+enum class TableFunctionReturnType { TABLE_RETURNING_FUNCTION, SET_RETURNING_FUNCTION };
 
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API TableFunction();
 	// Overloads taking table_function_t
 	DUCKDB_API
-	TableFunction(string name, const vector<LogicalType> &arguments, table_function_t function,
+	TableFunction(Identifier name, const vector<LogicalType> &arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API
@@ -372,7 +404,7 @@ public:
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
 	// Overloads taking std::nullptr
 	DUCKDB_API
-	TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function,
+	TableFunction(Identifier name, const vector<LogicalType> &arguments, std::nullptr_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API
@@ -441,8 +473,6 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
-	//! (Optional) deprecated compatibility callback; prefer get_metrics for new table scan metrics
-	table_function_rows_scanned_t rows_scanned;
 	//! (Optional) returns profiling metrics for this table scan operator
 	table_function_get_metrics_t get_metrics;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
@@ -452,22 +482,24 @@ public:
 	table_function_pushdown_expression_t pushdown_expression;
 	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
-	//! (Optional) function for rendering the operator to a string in profiling output (invoked post-execution)
-	table_function_dynamic_to_string_t dynamic_to_string;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)
 	table_function_progress_t table_scan_progress;
 	//! (Optional) returns the partition info of the current scan operator
 	table_function_get_partition_data_t get_partition_data;
 	//! (Optional) returns extra bind info
 	table_function_get_bind_info_t get_bind_info;
-	//! (Optional) pushes down type information to scanner, returns true if pushdown was successful
-	table_function_type_pushdown_t type_pushdown;
+	//! (Optional) pushes down projection expressions like len() in "SELECT len(str)" or
+	//! casts like "col as UINTEGER" in "SELECT col::UINTEGER" to scanner.
+	//! Returns true if pushdown was successful
+	table_function_projection_expression_pushdown_t projection_expression_pushdown;
 	//! (Optional) allows injecting a custom MultiFileReader implementation
 	table_function_get_multi_file_reader_t get_multi_file_reader;
 	//! (Optional) If this scanner supports filter pushdown, but not to all data types
 	table_function_supports_pushdown_type_t supports_pushdown_type;
 	//! (Optional) If this scanner supports projection pushdown of struct extracts
 	table_function_supports_pushdown_extract_t supports_pushdown_extract;
+	//! Optional repeatability capability. An absent callback is treated conservatively as unknown.
+	table_function_is_repeatable_t is_repeatable;
 	//! Get partition info of the table
 	table_function_get_partition_info_t get_partition_info;
 	//! (Optional) get a list of all the partition stats of the table
@@ -478,6 +510,8 @@ public:
 	table_function_get_row_id_columns get_row_id_columns;
 	//! (Optional) sets the order to scan the row groups in
 	table_function_set_scan_order set_scan_order;
+	//! (Optional) restricts the scan to a specific subset of partitions (by index in get_partition_stats order)
+	table_function_set_partitions_to_scan_t set_partitions_to_scan = nullptr;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
@@ -497,6 +531,10 @@ public:
 	bool sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
+	TableFunctionReturnType return_type;
+	//! The return type used when this function is invoked through a CALL statement
+	//! By default a CALL returns a query result - functions that only have side effects can use NOTHING instead
+	StatementReturnType call_return_type = StatementReturnType::QUERY_RESULT;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 	//! The order preservation type of the table function
@@ -506,6 +544,9 @@ public:
 	//! By default init_global is called when the pipeline is ready for execution
 	//! If this is set to `INITIALIZE_ON_SCHEDULE` the table function is initialized when the query is scheduled
 	TableFunctionInitialization global_initialization = TableFunctionInitialization::INITIALIZE_ON_EXECUTE;
+
+	//! How this table function manages parallelism
+	TableFunctionParallelism parallelism = TableFunctionParallelism::SELF_MANAGED_PARALLELISM;
 
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
 	DUCKDB_API bool operator==(const TableFunction &rhs) const;

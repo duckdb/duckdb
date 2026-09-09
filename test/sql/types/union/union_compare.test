@@ -1,0 +1,55 @@
+# name: test/sql/types/union/union_compare.test
+# description: Test union comparison logic
+# group: [union]
+
+statement ok
+create or replace table unions(u UNION(num INTEGER, str VARCHAR));
+
+statement ok
+insert into unions values (1), ('two'), (NULL), (union_value(str := NULL));
+
+# Note the first NULL in the sort is the union_value, which is not comparable to the integer column
+# so it sorts using the tag, not the values
+query IIII
+select l.u, r.u, l.u = r.u, l.u <> r.u
+from unions l, unions r
+order by all;
+----
+1	1	true	false
+1	two	false	true
+1	NULL	false	true
+1	NULL	NULL	NULL
+two	1	false	true
+two	two	true	false
+two	NULL	NULL	NULL
+two	NULL	NULL	NULL
+NULL	1	false	true
+NULL	two	NULL	NULL
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+NULL	1	NULL	NULL
+NULL	two	NULL	NULL
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+
+query I
+select union_value(str := NULL) = union_value(str := NULL);
+----
+NULL
+
+query IIIII
+WITH vals AS (
+    SELECT
+        union_value(str := 'a')::UNION(num INT, str VARCHAR) AS a,
+        union_value(str := NULL)::UNION(num INT, str VARCHAR) AS n,
+        union_value(str := 'b')::UNION(num INT, str VARCHAR) AS b
+)
+SELECT
+    a = n,
+    n = b,
+    a = b,
+    a IS NOT DISTINCT FROM n,
+    {'u': a} = {'u': n}
+FROM vals;
+----
+NULL	NULL	false	false	false

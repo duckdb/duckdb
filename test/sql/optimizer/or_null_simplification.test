@@ -1,0 +1,138 @@
+# name: test/sql/optimizer/or_null_simplification.test
+# description: Simplify NULL in root OR predicates
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t(x INTEGER NOT NULL);
+
+statement ok
+INSERT INTO t SELECT range FROM range(0, 100);
+
+# NULL and FALSE both reject a row at a predicate root
+query II
+EXPLAIN SELECT count(*) FROM t WHERE x = 5 OR NULL;
+----
+physical_plan	<!REGEX>:.*NULL.*
+
+query I
+SELECT count(*) FROM t WHERE x = 5 OR NULL;
+----
+1
+
+# typed NULL should behave identically
+query II
+EXPLAIN SELECT count(*) FROM t WHERE x = 5 OR NULL::BOOLEAN;
+----
+physical_plan	<!REGEX>:.*NULL.*
+
+query I
+SELECT count(*) FROM t WHERE x = 5 OR NULL::BOOLEAN;
+----
+1
+
+# remove every NULL from an n-ary OR
+query II
+EXPLAIN SELECT count(*) FROM t WHERE x = 5 OR NULL OR NULL::BOOLEAN;
+----
+physical_plan	<!REGEX>:.*NULL.*
+
+query I
+SELECT count(*) FROM t WHERE x = 5 OR NULL OR NULL::BOOLEAN;
+----
+1
+
+# an OR of only NULL branches is an empty filter
+query II
+EXPLAIN SELECT count(*) FROM t WHERE NULL OR NULL::BOOLEAN;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM t WHERE NULL OR NULL::BOOLEAN;
+----
+0
+
+# AND NULL already folds to an empty filter
+query II
+EXPLAIN SELECT count(*) FROM t WHERE x = 5 AND NULL;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM t WHERE x = 5 AND NULL;
+----
+0
+
+# non-root expressions must preserve three-valued logic
+query II
+SELECT x, x = 5 OR NULL FROM t WHERE x IN (4, 5) ORDER BY x;
+----
+4	NULL
+5	true
+
+query I
+SELECT count(*) FROM t WHERE NOT (x = 5 OR NULL);
+----
+0
+
+query I
+SELECT count(*) FROM t WHERE (x = 5 OR NULL) IS FALSE;
+----
+0
+
+query I
+SELECT count(*) FROM t WHERE COALESCE(x = 5 OR NULL, true);
+----
+100
+
+# preserve volatile expression evaluations
+statement ok
+CREATE SEQUENCE s;
+
+statement ok
+CREATE TABLE volatile_t(a BOOLEAN);
+
+statement ok
+INSERT INTO volatile_t VALUES (false), (true);
+
+query I
+SELECT count(*) FROM volatile_t WHERE nextval('s') > 0 OR NULL;
+----
+2
+
+query I
+SELECT currval('s');
+----
+2
+
+# preserve throwing expressions
+statement error
+SELECT count(*) FROM volatile_t WHERE error('expected')::BOOLEAN OR NULL;
+----
+expected
+
+# a root join predicate has the same TRUE-only semantics
+query II
+EXPLAIN SELECT count(*)
+FROM (VALUES (1), (2)) l(x)
+JOIN (VALUES (2), (3)) r(y)
+  ON l.x = r.y OR NULL;
+----
+physical_plan	<REGEX>:.*Conditions: x = y.*
+
+query I
+SELECT count(*)
+FROM (VALUES (1), (2)) l(x)
+JOIN (VALUES (2), (3)) r(y)
+  ON l.x = r.y OR NULL;
+----
+1
+
+# a comparison join operand is not itself a predicate root
+query I
+SELECT count(*)
+FROM (VALUES (4), (5)) l(x)
+JOIN (VALUES (false)) r(y)
+  ON (l.x = 5 OR NULL) = r.y;
+----
+0

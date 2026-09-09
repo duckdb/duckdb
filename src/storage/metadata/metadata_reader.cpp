@@ -36,7 +36,7 @@ void MetadataReader::ReadData(QueryContext context, data_ptr_t buffer, idx_t rea
 			memcpy(buffer, Ptr(), to_read);
 			read_size -= to_read;
 			buffer += to_read;
-			offset += read_size;
+			offset += to_read;
 		}
 		// then move to the next block
 		ReadNextBlock(context);
@@ -86,7 +86,7 @@ void MetadataReader::ReadNextBlock(QueryContext context) {
 }
 
 data_ptr_t MetadataReader::BasePtr() {
-	return block.handle.Ptr() + index * GetMetadataManager().GetMetadataBlockSize();
+	return block.handle.GetDataMutable() + index * GetMetadataManager().GetMetadataBlockSize();
 }
 
 data_ptr_t MetadataReader::Ptr() {

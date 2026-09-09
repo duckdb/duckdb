@@ -45,9 +45,7 @@ RunContainerScanState::RunContainerScanState(idx_t container_index, idx_t contai
     : ContainerScanState(container_index, container_size), count(count), data(data_p) {
 }
 
-void RunContainerScanState::ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
-	auto &result_mask = FlatVector::Validity(result);
-
+void RunContainerScanState::ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) {
 	// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 	// scanned.
 
@@ -166,17 +164,18 @@ void CompressedRunContainerScanState::Verify() const {
 
 //! BitsetContainer
 
-BitsetContainerScanState::BitsetContainerScanState(idx_t container_index, idx_t count, validity_t *bitset)
-    : ContainerScanState(container_index, count), bitset(bitset) {
+BitsetContainerScanState::BitsetContainerScanState(idx_t container_index, idx_t container_size, validity_t *bitset)
+    : ContainerScanState(container_index, container_size),
+      bitset(bitset,
+             container_size / ValidityMask::BITS_PER_VALUE + (container_size % ValidityMask::BITS_PER_VALUE != 0)) {
 }
 
-void BitsetContainerScanState::ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
+void BitsetContainerScanState::ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) {
 	if (!result_offset && (to_scan % ValidityMask::BITS_PER_VALUE) == 0 &&
 	    (scanned_count % ValidityMask::BITS_PER_VALUE) == 0) {
-		ValidityUncompressed::AlignedScan(reinterpret_cast<data_ptr_t>(bitset), scanned_count, result, to_scan);
+		ValidityUncompressed::AlignedScan(bitset, scanned_count, result_mask, to_scan);
 	} else {
-		ValidityUncompressed::UnalignedScan(reinterpret_cast<data_ptr_t>(bitset), container_size, scanned_count, result,
-		                                    result_offset, to_scan);
+		ValidityUncompressed::UnalignedScan(bitset, container_size, scanned_count, result_mask, result_offset, to_scan);
 	}
 	scanned_count += to_scan;
 }
@@ -192,15 +191,15 @@ void BitsetContainerScanState::Verify() const {
 }
 
 RoaringScanState::RoaringScanState(ColumnSegment &segment) : segment(segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	handle = buffer_manager.Pin(segment.GetBlockHandle());
 	auto segment_size = segment.SegmentSize();
 	auto segment_block_offset = segment.GetBlockOffset();
 	if (segment_block_offset >= segment_size) {
 		throw InternalException("invalid segment_block_offset in RoaringScanState constructor");
 	}
 
-	auto base_ptr = handle.Ptr() + segment_block_offset;
+	auto base_ptr = handle.GetDataMutable() + segment_block_offset;
 	data_ptr = base_ptr + sizeof(idx_t);
 
 	// Deserialize the container metadata for this segment
@@ -214,6 +213,10 @@ RoaringScanState::RoaringScanState(ColumnSegment &segment) : segment(segment) {
 	auto container_count = segment_count / ROARING_CONTAINER_SIZE;
 	if (segment_count % ROARING_CONTAINER_SIZE != 0) {
 		container_count++;
+	}
+	auto available_metadata_space = segment_size - metadata_offset;
+	if (container_count > available_metadata_space) {
+		throw IOException("Corrupted Roaring segment: container count exceeds available metadata space");
 	}
 	metadata_collection.Deserialize(metadata_ptr, container_count);
 	ContainerMetadataCollectionScanner scanner(metadata_collection);
@@ -322,7 +325,7 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 	return *current_container;
 }
 
-void RoaringScanState::ScanInternal(ContainerScanState &scan_state, idx_t to_scan, Vector &result, idx_t offset) {
+void RoaringScanState::ScanInternal(ContainerScanState &scan_state, idx_t to_scan, ValidityMask &result, idx_t offset) {
 	scan_state.ScanPartial(result, offset, to_scan);
 }
 
@@ -332,8 +335,7 @@ idx_t RoaringScanState::GetContainerIndex(idx_t start_index, idx_t &offset) {
 	return container_index;
 }
 
-void RoaringScanState::ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count) {
-	result.Flatten(count);
+void RoaringScanState::ScanPartial(idx_t start_idx, ValidityMask &result, idx_t offset, idx_t count) {
 	idx_t remaining = count;
 	idx_t scanned = 0;
 	while (remaining) {

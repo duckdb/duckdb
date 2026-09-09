@@ -4,9 +4,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -80,7 +77,7 @@ BaseStatistics GeometryStats::CreateEmpty(LogicalType type) {
 void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	// Should we serialize as old extension geometry type for backwards compatibility?
 	// (in that case, write unknown string stats)
-	if (!serializer.ShouldSerialize(7)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		auto string_stats = StringStats::CreateUnknown(LogicalType::VARCHAR);
 		StringStats::Serialize(string_stats, serializer);
 		return;
@@ -151,21 +148,30 @@ void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base
 	deserializer.ReadPropertyWithDefault<uint8_t>(302, "flags", data.flags.flags);
 }
 
-string GeometryStats::ToString(const BaseStatistics &stats) {
+child_list_t<Value> GeometryStats::ToStruct(const BaseStatistics &stats) {
 	const auto &data = GetDataUnsafe(stats);
-	string result;
+	child_list_t<Value> result;
+	child_list_t<Value> extent;
 
-	result += "[";
-	result += StringUtil::Format("Extent: [X: [%f, %f], Y: [%f, %f], Z: [%f, %f], M: [%f, %f]]", data.extent.x_min,
-	                             data.extent.x_max, data.extent.y_min, data.extent.y_max, data.extent.z_min,
-	                             data.extent.z_max, data.extent.m_min, data.extent.m_max);
-	result += StringUtil::Format(", Types: [%s]", StringUtil::Join(data.types.ToString(true), ", "));
-	result += StringUtil::Format(
-	    ", Flags: [Has Empty Geom: %s, Has No Empty Geom: %s, Has Empty Part: %s, Has No Empty Part: %s]",
-	    data.flags.HasEmptyGeometry() ? "true" : "false", data.flags.HasNonEmptyGeometry() ? "true" : "false",
-	    data.flags.HasEmptyPart() ? "true" : "false", data.flags.HasNonEmptyPart() ? "true" : "false");
+	extent.emplace_back("x_min", Value::DOUBLE(data.extent.x_min));
+	extent.emplace_back("x_max", Value::DOUBLE(data.extent.x_max));
+	extent.emplace_back("y_min", Value::DOUBLE(data.extent.y_min));
+	extent.emplace_back("y_max", Value::DOUBLE(data.extent.y_max));
+	if (Value::IsFinite(data.extent.z_min) || Value::IsFinite(data.extent.z_max)) {
+		extent.emplace_back("z_min", Value::DOUBLE(data.extent.z_min));
+		extent.emplace_back("z_max", Value::DOUBLE(data.extent.z_max));
+	}
+	if (Value::IsFinite(data.extent.m_min) || Value::IsFinite(data.extent.m_max)) {
+		extent.emplace_back("m_min", Value::DOUBLE(data.extent.m_min));
+		extent.emplace_back("m_max", Value::DOUBLE(data.extent.m_max));
+	}
 
-	result += "]";
+	result.emplace_back("extent", Value::STRUCT(std::move(extent)));
+
+	result.emplace_back("has_empty_geom", Value::BOOLEAN(data.flags.HasEmptyGeometry()));
+	result.emplace_back("has_non_empty_geom", Value::BOOLEAN(data.flags.HasNonEmptyGeometry()));
+	result.emplace_back("has_empty_part", Value::BOOLEAN(data.flags.HasEmptyPart()));
+	result.emplace_back("has_non_empty_part", Value::BOOLEAN(data.flags.HasNonEmptyPart()));
 	return result;
 }
 
@@ -187,7 +193,7 @@ void GeometryStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	target.Merge(source);
 }
 
-void GeometryStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void GeometryStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	// TODO: Verify stats
 }
 
@@ -223,123 +229,6 @@ const GeometryTypeSet &GeometryStats::GetTypes(const BaseStatistics &stats) {
 
 const GeometryStatsFlags &GeometryStats::GetFlags(const BaseStatistics &stats) {
 	return GetDataUnsafe(stats).flags;
-}
-
-// Expression comparison pruning
-static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &data, const Value &constant) {
-	if (constant.IsNull() || constant.type().id() != LogicalTypeId::GEOMETRY) {
-		// Cannot prune against NULL
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	// This has been checked before and needs to be true for the checks below to be valid.
-	// Note: only one axis needs to be set; an unknown axis is an infinite range that
-	// intersects everything, so the IntersectsXY/ContainsXY math below stays valid.
-	D_ASSERT(data.extent.CanPruneXY());
-
-	const auto &geom = StringValue::Get(constant);
-	auto extent = GeometryExtent::Empty();
-	if (Geometry::GetExtent(string_t(geom), extent) == 0) {
-		// If the geometry is empty, the predicate will never match
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-
-	// Check if the bounding boxes intersect
-	// If the bounding boxes do not intersect, the predicate will never match
-	if (!extent.IntersectsXY(data.extent)) {
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-
-	// If the column is completely inside the bounds, the predicate will always match
-	if (extent.ContainsXY(data.extent)) {
-		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-	}
-
-	// We cannot prune, as this column may contain geometries that intersect
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-}
-
-FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, const unique_ptr<Expression> &expr) {
-	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	if (expr->return_type != LogicalType::BOOLEAN) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	const auto &func = expr->Cast<BoundFunctionExpression>();
-	if (func.children.size() != 2) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	if (func.children[0]->return_type.id() != LogicalTypeId::GEOMETRY ||
-	    func.children[1]->return_type.id() != LogicalTypeId::GEOMETRY) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	// The set of geometry predicates that can be optimized using the bounding box
-	static constexpr const char *geometry_predicates[2] = {"&&", "st_intersects_extent"};
-
-	auto found = false;
-	for (const auto &name : geometry_predicates) {
-		if (StringUtil::CIEquals(func.function.name.c_str(), name)) {
-			found = true;
-			break;
-		}
-	}
-	if (!found) {
-		// Not a geometry predicate we can optimize
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	// The column reference may be wrapped in a GEOMETRY -> GEOMETRY cast (e.g. a CRS-erasing cast inserted to match
-	// the predicate's argument type). Such casts only change CRS metadata, not coordinates, so the bounding box
-	// remains valid. Look through them when classifying the operands.
-	auto strip_geometry_cast = [](const Expression &child) -> const Expression * {
-		if (child.GetExpressionType() == ExpressionType::OPERATOR_CAST) {
-			auto &cast = child.Cast<BoundCastExpression>();
-			if (cast.child->return_type.id() == LogicalTypeId::GEOMETRY) {
-				return cast.child.get();
-			}
-		}
-		return &child;
-	};
-
-	const auto &lhs = *strip_geometry_cast(*func.children[0]);
-	const auto &rhs = *strip_geometry_cast(*func.children[1]);
-	const auto lhs_kind = lhs.GetExpressionType();
-	const auto rhs_kind = rhs.GetExpressionType();
-	const auto lhs_is_const = lhs_kind == ExpressionType::VALUE_CONSTANT && rhs_kind == ExpressionType::BOUND_REF;
-	const auto rhs_is_const = rhs_kind == ExpressionType::VALUE_CONSTANT && lhs_kind == ExpressionType::BOUND_REF;
-
-	if (!stats.CanHaveNoNull()) {
-		// no non-null values are possible: always false
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-
-	auto &data = GetDataUnsafe(stats);
-
-	if (!data.extent.CanPruneXY()) {
-		// If neither axis is set (the extent is empty or fully unknown), we cannot prune.
-		// A single known axis is enough: the unknown axis is an infinite range that
-		// intersects everything, so pruning degrades to the known axis.
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	auto result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	if (lhs_is_const) {
-		result = CheckIntersectionFilter(data, lhs.Cast<BoundConstantExpression>().value);
-	} else if (rhs_is_const) {
-		result = CheckIntersectionFilter(data, rhs.Cast<BoundConstantExpression>().value);
-	}
-
-	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && (stats.CanHaveNull() || data.flags.HasEmptyGeometry())) {
-		// the predicate matches every row that is represented in the extent, but rows that are not
-		// represented in it do not match: NULL values (the predicate evaluates to NULL for them) and
-		// empty geometries (which contribute no vertices, but never intersect anything).
-		// If either can be present we cannot prune the filter away
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	return result;
 }
 
 } // namespace duckdb

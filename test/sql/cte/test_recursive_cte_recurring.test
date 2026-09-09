@@ -2,9 +2,6 @@
 # description: Recursive CTEs with access to the UNION table
 # group: [cte]
 
-statement ok
-PRAGMA enable_verification;
-
 query II
 WITH RECURSIVE deduction AS (
 	-- P, (not P or Q), (not Q)

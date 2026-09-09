@@ -14,7 +14,7 @@ create or replace table t(id int, name text, u_ids int[]);
 statement ok
 insert into t values (1, 'one', [1]), (2, 'two', [1, 2]), (3, 'three', null);
 
-query II
+query II rowsort
 select c.id, ts.names
 from c LEFT JOIN (
   select array_agg(t.name)
@@ -25,7 +25,7 @@ where ts.names IS NOT NULL;
 1	[one, two]
 2	[two]
 
-query II
+query II rowsort
 select c.id, ts.names
 from c LEFT JOIN (
   select array_agg(t.name)

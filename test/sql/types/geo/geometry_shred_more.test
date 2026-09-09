@@ -10,7 +10,7 @@ foreach storage_version v1.0.0 v1.5.0
 foreach rgsize 2048 8192
 
 statement ok
-ATTACH '__TEST_DIR__/geocp_${storage_version}_${rgsize}.db' AS db (ROW_GROUP_SIZE ${rgsize}, STORAGE_VERSION '${storage_version}');
+ATTACH '{TEST_DIR}/geocp_{storage_version}_{rgsize}.db' AS db (ROW_GROUP_SIZE {rgsize}, STORAGE_VERSION '{storage_version}');
 
 statement ok
 USE db;
@@ -140,7 +140,7 @@ statement ok
 DETACH db;
 
 statement ok
-ATTACH '__TEST_DIR__/geocp_${storage_version}_${rgsize}.db' AS db;
+ATTACH '{TEST_DIR}/geocp_{storage_version}_{rgsize}.db' AS db;
 
 statement ok
 USE db;

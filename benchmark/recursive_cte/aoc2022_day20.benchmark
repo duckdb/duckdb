@@ -1,0 +1,7 @@
+# name: benchmark/recursive_cte/aoc2022_day20.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/aoc2022/recursive_cte_aoc2022.benchmark.in
+DAY=day20
+BENCHMARK_NAME=AoC 2022 day20 recursive mixing
+DESCRIPTION=Run recursive permutation updates driven by a window

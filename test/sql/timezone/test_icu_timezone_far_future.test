@@ -1,0 +1,157 @@
+# name: test/sql/timezone/test_icu_timezone_far_future.test
+# description: Time zones and dates past 2038, where a 32 bit seconds count would run out
+# group: [timezone]
+
+require icu
+
+# The zone data holds the transitions it knows about, and a recurring rule for everything after
+# them. The transitions of the Unicode dataset are split into a section that fits in 32 bits and
+# sections that do not, so a zone that stopped working in 2038 would mean the second kind is
+# being read wrongly, or the rule is not being applied at all.
+
+statement ok
+SET TimeZone='America/New_York';
+
+# the instant a 32 bit seconds count overflows, and the second after it
+
+query I
+SELECT '2038-01-19 03:14:07+00'::TIMESTAMPTZ;
+----
+2038-01-18 22:14:07-05
+
+query I
+SELECT '2038-01-19 03:14:08+00'::TIMESTAMPTZ;
+----
+2038-01-18 22:14:08-05
+
+# daylight savings is still observed either side of it
+
+query II
+SELECT '2038-01-15 12:00:00+00'::TIMESTAMPTZ, '2038-07-15 12:00:00+00'::TIMESTAMPTZ;
+----
+2038-01-15 07:00:00-05	2038-07-15 08:00:00-04
+
+# and it is still observed a long way after it
+
+query II
+SELECT '2099-01-15 12:00:00+00'::TIMESTAMPTZ, '2099-07-15 12:00:00+00'::TIMESTAMPTZ;
+----
+2099-01-15 07:00:00-05	2099-07-15 08:00:00-04
+
+query I
+SELECT '2500-07-15 12:00:00+00'::TIMESTAMPTZ;
+----
+2500-07-15 08:00:00-04
+
+# the transitions of 2045 are where the rule says they are: forward at 2am on the second Sunday
+# of March, so that 2am does not exist, and back at 2am on the first Sunday of November, so that
+# 1am occurs twice
+
+query II
+SELECT '2045-03-12 06:59:59+00'::TIMESTAMPTZ, '2045-03-12 07:00:00+00'::TIMESTAMPTZ;
+----
+2045-03-12 01:59:59-05	2045-03-12 03:00:00-04
+
+query II
+SELECT '2045-11-05 05:59:59+00'::TIMESTAMPTZ, '2045-11-05 06:00:00+00'::TIMESTAMPTZ;
+----
+2045-11-05 01:59:59-04	2045-11-05 01:00:00-05
+
+statement ok
+SET TimeZone='UTC';
+
+# Every transition of every year from 2038 to 2100, checked against the rule that produces it.
+# A zone that ran out of data would show up here as a year with no transitions in it.
+
+# the offset is measured at noon, which is after every transition of the day it is on
+statement ok
+CREATE MACRO transitions(zone) AS TABLE
+    WITH days(day) AS (
+        SELECT '2038-01-01'::DATE + to_days(i::INTEGER) FROM range(23000) t(i)
+    ), offsets AS (
+        SELECT day,
+               epoch(timezone(zone, day::TIMESTAMP + INTERVAL 12 HOUR)) - epoch(day::TIMESTAMP + INTERVAL 12 HOUR)
+                   AS off
+        FROM days
+    ), changes AS (
+        SELECT day, off, lag(off) OVER (ORDER BY day) AS previous FROM offsets
+    )
+    SELECT day, previous > off AS starts_daylight_saving
+    FROM changes WHERE previous IS NOT NULL AND off <> previous;
+
+# the United States: forward on the second Sunday of March, back on the first Sunday of November
+query IIII
+SELECT count(*),
+       count(*) FILTER (WHERE dayname(day) <> 'Sunday'),
+       count(*) FILTER (WHERE starts_daylight_saving AND (month(day) <> 3 OR ((day(day) - 1) // 7) + 1 <> 2)),
+       count(*) FILTER (WHERE NOT starts_daylight_saving AND (month(day) <> 11 OR ((day(day) - 1) // 7) + 1 <> 1))
+FROM transitions('America/New_York');
+----
+126	0	0	0
+
+# the European Union: the last Sunday of March and of October
+query IIII
+SELECT count(*),
+       count(*) FILTER (WHERE dayname(day) <> 'Sunday'),
+       count(*) FILTER (WHERE starts_daylight_saving AND (month(day) <> 3 OR day(day) + 7 <= 31)),
+       count(*) FILTER (WHERE NOT starts_daylight_saving AND (month(day) <> 10 OR day(day) + 7 <= 31))
+FROM transitions('Europe/Berlin');
+----
+126	0	0	0
+
+# the southern hemisphere, where the daylight savings period wraps around the end of the year
+query III
+SELECT count(*),
+       count(*) FILTER (WHERE dayname(day) <> 'Sunday'),
+       count(DISTINCT month(day))
+FROM transitions('Australia/Sydney');
+----
+126	0	2
+
+# a zone that does not observe daylight savings never changes its offset
+query I
+SELECT count(*) FROM transitions('Asia/Tokyo');
+----
+0
+
+query I
+SELECT count(*) FROM transitions('Asia/Kolkata');
+----
+0
+
+# The dates themselves also have to keep working past 2038.
+
+query II
+SELECT year('2044-02-29 12:00:00+00'::TIMESTAMPTZ), dayofyear('2044-12-31 12:00:00+00'::TIMESTAMPTZ);
+----
+2044	366
+
+query I
+SELECT '2038-01-19 03:14:07+00'::TIMESTAMPTZ + INTERVAL 10 YEAR;
+----
+2048-01-19 03:14:07+00
+
+query I
+SELECT date_diff('day', '2037-01-01 00:00:00+00'::TIMESTAMPTZ, '2045-01-01 00:00:00+00'::TIMESTAMPTZ);
+----
+2922
+
+query I
+SELECT date_diff('year', '2000-01-01 00:00:00+00'::TIMESTAMPTZ, '2100-01-01 00:00:00+00'::TIMESTAMPTZ);
+----
+100
+
+query I
+SELECT date_trunc('year', '2045-07-04 12:00:00+00'::TIMESTAMPTZ);
+----
+2045-01-01 00:00:00+00
+
+# the day of the week keeps advancing by one across the boundary
+query I
+SELECT count(*) FROM (
+    SELECT dayofweek(ts) AS dow,
+           lag(dayofweek(ts)) OVER (ORDER BY ts) AS previous
+    FROM (SELECT '2037-06-01 12:00:00+00'::TIMESTAMPTZ + to_days(i::INTEGER) AS ts FROM range(1000) t(i))
+) WHERE previous IS NOT NULL AND dow <> (previous + 1) % 7;
+----
+0

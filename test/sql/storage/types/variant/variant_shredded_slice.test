@@ -1,0 +1,41 @@
+# name: test/sql/storage/types/variant/variant_shredded_slice.test
+# description: Slicing a shredded variant vector and consuming it (hash/aggregate)
+# group: [variant]
+
+load {TEST_DIR}/variant_shredded_slice.db readwrite v1.5.0
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+create table bluesky (j VARIANT)
+
+# heterogeneous schemas -> the variant column is only partially shredded
+statement ok
+insert into bluesky select
+  case when i%3=0
+       then {'kind':'commit','did':'c'|| (i%4),'commit':{'collection':'coll'|| (i%2),'operation':'create'}}::VARIANT
+       else {'kind':'identity','did':'d'|| (i%5)}::VARIANT
+  end
+from range(4096) t(i)
+
+statement ok
+checkpoint
+
+# count(DISTINCT) hashes a shredded variant - the distinct aggregate slices/hashes the shredded vector
+query II
+SELECT count(DISTINCT j.did), count(*) FROM bluesky;
+----
+9	4096
+
+# jsonbench q02 style: the filter slices the shredded vector, then it is grouped/hashed
+query TII
+SELECT j.commit.collection AS event, count() AS count, count(DISTINCT j.did) AS users
+FROM bluesky
+WHERE (j.kind = 'commit') AND (j.commit.operation = 'create')
+GROUP BY event
+ORDER BY count DESC, event
+----
+coll0	683	2
+coll1	683	2

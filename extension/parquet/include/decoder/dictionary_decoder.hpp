@@ -8,13 +8,24 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "duckdb.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "resizable_buffer.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 class ColumnReader;
 struct TableFilterState;
+class DictionaryEntry;
+class ResizeableBuffer;
+class Vector;
 
 class DictionaryDecoder {
 public:
@@ -47,7 +58,7 @@ private:
 	SelectionVector valid_sel;
 	SelectionVector dictionary_selection_vector;
 	idx_t dictionary_size;
-	buffer_ptr<VectorChildBuffer> dictionary;
+	buffer_ptr<DictionaryEntry> dictionary;
 	unsafe_unique_array<bool> filter_result;
 	idx_t filter_count;
 	bool can_have_nulls;

@@ -1,8 +1,11 @@
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
 
@@ -50,7 +53,7 @@ struct LeastGreatestSortKeyState : public FunctionLocalState {
 template <class OP>
 unique_ptr<FunctionLocalState> LeastGreatestSortKeyInit(ExpressionState &state, const BoundFunctionExpression &expr,
                                                         FunctionData *bind_data) {
-	return make_uniq<LeastGreatestSortKeyState>(expr.children.size(), OP::NullOrdering());
+	return make_uniq<LeastGreatestSortKeyState>(expr.GetChildren().size(), OP::NullOrdering());
 }
 
 template <bool STRING>
@@ -66,7 +69,7 @@ struct StandardLeastGreatest {
 	}
 
 	static void FinalizeResult(idx_t rows, bool result_has_value[], Vector &result, ExpressionState &) {
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < rows; i++) {
 			if (!result_has_value[i]) {
 				result_mask.SetInvalid(i);
@@ -82,10 +85,8 @@ struct SortKeyLeastGreatest {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LeastGreatestSortKeyState>();
 		lstate.sort_keys.Reset();
 		for (idx_t c_idx = 0; c_idx < args.ColumnCount(); c_idx++) {
-			CreateSortKeyHelpers::CreateSortKey(args.data[c_idx], args.size(), lstate.modifiers,
-			                                    lstate.sort_keys.data[c_idx]);
+			CreateSortKeyHelpers::CreateSortKey(args.data[c_idx], lstate.modifiers, lstate.sort_keys.data[c_idx]);
 		}
-		lstate.sort_keys.SetCardinality(args.size());
 		return lstate.sort_keys;
 	}
 
@@ -97,7 +98,7 @@ struct SortKeyLeastGreatest {
 	static void FinalizeResult(idx_t rows, bool result_has_value[], Vector &result, ExpressionState &state) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LeastGreatestSortKeyState>();
 		auto result_keys = FlatVector::GetData<string_t>(lstate.intermediate);
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < rows; i++) {
 			if (!result_has_value[i]) {
 				result_mask.SetInvalid(i);
@@ -130,7 +131,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		}
 	}
 
-	auto result_data = FlatVector::GetData<T>(result_vector);
+	auto result_data = FlatVector::ScatterWriter<T>(result_vector);
 	bool result_has_value[STANDARD_VECTOR_SIZE] {false};
 	// perform the operation column-by-column
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
@@ -140,17 +141,15 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			continue;
 		}
 
-		UnifiedVectorFormat vdata;
-		input.data[col_idx].ToUnifiedFormat(input.size(), vdata);
+		auto entries = input.data[col_idx].template Values<T>();
 
-		auto input_data = UnifiedVectorFormat::GetData<T>(vdata);
-		if (!vdata.validity.AllValid()) {
+		if (entries.CanHaveNull()) {
 			// potential new null entries: have to check the null mask
 			for (idx_t i = 0; i < input.size(); i++) {
-				auto vindex = vdata.sel->get_index(i);
-				if (vdata.validity.RowIsValid(vindex)) {
+				auto entry = entries[i];
+				if (entry.IsValid()) {
 					// not a null entry: perform the operation and add to new set
-					auto ivalue = input_data[vindex];
+					auto ivalue = entry.GetValue();
 					if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
 						result_has_value[i] = true;
 						result_data[i] = ivalue;
@@ -160,9 +159,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		} else {
 			// no new null entries: only need to perform the operation
 			for (idx_t i = 0; i < input.size(); i++) {
-				auto vindex = vdata.sel->get_index(i);
-
-				auto ivalue = input_data[vindex];
+				auto ivalue = entries.GetValueUnsafe(i);
 				if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
 					result_has_value[i] = true;
 					result_data[i] = ivalue;
@@ -175,8 +172,72 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 template <class LEAST_GREATER_OP>
-unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
+	auto &return_type = expr.GetReturnType();
+	if (BaseStatistics::GetStatsType(return_type) != StatisticsType::NUMERIC_STATS ||
+	    return_type.InternalType() == PhysicalType::BOOL) {
+		return nullptr;
+	}
+	constexpr bool IS_LEAST = std::is_same_v<LEAST_GREATER_OP, LeastOp>;
+
+	auto merge = [](Value &bound, const Value &candidate, bool keep_smaller) {
+		if (bound.IsNull() || (keep_smaller ? candidate < bound : candidate > bound)) {
+			bound = candidate;
+		}
+	};
+
+	// least/greatest always returns one of its inputs, so the result range is built from the
+	// inputs' min/max values. A NULL input is skipped at runtime, so only inputs that can never
+	// be NULL may tighten the "anchored" side of the range:
+	//
+	//             | loose side (over all inputs) | anchored side (over non-null inputs)
+	//   least     | min of the mins  -> min      | min of the maxes -> max
+	//   greatest  | max of the maxes -> max      | max of the mins  -> min
+	//
+	// If every input can be NULL, a single input may end up deciding the result, so the anchored
+	// side falls back to the opposite aggregation over all inputs
+	Value loose;
+	Value anchored;          // over non-null inputs only
+	Value anchored_fallback; // over all inputs; used only when every input is nullable
+	bool has_nonnull_input = false;
+	for (auto &cs : child_stats) {
+		if (cs.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(cs)) {
+			return nullptr;
+		}
+		const Value cmin = NumericStats::Min(cs);
+		const Value cmax = NumericStats::Max(cs);
+		const Value &loose_val = IS_LEAST ? cmin : cmax;
+		const Value &anchored_val = IS_LEAST ? cmax : cmin;
+
+		merge(loose, loose_val, /*keep_smaller=*/IS_LEAST);
+		merge(anchored_fallback, anchored_val, /*keep_smaller=*/!IS_LEAST);
+		if (!cs.CanHaveNull()) {
+			has_nonnull_input = true;
+			merge(anchored, anchored_val, /*keep_smaller=*/IS_LEAST);
+		}
+	}
+	if (!has_nonnull_input) {
+		anchored = std::move(anchored_fallback);
+	}
+
+	auto result = NumericStats::CreateEmpty(return_type);
+	NumericStats::SetMin(result, IS_LEAST ? std::move(loose) : std::move(anchored));
+	NumericStats::SetMax(result, IS_LEAST ? std::move(anchored) : std::move(loose));
+	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
+	if (!has_nonnull_input) {
+		// the result is NULL only if all inputs are NULL
+		result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
+	return result.ToUnique();
+}
+
+template <class LEAST_GREATER_OP>
+unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	LogicalType child_type = ExpressionBinder::GetExpressionReturnType(*arguments[0]);
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
@@ -200,7 +261,7 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 	}
 	using OP = typename LEAST_GREATER_OP::OP;
 	switch (child_type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(least_greatest_types)
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		bound_function.SetFunctionCallback(LeastGreatestFunction<int8_t, OP>);
@@ -230,16 +291,17 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 		bound_function.SetInitStateCallback(LeastGreatestSortKeyInit<LEAST_GREATER_OP>);
 		break;
 	}
-	bound_function.arguments[0] = child_type;
-	bound_function.varargs = child_type;
+	for (auto &arg : bound_function.GetArguments()) {
+		arg = child_type;
+	}
 	bound_function.SetReturnType(child_type);
 	return nullptr;
 }
 
 template <class OP>
 ScalarFunction GetLeastGreatestFunction() {
-	return ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>, nullptr, nullptr,
-	                      nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
+	return ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>,
+	                      PropagateLeastGreatestStats<OP>, nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
 	                      FunctionNullHandling::SPECIAL_HANDLING);
 }
 

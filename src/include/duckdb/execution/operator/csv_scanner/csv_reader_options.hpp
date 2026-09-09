@@ -54,6 +54,8 @@ struct CSVReaderOptions {
 	CSVOption<string> rejects_scan_name = {"reject_scans"};
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
+	//! Rejects line size limit (0 = no limit)
+	idx_t rejects_line_size_limit = 10000;
 	//! Number of samples to buffer
 	idx_t buffer_sample_size = static_cast<idx_t>(STANDARD_VECTOR_SIZE * 50);
 	//! Specifies the strings that represents a null value
@@ -72,18 +74,18 @@ struct CSVReaderOptions {
 	// CSVAutoOptions
 	//===--------------------------------------------------------------------===//
 	//! SQL Type list mapping of name to SQL type index in sql_type_list
-	case_insensitive_map_t<idx_t> sql_types_per_column;
+	identifier_map_t<idx_t> sql_types_per_column;
 	//! User-defined SQL type list
 	vector<LogicalType> sql_type_list;
 	//! User-defined name list
-	vector<string> name_list;
+	vector<Identifier> name_list;
 	//! If the names and types were set by the columns parameter
 	bool columns_set = false;
 	//! Types considered as candidates for auto-detection ordered by ascending specificity (~ from low to high)
-	vector<LogicalType> auto_type_candidates = {
-	    LogicalType::VARCHAR,      LogicalType::DOUBLE,    LogicalType::BIGINT,
-	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP, LogicalType::DATE,
-	    LogicalType::TIME,         LogicalType::BOOLEAN,   LogicalType::SQLNULL};
+	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR,   LogicalType::DOUBLE, LogicalType::BIGNUM,
+	                                            LogicalType::HUGEINT,   LogicalType::BIGINT, LogicalType::TIMESTAMP_TZ,
+	                                            LogicalType::TIMESTAMP, LogicalType::DATE,   LogicalType::TIME,
+	                                            LogicalType::BOOLEAN,   LogicalType::SQLNULL};
 	//! In case the sniffer found a mismatch error from user defined types or dialect
 	string sniffer_user_mismatch_error;
 	//! In case the sniffer found a mismatch error from user defined types or dialect
@@ -128,7 +130,7 @@ struct CSVReaderOptions {
 	//! By default, our encoding is always UTF-8
 	string encoding = "utf-8";
 	//! User defined parameters
-	map<string, string> user_defined_parameters;
+	identifier_tree_t<string> user_defined_parameters;
 
 	//! Returns a list of user-defined parameters in string format
 	string GetUserDefinedParameters() const;
@@ -182,17 +184,17 @@ struct CSVReaderOptions {
 
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
-	bool SetBaseOption(const string &loption, const Value &value, bool write_option = false);
+	bool SetBaseOption(const Identifier &loption, const Value &value, bool write_option = false);
 
 	//! loption - lowercase string
 	//! set - argument(s) to the option
 	//! expected_names - names expected if the option is "columns"
-	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
-	void SetWriteOption(const string &loption, const Value &value);
+	void SetReadOption(const Identifier &loption, const Value &value, const vector<Identifier> &expected_names);
+	void SetWriteOption(const Identifier &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 	void ToNamedParameters(named_parameter_map_t &out) const;
 	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context, MultiFileOptions &file_options);
-	void ParseOption(ClientContext &context, const string &key, const Value &val);
+	void ParseOption(ClientContext &context, const Identifier &key, const Value &val);
 	//! Verify options are not conflicting
 	void Verify(MultiFileOptions &file_options);
 

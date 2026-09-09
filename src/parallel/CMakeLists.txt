@@ -9,15 +9,20 @@ add_library_unity(
   event.cpp
   interrupt.cpp
   pipeline.cpp
+  pipeline_broadcast_exchange.cpp
   pipeline_complete_event.cpp
   pipeline_event.cpp
   pipeline_executor.cpp
   pipeline_finish_event.cpp
   pipeline_initialize_event.cpp
   pipeline_prepare_finish_event.cpp
+  pipeline_schedule.cpp
+  scan_read_ahead.cpp
   task_executor.cpp
   task_notifier.cpp
   task_scheduler.cpp
+  task_scheduler_pool.cpp
+  task_scheduler_queue.cpp
   thread_context.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parallel>

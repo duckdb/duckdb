@@ -5,9 +5,6 @@
 require parquet
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok
@@ -59,44 +56,44 @@ CREATE TABLE timestamp_ns_limits AS SELECT '1900-01-01 00:00:00'::timestamp_ns m
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns varchar blob boolean tinyint smallint integer bigint float double
 
 statement ok
-CREATE TABLE tbl(i ${type});
+CREATE TABLE tbl(i {type});
 
 # empty stats (all values are NULL)
 statement ok
 INSERT INTO tbl SELECT NULL
 
 statement ok
-COPY tbl TO '__TEST_DIR__/${type}_stats.parquet' (FORMAT PARQUET);
+COPY tbl TO '{TEST_DIR}/{type}_stats.parquet' (FORMAT PARQUET);
 
 query IIII
-SELECT stats_min_value::${type}, stats_max_value::${type}, stats_min::${type}, stats_max::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_min_value::{type}, stats_max_value::{type}, stats_min::{type}, stats_max::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL	NULL	NULL	NULL
 
 # min/max stats
 statement ok
-INSERT INTO tbl SELECT min FROM ${type}_limits
+INSERT INTO tbl SELECT min FROM {type}_limits
 
 statement ok
-INSERT INTO tbl SELECT max FROM ${type}_limits
+INSERT INTO tbl SELECT max FROM {type}_limits
 
 statement ok
-COPY tbl TO '__TEST_DIR__/${type}_stats.parquet' (FORMAT PARQUET);
+COPY tbl TO '{TEST_DIR}/{type}_stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_min_value::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet') EXCEPT SELECT min FROM ${type}_limits
+SELECT stats_min_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT min FROM {type}_limits
 ----
 
 query I
-SELECT stats_max_value::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet') EXCEPT SELECT max FROM ${type}_limits
+SELECT stats_max_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT max FROM {type}_limits
 ----
 
 query I
-SELECT stats_min::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet') EXCEPT SELECT min FROM ${type}_limits
+SELECT stats_min::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT min FROM {type}_limits
 ----
 
 query I
-SELECT stats_max::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet') EXCEPT SELECT max FROM ${type}_limits
+SELECT stats_max::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT max FROM {type}_limits
 ----
 
 statement ok
@@ -120,60 +117,60 @@ CREATE TABLE ubigint_limits AS SELECT 0::UBIGINT min, 18446744073709551615::UBIG
 foreach type utinyint usmallint uinteger ubigint
 
 statement ok
-CREATE TABLE tbl(i ${type});
+CREATE TABLE tbl(i {type});
 
 # empty stats (all values are NULL)
 statement ok
 INSERT INTO tbl SELECT NULL
 
 statement ok
-COPY tbl TO '__TEST_DIR__/${type}_stats.parquet' (FORMAT PARQUET);
+COPY tbl TO '{TEST_DIR}/{type}_stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_min_value::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_min_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL
 
 query I
-SELECT stats_max_value::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_max_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL
 
 query I
-SELECT stats_min::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_min::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL
 
 query I
-SELECT stats_max::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_max::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL
 
 # min/max stats
 statement ok
-INSERT INTO tbl SELECT min FROM ${type}_limits
+INSERT INTO tbl SELECT min FROM {type}_limits
 
 statement ok
-INSERT INTO tbl SELECT max FROM ${type}_limits
+INSERT INTO tbl SELECT max FROM {type}_limits
 
 statement ok
-COPY tbl TO '__TEST_DIR__/${type}_stats.parquet' (FORMAT PARQUET);
+COPY tbl TO '{TEST_DIR}/{type}_stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_min_value::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet') EXCEPT SELECT min FROM ${type}_limits
+SELECT stats_min_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT min FROM {type}_limits
 ----
 
 query I
-SELECT stats_max_value::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet') EXCEPT SELECT max FROM ${type}_limits
+SELECT stats_max_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT max FROM {type}_limits
 ----
 
 query I
-SELECT stats_min::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_min::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL
 
 query I
-SELECT stats_max::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_max::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL
 
@@ -189,34 +186,34 @@ CREATE TABLE hugeint_limits AS SELECT (-170141183460469231731687303715884105728)
 foreach type hugeint
 
 statement ok
-CREATE TABLE tbl(i ${type});
+CREATE TABLE tbl(i {type});
 
 statement ok
-INSERT INTO tbl SELECT min FROM ${type}_limits
+INSERT INTO tbl SELECT min FROM {type}_limits
 
 statement ok
-INSERT INTO tbl SELECT max FROM ${type}_limits
+INSERT INTO tbl SELECT max FROM {type}_limits
 
 statement ok
-COPY tbl TO '__TEST_DIR__/${type}_stats.parquet' (FORMAT PARQUET);
+COPY tbl TO '{TEST_DIR}/{type}_stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_min_value::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_min_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL
 
 query I
-SELECT stats_max_value::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_max_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL
 
 query I
-SELECT stats_min::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_min::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL
 
 query I
-SELECT stats_max::${type} FROM parquet_metadata('__TEST_DIR__/${type}_stats.parquet')
+SELECT stats_max::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
 ----
 NULL
 

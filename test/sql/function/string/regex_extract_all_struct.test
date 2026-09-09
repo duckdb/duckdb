@@ -2,9 +2,6 @@
 # description: tests for regexp_extract_all struct multi-match variant
 # group: [string]
 
-statement ok
-PRAGMA enable_verification;
-
 query I
 SELECT regexp_extract_all('Peter:33 Paul:14', '(\w+):(\d+)', ['name','num']) AS res;
 ----
@@ -325,7 +322,7 @@ statement error
 WITH params(name_list) AS (SELECT ['g1','g2'])
 SELECT regexp_extract_all('abc', '(a)(b)', name_list) FROM params;
 ----
-Group specification field must be a constant list
+must be a constant expression
 
 statement error
 SELECT regexp_extract_all('abc', '(a)', NULL::VARCHAR[]);

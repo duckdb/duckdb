@@ -3,7 +3,7 @@
 # group: [read_duckdb]
 
 statement ok
-ATTACH '__TEST_DIR__/read_duckdb_transaction.db' AS rd
+ATTACH '{TEST_DIR}/read_duckdb_transaction.db' AS rd
 
 statement ok
 CREATE TABLE rd.my_tbl AS SELECT 42 i
@@ -15,12 +15,12 @@ statement ok
 BEGIN
 
 query I
-SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_transaction.db')
+SELECT * FROM read_duckdb('{TEST_DIR}/read_duckdb_transaction.db')
 ----
 42
 
 query I
-SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_transaction.db')
+SELECT * FROM read_duckdb('{TEST_DIR}/read_duckdb_transaction.db')
 ----
 42
 

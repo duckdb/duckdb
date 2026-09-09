@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -64,6 +65,9 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
+	}
 
 	bool SinkOrderDependent() const override {
 		return false;
@@ -81,7 +85,7 @@ public:
 	//! The number of bits we need to completely cover each of the groups
 	vector<idx_t> required_bits;
 
-	unordered_map<Expression *, size_t> filter_indexes;
+	reference_map_t<const Expression, size_t> filter_indexes;
 };
 
 } // namespace duckdb

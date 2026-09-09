@@ -1,0 +1,24 @@
+# name: test/sql/optimizer/sign_row_group_pruning.test
+# description: Row-group pruning through the sign function
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/sign_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+statement ok
+CREATE TABLE integers AS
+    SELECT range::INTEGER AS i
+    FROM range(6144);
+
+query I
+SELECT sum(i) FROM integers WHERE sign(i) = 0;
+----
+0
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM integers WHERE sign(i) = 0;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*

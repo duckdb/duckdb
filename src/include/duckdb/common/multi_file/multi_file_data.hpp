@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include <numeric>
@@ -39,6 +38,10 @@ struct HivePartitioningIndex {
 
 struct MultiFileColumnDefinition {
 public:
+	MultiFileColumnDefinition(const Identifier &name, const LogicalType &type) : name(name), type(type) {
+	}
+	MultiFileColumnDefinition(const char *name, const LogicalType &type) : name(name), type(type) {
+	}
 	MultiFileColumnDefinition(const string &name, const LogicalType &type) : name(name), type(type) {
 	}
 
@@ -60,7 +63,7 @@ public:
 	}
 
 public:
-	static MultiFileColumnDefinition CreateFromNameAndType(const string &name, const LogicalType &type) {
+	static MultiFileColumnDefinition CreateFromNameAndType(const Identifier &name, const LogicalType &type) {
 		MultiFileColumnDefinition result(name, type);
 		if (type.id() == LogicalTypeId::STRUCT) {
 			// recursively create for children
@@ -71,7 +74,7 @@ public:
 		return result;
 	}
 
-	static vector<MultiFileColumnDefinition> ColumnsFromNamesAndTypes(const vector<string> &names,
+	static vector<MultiFileColumnDefinition> ColumnsFromNamesAndTypes(const vector<Identifier> &names,
 	                                                                  const vector<LogicalType> &types) {
 		vector<MultiFileColumnDefinition> columns;
 		D_ASSERT(names.size() == types.size());
@@ -88,7 +91,7 @@ public:
 		D_ASSERT(names.empty());
 		D_ASSERT(types.empty());
 		for (auto &column : columns) {
-			names.push_back(column.name);
+			names.push_back(column.name.GetIdentifierName());
 			types.push_back(column.type);
 		}
 	}
@@ -102,7 +105,7 @@ public:
 	string GetIdentifierName() const {
 		if (identifier.IsNull()) {
 			// No identifier was provided, assume the name as the identifier
-			return name;
+			return name.GetIdentifierName();
 		}
 		D_ASSERT(identifier.type().id() == LogicalTypeId::VARCHAR);
 		return identifier.GetValue<string>();
@@ -110,15 +113,15 @@ public:
 
 	Value GetDefaultValue() const {
 		D_ASSERT(default_expression);
-		if (default_expression->type != ExpressionType::VALUE_CONSTANT) {
+		if (default_expression->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			throw NotImplementedException("Default expression that isn't constant is not supported yet");
 		}
 		auto &constant_expr = default_expression->Cast<ConstantExpression>();
-		return constant_expr.value;
+		return constant_expr.GetValue();
 	}
 
 public:
-	string name;
+	Identifier name;
 	LogicalType type;
 	vector<MultiFileColumnDefinition> children;
 	unique_ptr<ParsedExpression> default_expression;
@@ -131,6 +134,8 @@ public:
 struct MultiFileCastMap;
 struct MultiFileFilterEntry;
 
+//! MultiFileLocalColumnId refers to an absolute column index within a specific file we are reading
+// i.e. if the file has columns "a, b, c", a will have MultiFileLocalColumnId(0), b = 1, c = 2
 struct MultiFileLocalColumnId {
 	friend struct MultiFileCastMap;
 
@@ -158,6 +163,9 @@ struct MultiFileColumnMapping;
 struct MultiFileFilterMap;
 struct MultiFileConstantMap;
 
+//! MultiFileLocalIndex refers to a ProjectionIndex locally within a specific file that we are reading
+//! This refers to an entry in the "column_ids" list - i.e. to get the absolute column (MultiFileLocalColumnId)
+// we can use column_ids[#MultiFileLocalColumnId]
 struct MultiFileLocalIndex {
 	//! these are allowed to access the index
 	template <class T>
@@ -166,15 +174,45 @@ struct MultiFileLocalIndex {
 	friend struct MultiFileFilterEntry;
 
 public:
-	explicit MultiFileLocalIndex(idx_t index) : index(index) {
+	explicit MultiFileLocalIndex(idx_t index = DConstants::INVALID_INDEX) : index(index) {
+	}
+	explicit MultiFileLocalIndex(ProjectionIndex projection) : index(projection) {
 	}
 
 public:
 	operator idx_t() const { // NOLINT: allow implicit conversion
-		return index;
+		return GetIndex();
 	}
 	idx_t GetIndex() const {
+		if (!IsValid()) {
+			throw InternalException("MultiFileLocalIndex::GetIndex called on invalid index");
+		}
 		return index;
+	}
+	bool IsValid() const {
+		return index != DConstants::INVALID_INDEX;
+	}
+	operator ProjectionIndex() const { // NOLINT: allow implicit conversion to projection index
+		return ProjectionIndex(index);
+	}
+
+	inline bool operator==(const MultiFileLocalIndex &rhs) const {
+		return index == rhs.index;
+	};
+	inline bool operator<(const MultiFileLocalIndex &rhs) const {
+		return index < rhs.index;
+	};
+	bool operator!=(const MultiFileLocalIndex &other) const {
+		return !(*this == other);
+	}
+	bool operator>(const MultiFileLocalIndex &other) const {
+		return other < *this;
+	}
+	bool operator<=(const MultiFileLocalIndex &other) const {
+		return !(other < *this);
+	}
+	bool operator>=(const MultiFileLocalIndex &other) const {
+		return !(*this < other);
 	}
 
 private:
@@ -195,6 +233,28 @@ public:
 	}
 	idx_t GetIndex() const {
 		return index;
+	}
+	operator ProjectionIndex() const { // NOLINT: allow implicit conversion to projection index
+		return ProjectionIndex(index);
+	}
+
+	inline bool operator==(const MultiFileGlobalIndex &rhs) const {
+		return index == rhs.index;
+	};
+	inline bool operator<(const MultiFileGlobalIndex &rhs) const {
+		return index < rhs.index;
+	};
+	bool operator!=(const MultiFileGlobalIndex &other) const {
+		return !(*this == other);
+	}
+	bool operator>(const MultiFileGlobalIndex &other) const {
+		return other < *this;
+	}
+	bool operator<=(const MultiFileGlobalIndex &other) const {
+		return !(other < *this);
+	}
+	bool operator>=(const MultiFileGlobalIndex &other) const {
+		return !(*this < other);
 	}
 
 private:
@@ -343,3 +403,13 @@ private:
 };
 
 } // namespace duckdb
+
+namespace std {
+
+template <>
+struct hash<duckdb::MultiFileGlobalIndex> {
+	size_t operator()(const duckdb::MultiFileGlobalIndex &global_idx) const {
+		return std::hash<uint64_t> {}(global_idx.GetIndex());
+	}
+};
+} // namespace std

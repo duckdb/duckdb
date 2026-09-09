@@ -2,9 +2,6 @@
 # description: Test decimal-to-decimal casting with scale reduction
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT '9.90'::DECIMAL(4,3)::DECIMAL(3,2);
 ----

@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/asql_fluid_using_key.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/asql_ws2526/recursive_cte_asql.benchmark.in
+LOAD=fluid
+QUERY=asql_fluid_using_key
+BENCHMARK_NAME=Advanced SQL one-dimensional diffusion using key
+DESCRIPTION=Retain the latest per-cell diffusion state with USING KEY

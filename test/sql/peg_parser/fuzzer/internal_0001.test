@@ -1,0 +1,8 @@
+# name: test/sql/peg_parser/fuzzer/internal_0001.test
+# description: PEG parser throws internal exception here for create secret
+# group: [fuzzer]
+
+statement error
+CREATE SECRET ( x '\r' );
+----
+Parser Error: Failed to create secret - secret must have a type defined

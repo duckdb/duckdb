@@ -2,9 +2,6 @@
 # description: Test selecting a view through a qualified reference
 # group: [select]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT j : 42;
 ----

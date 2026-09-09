@@ -1,0 +1,41 @@
+# name: test/sql/join/test_predicate_binding.test
+# description: Test non-comparison join bindings
+# group: [join]
+
+statement ok
+CREATE TABLE b (id BIGINT, name VARCHAR, created_at VARCHAR);
+
+statement ok
+INSERT INTO b VALUES (-3, 'a', 'a'), (NULL, 'b', 'b');
+
+statement ok
+CREATE TABLE empt AS SELECT * FROM b WHERE 1 = 0;
+
+statement ok
+CREATE VIEW t AS 
+	SELECT id, name, created_at 
+	FROM b 
+	ANTI JOIN empt 
+	ON TRUE;
+
+statement ok
+SELECT t5.created_at
+FROM (SELECT 'YEAR' AS c0
+      FROM t AS t1 
+      INNER JOIN t AS t2 
+      ON t1.created_at <= t2.created_at
+      WHERE COALESCE(t1.id, t2.id) IS NOT NULL
+) AS sq4
+INNER JOIN t AS t5 
+ON sq4.c0 = t5.created_at;
+
+statement ok
+SELECT t5.created_at
+FROM (SELECT 'YEAR' AS c0
+      FROM t AS t1 
+      INNER JOIN t AS t2 
+      ON t1.created_at = t2.created_at
+      WHERE COALESCE(t1.id, t2.id) IS NOT NULL
+) AS sq4
+INNER JOIN t AS t5 
+ON sq4.c0 = t5.created_at;

@@ -1,0 +1,11 @@
+# name: test/sql/table_function/duckdb_available_metrics.test
+# description: Test the duckdb_available_metrics() table function
+# group: [table_function]
+
+# Verify the function exists and returns the expected columns.
+query IIII
+SELECT metric_name, metric_type, description, unit
+FROM duckdb_available_metrics()
+WHERE metric_name = 'query.cpu_time';
+----
+query.cpu_time	double	CPU time spent on the query	seconds

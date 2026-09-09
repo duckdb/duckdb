@@ -9,6 +9,8 @@
 #pragma once
 
 #include "writer/parquet_write_stats.hpp"
+#include "parquet_interval.hpp"
+#include "parquet_timestamp.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
@@ -30,6 +32,16 @@ struct BaseParquetOperator {
 	template <class SRC, class TGT>
 	static uint64_t XXHash64(const TGT &target_value) {
 		return duckdb_zstd::XXH64(&target_value, sizeof(target_value), 0);
+	}
+
+	template <class SRC, class TGT>
+	static idx_t BloomFilterEntriesPerValue() {
+		return 1;
+	}
+
+	template <class SRC, class TGT>
+	static optional<uint64_t> GetExtraBloomFilterHash(const SRC &, const TGT &) {
+		return nullopt;
 	}
 
 	template <class SRC, class TGT>
@@ -107,6 +119,38 @@ struct ParquetTimestampSOperator : public ParquetCastOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochSecondsPossiblyInfinite(input).value;
+	}
+};
+
+struct ParquetTimestampInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		timestamp_t ts(input);
+		return TimestampToImpalaTimestamp(ts);
+	}
+};
+
+struct ParquetTimestampSInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		auto ts = Timestamp::FromEpochSecondsPossiblyInfinite(input);
+		return TimestampToImpalaTimestamp(ts);
+	}
+};
+
+struct ParquetTimestampMSInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		auto ts = Timestamp::FromEpochMsPossiblyInfinite(input);
+		return TimestampToImpalaTimestamp(ts);
+	}
+};
+
+struct ParquetTimestampNSInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		auto ts = Timestamp::FromEpochNanoSecondsPossiblyInfinite(input);
+		return TimestampToImpalaTimestamp(ts);
 	}
 };
 
@@ -205,7 +249,7 @@ struct ParquetStringOperator : public ParquetBaseStringOperator {
 };
 
 struct ParquetIntervalTargetType {
-	static constexpr const idx_t PARQUET_INTERVAL_SIZE = 12;
+	static constexpr const idx_t PARQUET_INTERVAL_SIZE = ParquetIntervalUtils::PARQUET_INTERVAL_SIZE;
 	data_t bytes[PARQUET_INTERVAL_SIZE];
 };
 
@@ -216,9 +260,7 @@ struct ParquetIntervalOperator : public BaseParquetOperator {
 			throw IOException("Parquet files do not support negative intervals");
 		}
 		TGT result;
-		Store<uint32_t>(input.months, result.bytes);
-		Store<uint32_t>(input.days, result.bytes + sizeof(uint32_t));
-		Store<uint32_t>(input.micros / 1000, result.bytes + sizeof(uint32_t) * 2);
+		ParquetIntervalUtils::Encode(input, result.bytes);
 		return result;
 	}
 
@@ -235,6 +277,17 @@ struct ParquetIntervalOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static uint64_t XXHash64(const TGT &target_value) {
 		return duckdb_zstd::XXH64(target_value.bytes, ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE, 0);
+	}
+
+	template <class SRC, class TGT>
+	static idx_t BloomFilterEntriesPerValue() {
+		return 2;
+	}
+
+	template <class SRC, class TGT>
+	static optional<uint64_t> GetExtraBloomFilterHash(const SRC &source_value, const TGT &) {
+		// Preserve the Parquet plain-encoding hash and add the hash used by DuckDB comparisons.
+		return ParquetIntervalUtils::HashNormalized(source_value);
 	}
 };
 
@@ -285,7 +338,23 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 struct ParquetTimeTZOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		return Time::NormalizeTimeTZ(input).micros;
+		return Time::NormalizeTimeTZ(input).value;
+	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<NumericStatisticsState<TGT, TGT, BaseParquetOperator>>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+		auto &numeric_stats = stats->Cast<NumericStatisticsState<TGT, TGT, BaseParquetOperator>>();
+		if (LessThan::Operation(target_value, numeric_stats.min)) {
+			numeric_stats.min = target_value;
+		}
+		if (GreaterThan::Operation(target_value, numeric_stats.max)) {
+			numeric_stats.max = target_value;
+		}
 	}
 };
 

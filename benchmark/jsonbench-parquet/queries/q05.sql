@@ -1,0 +1,1 @@
+SELECT j.did::String as user_id,date_diff('milliseconds', TO_TIMESTAMP(CAST(MIN(j.time_us) AS BIGINT) / 1000000),TO_TIMESTAMP(CAST(MAX(j.time_us) AS BIGINT) / 1000000)) AS activity_span FROM bluesky WHERE (j.kind = 'commit') AND (j.commit.operation = 'create') AND (j.commit.collection = 'app.bsky.feed.post') GROUP BY user_id ORDER BY activity_span DESC LIMIT 3;

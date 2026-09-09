@@ -1,0 +1,18 @@
+# name: test/sql/collate/collate_string_col.test
+# group: [collate]
+
+statement ok
+CREATE TABLE tbl (
+	col1 STRING COLLATE NOCASE
+);
+
+statement ok
+INSERT INTO tbl VALUES ('Hello'), ('hello'), ('HELLO'), ('hElLo');
+
+query I
+SELECT * FROM tbl WHERE col1 = 'hello';
+----
+Hello
+hello
+HELLO
+hElLo

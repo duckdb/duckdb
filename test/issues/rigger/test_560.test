@@ -2,9 +2,6 @@
 # description: Issue 560
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Incorrect result for SUM() and negative number
 statement ok
 CREATE TABLE t0 (c0 INT);

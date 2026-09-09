@@ -56,12 +56,12 @@
 
 #include <stdio.h>
 
-struct W_WEB_SALES_TBL g_w_web_sales;
+thread_local struct W_WEB_SALES_TBL g_w_web_sales;
 ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 
-static ds_key_t kNewDateIndex = 0;
-static ds_key_t jDate;
-static int nItemIndex = 0;
+static thread_local ds_key_t kNewDateIndex = 0;
+static thread_local ds_key_t jDate;
+static thread_local int nItemIndex = 0;
 
 /*
  * the validation process requires generating a single lineitem
@@ -69,10 +69,10 @@ static int nItemIndex = 0;
  * and a detail/lineitem portion.
  */
 static void mk_master(void *info_arr, ds_key_t index) {
-	static decimal_t dMin, dMax;
+	static thread_local decimal_t dMin, dMax;
 	int nGiftPct;
 	struct W_WEB_SALES_TBL *r;
-	static int nItemCount;
+	static thread_local int nItemCount;
 
 	r = &g_w_web_sales;
 
@@ -124,7 +124,8 @@ static void mk_master(void *info_arr, ds_key_t index) {
 }
 
 static void mk_detail(void *info_arr, int bPrint) {
-	static int *pItemPermutation, nItemCount;
+	static thread_local int *pItemPermutation, nItemCount;
+	static thread_local int nItemPermutationSize;
 	struct W_WEB_SALES_TBL *r;
 	int nShipLag, nTemp;
 	struct W_WEB_RETURNS_TBL w_web_returns;
@@ -132,7 +133,14 @@ static void mk_detail(void *info_arr, int bPrint) {
 
 	if (!InitConstants::mk_detail_init) {
 		jDate = skipDays(WEB_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(NULL, nItemCount = (int)getIDCount(ITEM), WS_PERMUTATION);
+		nItemCount = (int)getIDCount(ITEM);
+		// A cached permutation is only reusable if it is at least as large as the
+		// current scale requires; otherwise re-allocate to avoid overflowing it.
+		if (nItemCount > nItemPermutationSize) {
+			pItemPermutation = NULL;
+			nItemPermutationSize = nItemCount;
+		}
+		pItemPermutation = makePermutation(pItemPermutation, nItemCount, WS_PERMUTATION);
 
 		InitConstants::mk_detail_init = 1;
 	}
@@ -173,30 +181,30 @@ static void mk_detail(void *info_arr, int bPrint) {
 		void *info = append_info_get(info_arr, WEB_RETURNS);
 		append_row_start(info);
 
-		append_key(info, rr->wr_returned_date_sk);
-		append_key(info, rr->wr_returned_time_sk);
-		append_key(info, rr->wr_item_sk);
-		append_key(info, rr->wr_refunded_customer_sk);
-		append_key(info, rr->wr_refunded_cdemo_sk);
-		append_key(info, rr->wr_refunded_hdemo_sk);
-		append_key(info, rr->wr_refunded_addr_sk);
-		append_key(info, rr->wr_returning_customer_sk);
-		append_key(info, rr->wr_returning_cdemo_sk);
-		append_key(info, rr->wr_returning_hdemo_sk);
-		append_key(info, rr->wr_returning_addr_sk);
-		append_key(info, rr->wr_web_page_sk);
-		append_key(info, rr->wr_reason_sk);
-		append_key(info, rr->wr_order_number);
-		append_integer(info, rr->wr_pricing.quantity);
-		append_decimal(info, &rr->wr_pricing.net_paid);
-		append_decimal(info, &rr->wr_pricing.ext_tax);
-		append_decimal(info, &rr->wr_pricing.net_paid_inc_tax);
-		append_decimal(info, &rr->wr_pricing.fee);
-		append_decimal(info, &rr->wr_pricing.ext_ship_cost);
-		append_decimal(info, &rr->wr_pricing.refunded_cash);
-		append_decimal(info, &rr->wr_pricing.reversed_charge);
-		append_decimal(info, &rr->wr_pricing.store_credit);
-		append_decimal(info, &rr->wr_pricing.net_loss);
+		append_key(info, rr->wr_returned_date_sk, WR_RETURNED_DATE_SK);
+		append_key(info, rr->wr_returned_time_sk, WR_RETURNED_TIME_SK);
+		append_key(info, rr->wr_item_sk, WR_ITEM_SK);
+		append_key(info, rr->wr_refunded_customer_sk, WR_REFUNDED_CUSTOMER_SK);
+		append_key(info, rr->wr_refunded_cdemo_sk, WR_REFUNDED_CDEMO_SK);
+		append_key(info, rr->wr_refunded_hdemo_sk, WR_REFUNDED_HDEMO_SK);
+		append_key(info, rr->wr_refunded_addr_sk, WR_REFUNDED_ADDR_SK);
+		append_key(info, rr->wr_returning_customer_sk, WR_RETURNING_CUSTOMER_SK);
+		append_key(info, rr->wr_returning_cdemo_sk, WR_RETURNING_CDEMO_SK);
+		append_key(info, rr->wr_returning_hdemo_sk, WR_RETURNING_HDEMO_SK);
+		append_key(info, rr->wr_returning_addr_sk, WR_RETURNING_ADDR_SK);
+		append_key(info, rr->wr_web_page_sk, WR_WEB_PAGE_SK);
+		append_key(info, rr->wr_reason_sk, WR_REASON_SK);
+		append_key(info, rr->wr_order_number, WR_ORDER_NUMBER);
+		append_integer(info, rr->wr_pricing.quantity, WR_PRICING_QUANTITY);
+		append_decimal(info, &rr->wr_pricing.net_paid, WR_PRICING_NET_PAID);
+		append_decimal(info, &rr->wr_pricing.ext_tax, WR_PRICING_EXT_TAX);
+		append_decimal(info, &rr->wr_pricing.net_paid_inc_tax, WR_PRICING_NET_PAID_INC_TAX);
+		append_decimal(info, &rr->wr_pricing.fee, WR_PRICING_FEE);
+		append_decimal(info, &rr->wr_pricing.ext_ship_cost, WR_PRICING_EXT_SHIP_COST);
+		append_decimal(info, &rr->wr_pricing.refunded_cash, WR_PRICING_REFUNDED_CASH);
+		append_decimal(info, &rr->wr_pricing.reversed_charge, WR_PRICING_REVERSED_CHARGE);
+		append_decimal(info, &rr->wr_pricing.store_credit, WR_PRICING_STORE_CREDIT);
+		append_decimal(info, &rr->wr_pricing.net_loss, WR_PRICING_NET_LOSS);
 
 		append_row_end(info);
 	}
@@ -204,40 +212,40 @@ static void mk_detail(void *info_arr, int bPrint) {
 	void *info = append_info_get(info_arr, WEB_SALES);
 	append_row_start(info);
 
-	append_key(info, r->ws_sold_date_sk);
-	append_key(info, r->ws_sold_time_sk);
-	append_key(info, r->ws_ship_date_sk);
-	append_key(info, r->ws_item_sk);
-	append_key(info, r->ws_bill_customer_sk);
-	append_key(info, r->ws_bill_cdemo_sk);
-	append_key(info, r->ws_bill_hdemo_sk);
-	append_key(info, r->ws_bill_addr_sk);
-	append_key(info, r->ws_ship_customer_sk);
-	append_key(info, r->ws_ship_cdemo_sk);
-	append_key(info, r->ws_ship_hdemo_sk);
-	append_key(info, r->ws_ship_addr_sk);
-	append_key(info, r->ws_web_page_sk);
-	append_key(info, r->ws_web_site_sk);
-	append_key(info, r->ws_ship_mode_sk);
-	append_key(info, r->ws_warehouse_sk);
-	append_key(info, r->ws_promo_sk);
-	append_key(info, r->ws_order_number);
-	append_integer(info, r->ws_pricing.quantity);
-	append_decimal(info, &r->ws_pricing.wholesale_cost);
-	append_decimal(info, &r->ws_pricing.list_price);
-	append_decimal(info, &r->ws_pricing.sales_price);
-	append_decimal(info, &r->ws_pricing.ext_discount_amt);
-	append_decimal(info, &r->ws_pricing.ext_sales_price);
-	append_decimal(info, &r->ws_pricing.ext_wholesale_cost);
-	append_decimal(info, &r->ws_pricing.ext_list_price);
-	append_decimal(info, &r->ws_pricing.ext_tax);
-	append_decimal(info, &r->ws_pricing.coupon_amt);
-	append_decimal(info, &r->ws_pricing.ext_ship_cost);
-	append_decimal(info, &r->ws_pricing.net_paid);
-	append_decimal(info, &r->ws_pricing.net_paid_inc_tax);
-	append_decimal(info, &r->ws_pricing.net_paid_inc_ship);
-	append_decimal(info, &r->ws_pricing.net_paid_inc_ship_tax);
-	append_decimal(info, &r->ws_pricing.net_profit);
+	append_key(info, r->ws_sold_date_sk, WS_SOLD_DATE_SK);
+	append_key(info, r->ws_sold_time_sk, WS_SOLD_TIME_SK);
+	append_key(info, r->ws_ship_date_sk, WS_SHIP_DATE_SK);
+	append_key(info, r->ws_item_sk, WS_ITEM_SK);
+	append_key(info, r->ws_bill_customer_sk, WS_BILL_CUSTOMER_SK);
+	append_key(info, r->ws_bill_cdemo_sk, WS_BILL_CDEMO_SK);
+	append_key(info, r->ws_bill_hdemo_sk, WS_BILL_HDEMO_SK);
+	append_key(info, r->ws_bill_addr_sk, WS_BILL_ADDR_SK);
+	append_key(info, r->ws_ship_customer_sk, WS_SHIP_CUSTOMER_SK);
+	append_key(info, r->ws_ship_cdemo_sk, WS_SHIP_CDEMO_SK);
+	append_key(info, r->ws_ship_hdemo_sk, WS_SHIP_HDEMO_SK);
+	append_key(info, r->ws_ship_addr_sk, WS_SHIP_ADDR_SK);
+	append_key(info, r->ws_web_page_sk, WS_WEB_PAGE_SK);
+	append_key(info, r->ws_web_site_sk, WS_WEB_SITE_SK);
+	append_key(info, r->ws_ship_mode_sk, WS_SHIP_MODE_SK);
+	append_key(info, r->ws_warehouse_sk, WS_WAREHOUSE_SK);
+	append_key(info, r->ws_promo_sk, WS_PROMO_SK);
+	append_key(info, r->ws_order_number, WS_ORDER_NUMBER);
+	append_integer(info, r->ws_pricing.quantity, WS_PRICING_QUANTITY);
+	append_decimal(info, &r->ws_pricing.wholesale_cost, WS_PRICING_WHOLESALE_COST);
+	append_decimal(info, &r->ws_pricing.list_price, WS_PRICING_LIST_PRICE);
+	append_decimal(info, &r->ws_pricing.sales_price, WS_PRICING_SALES_PRICE);
+	append_decimal(info, &r->ws_pricing.ext_discount_amt, WS_PRICING_EXT_DISCOUNT_AMT);
+	append_decimal(info, &r->ws_pricing.ext_sales_price, WS_PRICING_EXT_SALES_PRICE);
+	append_decimal(info, &r->ws_pricing.ext_wholesale_cost, WS_PRICING_EXT_WHOLESALE_COST);
+	append_decimal(info, &r->ws_pricing.ext_list_price, WS_PRICING_EXT_LIST_PRICE);
+	append_decimal(info, &r->ws_pricing.ext_tax, WS_PRICING_EXT_TAX);
+	append_decimal(info, &r->ws_pricing.coupon_amt, WS_PRICING_COUPON_AMT);
+	append_decimal(info, &r->ws_pricing.ext_ship_cost, WS_PRICING_EXT_SHIP_COST);
+	append_decimal(info, &r->ws_pricing.net_paid, WS_PRICING_NET_PAID);
+	append_decimal(info, &r->ws_pricing.net_paid_inc_tax, WS_PRICING_NET_PAID_INC_TAX);
+	append_decimal(info, &r->ws_pricing.net_paid_inc_ship, WS_PRICING_NET_PAID_INC_SHIP);
+	append_decimal(info, &r->ws_pricing.net_paid_inc_ship_tax, WS_PRICING_NET_PAID_INC_SHIP_TAX);
+	append_decimal(info, &r->ws_pricing.net_profit, WS_PRICING_NET_PROFIT);
 
 	append_row_end(info);
 

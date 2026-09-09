@@ -1,0 +1,94 @@
+# name: test/sql/catalog/nested_schema/nested_wal_replay_index.test
+# description: Replaying indexes of identically-named tables in different nested schemas
+# group: [nested_schema]
+
+load {TEST_DIR}/nested_wal_replay_index.db readwrite v2.0.0
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.x;
+
+statement ok
+CREATE SCHEMA s2;
+
+statement ok
+CREATE SCHEMA s2.x;
+
+statement ok
+CREATE TABLE s1.x.t(i INTEGER);
+
+statement ok
+CREATE TABLE s2.x.t(i INTEGER);
+
+statement ok
+INSERT INTO s2.x.t VALUES (1);
+
+# dropping s1.x.t must not discard the index of the identically-named table in s2.x
+statement ok
+BEGIN
+
+statement ok
+CREATE UNIQUE INDEX idx ON s1.x.t(i);
+
+statement ok
+CREATE UNIQUE INDEX idx ON s2.x.t(i);
+
+statement ok
+DROP TABLE s1.x.t;
+
+statement ok
+COMMIT
+
+restart
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+query II
+SELECT schema_name, index_name FROM duckdb_indexes();
+----
+x	idx
+
+statement error
+INSERT INTO s2.x.t VALUES (1);
+----
+<REGEX>:.*Constraint Error.*
+
+# dropping the index of one nested table must not discard the index of the other
+statement ok
+CREATE TABLE s1.x.t(i INTEGER);
+
+statement ok
+BEGIN
+
+statement ok
+CREATE UNIQUE INDEX idx2 ON s1.x.t(i);
+
+statement ok
+DROP INDEX s2.x.idx;
+
+statement ok
+COMMIT
+
+restart
+
+query II
+SELECT schema_name, index_name FROM duckdb_indexes();
+----
+x	idx2
+
+statement error
+INSERT INTO s1.x.t VALUES (1), (1);
+----
+<REGEX>:.*Constraint Error.*

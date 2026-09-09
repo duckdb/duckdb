@@ -10,6 +10,8 @@ private:
 	yyjson_mut_doc *doc;
 	yyjson_mut_val *current_tag;
 	vector<yyjson_mut_val *> stack;
+	vector<bool> stack_can_be_omitted;
+	vector<bool> property_can_be_omitted;
 
 	// Skip writing property if null
 	bool skip_if_null = false;
@@ -20,6 +22,9 @@ private:
 	inline yyjson_mut_val *Current() {
 		return stack.back();
 	};
+	inline bool CurrentPropertyCanBeOmitted() {
+		return !property_can_be_omitted.empty() && property_can_be_omitted.back();
+	}
 
 	// Either adds a value to the current object with the current tag, or appends it to the current array
 	void PushValue(yyjson_mut_val *val);
@@ -27,7 +32,8 @@ private:
 public:
 	explicit JsonSerializer(yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty, bool skip_if_default,
 	                        SerializationOptions options_p = SerializationOptions())
-	    : doc(doc), stack({yyjson_mut_obj(doc)}), skip_if_null(skip_if_null), skip_if_empty(skip_if_empty) {
+	    : doc(doc), stack({yyjson_mut_obj(doc)}), stack_can_be_omitted({false}), skip_if_null(skip_if_null),
+	      skip_if_empty(skip_if_empty) {
 		options = std::move(options_p);
 		options.serialize_enum_as_string = true;
 		options.serialize_default_values = !skip_if_default;

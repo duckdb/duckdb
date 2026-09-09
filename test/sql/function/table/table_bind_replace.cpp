@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
@@ -8,7 +9,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 // This function demonstrates/tests how the TableFunction::bind_replace works.
 // The bind_replace_demo function has two params: depth and name. It generates custom plan recursively by using
@@ -23,7 +23,7 @@ struct BindReplaceDemoFun {
 
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                             duckdb::vector<LogicalType> &return_types,
-	                                             duckdb::vector<string> &names) {
+	                                             duckdb::vector<Identifier> &names) {
 		auto result = make_uniq<BindReplaceDemoFun::CustomFunctionData>();
 
 		result->current_depth = input.inputs[0].GetValue<int64_t>();
@@ -54,7 +54,7 @@ struct BindReplaceDemoFun {
 			left_children.push_back(make_uniq<ConstantExpression>(Value(depth - 1)));
 			left_children.push_back(make_uniq<ConstantExpression>(Value(name + "L")));
 			auto tf_ref_left = make_uniq<TableFunctionRef>();
-			tf_ref_left->alias = "inner_table_" + name + "L";
+			tf_ref_left->alias = Identifier("inner_table_" + name + "L");
 			tf_ref_left->function = make_uniq<FunctionExpression>("bind_replace_demo", std::move(left_children));
 			join_node->left = std::move(tf_ref_left);
 
@@ -63,7 +63,7 @@ struct BindReplaceDemoFun {
 			right_children.push_back(make_uniq<ConstantExpression>(Value(depth - 1)));
 			right_children.push_back(make_uniq<ConstantExpression>(Value(name + "R")));
 			auto tf_ref_right = make_uniq<TableFunctionRef>();
-			tf_ref_right->alias = "inner_table_" + name + "R";
+			tf_ref_right->alias = Identifier("inner_table_" + name + "R");
 			tf_ref_right->function = make_uniq<FunctionExpression>("bind_replace_demo", std::move(right_children));
 			join_node->right = std::move(tf_ref_right);
 
@@ -80,12 +80,12 @@ struct BindReplaceDemoFun {
 		auto &state = (BindReplaceDemoFun::CustomFunctionData &)*data.bind_data;
 
 		if (!state.done) {
-			output.SetValue(0, 0, Value(state.current_depth));
-			output.SetValue(1, 0, Value(state.current_name));
-			output.SetCardinality(1);
+			output.data[0].Append(Value(state.current_depth));
+			output.data[1].Append(Value(state.current_name));
+			output.SetChildCardinality(1);
 			state.done = true;
 		} else {
-			output.SetCardinality(0);
+			output.SetChildCardinality(0);
 		}
 	}
 

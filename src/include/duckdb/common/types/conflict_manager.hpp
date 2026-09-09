@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -15,6 +16,7 @@
 namespace duckdb {
 
 class Index;
+class IndexEntry;
 class ConflictInfo;
 
 enum class ConflictManagerMode : uint8_t {
@@ -67,21 +69,22 @@ public:
 	}
 
 	//! Adds an index and its respective delete_index.
-	void AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index) {
+	void AddIndex(const shared_ptr<IndexEntry> &index, const Identifier &index_name,
+	              shared_ptr<IndexEntry> delete_index) {
 		matching_indexes.push_back(index);
-		matching_delete_indexes.push_back(delete_index);
-		index_names.insert(index.name);
+		matching_delete_indexes.push_back(std::move(delete_index));
+		index_names.insert(index_name);
 	}
 	//! Returns true, if the index is in this conflict manager.
-	bool IndexMatches(BoundIndex &index) {
-		return index_names.find(index.name) != index_names.end();
+	bool IndexMatches(const Identifier &index_name) const {
+		return index_names.find(index_name) != index_names.end();
 	}
 	//! Returns a reference to the matching indexes.
-	const vector<reference<BoundIndex>> &MatchingIndexes() const {
+	const vector<shared_ptr<IndexEntry>> &MatchingIndexes() const {
 		return matching_indexes;
 	}
 	//! Returns a reference to the matching delete indexes.
-	const vector<optional_ptr<BoundIndex>> &MatchingDeleteIndexes() const {
+	const vector<shared_ptr<IndexEntry>> &MatchingDeleteIndexes() const {
 		return matching_delete_indexes;
 	}
 
@@ -133,11 +136,11 @@ private:
 	ConflictManagerMode mode;
 
 	//! Indexes matching the conflict target.
-	vector<reference<BoundIndex>> matching_indexes;
+	vector<shared_ptr<IndexEntry>> matching_indexes;
 	//! Delete indexes matching the conflict target.
-	vector<optional_ptr<BoundIndex>> matching_delete_indexes;
+	vector<shared_ptr<IndexEntry>> matching_delete_indexes;
 	//! All matching indexes by their name (unique identifier).
-	case_insensitive_set_t index_names;
+	identifier_set_t index_names;
 
 	//! Registers all conflicting rows in a data chunk.
 	unordered_set<idx_t> conflict_rows;
@@ -216,7 +219,7 @@ private:
 		conflict_data[i].inverted_sel = make_uniq<SelectionVector>(chunk_size);
 		conflict_data[i].validity.Initialize(chunk_size, false);
 		conflict_data[i].row_ids = make_uniq<Vector>(LogicalType::ROW_TYPE, chunk_size);
-		conflict_data[i].row_ids_data = FlatVector::GetData<row_t>(*conflict_data[i].row_ids);
+		conflict_data[i].row_ids_data = FlatVector::GetDataMutable<row_t>(*conflict_data[i].row_ids);
 		return conflict_data[i];
 	}
 

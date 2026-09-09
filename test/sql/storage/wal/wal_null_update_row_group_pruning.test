@@ -1,0 +1,60 @@
+# name: test/sql/storage/wal/wal_null_update_row_group_pruning.test
+# description: Test row-group pruning after WAL replay of NULL updates
+# group: [wal]
+
+require skip_reload
+
+load {TEST_DIR}/wal_null_update_row_group_pruning.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE test AS SELECT i::BIGINT AS a FROM range(2048) tbl(i);
+
+statement ok
+CREATE TABLE distinct_test AS SELECT 1::BIGINT AS a FROM range(2048);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+UPDATE test SET a = NULL WHERE a = 3;
+
+statement ok
+UPDATE distinct_test SET a = NULL WHERE rowid = 3;
+
+query I
+SELECT count(*) FROM test WHERE a IS NULL;
+----
+1
+
+query I
+SELECT count(*) FROM distinct_test WHERE a IS DISTINCT FROM 1;
+----
+1
+
+restart
+
+query I
+SELECT count(*) FROM test WHERE a IS NULL;
+----
+1
+
+query I
+SELECT count(*) FROM test WHERE CASE WHEN a IS NULL THEN true ELSE false END;
+----
+1
+
+query I
+SELECT count(*) FROM distinct_test WHERE a IS DISTINCT FROM 1;
+----
+1
+
+query I
+SELECT count(*) FROM distinct_test WHERE CASE WHEN a IS DISTINCT FROM 1 THEN true ELSE false END;
+----
+1

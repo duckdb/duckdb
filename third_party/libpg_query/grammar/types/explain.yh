@@ -1,9 +1,0 @@
-%type <boolean> opt_verbose
-%type <node> explain_option_arg
-%type <node> ExplainableStmt
-%type <str> NonReservedWord
-%type <str> NonReservedWord_or_Sconst
-%type <list> explain_option_list
-%type <str> opt_boolean_or_string
-%type <defelt> explain_option_elem
-%type <str> explain_option_name

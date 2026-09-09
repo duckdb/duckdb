@@ -12,7 +12,7 @@ struct GlobFunctionBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<GlobFunctionBindData>();
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	result->file_list = multi_file_reader->CreateFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY);
@@ -43,15 +43,16 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 	state.file_list_scan.scan_type = MultiFileListScanType::ALWAYS_FETCH;
 	idx_t count = 0;
+	auto &file_column = output.data[0];
 	while (count < STANDARD_VECTOR_SIZE) {
 		OpenFileInfo file;
 		if (!bind_data.file_list->Scan(state.file_list_scan, file)) {
 			break;
 		}
-		output.data[0].SetValue(count++, file.path);
+		file_column.Append(Value(file.path));
+		count++;
 		state.file_list_scan.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
 	}
-	output.SetCardinality(count);
 }
 
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {

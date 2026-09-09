@@ -1,3 +1,8 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
@@ -21,24 +26,25 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	Vector varchar_map(varchar_type, count);
+	FlatVector::SetSize(varchar_map, count);
 
 	// since map's physical type is a list, the ListCast can be utilized
 	ListCast::ListToListCast(source, varchar_map, count, parameters);
 
-	varchar_map.Flatten(count);
-	auto &validity = FlatVector::Validity(varchar_map);
+	varchar_map.Flatten();
+	auto &validity = FlatVector::ValidityMutable(varchar_map);
 	auto &key_str = MapVector::GetKeys(varchar_map);
 	auto &val_str = MapVector::GetValues(varchar_map);
 
-	key_str.Flatten(ListVector::GetListSize(source));
-	val_str.Flatten(ListVector::GetListSize(source));
+	key_str.Flatten();
+	val_str.Flatten();
 
-	auto list_data = ListVector::GetData(varchar_map);
+	auto list_data = FlatVector::GetData<list_entry_t>(varchar_map);
 	auto key_data = FlatVector::GetData<string_t>(key_str);
 	auto val_data = FlatVector::GetData<string_t>(val_str);
 	auto &key_validity = FlatVector::Validity(key_str);
 	auto &val_validity = FlatVector::Validity(val_str);
-	auto &struct_validity = FlatVector::Validity(ListVector::GetEntry(varchar_map));
+	auto &struct_validity = FlatVector::Validity(ListVector::GetChild(varchar_map));
 
 	//! {key=value[, ]}
 	static constexpr const idx_t SEP_LENGTH = 2;
@@ -61,13 +67,13 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto value_write_func =
 	    value_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
 
-	auto result_data = FlatVector::GetData<string_t>(result);
 	unsafe_unique_array<bool> key_needs_quotes;
 	unsafe_unique_array<bool> value_needs_quotes;
 	idx_t needs_quotes_length = DConstants::INVALID_INDEX;
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			FlatVector::SetNull(result, i, true);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -103,8 +109,8 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 				string_length += NULL_LENGTH;
 			}
 		}
-		result_data[i] = StringVector::EmptyString(result, string_length);
-		auto dataptr = result_data[i].GetDataWriteable();
+		auto &result_str = result_data.WriteEmptyString(string_length);
+		auto dataptr = result_str.GetDataWriteable();
 		idx_t offset = 0;
 
 		dataptr[offset++] = '{';
@@ -136,7 +142,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 			}
 		}
 		dataptr[offset++] = '}';
-		result_data[i].Finalize();
+		result_str.Finalize();
 	}
 
 	if (constant) {
@@ -145,10 +151,59 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	return true;
 }
 
+static bool MapToMapCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	bool all_valid = ListCast::ListToListCast(source, result, count, parameters);
+
+	// CAST: throw exception if error occurred.
+	if (!parameters.error_message) {
+		if (!all_valid) {
+			HandleCastError::AssignError("Failed to cast map entries", parameters);
+			// throws exceptions
+		}
+		MapVector::MapConversionVerify(result, count);
+		return true;
+	}
+
+	// TRY_CAST: error message, so we need to nullify the invalid map entries.
+	SelectionVector row_sel(1);
+	// Return true if the map is invalid and we need to nullify the entry.
+	auto nullify_invalid_map = [&](MapInvalidReason reason) {
+		if (reason == MapInvalidReason::VALID) {
+			return false;
+		}
+		auto error_message =
+		    reason == MapInvalidReason::DUPLICATE_KEY ? "Map keys must be unique." : "Map keys can not be NULL.";
+		D_ASSERT(parameters.error_message);
+		HandleCastError::AssignError(error_message, parameters);
+		all_valid = false;
+		return true;
+	};
+
+	// Special handle constant vector, which only needs to handle one map entry.
+	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (nullify_invalid_map(MapVector::CheckMapValidity(result, count))) {
+			ConstantVector::SetNull(result, count_t(count));
+		}
+		return all_valid;
+	}
+
+	auto &result_validity = FlatVector::ValidityMutable(result);
+	for (idx_t idx = 0; idx < count; ++idx) {
+		if (!result_validity.RowIsValid(idx)) {
+			continue;
+		}
+		row_sel.set_index(0, idx);
+		if (nullify_invalid_map(MapVector::CheckMapValidity(result, /*count=*/1, row_sel))) {
+			result_validity.SetInvalid(idx);
+		}
+	}
+	return all_valid;
+}
+
 BoundCastInfo DefaultCasts::MapCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	switch (target.id()) {
 	case LogicalTypeId::MAP:
-		return BoundCastInfo(ListCast::ListToListCast, ListBoundCastData::BindListToListCast(input, source, target),
+		return BoundCastInfo(MapToMapCast, ListBoundCastData::BindListToListCast(input, source, target),
 		                     ListBoundCastData::InitListLocalState);
 	case LogicalTypeId::VARCHAR: {
 		auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);

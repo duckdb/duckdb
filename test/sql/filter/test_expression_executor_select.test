@@ -1,0 +1,102 @@
+# name: test/sql/filter/test_expression_executor_select.test
+# description: Exercise ExpressionExecutor::Select with constant parameters and dictionary vectors
+# group: [filter]
+
+statement ok
+PRAGMA disable_optimizer
+
+statement ok
+PREPARE const_eq AS
+SELECT count(*) FROM range(6) tbl(i) WHERE ?::INTEGER = ?::INTEGER;
+
+query I
+EXECUTE const_eq(1, 1)
+----
+6
+
+query I
+EXECUTE const_eq(1, 2)
+----
+0
+
+statement ok
+PREPARE const_is_not_distinct AS
+SELECT count(*) FROM range(6) tbl(i) WHERE ?::INTEGER IS NOT DISTINCT FROM ?::INTEGER;
+
+query I
+EXECUTE const_is_not_distinct(NULL, NULL)
+----
+6
+
+query I
+EXECUTE const_is_not_distinct(1, NULL)
+----
+0
+
+statement ok
+CREATE TABLE dict_select(
+	id INTEGER,
+	s VARCHAR
+);
+
+statement ok
+PRAGMA debug_verify_vector='dictionary_expression'
+
+statement ok
+INSERT INTO dict_select VALUES
+	(1, 'duck'),
+	(2, 'goose'),
+	(3, NULL),
+	(4, 'duck'),
+	(5, 'swan'),
+	(6, 'duck');
+
+statement ok
+PREPARE dict_eq AS
+SELECT id FROM dict_select WHERE s = ?::VARCHAR ORDER BY id;
+
+query I
+EXECUTE dict_eq('duck')
+----
+1
+4
+6
+
+query I
+EXECUTE dict_eq('goose')
+----
+2
+
+statement ok
+PREPARE dict_is_not_distinct AS
+SELECT id FROM dict_select WHERE s IS NOT DISTINCT FROM ?::VARCHAR ORDER BY id;
+
+query I
+EXECUTE dict_is_not_distinct(NULL)
+----
+3
+
+query I
+EXECUTE dict_is_not_distinct('duck')
+----
+1
+4
+6
+
+statement ok
+PREPARE dict_between AS
+SELECT id FROM dict_select WHERE s BETWEEN ?::VARCHAR AND ?::VARCHAR ORDER BY id;
+
+query I
+EXECUTE dict_between('duck', 'goose')
+----
+1
+2
+4
+6
+
+statement ok
+PRAGMA debug_verify_vector='none'
+
+statement ok
+PRAGMA enable_optimizer

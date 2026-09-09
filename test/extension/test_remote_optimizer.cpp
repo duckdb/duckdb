@@ -25,7 +25,6 @@
 #endif
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test using a remote optimizer pass in case thats important to someone", "[extension]") {
 	pid_t pid = fork();

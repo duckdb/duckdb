@@ -6,6 +6,7 @@
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 
 namespace duckdb {
 

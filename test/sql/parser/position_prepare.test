@@ -3,9 +3,6 @@
 # group: [parser]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PREPARE v1 AS SELECT POSITION(? in ?)
 
 query I

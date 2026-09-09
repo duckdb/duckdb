@@ -1,5 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
-#include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 
 namespace duckdb {
 
@@ -12,7 +12,8 @@ struct DuckDBExternalFileCacheData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBExternalFileCacheBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
+                                                            vector<LogicalType> &return_types,
+                                                            vector<Identifier> &names) {
 	names.emplace_back("path");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -23,6 +24,9 @@ static unique_ptr<FunctionData> DuckDBExternalFileCacheBind(ClientContext &conte
 	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("loaded");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	names.emplace_back("spilled");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	return nullptr;
@@ -44,21 +48,27 @@ void DuckDBExternalFileCacheFunction(ClientContext &context, TableFunctionInput 
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// path, VARCHAR
+	auto &path = output.data[0];
+	// nr_bytes, BIGINT
+	auto &nr_bytes = output.data[1];
+	// location, BIGINT
+	auto &location = output.data[2];
+	// loaded, BOOLEAN
+	auto &loaded = output.data[3];
+	// spilled, BOOLEAN
+	auto &spilled = output.data[4];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
-		// return values:
-		idx_t col = 0;
-		// path, VARCHAR
-		output.SetValue(col++, count, entry.path);
-		// nr_bytes, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.nr_bytes)));
-		// location, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.location)));
-		// loaded, BOOLEAN
-		output.SetValue(col++, count, entry.loaded);
+		path.Append(Value(entry.path));
+		nr_bytes.Append(Value::BIGINT(NumericCast<int64_t>(entry.nr_bytes)));
+		location.Append(Value::BIGINT(NumericCast<int64_t>(entry.location)));
+		loaded.Append(Value::BOOLEAN(entry.loaded));
+		spilled.Append(Value::BOOLEAN(entry.spilled));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBExternalFileCacheFun::RegisterFunction(BuiltinFunctions &set) {

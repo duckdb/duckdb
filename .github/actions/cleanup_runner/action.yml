@@ -1,4 +1,5 @@
 name: 'Cleanup Runner'
+description: 'Free disk space on GitHub-hosted runners'
 runs:
   using: "composite"
   steps:

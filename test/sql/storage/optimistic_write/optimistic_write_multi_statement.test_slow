@@ -2,7 +2,7 @@
 # description: Test multiple appends across statements within the same transaction
 # group: [optimistic_write]
 
-load __TEST_DIR__/optimistic_write_multi_statement.db
+load {TEST_DIR}/optimistic_write_multi_statement.db
 
 statement ok
 SET force_compression='uncompressed';
@@ -16,7 +16,7 @@ BEGIN
 foreach file_size 130815 68295 68490
 
 statement ok
-CREATE OR REPLACE TEMPORARY TABLE insert_tbl AS FROM range(${file_size});
+CREATE OR REPLACE TEMPORARY TABLE insert_tbl AS FROM range({file_size});
 
 statement ok
 INSERT INTO main_tbl FROM insert_tbl;

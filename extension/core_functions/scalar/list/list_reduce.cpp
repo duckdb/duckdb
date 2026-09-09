@@ -1,6 +1,7 @@
 #include "core_functions/scalar/list_functions.hpp"
 
 #include "duckdb/function/lambda_functions.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
@@ -10,7 +11,7 @@ namespace {
 
 struct ReduceExecuteInfo {
 	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context)
-	    : left_slice(make_uniq<Vector>(*info.child_vector)) {
+	    : context(context), left_slice(make_uniq<Vector>(Vector::Ref(*info.child_vector))) {
 		if (info.has_initial) {
 			initial_value_offset = 0;
 		}
@@ -43,22 +44,27 @@ struct ReduceExecuteInfo {
 		}
 		left_slice->Slice(left_vector, reduced_row_idx);
 
+		// input_types layout: [optional index, element (T), accumulator (S), captured args...]
 		if (info.has_index) {
 			input_types.push_back(LogicalType::BIGINT);
 		}
-		input_types.push_back(left_slice->GetType());
-		input_types.push_back(left_slice->GetType());
+		input_types.push_back(info.child_vector->GetType());
+		input_types.push_back(info.lambda_expr->GetReturnType());
 
+		// info.column_infos includes the list column plus captured args (and the initial value if present).
 		// skip the first entry if there is an initial value
 		for (idx_t i = info.has_initial ? 1 : 0; i < info.column_infos.size(); i++) {
 			input_types.push_back(info.column_infos[i].vector.get().GetType());
 		}
 
+		accumulator_cast = make_uniq<Vector>(info.lambda_expr->GetReturnType(), info.row_count);
 		expr_executor = make_uniq<ExpressionExecutor>(context, *info.lambda_expr);
 	};
 
 	ValidityMask active_rows;
+	ClientContext &context;
 	unique_ptr<Vector> left_slice;
+	unique_ptr<Vector> accumulator_cast;
 	unique_ptr<ExpressionExecutor> expr_executor;
 	vector<LogicalType> input_types;
 
@@ -66,6 +72,22 @@ struct ReduceExecuteInfo {
 	SelectionVector left_sel;
 	SelectionVector active_rows_sel;
 };
+
+void ReferenceAccumulator(ReduceExecuteInfo &execute_info, Vector &target, Vector &source, const idx_t count,
+                          const bool allow_cast) {
+	if (source.GetType() != target.GetType()) {
+		if (!allow_cast) {
+			throw InternalException("list_reduce accumulator type mismatch: %s referenced %s",
+			                        source.GetType().ToString(), target.GetType().ToString());
+		}
+		execute_info.accumulator_cast->SetVectorType(VectorType::FLAT_VECTOR);
+		FlatVector::ValidityMutable(*execute_info.accumulator_cast).SetAllValid(count);
+		VectorOperations::Cast(execute_info.context, source, *execute_info.accumulator_cast, count, true);
+		target.Reference(*execute_info.accumulator_cast);
+	} else {
+		target.Reference(source);
+	}
+}
 
 bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFunctions::LambdaInfo &info,
                    DataChunk &result_chunk) {
@@ -125,7 +147,7 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	}
 
 	// create the index vector, where the index is that of the current node.
-	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops_offset + 1)));
+	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops_offset + 1)), count_t(reduced_row_idx));
 
 	// slice the left and right slice
 	execute_info.left_slice->Slice(*execute_info.left_slice, execute_info.left_sel, reduced_row_idx);
@@ -134,20 +156,23 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	// create the input chunk
 	DataChunk input_chunk;
 	input_chunk.InitializeEmpty(execute_info.input_types);
-	input_chunk.SetCardinality(reduced_row_idx);
+	input_chunk.SetChildCardinality(reduced_row_idx);
 
-	const idx_t slice_offset = info.has_index ? 1 : 0;
+	const idx_t element_offset = info.has_index ? 1 : 0;
+	const idx_t accumulator_offset = element_offset + 1;
 	if (info.has_index) {
 		input_chunk.data[0].Reference(index_vector);
 	}
 
 	if (loops == 0 && info.has_initial) {
 		info.column_infos[0].vector.get().Slice(execute_info.active_rows_sel, reduced_row_idx);
-		input_chunk.data[slice_offset + 1].Reference(info.column_infos[0].vector);
+		auto &initial_vector = info.column_infos[0].vector.get();
+		ReferenceAccumulator(execute_info, input_chunk.data[accumulator_offset], initial_vector, reduced_row_idx, true);
 	} else {
-		input_chunk.data[slice_offset + 1].Reference(*execute_info.left_slice);
+		ReferenceAccumulator(execute_info, input_chunk.data[accumulator_offset], *execute_info.left_slice,
+		                     reduced_row_idx, loops == 0);
 	}
-	input_chunk.data[slice_offset].Reference(right_slice);
+	input_chunk.data[element_offset].Reference(right_slice);
 
 	// add the other columns
 	// skip the initial value if there is one
@@ -156,17 +181,17 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	for (idx_t i = 0; i < info.column_infos.size() - initial_offset; i++) {
 		if (info.column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// only reference constant vectors
-			input_chunk.data[slice_offset + 2 + i].Reference(info.column_infos[initial_offset + i].vector);
+			input_chunk.data[accumulator_offset + 1 + i].Reference(info.column_infos[initial_offset + i].vector);
 		} else {
 			// slice the other vectors
 			slices.emplace_back(info.column_infos[initial_offset + i].vector, execute_info.active_rows_sel,
 			                    reduced_row_idx);
-			input_chunk.data[slice_offset + 2 + i].Reference(slices.back());
+			input_chunk.data[accumulator_offset + 1 + i].Reference(slices.back());
 		}
 	}
 
 	result_chunk.Reset();
-	result_chunk.SetCardinality(reduced_row_idx);
+	result_chunk.SetChildCardinality(reduced_row_idx);
 	execute_info.expr_executor->Execute(input_chunk, result_chunk);
 
 	// We need to copy the result into left_slice to avoid data loss due to vector.Reference(...).
@@ -176,8 +201,20 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	return false;
 }
 
-unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+LogicalType ResolveReduceAccumulatorType(ClientContext &context, const LogicalType &initial_type,
+                                         const LogicalType &lambda_return_type) {
+	LogicalType max_logical_type;
+	if (LogicalType::TryGetMaxLogicalType(context, initial_type, lambda_return_type, max_logical_type)) {
+		return max_logical_type;
+	}
+	throw BinderException("No common super type between initial value type %s and lambda return type %s",
+	                      initial_type.ToString(), lambda_return_type.ToString());
+}
+
+unique_ptr<FunctionData> ListReduceBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
@@ -191,72 +228,52 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 		return bind_data;
 	}
 
-	auto list_child_type = arguments[0]->return_type;
-	list_child_type = ListType::GetChildType(list_child_type);
-
 	bool has_initial = arguments.size() == 3;
+	LogicalType accumulator_type;
 	if (has_initial) {
-		const auto initial_value_type = arguments[2]->return_type;
-		// Check if the initial value type is the same as the return type of the lambda expression
-		if (list_child_type != initial_value_type) {
-			LogicalType max_logical_type;
-			const auto has_max_logical_type =
-			    LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
-			if (!has_max_logical_type) {
-				throw BinderException(
-				    "The initial value type must be the same as the list child type or a common super type");
-			}
-
-			list_child_type = max_logical_type;
-			arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]),
-			                                                  LogicalType::LIST(max_logical_type));
-			arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), max_logical_type);
+		const auto &initial_value_type = arguments[2]->GetReturnType();
+		auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
+		auto &lambda_return_type = bound_lambda_expr.LambdaExpr()->GetReturnType();
+		accumulator_type = ResolveReduceAccumulatorType(context, initial_value_type, lambda_return_type);
+		arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), accumulator_type);
+	} else {
+		auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
+		auto list_child_type = LambdaFunctions::DetermineListChildType(arguments[0]->GetReturnType());
+		auto &lambda_return_type = bound_lambda_expr.LambdaExpr()->GetReturnType();
+		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
+			throw BinderException("No common super type between list element type %s and lambda return type %s",
+			                      list_child_type.ToString(), lambda_return_type.ToString());
 		}
 	}
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	if (bound_lambda_expr.parameter_count < 2 || bound_lambda_expr.parameter_count > 3) {
+	if (bound_lambda_expr.ParameterCount() < 2 || bound_lambda_expr.ParameterCount() > 3) {
 		throw BinderException("list_reduce expects a function with 2 or 3 arguments");
 	}
-	auto has_index = bound_lambda_expr.parameter_count == 3;
+	auto has_index = bound_lambda_expr.ParameterCount() == 3;
 
+	const auto lambda_return_type = bound_lambda_expr.LambdaExpr()->GetReturnType();
 	auto cast_lambda_expr =
-	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), list_child_type);
+	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.LambdaExprMutable()), accumulator_type);
 	if (!cast_lambda_expr) {
-		throw BinderException("Could not cast lambda expression to list child type");
+		throw BinderException("Could not cast lambda return type %s to accumulator type %s",
+		                      lambda_return_type.ToString(), accumulator_type.ToString());
 	}
-	bound_function.SetReturnType(cast_lambda_expr->return_type);
-	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(cast_lambda_expr), has_index,
-	                                     has_initial);
+	// cast in place, so that the bound lambda expression stays intact as a child of the function
+	bound_lambda_expr.LambdaExprMutable() = std::move(cast_lambda_expr);
+	bound_function.SetReturnType(bound_lambda_expr.LambdaExpr()->GetReturnType());
+	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), bound_lambda_expr.LambdaExpr()->Copy(),
+	                                     has_index, has_initial);
 }
 
 LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType> &function_child_types,
-                               const idx_t parameter_idx) {
+                               const idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context) {
 	auto list_child_type = LambdaFunctions::DetermineListChildType(function_child_types[0]);
-
-	// if there is an initial value, find the max logical type
-	if (function_child_types.size() == 3) {
-		// the initial value is the third child
-		constexpr idx_t initial_idx = 2;
-
-		const LogicalType initial_value_type = function_child_types[initial_idx];
-		if (initial_value_type != list_child_type) {
-			// we need to check if the initial value type is the same as the return type of the lambda expression
-			LogicalType max_logical_type;
-			const auto has_max_logical_type =
-			    LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
-			if (!has_max_logical_type) {
-				throw BinderException(
-				    "The initial value type must be the same as the list child type or a common super type");
-			}
-
-			list_child_type = max_logical_type;
-		}
-	}
+	const bool has_initial = function_child_types.size() == 3;
 
 	switch (parameter_idx) {
 	case 0:
-		return list_child_type;
+		return has_initial ? function_child_types[2] : list_child_type;
 	case 1:
 		return list_child_type;
 	case 2:
@@ -267,8 +284,8 @@ LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType>
 }
 
 LogicalType ListReduceBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                 const idx_t parameter_idx) {
-	return BindReduceChildren(context, function_child_types, parameter_idx);
+                                 const idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context) {
+	return BindReduceChildren(context, function_child_types, parameter_idx, bind_lambda_context);
 }
 
 } // namespace
@@ -287,15 +304,16 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	// This means there is always an empty result chunk for the next iteration,
 	// without the referenced chunk having to be reset until the current iteration is complete.
 	DataChunk odd_result_chunk;
-	odd_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->return_type});
+	odd_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->GetReturnType()});
 
 	DataChunk even_result_chunk;
-	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->return_type});
+	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->GetReturnType()});
 
 	// Execute reduce until all rows are finished.
 	idx_t loops = 0;
 	bool end = false;
 	while (!end) {
+		state.GetContext().InterruptCheck();
 		auto &result_chunk = loops % 2 ? odd_result_chunk : even_result_chunk;
 		auto &spare_result_chunk = loops % 2 ? even_result_chunk : odd_result_chunk;
 
@@ -317,10 +335,11 @@ ScalarFunctionSet ListReduceFun::GetFunctions() {
 	fun.SetSerializeCallback(ListLambdaBindData::Serialize);
 	fun.SetDeserializeCallback(ListLambdaBindData::Deserialize);
 	fun.SetBindLambdaCallback(ListReduceBindLambda);
+	fun.SetFallible();
 
 	ScalarFunctionSet set;
 	set.AddFunction(fun);
-	fun.arguments.push_back(LogicalType::ANY);
+	fun.GetSignature().AddParameter(LogicalType::ANY);
 	set.AddFunction(fun);
 	return set;
 }

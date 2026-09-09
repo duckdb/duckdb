@@ -1,5 +1,6 @@
 #include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/array_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
@@ -10,6 +11,7 @@
 
 #include "duckdb/common/types/variant_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 
 namespace duckdb {
 
@@ -164,7 +166,7 @@ optional_ptr<const BaseStatistics> VariantShreddedStats::FindChildStats(const Ba
 		auto &object_fields = StructType::GetChildTypes(typed_value_type);
 		for (idx_t i = 0; i < object_fields.size(); i++) {
 			auto &object_field = object_fields[i];
-			if (StringUtil::CIEquals(object_field.first, component.key)) {
+			if (object_field.first.GetIdentifierName() == component.key) {
 				return StructStats::GetChildStats(typed_value_stats, i);
 			}
 		}
@@ -268,6 +270,37 @@ bool VariantStats::IsShredded(const BaseStatistics &stats) {
 	return data.shredding_state == VariantStatsShreddingState::SHREDDED;
 }
 
+bool VariantStats::IsShredded(const BaseStatistics &stats, const ColumnIndex &index) {
+	if (!IsShredded(stats)) {
+		return false;
+	}
+
+	reference<const BaseStatistics> shredded_stats(VariantStats::GetShreddedStats(stats));
+	reference<const ColumnIndex> path_iter(index);
+	while (path_iter.get().HasChildren()) {
+		auto &current_stats = shredded_stats.get();
+		if (!VariantShreddedStats::IsFullyShredded(current_stats)) {
+			return false;
+		}
+		auto &current = path_iter.get();
+		auto &child = current.GetChildIndexes()[0];
+		VariantPathComponent path_component(child.GetFieldName());
+		auto child_stats = VariantShreddedStats::FindChildStats(shredded_stats.get(), path_component);
+		if (!child_stats) {
+			return false;
+		}
+		path_iter = child;
+		shredded_stats = *child_stats;
+	}
+	if (!VariantShreddedStats::IsFullyShredded(shredded_stats.get())) {
+		return false;
+	}
+	auto &typed_value_stats = StructStats::GetChildStats(shredded_stats.get(), VariantStats::TYPED_VALUE_INDEX);
+	auto &typed_value_type = typed_value_stats.GetType();
+
+	return !typed_value_type.IsNested();
+}
+
 BaseStatistics VariantStats::CreateShredded(const LogicalType &shredded_type) {
 	BaseStatistics result(LogicalType::VARIANT());
 	result.InitializeEmpty();
@@ -358,18 +391,27 @@ void VariantStats::Deserialize(Deserializer &deserializer, BaseStatistics &base)
 	}
 }
 
-static string ToStringInternal(const BaseStatistics &stats) {
-	string result;
-	result = StringUtil::Format("fully_shredded: %s", VariantShreddedStats::IsFullyShredded(stats) ? "true" : "false");
+static Value GetShreddedStatsStruct(const BaseStatistics &stats, bool fully_shredded) {
+	if (VariantShreddedStats::IsFullyShredded(stats) != fully_shredded) {
+		return Value();
+	}
 
 	auto &typed_value = VariantStats::GetTypedStats(stats);
 	auto type_id = typed_value.GetType().id();
 	if (type_id == LogicalTypeId::LIST) {
-		result += ", child: ";
+		// list
 		auto &child_stats = ListStats::GetChildStats(typed_value);
-		result += ToStringInternal(child_stats);
-	} else if (type_id == LogicalTypeId::STRUCT) {
-		result += ", children: {";
+		child_list_t<Value> result;
+		auto result_stats = GetShreddedStatsStruct(child_stats, fully_shredded);
+		if (result_stats.IsNull()) {
+			return Value();
+		}
+		result.emplace_back("child_stats", std::move(result_stats));
+		return Value::STRUCT(std::move(result));
+	}
+	if (type_id == LogicalTypeId::STRUCT) {
+		// struct
+		child_list_t<Value> result;
 		auto &fields = StructType::GetChildTypes(typed_value.GetType());
 		vector<idx_t> indices(fields.size());
 		for (idx_t i = 0; i < indices.size(); i++) {
@@ -378,31 +420,43 @@ static string ToStringInternal(const BaseStatistics &stats) {
 		std::sort(indices.begin(), indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
 			auto &a = fields[lhs].first;
 			auto &b = fields[rhs].first;
-			return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
+			return std::lexicographical_compare(a.GetIdentifierName().begin(), a.GetIdentifierName().end(),
+			                                    b.GetIdentifierName().begin(), b.GetIdentifierName().end());
 		});
 		for (idx_t i = 0; i < indices.size(); i++) {
-			if (i) {
-				result += ", ";
-			}
 			auto &child_stats = StructStats::GetChildStats(typed_value, indices[i]);
 			auto &field = fields[indices[i]];
-			result += StringUtil::Format("%s: %s", field.first, ToStringInternal(child_stats));
+			auto child_stats_entry = GetShreddedStatsStruct(child_stats, fully_shredded);
+			if (child_stats_entry.IsNull()) {
+				continue;
+			}
+			result.emplace_back(field.first, std::move(child_stats_entry));
 		}
-		result += "}";
+		if (result.empty()) {
+			return Value();
+		}
+		return Value::STRUCT(std::move(result));
 	}
-	return result;
+	child_list_t<Value> result;
+	result.emplace_back("type", Value(typed_value.GetType().ToString()));
+	result.emplace_back("stats", typed_value.ToStruct());
+	return Value::STRUCT(std::move(result));
 }
 
-string VariantStats::ToString(const BaseStatistics &stats) {
-	string result;
+child_list_t<Value> VariantStats::ToStruct(const BaseStatistics &stats) {
+	child_list_t<Value> result;
 	bool is_shredded = IsShredded(stats);
 	auto &data = GetDataUnsafe(stats);
-	result = StringUtil::Format("shredding_state: %s", EnumUtil::ToString(data.shredding_state));
+	result.emplace_back("shredding_state", Value(EnumUtil::ToString(data.shredding_state)));
 	if (is_shredded) {
-		result += ", shredding: {";
-		result += StringUtil::Format("typed_value_type: %s, ", ToStructuredType(stats.child_stats[1].type).ToString());
-		result += StringUtil::Format("stats: {%s}", ToStringInternal(stats.child_stats[1]));
-		result += "}";
+		auto fully_shredded_stats = GetShreddedStatsStruct(stats.child_stats[1], true);
+		if (!fully_shredded_stats.IsNull()) {
+			result.emplace_back("fully_shredded", std::move(fully_shredded_stats));
+		}
+		auto partially_shredded_stats = GetShreddedStatsStruct(stats.child_stats[1], false);
+		if (!partially_shredded_stats.IsNull()) {
+			result.emplace_back("partially_shredded", std::move(partially_shredded_stats));
+		}
 	}
 	return result;
 }
@@ -427,6 +481,74 @@ static BaseStatistics WrapTypedValue(const BaseStatistics &typed_value,
 	return shredded;
 }
 
+//! Recursively build the shredding representation stats for a value of `type` with statistics `input`.
+//! Returns nullptr when the type can not be represented as a single consistent shredding.
+static unique_ptr<BaseStatistics> TryBuildShreddingStats(const LogicalType &type, const BaseStatistics &input) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT: {
+		auto &fields = StructType::GetChildTypes(type);
+		if (fields.empty()) {
+			// an empty object has no shredded fields to push down
+			return nullptr;
+		}
+		child_list_t<LogicalType> typed_children;
+		vector<unique_ptr<BaseStatistics>> child_stats;
+		child_stats.reserve(fields.size());
+		for (idx_t i = 0; i < fields.size(); i++) {
+			auto child_result = TryBuildShreddingStats(fields[i].second, StructStats::GetChildStats(input, i));
+			if (!child_result) {
+				return nullptr;
+			}
+			typed_children.emplace_back(fields[i].first, child_result->GetType());
+			child_stats.push_back(std::move(child_result));
+		}
+		auto typed_value = BaseStatistics::CreateEmpty(LogicalType::STRUCT(std::move(typed_children)));
+		for (idx_t i = 0; i < child_stats.size(); i++) {
+			StructStats::SetChildStats(typed_value, i, *child_stats[i]);
+		}
+		typed_value.CopyValidity(input);
+		return WrapTypedValue(typed_value, nullptr).ToUnique();
+	}
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY: {
+		const bool is_list = type.id() == LogicalTypeId::LIST;
+		auto &child_type = is_list ? ListType::GetChildType(type) : ArrayType::GetChildType(type);
+		auto &input_child = is_list ? ListStats::GetChildStats(input) : ArrayStats::GetChildStats(input);
+		auto child_result = TryBuildShreddingStats(child_type, input_child);
+		if (!child_result) {
+			return nullptr;
+		}
+		// a variant stores both LISTs and fixed-size ARRAYs as a (variable length) array
+		auto typed_value = BaseStatistics::CreateEmpty(LogicalType::LIST(child_result->GetType()));
+		ListStats::SetChildStats(typed_value, std::move(child_result));
+		typed_value.CopyValidity(input);
+		return WrapTypedValue(typed_value, nullptr).ToUnique();
+	}
+	default:
+		if (type.IsNested() || type.id() == LogicalTypeId::ENUM) {
+			// MAP / UNION / ENUM etc. are not stored in their source representation in the variant
+			return nullptr;
+		}
+		return input.ToUnique();
+	}
+}
+
+unique_ptr<BaseStatistics> VariantStats::StatisticsPropagateToVariant(const LogicalType &source_type,
+                                                                      const BaseStatistics &child_stats) {
+	if (source_type.id() == LogicalTypeId::VARIANT) {
+		return nullptr;
+	}
+	auto shredding = TryBuildShreddingStats(source_type, child_stats);
+	if (!shredding) {
+		return nullptr;
+	}
+	auto result = VariantStats::CreateShredded(shredding->GetType());
+	VariantStats::SetShreddedStats(result, *shredding);
+	// the cast preserves NULLs exactly, so the top-level variant validity matches the input validity
+	result.CopyBase(child_stats);
+	return result.ToUnique();
+}
+
 unique_ptr<BaseStatistics> VariantStats::WrapExtractedFieldAsVariant(const BaseStatistics &base_variant,
                                                                      const BaseStatistics &extracted_field) {
 	D_ASSERT(base_variant.type.id() == LogicalTypeId::VARIANT);
@@ -436,6 +558,20 @@ unique_ptr<BaseStatistics> VariantStats::WrapExtractedFieldAsVariant(const BaseS
 	copy.Copy(base_variant);
 	copy.child_stats[1] = BaseStatistics::CreateUnknown(extracted_field.GetType());
 	copy.child_stats[1].Copy(extracted_field);
+	// The extraction can produce NULL when the field's typed value is NULL, even if the input
+	// variant is not - descend through the shredding STRUCTs to the typed value.
+	const BaseStatistics *effective = &extracted_field;
+	bool can_have_null = false;
+	while (true) {
+		can_have_null |= effective->CanHaveNull();
+		if (effective->GetType().id() != LogicalTypeId::STRUCT) {
+			break;
+		}
+		effective = &VariantStats::GetTypedStats(*effective);
+	}
+	if (can_have_null) {
+		copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
 	return copy.ToUnique();
 }
 
@@ -499,7 +635,7 @@ bool VariantStats::MergeShredding(const BaseStatistics &stats, const BaseStatist
 
 		for (idx_t i = 0; i < stats_object_children.size(); i++) {
 			auto &stats_object_child = stats_object_children[i];
-			auto other_it = key_to_index.find(stats_object_child.first);
+			auto other_it = key_to_index.find(stats_object_child.first.GetIdentifierName());
 			if (other_it == key_to_index.end()) {
 				continue;
 			}
@@ -651,7 +787,7 @@ void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-void VariantStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void VariantStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	// TODO: Verify stats
 }
 
@@ -695,6 +831,7 @@ unique_ptr<BaseStatistics> VariantStats::PushdownExtract(const BaseStatistics &s
 		if (!index_iter.get().HasChildren()) {
 			break;
 		}
+		index_iter = index_iter.get().GetChildIndex(0);
 	}
 	auto &shredded_child_stats = *res;
 
@@ -713,7 +850,7 @@ unique_ptr<BaseStatistics> VariantStats::PushdownExtract(const BaseStatistics &s
 	auto &cast_type = last_index.GetType();
 	if (child_type != cast_type) {
 		//! FIXME: support try_cast
-		return StatisticsPropagator::TryPropagateCast(typed_value_stats, child_type, cast_type);
+		return CastStatistics::TryPropagate(typed_value_stats, child_type, cast_type);
 	}
 	auto result = typed_value_stats.ToUnique();
 	return result;

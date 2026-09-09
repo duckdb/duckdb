@@ -2,9 +2,6 @@
 # description: Issue 633
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Query using LEFT() results in a segmentation fault
 statement ok
 CREATE TABLE t0(c0 BOOL);

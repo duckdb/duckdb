@@ -2,10 +2,7 @@
 # group: [array]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
-PRAGMA verify_external
+SET debug_force_external=true;
 
 query I
 SELECT array_value(i -1, i, i + 1) FROM range(4,1,-1) as r(i) ORDER BY 1 DESC;
@@ -80,9 +77,9 @@ foreach COLLECTION_INNER array_value list_value
 query I
 WITH
 	a(i) AS (SELECT * FROM range(0,2)),
-	b(i) AS (SELECT ${COLLECTION_INNER}(a1.i, a2.i) FROM a as a1, a as a2),
-	c(i) AS (SELECT ${COLLECTION_MIDDLE}(b1.i, b2.i) FROM b as b1, b as b2)
-SELECT ${COLLECTION_OUTER}(c1.i, c2.i) FROM c as c1, c as c2
+	b(i) AS (SELECT {COLLECTION_INNER}(a1.i, a2.i) FROM a as a1, a as a2),
+	c(i) AS (SELECT {COLLECTION_MIDDLE}(b1.i, b2.i) FROM b as b1, b as b2)
+SELECT {COLLECTION_OUTER}(c1.i, c2.i) FROM c as c1, c as c2
 ORDER BY 1 ASC;
 ----
 [[[0, 0], [0, 0]], [[0, 0], [0, 0]]]

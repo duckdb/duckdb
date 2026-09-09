@@ -1,0 +1,27 @@
+# name: benchmark/micro/optimizer/count_not_null_column_prune.benchmark
+# description: Benchmark of column pruning after the COUNT(x) to COUNT(*) rewrite
+# group: [optimizer]
+
+name Count Not Null Column Prune
+group micro
+subgroup optimizer
+storage persistent
+
+load
+CREATE TABLE events AS
+    SELECT 'd' || (i % 8) AS device_type,
+           md5(i::VARCHAR) AS uuid
+    FROM range(5000000) t(i);
+
+run
+SELECT device_type, count(uuid) FROM events GROUP BY device_type ORDER BY device_type;
+
+result II
+d0	625000
+d1	625000
+d2	625000
+d3	625000
+d4	625000
+d5	625000
+d6	625000
+d7	625000

@@ -37,36 +37,49 @@ void dss_random(DSS_HUGE *tgt, DSS_HUGE lower, DSS_HUGE upper, seed_t *seed) {
 	return;
 }
 
+static int seed_table(int t) {
+	if (t == ORDER_LINE) {
+		return ORDER;
+	}
+	if (t == PART_PSUPP) {
+		return PART;
+	}
+	return t;
+}
+
+static bool seed_matches_table(seed_t &seed, int t, DBGenContext *ctx) {
+	return seed.table == t || seed.table == ctx->tdefs[t].child;
+}
+
 void row_start(int t, DBGenContext *ctx) {
-	(void)t;
-	int i;
-	for (i = 0; i <= MAX_STREAM; i++)
-		ctx->Seed[i].usage = 0;
+	t = seed_table(t);
+	for (int i = 0; i <= MAX_STREAM; i++) {
+		if (seed_matches_table(ctx->Seed[i], t, ctx)) {
+			ctx->Seed[i].usage = 0;
+		}
+	}
 
 	return;
 }
 
 void row_stop_h(int t, DBGenContext *ctx) {
-	int i;
-
-	/* need to allow for handling the master and detail together */
-	if (t == ORDER_LINE)
-		t = ORDER;
-	if (t == PART_PSUPP)
-		t = PART;
-
-	for (i = 0; i <= MAX_STREAM; i++)
-		if ((ctx->Seed[i].table == t) || (ctx->Seed[i].table == ctx->tdefs[t].child)) {
+	t = seed_table(t);
+	for (int i = 0; i <= MAX_STREAM; i++) {
+		if (seed_matches_table(ctx->Seed[i], t, ctx)) {
 			if (set_seeds && (ctx->Seed[i].usage > ctx->Seed[i].boundary)) {
 				fprintf(stderr, "\nSEED CHANGE: seed[%d].usage = " HUGE_FORMAT "\n", i, ctx->Seed[i].usage);
 				ctx->Seed[i].boundary = ctx->Seed[i].usage;
 			} else {
-				NthElement((ctx->Seed[i].boundary - ctx->Seed[i].usage), &ctx->Seed[i].value);
+				auto advance_count = ctx->Seed[i].boundary - ctx->Seed[i].usage;
+				if (advance_count > 0) {
+					NthElement(advance_count, &ctx->Seed[i].value);
+				}
 #ifdef RNG_TEST
-				ctx->Seed[i].nCalls += ctx->Seed[i].boundary - ctx->Seed[i].usage;
+				ctx->Seed[i].nCalls += advance_count;
 #endif
 			}
 		}
+	}
 	return;
 }
 

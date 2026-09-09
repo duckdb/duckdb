@@ -1,0 +1,68 @@
+# name: test/sql/peg_parser/identifier.test
+# description: Test SQL identifier rules: must start with a letter or underscore
+# group: [peg_parser]
+
+query I
+SELECT 1 a;
+----
+1
+
+query I
+SELECT 1 A1;
+----
+1
+
+query I
+SELECT 1 _abc;
+----
+1
+
+query I
+SELECT 1 _;
+----
+1
+
+query I
+SELECT 1 a1;
+----
+1
+
+query I
+SELECT 1 a_1;
+----
+1
+
+query I
+SELECT 1 a_b;
+----
+1
+
+query I
+SELECT 1 abc123;
+----
+1
+
+query I
+SELECT 1 a$c;
+----
+1
+
+query I
+SELECT 1 a$1;
+----
+1
+
+statement error
+SELECT 1 1abc;
+----
+Parser Error: syntax error at or near "1"
+
+statement error
+SELECT 1 123;
+----
+Parser Error: syntax error at or near "123"
+
+statement error
+SELECT 1 $col;
+----
+Parser Error: syntax error at or near "$"

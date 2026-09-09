@@ -1,0 +1,86 @@
+# name: test/sql/storage/compression/skip_explicit_compression_analyze.test
+# description: Test Analyze handling for explicitly compressed columns
+# group: [compression]
+
+require noforcestorage
+
+require no_alternative_verify
+
+load {TEST_DIR}/skip_explicit_compression_analyze.db readwrite v1.2.0
+
+statement ok
+SET threads=1
+
+statement ok
+SET checkpoint_threshold='9999GB'
+
+# Exercise explicit compression methods with different Analyze requirements.
+statement ok
+CREATE TABLE test(
+    id BIGINT,
+    n INTEGER USING COMPRESSION RLE,
+    z VARCHAR USING COMPRESSION ZSTD,
+    d VARCHAR USING COMPRESSION DICTIONARY)
+
+statement ok
+INSERT INTO test
+SELECT i,
+       CASE WHEN i%257=0 THEN NULL ELSE (i%2)::INTEGER END,
+       CASE
+           WHEN i%997=0 THEN NULL
+           WHEN i%997=1 THEN ''
+           WHEN i=2048 THEN repeat('L', 300000)
+           ELSE concat(repeat('value-', 8), i::VARCHAR)
+       END,
+       CASE WHEN i=32 THEN repeat('x', 300000) ELSE concat('value-', (i%7)::VARCHAR) END
+FROM range(4097) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+# Explicit methods must be analyzed; Dictionary must inspect input and fall back.
+query III
+SELECT count(*) FILTER (
+           WHERE column_name='n' AND segment_type='INTEGER' AND compression!='RLE'),
+       count(*) FILTER (
+           WHERE column_name='z' AND segment_type='VARCHAR' AND compression!='ZSTD'),
+       count(*) FILTER (
+           WHERE column_name='d' AND segment_type='VARCHAR' AND compression!='Uncompressed')
+FROM pragma_storage_info('test')
+----
+0	0	0
+
+# Checkpoint validity changes together with the explicitly compressed data.
+statement ok
+UPDATE test SET n=NULL WHERE id=1
+
+statement ok
+UPDATE test SET n=1 WHERE id=257
+
+statement ok
+FORCE CHECKPOINT
+
+restart
+
+# Check that each selected or fallback path remains readable after reopening.
+query IIII
+SELECT (count(*)=4097)::INTEGER,
+       (count(*) FILTER (WHERE n IS DISTINCT FROM CASE
+            WHEN id=1 THEN NULL
+            WHEN id=257 THEN 1
+            WHEN id%257=0 THEN NULL
+            ELSE (id%2)::INTEGER
+        END)=0)::INTEGER,
+       (count(*) FILTER (WHERE z IS DISTINCT FROM CASE
+            WHEN id%997=0 THEN NULL
+            WHEN id%997=1 THEN ''
+            WHEN id=2048 THEN repeat('L', 300000)
+            ELSE concat(repeat('value-', 8), id::VARCHAR)
+        END)=0)::INTEGER,
+       (count(*) FILTER (WHERE d IS DISTINCT FROM CASE
+            WHEN id=32 THEN repeat('x', 300000)
+            ELSE concat('value-', (id%7)::VARCHAR)
+        END)=0)::INTEGER
+FROM test
+----
+1	1	1	1

@@ -1,0 +1,27 @@
+# name: test/sql/copy/parquet/read_ahead/readahead_teardown_uaf.test_slow
+# description: Read-ahead use-after-free when LIMIT frees TaskExecutor mid async I/O
+# group: [read_ahead]
+
+require parquet
+
+statement ok
+SET threads=1
+
+statement ok
+SET async_threads=1
+
+statement ok
+SET read_ahead_depth=400
+
+# many small row groups so read-ahead prefetches hundreds of jobs
+statement ok
+COPY (SELECT range AS i, repeat('y', 4000) AS s FROM range(2000000)) TO '{TEST_DIR}/ra.parquet' (FORMAT parquet, ROW_GROUP_SIZE 5000)
+
+loop x 0 40
+
+query I
+SELECT i FROM '{TEST_DIR}/ra.parquet' LIMIT 1
+----
+0
+
+endloop

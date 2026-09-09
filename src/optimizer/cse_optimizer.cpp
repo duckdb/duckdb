@@ -12,7 +12,7 @@ namespace duckdb {
 //! underlying projection
 struct CSENode {
 	idx_t count;
-	optional_idx column_index;
+	ProjectionIndex column_index;
 
 	CSENode() : count(1), column_index() {
 	}
@@ -21,11 +21,11 @@ struct CSENode {
 //! The CSEReplacementState
 struct CSEReplacementState {
 	//! The projection index of the new projection
-	idx_t projection_index;
+	TableIndex projection_index;
 	//! Map of expression -> CSENode
 	expression_map_t<CSENode> expression_count;
 	//! Map of column bindings to column indexes in the projection expression list
-	column_binding_map_t<idx_t> column_map;
+	column_binding_map_t<ProjectionIndex> column_map;
 	//! The set of expressions of the resulting projection
 	vector<unique_ptr<Expression>> expressions;
 	//! Cached expressions that are kept around so the expression_map always contains valid expressions
@@ -38,7 +38,7 @@ void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		ExtractCommonSubExpresions(op);
+		ExtractCommonSubExpressions(op);
 		break;
 	default:
 		break;
@@ -52,6 +52,8 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:
+	// a lambda has no value of its own, so there is nothing to share between two occurrences of it
+	case ExpressionClass::BOUND_LAMBDA:
 		return;
 	default:
 		break;
@@ -97,17 +99,17 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref, check if this one has already been recorded in the expression list
-		auto column_entry = state.column_map.find(bound_column_ref.binding);
+		auto column_entry = state.column_map.find(bound_column_ref.Binding());
 		if (column_entry == state.column_map.end()) {
 			// not there yet: push the expression
-			idx_t new_column_index = state.expressions.size();
-			state.column_map[bound_column_ref.binding] = new_column_index;
-			state.expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    bound_column_ref.GetAlias(), bound_column_ref.return_type, bound_column_ref.binding));
-			bound_column_ref.binding = ColumnBinding(state.projection_index, new_column_index);
+			auto new_col_ref = make_uniq<BoundColumnRefExpression>(
+			    bound_column_ref.GetAlias(), bound_column_ref.GetReturnType(), bound_column_ref.Binding());
+			auto new_column_index = ColumnBinding::PushExpression(state.expressions, std::move(new_col_ref));
+			state.column_map[bound_column_ref.Binding()] = new_column_index;
+			bound_column_ref.BindingMutable() = ColumnBinding(state.projection_index, new_column_index);
 		} else {
 			// else: just update the column binding!
-			bound_column_ref.binding = ColumnBinding(state.projection_index, column_entry->second);
+			bound_column_ref.BindingMutable() = ColumnBinding(state.projection_index, column_entry->second);
 		}
 		return;
 	}
@@ -118,17 +120,16 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 			// this expression occurs more than once! push it into the projection
 			// check if it has already been pushed into the projection
 			auto alias = expr.GetAlias();
-			auto type = expr.return_type;
+			auto type = expr.GetReturnType();
 			if (!node.column_index.IsValid()) {
 				// has not been pushed yet: push it
-				node.column_index = state.expressions.size();
-				state.expressions.push_back(std::move(expr_ptr));
+				node.column_index = ColumnBinding::PushExpression(state.expressions, std::move(expr_ptr));
 			} else {
 				state.cached_expressions.push_back(std::move(expr_ptr));
 			}
 			// replace the original expression with a bound column ref
-			expr_ptr = make_uniq<BoundColumnRefExpression>(
-			    alias, type, ColumnBinding(state.projection_index, node.column_index.GetIndex()));
+			expr_ptr = make_uniq<BoundColumnRefExpression>(alias, type,
+			                                               ColumnBinding(state.projection_index, node.column_index));
 			return;
 		}
 	}
@@ -138,7 +139,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	                                      [&](unique_ptr<Expression> &child) { PerformCSEReplacement(child, state); });
 }
 
-void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &op) {
+void CommonSubExpressionOptimizer::ExtractCommonSubExpressions(LogicalOperator &op) {
 	D_ASSERT(op.children.size() == 1);
 
 	// first we count for each expression with children how many types it occurs

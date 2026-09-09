@@ -2,11 +2,8 @@
 # description: ENUM types used in table/catalog storage tests
 # group: [enum]
 
-statement ok
-PRAGMA enable_verification
-
 # load the DB from disk
-load __TEST_DIR__/enum_types.db
+load {TEST_DIR}/enum_types.db
 
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
@@ -72,7 +69,7 @@ loop i 0 2
 restart
 
 # FIXME: dependencies between enums and tables are currently disabled
-mode skip
+mode skip unsupported
 
 # We cant drop mood and we verify the constraint is still there after reloading the database
 statement error

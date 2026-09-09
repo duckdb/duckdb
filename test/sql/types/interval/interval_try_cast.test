@@ -2,9 +2,6 @@
 # description: Test interval try cast
 # group: [interval]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT cast('   ' as interval)
 ----
@@ -93,10 +90,22 @@ SELECT
 ----
 00:00:42.5	00:00:42.5	00:00:42.5
 
-query I
-SELECT TRY_CAST('2147483648 days' AS INTERVAL);
+query IIII
+SELECT
+	TRY_CAST('2147483648 days' AS INTERVAL),
+	TRY_CAST('-2147483649 days' AS INTERVAL),
+	TRY_CAST('2147483648 months' AS INTERVAL),
+	TRY_CAST('9223372036854775808 microseconds' AS INTERVAL);
 ----
-NULL
+NULL	NULL	NULL	NULL
+
+query III
+SELECT
+	TRY_CAST('-2147483648 months ago' AS INTERVAL),
+	TRY_CAST('-2147483648 days ago' AS INTERVAL),
+	TRY_CAST('-9223372036854775800 microseconds -8 microseconds ago' AS INTERVAL);
+----
+NULL	NULL	NULL
 
 statement error
 SELECT CAST('2147483648 days' AS INTERVAL);

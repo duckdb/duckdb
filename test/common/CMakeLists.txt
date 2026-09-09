@@ -1,24 +1,43 @@
 add_library_unity(
   test_common
   OBJECT
+  caching_test_utils.cpp
+  test_async_file_writer.cpp
+  test_managed_async_task_queue.cpp
   test_cast.cpp
+  test_checked_integer.cpp
   test_checksum.cpp
+  test_column_data_allocator.cpp
+  test_file_buffer_handle_group.cpp
   test_file_system.cpp
   test_caching_file_system_wrapper.cpp
   test_external_file_cache.cpp
   test_hyperlog.cpp
+  test_http_transport_manager.cpp
   test_lru_cache.cpp
-  test_numeric_cast.cpp
+  test_numeric_utils.cpp
   test_parse_expression.cpp
+  test_parse_load_statement.cpp
   test_parse_logical_type.cpp
+  test_parse_memory_limit_slurm.cpp
+  test_recursive_cte_metrics.cpp
+  test_scalar_executor.cpp
+  test_logical_type_is_complete.cpp
+  test_logical_type_immutable.cpp
   test_utf.cpp
   test_allocator_debug_info.cpp
+  test_buffer_pool_reservation.cpp
   test_storage_fuzz.cpp
   test_strftime.cpp
   test_string_util.cpp
+  test_substring_oob.cpp
+  test_swar.cpp
+  test_utf8_codepoint_oob.cpp
   test_temporary_memory_manager.cpp
-  test_value_to_sql_string.cpp)
+  test_versioning_utils.cpp
+  test_value_to_sql_string.cpp
+  test_musl_stack_size.cpp)
 
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_common>
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_common>
     PARENT_SCOPE)

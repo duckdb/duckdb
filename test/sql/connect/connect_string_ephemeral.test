@@ -1,0 +1,22 @@
+# name: test/sql/connect/connect_string_ephemeral.test
+# description: CONNECT '<uri>' attaches an ephemeral, hidden catalog and binds to it; unsupported backends roll back.
+# group: [connect]
+
+# A plain DuckDB database does not support CONNECT. The implicit attach performed by the
+# connection-string form is rolled back, and the statement errors with the offending URI.
+statement error
+CONNECT ':memory:';
+----
+<REGEX>:.*Invalid Input Error.*CONNECT ':memory:'.*does not support CONNECT.*
+
+# The rolled-back ephemeral attachment must not leak into the catalog.
+query I
+SELECT count(*) FROM pragma_database_list WHERE name LIKE '__connect%';
+----
+0
+
+# CONNECT never bound (the attach was rolled back), so we are still on LOCAL: DISCONNECT errors.
+statement error
+DISCONNECT;
+----
+<REGEX>:.*no active CONNECT.*

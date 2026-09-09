@@ -81,7 +81,7 @@ public:
 	DUCKDB_API virtual unique_ptr<QueryNode> GetQueryNode() = 0;
 	DUCKDB_API virtual string GetQuery();
 	DUCKDB_API virtual BoundStatement Bind(Binder &binder);
-	DUCKDB_API virtual string GetAlias();
+	DUCKDB_API virtual Identifier GetAlias();
 
 	DUCKDB_API unique_ptr<QueryResult> ExecuteOrThrow();
 	DUCKDB_API unique_ptr<QueryResult> Execute();
@@ -91,15 +91,15 @@ public:
 	DUCKDB_API void Print();
 	DUCKDB_API void Head(idx_t limit = 10);
 
-	DUCKDB_API shared_ptr<Relation> CreateView(const string &name, bool replace = true, bool temporary = false);
-	DUCKDB_API shared_ptr<Relation> CreateView(const string &schema_name, const string &name, bool replace = true,
-	                                           bool temporary = false);
+	DUCKDB_API shared_ptr<Relation> CreateView(const Identifier &name, bool replace = true, bool temporary = false);
+	DUCKDB_API shared_ptr<Relation> CreateView(const Identifier &schema_name, const Identifier &name,
+	                                           bool replace = true, bool temporary = false);
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &sql) const;
-	DUCKDB_API unique_ptr<QueryResult> Query(const string &name, const string &sql);
+	DUCKDB_API unique_ptr<QueryResult> Query(const Identifier &name, const string &sql);
 
 	//! Explain the query plan of this relation
 	DUCKDB_API unique_ptr<QueryResult> Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD,
-	                                           ExplainFormat explain_format = ExplainFormat::DEFAULT);
+	                                           const ProfilerPrintFormat &format = ProfilerPrintFormat::Default());
 
 	DUCKDB_API virtual unique_ptr<TableRef> GetTableRef();
 	virtual bool IsReadOnly() {
@@ -161,42 +161,40 @@ public:
 	DUCKDB_API shared_ptr<Relation> Alias(const string &alias);
 
 	//! Insert the data from this relation into a table
-	DUCKDB_API shared_ptr<Relation> InsertRel(const string &schema_name, const string &table_name);
-	DUCKDB_API shared_ptr<Relation> InsertRel(const string &catalog_name, const string &schema_name,
-	                                          const string &table_name);
-	DUCKDB_API void Insert(const string &table_name);
-	DUCKDB_API void Insert(const string &schema_name, const string &table_name);
-	DUCKDB_API void Insert(const string &catalog_name, const string &schema_name, const string &table_name);
+	DUCKDB_API shared_ptr<Relation> InsertRel(const Identifier &schema_name, const Identifier &table_name);
+	DUCKDB_API shared_ptr<Relation> InsertRel(const Identifier &catalog_name, const Identifier &schema_name,
+	                                          const Identifier &table_name);
+	DUCKDB_API void Insert(const Identifier &table_name);
+	DUCKDB_API void Insert(const Identifier &schema_name, const Identifier &table_name);
+	DUCKDB_API void Insert(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &table_name);
 	//! Insert a row (i.e.,list of values) into a table
 	DUCKDB_API virtual void Insert(const vector<vector<Value>> &values);
 	DUCKDB_API virtual void Insert(vector<vector<unique_ptr<ParsedExpression>>> &&expressions);
 	//! Create a table and insert the data from this relation into that table
-	DUCKDB_API shared_ptr<Relation> CreateRel(const string &schema_name, const string &table_name,
+	DUCKDB_API shared_ptr<Relation> CreateRel(const Identifier &schema_name, const Identifier &table_name,
 	                                          bool temporary = false,
 	                                          OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT);
-	DUCKDB_API shared_ptr<Relation> CreateRel(const string &catalog_name, const string &schema_name,
-	                                          const string &table_name, bool temporary = false,
+	DUCKDB_API shared_ptr<Relation> CreateRel(const Identifier &catalog_name, const Identifier &schema_name,
+	                                          const Identifier &table_name, bool temporary = false,
 	                                          OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT);
-	DUCKDB_API void Create(const string &table_name, bool temporary = false,
+	DUCKDB_API void Create(const Identifier &table_name, bool temporary = false,
 	                       OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT);
-	DUCKDB_API void Create(const string &schema_name, const string &table_name, bool temporary = false,
+	DUCKDB_API void Create(const Identifier &schema_name, const Identifier &table_name, bool temporary = false,
 	                       OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT);
-	DUCKDB_API void Create(const string &catalog_name, const string &schema_name, const string &table_name,
+	DUCKDB_API void Create(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &table_name,
 	                       bool temporary = false, OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT);
 
 	//! Write a relation to a CSV file
 	DUCKDB_API shared_ptr<Relation>
-	WriteCSVRel(const string &csv_file,
-	            case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
+	WriteCSVRel(const string &csv_file, identifier_map_t<vector<Value>> options = identifier_map_t<vector<Value>>());
 	DUCKDB_API void WriteCSV(const string &csv_file,
-	                         case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
+	                         identifier_map_t<vector<Value>> options = identifier_map_t<vector<Value>>());
 	//! Write a relation to a Parquet file
 	DUCKDB_API shared_ptr<Relation>
 	WriteParquetRel(const string &parquet_file,
-	                case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
-	DUCKDB_API void
-	WriteParquet(const string &parquet_file,
-	             case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
+	                identifier_map_t<vector<Value>> options = identifier_map_t<vector<Value>>());
+	DUCKDB_API void WriteParquet(const string &parquet_file,
+	                             identifier_map_t<vector<Value>> options = identifier_map_t<vector<Value>>());
 
 	//! Update a table, can only be used on a TableRelation
 	DUCKDB_API virtual void Update(const string &update, const string &condition = string());

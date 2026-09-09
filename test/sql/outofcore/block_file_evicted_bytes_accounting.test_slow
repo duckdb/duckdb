@@ -53,7 +53,7 @@ CREATE TABLE acct.t (id INTEGER, val VARCHAR);
 loop b 0 5
 
 statement maybe
-INSERT INTO acct.t SELECT range + ${b}*20, hex(repeat(md5(range::VARCHAR)::BLOB, 9000)) FROM range(20);
+INSERT INTO acct.t SELECT range + {b}*20, hex(repeat(md5(range::VARCHAR)::BLOB, 9000)) FROM range(20);
 ----
 <REGEX>:.*invalidated.*
 

@@ -2,9 +2,6 @@
 # description: Test LATERAL join with empty grouping sets
 # group: [lateral]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 select x, a, b
 from

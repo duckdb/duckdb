@@ -24,9 +24,6 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	auto extension_info = deserializer.ReadPropertyWithDefault<unique_ptr<ExtensionTypeInfo>>(103, "extension_info");
 	shared_ptr<ExtraTypeInfo> result;
 	switch (type) {
-	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
-		result = AggregateStateTypeInfo::Deserialize(deserializer);
-		break;
 	case ExtraTypeInfoType::ANY_TYPE_INFO:
 		result = AnyTypeInfo::Deserialize(deserializer);
 		break;
@@ -50,6 +47,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 		break;
 	case ExtraTypeInfoType::INVALID_TYPE_INFO:
 		return nullptr;
+	case ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO:
+		result = LegacyAggregateStateTypeInfo::Deserialize(deserializer);
+		break;
 	case ExtraTypeInfoType::LIST_TYPE_INFO:
 		result = ListTypeInfo::Deserialize(deserializer);
 		break;
@@ -71,21 +71,6 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	result->alias = std::move(alias);
 	result->extension_info = std::move(extension_info);
 	return result;
-}
-
-void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
-	ExtraTypeInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
-	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", state_type.bound_argument_types);
-}
-
-shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::shared_ptr<AggregateStateTypeInfo>(new AggregateStateTypeInfo());
-	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
-	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", result->state_type.bound_argument_types);
-	return std::move(result);
 }
 
 void AnyTypeInfo::Serialize(Serializer &serializer) const {
@@ -159,6 +144,21 @@ shared_ptr<ExtraTypeInfo> IntegerLiteralTypeInfo::Deserialize(Deserializer &dese
 	auto result = duckdb::shared_ptr<IntegerLiteralTypeInfo>(new IntegerLiteralTypeInfo());
 	deserializer.ReadProperty<Value>(200, "constant_value", result->constant_value);
 	return std::move(result);
+}
+
+void LegacyAggregateStateTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+	/* [Deleted] (string) "function_name" */
+	/* [Deleted] (LogicalType) "return_type" */
+	/* [Deleted] (vector<LogicalType>) "bound_argument_types" */
+}
+
+shared_ptr<ExtraTypeInfo> LegacyAggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
+	deserializer.ReadDeletedProperty<string>(200, "function_name");
+	deserializer.ReadDeletedProperty<LogicalType>(201, "return_type");
+	deserializer.ReadDeletedProperty<vector<LogicalType>>(202, "bound_argument_types");
+	auto result = LegacyAggregateStateTypeInfo::LegacyDeserialize();
+	return result;
 }
 
 void ListTypeInfo::Serialize(Serializer &serializer) const {

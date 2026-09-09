@@ -6,6 +6,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
@@ -14,9 +16,9 @@
 namespace duckdb {
 
 template <bool IS_UPPER>
-static string_t ASCIICaseConvert(Vector &result, const char *input_data, idx_t input_length) {
+static string_t ASCIICaseConvert(StringHeap &heap, const char *input_data, idx_t input_length) {
 	idx_t output_length = input_length;
-	auto result_str = StringVector::EmptyString(result, output_length);
+	auto result_str = heap.EmptyString(output_length);
 	auto result_data = result_str.GetDataWriteable();
 	for (idx_t i = 0; i < input_length; i++) {
 		result_data[i] = UnsafeNumericCast<char>(IS_UPPER ? StringUtil::ASCII_TO_UPPER_MAP[uint8_t(input_data[i])]
@@ -39,7 +41,7 @@ static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 
 		// UTF-8.
 		int sz = 0;
-		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz, input_length - i);
 		auto converted = IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
 		auto new_sz = Utf8Proc::CodepointLength(converted);
 		output_length += UnsafeNumericCast<idx_t>(new_sz);
@@ -55,7 +57,7 @@ static void CaseConvert(const char *input_data, idx_t input_length, char *result
 		if (input_data[i] & 0x80) {
 			// non-ascii character
 			int sz = 0, new_sz = 0;
-			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz, input_length - i);
 			auto converted_codepoint =
 			    IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
 			auto success = Utf8Proc::CodepointToUtf8(converted_codepoint, new_sz, result_data);
@@ -82,10 +84,10 @@ void LowerCase(const char *input_data, idx_t input_length, char *result_data) {
 }
 
 template <bool IS_UPPER>
-static string_t UnicodeCaseConvert(Vector &result, const char *input_data, idx_t input_length) {
+static string_t UnicodeCaseConvert(StringHeap &heap, const char *input_data, idx_t input_length) {
 	// first figure out the output length
 	idx_t output_length = GetResultLength<IS_UPPER>(input_data, input_length);
-	auto result_str = StringVector::EmptyString(result, output_length);
+	auto result_str = heap.EmptyString(output_length);
 	auto result_data = result_str.GetDataWriteable();
 
 	CaseConvert<IS_UPPER>(input_data, input_length, result_data);
@@ -97,35 +99,34 @@ namespace {
 template <bool IS_UPPER>
 struct CaseConvertOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+	static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap) {
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
-		return UnicodeCaseConvert<IS_UPPER>(result, input_data, input_length);
+		return UnicodeCaseConvert<IS_UPPER>(heap, input_data, input_length);
 	}
 };
 } // namespace
 
 template <bool IS_UPPER>
 static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result);
 }
 
 namespace {
 template <bool IS_UPPER>
 struct CaseConvertOperatorASCII {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+	static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap) {
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
-		return ASCIICaseConvert<IS_UPPER>(result, input_data, input_length);
+		return ASCIICaseConvert<IS_UPPER>(heap, input_data, input_length);
 	}
 };
 } // namespace
 
 template <bool IS_UPPER>
 static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result,
-	                                                                                     args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result);
 }
 
 template <bool IS_UPPER>
@@ -135,19 +136,55 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
+		expr.FunctionMutable().SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
 	}
-	return nullptr;
+	// case conversion is not order- or length-preserving, but it never turns a valid string into NULL
+	auto result = StringStats::CreateUnknown(expr.GetReturnType());
+	result.CopyValidity(child_stats[0]);
+	if (!StringStats::HasMinMax(child_stats[0])) {
+		return result.ToUnique();
+	}
+	// When min == max, all values share the stored string (exact) or the stored prefix (truncated).
+	// Case conversion is codepoint-local, so the converted string/prefix bounds the result.
+	auto min = StringStats::Min(child_stats[0]);
+	auto max = StringStats::Max(child_stats[0]);
+	if (min != max) {
+		return result.ToUnique();
+	}
+	const bool is_exact = StringStats::GetMinType(child_stats[0]) == StringStatsType::EXACT_STATS &&
+	                      StringStats::GetMaxType(child_stats[0]) == StringStatsType::EXACT_STATS;
+	if (!is_exact) {
+		// truncated stats can end in the middle of a character - only complete ones can be converted
+		size_t invalid_pos = 0;
+		if (Utf8Proc::Analyze(min.c_str(), min.size(), nullptr, &invalid_pos) == UnicodeType::INVALID) {
+			min.resize(invalid_pos);
+		}
+		if (min.empty()) {
+			return result.ToUnique();
+		}
+	}
+	string converted;
+	converted.resize(GetResultLength<IS_UPPER>(min.c_str(), min.size()));
+	CaseConvert<IS_UPPER>(min.c_str(), min.size(), &converted[0]);
+	auto stats_type = is_exact ? StringStatsType::EXACT_STATS : StringStatsType::TRUNCATED_STATS;
+	// case conversion can lengthen a string beyond what the stats can store
+	if (converted.size() > StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE) {
+		converted.resize(StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+		stats_type = StringStatsType::TRUNCATED_STATS;
+	}
+	StringStats::SetMin(result, string_t(converted), stats_type);
+	StringStats::SetMax(result, string_t(converted), stats_type);
+	return result.ToUnique();
 }
 
 ScalarFunction LowerFun::GetFunction() {
 	return ScalarFunction("lower", {LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<false>, nullptr,
-	                      nullptr, CaseConvertPropagateStats<false>);
+	                      CaseConvertPropagateStats<false>);
 }
 
 ScalarFunction UpperFun::GetFunction() {
 	return ScalarFunction("upper", {LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<true>, nullptr,
-	                      nullptr, CaseConvertPropagateStats<true>);
+	                      CaseConvertPropagateStats<true>);
 }
 
 } // namespace duckdb

@@ -10,15 +10,21 @@
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CreateCoordinateSystemInfo : public CreateInfo {
-	DUCKDB_API CreateCoordinateSystemInfo(string name_p, string authority, string code, string projjson,
+	DUCKDB_API CreateCoordinateSystemInfo(Identifier name_p, string authority, string code, string projjson,
 	                                      string wkt2_2019);
 
 	//! The name of the coordinate system
 	//! This is typically in the format "AUTH:CODE", e.g. "OGC:CRS84"
-	string name;
+	const Identifier &GetCoordinateSystemName() const {
+		return qualified_name.Name();
+	}
+	void SetCoordinateSystemName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
+	}
 
 	//! The authority identifier of the coordinate system (e.g. "EPSG")
 	string authority;

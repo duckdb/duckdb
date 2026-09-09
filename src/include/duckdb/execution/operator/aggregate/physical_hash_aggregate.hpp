@@ -70,7 +70,7 @@ public:
 	                      idx_t estimated_cardinality);
 	PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
 	                      vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> groups,
-	                      vector<GroupingSet> grouping_sets, vector<unsafe_vector<idx_t>> grouping_functions,
+	                      vector<GroupingSet> grouping_sets, vector<unsafe_vector<ProjectionIndex>> grouping_functions,
 	                      idx_t estimated_cardinality, TupleDataValidityType group_validity,
 	                      TupleDataValidityType distinct_validity);
 
@@ -88,7 +88,7 @@ public:
 	unsafe_vector<idx_t> non_distinct_filter;
 	unsafe_vector<idx_t> distinct_filter;
 
-	unordered_map<Expression *, size_t> filter_indexes;
+	reference_map_t<const Expression, size_t> filter_indexes;
 
 public:
 	// Source interface
@@ -129,6 +129,9 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
+	}
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
 	}
 
 	bool SinkOrderDependent() const override {

@@ -9,85 +9,148 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
-#include "duckdb/common/constants.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+struct BindingAlias;
+class Serializer;
+class Deserializer;
+
+//! Controls how QualifiedName::ToString renders the schema qualification
+enum class QualifiedNameToStringMode : uint8_t {
+	//! Always render every (non-empty) component
+	DEFAULT,
+	//! Omit the schema when it is a system schema (the default/"main" schema)
+	HIDE_DEFAULT_SCHEMA
+};
 
 struct QualifiedName {
 	QualifiedName() = default;
-	//! NOTE(backport): DuckDB 2.0 stores the components as a single `vector<Identifier> path` behind accessors, in
-	//! preparation for multi-level schemas, and its constructors and accessors deal in `Identifier`. On this branch
-	//! catalog/schema/name are plain strings everywhere, so they stay strings here too - `Identifier` converts
-	//! implicitly to and from `string` on this branch, so 2.0 call sites that pass an Identifier still compile.
-	//! `Path()`/`WithQualification()` are not provided, since there is no path to expose.
-	//! Construct an unqualified name (no catalog/schema). Implicit so that a name can be passed wherever an
-	//! unqualified QualifiedName lookup is expected.
-	QualifiedName(string name_p) // NOLINT: allow implicit conversion
-	    : catalog(INVALID_CATALOG), schema(INVALID_SCHEMA), name(std::move(name_p)) {
+	//! Construct an unqualified name (no catalog/schema). Implicit so that an Identifier can be passed wherever an
+	//! unqualified QualifiedName lookup is expected (also preserves backwards-compatibility for extensions).
+	QualifiedName(Identifier name_p) { // NOLINT: allow implicit conversion
+		path.push_back(std::move(name_p));
 	}
-	QualifiedName(string catalog_p, string schema_p, string name_p)
-	    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), name(std::move(name_p)) {
+	QualifiedName(Identifier catalog_p, Identifier schema_p, Identifier name_p) {
+		// store the catalog/schema/name as a single path - deeper (nested schema) paths are built with the
+		// vector<Identifier> constructor below
+		if (!catalog_p.empty()) {
+			path.push_back(std::move(catalog_p));
+			path.push_back(std::move(schema_p));
+		} else if (!schema_p.empty()) {
+			path.push_back(std::move(schema_p));
+		}
+		path.push_back(std::move(name_p));
 	}
-
-	string catalog;
-	string schema;
-	string name;
-
-	const string &Catalog() const {
-		return catalog;
-	}
-	const string &Schema() const {
-		return schema;
-	}
-	const string &Name() const {
-		return name;
+	//! Construct from an explicit schema path (the catalog/schema components actually present) and a name. Use this to
+	//! avoid passing INVALID_CATALOG/INVALID_SCHEMA placeholders for components that are not set.
+	QualifiedName(vector<Identifier> schema_path_p, Identifier name_p) : path(std::move(schema_path_p)) {
+		path.push_back(std::move(name_p));
 	}
 
-	//! Return a copy of this name with the name replaced, keeping the catalog/schema qualification
-	QualifiedName WithName(string name_p) const {
-		return QualifiedName(catalog, schema, std::move(name_p));
+	//! The catalog is the first element of the path, but only when the path is fully qualified ([catalog,
+	//! schema..., name])
+	const Identifier &Catalog() const {
+		return path.size() >= 3 ? path[0] : empty;
 	}
-	//! Return a copy of this name qualified with the given catalog, replacing the catalog it already has
-	QualifiedName WithCatalog(string catalog_p) const {
-		return QualifiedName(std::move(catalog_p), schema, name);
+	//! The schema is the element directly before the name (or empty if there is no schema)
+	const Identifier &Schema() const {
+		return path.size() >= 2 ? path[path.size() - 2] : empty;
 	}
-	//! Drop the catalog component (if any), keeping the schema and the name
+	//! The name is the last element of the path
+	const Identifier &Name() const {
+		return path.empty() ? empty : path.back();
+	}
+	//! The full underlying path. Most callers should use Catalog()/Schema()/Name(); this is for multi-level schema
+	//! support (e.g. nested CREATE SCHEMA), where the qualification can be deeper than [catalog, schema].
+	const vector<Identifier> &Path() const {
+		return path;
+	}
+
+	//! Return a copy of this name with the name replaced, keeping the (possibly nested) catalog/schema qualification
+	QualifiedName WithName(Identifier name) const {
+		vector<Identifier> qualification;
+		if (!path.empty()) {
+			qualification.insert(qualification.end(), path.begin(), path.end() - 1);
+		}
+		return QualifiedName(std::move(qualification), std::move(name));
+	}
+	//! Return a copy of this name with the catalog/schema qualification replaced by the given path, keeping the name
+	QualifiedName WithQualification(vector<Identifier> schema_path) const {
+		return QualifiedName(std::move(schema_path), Name());
+	}
+	//! Drop the catalog component (if any), keeping the (possibly nested) schema path and the name
 	void StripCatalog() {
-		catalog = INVALID_CATALOG;
+		if (path.size() < 3) {
+			return;
+		}
+		path.erase(path.begin());
+		if (path.size() >= 2 && path[0].empty()) {
+			// the name was catalog-qualified without a schema - drop the empty schema placeholder as well
+			path.erase(path.begin());
+		}
 	}
-
-	bool operator==(const QualifiedName &rhs) const {
-		return StringUtil::CIEquals(catalog, rhs.catalog) && StringUtil::CIEquals(schema, rhs.schema) &&
-		       StringUtil::CIEquals(name, rhs.name);
-	}
-	bool operator!=(const QualifiedName &rhs) const {
-		return !(*this == rhs);
+	//! Return a copy of this name qualified with the given catalog, replacing the catalog component it already has.
+	//! An empty catalog strips the catalog qualification.
+	QualifiedName WithCatalog(Identifier catalog) const {
+		if (catalog.empty()) {
+			auto result = *this;
+			result.StripCatalog();
+			return result;
+		}
+		if (path.size() < 2) {
+			return QualifiedName(std::move(catalog), Identifier(), Name());
+		}
+		vector<Identifier> qualification;
+		qualification.push_back(std::move(catalog));
+		// keep the (possibly nested) schema path, skipping the catalog component when the name is fully qualified
+		for (idx_t i = path.size() >= 3 ? 1 : 0; i + 1 < path.size(); i++) {
+			qualification.push_back(path[i]);
+		}
+		return QualifiedName(std::move(qualification), Name());
 	}
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA
 	static QualifiedName Parse(const string &input);
-	static vector<string> ParseComponents(const string &input);
-	string ToString() const;
+	static vector<Identifier> ParseComponents(const string &input);
+	string ToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
+	//! Render only the qualification (every component before the name), with a trailing "." after each component
+	string QualificationToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
+
+	hash_t Hash() const;
+	bool operator==(const QualifiedName &rhs) const;
+	bool operator!=(const QualifiedName &rhs) const;
+
+	void Serialize(Serializer &serializer) const;
+	static QualifiedName Deserialize(Deserializer &deserializer);
+
+private:
+	//! The full path (catalog/schema/name). The name is always the last element; the catalog/schema components that
+	//! are actually present precede it, and the schema part can be a nested chain ([catalog, s1, s2, ..., name]).
+	vector<Identifier> path;
+	//! Always-empty identifier, returned by the accessors when a catalog/schema/name component is absent
+	Identifier empty;
 };
 
 struct QualifiedColumnName {
 	QualifiedColumnName();
-	QualifiedColumnName(string column_p); // NOLINT: allow implicit conversion from string to column name
-	QualifiedColumnName(string table_p, string column_p);
-	QualifiedColumnName(const BindingAlias &alias, string column_p);
+	QualifiedColumnName(Identifier column_p); // NOLINT: allow implicit conversion from string to column name
+	QualifiedColumnName(Identifier table_p, Identifier column_p);
+	QualifiedColumnName(const BindingAlias &alias, Identifier column_p);
 
-	string catalog;
-	string schema;
-	string table;
-	string column;
+	Identifier catalog;
+	Identifier schema;
+	Identifier table;
+	Identifier column;
 
 	static QualifiedColumnName Parse(string &input);
 
 	string ToString() const;
+	string ToDisplayString() const;
 
 	void Serialize(Serializer &serializer) const;
 	static QualifiedColumnName Deserialize(Deserializer &deserializer);

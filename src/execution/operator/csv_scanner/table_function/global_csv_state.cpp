@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
@@ -42,16 +44,31 @@ void CSVGlobalState::FinishScan(unique_ptr<StringValueScanner> scanner) {
 	FinishTask(*previous_file);
 }
 
-unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &current_file_ptr) {
+CSVLocalState::~CSVLocalState() {
+	if (claim_state != ClaimState::PENDING) {
+		return;
+	}
+	// the claim dies without ever being scanned: it still accounts its boundary lines
+	file_scan->error_handler->Insert(iterator.GetBoundaryIdx(), 0);
+	file_scan->error_handler->DontPrintErrorLine();
+}
+
+void CSVLocalState::Materialize() {
+	D_ASSERT(claim_state == ClaimState::PENDING && !csv_reader);
+	csv_reader =
+	    make_uniq<StringValueScanner>(scanner_idx, file_scan->buffer_manager, file_scan->state_machine,
+	                                  file_scan->error_handler, file_scan, false, iterator, STANDARD_VECTOR_SIZE, true);
+	csv_reader->buffer_tracker = std::move(buffer_tracker);
+	file_scan.reset();
+	claim_state = ClaimState::MATERIALIZED;
+}
+
+bool CSVGlobalState::Next(shared_ptr<CSVFileScan> &current_file_ptr, CSVLocalState &lstate) {
 	auto &current_file = *current_file_ptr;
 	if (!initialized) {
 		// initialize the boundary for this file
 		current_boundary = current_file.start_iterator;
 		current_boundary.SetCurrentBoundaryToPosition(single_threaded, current_file.options);
-		if (current_boundary.done && context.client_data->debug_set_max_line_length) {
-			context.client_data->debug_max_line_length =
-			    MaxValue<idx_t>(context.client_data->debug_max_line_length, current_boundary.pos.buffer_pos);
-		}
 		current_buffer_in_use =
 		    make_shared_ptr<CSVBufferUsage>(*current_file.buffer_manager, current_boundary.GetBufferIdx());
 		initialized = true;
@@ -59,23 +76,21 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &cur
 		// produce the next boundary for this file
 		if (current_boundary.done || !current_boundary.Next(*current_file.buffer_manager, current_file.options)) {
 			// finished processing this file - return
-			return nullptr;
+			return false;
 		}
 	}
-	// create the scanner for this file
-	if (current_buffer_in_use->buffer_idx != current_boundary.GetBufferIdx()) {
+	if (!current_buffer_in_use || current_buffer_in_use->buffer_idx != current_boundary.GetBufferIdx()) {
 		current_buffer_in_use =
 		    make_shared_ptr<CSVBufferUsage>(*current_file.buffer_manager, current_boundary.GetBufferIdx());
 	}
 	++current_file.started_tasks;
-	// We first create the scanner for the current boundary
-	auto csv_scanner =
-	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
-	                                  current_file.error_handler, current_file_ptr, false, current_boundary);
-
-	csv_scanner->buffer_tracker = current_buffer_in_use;
-	// We initialize the scan
-	return csv_scanner;
+	// The scanner itself is constructed by the decoding thread when the claim is first scanned
+	lstate.scanner_idx = scanner_idx++;
+	lstate.iterator = current_boundary;
+	lstate.buffer_tracker = current_buffer_in_use;
+	lstate.file_scan = current_file_ptr;
+	lstate.claim_state = CSVLocalState::ClaimState::PENDING;
+	return true;
 }
 
 void CSVGlobalState::FinishLaunchingTasks(CSVFileScan &file) {
@@ -100,10 +115,6 @@ void CSVGlobalState::FinishFile(CSVFileScan &scan) {
 	}
 	scan.error_handler->ErrorIfAny();
 	FillRejectsTable(scan);
-	if (context.client_data->debug_set_max_line_length) {
-		context.client_data->debug_max_line_length =
-		    MaxValue<idx_t>(context.client_data->debug_max_line_length, scan.error_handler->GetMaxLineLength());
-	}
 }
 
 void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t file_idx, CSVFileScan &file) {

@@ -23,9 +23,9 @@
       }
     ],
     "finalize_deserialization": [
-        "if (type == QueryNodeType::CTE_NODE) {",
-        "\tresult = std::move(result->Cast<CTENode>().child);",
-        "}"
+      "if (type == QueryNodeType::CTE_NODE) {",
+      "\tresult = std::move(result->Cast<CTENode>().child);",
+      "}"
     ]
   },
   {
@@ -114,10 +114,16 @@
         "id": 204,
         "name": "children",
         "type": "vector<QueryNode*>",
-        "version": "6"
+        "version": "v1.5.0"
       }
     ],
-    "constructor": ["setop_type", "left", "right", "children", "setop_all"]
+    "constructor": [
+      "setop_type",
+      "left",
+      "right",
+      "children",
+      "setop_all"
+    ]
   },
   {
     "class": "RecursiveCTENode",
@@ -127,7 +133,7 @@
       {
         "id": 200,
         "name": "cte_name",
-        "type": "string",
+        "type": "Identifier",
         "property": "ctename"
       },
       {
@@ -149,7 +155,7 @@
       {
         "id": 204,
         "name": "aliases",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 205,
@@ -166,7 +172,7 @@
       {
         "id": 200,
         "name": "cte_name",
-        "type": "string",
+        "type": "Identifier",
         "property": "ctename"
       },
       {
@@ -182,7 +188,7 @@
       {
         "id": 203,
         "name": "aliases",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 204,
@@ -190,6 +196,223 @@
         "type": "CTEMaterialize",
         "default": "CTEMaterialize::CTE_MATERIALIZE_DEFAULT"
       }
+    ]
+  },
+  {
+    "class": "UpdateQueryNode",
+    "base": "QueryNode",
+    "enum": "UPDATE_QUERY_NODE",
+    "includes": [
+      "duckdb/parser/query_node/update_query_node.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "table",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "from_table",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 203,
+        "name": "set_info",
+        "type": "UpdateSetInfo*"
+      },
+      {
+        "id": 204,
+        "name": "prioritize_table_when_binding",
+        "type": "bool",
+        "default": "false"
+      }
+    ]
+  },
+  {
+    "class": "DeleteQueryNode",
+    "base": "QueryNode",
+    "enum": "DELETE_QUERY_NODE",
+    "includes": [
+      "duckdb/parser/query_node/delete_query_node.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "condition",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 201,
+        "name": "table",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "using_clauses",
+        "type": "vector<TableRef*>"
+      },
+      {
+        "id": 203,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      }
+    ]
+  },
+  {
+    "class": "InsertQueryNode",
+    "base": "QueryNode",
+    "enum": "INSERT_QUERY_NODE",
+    "includes": [
+      "duckdb/parser/query_node/insert_query_node.hpp",
+      "duckdb/parser/statement/insert_statement.hpp",
+      "duckdb/parser/statement/select_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "select_statement",
+        "type": "SelectStatement*"
+      },
+      {
+        "id": 201,
+        "name": "columns",
+        "type": "vector<Identifier>"
+      },
+      {
+        "id": 202,
+        "name": "table",
+        "type": "Identifier",
+        "serialize_property": "qualified_name.Name()"
+      },
+      {
+        "id": 203,
+        "name": "schema",
+        "type": "Identifier",
+        "serialize_property": "qualified_name.Schema()"
+      },
+      {
+        "id": 204,
+        "name": "catalog",
+        "type": "Identifier",
+        "serialize_property": "qualified_name.Catalog()"
+      },
+      {
+        "id": 205,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 206,
+        "name": "on_conflict_info",
+        "type": "OnConflictInfo*"
+      },
+      {
+        "id": 207,
+        "name": "table_ref",
+        "type": "TableRef*"
+      },
+      {
+        "id": 208,
+        "name": "default_values",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 209,
+        "name": "column_order",
+        "type": "InsertColumnOrder",
+        "default": "InsertColumnOrder::INSERT_BY_POSITION"
+      },
+      {
+        "id": 210,
+        "name": "qualified_name",
+        "serialize_property": "qualified_name",
+        "deserialize_property": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_condition": "qualified_name.Path().size() > 3",
+        "deserialize_default": "QualifiedName()",
+        "deserialize_skip_assign": true
+      }
+    ],
+    "finalize_deserialization": [
+      "if (!qualified_name.Path().empty()) {",
+      "\tresult->qualified_name = std::move(qualified_name);",
+      "}"
+    ],
+    "methods": {
+      "SetQualifiedName": [
+        "catalog",
+        "schema",
+        "table"
+      ]
+    }
+  },
+  {
+    "class": "MergeQueryNode",
+    "base": "QueryNode",
+    "enum": "MERGE_QUERY_NODE",
+    "includes": [
+      "duckdb/parser/query_node/merge_query_node.hpp",
+      "duckdb/parser/statement/merge_into_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "target",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "source",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "join_condition",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 203,
+        "name": "using_columns",
+        "type": "vector<Identifier>"
+      },
+      {
+        "id": 204,
+        "name": "actions",
+        "type": "map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>>"
+      },
+      {
+        "id": 205,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      }
+    ]
+  },
+  {
+    "class": "CopyQueryNode",
+    "base": "QueryNode",
+    "enum": "COPY_QUERY_NODE",
+    "includes": [
+      "duckdb/parser/query_node/copy_query_node.hpp",
+      "duckdb/parser/parsed_data/copy_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "CopyInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
     ]
   }
 ]

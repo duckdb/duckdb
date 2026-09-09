@@ -3,12 +3,18 @@ add_subdirectory(join_order)
 add_subdirectory(matcher)
 add_subdirectory(pullup)
 add_subdirectory(pushdown)
+add_subdirectory(relation_statistics)
 add_subdirectory(rule)
 add_subdirectory(statistics)
 
 add_library_unity(
   duckdb_optimizer
   OBJECT
+  aggregate_rewrite.cpp
+  aggregate_function_rewriter.cpp
+  aggregate_reuse.cpp
+  materialized_aggregate_reuse.cpp
+  aggregate_rewrite_helper.cpp
   build_probe_side_optimizer.cpp
   column_binding_replacer.cpp
   column_lifetime_analyzer.cpp
@@ -20,16 +26,23 @@ add_library_unity(
   cte_filter_pusher.cpp
   cte_inlining.cpp
   deliminator.cpp
+  multi_stage_aggregate_rewriter.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
+  filter_statistics.cpp
   filter_combiner.cpp
   filter_pullup.cpp
   filter_pushdown.cpp
+  grouping_sets_optimizer.cpp
   in_clause_rewriter.cpp
   join_filter_pushdown_optimizer.cpp
+  runtime_filter_cast.cpp
   late_materialization.cpp
   late_materialization_helper.cpp
   optimizer.cpp
+  outer_join_simplification.cpp
+  partial_aggregate_pushdown.cpp
+  partitioned_execution.cpp
   join_elimination.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
@@ -41,8 +54,12 @@ add_library_unity(
   topn_window_elimination.cpp
   unnest_rewriter.cpp
   window_self_join.cpp
+  row_number_rewriter.cpp
   sampling_pushdown.cpp
-  sum_rewriter.cpp)
+  type_pushdown.cpp
+  scalar_fn_pushdown.cpp
+  projection_pullup.cpp
+  remote_pushdown_optimizer.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)

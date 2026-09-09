@@ -3,7 +3,7 @@
 # group: [iejoin]
 
 statement ok
-PRAGMA enable_verification
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
 CREATE TABLE test(x INT);

@@ -1,4 +1,5 @@
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/function/partition_stats.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
@@ -46,7 +47,7 @@ unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_f
 }
 
 unique_ptr<MultiFileReader> MultiFileReader::Copy() const {
-	return CreateDefault(function_name);
+	return CreateDefault(function_name.GetIdentifierName());
 }
 
 MultiFileBindData::~MultiFileBindData() {
@@ -72,7 +73,7 @@ unique_ptr<FunctionData> MultiFileBindData::Copy() const {
 
 unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &function_name) {
 	auto res = make_uniq<MultiFileReader>();
-	res->function_name = function_name;
+	res->function_name = Identifier(function_name);
 	return res;
 }
 
@@ -90,36 +91,101 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["allow_empty"] = LogicalType::BOOLEAN;
 }
 
-vector<string> MultiFileReader::ParsePaths(const Value &input) {
+OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
+	if (input.IsNull()) {
+		throw ParserException("%s reader cannot take NULL input as parameter", function_name);
+	}
+	if (input.type().id() == LogicalTypeId::VARCHAR) {
+		return OpenFileInfo(StringValue::Get(input));
+	}
+	if (input.type().id() == LogicalTypeId::VARIANT) {
+		// a VARIANT lets every file carry its own set of open options - unpack it to its logical value
+		// a variant never unpacks to another variant, so this recurses at most once
+		return ParseFileEntry(VariantValue::GetValue(input));
+	}
+	if (input.type().id() != LogicalTypeId::STRUCT) {
+		throw ParserException("%s reader can only take a list of strings, structs or variants as a parameter",
+		                      function_name);
+	}
+	// a file specified as a struct holds the path in the "filename" field - every other field is an open option
+	auto &child_types = StructType::GetChildTypes(input.type());
+	auto &children = StructValue::GetChildren(input);
+	OpenFileInfo result;
+	auto extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	bool found_path = false;
+	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+		auto &name = child_types[child_idx].first;
+		auto &child = children[child_idx];
+		if (name == MultiFileReader::FILE_PATH_FIELD) {
+			if (child.IsNull() || child.type().id() != LogicalTypeId::VARCHAR) {
+				throw ParserException("%s reader requires the \"%s\" field of a file struct to be a non-NULL VARCHAR",
+				                      function_name, MultiFileReader::FILE_PATH_FIELD);
+			}
+			result.path = StringValue::Get(child);
+			found_path = true;
+			continue;
+		}
+		if (child.IsNull()) {
+			// a NULL option is an option that was not specified - a list of structs is typed by unifying the
+			// structs of its entries, which fills the options an entry did not specify with NULL
+			continue;
+		}
+		extended_info->SetUserOption(name.GetIdentifierName(), child);
+	}
+	if (!found_path) {
+		throw ParserException("%s reader requires a file struct to have a \"%s\" field holding the path of the file",
+		                      function_name, MultiFileReader::FILE_PATH_FIELD);
+	}
+	result.extended_info = std::move(extended_info);
+	return result;
+}
+
+vector<OpenFileInfo> MultiFileReader::ParseFileList(const Value &input) {
 	if (input.IsNull()) {
 		throw ParserException("%s cannot take NULL list as parameter", function_name);
 	}
-
-	if (input.type().id() == LogicalTypeId::VARCHAR) {
-		return {StringValue::Get(input)};
-	} else if (input.type().id() == LogicalTypeId::LIST) {
-		vector<string> paths;
-		for (auto &val : ListValue::GetChildren(input)) {
-			if (val.IsNull()) {
-				throw ParserException("%s reader cannot take NULL input as parameter", function_name);
-			}
-			if (val.type().id() != LogicalTypeId::VARCHAR) {
-				throw ParserException("%s reader can only take a list of strings as a parameter", function_name);
-			}
-			paths.push_back(StringValue::Get(val));
-		}
-		return paths;
-	} else {
-		throw InternalException("Unsupported type for MultiFileReader::ParsePaths called with: '%s'");
+	if (input.type().id() != LogicalTypeId::LIST) {
+		return {ParseFileEntry(input)};
 	}
+	vector<OpenFileInfo> files;
+	for (auto &val : ListValue::GetChildren(input)) {
+		files.push_back(ParseFileEntry(val));
+	}
+	return files;
 }
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           const FileGlobInput &glob_input) {
 	auto res = make_uniq<GlobMultiFileList>(context, paths, glob_input);
-	if (res->GetExpandResult() == FileExpandResult::NO_FILES && glob_input.behavior != FileGlobOptions::ALLOW_EMPTY) {
+	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
+		throw IOException("%s needs at least one file to read", function_name);
+	}
+	return std::move(res);
+}
+
+shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, vector<OpenFileInfo> files,
+                                                          const FileGlobInput &glob_input) {
+	bool has_open_options = false;
+	for (auto &file : files) {
+		if (file.extended_info) {
+			has_open_options = true;
+			break;
+		}
+	}
+	if (!has_open_options) {
+		// no per-file open options - dispatch to the path based method so any overrides of it are used
+		vector<string> paths;
+		paths.reserve(files.size());
+		for (auto &file : files) {
+			paths.push_back(std::move(file.path));
+		}
+		return CreateFileList(context, paths, glob_input);
+	}
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(files), glob_input);
+	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
 	return std::move(res);
@@ -127,48 +193,51 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
                                                           const FileGlobInput &glob_input) {
-	auto paths = ParsePaths(input);
-	return CreateFileList(context, paths, glob_input);
+	return CreateFileList(context, ParseFileList(input), glob_input);
 }
 
-bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileOptions &options,
+bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
                                   ClientContext &context) {
-	auto loption = StringUtil::Lower(key);
-	if (loption == "filename") {
+	if (key == "filename") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type() == LogicalType::VARCHAR) {
 			// If not, we interpret it as the name of the column containing the filename
 			options.filename = true;
 			options.filename_column = StringValue::Get(val);
 		} else {
-			Value boolean_value;
 			string error_message;
-			if (val.DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
+			auto boolean_value = val.DefaultTryCastAs(LogicalType::BOOLEAN, &error_message);
+			if (boolean_value) {
 				// If the argument can be cast to boolean, we just interpret it as a boolean
-				options.filename = BooleanValue::Get(boolean_value);
+				options.filename = BooleanValue::Get(*boolean_value);
 			}
 		}
-	} else if (loption == "hive_partitioning") {
+	} else if (key == "hive_partitioning") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
-	} else if (loption == "union_by_name") {
+	} else if (key == "union_by_name") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.union_by_name = BooleanValue::Get(val);
-	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
+	} else if (key == "allow_empty") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
+		}
+		options.allow_empty = BooleanValue::Get(val);
+	} else if (key == "hive_types_autocast" || key == "hive_type_autocast") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_types_autocast = BooleanValue::Get(val);
-	} else if (loption == "hive_types" || loption == "hive_type") {
+	} else if (key == "hive_types" || key == "hive_type") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(
@@ -180,12 +249,12 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		for (idx_t i = 0; i < children.size(); i++) {
 			const Value &child = children[i];
 			if (child.type().id() != LogicalType::VARCHAR) {
-				throw InvalidInputException("hive_types: '%s' must be a VARCHAR, instead: '%s' was provided",
+				throw InvalidInputException("hive_types: %s must be a VARCHAR, instead: '%s' was provided",
 				                            StructType::GetChildName(val.type(), i), child.type().ToString());
 			}
 			// for every child of the struct, get the logical type
 			LogicalType transformed_type = TransformStringToLogicalType(child.ToString(), context);
-			const string &name = StructType::GetChildName(val.type(), i);
+			const string &name = StructType::GetChildName(val.type(), i).GetIdentifierName();
 			options.hive_types_schema[name] = transformed_type;
 		}
 		D_ASSERT(!options.hive_types_schema.empty());
@@ -202,20 +271,31 @@ unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &
 	return files.ComplexFilterPushdown(context, options, info, filters);
 }
 
-unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(
-    ClientContext &context, const MultiFileList &files, const MultiFileOptions &options, const vector<string> &names,
-    const vector<LogicalType> &types, const vector<column_t> &column_ids, TableFilterSet &filters) {
-	return files.DynamicFilterPushdown(context, options, names, types, column_ids, filters);
+MultiFileDynamicPushdownInfo::MultiFileDynamicPushdownInfo(ClientContext &context, const MultiFileOptions &options,
+                                                           const vector<Identifier> &column_names,
+                                                           const vector<LogicalType> &column_types,
+                                                           const vector<ColumnIndex> &column_indexes,
+                                                           TableFilterSet &filters)
+    : context(context), options(options), column_names(column_names), column_types(column_types),
+      column_indexes(column_indexes), filters(filters) {
+	for (auto &column_id : column_indexes) {
+		column_ids.push_back(column_id.GetPrimaryIndex());
+	}
+}
+
+unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(const MultiFileList &files,
+                                                                 MultiFileDynamicPushdownInfo &pushdown_info) {
+	return files.DynamicFilterPushdown(pushdown_info);
 }
 
 bool MultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
-                           vector<string> &names, MultiFileReaderBindData &bind_data) {
+                           vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
 	// The Default MultiFileReader can not perform any binding as it uses MultiFileLists with no schema information.
 	return false;
 }
 
 void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
-                                  vector<string> &names, MultiFileReaderBindData &bind_data) {
+                                  vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
 	// Add generated constant column for filename
 	if (options.filename) {
 		if (std::find(names.begin(), names.end(), options.filename_column) != names.end()) {
@@ -262,12 +342,17 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 
 		for (auto &part : partitions) {
 			idx_t hive_partitioning_index;
-			auto lookup = std::find_if(names.begin(), names.end(), [&](const string &col_name) {
-				return StringUtil::CIEquals(col_name, part.first);
-			});
+			auto lookup = std::find_if(names.begin(), names.end(),
+			                           [&](const Identifier &col_name) { return col_name == part.first; });
 			if (lookup != names.end()) {
-				// hive partitioning column also exists in file - override
 				auto idx = NumericCast<idx_t>(lookup - names.begin());
+				if (bind_data.filename_idx == idx) {
+					throw BinderException(
+					    "Option filename adds column \"%s\", but a hive partition column with this "
+					    "name also exists. Try setting a different name: filename='<filename column name>'",
+					    options.filename_column);
+				}
+				// hive partitioning column also exists in file - override
 				hive_partitioning_index = idx;
 				return_types[idx] = options.GetHiveLogicalType(part.first);
 			} else {
@@ -291,6 +376,39 @@ void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderB
 	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
 }
 
+// Resolves `column_id` to a Value from info known without opening the file: filename, file_index,
+// or hive partitioning columns. `hive_partitions` is a caller-owned lazy cache.
+static bool TryResolvePreOpenConstant(column_t column_id, const string &file_path, idx_t file_list_idx,
+                                      const MultiFileReaderBindData &reader_bind, const MultiFileOptions &file_options,
+                                      ClientContext &context, std::map<string, string> &hive_partitions,
+                                      bool &hive_partitions_parsed, Value &out_constant) {
+	if ((reader_bind.filename_idx.IsValid() && column_id == reader_bind.filename_idx.GetIndex()) ||
+	    column_id == MultiFileReader::COLUMN_IDENTIFIER_FILENAME) {
+		out_constant = Value(file_path);
+		return true;
+	}
+	if (column_id == MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX) {
+		out_constant = Value::UBIGINT(file_list_idx);
+		return true;
+	}
+	auto &hive = reader_bind.hive_partitioning_indexes;
+	auto hp = std::find_if(hive.begin(), hive.end(),
+	                       [column_id](const HivePartitioningIndex &e) { return e.index == column_id; });
+	if (hp == hive.end()) {
+		return false;
+	}
+	if (!hive_partitions_parsed) {
+		hive_partitions = HivePartitioning::Parse(file_path);
+		hive_partitions_parsed = true;
+	}
+	auto entry = hive_partitions.find(hp->value);
+	if (entry == hive_partitions.end()) {
+		return false;
+	}
+	out_constant = file_options.GetHivePartitionValue(entry->second, hp->value, context);
+	return true;
+}
+
 void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const MultiFileOptions &file_options,
                                    const MultiFileReaderBindData &options,
                                    const vector<MultiFileColumnDefinition> &global_columns,
@@ -303,55 +421,37 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 	if (file_options.union_by_name) {
 		for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 			auto &column = local_columns[col_idx];
-			name_map[column.name] = col_idx;
+			name_map[column.name.GetIdentifierName()] = col_idx;
 		}
 	}
+	std::map<string, string> hive_partitions;
+	bool hive_partitions_parsed = false;
+	Value pre_open_constant;
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		auto global_idx = MultiFileGlobalIndex(i);
 		auto &col_id = global_column_ids[i];
 		auto column_id = col_id.GetPrimaryIndex();
-		if ((options.filename_idx.IsValid() && column_id == options.filename_idx.GetIndex()) ||
-		    column_id == COLUMN_IDENTIFIER_FILENAME) {
-			// filename
-			reader_data.constant_map.Add(global_idx, Value(filename));
-			continue;
-		}
-		if (column_id == COLUMN_IDENTIFIER_FILE_INDEX) {
-			// filename
-			reader_data.constant_map.Add(global_idx, Value::UBIGINT(reader_data.reader->file_list_idx.GetIndex()));
+		if (TryResolvePreOpenConstant(column_id, filename, reader_data.reader->file_list_idx.GetIndex(), options,
+		                              file_options, context, hive_partitions, hive_partitions_parsed,
+		                              pre_open_constant)) {
+			reader_data.constant_map.Add(global_idx, pre_open_constant);
 			continue;
 		}
 		if (IsVirtualColumn(column_id)) {
 			continue;
-		}
-		if (!options.hive_partitioning_indexes.empty()) {
-			// hive partition constants
-			auto partitions = HivePartitioning::Parse(filename);
-			D_ASSERT(partitions.size() == options.hive_partitioning_indexes.size());
-			bool found_partition = false;
-			for (auto &entry : options.hive_partitioning_indexes) {
-				if (column_id == entry.index) {
-					Value value = file_options.GetHivePartitionValue(partitions[entry.value], entry.value, context);
-					reader_data.constant_map.Add(global_idx, value);
-					found_partition = true;
-					break;
-				}
-			}
-			if (found_partition) {
-				continue;
-			}
 		}
 		if (file_options.union_by_name) {
 			auto &column = global_columns[column_id];
 			auto &name = column.name;
 			auto &type = column.type;
 
-			auto entry = name_map.find(name);
+			auto entry = name_map.find(name.GetIdentifierName());
 			bool not_present_in_file = entry == name_map.end();
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
 				// push a NULL value of the specified type
-				reader_data.constant_map.Add(global_idx, Value(type));
+				auto &constant_type = col_id.HasType() ? col_id.GetScanType() : type;
+				reader_data.constant_map.Add(global_idx, Value(constant_type));
 				continue;
 			}
 		}
@@ -386,21 +486,21 @@ ReaderInitializeType MultiFileReader::CreateMapping(
 	                     virtual_columns, bind_data.mapping);
 }
 
-string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expression &expr, BaseFileReader &reader,
-                                 idx_t expr_idx, string &first_message) {
-	if (expr.type != ExpressionType::OPERATOR_CAST) {
+static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expression &expr,
+                                        BaseFileReader &reader, idx_t expr_idx, string &first_message) {
+	if (expr.GetExpressionType() != ExpressionType::OPERATOR_CAST) {
 		// not a cast
 		return string();
 	}
-	auto &cast_expr = expr.Cast<BoundCastExpression>();
-	if (cast_expr.child->type != ExpressionType::BOUND_REF) {
+	auto &cast_expr = expr.Cast<BoundFunctionExpression>();
+	if (BoundCastExpression::Child(cast_expr).GetExpressionType() != ExpressionType::BOUND_REF) {
 		return string();
 	}
-	auto &ref = cast_expr.child->Cast<BoundReferenceExpression>();
-	auto &source_type = ref.return_type;
-	auto &target_type = cast_expr.return_type;
+	auto &ref = BoundCastExpression::Child(cast_expr).Cast<BoundReferenceExpression>();
+	auto &source_type = ref.GetReturnType();
+	auto &target_type = cast_expr.GetReturnType();
 	auto &columns = reader.GetColumns();
-	auto local_col_id = reader.column_indexes[ref.index].GetPrimaryIndex();
+	auto local_col_id = reader.column_indexes[ref.Index()].GetPrimaryIndex();
 	auto &local_col = columns[local_col_id];
 
 	auto reader_type = reader.GetReaderType();
@@ -413,7 +513,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 			target_column = "\"" + bind_data.table_columns[expr_idx] + "\" ";
 		}
 		extended_error = StringUtil::Format(
-		    "In file \"%s\" the column \"%s\" has type %s, but we are trying to load it into column %swith type "
+		    "In file \"%s\" the column %s has type %s, but we are trying to load it into column %swith type "
 		    "%s.\nThis means the %s schema does not match the schema of the table.\nPossible solutions:\n* Insert by "
 		    "name instead of by position using \"INSERT INTO tbl BY NAME SELECT * FROM %s(...)\"\n* Manually specify "
 		    "which columns to insert using \"INSERT INTO tbl SELECT ... FROM %s(...)\"",
@@ -422,16 +522,16 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 	} else {
 		// read_parquet() with multiple files
 		extended_error = StringUtil::Format(
-		    "In file \"%s\" the column \"%s\" has type %s, but we are trying to read it as type %s."
+		    "In file \"%s\" the column %s has type %s, but we are trying to read it as type %s."
 		    "\nThis can happen when reading multiple %s files. The schema information is taken from "
 		    "the first %s file by default. Possible solutions:\n"
 		    "* Enable the union_by_name=True option to combine the schema of all %s files "
-		    "(https://duckdb.org/docs/stable/data/multiple_files/combining_schemas)\n"
+		    "(https://duckdb.org/docs/current/data/multiple_files/combining_schemas)\n"
 		    "* Use a COPY statement to automatically derive types from an existing table.",
 		    reader.GetFileName(), local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
 	}
-	first_message = StringUtil::Format("failed to cast column \"%s\" from type %s to %s: ", local_col.name, source_type,
-	                                   target_type);
+	first_message =
+	    StringUtil::Format("failed to cast column %s from type %s to %s: ", local_col.name, source_type, target_type);
 	return extended_error;
 }
 
@@ -457,7 +557,6 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileBindD
 			                          first_message, original_error, extended_error);
 		}
 	}
-	output_chunk.SetCardinality(input_chunk.size());
 }
 
 void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,
@@ -504,10 +603,17 @@ TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, con
 }
 
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
-	TableFunctionSet function_set(table_function.name);
+	TableFunctionSet function_set {table_function.name};
 	function_set.AddFunction(table_function);
-	D_ASSERT(!table_function.arguments.empty() && table_function.arguments[0] == LogicalType::VARCHAR);
-	table_function.arguments[0] = LogicalType::LIST(LogicalType::VARCHAR);
+	D_ASSERT(!table_function.GetArguments().empty() && table_function.GetArguments()[0] == LogicalType::VARCHAR);
+	// the list variant takes ANY as its child type: a file is either a path (VARCHAR) or a STRUCT/VARIANT
+	// holding the path together with the options to open the file with
+	auto list_function = table_function;
+	list_function.GetArguments()[0] = LogicalType::LIST(LogicalType::ANY);
+	function_set.AddFunction(std::move(list_function));
+	// a single file can also be passed as a VARIANT - without this overload it would implicitly cast to VARCHAR
+	// and the stringified variant would be read as a path
+	table_function.GetArguments()[0] = LogicalType::VARIANT();
 	function_set.AddFunction(std::move(table_function));
 	return function_set;
 }
@@ -520,20 +626,20 @@ unique_ptr<Expression> MultiFileReader::GetConstantVirtualColumn(MultiFileReader
 	return nullptr;
 }
 
-unique_ptr<Expression> MultiFileReader::GetVirtualColumnExpression(ClientContext &, MultiFileReaderData &,
-                                                                   const vector<MultiFileColumnDefinition> &,
-                                                                   idx_t &column_id, const LogicalType &type,
-                                                                   MultiFileLocalIndex local_idx,
-                                                                   optional_ptr<MultiFileColumnDefinition> &) {
-	return make_uniq<BoundReferenceExpression>(type, local_idx.GetIndex());
+MultiFileReaderVirtualColumnBinding
+MultiFileReader::GetVirtualColumnExpression(ClientContext &, MultiFileReaderData &,
+                                            const vector<MultiFileColumnDefinition> &, idx_t column_id,
+                                            const LogicalType &type, MultiFileLocalIndex local_idx) {
+	return MultiFileReaderVirtualColumnBinding(make_uniq<BoundReferenceExpression>(type, local_idx.GetIndex()),
+	                                           {column_id});
 }
 
 MultiFileReaderBindData MultiFileReader::BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
-                                                         vector<string> &names, MultiFileList &files,
+                                                         vector<Identifier> &names, MultiFileList &files,
                                                          MultiFileBindData &result, BaseFileReaderOptions &options,
                                                          MultiFileOptions &file_options) {
 	D_ASSERT(file_options.union_by_name);
-	vector<string> union_col_names;
+	vector<Identifier> union_col_names;
 	vector<LogicalType> union_col_types;
 
 	// obtain the set of union column names + types by unifying the types of all of the files
@@ -555,7 +661,7 @@ MultiFileReaderBindData MultiFileReader::BindUnionReader(ClientContext &context,
 }
 
 MultiFileReaderBindData MultiFileReader::BindReader(ClientContext &context, vector<LogicalType> &return_types,
-                                                    vector<string> &names, MultiFileList &files,
+                                                    vector<Identifier> &names, MultiFileList &files,
                                                     MultiFileBindData &result, BaseFileReaderOptions &options,
                                                     MultiFileOptions &file_options) {
 	if (file_options.union_by_name) {
@@ -606,6 +712,34 @@ shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context,
 	return interface.CreateReader(context, file, options, file_options);
 }
 
+bool MultiFileReader::CanSkipFileFromFilters(ClientContext &context, const OpenFileInfo &file, idx_t file_list_idx,
+                                             const MultiFileOptions &file_options,
+                                             const MultiFileReaderBindData &reader_bind,
+                                             const vector<ColumnIndex> &global_column_ids,
+                                             optional_ptr<TableFilterSet> filters) {
+	if (!filters) {
+		return false;
+	}
+
+	std::map<string, string> hive_partitions;
+	bool hive_partitions_parsed = false;
+	Value constant;
+
+	for (auto &it : *filters) {
+		auto projection_idx = it.GetIndex().GetIndex();
+		D_ASSERT(projection_idx < global_column_ids.size());
+		auto column_id = global_column_ids[projection_idx].GetPrimaryIndex();
+		if (!TryResolvePreOpenConstant(column_id, file.path, file_list_idx, reader_bind, file_options, context,
+		                               hive_partitions, hive_partitions_parsed, constant)) {
+			continue;
+		}
+		if (!EvaluateTableFilterAgainstConstant(context, it.Filter(), constant)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void MultiFileReader::PruneReaders(MultiFileBindData &data, MultiFileList &file_list) {
 	unordered_set<string> file_set;
 
@@ -654,24 +788,26 @@ void MultiFileOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
 	bind_info.InsertOption("hive_types_autocast", Value::BOOLEAN(hive_types_autocast));
+	bind_info.InsertOption("allow_empty", Value::BOOLEAN(allow_empty));
 }
 
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
-                                    vector<LogicalType> &union_col_types, vector<string> &union_col_names,
-                                    case_insensitive_map_t<idx_t> &union_names_map) {
+                                    vector<LogicalType> &union_col_types, vector<Identifier> &union_col_names,
+                                    identifier_map_t<idx_t> &union_names_map) {
 	D_ASSERT(col_names.size() == sql_types.size());
 
 	for (idx_t col = 0; col < col_names.size(); ++col) {
-		auto union_find = union_names_map.find(col_names[col]);
+		Identifier col_name(col_names[col]);
+		auto union_find = union_names_map.find(col_name);
 
 		if (union_find != union_names_map.end()) {
 			// given same name , union_col's type must compatible with col's type
 			auto &current_type = union_col_types[union_find->second];
-			auto compatible_type = LogicalType::ForceMaxLogicalType(current_type, sql_types[col]);
+			auto compatible_type = LogicalType::DefaultForceMaxLogicalType(current_type, sql_types[col]);
 			union_col_types[union_find->second] = compatible_type;
 		} else {
-			union_names_map[col_names[col]] = union_col_names.size();
-			union_col_names.emplace_back(col_names[col]);
+			union_names_map[col_name] = union_col_names.size();
+			union_col_names.emplace_back(col_name);
 			union_col_types.emplace_back(sql_types[col]);
 		}
 	}
@@ -723,7 +859,7 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 			LogicalType detected_type = LogicalType::VARCHAR;
 			Value value(part.second);
 			for (auto &candidate : candidates) {
-				const bool success = value.TryCastAs(context, candidate, true);
+				const bool success = value.TryCastAs(context, candidate, nullptr, true).has_value();
 				if (success) {
 					detected_type = candidate;
 					break;

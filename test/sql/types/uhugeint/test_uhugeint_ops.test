@@ -2,9 +2,6 @@
 # description: Test various huge integer ops
 # group: [uhugeint]
 
-statement ok
-PRAGMA enable_verification
-
 # test storage of the UHUGEINT type
 statement ok
 CREATE TABLE uhugeints(h UHUGEINT);

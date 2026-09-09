@@ -12,8 +12,7 @@ LogicalMergeInto::LogicalMergeInto(TableCatalogEntry &table)
 
 LogicalMergeInto::LogicalMergeInto(ClientContext &context, const unique_ptr<CreateInfo> &table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_MERGE_INTO),
-      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
-                                                 table_info->Cast<CreateTableInfo>().table)) {
+      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->GetQualifiedName())) {
 	auto binder = Binder::CreateBinder(context);
 	bound_constraints = binder->BindConstraints(table);
 }
@@ -22,15 +21,15 @@ idx_t LogicalMergeInto::EstimateCardinality(ClientContext &context) {
 	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
 }
 
-vector<idx_t> LogicalMergeInto::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalMergeInto::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 vector<ColumnBinding> LogicalMergeInto::GetColumnBindings() {
 	if (return_chunk) {
 		return GenerateColumnBindings(table_index, table.GetTypes().size() + 1);
 	}
-	return {ColumnBinding(0, 0)};
+	return {ColumnBinding(TableIndex(0), ProjectionIndex(0))};
 }
 
 void LogicalMergeInto::ResolveTypes() {

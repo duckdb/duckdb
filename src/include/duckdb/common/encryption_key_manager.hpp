@@ -13,6 +13,8 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/storage/object_cache.hpp"
+#include "duckdb/storage/storage_info.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 

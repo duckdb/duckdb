@@ -3,9 +3,6 @@
 # group: [default]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE data(id INTEGER, x INTEGER);
 
 statement ok

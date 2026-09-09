@@ -5,9 +5,9 @@
 
 namespace duckdb {
 
-AlterInfo::AlterInfo(AlterType type, string catalog_p, string schema_p, string name_p, OnEntryNotFound if_not_found)
-    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), catalog(std::move(catalog_p)),
-      schema(std::move(schema_p)), name(std::move(name_p)), allow_internal(false) {
+AlterInfo::AlterInfo(AlterType type, QualifiedName name_p, OnEntryNotFound if_not_found)
+    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), allow_internal(false),
+      qualified_name(std::move(name_p)) {
 }
 
 AlterInfo::AlterInfo(AlterType type) : ParseInfo(TYPE), type(type) {
@@ -17,15 +17,10 @@ AlterInfo::~AlterInfo() {
 }
 
 AlterEntryData AlterInfo::GetAlterEntryData() const {
-	AlterEntryData data;
-	data.catalog = catalog;
-	data.schema = schema;
-	data.name = name;
-	data.if_not_found = if_not_found;
-	return data;
+	return AlterEntryData(GetQualifiedName(), if_not_found);
 }
 
-bool AlterInfo::IsAddPrimaryKey() const {
+bool AlterInfo::IsAddUniqueConstraint() const {
 	if (type != AlterType::ALTER_TABLE) {
 		return false;
 	}
@@ -36,16 +31,17 @@ bool AlterInfo::IsAddPrimaryKey() const {
 	}
 
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	if (constraint_info.constraint->type != ConstraintType::UNIQUE) {
+	return constraint_info.constraint->type == ConstraintType::UNIQUE;
+}
+
+bool AlterInfo::IsAddPrimaryKey() const {
+	if (!IsAddUniqueConstraint()) {
 		return false;
 	}
 
-	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
-	if (!unique_info.IsPrimaryKey()) {
-		return false;
-	}
-
-	return true;
+	auto &table_info = Cast<AlterTableInfo>();
+	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
+	return constraint_info.constraint->Cast<UniqueConstraint>().IsPrimaryKey();
 }
 
 } // namespace duckdb

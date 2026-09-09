@@ -2,9 +2,6 @@
 # description: Issue 8287: Internal Exception when dropping system catalog function as if it were a Macro
 # group: [general]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 drop macro sum;
 ----

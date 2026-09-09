@@ -2,6 +2,9 @@
 # description: Make sure estimated cardinalities are respected
 # group: [optimizer]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require notwindows
 
 statement ok

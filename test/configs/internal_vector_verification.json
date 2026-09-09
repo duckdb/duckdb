@@ -1,0 +1,5 @@
+{
+  "description": "Run with debug_verification_mode set to verify_vectors - enabling aggressive internal vector verification",
+  "on_init": "SET debug_verification_mode='verify_vectors';",
+  "skip_compiled": "true"
+}

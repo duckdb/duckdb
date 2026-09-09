@@ -14,9 +14,58 @@ blacklist = [
     "Type",
     "DictionaryAppendState",
     "DictFSSTMode",
+    "DictFSSTCompressResult",
     "ComplexJSONType",
     "UnavailableReason",
+    "VirtualColumnBindingType",
     "Slot",
+    "State",
+    "ScheduleMode",
+    "MemoryUpdateMode",
+    "SchedulePolicy",
+    "BatchDrainMode",
+    "AccountedWriteAdoption",
+    "FileWritePublicationState",
+    "IdleFilter",
+    "CreateDirectoryMode",
+    "RemoveDirectoryMode",
+    "CopyOutputOwnership",
+    "CopyOutputPublicationState",
+    "PendingTaskCountMode",
+    "PartitionKeyTrackerState",
+    "ClaimState",
+    "MoveBufferResult",
+    "CSVBufferResidency",
+    "AppendAdmission",
+    "AppendReservationState",
+    "BufferedPushState",
+    "CTEPipelineSelectionState",
+    "ConsumerLifecycle",
+    "ConsumerMode",
+    "ConsumerReadState",
+    "DataflowDependencyMode",
+    "ExchangeLogEvent",
+    "ExternalInputEventState",
+    "MetaPipelineDependencyMode",
+    "PipelineBroadcastExchangeCompletionMode",
+    "PipelineBroadcastExchangeDirectPushState",
+    "PipelineBroadcastExchangeLocalMode",
+    "PipelineDependencyType",
+    "PipelineInputChunkMode",
+    "PendingBatchAdvanceState",
+    "PipelineExternalInputCost",
+    "PipelineExternalInputSupport",
+    "PipelineSourceConsumption",
+    "ProducerState",
+    "ProjectionMode",
+    "ReaderWakeMode",
+    "RecursiveDependencyMode",
+    "ReservationKind",
+    "RowGroupBatchType",
+    "RuntimeFilterCastMode",
+    "SourceFinishNotificationState",
+    "WatermarkState",
+    "WriterWakeMode",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")
@@ -29,6 +78,7 @@ overrides = {
         "TIMESTAMP_TZ": "TIMESTAMP WITH TIME ZONE",
         "TIME_TZ": "TIME WITH TIME ZONE",
         "TIMESTAMP_SEC": "TIMESTAMP_S",
+        "TIMESTAMP_TZ_NS": "TIMESTAMPTZ_NS",
     },
     "JoinType": {"OUTER": "FULL"},
     "OrderType": {
@@ -73,6 +123,7 @@ overrides = {
         "HEAD_REQUEST": "HEAD",
         "DELETE_REQUEST": "DELETE",
         "POST_REQUEST": "POST",
+        "OPTIONS_REQUEST": "OPTIONS",
     },
     "CompressionType": {
         "COMPRESSION_AUTO": "AUTO",
@@ -93,6 +144,9 @@ overrides = {
         "COMPRESSION_DICT_FSST": "DICT_FSST",
     },
     "ArrowFormatVersion": {"V1_0": "1.0", "V1_1": "1.1", "V1_2": "1.2", "V1_3": "1.3", "V1_4": "1.4", "V1_5": "1.5"},
+    "TriggerTiming": {"BEFORE": "BEFORE", "AFTER": "AFTER", "INSTEAD_OF": "INSTEAD OF"},
+    "TriggerEventType": {"INSERT_EVENT": "INSERT", "DELETE_EVENT": "DELETE", "UPDATE_EVENT": "UPDATE"},
+    "TriggerForEach": {"STATEMENT": "STATEMENT", "ROW": "ROW"},
 }
 
 # get all the headers
@@ -101,8 +155,6 @@ for root, dirs, files in os.walk(os.path.join("..", "src")):
     for file in files:
         # Dont include the generated header itself recursively
         if file == "enum_util.hpp":
-            continue
-        if 'amalgamation' in root:
             continue
 
         if file.endswith(".hpp"):

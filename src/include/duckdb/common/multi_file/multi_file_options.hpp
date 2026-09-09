@@ -9,9 +9,8 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 
 namespace duckdb {
 struct BindInfo;
@@ -25,6 +24,7 @@ struct MultiFileOptions {
 	bool auto_detect_hive_partitioning = true;
 	bool union_by_name = false;
 	bool hive_types_autocast = true;
+	bool allow_empty = false;
 	MultiFileColumnMappingMode mapping = MultiFileColumnMappingMode::BY_NAME;
 
 	case_insensitive_map_t<LogicalType> hive_types_schema;

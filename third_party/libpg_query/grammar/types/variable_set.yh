@@ -1,5 +1,0 @@
-%type <vsetstmt> set_rest
-%type <vsetstmt> generic_set
-%type <node> var_value
-%type <node> zone_value
-%type <list> var_list

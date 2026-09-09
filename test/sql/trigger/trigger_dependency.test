@@ -1,0 +1,331 @@
+# name: test/sql/trigger/trigger_dependency.test
+# description: Test that tables referenced by a trigger body are protected from DROP
+# group: [trigger]
+
+require noforcestorage
+
+statement ok
+CREATE TABLE t(i INT);
+
+statement ok
+CREATE TABLE log(i INT);
+
+statement ok
+CREATE TRIGGER tr AFTER INSERT ON t FOR EACH STATEMENT INSERT INTO log VALUES (1);
+
+# DROP TABLE log RESTRICT must fail because the trigger body depends on it
+statement error
+DROP TABLE log RESTRICT;
+----
+<REGEX>:.*trigger "tr" on table "t" depends on table "log".*
+
+# CASCADE succeeds and removes the dependent trigger
+statement ok
+DROP TABLE log CASCADE;
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'tr';
+----
+0
+
+# the table itself is untouched
+query I
+SELECT COUNT(*) FROM t;
+----
+0
+
+statement ok
+DROP TABLE t;
+
+# --- DROP with no modifier defaults to RESTRICT ---
+statement ok
+CREATE TABLE t1b(i INT);
+
+statement ok
+CREATE TABLE log1b(i INT);
+
+statement ok
+CREATE TRIGGER tr1b AFTER INSERT ON t1b FOR EACH STATEMENT INSERT INTO log1b VALUES (1);
+
+statement error
+DROP TABLE log1b;
+----
+<REGEX>:.*trigger "tr1b" on table "t1b" depends on table "log1b".*
+
+statement ok
+DROP TABLE log1b CASCADE;
+
+statement ok
+DROP TABLE t1b;
+
+# --- A trigger never blocks dropping the table it is defined on ---
+statement ok
+CREATE TABLE t2(i INT);
+
+statement ok
+CREATE TABLE log2(i INT);
+
+statement ok
+CREATE TRIGGER tr2 AFTER INSERT ON t2 FOR EACH STATEMENT INSERT INTO log2 VALUES (1);
+
+# no modifier needed - the trigger's own table is never blocking, so this succeeds without CASCADE
+statement ok
+DROP TABLE t2;
+
+# dropping the table dropped its trigger, so log2 is no longer depended on
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'tr2';
+----
+0
+
+statement ok
+DROP TABLE log2 RESTRICT;
+
+# --- Dropping a trigger releases the dependency on the referenced table ---
+statement ok
+CREATE TABLE t3(i INT);
+
+statement ok
+CREATE TABLE log3(i INT);
+
+statement ok
+CREATE TRIGGER tr3 AFTER INSERT ON t3 FOR EACH STATEMENT INSERT INTO log3 VALUES (1);
+
+statement error
+DROP TABLE log3 RESTRICT;
+----
+<REGEX>:.*depends on.*
+
+statement ok
+DROP TRIGGER tr3 ON t3;
+
+statement ok
+DROP TABLE log3 RESTRICT;
+
+statement ok
+DROP TABLE t3;
+
+# --- Same trigger name on two tables: dropping one must not release the other's dependency ---
+statement ok
+CREATE TABLE a(i INT);
+
+statement ok
+CREATE TABLE b(i INT);
+
+statement ok
+CREATE TABLE log_a(i INT);
+
+statement ok
+CREATE TABLE log_b(i INT);
+
+statement ok
+CREATE TRIGGER same AFTER INSERT ON a FOR EACH STATEMENT INSERT INTO log_a VALUES (1);
+
+statement ok
+CREATE TRIGGER same AFTER INSERT ON b FOR EACH STATEMENT INSERT INTO log_b VALUES (1);
+
+statement ok
+DROP TRIGGER same ON a;
+
+# a's dependency is released
+statement ok
+DROP TABLE log_a RESTRICT;
+
+# b's trigger still exists, so its dependency must still block
+statement error
+DROP TABLE log_b RESTRICT;
+----
+<REGEX>:.*trigger "same" on table "b".*
+
+statement ok
+DROP TABLE b CASCADE;
+
+statement ok
+DROP TABLE log_b RESTRICT;
+
+statement ok
+DROP TABLE a;
+
+# --- A trigger body referencing its own table does not block dropping it ---
+statement ok
+CREATE TABLE t4(i INT);
+
+statement ok
+CREATE TABLE log4(i INT);
+
+statement ok
+CREATE TRIGGER tr4 AFTER INSERT ON t4 FOR EACH STATEMENT INSERT INTO log4 SELECT COUNT(*) FROM t4;
+
+statement ok
+DROP TABLE t4;
+
+statement ok
+DROP TABLE log4 RESTRICT;
+
+# --- Views referenced by a trigger body are protected too ---
+statement ok
+CREATE TABLE t5(i INT);
+
+statement ok
+CREATE TABLE base5(i INT);
+
+statement ok
+CREATE VIEW v5 AS SELECT * FROM base5;
+
+statement ok
+CREATE TABLE log5(i INT);
+
+statement ok
+CREATE TRIGGER tr5 AFTER INSERT ON t5 FOR EACH STATEMENT INSERT INTO log5 SELECT COUNT(*) FROM v5;
+
+statement error
+DROP VIEW v5;
+----
+<REGEX>:.*depends on.*
+
+statement ok
+DROP TABLE t5 CASCADE;
+
+statement ok
+DROP VIEW v5;
+
+statement ok
+DROP TABLE base5;
+
+statement ok
+DROP TABLE log5;
+
+# --- A trigger body referencing a table from a different catalog is rejected ---
+statement ok
+CREATE TABLE t6(i INT);
+
+statement ok
+CREATE TEMP TABLE log6(i INT);
+
+statement error
+CREATE TRIGGER tr6 AFTER INSERT ON t6 FOR EACH STATEMENT INSERT INTO temp.log6 VALUES (1);
+----
+<REGEX>:.*cannot reference.*different catalog.*
+
+statement ok
+DROP TABLE t6;
+
+statement ok
+DROP TABLE temp.log6;
+
+# --- Renaming the table a trigger is defined on is rejected ---
+statement ok
+CREATE TABLE t7(i INT);
+
+statement ok
+CREATE TABLE log7(i INT);
+
+statement ok
+CREATE TRIGGER tr7 AFTER INSERT ON t7 FOR EACH STATEMENT INSERT INTO log7 VALUES (1);
+
+statement error
+ALTER TABLE t7 RENAME TO t7b;
+----
+<REGEX>:.*Cannot alter entry "t7" because there are entries that depend on it.*
+
+# other alters on a table with a trigger are unaffected
+statement ok
+ALTER TABLE t7 ADD COLUMN j INT;
+
+statement ok
+ALTER TABLE t7 RENAME COLUMN j TO k;
+
+statement ok
+DROP TABLE t7 CASCADE;
+
+statement ok
+DROP TABLE log7;
+
+# --- Same restriction applies when the trigger body references its own table ---
+statement ok
+CREATE TABLE t8(i INT);
+
+statement ok
+CREATE TABLE log8(i INT);
+
+statement ok
+CREATE TRIGGER tr8 AFTER INSERT ON t8 FOR EACH STATEMENT INSERT INTO log8 SELECT COUNT(*) FROM t8;
+
+statement error
+ALTER TABLE t8 RENAME TO t8b;
+----
+<REGEX>:.*Cannot alter entry "t8" because there are entries that depend on it.*
+
+statement ok
+DROP TABLE t8 CASCADE;
+
+statement ok
+DROP TABLE log8;
+
+# --- Altering a column that the trigger body reads from its own table is rejected ---
+statement ok
+CREATE TABLE t9(i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE audit9(x INTEGER);
+
+statement ok
+CREATE TRIGGER tr9 AFTER INSERT ON t9 FOR EACH STATEMENT INSERT INTO audit9 SELECT j FROM t9;
+
+statement error
+ALTER TABLE t9 RENAME COLUMN j TO k;
+----
+<REGEX>:.*Cannot alter entry "t9" because there are entries that depend on it.*
+
+# dropping the table (and its trigger) needs no CASCADE - the trigger cannot outlive its own table either way
+statement ok
+DROP TABLE t9;
+
+statement ok
+DROP TABLE audit9;
+
+# --- A trigger that does not reference its own table's body is unaffected: column alters remain allowed ---
+statement ok
+CREATE TABLE t10(i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE log10(x INTEGER);
+
+statement ok
+CREATE TRIGGER tr10 AFTER INSERT ON t10 FOR EACH STATEMENT INSERT INTO log10 VALUES (1);
+
+statement ok
+ALTER TABLE t10 RENAME COLUMN j TO k;
+
+statement ok
+DROP TABLE t10;
+
+statement ok
+DROP TABLE log10;
+
+# --- Altering a column that the trigger body reads from a DIFFERENT (non-owning) table is rejected too ---
+statement ok
+CREATE TABLE t11(i INTEGER);
+
+statement ok
+CREATE TABLE src11(j INTEGER);
+
+statement ok
+CREATE TABLE audit11(x INTEGER);
+
+statement ok
+CREATE TRIGGER tr11 AFTER INSERT ON t11 FOR EACH STATEMENT INSERT INTO audit11 SELECT j FROM src11;
+
+statement error
+ALTER TABLE src11 RENAME COLUMN j TO k;
+----
+<REGEX>:.*Cannot alter entry "src11" because there are entries that depend on it.*
+
+statement ok
+DROP TABLE t11 CASCADE;
+
+statement ok
+DROP TABLE src11;
+
+statement ok
+DROP TABLE audit11;

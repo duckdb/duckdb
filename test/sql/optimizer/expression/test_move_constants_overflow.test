@@ -1,0 +1,221 @@
+# name: test/sql/optimizer/expression/test_move_constants_overflow.test
+# description: Moving a constant across a comparison must give correct results when the moved constant is out of range
+# group: [expression]
+
+# the original bug: [x * -1 <> INT32_MIN] was rewritten to [x <> 2147483648],
+# and since 2147483648 does not fit in an INTEGER the predicate was folded to constant false
+query I
+SELECT x * -1 <> CAST(-2147483648 AS INTEGER) FROM (VALUES (CAST(0 AS INTEGER))) t(x);
+----
+true
+
+foreach type,min,max tinyint,-128,127 smallint,-32768,32767 integer,-2147483648,2147483647 bigint,-9223372036854775808,9223372036854775807 hugeint,-170141183460469231731687303715884105728,170141183460469231731687303715884105727
+
+statement ok
+CREATE OR REPLACE TABLE vals(v {type});
+
+statement ok
+INSERT INTO vals VALUES (0), (2), (-2), ({max}), ({min}+1), (NULL);
+
+# [v * -1 COMP min]: the moved constant does not fit the type. Equalities can be folded to a constant, ordered
+# comparisons must be evaluated as written: no representable v satisfies v * -1 = min, and every representable v
+# satisfies v * -1 > min
+query I
+SELECT count(*) FROM vals WHERE v * (-1)::{type} = ({min})::{type};
+----
+0
+
+query I
+SELECT count(*) FROM vals WHERE v * (-1)::{type} <> ({min})::{type};
+----
+5
+
+query I
+SELECT count(*) FROM vals WHERE v * (-1)::{type} < ({min})::{type};
+----
+0
+
+query I
+SELECT count(*) FROM vals WHERE v * (-1)::{type} <= ({min})::{type};
+----
+0
+
+query I
+SELECT count(*) FROM vals WHERE v * (-1)::{type} > ({min})::{type};
+----
+5
+
+query I
+SELECT count(*) FROM vals WHERE v * (-1)::{type} >= ({min})::{type};
+----
+5
+
+query I
+SELECT count(*) FROM vals WHERE v * (-1)::{type} IS DISTINCT FROM ({min})::{type};
+----
+6
+
+query I
+SELECT count(*) FROM vals WHERE v * (-1)::{type} IS NOT DISTINCT FROM ({min})::{type};
+----
+0
+
+# constant on the left-hand side
+query I
+SELECT count(*) FROM vals WHERE ({min})::{type} = v * (-1)::{type};
+----
+0
+
+query I
+SELECT count(*) FROM vals WHERE ({min})::{type} <> v * (-1)::{type};
+----
+5
+
+query I
+SELECT count(*) FROM vals WHERE ({min})::{type} < v * (-1)::{type};
+----
+5
+
+query I
+SELECT count(*) FROM vals WHERE ({min})::{type} > v * (-1)::{type};
+----
+0
+
+query I
+SELECT count(*) FROM vals WHERE ({min})::{type} IS DISTINCT FROM v * (-1)::{type};
+----
+6
+
+# commuted multiplication
+query I
+SELECT count(*) FROM vals WHERE (-1)::{type} * v <> ({min})::{type};
+----
+5
+
+# NULL input stays NULL for regular comparisons and TRUE for IS DISTINCT FROM
+query I
+SELECT v * (-1)::{type} <> ({min})::{type} FROM vals WHERE v IS NULL;
+----
+NULL
+
+query I
+SELECT v * (-1)::{type} IS DISTINCT FROM ({min})::{type} FROM vals WHERE v IS NULL;
+----
+true
+
+# unary minus has the same shape: [-v COMP min]
+query I
+SELECT count(*) FROM vals WHERE -v = ({min})::{type};
+----
+0
+
+query I
+SELECT count(*) FROM vals WHERE -v <> ({min})::{type};
+----
+5
+
+query I
+SELECT count(*) FROM vals WHERE -v < ({min})::{type};
+----
+0
+
+query I
+SELECT count(*) FROM vals WHERE -v >= ({min})::{type};
+----
+5
+
+query I
+SELECT count(*) FROM vals WHERE -v IS DISTINCT FROM ({min})::{type};
+----
+6
+
+query I
+SELECT count(*) FROM vals WHERE -v IS NOT DISTINCT FROM ({min})::{type};
+----
+0
+
+# in-range rewrites at the very edge of the domain must still work
+query I
+SELECT count(*) FROM vals WHERE v * (-1)::{type} = ({max})::{type};
+----
+1
+
+query I
+SELECT count(*) FROM vals WHERE v * (-1)::{type} = ({min}+1)::{type};
+----
+1
+
+query I
+SELECT count(*) FROM vals WHERE -v = ({max})::{type};
+----
+1
+
+# addition and subtraction: the moved constant falls outside the type as well
+statement ok
+CREATE OR REPLACE TABLE pm_vals(v {type});
+
+statement ok
+INSERT INTO pm_vals VALUES (0), (2), (-2), (NULL);
+
+query I
+SELECT count(*) FROM pm_vals WHERE v + 1::{type} = ({min})::{type};
+----
+0
+
+query I
+SELECT count(*) FROM pm_vals WHERE v + 1::{type} <> ({min})::{type};
+----
+3
+
+query I
+SELECT count(*) FROM pm_vals WHERE v + 1::{type} > ({min})::{type};
+----
+3
+
+query I
+SELECT count(*) FROM pm_vals WHERE 1::{type} + v <> ({min})::{type};
+----
+3
+
+query I
+SELECT count(*) FROM pm_vals WHERE v + 1::{type} IS DISTINCT FROM ({min})::{type};
+----
+4
+
+query I
+SELECT count(*) FROM pm_vals WHERE v - 1::{type} = ({max})::{type};
+----
+0
+
+query I
+SELECT count(*) FROM pm_vals WHERE v - 1::{type} <> ({max})::{type};
+----
+3
+
+query I
+SELECT count(*) FROM pm_vals WHERE v - 1::{type} < ({max})::{type};
+----
+3
+
+query I
+SELECT count(*) FROM pm_vals WHERE 1::{type} - v = ({min})::{type};
+----
+0
+
+query I
+SELECT count(*) FROM pm_vals WHERE 1::{type} - v <> ({min})::{type};
+----
+3
+
+# in-range rewrites still work
+query I
+SELECT count(*) FROM pm_vals WHERE v + 1::{type} = 3::{type};
+----
+1
+
+query I
+SELECT count(*) FROM pm_vals WHERE v - 1::{type} = 1::{type};
+----
+1
+
+endloop

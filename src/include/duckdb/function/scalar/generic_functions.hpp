@@ -45,11 +45,31 @@ struct ErrorFun {
 	static ScalarFunction GetFunction();
 };
 
+struct BarrierFun {
+	static constexpr const char *Name = "__internal_barrier";
+	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Description = "Returns arg unchanged, and marks it as an optimizer barrier: the expression is never evaluated on rows removed by the operators around it";
+	static constexpr const char *Example = "__internal_barrier(s::INTEGER = 42)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CreateSortKeyFun {
 	static constexpr const char *Name = "create_sort_key";
 	static constexpr const char *Parameters = "parameters...";
 	static constexpr const char *Description = "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers";
 	static constexpr const char *Example = "create_sort_key('A', 'DESC')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct InvokeFun {
+	static constexpr const char *Name = "invoke";
+	static constexpr const char *Parameters = "lambda,arg1,arg2,...";
+	static constexpr const char *Description = "Invokes a lambda function with the given arguments";
+	static constexpr const char *Example = "invoke(x -> x + 1, 5)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();

@@ -3,9 +3,6 @@
 # group: [parser]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl AS FROM values(1), (4), (8), (0) i(x);
 
 query I
@@ -108,5 +105,10 @@ INSERT INTO map_expr VALUES (MAP {1 : 2});
 
 statement error
 SELECT SWITCH (1, i) FROM map_expr;
+----
+Binder Error: SWITCH expected a constant map for the cases
+
+statement error
+SELECT switch(i, MAP {i : 1}) FROM (SELECT 1 i);
 ----
 Binder Error: SWITCH expected a constant map for the cases

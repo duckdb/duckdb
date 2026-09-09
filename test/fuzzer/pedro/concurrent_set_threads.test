@@ -4,6 +4,6 @@
 concurrentloop i 1 10
 
 statement ok
-SET threads=${i}
+SET threads={i}
 
 endloop

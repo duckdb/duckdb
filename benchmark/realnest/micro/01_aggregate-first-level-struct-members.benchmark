@@ -8,7 +8,7 @@ group real_nest
 
 require json
 
-require httpfs
+require httpfs load_only
 
 cache real_nest.duckdb
 

@@ -2,9 +2,6 @@
 # description: Test aliases in the HAVING clause
 # group: [having]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT b, sum(a) AS a
 FROM (VALUES (1, 0), (1, 1)) t(a, b)

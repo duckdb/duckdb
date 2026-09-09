@@ -22,6 +22,8 @@ struct OuterJoinGlobalScanState {
 };
 
 struct OuterJoinLocalScanState {
+	void Reset();
+
 	DataChunk scan_chunk;
 	SelectionVector match_sel;
 	ColumnDataLocalScanState local_scan;

@@ -28,7 +28,7 @@ public:
 		(void)defines;
 		(void)plain_data;
 
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
 			result_mask.SetInvalid(row_idx + result_offset);
 		}

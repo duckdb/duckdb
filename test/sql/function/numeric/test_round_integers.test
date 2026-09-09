@@ -42,3 +42,70 @@ from test_all_types();
 0
 100
 NULL
+
+# Rounding near integer limits remains representable.
+query IIIIIIII
+SELECT
+	round(124::TINYINT, -1),
+	round((-124)::TINYINT, -1),
+	round(32764::SMALLINT, -1),
+	round((-32764)::SMALLINT, -1),
+	round(2147483644::INTEGER, -1),
+	round((-2147483644)::INTEGER, -1),
+	round(9223372036854775804::BIGINT, -1),
+	round((-9223372036854775804)::BIGINT, -1);
+----
+120	-120	32760	-32760	2147483640	-2147483640	9223372036854775800	-9223372036854775800
+
+query III
+SELECT
+	round(4000000000000000000::BIGINT, -19),
+	round('170141183460469231731687303715884105724'::HUGEINT, -1),
+	round('-170141183460469231731687303715884105724'::HUGEINT, -1);
+----
+0	170141183460469231731687303715884105720	-170141183460469231731687303715884105720
+
+# The rounded mathematical results exceed their input types.
+statement error
+SELECT round(127::TINYINT, -1);
+----
+
+statement error
+SELECT round((-128)::TINYINT, -1);
+----
+
+statement error
+SELECT round(32767::SMALLINT, -1);
+----
+
+statement error
+SELECT round((-32768)::SMALLINT, -1);
+----
+
+statement error
+SELECT round(2147483647::INTEGER, -1);
+----
+
+statement error
+SELECT round((-2147483647 - 1)::INTEGER, -1);
+----
+
+statement error
+SELECT round(9223372036854775807::BIGINT, -1);
+----
+
+statement error
+SELECT round((-9223372036854775807 - 1)::BIGINT, -1);
+----
+
+statement error
+SELECT round(9223372036854775807::BIGINT, -19);
+----
+
+statement error
+SELECT round('170141183460469231731687303715884105727'::HUGEINT, -1);
+----
+
+statement error
+SELECT round('-170141183460469231731687303715884105728'::HUGEINT, -1);
+----

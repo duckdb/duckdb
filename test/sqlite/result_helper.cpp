@@ -1,6 +1,5 @@
 #include "result_helper.hpp"
 
-#include "catch.hpp"
 #include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "re2/re2.h"
@@ -9,6 +8,7 @@
 #include "termcolor.hpp"
 #include "test_helpers.hpp"
 #include "test_config.hpp"
+#include "test_reporter.hpp"
 
 #include <thread>
 
@@ -25,8 +25,9 @@ void TestResultHelper::SortQueryResult(SortStyle sort_style, vector<string> &res
 	}
 	if (result.size() % ncols != 0) {
 		// row-sort failed: result is not row-wise aligned, bail
-		FAIL(StringUtil::Format("Failed to sort query result - result is not aligned. Found %d rows with %d columns",
-		                        result.size(), ncols));
+		TEST_FAIL(
+		    StringUtil::Format("Failed to sort query result - result is not aligned. Found %d rows with %d columns",
+		                       result.size(), ncols));
 		return;
 	}
 	// row-oriented sorting
@@ -113,7 +114,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		fname = runner.ReplaceKeywords(fname);
 		fname = runner.LoopReplacement(fname, context.running_loops);
 		string csv_error;
-		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
+		comparison_values =
+		    LoadResultFromFile(fname, IdentifiersToStrings(result.GetNames()), expected_column_count, csv_error);
 		if (!csv_error.empty()) {
 			string log_message;
 			logger.PrintErrorHeader(csv_error);
@@ -225,9 +227,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				if (!success) {
 					break;
 				}
-				// we do this just to increment the assertion counter
-				string success_log = StringUtil::Format("CheckQueryResult: %s:%d", query.file_name, query.query_line);
-				REQUIRE(success_log.c_str());
+				TEST_ASSERTION();
 
 				current_column++;
 				if (current_column == expected_column_count) {
@@ -278,7 +278,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			});
 			return false;
 		}
-		REQUIRE(!hash_compare_error);
+		TEST_REQUIRE(!hash_compare_error);
 	}
 	return true;
 }
@@ -330,9 +330,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 						return false;
 					}
 				}
-				string success_log =
-				    StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
-				REQUIRE(success_log.c_str());
+				TEST_ASSERTION();
 				return true;
 			}
 		}
@@ -349,13 +347,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		}
 		return false;
 	}
-	if (error) {
-		REQUIRE(false);
-	} else {
-		string success_log =
-		    StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
-		REQUIRE(success_log.c_str());
-	}
+	TEST_ASSERTION();
 	return true;
 }
 
@@ -401,7 +393,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 bool TestResultHelper::SkipErrorMessage(const string &message) {
 	for (auto &error_message : runner.ignore_error_messages) {
 		if (StringUtil::Contains(message, error_message)) {
-			SKIP_TEST(string("skip on error_message matching '") + error_message + string("'"));
+			SQLLogicTestLogger::ReportSkip(runner.file_name, "skip on error_message matching '" + error_message + "'");
 			return true;
 		}
 	}
@@ -449,7 +441,7 @@ void TestResultHelper::DuckDBConvertResult(MaterializedQueryResult &result, bool
 	for (r = 0; r < row_count; r++) {
 		for (c = 0; c < column_count; c++) {
 			auto value = result.GetValue(c, r);
-			auto converted_value = SQLLogicTestConvertValue(value, result.types[c], original_sqlite_test);
+			auto converted_value = SQLLogicTestConvertValue(value, result.GetTypes()[c], original_sqlite_test);
 			out_result[r * column_count + c] = converted_value;
 		}
 	}
@@ -503,7 +495,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 	}
 	// some times require more checking (specifically floating point numbers because of inaccuracies)
 	// if not equivalent we need to cast to the SQL type to verify
-	auto sql_type = result.types[current_column];
+	auto sql_type = result.GetTypes()[current_column];
 	if (sql_type.IsNumeric()) {
 		bool converted_lvalue = false;
 		bool converted_rvalue = false;
@@ -511,18 +503,24 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 			lvalue = Value(sql_type);
 			converted_lvalue = true;
 		} else {
-			lvalue = Value(lvalue_str);
-			if (lvalue.TryCastAs(*runner.con->context, sql_type)) {
+			auto cast_lvalue = Value(lvalue_str).TryCastAs(*runner.con->context, sql_type);
+			if (cast_lvalue) {
+				lvalue = std::move(*cast_lvalue);
 				converted_lvalue = true;
+			} else {
+				lvalue = Value(lvalue_str);
 			}
 		}
 		if (rvalue_str == "NULL") {
 			rvalue = Value(sql_type);
 			converted_rvalue = true;
 		} else {
-			rvalue = Value(rvalue_str);
-			if (rvalue.TryCastAs(*runner.con->context, sql_type)) {
+			auto cast_rvalue = Value(rvalue_str).TryCastAs(*runner.con->context, sql_type);
+			if (cast_rvalue) {
+				rvalue = std::move(*cast_rvalue);
 				converted_rvalue = true;
+			} else {
+				rvalue = Value(rvalue_str);
 			}
 		}
 		if (converted_lvalue && converted_rvalue) {

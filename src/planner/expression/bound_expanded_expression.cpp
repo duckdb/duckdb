@@ -4,7 +4,7 @@ namespace duckdb {
 
 BoundExpandedExpression::BoundExpandedExpression(vector<unique_ptr<Expression>> expanded_expressions_p)
     : Expression(ExpressionType::BOUND_EXPANDED, ExpressionClass::BOUND_EXPANDED, LogicalType::INTEGER),
-      expanded_expressions(std::move(expanded_expressions_p)) {
+      children(std::move(expanded_expressions_p)) {
 }
 
 string BoundExpandedExpression::ToString() const {

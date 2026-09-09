@@ -4,7 +4,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 static void test_valid_str(Vector &a, const char *str) {
 	Value s(str);

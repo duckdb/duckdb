@@ -1,0 +1,61 @@
+# name: test/sql/types/bit/test_hex_to_bit.test
+# description: Hex to BIT tests
+# group: [bit]
+
+statement ok
+CREATE TABLE valid (v VARCHAR);
+
+statement ok
+INSERT INTO valid VALUES ('x0'), ('x04'), ('x0F0'), ('xFFFF'), ('xABCDE'), ('xabcdef');
+
+query I
+SELECT v::BIT FROM valid;
+----
+0000
+00000100
+000011110000
+1111111111111111
+10101011110011011110
+101010111100110111101111
+
+statement ok
+CREATE TABLE invalid (v VARCHAR);
+
+statement ok
+INSERT INTO invalid VALUES ('x0/'), ('x0:4'), ('x@0F0'), ('xFFGF'), ('xAB`DE'), ('xabcdgf');
+
+query I
+SELECT TRY_CAST(v AS BIT) FROM invalid;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT bitstring('x1'::BIT, 4)
+----
+0001
+
+query I
+SELECT bitstring('x1'::BIT, 5)
+----
+00001
+
+statement error
+SELECT bitstring('x1'::BIT, 3)
+----
+<REGEX>:Invalid Input Error.*Length must be equal or larger than input string.*
+
+statement error
+SELECT 'x01g'::BIT
+----
+<REGEX>:Conversion Error.*Invalid character encountered.*
+
+statement error
+SELECT 'x'::BIT
+----
+<REGEX>:Conversion Error.*Cannot cast empty string to BIT.*
+

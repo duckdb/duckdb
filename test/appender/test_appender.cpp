@@ -10,7 +10,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Basic appender tests", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
@@ -574,12 +573,6 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query("COMMIT TRANSACTION"));
 }
 
-void setDataChunkInt32(DataChunk &chunk, idx_t col_idx, idx_t row_idx, int32_t value) {
-	auto &col = chunk.data[col_idx];
-	auto data = FlatVector::GetData<int32_t>(col);
-	data[row_idx] = value;
-}
-
 TEST_CASE("Test appending with an active default column", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -594,10 +587,9 @@ TEST_CASE("Test appending with an active default column", "[appender]") {
 	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER};
 	chunk.Initialize(*con.context, types);
 
-	setDataChunkInt32(chunk, 0, 0, 42);
-	setDataChunkInt32(chunk, 0, 1, 43);
-
-	chunk.SetCardinality(2);
+	chunk.data[0].Append(Value::INTEGER(42));
+	chunk.data[0].Append(Value::INTEGER(43));
+	chunk.SetChildCardinality(2);
 	appender.AppendDataChunk(chunk);
 	appender.Close();
 
@@ -629,14 +621,14 @@ TEST_CASE("Test appending with two active normal columns", "[appender]") {
 	for (idx_t i = 0; i < 4; i++) {
 		for (idx_t j = 0; j < 2; j++) {
 			auto &col = chunk.data[j];
-			auto col_data = FlatVector::GetData<int32_t>(col);
+			auto col_data = FlatVector::Writer<int32_t>(col, STANDARD_VECTOR_SIZE);
 
 			auto offset = i * STANDARD_VECTOR_SIZE;
 			for (idx_t k = 0; k < STANDARD_VECTOR_SIZE; k++) {
-				col_data[k] = int32_t(offset + k);
+				col_data.WriteValue(static_cast<int32_t>(offset + k));
 			}
 		}
-		chunk.SetCardinality(STANDARD_VECTOR_SIZE);
+		chunk.SetChildCardinality(STANDARD_VECTOR_SIZE);
 		appender.AppendDataChunk(chunk);
 		chunk.Reset();
 	}
@@ -664,11 +656,11 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 	const duckdb::vector<LogicalType> all_types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
 	chunk_all_types.Initialize(*con.context, all_types);
 
-	setDataChunkInt32(chunk_all_types, 0, 0, 42);
-	setDataChunkInt32(chunk_all_types, 1, 0, 111);
-	setDataChunkInt32(chunk_all_types, 2, 0, 50);
+	chunk_all_types.data[0].Append(Value::INTEGER(42));
+	chunk_all_types.data[1].Append(Value::INTEGER(111));
+	chunk_all_types.data[2].Append(Value::INTEGER(50));
 
-	chunk_all_types.SetCardinality(1);
+	chunk_all_types.SetChildCardinality(1);
 	appender.AppendDataChunk(chunk_all_types);
 
 	appender.AddColumn("j");
@@ -678,10 +670,10 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 	const duckdb::vector<LogicalType> types_j_i = {LogicalType::INTEGER, LogicalType::INTEGER};
 	chunk_j_i.Initialize(*con.context, types_j_i);
 
-	setDataChunkInt32(chunk_j_i, 0, 0, 111);
-	setDataChunkInt32(chunk_j_i, 1, 0, 42);
+	chunk_j_i.data[0].Append(Value::INTEGER(111));
+	chunk_j_i.data[1].Append(Value::INTEGER(42));
 
-	chunk_j_i.SetCardinality(1);
+	chunk_j_i.SetChildCardinality(1);
 	appender.AppendDataChunk(chunk_j_i);
 
 	appender.ClearColumns();
@@ -693,9 +685,9 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 	const duckdb::vector<LogicalType> types_k = {LogicalType::INTEGER};
 	chunk_k.Initialize(*con.context, types_k);
 
-	setDataChunkInt32(chunk_k, 0, 0, 50);
+	chunk_k.data[0].Append(Value::INTEGER(50));
 
-	chunk_k.SetCardinality(1);
+	chunk_k.SetChildCardinality(1);
 	appender.AppendDataChunk(chunk_k);
 	appender.Close();
 
@@ -814,7 +806,7 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 
 	// Prepare a long time running QueryAppender
 	duckdb::vector<LogicalType> types = {LogicalType::INTEGER};
-	duckdb::vector<string> names = {"i"};
+	duckdb::vector<duckdb::Identifier> names = {"i"};
 	// This query will run for a long time by cross joining a huge range
 	string long_query = "INSERT INTO ints SELECT i FROM appended_data, range(1000000000000)";
 	QueryAppender app(con, long_query, types, names);
@@ -824,7 +816,7 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 
 	atomic<bool> flush_started {false};
 
-	thread t([&]() {
+	std::thread t([&]() {
 		flush_started.store(true);
 		try {
 			app.Flush();
@@ -836,7 +828,7 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 
 	// Wait until the flush thread starts, then interrupt
 	while (!flush_started.load()) {
-		this_thread::yield();
+		std::this_thread::yield();
 	}
 	// Give the flush a tiny moment to get into execution before interrupting
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -887,4 +879,74 @@ TEST_CASE("Test appender_allocator_flush_threshold", "[appender]") {
 		appender_2.EndRow();
 	}
 	appender_2.Close();
+}
+
+TEST_CASE("Test appender on a temp table in a read only database", "[appender]") {
+	auto dbdir = TestCreatePath("appender_temp_readonly");
+	DeleteDatabase(dbdir);
+
+	// Create the persistent database file, then reopen it read only.
+	{
+		DuckDB db(dbdir);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE persistent(i INTEGER)"));
+	}
+
+	DBConfig readonly_config;
+	readonly_config.options.access_mode = AccessMode::READ_ONLY;
+	DuckDB db(dbdir, &readonly_config);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMP TABLE t(i INTEGER)"));
+
+	// The name resolves through the (writable) temp catalog, not the read only default database.
+	auto info = con.TableInfo("t");
+	REQUIRE(info);
+	REQUIRE(info->qualified_name.Catalog() == "temp");
+	REQUIRE(info->qualified_name.Schema() == "main");
+	REQUIRE(info->qualified_name.Name() == "t");
+	REQUIRE(info->readonly == false);
+
+	Appender appender(con, "t");
+	appender.BeginRow();
+	appender.Append<int32_t>(42);
+	appender.EndRow();
+	appender.Close();
+
+	auto result = con.Query("SELECT i FROM t");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}
+
+TEST_CASE("Test appender when the search path resolves into a read only database", "[appender]") {
+	auto dbdir = TestCreatePath("appender_readonly_attach.db");
+	DeleteDatabase(dbdir);
+
+	// Create a persistent database file holding the target table.
+	{
+		DuckDB db(dbdir);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(i INTEGER)"));
+	}
+
+	// Default (in-memory) database is writable; the table only exists in the read only attachment.
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + dbdir + "' AS ro_attached (READ_ONLY)"));
+	// Keep memory.main as the default catalog so the name resolves into ro_attached via the search path.
+	REQUIRE_NO_FAIL(con.Query("SET search_path='memory.main,ro_attached.main'"));
+
+	auto info = con.TableInfo("tbl");
+	REQUIRE(info);
+	REQUIRE(info->qualified_name.Catalog() == "ro_attached");
+	REQUIRE(info->readonly == true);
+
+	bool failed = false;
+	try {
+		Appender appender(con, "tbl");
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("Cannot append to a readonly database") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
 }
