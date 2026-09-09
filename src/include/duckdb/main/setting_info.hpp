@@ -101,7 +101,8 @@ struct ConfigurationOption {
 
 struct ConfigurationAlias {
 	const char *alias;
-	idx_t option_index;
+	//! The name of the setting this alias refers to
+	const char *setting_name;
 };
 
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);

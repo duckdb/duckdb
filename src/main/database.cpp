@@ -4,8 +4,8 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/http_util.hpp"
-#include "duckdb/common/http_transport_manager.hpp"
+#include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"

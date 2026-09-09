@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/matcher_stack.hpp"
+#include "duckdb/common/optional.hpp"
 
 namespace duckdb {
 
@@ -9,8 +10,13 @@ MatchStack::MatchStack() {
 MatchStack::~MatchStack() {
 	// Child processes can reference state owned by their parents.
 	while (!frames.empty()) {
-		frames.pop_back();
+		DestroyTopFrame();
 	}
+}
+
+void MatchStack::DestroyTopFrame() {
+	D_ASSERT(!frames.empty());
+	frames.pop_back();
 }
 
 optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
@@ -112,7 +118,9 @@ bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 }
 
 MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
-	D_ASSERT(frame.result);
+	if (!frame.result) {
+		throw InternalException("Trying to finalize a frame without a stored result");
+	}
 	auto result = *frame.result;
 	auto &matcher = frame.matcher;
 	auto &state = frame.match_state;
@@ -131,7 +139,7 @@ MatcherResult MatchStack::Execute(MatchInput input) {
 			continue;
 		}
 		auto result = FinalizeFrame(frames.back());
-		frames.pop_back();
+		DestroyTopFrame();
 		if (frames.empty()) {
 			return result;
 		}
