@@ -227,7 +227,28 @@ string PEGTransformerFactory::TransformDoubleType(PEGTransformer &transformer) {
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformFloatType(PEGTransformer &transformer,
                                           optional<unique_ptr<ParsedExpression>> number_literal) {
-	return make_uniq<TypeExpression>(Identifier("FLOAT"), vector<unique_ptr<ParsedExpression>> {});
+	if (!number_literal) {
+		return make_uniq<TypeExpression>(Identifier("FLOAT"), vector<unique_ptr<ParsedExpression>> {});
+	}
+	auto &number_literal_value = number_literal.value();
+	auto &precision_value = number_literal_value->Cast<ConstantExpression>().GetValue();
+	if (!precision_value.type().IsIntegral()) {
+		throw ParserException("precision for type float must be an integer");
+	}
+	auto precision = precision_value.GetValue<int64_t>();
+	if (precision < 1) {
+		throw ParserException("precision for type float must be at least 1 bit");
+	}
+	if (precision > 53) {
+		throw ParserException("precision for type float must be less than 54 bits");
+	}
+	LogicalTypeId type;
+	if (precision <= 24) {
+		type = LogicalTypeId::FLOAT;
+	} else {
+		type = LogicalTypeId::DOUBLE;
+	}
+	return make_uniq<TypeExpression>(Identifier(LogicalTypeIdToString(type)), vector<unique_ptr<ParsedExpression>> {});
 }
 
 unique_ptr<ParsedExpression>
