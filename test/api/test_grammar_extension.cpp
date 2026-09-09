@@ -309,13 +309,47 @@ TEST_CASE("Custom keyword helpers and standalone literal matchers keep their sem
 	REQUIRE_FALSE(MatchLiteralTestToken(unregistered, "another_word"));
 }
 
-static unique_ptr<TransformResultValue> TransformGrammarExtensionTestAtom(PEGTransformer &, ParseResult &) {
-	auto statement = make_uniq<SelectStatement>();
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
-	select_node->from_table = make_uniq<EmptyTableRef>();
-	statement->node = std::move(select_node);
-	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement));
+class GrammarExtensionTestValueTransformProcess final : public TransformProcess {
+public:
+	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override {
+		D_ASSERT(!child_result);
+		return TransformStep::Complete(make_uniq<TypedTransformResult<bool>>(true));
+	}
+};
+
+class GrammarExtensionTestTransformProcess final : public TransformProcess {
+public:
+	GrammarExtensionTestTransformProcess(PEGTransformer &transformer_p, ParseResult &parse_result_p)
+	    : transformer(transformer_p), parse_result(parse_result_p) {
+	}
+
+	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override {
+		if (!child_result) {
+			auto &list = parse_result.Cast<ListParseResult>();
+			return TransformStep::Child({transformer.GetRule("GrammarExtensionTestValue"), list.GetChild(0)});
+		}
+		D_ASSERT(TryGetTransformResult<bool>(*child_result));
+		auto statement = make_uniq<SelectStatement>();
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
+		select_node->from_table = make_uniq<EmptyTableRef>();
+		statement->node = std::move(select_node);
+		return TransformStep::Complete(
+		    make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement)));
+	}
+
+private:
+	PEGTransformer &transformer;
+	ParseResult &parse_result;
+};
+
+static unique_ptr<TransformProcess> StartGrammarExtensionTestValueTransform(PEGTransformer &, ParseResult &) {
+	return make_uniq<GrammarExtensionTestValueTransformProcess>();
+}
+
+static unique_ptr<TransformProcess> StartGrammarExtensionTestTransform(PEGTransformer &transformer,
+                                                                       ParseResult &parse_result) {
+	return make_uniq<GrammarExtensionTestTransformProcess>(transformer, parse_result);
 }
 
 class GrammarExtensionTestMatchProcess final : public MatchProcess {
@@ -372,7 +406,8 @@ public:
 
 	vector<GrammarChange> GetChanges() const override {
 		vector<GrammarChange> changes;
-		changes.push_back(GrammarChange::AddRule("GrammarExtensionTestValue <- 'WRONG'"));
+		changes.push_back(
+		    GrammarChange::AddRule("GrammarExtensionTestValue <- 'WRONG'", StartGrammarExtensionTestValueTransform));
 		changes.push_back(GrammarChange::AddChoice("UnreservedKeyword", "'ANSWER'"));
 		changes.push_back(GrammarChange::AddTerminalRuleOverride(
 		    "GrammarExtensionTestValue", [](const PEGKeywordHelper &keyword_helper) {
@@ -393,7 +428,7 @@ public:
 	vector<GrammarChange> GetChanges() const override {
 		vector<GrammarChange> changes;
 		changes.push_back(GrammarChange::AddRule("GrammarExtensionTestAtom <- GrammarExtensionTestValue",
-		                                         TransformGrammarExtensionTestAtom));
+		                                         StartGrammarExtensionTestTransform));
 		changes.push_back(
 		    GrammarChange::PrependChoice("SelectAtom", "GrammarExtensionTestAtom", [](const PEGExpression &expression) {
 			    return expression.type == PEGExpression::Type::REFERENCE &&

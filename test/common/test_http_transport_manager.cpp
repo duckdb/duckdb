@@ -4,7 +4,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/http_transport_manager.hpp"
+#include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -367,43 +367,56 @@ TEST_CASE("HTTP transport manager capacity and provider contracts", "[http_trans
 		CHECK(HTTPTransportManagerTestHelper::AdvanceConnectionEpoch(connection_epoch, reuse_poisoned));
 	}
 
-	SECTION("pool coalesces prepared buckets and separates colliding origins") {
+	SECTION("pool coalesces prepared buckets and separates colliding origins and configurations") {
 		HTTPClientPool pool(2);
 		HTTPClientPool::ClientKey key;
 		key.provider_epoch = 0;
 		key.origin_hash = 42;
+		key.transport_config_hash = 42;
 		const string first_origin = "https://first.example.com";
-		const string second_origin = "https://second.example.com";
+		string second_origin = first_origin;
+		const HTTPTransportConfig first_config;
+		HTTPTransportConfig second_config;
+		SECTION("origin hash collision") {
+			second_origin = "https://second.example.com";
+		}
+		SECTION("transport configuration hash collision") {
+			HTTPUtil provider;
+			HTTPParams params(provider);
+			params.http_proxy = "proxy.example.com";
+			params.http_proxy_port = 8080;
+			second_config = HTTPTransportConfig(params);
+		}
 		auto state = make_shared_ptr<MockTransportState>();
 
-		auto first = pool.Reserve(key, first_origin, true);
-		auto second = pool.Reserve(key, first_origin, true);
-		REQUIRE(first.PrepareBucket(first_origin));
-		REQUIRE(second.PrepareBucket(first_origin));
-		pool.AdoptPreparedBucket(first, first_origin);
-		pool.AdoptPreparedBucket(second, first_origin);
+		auto first = pool.Reserve(key, first_origin, first_config, true);
+		auto second = pool.Reserve(key, first_origin, first_config, true);
+		REQUIRE(first.PrepareBucket(first_origin, first_config));
+		REQUIRE(second.PrepareBucket(first_origin, first_config));
+		pool.AdoptPreparedBucket(first);
+		pool.AdoptPreparedBucket(second);
 		CHECK(pool.BucketCount() == 1);
 		CHECK(pool.ReservedClients() == 2);
 		CHECK_FALSE(pool.HasAdmissionResource());
 		pool.Return(first.bucket, make_uniq<MockHTTPClient>(state, first_origin));
 		CHECK(pool.HasAdmissionResource());
 
-		// The same hash must evict, rather than reuse, a different origin's idle client.
-		auto collision = pool.Reserve(key, second_origin, true);
+		// Hash collisions must not reuse clients with a different origin or configuration.
+		auto collision = pool.Reserve(key, second_origin, second_config, true);
 		CHECK(collision.kind == HTTPClientPool::ReservationKind::NEW_CLIENT);
 		REQUIRE(collision.client);
 		CHECK(collision.client->GetBaseUrl() == first_origin);
 		collision.client.reset();
 		CHECK(pool.ReservedClients() == 2);
-		REQUIRE(collision.PrepareBucket(second_origin));
-		pool.AdoptPreparedBucket(collision, second_origin);
+		REQUIRE(collision.PrepareBucket(second_origin, second_config));
+		pool.AdoptPreparedBucket(collision);
 		CHECK(pool.BucketCount() == 2);
 		pool.Return(collision.bucket, make_uniq<MockHTTPClient>(state, second_origin));
 		auto removed_first = pool.FinishDestruction(second.bucket);
 		CHECK(pool.ReservedClients() == 1);
 		CHECK(pool.BucketCount() == 1);
 
-		auto reused = pool.Reserve(key, second_origin, true);
+		auto reused = pool.Reserve(key, second_origin, second_config, true);
 		CHECK(reused.kind == HTTPClientPool::ReservationKind::REUSE);
 		REQUIRE(reused.client);
 		CHECK(reused.client->GetBaseUrl() == second_origin);
@@ -551,6 +564,80 @@ TEST_CASE("HTTP transport manager synchronous session API", "[http_transport_man
 		REQUIRE(RunManagedRequest(session, params, "https://example.com/"));
 		CHECK(provider->state->created == 2);
 		CHECK(provider->state->high_water == 1);
+	}
+
+	SECTION("core isolates transport settings even when the provider accepts every client") {
+		auto provider = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::SHARED);
+		auto manager = HTTPTransportManagerTestHelper::Create(provider, 2);
+		auto first = manager->CreateSession(nullptr, nullptr);
+		auto second = manager->CreateSession(nullptr, nullptr);
+		auto &first_params = first.Parameters();
+		auto &second_params = second.Parameters();
+		first_params.http_proxy = second_params.http_proxy = "proxy.example.com";
+		first_params.http_proxy_port = second_params.http_proxy_port = 8080;
+		first_params.http_proxy_username = second_params.http_proxy_username = "user";
+		first_params.http_proxy_password = second_params.http_proxy_password = "password";
+		first_params.override_verify_ssl = second_params.override_verify_ssl = true;
+		first_params.verify_ssl = second_params.verify_ssl = true;
+		REQUIRE(first_params.GetTransportReuseDomain() == second_params.GetTransportReuseDomain());
+		REQUIRE(provider->state->can_reuse);
+		const string url = "https://example.com/";
+		REQUIRE(RunManagedRequest(first, first_params, url));
+		REQUIRE(RunManagedRequest(second, second_params, url));
+		CHECK(provider->state->created == 1);
+
+		SECTION("proxy host") {
+			second_params.http_proxy = "other-proxy.example.com";
+		}
+		SECTION("proxy port") {
+			second_params.http_proxy_port++;
+		}
+		SECTION("proxy username") {
+			second_params.http_proxy_username = "other-user";
+		}
+		SECTION("proxy password") {
+			second_params.http_proxy_password = "other-password";
+		}
+		SECTION("proxy removed") {
+			second_params.http_proxy.clear();
+		}
+		SECTION("TLS verification") {
+			second_params.verify_ssl = false;
+		}
+		SECTION("TLS override removed") {
+			second_params.override_verify_ssl = false;
+		}
+		REQUIRE(RunManagedRequest(second, second_params, url));
+		CHECK(provider->state->created == 2);
+		// The cached configuration must not follow mutations of the session's parameters.
+		REQUIRE(RunManagedRequest(first, first_params, url));
+		REQUIRE(RunManagedRequest(second, second_params, url));
+		CHECK(provider->state->created == 2);
+		CHECK(HTTPTransportManagerTestHelper::IdleKeys(*manager) == 2);
+	}
+
+	SECTION("inactive transport fields and request-local settings do not split clients") {
+		auto provider = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::SHARED);
+		auto manager = HTTPTransportManagerTestHelper::Create(provider, 1);
+		auto first = manager->CreateSession(nullptr, nullptr);
+		auto second = manager->CreateSession(nullptr, nullptr);
+		auto &params = second.Parameters();
+		params.http_proxy_port = 8080;
+		params.http_proxy_username = "unused-user";
+		params.http_proxy_password = "unused-password";
+		params.verify_ssl = false;
+		params.timeout++;
+		params.keep_alive = false;
+		params.follow_location = false;
+		params.extra_headers["Authorization"] = "request-local";
+		const HTTPTransportConfig first_config(first.Parameters());
+		const HTTPTransportConfig second_config(params);
+		CHECK(first_config == second_config);
+		CHECK(first_config.Hash() == second_config.Hash());
+		CHECK(first_config.Matches(params));
+		REQUIRE(RunManagedRequest(first, first.Parameters(), "https://example.com/"));
+		REQUIRE(RunManagedRequest(second, params, "https://example.com/"));
+		CHECK(provider->state->created == 1);
 	}
 
 	SECTION("generic failure discards only its client") {

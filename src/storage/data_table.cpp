@@ -792,7 +792,8 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 
-	parent.row_groups->VerifyNewConstraint(local_storage.GetClientContext(), parent, constraint);
+	parent.row_groups->VerifyNewConstraint(local_storage.GetClientContext(), local_storage.GetTransaction(), parent,
+	                                       constraint);
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 

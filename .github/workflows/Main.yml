@@ -1,4 +1,10 @@
 name: Main
+run-name: >-
+  ${{
+    github.event_name == 'workflow_dispatch' &&
+    format('Main ({0})', inputs.duckdb_version || format('alpha{0}', github.run_number)) ||
+    ''
+  }}
 on:
   workflow_dispatch:
     inputs:
@@ -985,6 +991,8 @@ jobs:
       # Job-level on purpose: the Test step's `make unittest_release` depends on `release`, so a
       # step-scoped flag would silently reconfigure and rebuild WITH rtti and test the wrong binary.
       DISABLE_RTTI: 1
+      # Compile with C++23 to test compatibility with the newer standard.
+      CXX_STANDARD: 23
       EXTENSION_CONFIGS: .github/config/in_tree_extensions.cmake
       DUCKDB_TEST_DESCRIPTION: 'Compiled with DISABLE_RTTI=1 (-fno-rtti).'
 

@@ -184,7 +184,8 @@ public:
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<StorageIndex> bound_columns, Expression &cast_expr,
 	                                         TransactionData transaction);
-	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
+	void VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction, DataTable &parent,
+	                         const BoundConstraint &constraint);
 
 	void SetStats(TableStatistics &new_stats);
 	void CopyStats(TableStatistics &stats);
