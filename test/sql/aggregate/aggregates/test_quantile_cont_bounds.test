@@ -1,0 +1,67 @@
+# name: test/sql/aggregate/aggregates/test_quantile_cont_bounds.test
+# description: Test QUANTILE_CONT interpolation at timestamp bounds - llround of an out-of-range double is UB (x86 yields INT64_MIN, ARM saturates) - and the .5 tie-break rule
+# group: [aggregates]
+
+require 64bit
+
+# Median of two identical near-max timestamps is the timestamp itself, not +/-infinity.
+# The interpolation computes lo*(1-d)+hi*d in double, which rounds up to 2^63 here;
+# casting that back to int64 overflows without a clamp.
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (make_timestamp(9223372036854775806::BIGINT)), (make_timestamp(9223372036854775806::BIGINT))) t(y);
+----
+294247-01-10 04:00:54.775806
+
+# Interpolation between two distinct near-max timestamps stays finite
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (make_timestamp(9223372036854775800::BIGINT)), (make_timestamp(9223372036854775806::BIGINT))) t(y);
+----
+294247-01-10 04:00:54.775803
+
+# Ordinary timestamp quantiles are unaffected
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '2020-01-01 00:00:00'), (TIMESTAMP '2020-01-03 00:00:00')) t(y);
+----
+2020-01-02 00:00:00
+
+# .5 tie-break: the exact integer path rounds the offset half away from zero,
+# i.e. the result half towards the upper endpoint, on every platform.
+# The old float path rounded the interpolated total half away from zero,
+# so the tie only flips when the midpoint is negative.
+# midpoint -0.5us: rounds up to the upper endpoint (old: -1us)
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '1969-12-31 23:59:59.999998'), (TIMESTAMP '1970-01-01 00:00:00.000001')) t(y);
+----
+1970-01-01 00:00:00
+
+# midpoint -2.5us with both endpoints negative: rounds up to -2us (old: -3us)
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '1969-12-31 23:59:59.999996'), (TIMESTAMP '1969-12-31 23:59:59.999999')) t(y);
+----
+1969-12-31 23:59:59.999998
+
+# median() uses the same interpolation
+query T
+SELECT median(y) FROM
+	(VALUES (TIMESTAMP '1969-12-31 23:59:59.999998'), (TIMESTAMP '1970-01-01 00:00:00.000001')) t(y);
+----
+1970-01-01 00:00:00
+
+# midpoint +2.5us: both rules land on the upper endpoint - unchanged
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '1970-01-01 00:00:00.000001'), (TIMESTAMP '1970-01-01 00:00:00.000004')) t(y);
+----
+1970-01-01 00:00:00.000003
+
+# TIME is non-negative, so its ties are unchanged as well
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIME '00:00:00.000001'), (TIME '00:00:00.000004')) t(y);
+----
+00:00:00.000003
