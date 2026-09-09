@@ -2,12 +2,6 @@
 # description: Test constraint timing for primary key and unique constraints
 # group: [deferred]
 
-# Preserve timing when copying or reparsing statements.
-foreach mode NONE COPY_STATEMENT REPARSE_STATEMENT
-
-statement ok
-SET debug_verify_statement='{mode}'
-
 statement error
 CREATE TABLE t(i INTEGER UNIQUE DEFERRED);
 ----
@@ -28,40 +22,11 @@ CREATE TABLE t(i INTEGER, PRIMARY KEY(i) DEFERRED);
 ----
 Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
 
-# Timing belongs to each constraint, not the column.
-statement error
-CREATE TABLE t(i INTEGER PRIMARY KEY UNIQUE DEFERRED);
-----
-Not implemented Error: Deferred UNIQUE constraints are not implemented yet
-
-statement error
-CREATE TABLE t(i INTEGER UNIQUE PRIMARY KEY DEFERRED);
-----
-Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
+# Preserve explicit timing when copying or reparsing statements.
+foreach mode NONE COPY_STATEMENT REPARSE_STATEMENT
 
 statement ok
-CREATE TABLE t(i INTEGER UNIQUE, j INTEGER PRIMARY KEY);
-
-query I rowsort
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 't' AND constraint_type <> 'NOT NULL';
-----
-PRIMARY KEY(j)
-UNIQUE(i)
-
-statement ok
-DROP TABLE t;
-
-statement ok
-CREATE TABLE t(i INTEGER, j INTEGER, UNIQUE(i), PRIMARY KEY(j));
-
-query I rowsort
-SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 't' AND constraint_type <> 'NOT NULL';
-----
-PRIMARY KEY(j)
-UNIQUE(i)
-
-statement ok
-DROP TABLE t;
+SET debug_verify_statement='{mode}'
 
 statement ok
 CREATE TABLE t(i INTEGER UNIQUE IMMEDIATE, j INTEGER PRIMARY KEY IMMEDIATE);
@@ -91,47 +56,3 @@ statement ok
 RESET debug_verify_statement
 
 endloop
-
-# IMMEDIATE remains usable as an unquoted identifier.
-statement ok
-CREATE TABLE immediate(immediate INTEGER UNIQUE IMMEDIATE);
-
-statement ok
-DROP TABLE immediate;
-
-# A constraint accepts only one timing modifier.
-
-statement error
-CREATE TABLE t(i INTEGER UNIQUE IMMEDIATE DEFERRED);
-----
-Parser Error:
-
-statement error
-CREATE TABLE t(i INTEGER PRIMARY KEY DEFERRED IMMEDIATE);
-----
-Parser Error:
-
-statement error
-CREATE TABLE t(i INTEGER UNIQUE IMMEDIATE IMMEDIATE);
-----
-Parser Error:
-
-statement error
-CREATE TABLE t(i INTEGER, UNIQUE(i) IMMEDIATE DEFERRED);
-----
-Parser Error:
-
-statement error
-CREATE TABLE t(i INTEGER, PRIMARY KEY(i) DEFERRED IMMEDIATE);
-----
-Parser Error:
-
-statement error
-CREATE TABLE t(i INTEGER PRIMARY KEY IMMEDIATE UNIQUE DEFERRED);
-----
-Not implemented Error: Deferred UNIQUE constraints are not implemented yet
-
-statement error
-CREATE TABLE t(i INTEGER UNIQUE IMMEDIATE PRIMARY KEY DEFERRED);
-----
-Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet

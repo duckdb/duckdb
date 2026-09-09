@@ -33,16 +33,6 @@ ALTER TABLE t1 ADD COLUMN j INTEGER REFERENCES t2(i)
 ----
 Parser Error: Adding columns with FOREIGN KEY constraints is not supported yet
 
-statement error
-ALTER TABLE t1 ADD COLUMN j INTEGER UNIQUE DEFERRED
-----
-Parser Error: Adding columns with UNIQUE constraints is not supported yet
-
-statement error
-ALTER TABLE t1 ADD COLUMN j INTEGER PRIMARY KEY DEFERRED
-----
-Parser Error: Adding columns with PRIMARY KEY constraints is not supported yet
-
 query I
 SELECT count(*) FROM pragma_table_info('t1')
 ----

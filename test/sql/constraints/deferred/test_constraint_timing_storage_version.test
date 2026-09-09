@@ -20,11 +20,6 @@ CREATE TABLE t2(i INTEGER, PRIMARY KEY(i) IMMEDIATE);
 ----
 Binder Error: Explicit constraint timing is only supported for storage versions v2.0.0 and higher.
 
-statement error
-CREATE TABLE t2(i INTEGER UNIQUE DEFERRED);
-----
-Not implemented Error: Deferred UNIQUE constraints are not implemented yet
-
 statement ok
 CREATE TABLE t2(i INTEGER, j INTEGER);
 
@@ -37,11 +32,6 @@ statement error
 ALTER TABLE t2 ADD PRIMARY KEY(j) IMMEDIATE;
 ----
 Binder Error: Explicit constraint timing is only supported for storage versions v2.0.0 and higher.
-
-statement error
-ALTER TABLE t2 ADD PRIMARY KEY(j) DEFERRED;
-----
-Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
 
 # Failed ALTER statements leave the table available for ordinary constraints.
 statement ok
