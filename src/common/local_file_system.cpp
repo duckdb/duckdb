@@ -15,6 +15,7 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
+#include <algorithm>
 #include <climits>
 #include <cstdint>
 #include <cstdio>
@@ -1575,10 +1576,26 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
 	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
-	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
+	const auto file_name_length = target_unicode.size() * sizeof(WCHAR);
+	const auto rename_info_size = sizeof(FILE_RENAME_INFO) - sizeof(WCHAR) + file_name_length;
+	const auto rename_info_size_dw = NumericCast<DWORD>(rename_info_size);
+	auto rename_info_buffer = unique_ptr<data_t[]>(new data_t[rename_info_size]);
+	auto rename_info = reinterpret_cast<FILE_RENAME_INFO *>(rename_info_buffer.get());
+	rename_info->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+	rename_info->RootDirectory = nullptr;
+	rename_info->FileNameLength = NumericCast<DWORD>(file_name_length);
+	std::copy(target_unicode.begin(), target_unicode.end(), rename_info->FileName);
 
-	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
-		throw IOException("Could not move file: %s", GetLastErrorAsString());
+	auto raw_source_handle =
+	    CreateFileW(source_unicode.c_str(), DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+	                OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	if (raw_source_handle == INVALID_HANDLE_VALUE) {
+		throw IOException("Could not open file \"%s\" for moving: %s", source, GetLastErrorAsString());
+	}
+	unique_ptr<void, decltype(&CloseHandle)> source_handle(raw_source_handle, CloseHandle);
+
+	if (!SetFileInformationByHandle(source_handle.get(), FileRenameInfoEx, rename_info, rename_info_size_dw)) {
+		throw IOException("Could not move file \"%s\" to \"%s\": %s", source, target, GetLastErrorAsString());
 	}
 }
 

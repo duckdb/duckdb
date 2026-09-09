@@ -703,6 +703,40 @@ TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 	REQUIRE(!fs->FileExists(fname));
 }
 
+TEST_CASE("Moving over an open file preserves existing handles", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+	auto source = TestCreatePath("move_over_open_file_source");
+	auto target = TestCreatePath("move_over_open_file_target");
+	const vector<char> source_data {'s', 'o', 'u', 'r', 'c', 'e'};
+	const vector<char> target_data {'t', 'a', 'r', 'g', 'e', 't'};
+
+	auto write = [&](const string &path, vector<char> data) {
+		auto handle = fs->OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		handle->Write(data.data(), data.size());
+	};
+	auto read = [](FileHandle &handle, idx_t size) {
+		vector<char> data(size);
+		handle.Read(data.data(), data.size());
+		return data;
+	};
+
+	fs->TryRemoveFile(source);
+	fs->TryRemoveFile(target);
+	write(source, source_data);
+	write(target, target_data);
+
+	auto open_target = fs->OpenFile(target, FileFlags::FILE_FLAGS_READ);
+	fs->MoveFile(source, target);
+
+	REQUIRE(!fs->FileExists(source));
+	REQUIRE(fs->FileExists(target));
+	REQUIRE(read(*open_target, target_data.size()) == target_data);
+	REQUIRE(read(*fs->OpenFile(target, FileFlags::FILE_FLAGS_READ), source_data.size()) == source_data);
+
+	open_target.reset();
+	fs->RemoveFile(target);
+}
+
 // ------------------------------------------------------------------------------------------------
 // Path struct tests
 // ------------------------------------------------------------------------------------------------
