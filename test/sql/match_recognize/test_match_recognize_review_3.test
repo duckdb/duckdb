@@ -558,7 +558,7 @@ FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS LAST(CLASSIFIER()) = 'A'
 )
 ----
-CLASSIFIER() cannot be navigated
+CLASSIFIER() only means something while the matcher is assembling a match
 
 statement error
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (

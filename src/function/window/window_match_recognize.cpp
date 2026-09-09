@@ -488,6 +488,13 @@ public:
 		if (!ready) {
 			Initialize();
 		}
+		// Copying a value into a vector *appends* to that vector's storage - a string onto its heap,
+		// a list's elements onto its child - so writing row zero again does not take the previous
+		// value back. A row that was only overwritten would carry every value the conditions were
+		// ever decided on, which is why the row is given back before it is assembled again.
+		if (row_grows) {
+			ResetRow();
+		}
 
 		// The row is assembled a field at a time out of the collection, so what is held here is one
 		// row of the fields the conditions read rather than a copy of everything that was collected.
@@ -545,14 +552,12 @@ private:
 		row_chunk.Initialize(context.client, types, 1);
 		// one expression is evaluated at a time here, so the result holds a single column
 		row_result.Initialize(context.client, vector<LogicalType> {LogicalType::BOOLEAN}, 1);
-		// the vectors carry their own size, and reading one row out of them means saying so here
-		row_chunk.SetChildCardinality(1);
-		// A condition only writes the fields it reads, so the rest never hold anything. Starting them
-		// as NULL keeps what the allocation happened to contain out of the chunk entirely.
-		for (auto &field : row_chunk.data) {
-			field.SetVectorType(VectorType::FLAT_VECTOR);
-			FlatVector::ValidityMutable(field).SetInvalid(0);
+		// only a field that carries its values somewhere other than the vector's own data can grow,
+		// so a condition over fixed-width fields pays nothing for the reset below
+		for (auto &type : types) {
+			row_grows = row_grows || !TypeIsConstantSize(type.InternalType());
 		}
+		ResetRow();
 		field_plan.resize(MaxValue<idx_t>(field_plan.size(), types.size()));
 
 		if (!columns_idx.empty()) {
@@ -563,6 +568,19 @@ private:
 			D_ASSERT(row_cursor->chunk.ColumnCount() == columns_idx.size());
 		}
 		ready = true;
+	}
+
+	//! Give the assembled row back, so that what it holds lives for one evaluation
+	void ResetRow() {
+		row_chunk.Reset();
+		// the vectors carry their own size, and reading one row out of them means saying so here
+		row_chunk.SetChildCardinality(1);
+		// A condition only writes the fields it reads, so the rest never hold anything. Starting them
+		// as NULL keeps what the allocation happened to contain out of the chunk entirely.
+		for (auto &field : row_chunk.data) {
+			field.SetVectorType(VectorType::FLAT_VECTOR);
+			FlatVector::ValidityMutable(field).SetInvalid(0);
+		}
 	}
 
 	//! Copy one field of one collected row. Seeking can replace the cursor's chunk, so the value is
@@ -611,6 +629,8 @@ private:
 	idx_t match_number = 1;
 	DataChunk row_chunk;
 	DataChunk row_result;
+	//! Whether any field of the row holds its values outside the vector's own data
+	bool row_grows = false;
 	//! Where each field of row_chunk takes its value from
 	vector<FieldPlan> field_plan;
 	//! The fields each condition reads, so that deciding one copies no more than it needs

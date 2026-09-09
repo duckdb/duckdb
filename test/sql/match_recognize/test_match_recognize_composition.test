@@ -85,21 +85,21 @@ SELECT count(*) FROM ev MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS n PATTERN (A B) DEFINE A AS true, B AS PREV(CLASSIFIER()) = 'A'
 )
 ----
-<REGEX>:Not implemented Error:.*CLASSIFIER\(\) cannot be navigated.*
+<REGEX>:Binder Error:.*CLASSIFIER\(\) only means something while the matcher is assembling a match.*
 
 statement error
 SELECT count(*) FROM ev MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS n PATTERN (A B) DEFINE A AS true, B AS NEXT(CLASSIFIER()) = 'A'
 )
 ----
-<REGEX>:Not implemented Error:.*CLASSIFIER\(\) cannot be navigated.*
+<REGEX>:Binder Error:.*CLASSIFIER\(\) only means something while the matcher is assembling a match.*
 
 statement error
 SELECT count(*) FROM ev MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS n PATTERN (A B) DEFINE A AS true, B AS LAST(CLASSIFIER()) = 'A'
 )
 ----
-<REGEX>:Not implemented Error:.*CLASSIFIER\(\) cannot be navigated.*
+<REGEX>:Binder Error:.*CLASSIFIER\(\) only means something while the matcher is assembling a match.*
 
 # on its own it still resolves
 query I

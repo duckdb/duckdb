@@ -11,6 +11,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/pattern_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
@@ -135,14 +136,53 @@ struct HoistedInputRefs {
 	vector<unique_ptr<ParsedExpression>> select_list;
 };
 
+//! The parameters a lambda names, when its left hand side is a parameter list at all. The arrow
+//! spelling is also the JSON operator, which is only told apart from a lambda once the enclosing
+//! function is bound - but a name this returns is either a parameter or a column of the input read
+//! without a qualifier, and neither of those is something to compute below this clause.
+static bool LambdaParameters(const ParsedExpression &expr, identifier_set_t &parameters) {
+	auto &lambda = expr.Cast<LambdaExpression>();
+	string error;
+	auto column_refs = lambda.ExtractColumnRefExpressions(error);
+	if (!error.empty()) {
+		return false;
+	}
+	for (auto &column_ref : column_refs) {
+		auto &names = column_ref.get().Cast<ColumnRefExpression>().ColumnNames();
+		if (names.size() != 1) {
+			// a parameter is one name; anything else is the left of a JSON operator
+			return false;
+		}
+		parameters.insert(names[0]);
+	}
+	return true;
+}
+
 //! A reference whose first name is a pattern variable belongs to this clause and is resolved here.
 //! Every other reference is the input's, so it is computed against the input - which is also what
 //! makes a reference the input finds ambiguous say so, rather than quietly taking the first of them.
+//!
+//! Except a name an expression binds for itself: a lambda's parameter is the lambda's, and there is
+//! nothing below this clause that could compute it.
 static void HoistInputReferences(unique_ptr<ParsedExpression> &expr, const case_insensitive_set_t &symbols,
-                                 const case_insensitive_set_t &aliases, HoistedInputRefs &refs) {
+                                 const case_insensitive_set_t &aliases, HoistedInputRefs &refs,
+                                 vector<identifier_set_t> &lambda_parameters) {
+	if (expr->GetExpressionClass() == ExpressionClass::LAMBDA) {
+		identifier_set_t parameters;
+		if (LambdaParameters(*expr, parameters)) {
+			auto &lambda = expr->Cast<LambdaExpression>();
+			lambda_parameters.push_back(std::move(parameters));
+			HoistInputReferences(lambda.RightMutable(), symbols, aliases, refs, lambda_parameters);
+			lambda_parameters.pop_back();
+			return;
+		}
+	}
 	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr->Cast<ColumnRefExpression>();
 		auto &names = colref.ColumnNames();
+		if (LambdaExpression::IsLambdaParameter(lambda_parameters, names[0])) {
+			return;
+		}
 		// alias.<name> is how a select list spells a reference to one of its own aliases, so that is
 		// this clause's name too rather than something to compute against the input
 		const auto is_alias = names.size() == 2 && StringUtil::CIEquals("alias", names[0].GetIdentifierName()) &&
@@ -154,8 +194,15 @@ static void HoistInputReferences(unique_ptr<ParsedExpression> &expr, const case_
 		}
 		return;
 	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { HoistInputReferences(child, symbols, aliases, refs); });
+	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
+		HoistInputReferences(child, symbols, aliases, refs, lambda_parameters);
+	});
+}
+
+static void HoistInputReferences(unique_ptr<ParsedExpression> &expr, const case_insensitive_set_t &symbols,
+                                 const case_insensitive_set_t &aliases, HoistedInputRefs &refs) {
+	vector<identifier_set_t> lambda_parameters;
+	HoistInputReferences(expr, symbols, aliases, refs, lambda_parameters);
 }
 
 //! Pattern leaves only have to carry the symbol they name; there is no column behind them
@@ -243,6 +290,15 @@ static void RemapToProjection(unique_ptr<Expression> &expr, MatchRecognizeCondit
 	}
 	ExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<Expression> &child) { RemapToProjection(child, inputs, input_columns); });
+}
+
+//! The frame the matcher walks is the input's to compute, so nothing in it can read a field only
+//! the matcher supplies. The binder rejects the spellings that would ask for that; this is the
+//! boundary where one it does not know about would otherwise reach the plan.
+static void RejectMatcherFields(const Expression &expr, const char *clause) {
+	ExpressionIterator::VisitExpression<BoundReferenceExpression>(expr, [&](const BoundReferenceExpression &) {
+		throw InternalException("MATCH_RECOGNIZE built a %s that reads a field only the matcher supplies", clause);
+	});
 }
 
 //! Record a column the matcher is handed per row, or report where it already is
@@ -581,7 +637,9 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	vector<unique_ptr<Expression>> bound_partitions;
 	for (auto &expr : ref.config->partition_expressions) {
 		auto partition = expr->Copy();
+		condition_binder.BeginFrame("PARTITION BY");
 		bound_partitions.push_back(condition_binder.Bind(partition));
+		RejectMatcherFields(*bound_partitions.back(), "PARTITION BY");
 	}
 	auto &order_config = DBConfig::GetConfig(context);
 	vector<BoundOrderByNode> bound_orders;
@@ -591,7 +649,9 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		// the query left unsaid is filled in here rather than reaching the sorter unresolved
 		const auto type = order_config.ResolveOrder(context, order.type);
 		const auto null_order = order_config.ResolveNullOrder(context, type, order.null_order);
+		condition_binder.BeginFrame("ORDER BY");
 		bound_orders.emplace_back(type, null_order, condition_binder.Bind(expr));
+		RejectMatcherFields(*bound_orders.back().expression, "ORDER BY");
 	}
 
 	// everything bound against the input now reads the projection that computes it

@@ -77,9 +77,19 @@ public:
 	                           MatchRecognizeConditionInputs &inputs, const WindowExpression &window_template,
 	                           const case_insensitive_set_t &symbols, const unique_ptr<Expression> &match_number);
 
-	//! The variable whose condition is being bound
+	//! The variable whose condition is being bound. A condition is decided on the row the matcher is
+	//! testing, which is the one place the matcher's own state can be read from.
 	void BeginDefine(const string &name) {
 		define_name = name;
+		outside.clear();
+		frame = false;
+	}
+	//! Bind the partitioning or the ordering instead. The matcher walks those, so they are settled
+	//! before there is a match for anything here to read.
+	void BeginFrame(const string &clause) {
+		define_name.clear();
+		outside = clause + ", which the matcher walks rather than produces";
+		frame = true;
 	}
 
 protected:
@@ -97,6 +107,8 @@ private:
 	//! it navigated to
 	BindResult BindNavigation(FunctionExpression &function, const string &function_name, idx_t depth);
 	BindResult BindNavigated(unique_ptr<ParsedExpression> inner, string symbol, bool last, idx_t offset, idx_t depth);
+	//! Reject something that only means anything while the matcher is assembling a match
+	void OutsideMatch(const string &what) const;
 
 	MatchRecognizeConditionInputs &inputs;
 	const WindowExpression &window_template;
@@ -108,6 +120,13 @@ private:
 	string define_name;
 	//! Whether what is being bound is read off a row other than the one being tested
 	bool navigated = false;
+	//! What the value being bound is computed for, when that is not the row the matcher is testing:
+	//! a window over the partition, the expression a navigation reads, or the frame the matcher
+	//! walks. Empty exactly where the matcher's own state is available.
+	string outside;
+	//! Whether what is being bound is the partitioning or the ordering, which cannot read a
+	//! neighbour in the very order they are defining
+	bool frame = false;
 };
 
 //! Binds the MEASURES clause. Everything MATCH_RECOGNIZE adds to an expression is decided here -
