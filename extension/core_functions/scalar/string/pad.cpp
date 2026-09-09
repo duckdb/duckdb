@@ -132,15 +132,21 @@ static void PadFunction(DataChunk &args, ExpressionState &state, Vector &result)
 }
 
 ScalarFunction LpadFun::GetFunction() {
-	ScalarFunction func({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                    PadFunction<LeftPadOperator>);
+	ScalarFunction func({}, LogicalType::VARCHAR, PadFunction<LeftPadOperator>);
+	func.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("count", LogicalType::INTEGER)
+	    .AddParameter("character", LogicalType::VARCHAR);
 	func.SetFallible();
 	return func;
 }
 
 ScalarFunction RpadFun::GetFunction() {
-	ScalarFunction func({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                    PadFunction<RightPadOperator>);
+	ScalarFunction func({}, LogicalType::VARCHAR, PadFunction<RightPadOperator>);
+	func.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("count", LogicalType::INTEGER)
+	    .AddParameter("character", LogicalType::VARCHAR);
 	func.SetFallible();
 	return func;
 }

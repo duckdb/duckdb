@@ -131,27 +131,37 @@ static void BinaryTrimFunction(DataChunk &input, ExpressionState &state, Vector 
 
 ScalarFunctionSet TrimFun::GetFunctions() {
 	ScalarFunctionSet trim;
-	trim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<true, true>));
+	ScalarFunction unary({}, LogicalType::VARCHAR, UnaryTrimFunction<true, true>);
+	unary.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	trim.AddFunction(unary);
 
-	trim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                BinaryTrimFunction<true, true>));
+	ScalarFunction binary({}, LogicalType::VARCHAR, BinaryTrimFunction<true, true>);
+	binary.GetSignature().AddParameter("string", LogicalType::VARCHAR).AddParameter("characters", LogicalType::VARCHAR);
+	trim.AddFunction(binary);
 	return trim;
 }
 
 ScalarFunctionSet LtrimFun::GetFunctions() {
 	ScalarFunctionSet ltrim;
-	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<true, false>));
-	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                 BinaryTrimFunction<true, false>));
+	ScalarFunction unary({}, LogicalType::VARCHAR, UnaryTrimFunction<true, false>);
+	unary.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	ltrim.AddFunction(unary);
+
+	ScalarFunction binary({}, LogicalType::VARCHAR, BinaryTrimFunction<true, false>);
+	binary.GetSignature().AddParameter("string", LogicalType::VARCHAR).AddParameter("characters", LogicalType::VARCHAR);
+	ltrim.AddFunction(binary);
 	return ltrim;
 }
 
 ScalarFunctionSet RtrimFun::GetFunctions() {
 	ScalarFunctionSet rtrim;
-	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<false, true>));
+	ScalarFunction unary({}, LogicalType::VARCHAR, UnaryTrimFunction<false, true>);
+	unary.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	rtrim.AddFunction(unary);
 
-	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                 BinaryTrimFunction<false, true>));
+	ScalarFunction binary({}, LogicalType::VARCHAR, BinaryTrimFunction<false, true>);
+	binary.GetSignature().AddParameter("string", LogicalType::VARCHAR).AddParameter("characters", LogicalType::VARCHAR);
+	rtrim.AddFunction(binary);
 	return rtrim;
 }
 

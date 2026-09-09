@@ -89,8 +89,12 @@ static void TranslateFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 ScalarFunction TranslateFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                      TranslateFunction);
+	ScalarFunction fun({}, LogicalType::VARCHAR, TranslateFunction);
+	fun.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("from", LogicalType::VARCHAR)
+	    .AddParameter("to", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb
