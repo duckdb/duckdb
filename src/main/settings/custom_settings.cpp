@@ -1746,7 +1746,7 @@ Value WriteBufferRowGroupMemoryLimitSetting::GetSetting(const ClientContext &con
 void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (!info.context) {
 		throw InvalidInputException(
-		    "current_transaction_invalidaton_policy can only be set when there is an active client context");
+		    "current_transaction_invalidation_policy can only be set when there is an active client context");
 	}
 	info.context->transaction.SetInvalidationPolicy(
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
