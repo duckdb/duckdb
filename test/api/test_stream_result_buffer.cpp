@@ -370,7 +370,7 @@ TEST_CASE("A parked read-ahead batch does not report the batched buffer waiting 
 	Connection con(db);
 	DataChunk chunk;
 	chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::BIGINT});
-	chunk.SetCardinality(STANDARD_VECTOR_SIZE);
+	chunk.SetChildCardinality(STANDARD_VECTOR_SIZE);
 	// The cap counts the buffered copy. Four chunks fit and the reserve for the minimum batch is one
 	// chunk, so a read-ahead batch parks on its fourth chunk with nothing in the read queue
 	const auto chunk_bytes = BufferedData::CopyForBuffering(chunk)->GetDataSize();
