@@ -405,6 +405,8 @@ private:
 	DeltaByteArrayDecoder delta_byte_array_decoder;
 	ByteStreamSplitDecoder byte_stream_split_decoder;
 	CryptoMetaData aad_crypto_metadata;
+	//! Per-column decryption key (set during InitializeRead if the column has a dedicated key)
+	string column_encryption_key;
 
 	//! Resizeable buffers used for the various encodings above
 	ResizeableBuffer encoding_buffers[2];
