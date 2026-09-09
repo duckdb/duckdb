@@ -382,6 +382,8 @@ void WriteAheadLogReplayer::MergeIntoRecoveryWAL(Connection &con, const ReplaySt
 	// move over the recovery WAL over the main WAL
 	recovery_handle->Sync();
 	recovery_handle.reset();
+	// the main WAL is the target of the move - Windows refuses to replace a file that is still open
+	main_wal_reader.handle.reset();
 
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_MOVING_RECOVERY) {
 		throw FatalException("Checkpoint aborted before moving recovery file because of PRAGMA checkpoint_abort flag");
@@ -496,7 +498,10 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 				}
 				// if this is not a read-only connection we need to finish the checkpoint
 				// overwrite the current WAL with the checkpoint WAL
+				// both files must be closed - Windows refuses to move a file that is still open, and refuses to
+				// replace a target that is still open
 				checkpoint_handle.reset();
+				reader.handle.reset();
 
 				fs.MoveFile(checkpoint_wal, wal_path);
 
