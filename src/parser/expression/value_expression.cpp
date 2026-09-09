@@ -4,8 +4,7 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/column_list.hpp"
-#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
@@ -116,16 +115,6 @@ static unique_ptr<ParsedExpression> MapExpression(const Value &value) {
 	return CastTo(value.type(), make_uniq<FunctionExpression>("map", std::move(arguments)));
 }
 
-//! A TYPE value is spelled as the type itself: parse its text back into the type expression
-static unique_ptr<ParsedExpression> TypeExpressionFor(const LogicalType &type) {
-	auto columns = Parser::ParseColumnList("dummy " + type.ToString());
-	auto &unbound = columns.GetColumn(LogicalIndex(0)).Type();
-	if (unbound.id() != LogicalTypeId::UNBOUND) {
-		throw InternalException("Cannot build a type expression for type '%s'", type.ToString());
-	}
-	return UnboundType::GetTypeExpression(unbound)->Copy();
-}
-
 unique_ptr<ParsedExpression> ConstantExpression::FromValue(const Value &value) {
 	auto &type = value.type();
 	if (value.IsNull()) {
@@ -194,7 +183,7 @@ unique_ptr<ParsedExpression> ConstantExpression::FromValue(const Value &value) {
 	case LogicalTypeId::MAP:
 		return MapExpression(value);
 	case LogicalTypeId::TYPE:
-		return TypeExpressionFor(TypeValue::GetType(value));
+		return TypeExpression::FromLogicalType(TypeValue::GetType(value));
 	case LogicalTypeId::POINTER:
 		return FromLiteral(Literal::Pointer(value.GetPointer()));
 	case LogicalTypeId::UNION: {

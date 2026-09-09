@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/matcher_stack.hpp"
+#include "duckdb/common/optional.hpp"
 
 namespace duckdb {
 
@@ -112,7 +113,9 @@ bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 }
 
 MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
-	D_ASSERT(frame.result);
+	if (!frame.result) {
+		throw InternalException("Trying to finalize a frame without a stored result");
+	}
 	auto result = *frame.result;
 	auto &matcher = frame.matcher;
 	auto &state = frame.match_state;

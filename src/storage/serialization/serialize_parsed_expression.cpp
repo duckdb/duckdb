@@ -123,21 +123,6 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(Deserializer &deseriali
 	return std::move(result);
 }
 
-void CastExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", child);
-	serializer.WriteProperty<LogicalType>(201, "cast_type", cast_type);
-	serializer.WritePropertyWithDefault<bool>(202, "try_cast", try_cast);
-}
-
-unique_ptr<ParsedExpression> CastExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<CastExpression>(new CastExpression());
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", result->child);
-	deserializer.ReadProperty<LogicalType>(201, "cast_type", result->cast_type);
-	deserializer.ReadPropertyWithDefault<bool>(202, "try_cast", result->try_cast);
-	return std::move(result);
-}
-
 void CollateExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", child);

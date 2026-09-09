@@ -1990,6 +1990,10 @@ LogicalType UnboundType::TryDefaultBind(const LogicalType &unbound_type) {
 	return TryDefaultBindTypeExpression(*expr);
 }
 
+LogicalType UnboundType::TryDefaultBind(const ParsedExpression &type_expr) {
+	return TryDefaultBindTypeExpression(type_expr);
+}
+
 //===--------------------------------------------------------------------===//
 // Logical Type
 //===--------------------------------------------------------------------===//

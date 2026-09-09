@@ -1,5 +1,5 @@
 diff --git a/src/mysql_sql_writer.cpp b/src/mysql_sql_writer.cpp
-index a610c64..91019c5 100644
+index e04be0c..0ed02cf 100644
 --- a/src/mysql_sql_writer.cpp
 +++ b/src/mysql_sql_writer.cpp
 @@ -442,7 +442,7 @@ string MySQLSQLWriter::WriteSubquery(const SubqueryExpression &subquery) {
@@ -17,10 +17,10 @@ index a610c64..91019c5 100644
  			// (SupportsPushdown verifies that the cast succeeds)
 -			auto &value = cast_expr.Child().Cast<ConstantExpression>().GetValue();
 +			auto value = cast_expr.Child().Cast<ConstantExpression>().GetLiteral().ToValue();
- 			auto target_type = cast_expr.TargetType();
- 			if (target_type.id() == LogicalTypeId::UNBOUND) {
- 				target_type = UnboundType::TryDefaultBind(target_type);
-@@ -597,7 +597,7 @@ string MySQLSQLWriter::WriteOrderList(const vector<OrderByNode> &orders,
+ 			// the cast target is an unbound type expression - resolve it against the built-in types
+ 			auto target_type = UnboundType::TryDefaultBind(cast_expr.TargetType());
+ 			auto cast_result = value.DefaultTryCastAs(target_type);
+@@ -596,7 +596,7 @@ string MySQLSQLWriter::WriteOrderList(const vector<OrderByNode> &orders,
  		string null_key;
  		auto &expr = *order.expression;
  		if (expr.GetExpressionClass() == ExpressionClass::CONSTANT) {
@@ -30,7 +30,7 @@ index a610c64..91019c5 100644
  				// positional reference (e.g. ORDER BY 1) - resolve it against the select list
  				// SupportsPushdown verifies that this resolution is possible
 diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
-index d8a2dde..a75a196 100644
+index 7210afd..7a5a506 100644
 --- a/src/storage/mysql_catalog.cpp
 +++ b/src/storage/mysql_catalog.cpp
 @@ -568,11 +568,11 @@ unique_ptr<TableRef> MySQLCatalog::RemoteExecute(ClientContext &context, unique_
@@ -39,7 +39,7 @@ index d8a2dde..a75a196 100644
  	vector<unique_ptr<ParsedExpression>> args;
 -	args.push_back(make_uniq<ConstantExpression>(Value(GetName())));
 -	args.push_back(make_uniq<ConstantExpression>(Value(sql)));
-+	args.push_back(ConstantExpression::String(GetName()));
++	args.push_back(ConstantExpression::String(GetName().GetIdentifierName()));
 +	args.push_back(ConstantExpression::String(sql));
  	args.push_back(make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
  	                                               make_uniq<ColumnRefExpression>("suppress_dml_output"),
@@ -84,16 +84,16 @@ index d8a2dde..a75a196 100644
  	auto bigint_value = val.DefaultTryCastAs(LogicalType::BIGINT);
  	if (!bigint_value || bigint_value->IsNull()) {
  		return false;
-@@ -1283,7 +1283,7 @@ bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
+@@ -1285,7 +1285,7 @@ bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
  		// MySQLSQLWriter::WriteExpression) - verify here that this is possible. Casts of
  		// non-literal expressions over malformed data remain a documented limitation.
  		if (cast_expr.Child().GetExpressionClass() == ExpressionClass::CONSTANT) {
 -			auto &value = cast_expr.Child().Cast<ConstantExpression>().GetValue();
 +			auto value = cast_expr.Child().Cast<ConstantExpression>().GetLiteral().ToValue();
- 			auto target_type = cast_expr.TargetType();
- 			if (target_type.id() == LogicalTypeId::UNBOUND) {
- 				target_type = UnboundType::TryDefaultBind(target_type);
-@@ -1304,8 +1304,7 @@ bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
+ 			auto cast_result = value.DefaultTryCastAs(target_type);
+ 			if (!cast_result) {
+ 				return false;
+@@ -1302,8 +1302,7 @@ bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
  		return true;
  	}
  	case ExpressionClass::CONSTANT: {
