@@ -184,7 +184,9 @@ ScalarFunction CurrvalFun::GetFunction() {
 
 ScalarFunctionSet SetvalFun::GetFunctions() {
 	ScalarFunction set_val("setval", {}, LogicalType::BIGINT, NextValFunction<SetValValueOperator>, nullptr, nullptr);
-	set_val.GetSignature().AddParameter("sequence_name", LogicalType::VARCHAR).AddParameter("value", LogicalType::BIGINT);
+	set_val.GetSignature()
+	    .AddParameter("sequence_name", LogicalType::VARCHAR)
+	    .AddParameter("value", LogicalType::BIGINT);
 	set_val.SetBindCallback(NextValBind);
 	set_val.SetSerializeCallback(Serialize);
 	set_val.SetDeserializeCallback(Deserialize);

@@ -361,8 +361,8 @@ ScalarFunctionSet TryStrpTimeFun::GetFunctions() {
 	ScalarFunctionSet try_strptime("try_strptime");
 
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
-	auto fun = ScalarFunction({}, LogicalType::TIMESTAMP, StrpTimeFunction::TryParse<timestamp_t>,
-	                          StrpTimeFunction::Bind);
+	auto fun =
+	    ScalarFunction({}, LogicalType::TIMESTAMP, StrpTimeFunction::TryParse<timestamp_t>, StrpTimeFunction::Bind);
 	fun.GetSignature().AddParameter("text", LogicalType::VARCHAR).AddParameter("format", LogicalType::VARCHAR);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	try_strptime.AddFunction(fun);

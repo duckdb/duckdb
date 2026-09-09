@@ -842,11 +842,11 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 }
 
 WindowFunction FirstValueFun::GetFunction() {
-	WindowFunction fun(Name, {}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
-	                   WindowFirstValueExecutor::Bind, WindowFirstValueExecutor::GetBounds,
-	                   WindowFirstValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal,
-	                   WindowFirstValueExecutor::GetLocal, WindowValueLocalState::Sinker,
-	                   WindowValueLocalState::Finalizer, WindowFirstValueExecutor::GetData);
+	WindowFunction fun(Name, {}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE, WindowFirstValueExecutor::Bind,
+	                   WindowFirstValueExecutor::GetBounds, WindowFirstValueExecutor::GetSharing,
+	                   WindowFirstValueExecutor::GetGlobal, WindowFirstValueExecutor::GetLocal,
+	                   WindowValueLocalState::Sinker, WindowValueLocalState::Finalizer,
+	                   WindowFirstValueExecutor::GetData);
 	fun.GetSignature().AddParameter("expr", LogicalTypeId::ANY);
 	fun.SetCanStreamCallback(WindowFirstValueExecutor::CanStream);
 	fun.SetStreamingStateCallback(WindowFirstValueExecutor::GetStreamingState);
@@ -965,11 +965,11 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 }
 
 WindowFunction LastValueFun::GetFunction() {
-	WindowFunction fun(Name, {}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
-	                   WindowLastValueExecutor::Bind, WindowLastValueExecutor::GetBounds,
-	                   WindowLastValueExecutor::GetSharing, WindowLastValueExecutor::GetGlobal,
-	                   WindowLastValueExecutor::GetLocal, WindowValueLocalState::Sinker,
-	                   WindowValueLocalState::Finalizer, WindowLastValueExecutor::GetData);
+	WindowFunction fun(Name, {}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE, WindowLastValueExecutor::Bind,
+	                   WindowLastValueExecutor::GetBounds, WindowLastValueExecutor::GetSharing,
+	                   WindowLastValueExecutor::GetGlobal, WindowLastValueExecutor::GetLocal,
+	                   WindowValueLocalState::Sinker, WindowValueLocalState::Finalizer,
+	                   WindowLastValueExecutor::GetData);
 	fun.GetSignature().AddParameter("expr", LogicalTypeId::ANY);
 	fun.SetCanStreamCallback(WindowLastValueExecutor::CanStream);
 	fun.SetStreamingStateCallback(WindowLastValueExecutor::GetStreamingState);
@@ -1596,9 +1596,9 @@ void WindowFillLocalState::Finalizer(ExecutionContext &context, CollectionPtr co
 
 WindowFunction FillFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::ANY, ExpressionType::WINDOW_FILL, WindowFillExecutor::Bind,
-	                   WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing,
-	                   WindowFillExecutor::GetGlobal, WindowFillExecutor::GetLocal, WindowFillLocalState::Sinker,
-	                   WindowFillLocalState::Finalizer, WindowFillExecutor::GetData);
+	                   WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing, WindowFillExecutor::GetGlobal,
+	                   WindowFillExecutor::GetLocal, WindowFillLocalState::Sinker, WindowFillLocalState::Finalizer,
+	                   WindowFillExecutor::GetData);
 	fun.GetSignature().AddParameter("expr", LogicalTypeId::ANY);
 
 	//! Never ignore nulls (that's the point!)

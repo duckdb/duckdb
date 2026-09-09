@@ -400,7 +400,7 @@ unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &in
 
 AggregateFunction HistogramFun::BinnedHistogramFunction() {
 	AggregateFunction function("histogram", {}, LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                          nullptr, HistogramBinBindFunction<HistogramRange>, nullptr);
+	                           nullptr, HistogramBinBindFunction<HistogramRange>, nullptr);
 	function.GetSignature()
 	    .AddParameter("arg", LogicalType::ANY)
 	    .AddParameter("bins", LogicalType::LIST(LogicalType::ANY));
@@ -409,7 +409,7 @@ AggregateFunction HistogramFun::BinnedHistogramFunction() {
 
 AggregateFunction HistogramExactFun::GetFunction() {
 	AggregateFunction function("histogram_exact", {}, LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                          nullptr, HistogramBinBindFunction<HistogramExact>, nullptr);
+	                           nullptr, HistogramBinBindFunction<HistogramExact>, nullptr);
 	function.GetSignature()
 	    .AddParameter("arg", LogicalType::ANY)
 	    .AddParameter("bins", LogicalType::LIST(LogicalType::ANY));
