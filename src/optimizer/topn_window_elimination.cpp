@@ -5,7 +5,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_nullability.hpp"

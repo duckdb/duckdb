@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/builtin_function_lookup.hpp
+// duckdb/function/builtin_function_lookup.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -19,6 +19,7 @@ class BoundFunctionExpression;
 class ClientContext;
 class Expression;
 class ScalarFunction;
+class WindowFunction;
 
 //! Look up a built-in scalar function in the system catalog and select the overload matching the given argument
 //! types. Rewrites that introduce a registered built-in resolve it this way so that the bound function keeps the
@@ -31,6 +32,10 @@ shared_ptr<const AggregateFunction> GetBuiltinAggregateFunction(ClientContext &c
 //! Like GetBuiltinAggregateFunction, but returns nullptr instead of throwing when no overload matches
 shared_ptr<const AggregateFunction> TryGetBuiltinAggregateFunction(ClientContext &context, const Identifier &name,
                                                                    const vector<LogicalType> &arguments);
+
+//! Window counterpart of GetBuiltinScalarFunction
+shared_ptr<const WindowFunction> GetBuiltinWindowFunction(ClientContext &context, const Identifier &name,
+                                                          const vector<LogicalType> &arguments);
 
 //! Look up a built-in scalar function as GetBuiltinScalarFunction does, and bind it to the given children
 unique_ptr<BoundFunctionExpression> BindBuiltinScalarFunction(ClientContext &context, const Identifier &name,
