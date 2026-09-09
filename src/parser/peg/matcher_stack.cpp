@@ -10,8 +10,13 @@ MatchStack::MatchStack() {
 MatchStack::~MatchStack() {
 	// Child processes can reference state owned by their parents.
 	while (!frames.empty()) {
-		frames.pop_back();
+		DestroyTopFrame();
 	}
+}
+
+void MatchStack::DestroyTopFrame() {
+	D_ASSERT(!frames.empty());
+	frames.pop_back();
 }
 
 optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
@@ -134,7 +139,7 @@ MatcherResult MatchStack::Execute(MatchInput input) {
 			continue;
 		}
 		auto result = FinalizeFrame(frames.back());
-		frames.pop_back();
+		DestroyTopFrame();
 		if (frames.empty()) {
 			return result;
 		}
