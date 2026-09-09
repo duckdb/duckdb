@@ -12,6 +12,7 @@
 #include "thrift/transport/TBufferTransports.h"
 
 #include "duckdb.hpp"
+#include "duckdb/storage/external_file_cache/async_file_read_task.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/storage/external_file_cache/file_buffer_handle_group.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -48,13 +49,25 @@ struct ReadHead {
 		}
 	}
 
-	void Fetch(CachingFileHandle &file_handle) {
+	//! Describe the read this head needs, validating the requested range
+	AsyncReadRequest PrepareFetch(CachingFileHandle &file_handle) {
 		if (GetEnd() > file_handle.GetFileSize()) {
 			throw std::runtime_error("Prefetch registered requested for bytes outside file");
 		}
-		handle_group = file_handle.Read(size, location);
+		return AsyncReadRequest(file_handle, size, location, handle_group);
+	}
+
+	//! Make the fetched bytes available through buffer_ptr
+	void FinishFetch(CachingFileHandle &file_handle) {
 		Materialize(file_handle.GetBufferAllocator());
 		data_isset = true;
+	}
+
+	//! Fetch this read head's bytes, blocking until they have landed
+	void Fetch(CachingFileHandle &file_handle) {
+		auto request = PrepareFetch(file_handle);
+		handle_group = file_handle.Read(request.nr_bytes, request.location);
+		FinishFetch(file_handle);
 	}
 };
 

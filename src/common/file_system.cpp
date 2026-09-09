@@ -455,6 +455,12 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
 
+// NOLINTNEXTLINE: sink params, taken by value so an override can move them into its queue
+FileReadSubmission FileSystem::TryStartRead(shared_ptr<const FileReadRequest> request, AsyncIOCallback callback) {
+	// by default a file system has no asynchronous read path, callers fall back to the synchronous Read
+	return FileReadSubmission::UNSUPPORTED;
+}
+
 void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("%s: Write (with location) is not implemented!", GetName());
 }
@@ -842,6 +848,13 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 	}
 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
+}
+
+void FileHandle::TrackBytesRead(QueryContext context, idx_t nr_bytes) {
+	// tracked up front, the same as the synchronous Read at a location does
+	if (track_io && context.GetClientContext() != nullptr) {
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
+	}
 }
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {

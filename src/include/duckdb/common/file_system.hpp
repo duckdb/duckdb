@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/async_io_callback.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
@@ -128,6 +129,8 @@ public:
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
+	//! Report [nr_bytes] to the profiler, for a caller that reads through TryStartRead rather than Read
+	DUCKDB_API void TrackBytesRead(QueryContext context, idx_t nr_bytes);
 	DUCKDB_API void Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Seek(idx_t location);
 	DUCKDB_API void Reset();
@@ -188,6 +191,32 @@ public:
 	bool track_io = true;
 };
 
+//! Where an asynchronous read lands. Shared, so the buffer outlives the call that started the read.
+class FileReadDestination {
+public:
+	virtual ~FileReadDestination() = default;
+	virtual data_ptr_t Data() = 0;
+	virtual idx_t Size() const = 0;
+};
+
+//! One asynchronous read. Everything it names is shared, so nothing it reads or writes can be freed
+//! while the read is still in flight.
+struct FileReadRequest {
+	shared_ptr<FileHandle> handle;
+	shared_ptr<FileReadDestination> destination;
+	idx_t location;
+};
+
+//! What became of an attempt to start an asynchronous read. The callback fires if and only if PENDING.
+enum class FileReadSubmission : uint8_t {
+	//! This file system has no asynchronous path, the caller must use Read()
+	UNSUPPORTED,
+	//! The bytes already landed, so the caller can consume them without waiting
+	COMPLETED,
+	//! The read is in flight, the callback fires when it lands
+	PENDING
+};
+
 class FileSystem {
 public:
 	DUCKDB_API virtual ~FileSystem();
@@ -211,6 +240,12 @@ public:
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
 	DUCKDB_API virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
+	//! Try to read [request] without holding the calling thread. UNSUPPORTED means this file system has no
+	//! asynchronous path and the caller must use Read(), COMPLETED means the read was already served, and only
+	//! PENDING invokes [callback], exactly once. A read that does not reach PENDING reports failure by throwing.
+	//! The request owns what it reads into, so it can be held for as long as the read takes.
+	DUCKDB_API virtual FileReadSubmission TryStartRead(shared_ptr<const FileReadRequest> request,
+	                                                   AsyncIOCallback callback);
 	//! Write exactly nr_bytes to the specified location in the file. Fails if nr_bytes could not be written. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Write().
 	DUCKDB_API virtual void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);

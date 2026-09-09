@@ -92,6 +92,8 @@ enum class AsyncResultType : uint8_t;
 
 enum class AsyncResultsExecutionMode : uint8_t;
 
+enum class AsyncTaskExecutionResult : uint8_t;
+
 enum class BaseColumnPrunerMode : uint8_t;
 
 enum class BinderType : uint8_t;
@@ -247,6 +249,8 @@ enum class FileIOMode : uint8_t;
 enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
+
+enum class FileReadSubmission : uint8_t;
 
 enum class FileWriteMode : uint8_t;
 
@@ -734,6 +738,9 @@ template<>
 const char* EnumUtil::ToChars<AsyncResultsExecutionMode>(AsyncResultsExecutionMode value);
 
 template<>
+const char* EnumUtil::ToChars<AsyncTaskExecutionResult>(AsyncTaskExecutionResult value);
+
+template<>
 const char* EnumUtil::ToChars<BaseColumnPrunerMode>(BaseColumnPrunerMode value);
 
 template<>
@@ -966,6 +973,9 @@ const char* EnumUtil::ToChars<FileLockType>(FileLockType value);
 
 template<>
 const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value);
+
+template<>
+const char* EnumUtil::ToChars<FileReadSubmission>(FileReadSubmission value);
 
 template<>
 const char* EnumUtil::ToChars<FileWriteMode>(FileWriteMode value);
@@ -1650,6 +1660,9 @@ template<>
 AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const char *value);
 
 template<>
+AsyncTaskExecutionResult EnumUtil::FromString<AsyncTaskExecutionResult>(const char *value);
+
+template<>
 BaseColumnPrunerMode EnumUtil::FromString<BaseColumnPrunerMode>(const char *value);
 
 template<>
@@ -1882,6 +1895,9 @@ FileLockType EnumUtil::FromString<FileLockType>(const char *value);
 
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value);
+
+template<>
+FileReadSubmission EnumUtil::FromString<FileReadSubmission>(const char *value);
 
 template<>
 FileWriteMode EnumUtil::FromString<FileWriteMode>(const char *value);

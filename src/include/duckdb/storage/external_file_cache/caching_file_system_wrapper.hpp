@@ -63,6 +63,8 @@ public:
 	                                           optional_ptr<FileOpener> opener = nullptr);
 
 	DUCKDB_API void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+	DUCKDB_API FileReadSubmission TryStartRead(shared_ptr<const FileReadRequest> request,
+	                                           AsyncIOCallback callback) override;
 	DUCKDB_API void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	DUCKDB_API int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	DUCKDB_API int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;

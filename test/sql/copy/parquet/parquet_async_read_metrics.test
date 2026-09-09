@@ -1,0 +1,64 @@
+# name: test/sql/copy/parquet/parquet_async_read_metrics.test
+# description: A parquet read served through the asynchronous path still reports the bytes it read
+# group: [parquet]
+
+require parquet
+
+require json
+
+# same single-threaded setup as parquet_async_read.test, so the reads really go through TryStartRead
+statement ok
+SET debug_physical_table_scan_execution_strategy=DEFAULT
+
+statement ok
+SET read_ahead_depth=0
+
+statement ok
+SET threads=1
+
+statement ok
+SET async_threads=0
+
+statement ok
+COPY (
+    SELECT i AS c0, i * 2 AS c1, i * 3 AS c2
+    FROM range(50000) t(i)
+) TO '{TEST_DIR}/parquet_async_read_metrics.parquet'
+(FORMAT PARQUET, ROW_GROUP_SIZE 10000)
+
+# everything that is not the measured scan happens before profiling starts, so nothing else
+# overwrites the profiling output
+statement ok
+SET GLOBAL debug_fs_async_reads=true
+
+# a latency to serve keeps the reads on the deferred path, which is the one that has to account for
+# its bytes without a synchronous Read to do it
+statement ok
+SET GLOBAL debug_fs_delay_mean_ms=1
+
+statement ok
+PRAGMA enable_profiling = 'json'
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/async_read_metrics.json'
+
+statement ok
+SET tracked_metrics = ['io.total_bytes_read']
+
+statement ok
+SELECT sum(c0) + sum(c2) FROM '{TEST_DIR}/parquet_async_read_metrics.parquet'
+
+statement ok
+PRAGMA disable_profiling
+
+statement ok
+SET GLOBAL debug_fs_async_reads=false
+
+statement ok
+SET GLOBAL debug_fs_delay_mean_ms=0
+
+# the column data dwarfs the metadata, so untracked read heads leave only a few tens of KB behind
+query I
+SELECT io.total_bytes_read > 100000 FROM '{TEST_DIR}/async_read_metrics.json'
+----
+true
