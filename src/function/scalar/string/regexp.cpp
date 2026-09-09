@@ -183,6 +183,57 @@ static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input)
 	return std::move(data);
 }
 
+static inline void CheckRewrite(const RE2 &re, const duckdb_re2::StringPiece &replace_piece) {
+	std::string rewrite_error;
+	if (!re.CheckRewriteString(replace_piece, &rewrite_error)) {
+		throw InvalidInputException("Invalid replacement string for regexp_replace: %s", rewrite_error);
+	}
+}
+
+// Rows the pattern cannot match are returned from regexp_replace unchanged, so when capture
+// groups would force RE2 into its (slow, backtracking) BitState engine we first run a
+// capture-free scan (nsubmatch = 0), which RE2 answers with its fast DFA.
+static inline bool ShouldPreScan(const RE2 &re, const duckdb_re2::StringPiece &replace_piece) {
+	return re.NumberOfCapturingGroups() > 0 && RE2::MaxSubmatch(replace_piece) > 0;
+}
+
+// Replace the first match of `re` in `input` (mirroring RE2::Replace), writing the result
+// directly into `heap` instead of splicing intermediate std::string copies of the full input.
+// `replace_piece` must have been validated with CheckRewriteString; `scratch` is a reusable
+// buffer for the rewritten section. Returns `input` unchanged when there is no match (the
+// caller has registered a heap reference on the input vector).
+static string_t RegexpReplaceOnce(StringHeap &heap, const string_t &input, RE2 &re,
+                                  const duckdb_re2::StringPiece &replace_piece, std::string &scratch) {
+	// Rewrites can only reference capture groups \0-\9 (enforced by CheckRewriteString).
+	duckdb_re2::StringPiece vec[10];
+	const int nvec = 1 + RE2::MaxSubmatch(replace_piece);
+	D_ASSERT(nvec <= 10 && nvec <= 1 + re.NumberOfCapturingGroups());
+	duckdb_re2::StringPiece text(input.GetData(), input.GetSize());
+	if (!re.Match(text, 0, text.size(), RE2::UNANCHORED, vec, nvec)) {
+		return input;
+	}
+	scratch.clear();
+	if (!re.Rewrite(&scratch, replace_piece, vec, nvec)) {
+		// Cannot happen after CheckRewriteString; mirror RE2::Replace leaving the input unchanged.
+		return input;
+	}
+	const auto prefix_len = UnsafeNumericCast<idx_t>(vec[0].data() - text.data());
+	const auto suffix_len = UnsafeNumericCast<idx_t>(text.size() - prefix_len - vec[0].size());
+	auto result_str = heap.EmptyString(prefix_len + scratch.size() + suffix_len);
+	auto ptr = result_str.GetDataWriteable();
+	if (prefix_len > 0) {
+		memcpy(ptr, text.data(), prefix_len);
+	}
+	if (!scratch.empty()) {
+		memcpy(ptr + prefix_len, scratch.data(), scratch.size());
+	}
+	if (suffix_len > 0) {
+		memcpy(ptr + prefix_len + scratch.size(), vec[0].data() + vec[0].size(), suffix_len);
+	}
+	result_str.Finalize();
+	return result_str;
+}
+
 static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.BindInfo()->Cast<RegexpReplaceBindData>();
@@ -191,23 +242,38 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 	const auto &patterns = args.data[1];
 	const auto &replaces = args.data[2];
 
+	// Unmodified rows are returned as zero-copy references into the input vector's buffer.
+	StringVector::AddHeapReference(result, strings);
 	auto &heap = StringVector::GetStringHeap(result);
+	std::string scratch;
+
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
+		auto &re = lstate.constant_pattern;
+		// Validate a constant replacement once per chunk instead of once per row. The check is
+		// performed lazily inside the executor callback (i.e. only for rows with non-NULL
+		// arguments) so that chunks whose rows are all NULL never raise a validation error,
+		// matching the per-row semantics of the unoptimized code.
+		const bool replace_is_constant = replaces.GetVectorType() == VectorType::CONSTANT_VECTOR;
+		bool replace_checked = false;
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, replaces, result, [&](string_t input, string_t replace) {
 			    auto replace_piece = CreateStringPiece(replace);
-			    std::string rewrite_error;
-			    if (!lstate.constant_pattern.CheckRewriteString(replace_piece, &rewrite_error)) {
-				    throw InvalidInputException("Invalid replacement string for regexp_replace: %s", rewrite_error);
+			    if (!replace_checked) {
+				    CheckRewrite(re, replace_piece);
+				    replace_checked = replace_is_constant;
 			    }
-			    std::string sstring = input.GetString();
+			    auto in_piece = CreateStringPiece(input);
+			    if (ShouldPreScan(re, replace_piece) &&
+			        !re.Match(in_piece, 0, in_piece.size(), RE2::UNANCHORED, nullptr, 0)) {
+				    return input;
+			    }
 			    if (info.global_replace) {
-				    RE2::GlobalReplace(&sstring, lstate.constant_pattern, replace_piece);
-			    } else {
-				    RE2::Replace(&sstring, lstate.constant_pattern, replace_piece);
+				    scratch.assign(input.GetData(), input.GetSize());
+				    RE2::GlobalReplace(&scratch, re, replace_piece);
+				    return heap.AddString(scratch);
 			    }
-			    return heap.AddString(sstring);
+			    return RegexpReplaceOnce(heap, input, re, replace_piece, scratch);
 		    });
 	} else {
 		TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
@@ -217,17 +283,18 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 				    throw InvalidInputException(re.error());
 			    }
 			    auto replace_piece = CreateStringPiece(replace);
-			    std::string rewrite_error;
-			    if (!re.CheckRewriteString(replace_piece, &rewrite_error)) {
-				    throw InvalidInputException("Invalid replacement string for regexp_replace: %s", rewrite_error);
+			    CheckRewrite(re, replace_piece);
+			    auto in_piece = CreateStringPiece(input);
+			    if (ShouldPreScan(re, replace_piece) &&
+			        !re.Match(in_piece, 0, in_piece.size(), RE2::UNANCHORED, nullptr, 0)) {
+				    return input;
 			    }
-			    std::string sstring = input.GetString();
 			    if (info.global_replace) {
-				    RE2::GlobalReplace(&sstring, re, replace_piece);
-			    } else {
-				    RE2::Replace(&sstring, re, replace_piece);
+				    scratch.assign(input.GetData(), input.GetSize());
+				    RE2::GlobalReplace(&scratch, re, replace_piece);
+				    return heap.AddString(scratch);
 			    }
-			    return heap.AddString(sstring);
+			    return RegexpReplaceOnce(heap, input, re, replace_piece, scratch);
 		    });
 	}
 }

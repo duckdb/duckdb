@@ -1,0 +1,55 @@
+# name: test/sql/function/string/regexp_replace_null_validation.test
+# description: regexp_replace replacement-string validation must be lazy for NULL rows
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# use a real table so the input column is not constant-folded away
+statement ok
+CREATE TABLE all_nulls(x VARCHAR);
+
+statement ok
+INSERT INTO all_nulls VALUES (NULL), (NULL);
+
+# an invalid replacement (\2 with only one capture group) over an all-NULL
+# column must return NULLs and must NOT raise a validation error
+query T
+SELECT regexp_replace(x, '(a)', '\2') FROM all_nulls
+----
+NULL
+NULL
+
+# same for global replace
+query T
+SELECT regexp_replace(x, '(a)', '\2', 'g') FROM all_nulls
+----
+NULL
+NULL
+
+statement ok
+CREATE TABLE mixed(x VARCHAR);
+
+statement ok
+INSERT INTO mixed VALUES (NULL), ('abc'), (NULL);
+
+# with at least one non-NULL row the invalid replacement must error
+statement error
+SELECT regexp_replace(x, '(a)', '\2') FROM mixed
+----
+Invalid replacement string
+
+# a valid replacement over mixed NULL/non-NULL rows works
+query T
+SELECT regexp_replace(x, '(a)', '[\1]') FROM mixed ORDER BY x NULLS FIRST
+----
+NULL
+NULL
+[a]bc
+
+# per-row (non-constant) pattern path: all-NULL rows must not error either
+query T
+SELECT regexp_replace(x, x, '\2') FROM all_nulls
+----
+NULL
+NULL
