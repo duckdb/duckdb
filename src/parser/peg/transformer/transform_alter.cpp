@@ -1,3 +1,4 @@
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/peg/ast/add_column_entry.hpp"
 #include "duckdb/parser/peg/ast/column_constraint_entry.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -39,16 +40,19 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	}
 	auto &add_column = alter_table.Cast<AddColumnInfo>();
 	auto &column_entry = add_column.new_column;
-	const bool add_not_null = add_column.add_not_null;
+	const auto follow_ups = add_column.add_column_constraints;
 	const bool materialize_default =
 	    column_entry.HasDefaultValue() && !IsSimpleDefaultValue(column_entry.DefaultValue());
-	if (!add_not_null && !materialize_default) {
+	if (!follow_ups.add_not_null && !follow_ups.add_unique && !materialize_default) {
 		return std::move(result);
 	}
 
 	if (add_column.if_column_not_exists) {
-		if (add_not_null) {
+		if (follow_ups.add_not_null) {
 			throw NotImplementedException("Adding a NOT NULL column with IF NOT EXISTS is not supported");
+		}
+		if (follow_ups.add_unique) {
+			throw NotImplementedException("Adding a UNIQUE column with IF NOT EXISTS is not supported");
 		}
 		// IF NOT EXISTS is not supported by the multi-statement rewrite - keep the plain ALTER
 		return std::move(result);
@@ -63,15 +67,22 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 		multi_statement = TransformAndMaterializeAlter(
 		    alter_entry_data,
 		    make_uniq<AddColumnInfo>(add_column.GetAlterEntryData(), std::move(null_column),
-		                             add_column.if_column_not_exists, /*add_not_null=*/false),
+		                             add_column.if_column_not_exists, AddColumnConstraints()),
 		    column_name.GetIdentifierName(), column_entry.DefaultValue().Copy());
 	} else {
 		multi_statement = make_uniq<MultiStatement>();
-		add_column.add_not_null = false;
+		add_column.add_column_constraints = AddColumnConstraints();
 		AddToMultiStatement(multi_statement, std::move(result->info));
 	}
-	if (add_not_null) {
+	if (follow_ups.add_not_null) {
 		AddToMultiStatement(multi_statement, make_uniq<SetNotNullInfo>(alter_entry_data, column_name));
+	}
+	if (follow_ups.add_unique) {
+		vector<Identifier> unique_columns;
+		unique_columns.push_back(column_name);
+		auto unique_constraint = make_uniq<UniqueConstraint>(std::move(unique_columns), /*is_primary_key=*/false);
+		AddToMultiStatement(multi_statement,
+		                    make_uniq<AddConstraintInfo>(alter_entry_data, std::move(unique_constraint)));
 	}
 	return std::move(multi_statement);
 }
@@ -249,10 +260,13 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 
 	if (add_column_entry.column_path.size() == 1) {
 		result = make_uniq<AddColumnInfo>(AlterEntryData(), std::move(column_definition), if_not_exists_value,
-		                                  add_column_entry.is_not_null);
+		                                  add_column_entry.add_column_constraints);
 	} else {
-		if (add_column_entry.is_not_null) {
+		if (add_column_entry.add_column_constraints.add_not_null) {
 			throw NotImplementedException("Adding NOT NULL constraints to nested fields is not supported");
+		}
+		if (add_column_entry.add_column_constraints.add_unique) {
+			throw NotImplementedException("Adding UNIQUE constraints to nested fields is not supported");
 		}
 		const auto parent_path =
 		    vector<Identifier>(add_column_entry.column_path.begin(), add_column_entry.column_path.end() - 1);
@@ -288,7 +302,10 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 				new_column.default_value = std::move(constraint.expression);
 			} else if (constraint.constraint_name == "NotNullConstraint" &&
 			           constraint.constraint_type_info.second == ConstraintType::NOT_NULL) {
-				new_column.is_not_null = true;
+				new_column.add_column_constraints.add_not_null = true;
+			} else if (constraint.constraint_name == "UniqueConstraint" &&
+			           constraint.constraint_type_info.second == ConstraintType::UNIQUE) {
+				new_column.add_column_constraints.add_unique = true;
 			}
 		}
 	}
