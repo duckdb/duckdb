@@ -570,16 +570,7 @@ static unique_ptr<BoundAggregateExpression> DEBindAggregate(ClientContext &conte
 
 static unique_ptr<BoundAggregateExpression> DEBindCombineAggr(ClientContext &context,
                                                               vector<unique_ptr<Expression>> children) {
-	vector<LogicalType> types;
-	for (auto &child : children) {
-		types.push_back(child->GetReturnType());
-	}
-	auto func = TryGetBuiltinAggregateFunction(context, CombineAggrFun::Name, types);
-	if (!func) {
-		return nullptr;
-	}
-	FunctionBinder function_binder(context);
-	return function_binder.BindAggregateFunction(std::move(func), std::move(children));
+	return DEBindAggregate(context, CombineAggrFun::Name, std::move(children));
 }
 
 struct DoubleEagerHeuristics {
