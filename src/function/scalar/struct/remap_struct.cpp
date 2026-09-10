@@ -149,7 +149,9 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 		}
 		auto list_data = ConstantVector::GetData<list_entry_t>(input);
 		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-		memcpy(result_list_data, list_data, sizeof(list_entry_t));
+		for (idx_t i = 0; i < result_size; i++) {
+			result_list_data[i] = list_data[0];
+		}
 	} else {
 		auto writer = FlatVector::Writer<list_entry_t>(result, result_size);
 		for (const auto entry : input.Values<list_entry_t>()) {

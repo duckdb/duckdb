@@ -217,3 +217,18 @@ SELECT remap_struct(
   );
 ----
 <REGEX>:.*Binder Error.*No child remaps found.*
+
+# constant list child in a flat struct
+query I
+SELECT remap_struct(
+    {'id': i, 'lst': list_value(1, 2, 3)},
+    NULL::STRUCT(id INTEGER, lst2 INTEGER[]),
+    {'id': 'id', 'lst2': ROW('lst', {'list': 'list'})},
+    NULL
+) FROM range(5) tbl(i);
+----
+{'id': 0, 'lst2': [1, 2, 3]}
+{'id': 1, 'lst2': [1, 2, 3]}
+{'id': 2, 'lst2': [1, 2, 3]}
+{'id': 3, 'lst2': [1, 2, 3]}
+{'id': 4, 'lst2': [1, 2, 3]}
