@@ -65,7 +65,7 @@ public:
 				return MatchStep::Complete(MatcherResult::Failure());
 			}
 			if (child_result->HasParseResult()) {
-				results.push_back(*child_result->GetParseResult());
+				results.push_back(child_result->GetParseResult());
 			}
 			child_index++;
 		}
@@ -108,7 +108,7 @@ private:
 	const ListMatcher &matcher;
 	MatchState &state;
 	MatchState list_state;
-	vector<reference<ParseResult>> results;
+	vector<ParseResultRef> results;
 	idx_t child_index = 0;
 	idx_t saved_suggestion_size = 0;
 	optional_idx start_offset;
@@ -137,7 +137,7 @@ public:
 				if (!child_result->HasParseResult()) {
 					return MatchStep::Complete(MatcherResult::Success());
 				}
-				return MatchStep::Complete(state.AllocateParseResult<ChoiceParseResult>(*child_result->GetParseResult(),
+				return MatchStep::Complete(state.AllocateParseResult<ChoiceParseResult>(child_result->GetParseResult(),
 				                                                                        child_index, start_offset));
 			}
 			child_index++;
@@ -224,7 +224,7 @@ public:
 			}
 			matched_once = true;
 			if (child_result->HasParseResult()) {
-				results.push_back(*child_result->GetParseResult());
+				results.push_back(child_result->GetParseResult());
 			}
 			state.token_iterator.SetPosition(repeat_state.token_iterator);
 			auto current = repeat_state.token_iterator.Current();
@@ -246,7 +246,7 @@ private:
 	const RepeatMatcher &matcher;
 	MatchState &state;
 	MatchState repeat_state;
-	vector<reference<ParseResult>> results;
+	vector<ParseResultRef> results;
 	bool matched_once = false;
 	optional_idx start_offset;
 	bool awaiting_child = false;

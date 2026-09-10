@@ -102,12 +102,12 @@ enum class MatchMode : uint8_t { BUILD_PARSE_RESULT, RECOGNIZE_ONLY };
 
 class MatcherResult {
 public:
-	static MatcherResult Success(optional_ptr<ParseResult> parse_result = nullptr) {
+	static MatcherResult Success(ParseResultRef parse_result = ParseResultRef()) {
 		return MatcherResult(true, parse_result);
 	}
 
 	static MatcherResult Failure() {
-		return MatcherResult(false, nullptr);
+		return MatcherResult(false, ParseResultRef());
 	}
 
 	bool IsSuccess() const {
@@ -115,21 +115,21 @@ public:
 	}
 
 	bool HasParseResult() const {
-		return parse_result != nullptr;
+		return parse_result.IsValid();
 	}
 
-	optional_ptr<ParseResult> GetParseResult() const {
+	ParseResultRef GetParseResult() const {
+		D_ASSERT(HasParseResult());
 		return parse_result;
 	}
 
 private:
-	MatcherResult(bool success_p, optional_ptr<ParseResult> parse_result_p)
-	    : success(success_p), parse_result(parse_result_p) {
+	MatcherResult(bool success_p, ParseResultRef parse_result_p) : success(success_p), parse_result(parse_result_p) {
 	}
 
 private:
 	bool success;
-	optional_ptr<ParseResult> parse_result;
+	ParseResultRef parse_result;
 };
 
 struct MatcherSuggestion {
@@ -400,14 +400,6 @@ private:
 	vector<unique_ptr<Matcher>> matchers;
 };
 
-class ParseResultAllocator {
-public:
-	optional_ptr<ParseResult> Allocate(unique_ptr<ParseResult> parse_result);
-
-private:
-	vector<unique_ptr<ParseResult>> parse_results;
-};
-
 template <class PROCESS, class... ARGS>
 arena_ptr<MatchProcess> MatchState::Make(ARGS &&... args) {
 	static_assert(std::is_base_of<MatchProcess, PROCESS>::value, "Expected a matcher process");
@@ -425,10 +417,11 @@ MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}
-	auto result = context.allocator.Allocate(make_uniq<RESULT>(std::forward<ARGS>(args)...));
+	auto result = context.allocator.Allocate<RESULT>(std::forward<ARGS>(args)...);
 	if (rule) {
-		result->SetRule(*rule);
-		result->name = rule->name;
+		auto &parse_result = context.allocator.Get(result);
+		parse_result.SetRule(*rule);
+		parse_result.name = rule->name;
 	}
 	return MatcherResult::Success(result);
 }

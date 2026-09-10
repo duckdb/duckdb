@@ -235,7 +235,7 @@ public:
 		}
 		if (lifetime.create_result) {
 			return MatchStep::Complete(child_state.AllocateParseResult<ListParseResult>(
-			    vector<reference<ParseResult>>(), string("nested result"), optional_idx()));
+			    vector<ParseResultRef>(), string("nested result"), optional_idx()));
 		}
 		return MatchStep::Complete(MatcherResult::Success());
 	}
@@ -296,7 +296,7 @@ TEST_CASE("Heap matcher segment growth preserves custom process lifetimes", "[ap
 			auto result = stack.Execute({matcher, state});
 			REQUIRE(result.IsSuccess());
 			REQUIRE(result.HasParseResult());
-			REQUIRE(result.GetParseResult()->name == "nested result");
+			REQUIRE(allocator.Get(result.GetParseResult()).name == "nested result");
 			REQUIRE(lifetime.active == 0);
 			REQUIRE(lifetime.state_valid);
 			REQUIRE(lifetime.started == depth);
@@ -635,14 +635,14 @@ TEST_CASE("Packrat results outlive reset process arenas", "[api][grammar_extensi
 	lifetime.started = 0;
 	auto cached = stack.Execute({matcher, state});
 	REQUIRE(cached.IsSuccess() == first.IsSuccess());
-	REQUIRE(cached.GetParseResult().get() == first.GetParseResult().get());
+	REQUIRE(cached.GetParseResult() == first.GetParseResult());
 	REQUIRE(lifetime.started == 0);
 	REQUIRE(lifetime.active == 0);
 	REQUIRE(lifetime.storage_valid);
 	REQUIRE(lifetime.state_valid);
 	if (cached.IsSuccess()) {
 		REQUIRE(cached.HasParseResult());
-		REQUIRE(cached.GetParseResult()->name == "nested result");
+		REQUIRE(parse_results.Get(cached.GetParseResult()).name == "nested result");
 	}
 }
 
