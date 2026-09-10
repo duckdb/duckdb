@@ -673,9 +673,30 @@ static bool ExtractValuesFromExpression(const Expression &expr, value_set_t &val
 	return !values.empty();
 }
 
+static unique_ptr<IndexScanState> TryInitializeBatchIndexScan(const IndexReadHandle<ART> &art,
+                                                              const Expression &index_expr,
+                                                              const BoundColumnRefExpression &column,
+                                                              const value_set_t &values) {
+	// Batch values refer directly to the column, so expression indexes cannot use this path.
+	if (!column.Equals(index_expr)) {
+		return nullptr;
+	}
+	for (const auto &value : values) {
+		if (value.type() != column.GetReturnType()) {
+			return nullptr;
+		}
+	}
+	auto value_chunk = make_uniq<DataChunk>();
+	value_chunk->Initialize(Allocator::DefaultAllocator(), {column.GetReturnType()}, values.size());
+	for (const auto &value : values) {
+		value_chunk->data[0].Append(value);
+	}
+	return art->InitializeBatchScan(std::move(value_chunk));
+}
+
 static unique_ptr<IndexScanState> TryInitializeIndexScan(const IndexReadHandle<ART> &art, const Expression &index_expr,
-                                                       const ColumnDefinition &col, const TableFilter &filter,
-                                                       ProjectionIndex storage_index) {
+                                                         const ColumnDefinition &col, const TableFilter &filter,
+                                                         ProjectionIndex storage_index) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "TryInitializeIndexScan");
 	ColumnBinding binding(TableIndex(0), storage_index);
 	BoundColumnRefExpression bound_ref(col.Name(), col.Type(), binding);
@@ -688,26 +709,12 @@ static unique_ptr<IndexScanState> TryInitializeIndexScan(const IndexReadHandle<A
 	}
 	if (values.size() == 1) {
 		// Preserve the scalar path when the filter resolves to a single equality.
-		auto filter_expr = BoundComparisonExpression::Create(
-		    ExpressionType::COMPARE_EQUAL, bound_ref.Copy(), make_uniq<BoundConstantExpression>(*values.begin()));
+		auto filter_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
+		                                                     make_uniq<BoundConstantExpression>(*values.begin()));
 		return art->TryInitializeScan(index_expr, *filter_expr);
 	}
 
-	// A batch contains values of the column itself, so it requires a matching index expression and types.
-	if (!bound_ref.Equals(index_expr)) {
-		return nullptr;
-	}
-	for (const auto &value : values) {
-		if (value.type() != col.Type()) {
-			return nullptr;
-		}
-	}
-	auto value_chunk = make_uniq<DataChunk>();
-	value_chunk->Initialize(Allocator::DefaultAllocator(), {col.Type()}, values.size());
-	for (const auto &value : values) {
-		value_chunk->data[0].Append(value);
-	}
-	return art->InitializeBatchScan(std::move(value_chunk));
+	return TryInitializeBatchIndexScan(art, index_expr, bound_ref, values);
 }
 
 bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list, TableFunctionInitInput &input,
