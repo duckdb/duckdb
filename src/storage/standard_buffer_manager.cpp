@@ -583,12 +583,9 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 
-		auto block_header_size = block.GetBlockHeaderSize();
-		auto buffer = ConstructManagedBuffer(GetBlockAllocSize() - block_header_size, block_header_size,
-		                                     std::move(reusable_buffer), block.GetMemory().GetBufferType());
 		idx_t eviction_size = 0;
-		buffer = temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(context, id, std::move(buffer),
-		                                                                       &eviction_size);
+		auto buffer = temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(
+		    context, id, std::move(reusable_buffer), &eviction_size);
 
 		// Decrement evicted size.
 		evicted_data_per_tag[uint8_t(tag)] -= eviction_size;
