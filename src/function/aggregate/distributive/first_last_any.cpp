@@ -87,7 +87,7 @@ struct FirstStringStateBase {
 	//! Whether the state has been set (i.e. we have seen a row)
 	bool is_set;
 	//! The size of the arena allocation for a non-inlined string value - not part of the exported state
-	uint32_t alloc_size;
+	idx_t alloc_size;
 
 	void Assign(string_t input, AggregateInputData &input_data) {
 		if (input.IsInlined()) {
@@ -99,7 +99,7 @@ struct FirstStringStateBase {
 			if (alloc_size >= len) {
 				ptr = value.GetDataWriteable();
 			} else {
-				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+				alloc_size = NextPowerOfTwo(len);
 				ptr = char_ptr_cast(input_data.allocator.Allocate(alloc_size));
 			}
 			memcpy(ptr, input.GetData(), len);
