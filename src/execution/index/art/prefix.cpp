@@ -5,6 +5,7 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
+#include "duckdb/execution/index/art/const_prefix_handle.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/prefix_handle.hpp"
@@ -34,8 +35,8 @@ Prefix::Prefix(FixedSizeAllocator &allocator, const NodePtr node, const idx_t co
 
 uint8_t Prefix::GetByte(const ART &art, const NodePtr &node, const uint8_t pos) {
 	D_ASSERT(node.GetType() == PREFIX);
-	Prefix prefix(art, node);
-	return prefix.data[pos];
+	ConstPrefixHandle prefix(art, node);
+	return prefix.GetByte(pos);
 }
 
 Prefix Prefix::NewInternal(ART &art, NodePtr &node, const data_ptr_t data, const uint8_t count, const idx_t offset) {
@@ -64,6 +65,40 @@ void Prefix::New(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, cons
 		offset += this_count;
 		count -= this_count;
 	}
+}
+
+PrefixHandle PrefixHandle::NewInternal(ART &art, NodePtr &node, const_data_ptr_t data, const uint8_t count,
+                                       const idx_t offset) {
+	node = NodePtr::GetAllocator(art, PREFIX).New();
+	node.SetMetadata(static_cast<uint8_t>(PREFIX));
+
+	PrefixHandle prefix(NodeHandle(art, node));
+	prefix.SetCount(art, count);
+	if (data) {
+		D_ASSERT(count);
+		memcpy(prefix.Data(), data + offset, count);
+	}
+	prefix.Child(art).Clear();
+	return prefix;
+}
+
+PrefixChain PrefixHandle::New(ART &art, const ARTKey &key, const idx_t depth, const idx_t count) {
+	D_ASSERT(count > 0);
+
+	NodePtr root;
+	auto first_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count));
+	auto prefix = NewInternal(art, root, key.data, first_count, depth);
+	auto tail = std::move(prefix).IntoChild(art);
+
+	idx_t offset = first_count;
+	while (offset < count) {
+		auto this_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count - offset));
+		auto next = NewInternal(art, tail.Get(), key.data, this_count, depth + offset);
+		tail = std::move(next).IntoChild(art);
+
+		offset += this_count;
+	}
+	return {root, std::move(tail)};
 }
 
 void Prefix::Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte,

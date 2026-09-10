@@ -124,9 +124,8 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 
 static unique_ptr<FunctionData> ListExtractBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
-	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.GetArguments().size() == 2);
+	D_ASSERT(input.GetBoundFunction().GetArguments().size() == 2);
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	return nullptr;
 }

@@ -7,9 +7,11 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/execution/index/index_type.hpp"
 
 namespace duckdb {
@@ -164,6 +166,15 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		if (indexes.Contains(info->GetIndexName())) {
 			throw CatalogException("an index with that name already exists for this table: %s",
 			                       SQLIdentifier(info->GetIndexName()));
+		}
+
+		// PRIMARY KEY columns cannot be NULL.
+		if (info->constraint_type == IndexConstraintType::PRIMARY) {
+			auto &local_storage = LocalStorage::Get(context, storage.db);
+			for (const auto &column_id : storage_ids) {
+				BoundNotNullConstraint not_null {PhysicalIndex(column_id)};
+				local_storage.VerifyNewConstraint(storage, not_null);
+			}
 		}
 
 		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
