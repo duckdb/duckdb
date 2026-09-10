@@ -503,6 +503,7 @@ struct UnboundType {
 	// Try to bind the unbound type into a concrete type, using just the built in types
 	DUCKDB_API static LogicalType TryParseAndDefaultBind(const string &type_str);
 	DUCKDB_API static LogicalType TryDefaultBind(const LogicalType &unbound_type);
+	DUCKDB_API static LogicalType TryDefaultBind(const ParsedExpression &type_expr);
 	DUCKDB_API static const unique_ptr<ParsedExpression> &GetTypeExpression(const LogicalType &type);
 };
 

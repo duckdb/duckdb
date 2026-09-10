@@ -119,8 +119,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 			unique_ptr<Expression> current =
 			    make_uniq<BoundReferenceExpression>(payload_types[i], payload_types.size() + i);
 			const auto normalize_previous = ExpressionBinder::PushCollation(context, previous, payload_types[i]);
+#ifdef D_ASSERT_IS_ENABLED
 			const auto normalize_current = ExpressionBinder::PushCollation(context, current, payload_types[i]);
 			D_ASSERT(normalize_previous == normalize_current);
+#else
+			ExpressionBinder::PushCollation(context, current, payload_types[i]);
+#endif
 			if (normalize_previous) {
 				payload_comparisons.push_back(BoundComparisonExpression::Create(
 				    ExpressionType::COMPARE_DISTINCT_FROM, std::move(previous), std::move(current)));
