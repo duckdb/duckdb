@@ -155,8 +155,10 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 			return SinkFinalizeType::READY;
 		}
 
-		auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table).get();
-		D_ASSERT(index_entry);
+		auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table);
+		if (!index_entry) {
+			return SinkFinalizeType::READY;
+		}
 		auto &index = index_entry->Cast<DuckIndexEntry>();
 		index.initial_index_size = bound_index->GetInMemorySize();
 
