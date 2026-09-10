@@ -1,6 +1,5 @@
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 
-#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
@@ -209,8 +208,7 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 					const auto aggr_offset = layout.GetOffsets()[layout.ColumnCount() + aggr_idx];
 					auto &aggr_fun = layout.GetAggregates()[aggr_idx];
 					for (idx_t i = 0; i < next; i++) {
-						duckdb::FastMemset(base_row_ptr + i * layout.GetRowWidth() + aggr_offset, '\0',
-						                   aggr_fun.payload_size);
+						memset(base_row_ptr + i * layout.GetRowWidth() + aggr_offset, '\0', aggr_fun.payload_size);
 					}
 				}
 			}

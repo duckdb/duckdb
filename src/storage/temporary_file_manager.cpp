@@ -1,12 +1,15 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 
+#include "duckdb/common/exception.hpp"
+
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/process_util.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
-#include "duckdb/storage/storage_options.hpp"
 #include "zstd.h"
 
 namespace duckdb {
@@ -254,15 +257,24 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext con
 		return buffer;
 	}
 
-	// Decompress into buffer
+	// Decompress into buffer.
+	// The leading length word and the compressed payload both come off disk, so validate them before
+	// handing them to zstd: an oversized length would make ZSTD_decompress read past compressed_buffer.
 	const auto compressed_size = Load<idx_t>(compressed_buffer.get());
-	D_ASSERT(!duckdb_zstd::ZSTD_isError(compressed_size));
+	if (compressed_size > compressed_buffer.GetSize() - sizeof(idx_t)) {
+		throw IOException("Corrupt temporary file: compressed block claims %llu bytes but only %llu are available",
+		                  compressed_size, compressed_buffer.GetSize() - sizeof(idx_t));
+	}
 	const auto decompressed_size = duckdb_zstd::ZSTD_decompress(
 	    buffer->InternalBuffer(), buffer->AllocSize(), compressed_buffer.get() + sizeof(idx_t), compressed_size);
-	(void)decompressed_size;
-	D_ASSERT(!duckdb_zstd::ZSTD_isError(decompressed_size));
-
-	D_ASSERT(decompressed_size == buffer->AllocSize());
+	if (duckdb_zstd::ZSTD_isError(decompressed_size)) {
+		throw IOException("Corrupt temporary file: failed to decompress block (%s)",
+		                  duckdb_zstd::ZSTD_getErrorName(decompressed_size));
+	}
+	if (decompressed_size != buffer->AllocSize()) {
+		throw IOException("Corrupt temporary file: decompressed block is %llu bytes but expected %llu",
+		                  decompressed_size, buffer->AllocSize());
+	}
 	return buffer;
 }
 
@@ -333,10 +345,6 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
-	// Temp files have no per-file IO_MODE; they follow the global default_io_mode setting.
-	if (Settings::Get<DefaultIoModeSetting>(db) == FileIOMode::DIRECT_IO) {
-		open_flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
-	}
 	handle = fs.OpenFile(path, open_flags);
 }
 
@@ -486,8 +494,9 @@ void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel 
 // TemporaryFileManager
 //===--------------------------------------------------------------------===//
 TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
-                                           atomic<idx_t> &size_on_disk_p)
-    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(size_on_disk_p), max_swap_space(0) {
+                                           atomic<idx_t> &size_on_disk_p, string file_prefix_p)
+    : file_prefix(std::move(file_prefix_p)), db(db), temp_directory(temp_directory_p), files(*this),
+      size_on_disk(size_on_disk_p), max_swap_space(0) {
 }
 
 TemporaryFileManager::~TemporaryFileManager() {
@@ -703,9 +712,79 @@ void TemporaryFileManager::EraseUsedBlock(TemporaryFileManagerLock &lock, block_
 	}
 }
 
+//! an array rather than a pointer, so the length below is derived from it and cannot drift
+static constexpr const char TEMPORARY_FILE_PREFIX[] = "duckdb_temp_";
+static constexpr idx_t TEMPORARY_FILE_PREFIX_LENGTH = sizeof(TEMPORARY_FILE_PREFIX) - 1;
+
+string TemporaryFilePrefix(const TemporaryFileOwner &owner) {
+	return TEMPORARY_FILE_PREFIX + to_string(owner.pid) + "_" + to_string(owner.instance) + "_";
+}
+
+string TemporaryOwnerMarkerName(const TemporaryFileOwner &owner) {
+	return TemporaryFilePrefix(owner) + "owner";
+}
+
+//! Only unsigned decimal, so nothing a version naming its files differently wrote can parse
+static bool TryParseDecimal(const string &text, uint64_t &result) {
+	if (text.empty() || text.size() > 19) {
+		return false;
+	}
+	uint64_t value = 0;
+	for (const auto c : text) {
+		if (c < '0' || c > '9') {
+			return false;
+		}
+		value = value * 10 + static_cast<uint64_t>(c - '0');
+	}
+	result = value;
+	return true;
+}
+
+bool TryParseTemporaryFileOwner(const string &file_name, TemporaryFileOwner &owner) {
+	if (!StringUtil::StartsWith(file_name, TEMPORARY_FILE_PREFIX)) {
+		return false;
+	}
+	auto pid_end = file_name.find('_', TEMPORARY_FILE_PREFIX_LENGTH);
+	if (pid_end == string::npos) {
+		return false;
+	}
+	auto instance_end = file_name.find('_', pid_end + 1);
+	if (instance_end == string::npos) {
+		return false;
+	}
+	uint64_t pid, instance;
+	if (!TryParseDecimal(file_name.substr(TEMPORARY_FILE_PREFIX_LENGTH, pid_end - TEMPORARY_FILE_PREFIX_LENGTH), pid) ||
+	    !TryParseDecimal(file_name.substr(pid_end + 1, instance_end - pid_end - 1), instance)) {
+		// written by a version that did not name its files after their owner - a UUID carries '-',
+		// which is not a decimal digit, so those land here too
+		return false;
+	}
+	owner.pid = NumericCast<int64_t>(pid);
+	owner.instance = NumericCast<idx_t>(instance);
+	return true;
+}
+
+//! Handed out in order, so instances in this process never take the same id twice
+static idx_t NextInstanceId() {
+	static atomic<idx_t> next_id(0);
+	return next_id++;
+}
+
+//! Whether this process still owes a directory its sweep. Leaked, mutex included: a DatabaseInstance
+//! can be created during static destruction, and locking a destroyed mutex throws.
+static bool ClaimDirectorySweep(const string &temp_directory) {
+	struct SweptDirectories {
+		mutex lock;
+		unordered_set<string> directories;
+	};
+	static auto &swept = *new SweptDirectories();
+	lock_guard<mutex> guard(swept.lock);
+	return swept.directories.insert(temp_directory).second;
+}
+
 string TemporaryFileManager::CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const {
 	return FileSystem::GetFileSystem(db).JoinPath(
-	    temp_directory, StringUtil::Format("duckdb_temp_storage_%s-%llu.tmp", EnumUtil::ToString(identifier.size),
+	    temp_directory, StringUtil::Format("%sstorage_%s-%llu.tmp", file_prefix, EnumUtil::ToString(identifier.size),
 	                                       identifier.file_index.GetIndex()));
 }
 
@@ -731,50 +810,114 @@ void TemporaryFileManager::EraseFileHandle(TemporaryFileManagerLock &, const Tem
 //===--------------------------------------------------------------------===//
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, atomic<idx_t> &size_on_disk,
                                                    optional_idx max_swap_space)
-    : db(db), temp_directory(std::move(path_p)),
-      temp_file(make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk)) {
+    : db(db), temp_directory(std::move(path_p)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	D_ASSERT(!temp_directory.empty());
 	if (!fs.DirectoryExists(temp_directory)) {
 		fs.CreateDirectory(temp_directory);
 		created_directory = true;
 	}
+	ClaimOwner();
+	// reap whatever earlier instances left behind - a crash never reaches teardown. Once per
+	// directory: repeating it per instance only multiplies the chances of misjudging a live process.
+	if (ClaimDirectorySweep(temp_directory)) {
+		SweepAbandonedInstances();
+	}
+	temp_file = make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk, file_prefix);
 	temp_file->SetMaxSwapSpace(max_swap_space);
+}
+
+void TemporaryDirectoryHandle::ClaimOwner() {
+	auto &fs = FileSystem::GetFileSystem(db);
+	owner.pid = ProcessUtil::CurrentProcessId();
+	// Creating the marker is what claims the id, because it is the only step that is atomic against
+	// an instance that shares our pid but not our counter - two copies of duckdb in one process each
+	// count from zero. It is not locked, and nothing ever opens anybody else's: existing is its job.
+	for (;;) {
+		owner.instance = NextInstanceId();
+		try {
+			auto marker = fs.OpenFile(fs.JoinPath(temp_directory, TemporaryOwnerMarkerName(owner)),
+			                          FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+			marker->Close();
+			break;
+		} catch (std::exception &) {
+			// taken, by a live instance or by one that died holding it - either way not ours
+		}
+	}
+	file_prefix = TemporaryFilePrefix(owner);
+}
+
+vector<string> TemporaryDirectoryHandle::ListOwnFiles() {
+	auto &fs = FileSystem::GetFileSystem(db);
+	auto marker_name = TemporaryOwnerMarkerName(owner);
+	vector<string> result;
+	fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
+		TemporaryFileOwner found;
+		if (is_dir || !TryParseTemporaryFileOwner(name, found) || !(found == owner)) {
+			return;
+		}
+		if (name == marker_name) {
+			// the claim itself, removed on its own once everything it reserves is gone
+			return;
+		}
+		result.push_back(fs.JoinPath(temp_directory, name));
+	});
+	return result;
+}
+
+void TemporaryDirectoryHandle::SweepAbandonedInstances() {
+	auto &fs = FileSystem::GetFileSystem(db);
+	try {
+		// the instance an id belongs to never affects the verdict, only the process it ran in does
+		unordered_map<int64_t, vector<string>> by_pid;
+		fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
+			TemporaryFileOwner found;
+			if (!is_dir && TryParseTemporaryFileOwner(name, found)) {
+				by_pid[found.pid].push_back(fs.JoinPath(temp_directory, name));
+			}
+		});
+		for (auto &entry : by_pid) {
+			// our own pid included: a live process is the one thing that can still be using these
+			if (ProcessUtil::ProcessIsRunning(entry.first)) {
+				continue;
+			}
+			fs.RemoveFiles(entry.second);
+		}
+	} catch (...) { // NOLINT
+		            // reclaiming disk is not worth failing an open over - a later process tries again
+	}
 }
 
 TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
 	// first release any temporary files
 	temp_file.reset();
-	// then delete the temporary file directory
+	// Nothing here may throw - this is a destructor - but it reaches RemoveFile, which does: another
+	// instance removing a file between TryRemoveFile's existence check and its removal raises ENOENT,
+	// and Windows refuses to remove a file another instance holds open. A later instance reaps
+	// whatever is left, so there is nothing to do but log.
+	try {
+		CleanupTemporaryDirectory();
+	} catch (...) { // NOLINT
+		            // ~DatabaseInstance resets the log manager before the buffer manager that owns us, so there is
+		            // nowhere to report this; a later instance reaps whatever was left behind
+	}
+}
+
+void TemporaryDirectoryHandle::CleanupTemporaryDirectory() {
+	if (temp_directory.empty()) {
+		return;
+	}
 	auto &fs = FileSystem::GetFileSystem(db);
-	if (!temp_directory.empty()) {
-		bool delete_directory = created_directory;
-		vector<string> files_to_delete;
-		if (!created_directory) {
-			bool deleted_everything = true;
-			fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
-				if (isdir) {
-					deleted_everything = false;
-					return;
-				}
-				if (!StringUtil::StartsWith(path, "duckdb_temp_")) {
-					deleted_everything = false;
-					return;
-				}
-				files_to_delete.push_back(path);
-			});
-		}
-		if (delete_directory) {
-			// we want to remove all files in the directory
-			fs.RemoveDirectory(temp_directory);
-		} else {
-			vector<string> full_path_files_to_delete;
-			full_path_files_to_delete.reserve(files_to_delete.size());
-			for (auto &file : files_to_delete) {
-				full_path_files_to_delete.push_back(fs.JoinPath(temp_directory, file));
-			}
-			fs.RemoveFiles(full_path_files_to_delete);
-		}
+	// only our own: we are their owner, so no process has to be judged to know they are free. What
+	// others left behind is the first-spill sweep's business
+	fs.RemoveFiles(ListOwnFiles());
+	// the claim goes last - while it stands nobody can take our id and create a file under our name
+	// that we would then delete out from under them
+	fs.TryRemoveFile(fs.JoinPath(temp_directory, TemporaryOwnerMarkerName(owner)));
+	if (created_directory) {
+		// only if nothing else is in it: another instance may have joined us here, and removing the
+		// directory is recursive - it would take their files with it
+		fs.RemoveDirectoryExtended(temp_directory, {RemoveDirectoryMode::SINGLE});
 	}
 }
 

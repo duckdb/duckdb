@@ -146,14 +146,10 @@ void TableIndexList::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 	}
 }
 
-void TableIndexList::RevertIndexAppend(DataChunk &chunk, row_t row_start) {
+void TableIndexList::RevertAppend(DataChunk &chunk, row_t row_start) {
 	Vector row_ids(LogicalType::ROW_TYPE);
 	VectorOperations::GenerateSequence(row_ids, chunk.size(), row_start, 1);
-
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
-		entry->RevertIndexAppend(chunk, row_ids);
-	}
+	RevertAppend(chunk, row_ids);
 }
 
 void TableIndexList::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
@@ -544,7 +540,7 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(const Identifier &na
 	return nullptr;
 }
 
-void TableIndexList::MergeCheckpointDeltas(const transaction_t checkpoint_id) const {
+void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) const {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		entry->MergeCheckpointDeltas(checkpoint_id);

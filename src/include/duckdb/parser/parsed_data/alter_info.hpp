@@ -96,6 +96,7 @@ public:
 
 	AlterEntryData GetAlterEntryData() const;
 	bool IsAddPrimaryKey() const;
+	bool IsAddUniqueConstraint() const;
 
 protected:
 	explicit AlterInfo(AlterType type);

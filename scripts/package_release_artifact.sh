@@ -3,7 +3,7 @@
 set -euo pipefail
 
 usage() {
-	echo "Usage: $0 <cli|shared-libs> <artifact-suffix> <input> [...]" >&2
+	echo "Usage: $0 <cli|shared-libs|static-libs> <artifact-suffix> <input> [...]" >&2
 	exit 1
 }
 
@@ -29,6 +29,9 @@ cli)
 	;;
 shared-libs)
 	artifact_name="duckdb-shared-libs-${artifact_suffix}.tar.gz"
+	;;
+static-libs)
+	artifact_name="duckdb-static-libs-${artifact_suffix}.tar.gz"
 	;;
 *)
 	usage
@@ -83,7 +86,9 @@ else
 	script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 	repository_root="$(cd "$script_dir/.." && pwd)"
 	stage_file "$repository_root/src/include/duckdb.h"
+	stage_file "$repository_root/src/include/duckdb_v2.h"
 	stage_file "$repository_root/src/include/duckdb_extension.h"
+	stage_file "$repository_root/src/include/duckdb_extension_v2.h"
 fi
 
 tar -C "$staging_dir" -czf "$temporary_archive" "${members[@]}"
