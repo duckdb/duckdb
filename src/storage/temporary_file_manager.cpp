@@ -101,10 +101,18 @@ bool TemporaryFileIndex::IsValid() const {
 //===--------------------------------------------------------------------===//
 // BlockIndexManager
 //===--------------------------------------------------------------------===//
-BlockIndexManager::BlockIndexManager() : max_index(0), manager(nullptr) {
+BlockIndexManager::BlockIndexManager() : max_index(0), manager(nullptr), encrypted(false) {
 }
 
-BlockIndexManager::BlockIndexManager(TemporaryFileManager &manager) : max_index(0), manager(&manager) {
+BlockIndexManager::BlockIndexManager(TemporaryFileManager &manager, bool encrypted)
+    : max_index(0), manager(&manager), encrypted(encrypted) {
+}
+
+//! Physical stride of one block on disk: payload + (per-block encryption header, if encrypted).
+static idx_t PhysicalBlockSize(const TemporaryBufferSize size, const bool encrypted) {
+	const auto base = size == TemporaryBufferSize::DEFAULT ? DEFAULT_BLOCK_ALLOC_SIZE : TemporaryBufferSizeToSize(size);
+	const auto header_size = encrypted ? DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE : 0;
+	return base + header_size;
 }
 
 idx_t BlockIndexManager::GetNewBlockIndex(const TemporaryBufferSize size) {
@@ -167,8 +175,7 @@ idx_t BlockIndexManager::GetNewBlockIndexInternal(const TemporaryBufferSize size
 }
 
 void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBufferSize size) {
-	const auto temp_file_block_size =
-	    size == TemporaryBufferSize::DEFAULT ? DEFAULT_BLOCK_ALLOC_SIZE : TemporaryBufferSizeToSize(size);
+	const auto temp_file_block_size = PhysicalBlockSize(size, encrypted);
 	if (!manager) {
 		max_index = new_index;
 	} else {
@@ -194,7 +201,7 @@ void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBuffer
 TemporaryFileHandle::TemporaryFileHandle(TemporaryFileManager &manager, TemporaryFileIdentifier identifier_p,
                                          idx_t temp_file_count)
     : db(manager.db), identifier(identifier_p), max_allowed_index((1 << temp_file_count) * MAX_ALLOWED_INDEX_BASE),
-      path(manager.CreateTemporaryFileName(identifier)), index_manager(manager) {
+      path(manager.CreateTemporaryFileName(identifier)), index_manager(manager, identifier.encrypted) {
 }
 
 TemporaryFileHandle::~TemporaryFileHandle() {
@@ -549,7 +556,7 @@ idx_t TemporaryFileManager::WriteTemporaryBuffer(QueryContext context, block_id_
 	handle->WriteTemporaryBuffer(context, buffer, index.block_index.GetIndex(), compressed_buffer);
 
 	compression_adaptivity.Update(compression_result.level, time_before);
-	return static_cast<idx_t>(compression_result.size);
+	return PhysicalBlockSize(compression_result.size, handle->IsEncrypted());
 }
 
 TemporaryFileManager::CompressionResult
@@ -665,9 +672,10 @@ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext co
 		handle = GetFileHandle(lock, index.identifier);
 	}
 
-	// If eviction size requested, set it to the size of the block (compressed size if applicable).
+	// If eviction size requested, set it to the physical stride on disk (payload + per-block
+	// encryption header if applicable) so the caller's accounting stays in sync with the writer.
 	if (eviction_size) {
-		*eviction_size = NumericCast<idx_t>(index.identifier.size);
+		*eviction_size = PhysicalBlockSize(index.identifier.size, index.identifier.encrypted);
 	}
 
 	// before the reusable buffer is given,
@@ -685,7 +693,7 @@ idx_t TemporaryFileManager::DeleteTemporaryBuffer(block_id_t id) {
 	auto index = GetTempBlockIndex(lock, id);
 	auto handle = GetFileHandle(lock, index.identifier);
 	EraseUsedBlock(lock, id, *handle, index);
-	return static_cast<idx_t>(index.identifier.size);
+	return PhysicalBlockSize(index.identifier.size, index.identifier.encrypted);
 }
 
 vector<TemporaryFileInformation> TemporaryFileManager::GetTemporaryFiles() {
