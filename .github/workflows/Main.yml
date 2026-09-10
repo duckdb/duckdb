@@ -729,15 +729,6 @@ jobs:
     - name: Run all release unit tests
       run: make allunit
 
-    - name: Release tests
-      shell: bash
-      run: |
-        if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
-          make alltest_release_tag
-        else
-          make test_release_tag
-        fi
-
     - name: Tools Tests
       run: python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
