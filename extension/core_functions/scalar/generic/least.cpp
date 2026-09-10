@@ -203,6 +203,9 @@ unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, F
 	Value anchored_fallback; // over all inputs; used only when every input is nullable
 	bool has_nonnull_input = false;
 	for (auto &cs : child_stats) {
+		if (!cs.CanHaveNoNull()) {
+			continue;
+		}
 		if (cs.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(cs)) {
 			return nullptr;
 		}
@@ -217,6 +220,9 @@ unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, F
 			has_nonnull_input = true;
 			merge(anchored, anchored_val, /*keep_smaller=*/IS_LEAST);
 		}
+	}
+	if (loose.IsNull()) {
+		return BaseStatistics::FromConstant(Value(return_type)).ToUnique();
 	}
 	if (!has_nonnull_input) {
 		anchored = std::move(anchored_fallback);

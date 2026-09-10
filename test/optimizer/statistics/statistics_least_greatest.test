@@ -90,3 +90,29 @@ query I
 SELECT count(*) FROM nullable_pairs WHERE least(a, b) > 2000000;
 ----
 0
+
+statement ok
+ATTACH '{TEST_DIR}/least_greatest_pruning.duckdb' AS rg (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE rg;
+
+# RGs 1 and 2 are all NULL; RG 3 contains values 4096 through 6143.
+statement ok
+CREATE TABLE metrics AS
+SELECT CASE WHEN i < 4096 THEN NULL ELSE i END AS value FROM range(6144) t(i);
+
+# Ignore all-NULL arguments; if every argument is NULL, the result stays NULL.
+foreach predicate greatest(value,0)>100 least(value,10000)<10000 greatest(value,NULL)>100 least(value,NULL)>100
+
+query I
+SELECT count(*) FROM metrics WHERE {predicate};
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT value FROM metrics WHERE {predicate};
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+endloop
