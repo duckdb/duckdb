@@ -218,13 +218,10 @@ TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex(idx_t block_header_size
 
 unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext context,
                                                                 const TemporaryFileIndex &index_in_file,
-                                                                unique_ptr<FileBuffer> reusable_buffer) const {
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
+                                                                unique_ptr<FileBuffer> buffer) const {
 	auto block_index = index_in_file.block_index.GetIndex();
 	auto block_header_size = index_in_file.block_header_size.GetIndex();
-
-	auto buffer = buffer_manager.ConstructManagedBuffer(buffer_manager.GetBlockAllocSize() - block_header_size,
-	                                                    block_header_size, std::move(reusable_buffer));
+	D_ASSERT(buffer->GetHeaderSize() == block_header_size);
 	AllocatedData compressed_buffer;
 	data_ptr_t read_buffer;
 	idx_t read_size;
@@ -655,8 +652,7 @@ bool TemporaryFileManager::IsEncrypted() const {
 }
 
 unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext context, block_id_t id,
-                                                                 unique_ptr<FileBuffer> reusable_buffer,
-                                                                 idx_t *eviction_size) {
+                                                                 unique_ptr<FileBuffer> buffer, idx_t *eviction_size) {
 	TemporaryFileIndex index;
 	optional_ptr<TemporaryFileHandle> handle;
 	{
@@ -670,8 +666,7 @@ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext co
 		*eviction_size = NumericCast<idx_t>(index.identifier.size);
 	}
 
-	// before the reusable buffer is given,
-	auto buffer = handle->ReadTemporaryBuffer(context, index, std::move(reusable_buffer));
+	buffer = handle->ReadTemporaryBuffer(context, index, std::move(buffer));
 	{
 		// remove the block (and potentially erase the temp file)
 		TemporaryFileManagerLock lock(manager_lock);
