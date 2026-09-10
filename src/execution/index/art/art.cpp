@@ -34,7 +34,7 @@ namespace duckdb {
 
 struct ARTIndexScanState : public IndexScanState {
 	//! Logical equality values, encoded into ART keys during Scan. An empty chunk is an empty batch, not a full scan.
-	unique_ptr<DataChunk> equality_values;
+	unique_ptr<DataChunk> batch_equality_values;
 	//! The predicates to scan.
 	//! A single predicate for point lookups, and two predicates for range scans.
 	Value values[2];
@@ -262,7 +262,7 @@ unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> values
 		throw InternalException("ART batch scan keys must have the index's logical types");
 	}
 	auto result = make_uniq<ARTIndexScanState>();
-	result->equality_values = std::move(values);
+	result->batch_equality_values = std::move(values);
 	return std::move(result);
 }
 
@@ -825,8 +825,8 @@ bool ART::ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const {
 
 bool ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
-	if (scan_state.equality_values) {
-		return ScanBatch(*scan_state.equality_values, row_ids);
+	if (scan_state.batch_equality_values) {
+		return ScanBatch(*scan_state.batch_equality_values, row_ids);
 	}
 	if (scan_state.values[0].IsNull()) {
 		// full scan
