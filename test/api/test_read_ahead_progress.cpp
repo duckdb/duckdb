@@ -23,8 +23,8 @@ TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding"
 	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='64KB'"));
 
 	// after one chunk read-ahead has claimed four row groups, only the first of them is being decoded
-	auto stream = con.SendQuery("SELECT i FROM integers");
-	REQUIRE_NO_FAIL(*stream);
+	auto stream = OpenStream(con, "SELECT i FROM integers");
+	REQUIRE_FALSE(stream->HasError());
 	auto chunk = stream->Fetch();
 	REQUIRE(chunk);
 	auto percentage = con.context->GetQueryProgress().GetPercentage();
@@ -35,8 +35,8 @@ TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding"
 	// with single vector assignments the claimed rows are single vectors as well, buffer only a chunk or two
 	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='16KB'"));
-	stream = con.SendQuery("SELECT i FROM integers");
-	REQUIRE_NO_FAIL(*stream);
+	stream = OpenStream(con, "SELECT i FROM integers");
+	REQUIRE_FALSE(stream->HasError());
 	chunk = stream->Fetch();
 	REQUIRE(chunk);
 	percentage = con.context->GetQueryProgress().GetPercentage();
