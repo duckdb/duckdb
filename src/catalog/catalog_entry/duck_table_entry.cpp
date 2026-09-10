@@ -331,7 +331,6 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &rename_info = table_info.Cast<RenameTableInfo>();
 		auto copied_table = Copy(context);
 		copied_table->name = rename_info.new_table_name;
-		storage->SetTableName(rename_info.new_table_name);
 		return copied_table;
 	}
 	case AlterTableType::ADD_COLUMN: {

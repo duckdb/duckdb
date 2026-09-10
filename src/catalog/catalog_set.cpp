@@ -391,6 +391,9 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 		// in that case we are able to just directly destroy the child (if there is any)
 		entry_to_destroy = new_entry->TakeChild();
 	}
+	if (new_entry->name != entry->name) {
+		new_entry->SetAsRoot();
+	}
 
 	read_lock.unlock();
 	write_lock.unlock();
