@@ -749,6 +749,13 @@ bool ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t
 	return true; // No defines, so everything is valid
 }
 
+void ColumnReader::PinBlock() {
+	if (block) {
+		block->Pin(GetBufferManager());
+		RebaseDecoders();
+	}
+}
+
 void ColumnReader::RebaseDecoders() {
 	// Block's offset has moved on so we need to use the decoders own stored offset to calculate current location.
 	if (repeated_decoder) {
@@ -792,10 +799,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		return;
 	}
 
-	if (block) {
-		block->Pin(GetBufferManager());
-		RebaseDecoders();
-	}
+	PinBlock();
 
 	// read the defines/repeats
 	const auto all_valid = PrepareRead(read_now, define_out, repeat_out, result_offset);
@@ -911,10 +915,7 @@ void ColumnReader::DirectSelect(ColumnReaderInput &input, Vector &result, const 
 	auto read_now = ReadPageHeaders(to_read);
 
 	// pin after BeginRead in case of skips
-	if (block) {
-		block->Pin(GetBufferManager());
-		RebaseDecoders();
-	}
+	PinBlock();
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (!page_is_filtered_out && read_now == to_read && encoding == ColumnEncoding::PLAIN) {
@@ -961,10 +962,7 @@ void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const 
 	auto read_now = ReadPageHeaders(to_read, &filter, &filter_state);
 
 	// pin after BeginRead in case of skips
-	if (block) {
-		block->Pin(GetBufferManager());
-		RebaseDecoders();
-	}
+	PinBlock();
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (encoding == ColumnEncoding::DICTIONARY && read_now == to_read && dictionary_decoder.HasFilter()) {
@@ -1016,10 +1014,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	data_ptr_t skip_define_out = HasDefines() ? skip_defines : define_out;
 	data_ptr_t skip_repeat_out = HasRepeats() ? skip_repeats : repeat_out;
 
-	if (block) {
-		block->Pin(GetBufferManager());
-		RebaseDecoders();
-	}
+	PinBlock();
 
 	// start reading but do not apply skips (we are skipping now)
 	BeginRead(nullptr, nullptr);

@@ -28,7 +28,7 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 	// read the binary packed lengths
 	auto &block = *reader.block;
 	auto &buffer_manager = reader.reader.buffer_manager;
-	block.Pin(buffer_manager);
+	reader.PinBlock();
 	length_buffer.Pin(buffer_manager);
 	DeltaByteArrayDecoder::ReadDbpData(buffer_manager, block, length_buffer, byte_array_count);
 

@@ -378,6 +378,7 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
+	void PinBlock();
 	void RebaseDecoders();
 	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
 	                 idx_t rows_to_skip = 0);
