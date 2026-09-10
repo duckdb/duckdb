@@ -147,7 +147,8 @@ unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<refer
 	}
 
 	const auto constant_str = StringValue::Get(constant.GetValue());
-	const auto constant_length = Length<string_t, int64_t>(string_t(constant_str.c_str(), constant_str.size()));
+	const auto constant_length =
+	    Length<string_t, int64_t>(string_t(constant_str.c_str(), NumericCast<uint32_t>(constant_str.size())));
 
 	// The constant is longer than the extracted prefix, so the comparison can only be FALSE
 	if (constant_length > num_characters) {

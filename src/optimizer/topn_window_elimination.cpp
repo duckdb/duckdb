@@ -1210,7 +1210,7 @@ TopNWindowElimination::TryPrepareLateMaterialization(const LogicalWindow &window
 				for (const auto &rowid_binding : rhs_rowid_bindings) {
 					auto entry = std::find(child_bindings.begin(), child_bindings.end(), rowid_binding);
 					D_ASSERT(entry != child_bindings.end());
-					const ProjectionIndex projection_idx(entry - child_bindings.begin());
+					const ProjectionIndex projection_idx(NumericCast<idx_t>(entry - child_bindings.begin()));
 					if (std::find(filter.projection_map.begin(), filter.projection_map.end(), projection_idx) ==
 					    filter.projection_map.end()) {
 						filter.projection_map.push_back(projection_idx);
@@ -1232,7 +1232,7 @@ TopNWindowElimination::TryPrepareLateMaterialization(const LogicalWindow &window
 					for (const auto &rowid_binding : rhs_rowid_bindings) {
 						auto entry = std::find(child_bindings.begin(), child_bindings.end(), rowid_binding);
 						D_ASSERT(entry != child_bindings.end());
-						const ProjectionIndex projection_idx(entry - child_bindings.begin());
+						const ProjectionIndex projection_idx(NumericCast<idx_t>(entry - child_bindings.begin()));
 						if (std::find(projection_map.begin(), projection_map.end(), projection_idx) ==
 						    projection_map.end()) {
 							projection_map.push_back(projection_idx);
