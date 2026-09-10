@@ -4,12 +4,12 @@
 
 namespace duckdb {
 
-TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p)
-    : scheduler(scheduler), type(type_p), token(scheduler.CreateProducer()) {
+TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p, TaskExecutorMode mode_p)
+    : scheduler(scheduler), type(type_p), mode(mode_p), token(scheduler.CreateProducer()) {
 }
 
-TaskExecutor::TaskExecutor(ClientContext &context_p, TaskSchedulerType type_p)
-    : TaskExecutor(TaskScheduler::GetScheduler(context_p), type_p) {
+TaskExecutor::TaskExecutor(ClientContext &context_p, TaskSchedulerType type_p, TaskExecutorMode mode_p)
+    : TaskExecutor(TaskScheduler::GetScheduler(context_p), type_p, mode_p) {
 	context = context_p;
 }
 
@@ -31,6 +31,11 @@ void TaskExecutor::ThrowError() {
 void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 	{
 		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
+		if (mode == TaskExecutorMode::JOINED && !parked_task) {
+			// the joining thread has to wait for the other tasks anyway - park this one for it to execute
+			parked_task = std::move(task);
+			return;
+		}
 		++total_tasks;
 	}
 	try {
@@ -51,6 +56,23 @@ void TaskExecutor::FinishTask() {
 }
 
 void TaskExecutor::DrainTasks() {
+	// execute the parked task (if any) on this thread - if we are cancelling we discard it instead
+	unique_ptr<Task> parked;
+	{
+		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
+		if (parked_task && !cancelled) {
+			parked = std::move(parked_task);
+			++total_tasks;
+		} else {
+			parked_task.reset();
+		}
+	}
+	if (parked) {
+		// Execute finishes the task, also when it bails out because another task has errored
+		parked->Execute(TaskExecutionMode::PROCESS_ALL);
+		parked.reset();
+	}
+
 	// wait for all active tasks to finish, executing queued tasks on this thread where possible
 	shared_ptr<Task> task_from_producer;
 	while (true) {

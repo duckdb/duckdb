@@ -17,11 +17,20 @@
 
 namespace duckdb {
 
+enum class TaskExecutorMode : uint8_t {
+	//! Tasks are dispatched to the scheduler, the owner does not necessarily join
+	BACKGROUND,
+	//! The owner blocks in WorkOnTasks, so one task is kept back for the joining thread to execute
+	JOINED
+};
+
 //! The TaskExecutor is a helper class that enables parallel scheduling and execution of tasks
 class TaskExecutor {
 public:
-	explicit TaskExecutor(ClientContext &context, TaskSchedulerType type = TaskSchedulerType::REGULAR);
-	explicit TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type = TaskSchedulerType::REGULAR);
+	explicit TaskExecutor(ClientContext &context, TaskSchedulerType type = TaskSchedulerType::REGULAR,
+	                      TaskExecutorMode mode = TaskExecutorMode::BACKGROUND);
+	explicit TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type = TaskSchedulerType::REGULAR,
+	                      TaskExecutorMode mode = TaskExecutorMode::BACKGROUND);
 	~TaskExecutor();
 
 	//! Push an error into the TaskExecutor
@@ -31,7 +40,7 @@ public:
 	//! Throw an error that was encountered during execution (if HasError() is true)
 	void ThrowError();
 
-	//! Schedule a new task
+	//! Schedule a new task. In JOINED mode the first task is parked instead, and executed by the joining thread
 	void ScheduleTask(unique_ptr<Task> task);
 	//! Label a task as finished
 	void FinishTask();
@@ -53,8 +62,11 @@ private:
 
 	TaskScheduler &scheduler;
 	const TaskSchedulerType type;
+	const TaskExecutorMode mode;
 	TaskErrorManager error_manager;
 	unique_ptr<ProducerToken> token;
+	//! Task that is kept back for the thread that drains this executor (JOINED mode only)
+	unique_ptr<Task> parked_task DUCKDB_GUARDED_BY(token->producer_lock);
 	idx_t completed_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
 	idx_t total_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
 	atomic<bool> cancelled {false};
