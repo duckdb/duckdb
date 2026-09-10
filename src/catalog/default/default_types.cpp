@@ -19,6 +19,28 @@ namespace duckdb {
 namespace {
 
 //----------------------------------------------------------------------------------------------------------------------
+// FLOAT Type
+//----------------------------------------------------------------------------------------------------------------------
+void RegisterFloatConstructors(TypeConstructorSet &set) {
+	set.AddFunction(TypeConstructor::Identity(Identifier("float")));
+
+	auto signature = TypeConstructor::Signature();
+	signature.AddParameter("precision", LogicalType::BIGINT);
+	set.AddFunction(TypeConstructor(std::move(signature), [](BindLogicalTypeInput &input) -> LogicalType {
+		auto precision = input.modifiers[0].GetValue().GetValue<int64_t>();
+		if (precision < 1) {
+			throw BinderException(input.GetLocation(0), "precision for type float must be at least 1 bit");
+		} else if (precision <= 24) {
+			return LogicalType::FLOAT;
+		} else if (precision <= 53) {
+			return LogicalType::DOUBLE;
+		} else {
+			throw BinderException(input.GetLocation(0), "precision for type float must be less than 54 bits");
+		}
+	}));
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // DECIMAL Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindDefaultDecimalType(BindLogicalTypeInput &input) {
@@ -478,7 +500,7 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, R
                                            {"guid", LogicalTypeId::UUID, nullptr},
                                            {"enum", LogicalTypeId::ENUM, RegisterEnumConstructors},
                                            {"null", LogicalTypeId::SQLNULL, nullptr},
-                                           {"float", LogicalTypeId::FLOAT, nullptr},
+                                           {"float", LogicalTypeId::FLOAT, RegisterFloatConstructors},
                                            {"real", LogicalTypeId::FLOAT, nullptr},
                                            {"float4", LogicalTypeId::FLOAT, nullptr},
                                            {"double", LogicalTypeId::DOUBLE, nullptr},
