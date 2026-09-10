@@ -161,7 +161,7 @@ ScalarFunctionSet SwitchFun::GetFunctions() {
 	    {{"map", LogicalType::MAP(key_type, val_type)}}};
 
 	for (const auto &variation : function_variations) {
-		auto switch_expression = ScalarFunction({}, val_type, nullptr, SwitchBindReturnType, nullptr);
+		auto switch_expression = ScalarFunction(vector<LogicalType> {}, val_type, nullptr, SwitchBindReturnType, nullptr);
 		for (const auto &param : variation) {
 			switch_expression.GetSignature().AddParameter(param.first, param.second);
 		}
