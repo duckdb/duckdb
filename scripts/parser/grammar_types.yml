@@ -34,6 +34,9 @@
 # transformer generator should treat only `identifier` and `reserved_identifier`
 # entries as direct IdentifierParseResult-producing rules.
 #
+# additional_transform_result_types: result types used by transformer infrastructure
+# rather than as the declared return type of a grammar rule.
+#
 # packrat_memoized_rules: named grammar rules that should use packrat
 # memoization in MatchParseResult. Keep this selective because cache lookup and
 # parse-result sharing are only worthwhile for rules with repeated backtracking.
@@ -41,6 +44,10 @@
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
 # ---------------------------------------------------------------------------
+
+additional_transform_result_types:
+  - "unique_ptr<TransformResultValue>"
+  - "vector<Identifier>"
 
 SQLStatementList:
   type: "vector<unique_ptr<SQLStatement>>"

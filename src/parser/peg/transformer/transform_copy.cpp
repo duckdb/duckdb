@@ -1,4 +1,6 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -41,13 +43,13 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 			if (option.children.empty()) {
 				info->parsed_options[option.name] = nullptr;
 			} else {
-				info->parsed_options[option.name] = make_uniq<ConstantExpression>(option.children[0]);
+				info->parsed_options[option.name] = ConstantExpression::FromValue(option.children[0]);
 			}
 		} else if (option.name == "NULL" || option.name == "NULLSTR") {
 			if (option.children.empty()) {
 				info->parsed_options[option.name] = std::move(option.expression);
 			} else {
-				info->parsed_options[option.name] = make_uniq<ConstantExpression>(option.children[0]);
+				info->parsed_options[option.name] = ConstantExpression::FromValue(option.children[0]);
 			}
 		} else {
 			if (option.expression) {
@@ -76,7 +78,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(
 	info->is_from = false;
 	if (copy_file_name->GetExpressionClass() == ExpressionClass::CONSTANT) {
 		auto &const_expr = copy_file_name->Cast<ConstantExpression>();
-		info->file_path = const_expr.GetValue().GetValue<string>();
+		info->file_path = const_expr.GetLiteral().ToValue().GetValue<string>();
 	} else {
 		info->file_path_expression = std::move(copy_file_name);
 	}
@@ -101,8 +103,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyFromDatabaseWithout
                                                                                      const Identifier &col_id_1) {
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = "copy_database";
-	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(col_id)));
-	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(col_id_1)));
+	result->info->parameters.emplace_back(ConstantExpression::String(col_id.GetIdentifierName()));
+	result->info->parameters.emplace_back(ConstantExpression::String(col_id_1.GetIdentifierName()));
 	return std::move(result);
 }
 
@@ -141,7 +143,7 @@ PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer, unique_pt
 	info->is_from = from_or_to;
 	if (copy_file_name->GetExpressionClass() == ExpressionClass::CONSTANT) {
 		auto &const_expr = copy_file_name->Cast<ConstantExpression>();
-		info->file_path = const_expr.GetValue().GetValue<string>();
+		info->file_path = const_expr.GetLiteral().ToValue().GetValue<string>();
 	} else {
 		info->file_path_expression = std::move(copy_file_name);
 	}
@@ -166,19 +168,19 @@ bool PEGTransformerFactory::TransformCopyTo(PEGTransformer &transformer) {
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileNameStringLiteral(PEGTransformer &transformer,
                                                                                        const string &string_literal) {
-	return make_uniq<ConstantExpression>(Value(string_literal));
+	return ConstantExpression::String(string_literal);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileNameIdentifier(PEGTransformer &transformer,
                                                                                     const Identifier &identifier) {
 	string file_name = identifier == "stdout" ? "/dev/stdout" : identifier.GetIdentifierName();
-	return make_uniq<ConstantExpression>(Value(file_name));
+	return ConstantExpression::String(file_name);
 }
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformCopyFileNameIdentifierColId(PEGTransformer &transformer,
                                                             const Identifier &identifier_col_id) {
-	return make_uniq<ConstantExpression>(Value(identifier_col_id));
+	return ConstantExpression::String(identifier_col_id.GetIdentifierName());
 }
 
 Identifier PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transformer, const Identifier &identifier,

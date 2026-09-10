@@ -294,6 +294,9 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 
 		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
 		if (!CastVariant(conversion_data, child, new_sel, entry.offset, child_data_entry.child_count, row_index)) {
+			// a TRY_CAST reports the failure by returning false rather than throwing, so the writer has to be
+			// told it is deliberately short of count before it goes out of scope
+			result_data.Truncate();
 			return false;
 		}
 	}
@@ -521,11 +524,15 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 		    VariantCasts::ConvertVariantToJSON(holder.GetDocument(), conversion_data.variant, row_index, sel[i]);
 		if (!json_val) {
 			error = StringUtil::Format("Failed to convert to JSON object");
+			// same as the list path: a TRY_CAST returns false instead of throwing, so the writer must be
+			// told it is deliberately short of count
+			result_data.Truncate();
 			return false;
 		}
 
 		const auto serialized = holder.Serialize(json_val, error);
 		if (!serialized) {
+			result_data.Truncate();
 			return false;
 		}
 

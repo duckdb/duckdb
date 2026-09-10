@@ -298,17 +298,25 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	}
 }
 
+//! An omitted slice bound is parsed as an empty list constructor (see OperatorExpression::EmptySliceBound)
 bool CheckIfParamIsEmpty(duckdb::unique_ptr<duckdb::Expression> &param) {
-	bool is_empty = false;
-	if (param->GetReturnType().id() == LogicalTypeId::LIST) {
-		auto empty_list = make_uniq<BoundConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
-		is_empty = param->Equals(*empty_list);
-		if (!is_empty) {
-			// if the param is not empty, the user has entered a list instead of a BIGINT
-			throw BinderException("The upper and lower bounds of the slice must be a BIGINT");
+	if (param->GetReturnType().id() != LogicalTypeId::LIST) {
+		return false;
+	}
+	if (param->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &function = param->Cast<BoundFunctionExpression>();
+		if (function.Function().GetName() == "list_value" && function.GetChildren().empty()) {
+			return true;
 		}
 	}
-	return is_empty;
+	if (param->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		auto &value = param->Cast<BoundConstantExpression>().GetValue();
+		if (!value.IsNull() && ListValue::GetChildren(value).empty()) {
+			return true;
+		}
+	}
+	// the user has entered a list instead of a BIGINT
+	throw BinderException("The upper and lower bounds of the slice must be a BIGINT");
 }
 
 unique_ptr<FunctionData> ArraySliceBind(BindScalarFunctionInput &input) {
