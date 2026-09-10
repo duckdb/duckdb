@@ -47,6 +47,28 @@ struct ARTIndexScanState : public IndexScanState {
 // ART
 //===--------------------------------------------------------------------===//
 
+static idx_t GetNode256LeafSegmentSize(const IndexStorageInfo &info, StorageVersion storage_version) {
+	// Preserve the oversized mask and padding of the persisted legacy layout.
+	struct LegacyNode256Leaf {
+		uint16_t count;
+		validity_t mask[Node256Leaf::CAPACITY / sizeof(validity_t)];
+	};
+	constexpr idx_t compact_size = sizeof(Node256Leaf);
+	constexpr idx_t legacy_size = sizeof(LegacyNode256Leaf);
+	const auto allocator_idx = NodePtr::GetAllocatorIdx(NType::NODE_256_LEAF);
+	if (info.allocator_infos.size() > allocator_idx) {
+		// Preserve the persisted segment size so existing buffers retain their original layout.
+		const auto saved_segment_size = info.allocator_infos[allocator_idx].segment_size;
+		if (saved_segment_size != compact_size && saved_segment_size != legacy_size) {
+			throw SerializationException("Invalid Node256Leaf segment size %llu (expected %llu or %llu)",
+			                             saved_segment_size, compact_size, legacy_size);
+		}
+		return saved_segment_size;
+	}
+	// New indexes must retain the original layout when targeting older storage versions.
+	return storage_version >= StorageVersion::V2_0_0 ? compact_size : legacy_size;
+}
+
 ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db,
@@ -83,6 +105,7 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 		owns_data = true;
 		auto prefix_size = NumericCast<idx_t>(prefix_count) + NumericCast<idx_t>(Prefix::METADATA_SIZE);
 		auto &block_manager = table_io_manager.GetIndexBlockManager();
+		const auto leaf256_size = GetNode256LeafSegmentSize(info, db.GetStorageManager().GetStorageVersion());
 
 		array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
 		    make_unsafe_uniq<FixedSizeAllocator>(prefix_size, block_manager),
@@ -93,7 +116,7 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node7Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node15Leaf), block_manager),
-		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256Leaf), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(leaf256_size, block_manager),
 		};
 		allocators =
 		    make_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
@@ -1317,6 +1340,13 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
 	if (other_art.owns_data) {
 		if (prefix_count != other_art.prefix_count) {
 			throw InternalException("Failed to merge ARTs - prefix count does not match");
+		}
+		const auto target_size = NodePtr::GetAllocator(*this, NType::NODE_256_LEAF).GetSegmentSize();
+		const auto source_size = NodePtr::GetAllocator(other_art, NType::NODE_256_LEAF).GetSegmentSize();
+		if (target_size != source_size) {
+			throw InternalException(
+			    "Failed to merge ARTs - Node256Leaf segment sizes do not match (target %llu, source %llu)", target_size,
+			    source_size);
 		}
 		if (tree.HasMetadata()) {
 			// Fully deserialize other_index, and traverse it to increment its buffer IDs.

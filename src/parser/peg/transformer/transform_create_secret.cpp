@@ -6,7 +6,7 @@ namespace duckdb {
 
 Value PEGTransformerFactory::GetConstantExpressionValue(unique_ptr<ParsedExpression> &expr) {
 	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		return expr->Cast<ConstantExpression>().GetValue();
+		return expr->Cast<ConstantExpression>().GetLiteral().ToValue();
 	}
 	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		return expr->Cast<ColumnRefExpression>().GetName();

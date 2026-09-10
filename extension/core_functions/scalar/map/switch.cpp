@@ -32,22 +32,14 @@ struct SwitchFunctionBindData : FunctionData {
 	}
 };
 
-idx_t FindMapArgumentIndex(const vector<unique_ptr<Expression>> &arguments) {
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i]->GetReturnType().id() == LogicalTypeId::MAP) {
-			return i;
-		}
-	}
-	return DConstants::INVALID_INDEX;
-}
-
+//! Which argument holds the cases map is a property of the overload that was resolved, not of the
+//! argument types: a MAP-typed key argument makes the types ambiguous. Each variation binds its own index.
+template <idx_t MAP_INDEX>
 unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
-	auto map_index = FindMapArgumentIndex(arguments);
-	if (map_index == DConstants::INVALID_INDEX) {
-		throw BinderException("Switch: No map argument found");
-	}
+	constexpr idx_t map_index = MAP_INDEX;
+	D_ASSERT(map_index < arguments.size());
 	auto &cases = arguments[map_index];
 	if (cases->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		throw BinderException("SWITCH expected a constant map for the cases");

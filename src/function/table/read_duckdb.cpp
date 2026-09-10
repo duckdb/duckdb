@@ -540,7 +540,7 @@ unique_ptr<TableRef> ReadDuckDBTableFunction::ReplacementScan(ClientContext &con
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("read_duckdb", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {

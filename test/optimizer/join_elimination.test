@@ -244,3 +244,51 @@ query II
 explain select a.ida from b right join (select ida from a group by ida) as a on ida < idb;
 ----
 physical_plan	<REGEX>:.*JOIN.*
+
+# unnest emits multiple rows per input row, so a distinct group below it does not survive above it
+# (issue #25213)
+
+statement ok
+create table dup_keys(k int);
+
+statement ok
+insert into dup_keys values (1),(1),(2),(3);
+
+statement ok
+create table probe_keys(idb int);
+
+statement ok
+insert into probe_keys values (1),(1),(2),(3),(4),(NULL),(2),(3);
+
+query I
+select count(*) from probe_keys left join (select k, unnest([1,2,3]) e from (select distinct k from dup_keys) s) t on t.k=probe_keys.idb;
+----
+20
+
+query II
+explain select count(*) from probe_keys left join (select k, unnest([1,2,3]) e from (select distinct k from dup_keys) s) t on t.k=probe_keys.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# same through group by instead of distinct
+query I
+select count(*) from probe_keys left join (select k, unnest([1,2,3]) e from (select k from dup_keys group by k) s) t on t.k=probe_keys.idb;
+----
+20
+
+# same through a nested unnest
+query I
+select count(*) from probe_keys left join (select k, unnest([[1,2],[3]], recursive := true) e from (select distinct k from dup_keys) s) t on t.k=probe_keys.idb;
+----
+20
+
+# a distinct ABOVE the unnest still makes the inner side unique, so the join is still eliminated
+query I
+select count(*) from probe_keys left join (select distinct k from (select k, unnest([1,2,3]) e from dup_keys) u) t on t.k=probe_keys.idb;
+----
+8
+
+query II
+explain select count(*) from probe_keys left join (select distinct k from (select k, unnest([1,2,3]) e from dup_keys) u) t on t.k=probe_keys.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
