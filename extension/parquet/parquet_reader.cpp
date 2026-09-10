@@ -1433,7 +1433,7 @@ vector<ParquetColumnDefinition> ParquetColumnDefinition::FromSchemaMap(ClientCon
 MultiFileColumnDefinition ParquetColumnDefinition::ToMultiFileColumnDefinition() const {
 	MultiFileColumnDefinition result(name, type);
 	result.identifier = identifier;
-	result.default_expression = make_uniq<ConstantExpression>(default_value);
+	result.default_expression = ConstantExpression::FromValue(default_value);
 	result.children.reserve(children.size());
 	for (auto &child : children) {
 		result.children.emplace_back(child.ToMultiFileColumnDefinition());
@@ -1456,15 +1456,14 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	// read the extended file open info (if any)
 	optional_idx footer_size;
 	if (file.extended_info) {
-		auto &open_options = file.extended_info->options;
-		auto encryption_entry = file.extended_info->options.find("encryption_key");
-		if (encryption_entry != open_options.end()) {
-			parquet_options.encryption_config =
-			    make_shared_ptr<ParquetEncryptionConfig>(StringValue::Get(encryption_entry->second));
+		auto &extended_info = *file.extended_info;
+		string encryption_key;
+		if (extended_info.TryGetOption("encryption_key", encryption_key)) {
+			parquet_options.encryption_config = make_shared_ptr<ParquetEncryptionConfig>(std::move(encryption_key));
 		}
-		auto footer_entry = file.extended_info->options.find("footer_size");
-		if (footer_entry != open_options.end()) {
-			footer_size = UBigIntValue::Get(footer_entry->second);
+		idx_t footer_size_option;
+		if (extended_info.TryGetOption("footer_size", footer_size_option)) {
+			footer_size = footer_size_option;
 		}
 	}
 
@@ -1731,6 +1730,20 @@ static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expre
 	if (leaf_reader->Type().id() == LogicalTypeId::LIST &&
 	    (function.Function().GetName() == "list_extract" || function.Function().GetName() == "array_extract")) {
 		leaf_reader = &leaf_reader->Cast<ListColumnReader>().GetChildReader();
+		return true;
+	}
+
+	// Handle MAP value extraction.
+	if (leaf_reader->Type().id() == LogicalTypeId::MAP && function.Function().GetName() == "map_extract_value") {
+		auto &entry_reader = leaf_reader->Cast<ListColumnReader>().GetChildReader();
+		if (entry_reader.Type().id() != LogicalTypeId::STRUCT) {
+			return false;
+		}
+		auto &struct_reader = entry_reader.Cast<StructColumnReader>();
+		if (struct_reader.child_readers.size() != 2 || !struct_reader.child_readers[1]) {
+			return false;
+		}
+		leaf_reader = struct_reader.child_readers[1].get();
 		return true;
 	}
 

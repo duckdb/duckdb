@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
@@ -386,7 +387,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 			throw InternalException("NextBatch called with the same batch index?");
 		}
 		// batch index has changed: move the old collection to the global state and create a new collection
-		TransactionData tdata(0, 0);
+		auto tdata = TransactionData::Unversioned();
 		auto &optimistic_collection =
 		    gstate.table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
 		auto &collection = *optimistic_collection.collection;
@@ -496,7 +497,7 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 	memory_manager.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
 
 	if (lstate.collection_index.IsValid()) {
-		TransactionData tdata(0, 0);
+		auto tdata = TransactionData::Unversioned();
 		auto &optimistic_collection =
 		    gstate.table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
 		auto &collection = *optimistic_collection.collection;

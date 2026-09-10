@@ -1,4 +1,5 @@
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
@@ -45,6 +46,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
 	row_groups->collection = std::move(new_collection);
 
 	append_indexes.Move(parent.append_indexes);
+	delete_indexes.Move(parent.delete_indexes);
 }
 
 LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent,
@@ -60,6 +62,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
 	row_groups->collection = std::move(new_collection);
 
 	append_indexes.Move(parent.append_indexes);
+	delete_indexes.Move(parent.delete_indexes);
 }
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
@@ -72,6 +75,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 	row_groups = std::move(parent.row_groups);
 	row_groups->collection = std::move(new_collection);
 	append_indexes.Move(parent.append_indexes);
+	delete_indexes.Move(parent.delete_indexes);
 }
 
 LocalTableStorage::~LocalTableStorage() {
@@ -161,8 +165,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		mapped_column_ids.emplace_back(col);
 	}
 	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
-	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
-	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
+	auto checkpoint_id = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
 
 	// The bound expressions of the indexes (and their bound column references) are in relation to
 	// ALL table columns, so we create an empty table chunk based on the table types. It references
@@ -399,13 +402,14 @@ OptimisticWriteCollection &LocalTableStorage::GetPrimaryCollection() {
 	return *row_groups;
 }
 
-bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
-                                    CollectionScanState &scan_state) {
+optional_idx LocalStorage::NextParallelScan(ClientContext &context, DataTable &table,
+                                            ParallelCollectionScanState &state, CollectionScanState &scan_state,
+                                            bool initialize_columns) {
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {
-		return false;
+		return optional_idx();
 	}
-	return storage->GetCollection().NextParallelScan(context, state, scan_state);
+	return storage->GetCollection().NextParallelScan(context, state, scan_state, initialize_columns);
 }
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry) {
@@ -539,7 +543,7 @@ idx_t LocalStorage::Delete(DataTable &table, DuckTableEntry &table_entry, Vector
 	}
 
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
-	idx_t delete_count = storage->GetCollection().Delete(TransactionData(0, 0), table_entry, ids, count);
+	idx_t delete_count = storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count);
 	storage->deleted_rows += delete_count;
 	return delete_count;
 }
@@ -551,7 +555,7 @@ void LocalStorage::Update(DataTable &table, DuckTableEntry &table_entry, Vector 
 	D_ASSERT(storage);
 
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
-	storage->GetCollection().Update(TransactionData(0, 0), table_entry, ids, column_ids, updates);
+	storage->GetCollection().Update(TransactionData::Unversioned(), table_entry, ids, column_ids, updates);
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {
@@ -749,7 +753,7 @@ void LocalStorage::VerifyNewConstraint(DataTable &parent, const BoundConstraint 
 	if (!storage) {
 		return;
 	}
-	storage->GetCollection().VerifyNewConstraint(context, parent, constraint);
+	storage->GetCollection().VerifyNewConstraint(context, transaction, parent, constraint);
 }
 
 } // namespace duckdb

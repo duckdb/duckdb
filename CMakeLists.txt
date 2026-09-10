@@ -247,6 +247,7 @@ endif()
 
 if (MUSL_ENABLED)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__MUSL_ENABLED__")
+  add_link_options(-Wl,-z,stack-size=8388608)
 endif()
 
 set(M32_FLAG "")

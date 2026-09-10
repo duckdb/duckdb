@@ -166,7 +166,7 @@ def generate_member_comparison(member, indent='\t'):
     field_name = get_member_field_name(member)
     type_str = member['type']
 
-    if type_str in ('Identifier', 'duckdb::Identifier'):
+    if type_str in ('Identifier', 'duckdb::Identifier', 'Literal'):
         return [
             f'{indent}if ({field_name} != other_p.{field_name}) {{',
             f'{indent}\treturn false;',
@@ -190,6 +190,15 @@ def generate_member_comparison(member, indent='\t'):
     elif is_order_modifier_ptr(type_str):
         return [
             f'{indent}if (!OrderModifier::Equals({field_name}, other_p.{field_name})) {{',
+            f'{indent}\treturn false;',
+            f'{indent}}}',
+        ]
+    elif type_str == 'TypeExpression*':
+        return [
+            f'{indent}if (static_cast<bool>({field_name}) != static_cast<bool>(other_p.{field_name})) {{',
+            f'{indent}\treturn false;',
+            f'{indent}}}',
+            f'{indent}if ({field_name} && !{field_name}->Equals(*other_p.{field_name})) {{',
             f'{indent}\treturn false;',
             f'{indent}}}',
         ]
@@ -294,6 +303,11 @@ def generate_member_copy(member, indent='\t'):
     if is_order_modifier_ptr(type_str):
         base = member.get('base', 'ResultModifier')
         return [f'{indent}copy->{field} = {field} ? unique_ptr_cast<{base}, OrderModifier>({field}->Copy()) : nullptr;']
+
+    if type_str == 'TypeExpression*':
+        return [
+            f'{indent}copy->{field} = {field} ? unique_ptr_cast<ParsedExpression, TypeExpression>({field}->Copy()) : nullptr;'
+        ]
 
     if type_str == 'SelectStatement*':
         return [
@@ -403,6 +417,8 @@ def generate_member_hash(member, indent='\t'):
     field_name = get_member_field_name(member)
     type_str = member['type']
 
+    if type_str == 'TypeExpression*':
+        return [f'{indent}hash = CombineHash(hash, {field_name} ? {field_name}->Hash() : 0);']
     # Covered by EnumerateChildren in ParsedExpression::Hash
     if is_parsed_expression_ptr(type_str):
         return []
@@ -422,7 +438,7 @@ def generate_member_hash(member, indent='\t'):
     if 'qualified_column_map_t' in type_str or 'qualified_column_set_t' in type_str:
         return []
 
-    if type_str in ('Identifier', 'duckdb::Identifier'):
+    if type_str in ('Identifier', 'duckdb::Identifier', 'Literal'):
         return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
     if type_str == 'vector<Identifier>':
         return [

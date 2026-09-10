@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/assert.hpp"
@@ -20,6 +21,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
@@ -64,14 +66,18 @@ public:
 	WALReplayState replay_state;
 
 	struct ReplayIndexInfo {
-		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, QualifiedName table_name)
-		    : index_list(index_list), index(std::move(index)), table_name(std::move(table_name)) {
+		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid)
+		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid) {
 		}
 
 		reference<TableIndexList> index_list;
 		unique_ptr<Index> index;
-		//! The fully-qualified name of the table the index belongs to ([catalog, schema path..., table])
-		QualifiedName table_name;
+		//! The oid of the table, used to uniquely identify the table (even after a rename).
+		idx_t table_oid;
+		//! The oid of the index catalog entry, used to match a DROP INDEX in the same replayed transaction.
+		//! Invalid for constraint-backed indexes (i.e., UNIQUE): they have no separate catalog entry and cannot be
+		//! targeted by DROP INDEX.
+		optional_idx index_oid;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -436,6 +442,8 @@ void WriteAheadLogReplayer::MergeIntoRecoveryWAL(Connection &con, const ReplaySt
 	// move over the recovery WAL over the main WAL
 	recovery_handle->Sync();
 	recovery_handle.reset();
+	// the main WAL is the target of the move - Windows refuses to replace a file that is still open
+	main_wal_reader.handle.reset();
 
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_MOVING_RECOVERY) {
 		throw FatalException("Checkpoint aborted before moving recovery file because of PRAGMA checkpoint_abort flag");
@@ -550,7 +558,10 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 				}
 				// if this is not a read-only connection we need to finish the checkpoint
 				// overwrite the current WAL with the checkpoint WAL
+				// both files must be closed - Windows refuses to move a file that is still open, and refuses to
+				// replace a target that is still open
 				checkpoint_handle.reset();
+				reader.handle.reset();
 
 				fs.MoveFile(checkpoint_wal, wal_path);
 
@@ -860,9 +871,10 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	}
 
 	// Remove any replay indexes of this table.
+	auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, info.GetQualifiedName());
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
-	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.table_name == info.GetQualifiedName();
+	                                              [&table_entry](const ReplayState::ReplayIndexInfo &replay_info) {
+		                                              return replay_info.table_oid == table_entry.oid;
 	                                              }),
 	                               state.replay_index_infos.end());
 
@@ -967,8 +979,9 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	vector<column_t> column_ids;
-	for (auto &column_index : column_indexes) {
-		column_ids.push_back(column_index.GetPrimaryIndex());
+	column_ids.reserve(logical_indexes.size());
+	for (const auto &logical_index : logical_indexes) {
+		column_ids.push_back(column_list.LogicalToPhysical(logical_index).index);
 	}
 
 	auto &storage = table.GetStorage();
@@ -980,7 +993,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), std::move(table_name));
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid,
+	                                      /*index_oid=*/optional_idx());
 
 	catalog.Alter(context, alter_info);
 }
@@ -1239,13 +1253,13 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto &io_manager = TableIOManager::Get(storage);
 
 	// Create the index in the catalog.
-	table.schema.CreateIndex(context, info, table);
+	auto index_entry = table.schema.CreateIndex(context, info, table);
 
 	// add the index to the storage
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), std::move(table_name));
+	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
@@ -1257,12 +1271,11 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 		return;
 	}
 
-	// Remove the replay index, if any - the index lives in the same (possibly nested) schema as its table
+	// Remove the replay index, if any. Match on the index entry's oid.
+	auto &index_entry = catalog.GetEntry<IndexCatalogEntry>(context, info.GetQualifiedName());
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
-	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.table_name.WithName(
-		                                                         replay_info.index->GetIndexName()) ==
-		                                                     info.GetQualifiedName();
+	                                              [&index_entry](const ReplayState::ReplayIndexInfo &replay_info) {
+		                                              return replay_info.index_oid == index_entry.oid;
 	                                              }),
 	                               state.replay_index_infos.end());
 

@@ -62,6 +62,9 @@ public:
 class CreateSecretFunctionSet {
 public:
 	explicit CreateSecretFunctionSet(string &name) : name(name) {};
+	identifier_map_t<CreateSecretFunction> &GetFunctions() {
+		return functions;
+	}
 
 public:
 	bool ProviderExists(const Identifier &provider_name);

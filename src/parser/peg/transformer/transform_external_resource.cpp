@@ -13,7 +13,7 @@ static void ApplyOptions(const optional<vector<GenericCopyOption>> &options, Ext
 	}
 	for (const auto &opt : *options) {
 		if (!opt.expression && opt.children.empty()) {
-			stmt.options[opt.name.GetIdentifierName()] = make_uniq<ConstantExpression>(Value(true));
+			stmt.options[opt.name.GetIdentifierName()] = ConstantExpression::Boolean(true);
 		} else {
 			stmt.options[opt.name.GetIdentifierName()] = opt.GetFirstChildOrExpression();
 		}
