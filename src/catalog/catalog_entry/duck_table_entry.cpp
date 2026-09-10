@@ -815,19 +815,18 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 			if (unique.HasIndex()) {
 				// Single-column UNIQUE constraint
 				if (unique.GetIndex() == removed_index) {
-					throw CatalogException(
-					    "Cannot drop column %s because there is a UNIQUE constraint that depends on it",
-					    info.removed_column);
+					string constraint_type = unique.IsPrimaryKey() ? "PRIMARY KEY" : "UNIQUE";
+					throw CatalogException("Cannot drop column %s because there is a %s constraint that depends on it",
+					                       info.removed_column, constraint_type);
 				}
 				unique.SetIndex(adjusted_indices[unique.GetIndex().index]);
 			} else {
 				// Multi-column UNIQUE constraint - check if any column matches the one being dropped
 				for (const auto &col_name : unique.GetColumnNames()) {
 					if (col_name == info.removed_column) {
-						// Build constraint string for error message: UNIQUE(col1, col2, ...)
-						auto constraint_str = "UNIQUE(" + StringUtil::Join(unique.GetColumnNames(), ", ") + ")";
-						throw CatalogException("Cannot drop column %s because it is referenced in unique constraint %s",
-						                       info.removed_column, constraint_str);
+						string constraint_kind = unique.IsPrimaryKey() ? "primary key" : "unique";
+						throw CatalogException("Cannot drop column %s because it is referenced in %s constraint %s",
+						                       info.removed_column, constraint_kind, unique.ToString());
 					}
 				}
 			}
