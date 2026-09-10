@@ -1576,7 +1576,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
 	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
-	constexpr DWORD delete_access = 0x00010000L; // DELETE
+	constexpr DWORD delete_access = 0x00010000L;                                     // DELETE
 	constexpr auto file_rename_info_ex = static_cast<FILE_INFO_BY_HANDLE_CLASS>(22); // FileRenameInfoEx
 	const auto file_name_length = target_unicode.size() * sizeof(WCHAR);
 	const auto rename_info_size = sizeof(FILE_RENAME_INFO) - sizeof(WCHAR) + file_name_length;
