@@ -1,0 +1,68 @@
+# name: test/sql/constraints/foreignkey/test_fk_rename_table.test
+# description: Test ALTER TABLE ... RENAME TO on tables involved in a foreign key
+# group: [foreignkey]
+
+# the referenced table stores the name of the referencing table, so a rename has to rewrite it
+
+statement ok
+CREATE TABLE pk_tbl (i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO pk_tbl VALUES (1), (2);
+
+statement ok
+CREATE TABLE fk_tbl (j INTEGER REFERENCES pk_tbl(i));
+
+statement ok
+INSERT INTO fk_tbl VALUES (1);
+
+statement ok
+ALTER TABLE fk_tbl RENAME TO fk_renamed;
+
+statement error
+DELETE FROM pk_tbl WHERE i = 1;
+----
+<REGEX>:Constraint Error.*is still referenced by a foreign key.*
+
+# rows that nothing references can still be removed
+
+statement ok
+DELETE FROM pk_tbl WHERE i = 2;
+
+statement error
+INSERT INTO fk_renamed VALUES (99);
+----
+<REGEX>:Constraint Error.*does not exist in the referenced table.*
+
+statement error
+DROP TABLE pk_tbl;
+----
+<REGEX>:Catalog Error.*main key table of the table "fk_renamed".*
+
+statement ok
+DROP TABLE fk_renamed;
+
+statement ok
+DROP TABLE pk_tbl;
+
+# a self-referencing foreign key stores this table's own name
+
+statement ok
+CREATE TABLE self_tbl (i INTEGER PRIMARY KEY, parent INTEGER REFERENCES self_tbl(i));
+
+statement ok
+INSERT INTO self_tbl VALUES (1, NULL);
+
+statement ok
+INSERT INTO self_tbl VALUES (2, 1);
+
+statement ok
+ALTER TABLE self_tbl RENAME TO self_renamed;
+
+statement error
+DELETE FROM self_renamed WHERE i = 1;
+----
+<REGEX>:Constraint Error.*is still referenced by a foreign key.*
+
+statement ok
+INSERT INTO self_renamed VALUES (3, 2);
