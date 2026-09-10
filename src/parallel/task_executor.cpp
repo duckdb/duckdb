@@ -31,12 +31,12 @@ void TaskExecutor::ThrowError() {
 void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 	{
 		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
+		++total_tasks;
 		if (mode == TaskExecutorMode::JOINED && !parked_task) {
 			// the joining thread has to wait for the other tasks anyway - park this one for it to execute
 			parked_task = std::move(task);
 			return;
 		}
-		++total_tasks;
 	}
 	try {
 		scheduler.ScheduleTask(*token, std::move(task), type);
@@ -56,32 +56,17 @@ void TaskExecutor::FinishTask() {
 }
 
 void TaskExecutor::DrainTasks() {
-	// execute the parked task (if any) on this thread - if we are cancelling we discard it instead
-	unique_ptr<Task> parked;
-	{
-		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
-		if (parked_task && !cancelled) {
-			parked = std::move(parked_task);
-			++total_tasks;
-		} else {
-			parked_task.reset();
-		}
-	}
-	if (parked) {
-		// Execute finishes the task, also when it bails out because another task has errored
-		parked->Execute(TaskExecutionMode::PROCESS_ALL);
-		parked.reset();
-	}
-
 	// wait for all active tasks to finish, executing queued tasks on this thread where possible
 	shared_ptr<Task> task_from_producer;
 	while (true) {
 		{
 			annotated_unique_lock<annotated_mutex> lk(token->producer_lock);
-			if (completed_tasks == total_tasks) {
+			if (parked_task) {
+				// a task can be parked at any point, also while we are draining - check on every iteration
+				task_from_producer = std::move(parked_task);
+			} else if (completed_tasks == total_tasks) {
 				break;
-			}
-			if (!scheduler.GetTaskFromProducerLocked(*token, task_from_producer)) {
+			} else if (!scheduler.GetTaskFromProducerLocked(*token, task_from_producer)) {
 				token->producer_cv.wait(lk);
 				continue;
 			}
