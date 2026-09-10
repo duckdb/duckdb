@@ -1,6 +1,5 @@
 # name: test/sql/storage/encryption/temp_files/encrypted_temp_file_size_accounting.test
-# description: With temp_file_encryption on, temp-directory usage reported by duckdb_memory
-#              agrees with the on-disk footprint in duckdb_temporary_files().
+# description: Verify encrypted temp-file accounting matches the on-disk footprint
 # group: [temp_files]
 
 # httpfs is required to enable temp file encryption
