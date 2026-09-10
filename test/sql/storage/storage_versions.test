@@ -27,3 +27,13 @@ SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY d
 {storage_version=v1.0.0+}
 {storage_version=v1.2.0+}
 {storage_version=v1.3.0+}
+
+statement error
+ATTACH '{DATA_DIR}/storage/empty69.db' (READ_ONLY);
+----
+Trying to read a database file with version number 69
+
+statement error
+ATTACH '{DATA_DIR}/storage/empty69.db' (READ_ONLY);
+----
+The database file was created with a newer version of DuckDB
