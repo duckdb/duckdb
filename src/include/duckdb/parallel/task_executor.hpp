@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/query_context.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
@@ -30,7 +31,8 @@ public:
 	explicit TaskExecutor(ClientContext &context, TaskSchedulerType type = TaskSchedulerType::REGULAR,
 	                      TaskExecutorMode mode = TaskExecutorMode::BACKGROUND);
 	explicit TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type = TaskSchedulerType::REGULAR,
-	                      TaskExecutorMode mode = TaskExecutorMode::BACKGROUND);
+	                      TaskExecutorMode mode = TaskExecutorMode::BACKGROUND,
+	                      QueryContext query_context = QueryContext());
 	~TaskExecutor();
 
 	//! Push an error into the TaskExecutor

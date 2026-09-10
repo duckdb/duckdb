@@ -1,11 +1,17 @@
 #include "duckdb/parallel/task_executor.hpp"
+
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_notifier.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
+#include <chrono>
+
 namespace duckdb {
 
-TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p, TaskExecutorMode mode_p)
-    : scheduler(scheduler), type(type_p), mode(mode_p), token(scheduler.CreateProducer()) {
+TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p, TaskExecutorMode mode_p,
+                           QueryContext query_context)
+    : scheduler(scheduler), type(type_p), mode(mode_p), token(scheduler.CreateProducer()),
+      context(query_context.GetClientContext()) {
 }
 
 TaskExecutor::TaskExecutor(ClientContext &context_p, TaskSchedulerType type_p, TaskExecutorMode mode_p)
@@ -74,17 +80,28 @@ void TaskExecutor::DrainTasks() {
 	}
 
 	// wait for all active tasks to finish, executing queued tasks on this thread where possible
+	static constexpr std::chrono::milliseconds INTERRUPT_CHECK_INTERVAL = std::chrono::milliseconds(20);
+
 	shared_ptr<Task> task_from_producer;
 	while (true) {
+		bool waited = false;
 		{
 			annotated_unique_lock<annotated_mutex> lk(token->producer_lock);
 			if (completed_tasks == total_tasks) {
 				break;
 			}
 			if (!scheduler.GetTaskFromProducerLocked(*token, task_from_producer)) {
-				token->producer_cv.wait(lk);
-				continue;
+				// wait for a bounded time, so that we can check for interruption in between waits
+				token->producer_cv.wait_for(lk, INTERRUPT_CHECK_INTERVAL);
+				waited = true;
 			}
+		}
+		if (waited) {
+			// a drain that cancels must always run to completion, so it is never allowed to throw
+			if (!cancelled && context) {
+				context->InterruptCheck();
+			}
+			continue;
 		}
 
 		const auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
