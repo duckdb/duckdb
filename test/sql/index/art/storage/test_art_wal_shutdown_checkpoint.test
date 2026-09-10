@@ -1,0 +1,43 @@
+# name: test/sql/index/art/storage/test_art_wal_shutdown_checkpoint.test
+# description: avoid checkpointing buffered index replays without a client context
+# group: [storage]
+
+load {TEST_DIR}/test_art_wal_shutdown_checkpoint.db
+
+statement ok
+SET index_scan_max_count = 1;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+
+statement ok
+CREATE INDEX idx ON tbl(i);
+
+statement ok
+INSERT INTO tbl VALUES (42), (43);
+
+# Replay the WAL, leaving the index unbound with buffered inserts.
+restart
+
+# A shutdown checkpoint has no client context in which to bind the index. It must
+# preserve the WAL instead of serializing the stale index storage information.
+restart
+
+query I
+SELECT count(*) FROM tbl WHERE i = 42;
+----
+1
+
+# The query above binds the index. A subsequent shutdown checkpoint can persist it.
+restart
+
+query I
+SELECT count(*) FROM tbl WHERE i = 42;
+----
+1
