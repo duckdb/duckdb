@@ -1611,14 +1611,14 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	constexpr DWORD delete_access = 0x00010000L;                                     // DELETE
 	constexpr auto file_rename_info_ex = static_cast<FILE_INFO_BY_HANDLE_CLASS>(22); // FileRenameInfoEx
 	const auto file_name_length = target_unicode.size() * sizeof(WCHAR);
-	const auto rename_info_size = offsetof(FILE_RENAME_INFO, FileName) + file_name_length;
+	const auto rename_info_size = offsetof(FILE_RENAME_INFO, FileName) + file_name_length + sizeof(WCHAR);
 	const auto rename_info_size_dw = NumericCast<DWORD>(rename_info_size);
 	auto rename_info_buffer = unique_ptr<data_t[]>(new data_t[rename_info_size]);
 	auto rename_info = reinterpret_cast<FILE_RENAME_INFO *>(rename_info_buffer.get());
 	rename_info->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
 	rename_info->RootDirectory = nullptr;
 	rename_info->FileNameLength = NumericCast<DWORD>(file_name_length);
-	std::copy(target_unicode.begin(), target_unicode.end(), rename_info->FileName);
+	std::copy(target_unicode.c_str(), target_unicode.c_str() + target_unicode.size() + 1, rename_info->FileName);
 
 	auto raw_source_handle =
 	    CreateFileW(source_unicode.c_str(), delete_access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
