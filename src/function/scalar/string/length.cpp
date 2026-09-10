@@ -307,7 +307,7 @@ ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	ScalarFunction binary({}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind);
 	binary.GetSignature()
 	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
-	    .AddParameter("dimension", LogicalType::ANY);
+	    .AddParameter("dimension", LogicalType::BIGINT);
 	array_length.AddFunction(binary);
 
 	array_length.SetFallible();
