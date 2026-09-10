@@ -31,7 +31,7 @@ public:
 
 private:
 	uint16_t count;
-	validity_t mask[CAPACITY / sizeof(validity_t)];
+	validity_t mask[CAPACITY / ValidityMask::BITS_PER_VALUE];
 
 public:
 	//! Get a new Node256Leaf handle and initialize the leaf.
