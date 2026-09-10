@@ -744,6 +744,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"read_ndjson_objects", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_parquet", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_postgres_binary", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"read_single_json_file", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_xlsx", "excel", CatalogType::TABLE_FUNCTION_ENTRY},
     {"reduce", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"reduce_sql_statement", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
