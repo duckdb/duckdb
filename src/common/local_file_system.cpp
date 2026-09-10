@@ -1576,6 +1576,8 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
 	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
+	constexpr DWORD delete_access = 0x00010000L; // DELETE
+	constexpr auto file_rename_info_ex = static_cast<FILE_INFO_BY_HANDLE_CLASS>(22); // FileRenameInfoEx
 	const auto file_name_length = target_unicode.size() * sizeof(WCHAR);
 	const auto rename_info_size = sizeof(FILE_RENAME_INFO) - sizeof(WCHAR) + file_name_length;
 	const auto rename_info_size_dw = NumericCast<DWORD>(rename_info_size);
@@ -1587,14 +1589,14 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	std::copy(target_unicode.begin(), target_unicode.end(), rename_info->FileName);
 
 	auto raw_source_handle =
-	    CreateFileW(source_unicode.c_str(), DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-	                OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	    CreateFileW(source_unicode.c_str(), delete_access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+	                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
 	if (raw_source_handle == INVALID_HANDLE_VALUE) {
 		throw IOException("Could not open file \"%s\" for moving: %s", source, GetLastErrorAsString());
 	}
 	unique_ptr<void, decltype(&CloseHandle)> source_handle(raw_source_handle, CloseHandle);
 
-	if (!SetFileInformationByHandle(source_handle.get(), FileRenameInfoEx, rename_info, rename_info_size_dw)) {
+	if (!SetFileInformationByHandle(source_handle.get(), file_rename_info_ex, rename_info, rename_info_size_dw)) {
 		throw IOException("Could not move file \"%s\" to \"%s\": %s", source, target, GetLastErrorAsString());
 	}
 }
