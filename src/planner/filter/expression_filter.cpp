@@ -537,6 +537,29 @@ static FilterPropagateResult CheckBetweenStatistics(optional_ptr<ClientContext> 
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
+static FilterPropagateResult CheckBoolStatistics(const BaseStatistics &stats, bool negated) {
+	if (stats.GetType().id() != LogicalTypeId::BOOLEAN) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!stats.CanHaveNoNull()) {
+		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+	}
+	if (!NumericStats::HasMinMax(stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const auto min_v = NumericStats::Min(stats).GetValue<bool>();
+	const auto max_v = NumericStats::Max(stats).GetValue<bool>();
+	if (min_v != max_v) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const bool value = negated ? !min_v : min_v;
+	if (!value) {
+		return stats.CanHaveNull() ? FilterPropagateResult::FILTER_FALSE_OR_NULL
+		                           : FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	return stats.CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+}
+
 static FilterPropagateResult CheckFunctionStatistics(optional_ptr<ClientContext> context_p,
                                                      const BoundFunctionExpression &func_expr,
                                                      array_ptr<const BaseStatistics> input_stats) {
@@ -551,7 +574,15 @@ static FilterPropagateResult CheckFunctionStatistics(optional_ptr<ClientContext>
 		return CheckComparisonStatistics(context_p, func_expr, input_stats);
 	}
 	if (!func_expr.Function().HasFilterPruneCallback()) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		if (func_expr.GetReturnType().id() != LogicalTypeId::BOOLEAN || !func_expr.Function().HasStatisticsCallback()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		vector<unique_ptr<BaseStatistics>> owned_stats;
+		const auto function_stats = TryGetFilterStats(context_p, func_expr, input_stats, owned_stats);
+		if (!function_stats) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return CheckBoolStatistics(*function_stats, /*negated=*/false);
 	}
 	// Derive the statistics of each argument. This lets a callback prune regardless of which argument is the column and
 	// which is the constant (e.g. `foo(col, const)` vs `foo(const, col`).
@@ -647,24 +678,7 @@ static FilterPropagateResult CheckBoolRefStatistics(const Expression &expr, arra
 	if (index >= input_stats.size()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	const auto &stats = input_stats[index];
-	if (!stats.CanHaveNoNull()) {
-		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
-	}
-	if (!NumericStats::HasMinMax(stats)) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	const auto min_v = NumericStats::Min(stats).GetValue<bool>();
-	const auto max_v = NumericStats::Max(stats).GetValue<bool>();
-	if (min_v != max_v) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	const bool value = negated ? !min_v : min_v;
-	if (!value) {
-		return stats.CanHaveNull() ? FilterPropagateResult::FILTER_FALSE_OR_NULL
-		                           : FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-	return stats.CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	return CheckBoolStatistics(input_stats[index], negated);
 }
 
 static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientContext> context_p,
