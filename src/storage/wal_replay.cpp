@@ -462,7 +462,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		return nullptr;
 	}
 
-	con.BeginTransaction();
+	con.context->transaction.SetAutoCommit(false);
 	MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
 
 	auto &config = DBConfig::GetConfig(database.GetDatabase());
@@ -612,7 +612,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 			// read the current entry
 			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(state, wal_reader);
 			if (deserializer.ReplayEntry()) {
-				con.Commit();
+				con.context->transaction.Commit();
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
@@ -627,7 +627,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 					all_succeeded = true;
 					break;
 				}
-				con.BeginTransaction();
+				con.context->transaction.SetAutoCommit(false);
 				MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
 			}
 		}
