@@ -2790,6 +2790,10 @@ TEST_CASE("SQL export measures qualification gaps in aggregate and TopN rewrites
 	                     "SELECT i,sum(j) FROM (VALUES (1,2),(1,3),(2,4),(2,5)) t(i,j) "
 	                     "GROUP BY GROUPING SETS ((i),()) ORDER BY ALL",
 	                     "combine_aggr"},
+	                    {"grouping_sets",
+	                     "SELECT i LIKE 'a%',sum(j) FROM (VALUES ('a',2),('ab',3),('b',4),(NULL,5)) t(i,j) "
+	                     "GROUP BY GROUPING SETS ((i),()) ORDER BY ALL",
+	                     "combine_aggr"},
 	                    {"partial_aggregate_pushdown",
 	                     "SELECT d.a,d.b,d.c,d.d,sum(f.v) FROM (VALUES " + fact_values +
 	                         ") f(k,v) "
@@ -2862,7 +2866,7 @@ TEST_CASE("SQL export measures qualification gaps in aggregate and TopN rewrites
 		REQUIRE_NO_FAIL(*optimized);
 		REQUIRE(optimized->Equals(*baseline));
 		auto expressions = collect(*plan);
-		idx_t unqualified_count = 0;
+		idx_t unqualified_introduced_count = 0;
 		for (auto &reference : expressions) {
 			auto &expression = reference.get();
 			auto &definition = expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION
@@ -2871,13 +2875,20 @@ TEST_CASE("SQL export measures qualification gaps in aggregate and TopN rewrites
 			                       : static_cast<const Function &>(
 			                             *expression.Cast<BoundAggregateExpression>().Function().GetDefinition());
 			if (definition.GetCatalogName().empty() || definition.GetSchemaName().empty()) {
-				REQUIRE((definition.GetName() == "combine_aggr" || definition.GetName() == "min" ||
-				         definition.GetName() == "max" || definition.GetName() == "count_star"));
+				INFO("unqualified function: " << definition.GetName());
 				LogicalPlanVerificationPath path;
 				path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-				RequireIssue(BoundExpressionSQLExporter::Export(expression, {}),
-				             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
-				unqualified_count++;
+				auto exported = BoundExpressionSQLExporter::Export(expression, {});
+				REQUIRE(exported.IsValid());
+				REQUIRE(exported.HasError());
+				REQUIRE_FALSE(exported.IsSuccess());
+				REQUIRE(exported.GetIssues().size() == 1);
+				REQUIRE(exported.GetIssues()[0].phase == LogicalPlanVerificationPhase::EXPRESSION_EXPORT);
+				REQUIRE(exported.GetIssues()[0].path == optional<LogicalPlanVerificationPath>(path));
+				if (definition.GetName() == entry.introduced_function) {
+					RequireIssue(exported, LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+				}
+				unqualified_introduced_count += definition.GetName() == entry.introduced_function;
 				continue;
 			}
 			vector<SQLBindingEntry> bindings;
@@ -2942,9 +2953,9 @@ TEST_CASE("SQL export measures qualification gaps in aggregate and TopN rewrites
 			REQUIRE(restored_result->Equals(*result));
 		}
 		if (entry.optimizer == "top_n_window_elimination") {
-			REQUIRE(unqualified_count == 0);
+			REQUIRE(unqualified_introduced_count == 0);
 		} else {
-			REQUIRE(unqualified_count > 0);
+			REQUIRE(unqualified_introduced_count > 0);
 		}
 	}
 	connection.Rollback();
