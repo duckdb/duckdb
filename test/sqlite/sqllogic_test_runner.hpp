@@ -23,6 +23,14 @@ class SQLLogicParser;
 
 enum class RequireResult { PRESENT, MISSING };
 
+//! Why a whole test was skipped.
+enum class TestSkipKind : uint8_t {
+	//! the environment cannot run it: require / require-env
+	REQUIREMENT,
+	//! it was deliberately excluded: a skip list or a tag selection
+	EXCLUDED
+};
+
 struct CachedLabelData {
 public:
 	CachedLabelData(const string &hash, string result_str_p) : hash(hash), result_str(std::move(result_str_p)) {
@@ -101,6 +109,10 @@ public:
 	//! the terminal to emit end{status:"skip-requirement"}.
 	bool test_skipped_requirement = false;
 	string test_skip_reason;
+	TestSkipKind test_skip_kind = TestSkipKind::REQUIREMENT;
+	//! Error text of the statement that failed, when it failed with one. The driver otherwise only
+	//! sees a file:line locator, and the text is what says why.
+	string last_error_message;
 	//! Locator for the failing command (file:line), stashed at the throw site for --emit-test-events.
 	//! A Catch FAIL carries no message; consumers get this anchor to correlate with captured output.
 	//! Written single-threaded: serial fails throw directly; concurrent fails are re-raised post-join.
@@ -124,9 +136,9 @@ public:
 	string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	string LoopReplacement(string text, const vector<LoopDefinition> &loops);
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
-	void SkipTest(const string &reason);
+	void SkipTest(const string &reason, TestSkipKind kind = TestSkipKind::REQUIREMENT);
 	static string GetSkipReasonSummary();
-	//! --emit-test-events: statement tallies (counted, not emitted) + the begin/end JSON events.
+	//! Statement tallies, plus the begin/end JSON events emitted under --emit-test-events.
 	void CountStatement(bool passed);
 	void CountSkipMode();
 	void EmitBegin(const string &test_name);

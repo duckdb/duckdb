@@ -569,6 +569,18 @@ bool DeleteTestPath() {
 
 static bool emit_test_events = false;
 
+static std::function<void(DuckDB &)> static_extension_loader;
+
+void SetStaticExtensionLoader(std::function<void(DuckDB &)> loader) {
+	static_extension_loader = std::move(loader);
+}
+
+void LoadStaticExtensions(DuckDB &db) {
+	if (static_extension_loader) {
+		static_extension_loader(db);
+	}
+}
+
 void SetEmitTestEvents(bool emit) {
 	emit_test_events = emit;
 }

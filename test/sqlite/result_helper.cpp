@@ -76,6 +76,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			runner.finished_processing_file = true;
 			return true;
 		}
+		runner.last_error_message = result.GetError();
 		if (!FailureSummary::SkipLoggingSameError(context.error_file)) {
 			logger.UnexpectedFailure(result);
 		}
@@ -342,6 +343,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 			runner.finished_processing_file = true;
 			return true;
 		}
+		runner.last_error_message = result.GetError();
 		if (!FailureSummary::SkipLoggingSameError(statement.file_name)) {
 			logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
 		}
