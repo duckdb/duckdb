@@ -113,12 +113,12 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 			if (option_entry.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
 				throw InvalidInputException("Defer binding option must be a constant value");
 			}
-			auto &val = option_entry.second->Cast<ConstantExpression>().GetValue();
-			if (val.IsNull()) {
+			auto &literal = option_entry.second->Cast<ConstantExpression>().GetLiteral();
+			if (literal.IsNull()) {
 				info->binding_mode = CreateViewBindingMode::SKIP_BINDING;
-			} else if (val.type().id() != LogicalTypeId::BOOLEAN) {
+			} else if (literal.kind != LiteralKind::BOOLEAN) {
 				throw InvalidInputException("Defer binding option must be a boolean");
-			} else if (BooleanValue::Get(val)) {
+			} else if (BooleanValue::Get(literal.ToValue())) {
 				info->binding_mode = CreateViewBindingMode::SKIP_BINDING;
 			}
 		}

@@ -166,7 +166,7 @@ def generate_member_comparison(member, indent='\t'):
     field_name = get_member_field_name(member)
     type_str = member['type']
 
-    if type_str in ('Identifier', 'duckdb::Identifier'):
+    if type_str in ('Identifier', 'duckdb::Identifier', 'Literal'):
         return [
             f'{indent}if ({field_name} != other_p.{field_name}) {{',
             f'{indent}\treturn false;',
@@ -438,7 +438,7 @@ def generate_member_hash(member, indent='\t'):
     if 'qualified_column_map_t' in type_str or 'qualified_column_set_t' in type_str:
         return []
 
-    if type_str in ('Identifier', 'duckdb::Identifier'):
+    if type_str in ('Identifier', 'duckdb::Identifier', 'Literal'):
         return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
     if type_str == 'vector<Identifier>':
         return [

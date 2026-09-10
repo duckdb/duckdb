@@ -102,7 +102,7 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 	vector<unique_ptr<ParsedExpression>> type_args;
 	for (idx_t i = 1; i < args.size(); i++) {
 		auto &arg = args[i];
-		auto result = make_uniq<ConstantExpression>(arg.second);
+		auto result = ConstantExpression::FromValue(arg.second);
 		result->SetAlias(Identifier(arg.first));
 
 		type_args.push_back(std::move(result));
