@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
@@ -130,7 +131,8 @@ static std::wstring ConvertPathToNormalizedAbsolute(const std::wstring &path) {
 }
 
 static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const string &path,
-                                                     optional_ptr<FileOpener> opener) {
+                                                     optional_ptr<FileOpener> opener,
+                                                     bool force_extended_path = false) {
 	string normalized_path = fs.ExpandPath(path, opener);
 	std::wstring unicode_path = ConvertPathToUnicode(normalized_path);
 
@@ -139,8 +141,8 @@ static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const strin
 	// We are doing it for all paths to not perform current working dir resolving twice.
 	std::wstring abs_path = ConvertPathToNormalizedAbsolute(unicode_path);
 
-	if (abs_path.length() <= WINDOWS_MAX_SHORT_PATH || abs_path.find(WINDOWS_LOCAL_LONG_PATH_PREFIX) == 0 ||
-	    abs_path.find(WINDOWS_UNC_LONG_PATH_PREFIX) == 0) {
+	if ((!force_extended_path && abs_path.length() <= WINDOWS_MAX_SHORT_PATH) ||
+	    abs_path.find(WINDOWS_LOCAL_LONG_PATH_PREFIX) == 0 || abs_path.find(WINDOWS_UNC_LONG_PATH_PREFIX) == 0) {
 		return abs_path;
 	}
 
@@ -1605,11 +1607,11 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
-	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
+	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener, true);
 	constexpr DWORD delete_access = 0x00010000L;                                     // DELETE
 	constexpr auto file_rename_info_ex = static_cast<FILE_INFO_BY_HANDLE_CLASS>(22); // FileRenameInfoEx
 	const auto file_name_length = target_unicode.size() * sizeof(WCHAR);
-	const auto rename_info_size = sizeof(FILE_RENAME_INFO) - sizeof(WCHAR) + file_name_length;
+	const auto rename_info_size = offsetof(FILE_RENAME_INFO, FileName) + file_name_length;
 	const auto rename_info_size_dw = NumericCast<DWORD>(rename_info_size);
 	auto rename_info_buffer = unique_ptr<data_t[]>(new data_t[rename_info_size]);
 	auto rename_info = reinterpret_cast<FILE_RENAME_INFO *>(rename_info_buffer.get());
@@ -1626,7 +1628,13 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	}
 	unique_ptr<void, decltype(&CloseHandle)> source_handle(raw_source_handle, CloseHandle);
 
-	if (!SetFileInformationByHandle(source_handle.get(), file_rename_info_ex, rename_info, rename_info_size_dw)) {
+	if (SetFileInformationByHandle(source_handle.get(), file_rename_info_ex, rename_info, rename_info_size_dw)) {
+		return;
+	}
+	source_handle.reset();
+
+	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
+	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
 		throw IOException("Could not move file \"%s\" to \"%s\": %s", source, target, GetLastErrorAsString());
 	}
 }
