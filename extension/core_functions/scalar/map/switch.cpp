@@ -32,22 +32,14 @@ struct SwitchFunctionBindData : FunctionData {
 	}
 };
 
-idx_t FindMapArgumentIndex(const vector<unique_ptr<Expression>> &arguments) {
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i]->GetReturnType().id() == LogicalTypeId::MAP) {
-			return i;
-		}
-	}
-	return DConstants::INVALID_INDEX;
-}
-
+//! Which argument holds the cases map is a property of the overload that was resolved, not of the
+//! argument types: a MAP-typed key argument makes the types ambiguous. Each variation binds its own index.
+template <idx_t MAP_INDEX>
 unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
-	auto map_index = FindMapArgumentIndex(arguments);
-	if (map_index == DConstants::INVALID_INDEX) {
-		throw BinderException("Switch: No map argument found");
-	}
+	constexpr idx_t map_index = MAP_INDEX;
+	D_ASSERT(map_index < arguments.size());
 	auto &cases = arguments[map_index];
 	if (cases->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		throw BinderException("SWITCH expected a constant map for the cases");
@@ -154,13 +146,15 @@ ScalarFunctionSet SwitchFun::GetFunctions() {
 	auto val_type = LogicalType::TEMPLATE("V");
 	ScalarFunctionSet func_set;
 
-	vector<vector<LogicalType>> function_variations = {{key_type, LogicalType::MAP(key_type, val_type)},
-	                                                   {key_type, LogicalType::MAP(key_type, val_type), val_type},
-	                                                   {LogicalType::MAP(key_type, val_type), val_type},
-	                                                   {LogicalType::MAP(key_type, val_type)}};
+	// each variation is paired with the position of its MAP(K, V) parameter
+	vector<pair<vector<LogicalType>, bind_scalar_function_t>> function_variations = {
+	    {{key_type, LogicalType::MAP(key_type, val_type)}, SwitchBindReturnType<1>},
+	    {{key_type, LogicalType::MAP(key_type, val_type), val_type}, SwitchBindReturnType<1>},
+	    {{LogicalType::MAP(key_type, val_type), val_type}, SwitchBindReturnType<0>},
+	    {{LogicalType::MAP(key_type, val_type)}, SwitchBindReturnType<0>}};
 
 	for (const auto &variation : function_variations) {
-		auto switch_expression = ScalarFunction(variation, val_type, nullptr, SwitchBindReturnType, nullptr);
+		auto switch_expression = ScalarFunction(variation.first, val_type, nullptr, variation.second, nullptr);
 		switch_expression.SetBindExpressionCallback(SwitchBindExpression);
 		func_set.AddFunction(std::move(switch_expression));
 	}
