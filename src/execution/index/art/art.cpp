@@ -33,8 +33,8 @@
 namespace duckdb {
 
 struct ARTIndexScanState : public IndexScanState {
-	//! All equality keys; a non-null empty chunk represents an empty batch, not a full scan.
-	unique_ptr<DataChunk> equality_keys;
+	//! Logical equality values, encoded into ART keys during Scan. An empty chunk is an empty batch, not a full scan.
+	unique_ptr<DataChunk> equality_values;
 	//! The predicates to scan.
 	//! A single predicate for point lookups, and two predicates for range scans.
 	Value values[2];
@@ -257,12 +257,12 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 	return InitializeScanSinglePredicate(high_value, high_comparison_type);
 }
 
-unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> keys) const {
-	if (!keys || keys->GetTypes() != logical_types) {
+unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> values) const {
+	if (!values || values->GetTypes() != logical_types) {
 		throw InternalException("ART batch scan keys must have the index's logical types");
 	}
 	auto result = make_uniq<ARTIndexScanState>();
-	result->equality_keys = std::move(keys);
+	result->equality_values = std::move(values);
 	return std::move(result);
 }
 
@@ -809,15 +809,15 @@ bool ART::ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const {
 
 bool ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
-	if (scan_state.equality_keys) {
-		auto &keys = *scan_state.equality_keys;
-		if (keys.size() <= STANDARD_VECTOR_SIZE) {
-			return ScanBatch(keys, row_ids);
+	if (scan_state.equality_values) {
+		auto &values = *scan_state.equality_values;
+		if (values.size() <= STANDARD_VECTOR_SIZE) {
+			return ScanBatch(values, row_ids);
 		}
 		DataChunk chunk;
-		chunk.InitializeEmpty(keys.GetTypes());
-		for (idx_t offset = 0; offset < keys.size(); offset += STANDARD_VECTOR_SIZE) {
-			chunk.Slice(keys, offset, MinValue<idx_t>(offset + STANDARD_VECTOR_SIZE, keys.size()));
+		chunk.InitializeEmpty(values.GetTypes());
+		for (idx_t offset = 0; offset < values.size(); offset += STANDARD_VECTOR_SIZE) {
+			chunk.Slice(values, offset, MinValue<idx_t>(offset + STANDARD_VECTOR_SIZE, values.size()));
 			if (!ScanBatch(chunk, row_ids)) {
 				return false;
 			}

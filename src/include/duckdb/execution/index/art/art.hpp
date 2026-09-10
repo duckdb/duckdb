@@ -80,9 +80,9 @@ public:
 	//! Returns false on capacity exhaustion; the caller must discard any partial output.
 	//! Equality batches skip NULL keys and append matching row IDs.
 	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const;
-	//! Take ownership of evaluated equality keys with the index's logical types, including an empty batch.
+	//! Take ownership of evaluated equality values with the index's logical types, including an empty batch.
 	//! The returned state can be scanned repeatedly, including against compatible delta indexes.
-	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> keys) const;
+	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> values) const;
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.

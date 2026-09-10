@@ -673,8 +673,8 @@ static bool ExtractValuesFromExpression(const Expression &expr, value_set_t &val
 	return !values.empty();
 }
 
-void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnRefExpression &bound_ref,
-                                  vector<unique_ptr<Expression>> &expressions) {
+static void ExtractExpressionsFromValues(const value_set_t &unique_values, const BoundColumnRefExpression &bound_ref,
+                                        vector<unique_ptr<Expression>> &expressions) {
 	for (const auto &value : unique_values) {
 		auto bound_constant = make_uniq<BoundConstantExpression>(value);
 		auto filter_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
@@ -686,40 +686,40 @@ void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnR
 static vector<unique_ptr<IndexScanState>>
 TryInitializeIndexScans(const IndexReadHandle<ART> &art, const Expression &index_expr, const ColumnDefinition &col,
                         const TableFilter &filter, ProjectionIndex storage_index) {
-	// Extract exact values once, preserving the batch instead of creating a predicate per key.
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "TryInitializeIndexScans");
 	ColumnBinding binding(TableIndex(0), storage_index);
-	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
-	value_set_t batch_values;
-	ExtractValuesFromExpression(*expr_filter.expr, batch_values);
-	bool can_batch = batch_values.size() > 1;
-	for (const auto &value : batch_values) {
+	BoundColumnRefExpression bound_ref(col.Name(), col.Type(), binding);
+
+	// Keep extracted equality values together when they can use the batch API.
+	value_set_t values;
+	ExtractValuesFromExpression(*expr_filter.expr, values);
+	bool can_batch = values.size() > 1;
+	for (const auto &value : values) {
 		if (value.type() != col.Type()) {
 			can_batch = false;
 			break;
 		}
 	}
 	if (can_batch) {
-		auto representative =
-		    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, std::move(bound_ref),
-		                                      make_uniq<BoundConstantExpression>(*batch_values.begin()));
-		if (!art->TryInitializeScan(index_expr, *representative)) {
+		// Extracted values compare the column itself, which must match the indexed expression.
+		if (!bound_ref.Equals(index_expr)) {
 			return {};
 		}
-		auto key_chunk = make_uniq<DataChunk>();
-		key_chunk->Initialize(Allocator::DefaultAllocator(), {col.Type()}, batch_values.size());
-		for (const auto &value : batch_values) {
-			key_chunk->data[0].Append(value);
+		auto value_chunk = make_uniq<DataChunk>();
+		value_chunk->Initialize(Allocator::DefaultAllocator(), {col.Type()}, values.size());
+		for (const auto &value : values) {
+			value_chunk->data[0].Append(value);
 		}
 		vector<unique_ptr<IndexScanState>> states;
-		states.push_back(art->InitializeBatchScan(std::move(key_chunk)));
+		states.push_back(art->InitializeBatchScan(std::move(value_chunk)));
 		return states;
 	}
 
+	// Preserve expression-based initialization for single values, ranges, and values requiring fallback.
 	vector<unique_ptr<Expression>> expressions;
-	ExtractExpressionsFromValues(batch_values, *bound_ref, expressions);
+	ExtractExpressionsFromValues(values, bound_ref, expressions);
 	if (expressions.empty()) {
-		expressions.push_back(expr_filter.ToExpression(*bound_ref));
+		expressions.push_back(expr_filter.ToExpression(bound_ref));
 	}
 	vector<unique_ptr<IndexScanState>> states;
 	for (const auto &filter_expr : expressions) {
