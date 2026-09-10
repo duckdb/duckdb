@@ -421,7 +421,8 @@ jobs:
       - linux-relassert
       - linux-release
     with:
-      duckdb_version: ${{ needs.prepare.outputs.duckdb_commit }}
+      duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
+      duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
       image_version: ${{ needs.prepare.outputs.image_version }}
       groups: |
         core:
