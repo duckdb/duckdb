@@ -2,6 +2,9 @@
 # description: Test that ORDER BY does not turn -0.0 into 0.0 for FLOAT/DOUBLE
 # group: [order]
 
+# checkpointing loses the sign of zero regardless of ORDER BY; unrelated bug, see issue #25580
+require noforcestorage
+
 statement ok
 CREATE TABLE zero_probe(id INTEGER, v DOUBLE, vf FLOAT);
 
