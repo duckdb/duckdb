@@ -484,6 +484,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	// Check if row_number column is requested and initialize row_number_base
 	for (idx_t i = 0; i < input.column_ids.size(); i++) {
 		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
+			annotated_lock_guard lock(g_state->state.scan_state.lock);
 			g_state->state.scan_state.row_number_base = 0;
 			break;
 		}

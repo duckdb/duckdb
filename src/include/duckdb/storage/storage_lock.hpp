@@ -16,6 +16,7 @@ struct StorageLockInternals;
 
 enum class StorageLockType { SHARED = 0, EXCLUSIVE = 1 };
 
+//! Keys can outlive a scope or move between threads; ownership is not a thread-local capability.
 class StorageLockKey {
 public:
 	StorageLockKey(shared_ptr<StorageLockInternals> internals, StorageLockType type);

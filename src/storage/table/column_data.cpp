@@ -88,7 +88,7 @@ StorageManager &ColumnData::GetStorageManager() const {
 }
 
 bool ColumnData::HasUpdates() const {
-	lock_guard<mutex> update_guard(update_lock);
+	annotated_lock_guard update_guard(update_lock);
 	return updates.get();
 }
 
@@ -293,13 +293,13 @@ void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t targ
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
-	lock_guard<mutex> update_guard(update_lock);
+	annotated_lock_guard update_guard(update_lock);
 	return updates ? updates->GetStatistics() : nullptr;
 }
 
 void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
                               UpdateScanType update_type) {
-	lock_guard<mutex> update_guard(update_lock);
+	annotated_lock_guard update_guard(update_lock);
 	if (!updates) {
 		return;
 	}
@@ -311,7 +311,7 @@ void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, V
 }
 
 void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx) {
-	lock_guard<mutex> update_guard(update_lock);
+	annotated_lock_guard update_guard(update_lock);
 	if (!updates) {
 		return;
 	}
@@ -322,7 +322,7 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 void ColumnData::UpdateInternal(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                                 Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector,
                                 idx_t row_group_start) {
-	lock_guard<mutex> update_guard(update_lock);
+	annotated_lock_guard update_guard(update_lock);
 	if (!updates) {
 		updates = make_uniq<UpdateSegment>(*this);
 	}
@@ -417,7 +417,7 @@ void ColumnData::FinalizeAppend(optional_ptr<BaseStatistics> table_stats, Column
 	if (!stats) {
 		throw InternalException("ColumnData::FinalizeAppend called on a column with a parent or without stats");
 	}
-	lock_guard<mutex> l(stats_lock);
+	annotated_lock_guard l(stats_lock);
 	ColumnDataFinalizeAppendState finalize_state(stats->statistics);
 	if (table_stats) {
 		finalize_state.global_stats.emplace_back(*table_stats);
@@ -426,7 +426,7 @@ void ColumnData::FinalizeAppend(optional_ptr<BaseStatistics> table_stats, Column
 }
 
 void ColumnData::FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
-	lock_guard<mutex> l(stats_lock);
+	annotated_lock_guard l(stats_lock);
 	FinalizeAppend(finalize_state, state);
 }
 
@@ -448,7 +448,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	                      : state.current;
 	FilterPropagateResult prune_result;
 	{
-		lock_guard<mutex> l(stats_lock);
+		annotated_lock_guard l(stats_lock);
 		auto &segment_stats = checked_segment->GetNode().GetStatsMutable();
 		auto context = state.context.GetClientContext();
 		prune_result =
@@ -477,7 +477,7 @@ FilterPropagateResult ColumnData::CheckZonemap(optional_ptr<ClientContext> conte
 	if (!stats) {
 		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
 	}
-	lock_guard<mutex> l(stats_lock);
+	annotated_lock_guard l(stats_lock);
 	if (index.IsPushdownExtract()) {
 		auto child_stats = stats->statistics.PushdownExtract(index.GetChildIndex(0));
 		if (!child_stats) {
@@ -508,7 +508,7 @@ unique_ptr<BaseStatistics> ColumnData::GetStatistics() const {
 	if (!stats) {
 		throw InternalException("ColumnData::GetStatistics called on a column without stats");
 	}
-	lock_guard<mutex> l(stats_lock);
+	annotated_lock_guard l(stats_lock);
 	return stats->statistics.ToUnique();
 }
 
@@ -516,7 +516,7 @@ void ColumnData::MergeStatistics(const BaseStatistics &other) {
 	if (!stats) {
 		throw InternalException("ColumnData::MergeStatistics called on a column without stats");
 	}
-	lock_guard<mutex> l(stats_lock);
+	annotated_lock_guard l(stats_lock);
 	return stats->statistics.Merge(other);
 }
 
@@ -524,7 +524,7 @@ void ColumnData::MergeIntoStatistics(BaseStatistics &other) {
 	if (!stats) {
 		throw InternalException("ColumnData::MergeIntoStatistics called on a column without stats");
 	}
-	lock_guard<mutex> l(stats_lock);
+	annotated_lock_guard l(stats_lock);
 	return other.Merge(stats->statistics);
 }
 
@@ -622,7 +622,7 @@ void ColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata
 		// segment is full and we have more to copy
 		// first flush the stats into the segment and the column data
 		{
-			lock_guard<mutex> guard(stats_lock);
+			annotated_lock_guard guard(stats_lock);
 			state.FlushSegmentStats();
 		}
 		// re-initialize the stats
@@ -722,7 +722,7 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 		current_segment->GetNode().FetchRow(state, NumericCast<row_t>(index_in_segment), result, result_offset + idx);
 	}
 	{
-		const lock_guard<mutex> update_guard(update_lock);
+		const annotated_lock_guard update_guard(update_lock);
 		if (updates) {
 			updates->FetchRows(transaction, offsets, sel, fetch_count, result, result_offset);
 		}
@@ -1301,7 +1301,7 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 		column_info.segment_count = segment.count;
 		column_info.compression_type = CompressionTypeToString(segment.GetCompressionFunction().type);
 		{
-			lock_guard<mutex> l(stats_lock);
+			annotated_lock_guard l(stats_lock);
 			column_info.segment_stats = segment.GetStats().ToStruct();
 		}
 		column_info.has_updates = ColumnData::HasUpdates();

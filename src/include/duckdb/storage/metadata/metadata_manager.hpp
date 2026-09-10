@@ -98,19 +98,26 @@ public:
 protected:
 	BlockManager &block_manager;
 	BufferManager &buffer_manager;
-	mutable mutex block_lock;
+	//! Release before allocating, pinning, or registering blocks in the block manager.
+	mutable annotated_mutex block_lock;
+	//! Checkpointing keeps the map structure stable for lock-free Flush/Write/BlockCount access.
 	unordered_map<block_id_t, MetadataBlock> blocks;
-	unordered_map<block_id_t, idx_t> modified_blocks;
+	unordered_map<block_id_t, idx_t> modified_blocks DUCKDB_GUARDED_BY(block_lock);
 
 protected:
-	block_id_t AllocateNewBlock(unique_lock<mutex> &block_lock);
-	block_id_t PeekNextBlockId() const;
-	block_id_t GetNextBlockId() const;
+	//! Acquires the caller's deferred lock after allocating the block.
+	block_id_t AllocateNewBlock(annotated_unique_lock<annotated_mutex> &guard) DUCKDB_ACQUIRE(block_lock);
+	block_id_t PeekNextBlockId() const DUCKDB_EXCLUDES(block_lock);
+	block_id_t GetNextBlockId() const DUCKDB_EXCLUDES(block_lock);
 
-	void AddBlock(unique_lock<mutex> &block_lock, MetadataBlock new_block, bool if_exists = false);
-	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block);
-	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block);
-	MetadataPointer FromDiskPointerInternal(unique_lock<mutex> &block_lock, MetaBlockPointer pointer);
+	void AddBlock(annotated_unique_lock<annotated_mutex> &guard, MetadataBlock new_block, bool if_exists = false)
+	    DUCKDB_REQUIRES(block_lock);
+	void AddAndRegisterBlock(annotated_unique_lock<annotated_mutex> &guard, MetadataBlock block)
+	    DUCKDB_REQUIRES(block_lock);
+	void ConvertToTransient(annotated_unique_lock<annotated_mutex> &guard, MetadataBlock &block)
+	    DUCKDB_REQUIRES(block_lock);
+	MetadataPointer FromDiskPointerInternal(annotated_unique_lock<annotated_mutex> &guard, MetaBlockPointer pointer)
+	    DUCKDB_REQUIRES(block_lock);
 };
 
 } // namespace duckdb

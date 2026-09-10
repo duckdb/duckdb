@@ -88,7 +88,7 @@ public:
 
 	bool IsEmpty() const;
 
-	void AppendRowGroup(SegmentLock &l, idx_t start_row);
+	void AppendRowGroup(SegmentLock &l, idx_t start_row) DUCKDB_REQUIRES(l);
 	//! Get the nth row-group, negative numbers start from the back (so -1 is the last row group, etc)
 	optional_ptr<RowGroup> GetRowGroup(int64_t index);
 	//! Overrides a row group - should only be used if you know what you're doing (will likely be removed in the future)
@@ -218,13 +218,13 @@ public:
 	idx_t GetSegmentCount();
 
 	//! Get a ptr to the raw segment tree. This can be useful for some extensions to have directly exposed.
-	shared_ptr<RowGroupSegmentTree> GetRowGroups() const;
+	shared_ptr<RowGroupSegmentTree> GetRowGroups() const DUCKDB_EXCLUDES(row_group_pointer_lock);
 
 private:
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,
 	                                                       idx_t count) const;
 
-	void SetRowGroups(shared_ptr<RowGroupSegmentTree> row_groups);
+	void SetRowGroups(shared_ptr<RowGroupSegmentTree> row_groups) DUCKDB_EXCLUDES(row_group_pointer_lock);
 
 private:
 	//! BlockManager
@@ -241,9 +241,9 @@ private:
 	//! The column types of the row group collection
 	vector<LogicalType> types;
 	//! Lock held when accessing or modifying the owned_row_groups pointer
-	mutable mutex row_group_pointer_lock;
+	mutable annotated_mutex row_group_pointer_lock;
 	//! The owning pointer of the segment tree
-	shared_ptr<RowGroupSegmentTree> owned_row_groups;
+	shared_ptr<RowGroupSegmentTree> owned_row_groups DUCKDB_GUARDED_BY(row_group_pointer_lock);
 	//! Table statistics
 	TableStatistics stats;
 	//! Allocation size, only tracked for appends

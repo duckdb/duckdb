@@ -191,6 +191,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 
 void LocalTableStorage::AppendToTable(DuckTransaction &transaction, TableAppendState &append_state) {
 	auto &table = table_ref.get();
+	table.VerifyAppendLock(append_state);
 	table.InitializeAppend(transaction, append_state);
 	auto &collection = *row_groups->collection;
 	for (auto &table_chunk : collection.Chunks(transaction)) {
@@ -382,7 +383,9 @@ void LocalStorage::Scan(CollectionScanState &state, const vector<StorageIndex> &
 	state.Scan(transaction, result);
 }
 
-void LocalStorage::InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state) {
+// The scan state is initialized before it is shared with worker threads.
+void LocalStorage::InitializeParallelScan(DataTable &table,
+                                          ParallelCollectionScanState &state) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {
 		state.max_row = 0;
@@ -571,6 +574,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 
 	TableAppendState append_state;
 	table.AppendLock(transaction, append_state);
+	table.VerifyAppendLock(append_state);
 	if (storage.IsBulkAppend() ||
 	    (append_state.row_start == 0 && storage.deleted_rows == 0 && !storage.WritesToDisk())) {
 		// bulk append (at least one full row group, no deletes): move over the storage directly.

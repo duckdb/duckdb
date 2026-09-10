@@ -55,8 +55,8 @@ public:
 	Identifier GetSchemaName();
 	//! The full (possibly nested) schema path of the table
 	const vector<Identifier> &GetSchemaPath() const;
-	Identifier GetTableName();
-	void SetTableName(Identifier name);
+	Identifier GetTableName() DUCKDB_EXCLUDES(name_lock);
+	void SetTableName(Identifier name) DUCKDB_EXCLUDES(name_lock);
 
 private:
 	//! The database instance of the table
@@ -64,11 +64,11 @@ private:
 	//! The table IO manager
 	shared_ptr<TableIOManager> table_io_manager;
 	//! Lock for modifying the name
-	mutex name_lock;
+	annotated_mutex name_lock;
 	//! The (possibly nested) schema path of the table, outermost schema first
 	vector<Identifier> schema_path;
 	//! The name of the table
-	Identifier table;
+	Identifier table DUCKDB_GUARDED_BY(name_lock);
 	//! The physical list of indexes of this table
 	TableIndexList indexes;
 	//! Index storage information of the indexes created by this table

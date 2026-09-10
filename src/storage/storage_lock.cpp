@@ -17,35 +17,35 @@ public:
 	StorageLockInternals() : read_count(0), writer_active(false), writer_tickets(0), writers_done(0) {
 	}
 
-	mutex state_lock;
+	annotated_mutex state_lock;
 	std::condition_variable state_cv;
-	idx_t read_count;
-	bool writer_active;
+	idx_t read_count DUCKDB_GUARDED_BY(state_lock);
+	bool writer_active DUCKDB_GUARDED_BY(state_lock);
 	//! Incremented when a writer registers (blocking acquisition) or acquires (try/upgrade)
-	idx_t writer_tickets;
+	idx_t writer_tickets DUCKDB_GUARDED_BY(state_lock);
 	//! Incremented when a writer releases
-	idx_t writers_done;
+	idx_t writers_done DUCKDB_GUARDED_BY(state_lock);
 
 public:
-	unique_ptr<StorageLockKey> GetExclusiveLock() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
-		unique_lock<mutex> guard(state_lock);
+	unique_ptr<StorageLockKey> GetExclusiveLock() {
+		annotated_unique_lock guard(state_lock);
 		writer_tickets++;
-		state_cv.wait(guard, [&]() { return !writer_active && read_count == 0; });
+		state_cv.wait(guard, [&]() DUCKDB_REQUIRES(state_lock) { return !writer_active && read_count == 0; });
 		writer_active = true;
 		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
 	}
 
-	unique_ptr<StorageLockKey> GetSharedLock() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
-		unique_lock<mutex> guard(state_lock);
+	unique_ptr<StorageLockKey> GetSharedLock() {
+		annotated_unique_lock guard(state_lock);
 		// wait for the writers registered before us (they drain and run first), but not for later ones
 		auto target = writer_tickets;
-		state_cv.wait(guard, [&]() { return !writer_active && writers_done >= target; });
+		state_cv.wait(guard, [&]() DUCKDB_REQUIRES(state_lock) { return !writer_active && writers_done >= target; });
 		read_count++;
 		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::SHARED);
 	}
 
-	unique_ptr<StorageLockKey> TryGetExclusiveLock() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
-		lock_guard<mutex> guard(state_lock);
+	unique_ptr<StorageLockKey> TryGetExclusiveLock() {
+		annotated_lock_guard guard(state_lock);
 		if (writer_active || read_count != 0) {
 			return nullptr;
 		}
@@ -54,11 +54,11 @@ public:
 		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
 	}
 
-	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
+	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock) {
 		if (lock.GetType() != StorageLockType::SHARED) {
 			throw InternalException("StorageLock::TryUpgradeLock called on an exclusive lock");
 		}
-		lock_guard<mutex> guard(state_lock);
+		annotated_lock_guard guard(state_lock);
 		if (writer_active || read_count != 1) {
 			// other shared locks (or a writer) are active: failed to upgrade
 			D_ASSERT(read_count != 0);
@@ -70,18 +70,18 @@ public:
 		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
 	}
 
-	void ReleaseExclusiveLock() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
+	void ReleaseExclusiveLock() {
 		{
-			lock_guard<mutex> guard(state_lock);
+			annotated_lock_guard guard(state_lock);
 			writer_active = false;
 			writers_done++;
 		}
 		state_cv.notify_all();
 	}
-	void ReleaseSharedLock() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
+	void ReleaseSharedLock() {
 		bool notify;
 		{
-			lock_guard<mutex> guard(state_lock);
+			annotated_lock_guard guard(state_lock);
 			read_count--;
 			notify = read_count == 0;
 		}

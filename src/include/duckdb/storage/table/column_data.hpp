@@ -168,8 +168,9 @@ public:
 	//! Finalize appending
 	virtual void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state);
 	void FinalizeAppend(optional_ptr<BaseStatistics> table_stats, ColumnAppendState &state);
-	//! Finalize appending while holding stats_lock (for use by child column calls)
-	void FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state);
+	//! Acquires this column's stats_lock before finalizing (for use by child column calls).
+	void FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state)
+	    DUCKDB_EXCLUDES(stats_lock);
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t new_count);
 
@@ -188,7 +189,7 @@ public:
 	virtual void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
 	                          const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
 	                          idx_t update_count, idx_t depth, idx_t row_group_start);
-	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
+	virtual unique_ptr<BaseStatistics> GetUpdateStatistics() DUCKDB_EXCLUDES(update_lock);
 
 	virtual void VisitBlockIds(BlockIdVisitor &visitor) const;
 
@@ -223,16 +224,16 @@ public:
 	                                           ColumnDataType data_type = ColumnDataType::MAIN_TABLE,
 	                                           optional_ptr<ColumnData> parent = nullptr);
 
-	void MergeStatistics(const BaseStatistics &other);
-	void MergeIntoStatistics(BaseStatistics &other);
-	unique_ptr<BaseStatistics> GetStatistics() const;
+	void MergeStatistics(const BaseStatistics &other) DUCKDB_EXCLUDES(stats_lock);
+	void MergeIntoStatistics(BaseStatistics &other) DUCKDB_EXCLUDES(stats_lock);
+	unique_ptr<BaseStatistics> GetStatistics() const DUCKDB_EXCLUDES(stats_lock);
 	const BaseStatistics &GetStatisticsRef() const;
 
 protected:
 	//! Append a transient segment
 	void AppendTransientSegment(SegmentLock &l, optional_ptr<SuballocationBlock> transient,
-	                            optional_ptr<ColumnSegment> prev_segment);
-	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
+	                            optional_ptr<ColumnSegment> prev_segment) DUCKDB_REQUIRES(l);
+	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment) DUCKDB_REQUIRES(l);
 
 	void BeginScanVectorInternal(ColumnScanState &state);
 	//! Scans a base vector from the column
@@ -249,11 +250,12 @@ protected:
 	                  idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state);
 
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
-	                  UpdateScanType update_type);
-	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
+	                  UpdateScanType update_type) DUCKDB_EXCLUDES(update_lock);
+	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx)
+	    DUCKDB_EXCLUDES(update_lock);
 	void UpdateInternal(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
 	                    Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector,
-	                    idx_t row_group_start);
+	                    idx_t row_group_start) DUCKDB_EXCLUDES(update_lock);
 	idx_t FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector, idx_t row_group_start);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
@@ -264,17 +266,17 @@ protected:
 	                                           ColumnData &validity_column);
 
 private:
-	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);
+	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function) DUCKDB_REQUIRES(l);
 
 protected:
 	//! The segments holding the data of this column segment
 	ColumnSegmentTree data;
 	//! The lock for the updates
-	mutable mutex update_lock;
+	mutable annotated_mutex update_lock;
 	//! The updates for this column segment
 	unique_ptr<UpdateSegment> updates;
 	//! The lock for the stats
-	mutable mutex stats_lock;
+	mutable annotated_mutex stats_lock;
 	//! Total transient allocation size
 	atomic<idx_t> allocation_size;
 	//! The stats of the root segment

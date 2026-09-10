@@ -116,7 +116,7 @@ private:
 	mutable vector<shared_ptr<ColumnData>> columns;
 
 public:
-	void MoveToCollection(RowGroupCollection &collection);
+	void MoveToCollection(RowGroupCollection &collection) DUCKDB_EXCLUDES(row_group_lock);
 	RowGroupCollection &GetCollection() const {
 		return collection.get();
 	}
@@ -267,21 +267,21 @@ private:
 	//! Advances the scan past the current vector, clearing the prepared state
 	void FinishVector(CollectionScanState &state);
 	void InitializeAppendInternal(RowGroupAppendState &append_state);
-	optional_ptr<RowVersionManager> GetVersionInfo();
+	optional_ptr<RowVersionManager> GetVersionInfo() DUCKDB_EXCLUDES(row_group_lock);
 	optional_ptr<RowVersionManager> GetVersionInfoIfLoaded() const;
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
-	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
-	void SetVersionInfo(shared_ptr<RowVersionManager> version);
+	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal() DUCKDB_EXCLUDES(row_group_lock);
+	void SetVersionInfo(shared_ptr<RowVersionManager> version) DUCKDB_REQUIRES(row_group_lock);
 
 	ColumnData &GetColumn(storage_t c) const;
-	void LoadColumn(storage_t c) const;
+	void LoadColumn(storage_t c) const DUCKDB_EXCLUDES(row_group_lock);
 	ColumnData &GetColumn(const StorageIndex &c) const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
-	void LoadRowIdColumnData() const;
-	void LoadRowNumberColumnData() const;
-	void SetCount(idx_t count);
+	void LoadRowIdColumnData() const DUCKDB_EXCLUDES(row_group_lock);
+	void LoadRowNumberColumnData() const DUCKDB_EXCLUDES(row_group_lock);
+	void SetCount(idx_t count) DUCKDB_EXCLUDES(row_group_lock);
 	bool ColumnIsLoaded(storage_t c) const;
-	void UnloadColumn(storage_t c);
+	void UnloadColumn(storage_t c) DUCKDB_EXCLUDES(row_group_lock);
 	bool HasUnchangedColumns() const;
 	static shared_ptr<ColumnData> CheckpointColumn(const RowGroup &row_group, idx_t column_idx, RowGroupWriteInfo &info,
 	                                               RowGroupWriteData &write_data);
@@ -290,7 +290,7 @@ private:
 	unique_ptr<RowGroup> CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count);
 
 private:
-	mutable mutex row_group_lock;
+	mutable annotated_mutex row_group_lock;
 	vector<MetaBlockPointer> column_pointers;
 	//! Whether or not each column is loaded (mutable because `const` can lazy load)
 	mutable unique_ptr<atomic<bool>[]> is_loaded;

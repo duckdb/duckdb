@@ -21,19 +21,20 @@ public:
 	RowGroupSegmentTree(RowGroupCollection &collection, idx_t base_row_id);
 	~RowGroupSegmentTree() override;
 
-	void Initialize(PersistentTableData &data, optional_ptr<vector<MetaBlockPointer>> read_pointers = nullptr);
+	void Initialize(PersistentTableData &data, optional_ptr<vector<MetaBlockPointer>> read_pointers = nullptr)
+	    DUCKDB_REQUIRES(node_lock);
 
 	MetaBlockPointer GetRootPointer() const {
 		return root_pointer;
 	}
 
 protected:
-	optional<LoadedSegment<RowGroup>> LoadSegment() const override;
+	optional<LoadedSegment<RowGroup>> LoadSegment() const DUCKDB_REQUIRES(node_lock) override;
 
 	RowGroupCollection &collection;
-	mutable idx_t current_row_group;
-	mutable idx_t max_row_group;
-	mutable unique_ptr<MetadataReader> reader;
+	mutable idx_t current_row_group DUCKDB_GUARDED_BY(node_lock);
+	mutable idx_t max_row_group DUCKDB_GUARDED_BY(node_lock);
+	mutable unique_ptr<MetadataReader> reader DUCKDB_GUARDED_BY(node_lock);
 	MetaBlockPointer root_pointer;
 };
 

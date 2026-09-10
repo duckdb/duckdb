@@ -191,7 +191,7 @@ void StandardColumnData::UpdateColumn(TransactionData transaction, DuckTableEntr
 unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	unique_ptr<BaseStatistics> stats;
 	{
-		lock_guard<mutex> update_guard(update_lock);
+		annotated_lock_guard update_guard(update_lock);
 		stats = updates ? updates->GetStatistics() : nullptr;
 	}
 	auto validity_stats = validity->GetUpdateStatistics();
