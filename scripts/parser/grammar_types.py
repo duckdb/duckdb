@@ -113,7 +113,13 @@ def load_grammar_types(types_file):
 
     # Category entries: CategoryName -> {type: "...", by_value: bool, default_initializer: "...", rules: [...]}
     for key, value in data.items():
-        if key in ("overrides", "excluded_rules", "matcher_rule_overrides", "packrat_memoized_rules"):
+        if key in (
+            "overrides",
+            "excluded_rules",
+            "matcher_rule_overrides",
+            "packrat_memoized_rules",
+            "additional_transform_result_types",
+        ):
             continue
         if not isinstance(value, dict):
             continue
@@ -136,6 +142,16 @@ def load_grammar_types(types_file):
     excluded_rules = set(data.get("excluded_rules", []))
     validate_grammar_types(types_file, data, rule_types, excluded_rules)
     return rule_types, excluded_rules
+
+
+def load_additional_transform_result_types(types_file):
+    """Load result types used by transformer infrastructure rather than grammar rules."""
+    data = load_grammar_types_yaml(types_file)
+    result_types = data.get("additional_transform_result_types", [])
+    if not isinstance(result_types, list) or not all(isinstance(result_type, str) for result_type in result_types):
+        print(f"Error: additional_transform_result_types in {types_file} must be a list of strings.", file=sys.stderr)
+        sys.exit(1)
+    return result_types
 
 
 def load_matcher_rule_overrides(types_file):
