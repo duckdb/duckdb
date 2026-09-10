@@ -673,7 +673,7 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		ScalarFunction timens_fun({}, LogialType::TIMESTAMP_TZ_NS,
 		                          Execute<ICUFromNaiveTimestamp, timestamp_ns_t, timestamp_tz_ns_t>, Bind);
 		timens_fun.GetSignature()
-		    .AddParamter("timezone", LogicalType::VARCHAR)
+		    .AddParameter("timezone", LogicalType::VARCHAR)
 		    .AddParameter("timestamp", LogicalType::TIMESTAMP_NS);
 		set.AddFunction(timens_fun);
 
