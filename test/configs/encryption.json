@@ -11,6 +11,13 @@
   ],
   "skip_tests": [
     {
+      "reason": "Explicit constraint timing requires storage version v2.0.0 or higher.",
+      "paths": [
+        "test/sql/constraints/deferred/test_alter_constraint_timing.test",
+        "test/sql/constraints/deferred/test_deferred_syntax.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
         "test/extension/test_tags.test",
