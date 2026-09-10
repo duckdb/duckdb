@@ -33,16 +33,12 @@
 namespace duckdb {
 
 struct ARTIndexScanState : public IndexScanState {
-	//! Logical equality values, encoded into ART keys during Scan. An empty chunk is an empty batch, not a full scan.
 	unique_ptr<DataChunk> batch_equality_values;
 	//! The predicates to scan.
 	//! A single predicate for point lookups, and two predicates for range scans.
 	Value values[2];
 	//! The expressions over the scan predicates.
 	ExpressionType expressions[2];
-	bool checked = false;
-	//! All scanned row IDs.
-	set<row_t> row_ids;
 };
 
 //===--------------------------------------------------------------------===//

@@ -677,7 +677,6 @@ static unique_ptr<IndexScanState> TryInitializeBatchIndexScan(const IndexReadHan
                                                               const Expression &index_expr,
                                                               const BoundColumnRefExpression &column,
                                                               const value_set_t &values) {
-	// Batch values refer directly to the column, so expression indexes cannot use this path.
 	if (!column.Equals(index_expr)) {
 		return nullptr;
 	}
@@ -703,12 +702,10 @@ static unique_ptr<IndexScanState> TryInitializeIndexScan(const IndexReadHandle<A
 
 	value_set_t values;
 	if (!ExtractValuesFromExpression(*expr_filter.expr, values)) {
-		// Ranges and other filters use the existing expression-based initializer.
 		auto filter_expr = expr_filter.ToExpression(bound_ref);
 		return art->TryInitializeScan(index_expr, *filter_expr);
 	}
 	if (values.size() == 1) {
-		// Preserve the scalar path when the filter resolves to a single equality.
 		auto filter_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
 		                                                     make_uniq<BoundConstantExpression>(*values.begin()));
 		return art->TryInitializeScan(index_expr, *filter_expr);

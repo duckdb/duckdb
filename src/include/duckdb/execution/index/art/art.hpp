@@ -76,13 +76,12 @@ public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr) const;
 	unique_ptr<IndexScanState> InitializeFullScan();
-	//! Perform a lookup on the ART, fetching up to the collection capacity.
-	//! Returns false on capacity exhaustion; the caller must discard any partial output.
-	//! Equality batches skip NULL keys and append matching row IDs.
-	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const;
-	//! Take ownership of evaluated equality values with the index's logical types, including an empty batch.
-	//! The returned state can be scanned repeatedly, including against compatible delta indexes.
+	//! NULL keys are skipped; an empty batch matches no rows.
 	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> values) const;
+	//! Perform a lookup on the ART, fetching up to the collection capacity.
+	//! Returns false if the results exceed capacity; the caller must discard partial output.
+	//! The state is reusable across the main index and its deltas.
+	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const;
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.
