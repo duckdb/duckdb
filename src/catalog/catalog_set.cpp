@@ -365,7 +365,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 	// Preserve the oid across the alter: an altered entry is the same logical object as before
 	value->oid = entry->oid;
 
-	if (!(value->name == entry->name)) {
+	if (value->name != entry->name) {
 		if (!RenameEntryInternal(transaction, *entry, value->name, alter_info, read_lock)) {
 			return false;
 		}
@@ -391,6 +391,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 		// in that case we are able to just directly destroy the child (if there is any)
 		entry_to_destroy = new_entry->TakeChild();
 	}
+
+	// Update shared entry state only after the alter is installed and rollbackable.
 	if (new_entry->name != entry->name) {
 		new_entry->SetAsRoot();
 	}

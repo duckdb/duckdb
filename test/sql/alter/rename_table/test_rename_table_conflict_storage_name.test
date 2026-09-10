@@ -30,9 +30,30 @@ COMMIT
 statement ok
 INSERT INTO ta VALUES (42)
 
+statement ok
+CREATE TABLE rollback_table(i INTEGER)
+
+statement ok
+BEGIN
+
+statement ok
+ALTER TABLE rollback_table RENAME TO rollback_table_new
+
+statement ok
+ROLLBACK
+
+# The restored DataTable name is used for the WAL SET_TABLE entry.
+statement ok
+INSERT INTO rollback_table VALUES (84)
+
 restart
 
 query I
 SELECT * FROM ta ORDER BY i
 ----
 42
+
+query I
+SELECT * FROM rollback_table ORDER BY i
+----
+84
