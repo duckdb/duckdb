@@ -113,7 +113,7 @@ BindResult ExpressionBinder::DispatchToScope(idx_t scope, unique_ptr<ParsedExpre
 BindResult ExpressionBinder::BindInEnclosingScope(ColumnRefExpression &col_ref, idx_t depth,
                                                   unique_ptr<ParsedExpression> &expr_ptr, ErrorData local_error) {
 	auto bind_error = std::move(local_error);
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	// the index of a scope is a depth, so a scope pushed or popped while the search is running would
 	// shift every index underneath it
 	const auto initial_scope_count = ScopeCount();

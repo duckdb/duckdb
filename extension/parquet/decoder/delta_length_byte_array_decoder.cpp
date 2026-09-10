@@ -28,6 +28,8 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 	// read the binary packed lengths
 	auto &block = *reader.block;
 	auto &buffer_manager = reader.reader.buffer_manager;
+	block.Pin(buffer_manager);
+	length_buffer.Pin(buffer_manager);
 	DeltaByteArrayDecoder::ReadDbpData(buffer_manager, block, length_buffer, byte_array_count);
 
 	// Verify that the sum of DBP string lengths match up with the available string data
@@ -39,6 +41,8 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 	block.Available(total_string_length);
 
 	length_idx = 0;
+	length_buffer.Unpin();
+	block.Unpin();
 }
 
 void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
@@ -65,6 +69,7 @@ template <bool HAS_DEFINES, bool VALIDATE_INDIVIDUAL_STRINGS>
 void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *const defines,
                                                const idx_t read_count, Vector &result, const idx_t result_offset) {
 	auto &block = *block_ref;
+	length_buffer.Pin(reader.reader.buffer_manager);
 	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 
 	if (!HAS_DEFINES) {
@@ -111,7 +116,9 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 		                                  NumericCast<uint32_t>(block.GetCurrentLoc() - start_ptr));
 	}
 
-	StringColumnReader::ReferenceBlock(result, block_ref);
+	auto &buffer_manager = reader.reader.buffer_manager;
+	StringColumnReader::ReferenceBlock(result, block_ref, buffer_manager);
+	length_buffer.Unpin();
 }
 
 void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
@@ -125,6 +132,7 @@ void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 template <bool HAS_DEFINES>
 void DeltaLengthByteArrayDecoder::SkipInternal(uint8_t *defines, idx_t skip_count) {
 	auto &block = *reader.block;
+	length_buffer.Pin(reader.reader.buffer_manager);
 	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 
 	if (!HAS_DEFINES) {
@@ -153,6 +161,7 @@ void DeltaLengthByteArrayDecoder::SkipInternal(uint8_t *defines, idx_t skip_coun
 		skip_bytes += length_data[length_idx++];
 	}
 	block.Inc(skip_bytes);
+	length_buffer.Unpin();
 }
 
 } // namespace duckdb

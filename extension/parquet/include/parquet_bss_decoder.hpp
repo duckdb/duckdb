@@ -53,6 +53,10 @@ public:
 		value_offset_ += batch_size;
 	}
 
+	void Rebase(data_ptr_t new_ptr) {
+		buffer_.Rebase(new_ptr);
+	}
+
 private:
 	ByteBuffer buffer_;
 	uint32_t value_offset_;

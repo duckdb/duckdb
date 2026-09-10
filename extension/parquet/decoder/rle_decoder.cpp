@@ -24,18 +24,28 @@ void RLEDecoder::InitializePage() {
 	}
 	auto &block = reader.block;
 	block->Inc(sizeof(uint32_t));
+	block_offset = block->GetOffset();
 	rle_decoder = make_uniq<RleBpDecoder>(block->GetCurrentLoc(), block->GetRemaining(), 1);
+}
+
+void RLEDecoder::Rebase() {
+	if (rle_decoder) {
+		rle_decoder->Rebase(reader.block->GetPtr() + block_offset);
+	}
 }
 
 void RLEDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
 	// RLE encoding for boolean
 	D_ASSERT(reader.Type().id() == LogicalTypeId::BOOLEAN);
 	idx_t valid_count = reader.GetValidCount(defines, read_count, result_offset);
+	auto &buffer_manager = reader.reader.buffer_manager;
+	decoded_data_buffer.Pin(buffer_manager);
 	decoded_data_buffer.Reset();
-	decoded_data_buffer.Resize(reader.reader.buffer_manager, sizeof(bool) * valid_count);
+	decoded_data_buffer.Resize(buffer_manager, sizeof(bool) * valid_count);
 	rle_decoder->GetBatch<uint8_t>(decoded_data_buffer.GetCurrentLoc(), valid_count);
 	reader.PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(decoded_data_buffer, defines, read_count,
 	                                                                   result_offset, result);
+	decoded_data_buffer.Unpin();
 }
 
 void RLEDecoder::Skip(uint8_t *defines, idx_t skip_count) {

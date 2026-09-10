@@ -640,6 +640,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (HasRepeats()) {
 		uint32_t rep_length = is_v1 ? block->Read<uint32_t>() : v2_header.repetition_levels_byte_length;
 		block->Available(rep_length);
+		repeated_decoder_offset = block->GetOffset();
 		repeated_decoder = make_uniq<RleBpDecoder>(block->GetCurrentLoc(), rep_length,
 		                                           RleBpDecoder::ComputeBitWidthFromMaxValue(MaxRepeat()));
 		block->Inc(rep_length);
@@ -650,6 +651,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (HasDefines()) {
 		uint32_t def_length = is_v1 ? block->Read<uint32_t>() : v2_header.definition_levels_byte_length;
 		block->Available(def_length);
+		defined_decoder_offset = block->GetOffset();
 		defined_decoder = make_uniq<RleBpDecoder>(block->GetCurrentLoc(), def_length,
 		                                          RleBpDecoder::ComputeBitWidthFromMaxValue(MaxDefine()));
 		block->Inc(def_length);
@@ -747,6 +749,32 @@ bool ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t
 	return true; // No defines, so everything is valid
 }
 
+void ColumnReader::RebaseDecoders() {
+	// Block's offset has moved on so we need to use the decoders own stored offset to calculate current location.
+	if (repeated_decoder) {
+		repeated_decoder->Rebase(block->GetPtr() + repeated_decoder_offset);
+	}
+	if (defined_decoder) {
+		defined_decoder->Rebase(block->GetPtr() + defined_decoder_offset);
+	}
+	switch (encoding) {
+	case ColumnEncoding::DICTIONARY:
+		dictionary_decoder.Rebase();
+		break;
+	case ColumnEncoding::DELTA_BINARY_PACKED:
+		delta_binary_packed_decoder.Rebase();
+		break;
+	case ColumnEncoding::RLE:
+		rle_decoder.Rebase();
+		break;
+	case ColumnEncoding::BYTE_STREAM_SPLIT:
+		byte_stream_split_decoder.Rebase();
+		break;
+	default:
+		break;
+	}
+}
+
 void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
                             idx_t result_offset) {
 	// flatten the result vector if required
@@ -763,6 +791,12 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		page_rows_available -= read_now;
 		return;
 	}
+
+	if (block) {
+		block->Pin(GetBufferManager());
+		RebaseDecoders();
+	}
+
 	// read the defines/repeats
 	const auto all_valid = PrepareRead(read_now, define_out, repeat_out, result_offset);
 	if (!IsRoot() && AllValuesAreNull()) {
@@ -777,6 +811,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 			}
 		}
 		page_rows_available -= read_now;
+		block->Unpin();
 		return;
 	}
 	// read the data according to the encoder
@@ -805,6 +840,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		break;
 	}
 	page_rows_available -= read_now;
+	block->Unpin();
 }
 
 void ColumnReader::FinishRead(idx_t read_count) {
@@ -874,18 +910,30 @@ void ColumnReader::DirectSelect(ColumnReaderInput &input, Vector &result, const 
 	BeginRead(define_out, repeat_out);
 	auto read_now = ReadPageHeaders(to_read);
 
+	// pin after BeginRead in case of skips
+	if (block) {
+		block->Pin(GetBufferManager());
+		RebaseDecoders();
+	}
+
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
-	if (read_now == to_read && encoding == ColumnEncoding::PLAIN) {
+	if (!page_is_filtered_out && read_now == to_read && encoding == ColumnEncoding::PLAIN) {
 		const auto all_valid = PrepareRead(read_now, define_out, repeat_out, 0);
 		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
 		PlainSelect(block, define_ptr, read_now, result, sel, approved_tuple_count);
 
 		page_rows_available -= read_now;
 		FinishRead(to_read);
+		if (block) {
+			block->Unpin();
+		}
 		return;
 	}
 	// fallback to regular read + filter
 	ReadInternal(input, result);
+	if (block) {
+		block->Unpin();
+	}
 }
 
 void ColumnReader::Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
@@ -912,6 +960,12 @@ void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const 
 	BeginRead(define_out, repeat_out);
 	auto read_now = ReadPageHeaders(to_read, &filter, &filter_state);
 
+	// pin after BeginRead in case of skips
+	if (block) {
+		block->Pin(GetBufferManager());
+		RebaseDecoders();
+	}
+
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (encoding == ColumnEncoding::DICTIONARY && read_now == to_read && dictionary_decoder.HasFilter()) {
 		if (page_is_filtered_out) {
@@ -926,11 +980,17 @@ void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const 
 		}
 		page_rows_available -= read_now;
 		FinishRead(to_read);
+		if (block) {
+			block->Unpin();
+		}
 		return;
 	}
 	// fallback to regular read + filter
 	ReadInternal(input, result);
 	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
+	if (block) {
+		block->Unpin();
+	}
 }
 
 void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
@@ -955,6 +1015,12 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	data_t skip_repeats[STANDARD_VECTOR_SIZE];
 	data_ptr_t skip_define_out = HasDefines() ? skip_defines : define_out;
 	data_ptr_t skip_repeat_out = HasRepeats() ? skip_repeats : repeat_out;
+
+	if (block) {
+		block->Pin(GetBufferManager());
+		RebaseDecoders();
+	}
+
 	// start reading but do not apply skips (we are skipping now)
 	BeginRead(nullptr, nullptr);
 
@@ -996,6 +1062,9 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 		to_skip -= skip_now;
 	}
 	FinishRead(num_values);
+	if (block) {
+		block->Unpin();
+	}
 }
 
 //===--------------------------------------------------------------------===//

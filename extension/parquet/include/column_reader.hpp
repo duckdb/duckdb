@@ -378,6 +378,7 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
+	void RebaseDecoders();
 	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
 	                 idx_t rows_to_skip = 0);
 	void PreparePage(PageHeader &page_hdr);
@@ -399,6 +400,9 @@ private:
 	ColumnEncoding encoding = ColumnEncoding::INVALID;
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> repeated_decoder;
+	//! Fixed offsets used to recompute decoder's location after a re-pin.
+	idx_t defined_decoder_offset = 0;
+	idx_t repeated_decoder_offset = 0;
 	DictionaryDecoder dictionary_decoder;
 	DeltaBinaryPackedDecoder delta_binary_packed_decoder;
 	RLEDecoder rle_decoder;

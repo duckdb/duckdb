@@ -19,15 +19,23 @@ DeltaBinaryPackedDecoder::DeltaBinaryPackedDecoder(ColumnReader &reader)
 
 void DeltaBinaryPackedDecoder::InitializePage() {
 	auto &block = reader.block;
+	block_offset = block->GetOffset();
 	idx_t dbp_len;
 	auto loc = block->ConsumeRemaining(dbp_len);
 	dbp_decoder = make_uniq<DbpDecoder>(loc, dbp_len);
+}
+
+void DeltaBinaryPackedDecoder::Rebase() {
+	if (dbp_decoder) {
+		dbp_decoder->Rebase(reader.block->GetPtr() + block_offset);
+	}
 }
 
 void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
 	idx_t valid_count = reader.GetValidCount(defines, read_count, result_offset);
 
 	auto &buffer_manager = reader.reader.buffer_manager;
+	decoded_data_buffer.Pin(buffer_manager);
 	decoded_data_buffer.Reset();
 	switch (reader.Schema().parquet_type) {
 	case duckdb_parquet::Type::INT32:
@@ -44,6 +52,7 @@ void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &
 	}
 	// Plain() will put NULLs in the right place
 	reader.Plain(decoded_data_buffer, defines, read_count, result_offset, result);
+	decoded_data_buffer.Unpin();
 }
 
 void DeltaBinaryPackedDecoder::Skip(uint8_t *defines, idx_t skip_count) {

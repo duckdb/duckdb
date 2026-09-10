@@ -74,9 +74,16 @@ void DictionaryDecoder::InitializePage() {
 	// where is it otherwise??
 	auto &block = reader.block;
 	auto dict_width = block->Read<uint8_t>();
+	block_offset = block->GetOffset();
 	idx_t dict_len;
 	auto loc = block->ConsumeRemaining(dict_len);
 	dict_decoder = make_uniq<RleBpDecoder>(loc, dict_len, dict_width);
+}
+
+void DictionaryDecoder::Rebase() {
+	if (dict_decoder) {
+		dict_decoder->Rebase(reader.block->GetPtr() + block_offset);
+	}
 }
 
 void DictionaryDecoder::ConvertDictToSelVec(uint32_t *offsets, const SelectionVector &rows, idx_t count) {

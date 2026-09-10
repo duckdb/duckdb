@@ -33,6 +33,10 @@ public:
 		return ptr + offset;
 	}
 
+	data_ptr_t GetPtr() const {
+		return ptr;
+	}
+
 	idx_t GetOffset() const {
 		return offset;
 	}
@@ -45,13 +49,16 @@ public:
 		return len - offset;
 	}
 
-	//! Hands off everything left in the buffer to a caller-managed sub-region: returns the current
-	//! location, writes its length to length_out, and consumes the buffer up to its end.
+	// Consumes the remaining space and returns the current location
 	data_ptr_t ConsumeRemaining(idx_t &length_out) {
 		length_out = GetRemaining();
 		auto loc = GetCurrentLoc();
 		UnsafeInc(length_out);
 		return loc;
+	}
+
+	data_ptr_t GetPtrAt(const idx_t rel_offset) const {
+		return ptr + rel_offset;
 	}
 
 	void Inc(const idx_t increment) {
@@ -110,6 +117,10 @@ public:
 		return req_len <= len - offset;
 	}
 
+	void Rebase(const data_ptr_t new_ptr) {
+		ptr = new_ptr;
+	}
+
 protected:
 	data_ptr_t ptr = nullptr;
 
@@ -152,14 +163,14 @@ public:
 		}
 		if (new_size > alloc_len) {
 			alloc_len = NextPowerOfTwo(new_size);
-			handle = buffer_manager.Allocate(MemoryTag::PARQUET_READER, alloc_len, true);
-			block = handle.GetBlockHandle();
+			handle = buffer_manager.Allocate(MemoryTag::PARQUET_READER, alloc_len, false);
+			block_handle = handle.GetBlockHandle();
 			ptr = handle.GetDataMutable();
 		}
 	}
 
 	void Reset() {
-		if (block) {
+		if (block_handle) {
 			ptr = handle.GetDataMutable();
 		} else {
 			ptr = allocated_data.get();
@@ -168,9 +179,27 @@ public:
 		offset = 0;
 	}
 
+	void Pin(BufferManager &buffer_manager) {
+		if (block_handle) {
+			handle = buffer_manager.Pin(block_handle);
+			ptr = handle.GetDataMutable();
+		}
+	}
+
+	void Unpin() {
+		if (block_handle) {
+			handle.Destroy();
+			ptr = nullptr;
+		}
+	}
+
+	shared_ptr<BlockHandle> &GetBlockHandle() {
+		return block_handle;
+	}
+
 private:
 	AllocatedData allocated_data;
-	shared_ptr<BlockHandle> block;
+	shared_ptr<BlockHandle> block_handle;
 	BufferHandle handle;
 
 	idx_t alloc_len = 0;

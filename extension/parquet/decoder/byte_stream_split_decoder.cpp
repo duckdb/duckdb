@@ -21,15 +21,23 @@ void ByteStreamSplitDecoder::InitializePage() {
 	auto &block = reader.block;
 	// Subtract 1 from length as the block is allocated with 1 extra byte,
 	// but the byte stream split encoder needs to know the correct data size.
+	region_offset = block->GetOffset();
 	idx_t bss_len;
 	auto loc = block->ConsumeRemaining(bss_len);
 	bss_decoder = make_uniq<BssDecoder>(loc, bss_len - 1);
+}
+
+void ByteStreamSplitDecoder::Rebase() {
+	if (bss_decoder) {
+		bss_decoder->Rebase(reader.block->GetPtr() + region_offset);
+	}
 }
 
 void ByteStreamSplitDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
 	idx_t valid_count = reader.GetValidCount(defines, read_count, result_offset);
 
 	auto &buffer_manager = reader.reader.buffer_manager;
+	decoded_data_buffer.Pin(buffer_manager);
 	decoded_data_buffer.Reset();
 	switch (reader.Schema().parquet_type) {
 	case duckdb_parquet::Type::FLOAT:
@@ -53,6 +61,7 @@ void ByteStreamSplitDecoder::Read(uint8_t *defines, idx_t read_count, Vector &re
 	}
 
 	reader.Plain(decoded_data_buffer, defines, read_count, result_offset, result);
+	decoded_data_buffer.Unpin();
 }
 
 void ByteStreamSplitDecoder::Skip(uint8_t *defines, idx_t skip_count) {

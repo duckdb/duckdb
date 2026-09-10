@@ -107,6 +107,10 @@ public:
 		return ComputeBitWidthFromMaxValue(value_count - 1);
 	}
 
+	void Rebase(data_ptr_t new_ptr) {
+		buffer_.Rebase(new_ptr);
+	}
+
 private:
 	ByteBuffer buffer_;
 

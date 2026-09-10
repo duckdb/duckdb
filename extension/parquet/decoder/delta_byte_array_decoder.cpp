@@ -43,10 +43,15 @@ void DeltaByteArrayDecoder::InitializePage() {
 	auto &block = *reader.block;
 	auto &buffer_manager = reader.reader.buffer_manager;
 	idx_t prefix_count, suffix_count;
+
 	auto &prefix_buffer = reader.encoding_buffers[0];
-	auto &suffix_buffer = reader.encoding_buffers[1];
+	prefix_buffer.Pin(buffer_manager);
 	ReadDbpData(buffer_manager, block, prefix_buffer, prefix_count);
+
+	auto &suffix_buffer = reader.encoding_buffers[1];
+	suffix_buffer.Pin(buffer_manager);
 	ReadDbpData(buffer_manager, block, suffix_buffer, suffix_count);
+
 	if (prefix_count != suffix_count) {
 		throw std::runtime_error("DELTA_BYTE_ARRAY - prefix and suffix counts are different - corrupt file?");
 	}
@@ -59,6 +64,8 @@ void DeltaByteArrayDecoder::InitializePage() {
 
 	if (prefix_count == 0) {
 		plain_data->Resize(buffer_manager, 0);
+		prefix_buffer.Unpin();
+		suffix_buffer.Unpin();
 		return;
 	}
 
@@ -114,14 +121,21 @@ void DeltaByteArrayDecoder::InitializePage() {
 		prev_len = value_len;
 		output += value_len;
 	}
+
+	prefix_buffer.Unpin();
+	suffix_buffer.Unpin();
 }
 
 void DeltaByteArrayDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
+	plain_data->Pin(reader.reader.buffer_manager);
 	reader.Plain(plain_data, defines, read_count, result_offset, result);
+	plain_data->Unpin();
 }
 
 void DeltaByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
+	plain_data->Pin(reader.reader.buffer_manager);
 	reader.PlainSkip(*plain_data, defines, skip_count);
+	plain_data->Unpin();
 }
 
 } // namespace duckdb
