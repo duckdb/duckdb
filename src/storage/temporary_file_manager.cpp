@@ -672,8 +672,7 @@ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext co
 		handle = GetFileHandle(lock, index.identifier);
 	}
 
-	// If eviction size requested, set it to the physical stride on disk (payload + per-block
-	// encryption header if applicable) so the caller's accounting stays in sync with the writer.
+	// If eviction size requested, set it to the size of the block (compressed size if applicable).
 	if (eviction_size) {
 		*eviction_size = PhysicalBlockSize(index.identifier.size, index.identifier.encrypted);
 	}

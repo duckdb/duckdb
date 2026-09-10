@@ -1,5 +1,6 @@
-# name: test/sql/storage/encryption/temp_files/encrypted_size_on_disk_undercount.test
-# description: Encrypted temp files: internal usage counters must include the per-block encryption header.
+# name: test/sql/storage/encryption/temp_files/encrypted_temp_file_size_accounting.test
+# description: With temp_file_encryption on, temp-directory usage reported by duckdb_memory
+#              agrees with the on-disk footprint in duckdb_temporary_files().
 # group: [temp_files]
 
 # httpfs is required to enable temp file encryption
@@ -7,11 +8,11 @@ require httpfs
 
 require block_size 262144
 
-load {TEST_DIR}/encrypted_size_on_disk_undercount.db
+load {TEST_DIR}/encrypted_temp_file_size_accounting.db
 
 # Isolate the temp directory so `duckdb_temporary_files()` only reports this test's spill
 statement ok
-SET temp_directory='{TEST_DIR}/encrypted_size_on_disk_undercount_tmp'
+SET temp_directory='{TEST_DIR}/encrypted_temp_file_size_accounting_tmp'
 
 statement ok
 SET temp_file_encryption=true

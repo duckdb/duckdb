@@ -137,7 +137,7 @@ private:
 	set<idx_t> indexes_in_use;
 	//! The TemporaryFileManager that "owns" this BlockIndexManager
 	optional_ptr<TemporaryFileManager> manager;
-	//! Whether the tracked file is encrypted (adds a per-block header on disk)
+	//! Whether the tracked file is encrypted
 	bool encrypted;
 };
 
