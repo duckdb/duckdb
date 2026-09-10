@@ -680,6 +680,7 @@ static unique_ptr<IndexScanState> TryInitializeBatchIndexScan(const IndexReadHan
 	if (!column.Equals(index_expr)) {
 		return nullptr;
 	}
+	// Casting a filter value to the column type could change which keys match.
 	for (const auto &value : values) {
 		if (value.type() != column.GetReturnType()) {
 			return nullptr;
@@ -772,6 +773,7 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 		row_ids.Reset();
 		return false;
 	}
+	// The main index may omit rows that are still visible to this transaction.
 	for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
 		auto delta_index = art.FindDelta(delta);
 		if (delta_index && !delta_index->Scan(*scan_state, row_ids)) {

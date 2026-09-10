@@ -30,6 +30,7 @@ SELECT count(*), sum(i) FROM t SEMI JOIN k USING(i);
 ----
 3000	139453500
 
+# Each lookup chunk fits, but the combined 3000 matches exceed this limit.
 statement ok
 SET index_scan_max_count = 2999;
 

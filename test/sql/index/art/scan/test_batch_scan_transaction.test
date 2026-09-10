@@ -11,6 +11,7 @@ CREATE UNIQUE INDEX idx ON t(i);
 statement ok
 CREATE TABLE k AS SELECT i * 3 + 1 AS i FROM range(3000) r(i);
 
+# This transaction must still see j = 1 and j = 19 after the rows are replaced.
 statement ok old
 BEGIN;
 

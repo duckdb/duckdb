@@ -789,6 +789,7 @@ bool ART::ScanBatchChunk(DataChunk &input, RowIdVectorOutput &row_ids) const {
 	ArenaAllocator arena(Allocator::Get(db));
 	unsafe_vector<ARTKey> keys(input.size());
 	if (HasLegacyGeometryKeys()) {
+		// Geometry keys stored before v1.5.0 use a different byte representation.
 		DataChunk converted;
 		ConvertKeyInput(input, converted);
 		GenerateKeys<>(arena, converted, keys);
@@ -797,6 +798,7 @@ bool ART::ScanBatchChunk(DataChunk &input, RowIdVectorOutput &row_ids) const {
 	}
 	lock_guard<mutex> guard(lock);
 	for (const auto &key : keys) {
+		// GenerateKeys represents SQL NULL as an empty ARTKey.
 		if (!key.Empty() && !SearchEqual(key, row_ids)) {
 			return false;
 		}
