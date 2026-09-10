@@ -1,5 +1,5 @@
 # name: test/sql/subquery/scalar/test_correlated_having.test
-# description: Test correlated subqueries with HAVING without GROUP BY
+# description: Issue #24563: Test correlated subqueries with HAVING without GROUP BY
 # group: [scalar]
 
 statement ok
