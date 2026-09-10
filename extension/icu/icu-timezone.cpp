@@ -670,14 +670,18 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		    .AddParameter("timestamp", LogicalType::TIME_TZ);
 		set.AddFunction(timetz_fun);
 
-		ScalarFunction timens_fun({}, LogialType::TIMESTAMP_TZ_NS, Execute<ICUFromNaiveTimestamp, timestamp_ns_t, timestamp_tz_ns_t>, Bind);
-		timens_fun.GetSignature().AddParamter("timezone", LogicalType::VARCHAR).AddParameter("timestamp", LogicalType::TIMESTAMP_NS);
+		ScalarFunction timens_fun({}, LogialType::TIMESTAMP_TZ_NS,
+		                          Execute<ICUFromNaiveTimestamp, timestamp_ns_t, timestamp_tz_ns_t>, Bind);
+		timens_fun.GetSignature()
+		    .AddParamter("timezone", LogicalType::VARCHAR)
+		    .AddParameter("timestamp", LogicalType::TIMESTAMP_NS);
 		set.AddFunction(timens_fun);
 
 		ScalarFunction timetzns_fun({}, LogicalType::TIMESTAMP_NS,
-									   Execute<ICUToNaiveTimestamp, timestamp_tz_ns_t, timestamp_ns_t>, Bind);
-		timetzns_fun.GetSignature().AddParamter("timezone", LogicalType::VARCHAR).AddParamter("timestamp", LogicalType::TIMESTAMP_TZ_NS)
-		set.AddFunction(timetzns_fun);
+		                            Execute<ICUToNaiveTimestamp, timestamp_tz_ns_t, timestamp_ns_t>, Bind);
+		timetzns_fun.GetSignature()
+		    .AddParamter("timezone", LogicalType::VARCHAR)
+		    .AddParamter("timestamp", LogicalType::TIMESTAMP_TZ_NS) set.AddFunction(timetzns_fun);
 
 		set.ApplyToFunctions([](ScalarFunction &func) {
 			func.SetFallible();
