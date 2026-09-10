@@ -43,3 +43,12 @@ query I
 select macro_definition from duckdb_functions() where function_name = 'my_range';
 ----
 SELECT * FROM "range"(x)
+
+# all scalar, window, and aggregate functions available to users should have a name in the function signature.
+query I
+SELECT count(*) FROM duckdb_functions()
+WHERE (function_type == 'window' OR function_type == 'scalar' or function_type == 'aggregate')
+    AND list_contains(parameters, 'col0')
+    AND internal == false
+----
+0
