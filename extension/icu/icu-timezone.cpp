@@ -680,8 +680,9 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		ScalarFunction timetzns_fun({}, LogicalType::TIMESTAMP_NS,
 		                            Execute<ICUToNaiveTimestamp, timestamp_tz_ns_t, timestamp_ns_t>, Bind);
 		timetzns_fun.GetSignature()
-		    .AddParamter("timezone", LogicalType::VARCHAR)
-		    .AddParamter("timestamp", LogicalType::TIMESTAMP_TZ_NS) set.AddFunction(timetzns_fun);
+		    .AddParameter("timezone", LogicalType::VARCHAR)
+		    .AddParameter("timestamp", LogicalType::TIMESTAMP_TZ_NS) set.AddFunction(timetzns_fun);
+		set.AddFunction(timetzns_fun);
 
 		set.ApplyToFunctions([](ScalarFunction &func) {
 			func.SetFallible();
