@@ -1,0 +1,70 @@
+# name: test/sql/alter/alter_nested_field_unsupported.test
+# description: ALTER forms that cannot address a nested field must reject it, not apply to the parent
+# group: [alter]
+
+statement ok
+CREATE TABLE t(s STRUCT(a INTEGER, b INTEGER), n INTEGER);
+
+statement ok
+INSERT INTO t VALUES ({'a': NULL, 'b': 1}, 1);
+
+# these three carry a single column name, so the field path used to be dropped silently and the
+# constraint or default landed on the enclosing struct column instead
+
+statement error
+ALTER TABLE t ALTER s.a SET NOT NULL;
+----
+<REGEX>:.*SET NOT NULL is not supported for the field s\.a.*
+
+statement error
+ALTER TABLE t ALTER s.a DROP NOT NULL;
+----
+<REGEX>:.*DROP NOT NULL is not supported for the field s\.a.*
+
+statement error
+ALTER TABLE t ALTER s.a SET DEFAULT 5;
+----
+<REGEX>:.*SET DEFAULT is not supported for the field s\.a.*
+
+# a deeper path is rejected the same way
+
+statement error
+ALTER TABLE t ALTER s.a.b SET NOT NULL;
+----
+<REGEX>:.*is not supported for the field s\.a\.b.*
+
+# the struct column is untouched by the rejected statements
+
+query I
+SELECT sql FROM duckdb_tables() WHERE table_name = 't';
+----
+CREATE TABLE t(s STRUCT(a INTEGER, b INTEGER), n INTEGER);
+
+# the flat forms still work
+
+statement ok
+ALTER TABLE t ALTER n SET DEFAULT 7;
+
+statement ok
+ALTER TABLE t ALTER n SET NOT NULL;
+
+query I
+SELECT sql FROM duckdb_tables() WHERE table_name = 't';
+----
+CREATE TABLE t(s STRUCT(a INTEGER, b INTEGER), n INTEGER DEFAULT(7) NOT NULL);
+
+statement ok
+ALTER TABLE t ALTER n DROP NOT NULL;
+
+# and the ALTER forms that genuinely do address a nested field still work
+
+statement ok
+ALTER TABLE t RENAME s.a TO z;
+
+statement ok
+ALTER TABLE t ADD COLUMN s.c INTEGER;
+
+query I
+SELECT sql FROM duckdb_tables() WHERE table_name = 't';
+----
+CREATE TABLE t(s STRUCT(z INTEGER, b INTEGER, c INTEGER), n INTEGER DEFAULT(7));

@@ -332,16 +332,31 @@ unique_ptr<AlterTableInfo>
 PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const bool &has_result,
                                             unique_ptr<ColumnRefExpression> nested_column_name,
                                             unique_ptr<AlterTableInfo> alter_column_entry) {
+	// these three carry a single column name, so a field path cannot be represented. Without this check the
+	// path is silently dropped and the constraint or default lands on the enclosing column instead.
+	auto reject_field_path = [&](const char *alter_name) {
+		auto &names = nested_column_name->ColumnNames();
+		if (names.size() > 1) {
+			vector<string> parts;
+			for (auto &name : names) {
+				parts.push_back(name.GetIdentifierName());
+			}
+			throw ParserException("%s is not supported for the field %s - it can only be applied to a column",
+			                      alter_name, StringUtil::Join(parts, "."));
+		}
+	};
 	if (alter_column_entry->alter_table_type == AlterTableType::SET_DEFAULT) {
+		reject_field_path("SET DEFAULT");
 		auto set_default_entry = unique_ptr_cast<AlterTableInfo, SetDefaultInfo>(std::move(alter_column_entry));
-		// TODO(Dtenwolde) Figure out with nested names;
 		set_default_entry->column_name = nested_column_name->ColumnNames()[0];
 		return std::move(set_default_entry);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::DROP_NOT_NULL) {
+		reject_field_path("DROP NOT NULL");
 		auto drop_not_null = unique_ptr_cast<AlterTableInfo, DropNotNullInfo>(std::move(alter_column_entry));
 		drop_not_null->column_name = nested_column_name->ColumnNames()[0];
 		return std::move(drop_not_null);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::SET_NOT_NULL) {
+		reject_field_path("SET NOT NULL");
 		auto set_not_null = unique_ptr_cast<AlterTableInfo, SetNotNullInfo>(std::move(alter_column_entry));
 		set_not_null->column_name = nested_column_name->ColumnNames()[0];
 		return std::move(set_not_null);
