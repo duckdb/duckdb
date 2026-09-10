@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 class BlockHandle;

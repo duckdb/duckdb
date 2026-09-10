@@ -1,4 +1,7 @@
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/peg/ast/distinct_clause.hpp"

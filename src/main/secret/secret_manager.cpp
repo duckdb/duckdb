@@ -1,4 +1,5 @@
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/common.hpp"
