@@ -76,11 +76,9 @@ public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr) const;
 	unique_ptr<IndexScanState> InitializeFullScan();
-	//! NULL keys are skipped; an empty batch matches no rows.
 	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> values) const;
 	//! Perform a lookup on the ART, fetching up to the collection capacity.
-	//! Returns false if the results exceed capacity; the caller must discard partial output.
-	//! The state is reusable across the main index and its deltas.
+	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const;
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
@@ -179,6 +177,7 @@ private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
+	bool ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const;
 	bool ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const;
 	bool ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const;
 	bool FullScan(RowIdVectorOutput &row_ids) const;
