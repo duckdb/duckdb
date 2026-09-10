@@ -94,10 +94,6 @@ struct RowGroupAppendState {
 	SuballocationBlock transient;
 };
 
-struct IndexLock {
-	unique_lock<mutex> index_lock;
-};
-
 struct TableAppendState {
 	TableAppendState();
 	~TableAppendState();
