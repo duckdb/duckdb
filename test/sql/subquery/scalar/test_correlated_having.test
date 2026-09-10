@@ -81,7 +81,7 @@ SELECT currval('having_effect_seq');
 2
 
 statement error
-SELECT (SELECT sum(inner_values.i) + CAST('invalid' AS INTEGER)
+SELECT (SELECT CAST(CASE WHEN sum(inner_values.i) IS NULL THEN 'invalid' ELSE '1' END AS INTEGER)
         FROM inner_values
         WHERE inner_values.i = outer_values.i)
 FROM outer_values
@@ -112,7 +112,7 @@ EXPLAIN SELECT (SELECT avg(inner_values.i) * 0.2
                 HAVING true)
 FROM outer_values;
 ----
-logical_opt	<REGEX>:.*Join Type: INNER.*Conditions: i IS NOT DISTINCT FROM #0.*
+logical_opt	<REGEX>:.*Join Type: INNER.*Conditions: i IS NOT DISTINCT FROM .*
 
 query II
 EXPLAIN SELECT (SELECT coalesce(avg(inner_values.i), 0)
@@ -121,7 +121,7 @@ EXPLAIN SELECT (SELECT coalesce(avg(inner_values.i), 0)
                 HAVING true)
 FROM outer_values;
 ----
-logical_opt	<REGEX>:.*Join Type: LEFT.*Conditions: i IS NOT DISTINCT FROM #0.*
+logical_opt	<REGEX>:.*Join Type: LEFT.*Conditions: i IS NOT DISTINCT FROM .*
 
 statement ok
 SET disabled_optimizers='';
