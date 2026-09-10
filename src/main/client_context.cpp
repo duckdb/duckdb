@@ -803,18 +803,15 @@ QueryResultState ClientContext::FailQueryInternal(ClientContextLock &lock, BaseQ
 			error = executor.GetError();
 			invalidate_transaction = ErrorInvalidatesTransaction(error.Type());
 		}
-		result.SetError(error);
-	} else {
-		if (!ErrorInvalidatesTransaction(error.Type())) {
-			invalidate_transaction = false;
-		} else if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
-			// fatal exceptions invalidate the entire database
-			auto &db_instance = DatabaseInstance::GetDatabase(*this);
-			ValidChecker::Invalidate(db_instance, error.RawMessage());
-		}
-		ProcessError(error, active_query->query);
-		result.SetError(std::move(error));
+	} else if (!ErrorInvalidatesTransaction(error.Type())) {
+		invalidate_transaction = false;
+	} else if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
+		// fatal exceptions invalidate the entire database
+		auto &db_instance = DatabaseInstance::GetDatabase(*this);
+		ValidChecker::Invalidate(db_instance, error.RawMessage());
 	}
+	ProcessError(error, active_query->query);
+	result.SetError(std::move(error));
 	EndQueryInternal(lock, false, invalidate_transaction, result.GetErrorObject());
 	return QueryResultState::EXECUTION_ERROR;
 }
