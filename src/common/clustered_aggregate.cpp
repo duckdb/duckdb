@@ -269,7 +269,23 @@ const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const 
 		return nullptr;
 	}
 	if (cached_dict_sel == dict_data) {
-		return composed_sel_data;
+		return state ? state->composed_sel_data.get() : local_composed_sel_data.get();
+	}
+	// Most clustered updates operate on flat or unified vectors. Only dictionary vectors need a
+	// composed selection, so allocate this scratch lazily. Hash-table users reuse the buffer in
+	// ClusteredAggrState; SetSingleRun users keep a private heap-backed buffer.
+	sel_t *composed_sel_data;
+	if (state) {
+		if (!state->composed_sel_data) {
+			state->composed_sel_data =
+			    make_unsafe_uniq_array_uninitialized<sel_t>(STANDARD_VECTOR_SIZE);
+		}
+		composed_sel_data = state->composed_sel_data.get();
+	} else {
+		if (!local_composed_sel_data) {
+			local_composed_sel_data = make_unsafe_uniq_array_uninitialized<sel_t>(STANDARD_VECTOR_SIZE);
+		}
+		composed_sel_data = local_composed_sel_data.get();
 	}
 	idx_t pos = 0;
 	for (idx_t r = 0; r < n_group_runs; r++) {
@@ -290,19 +306,21 @@ void ClusteredAggrState::Initialize() {
 	// Total = 2 * (MAX_HOTKEYS/2 + 1) * HALF_VEC = (MAX_HOTKEYS/2 + 1) * STANDARD_VECTOR_SIZE.
 	arena = make_unsafe_uniq_array_uninitialized<sel_t>((ClusteredAggr::MAX_HOTKEYS / 2 + 1) * STANDARD_VECTOR_SIZE);
 	slots = make_unsafe_uniq_array_uninitialized<uint64_t>(2 * ClusteredAggr::HASHTAB_SZ);
+	group_runs = make_unsafe_uniq_array_uninitialized<ClusteredAggr::GroupRun>(ClusteredAggr::MAX_RUNS);
 	std::fill_n(slots.get(), 2 * ClusteredAggr::HASHTAB_SZ, ClusteredAggr::FREE_SLOT);
 	skipped_opportunities = 0;
 	retry_backoff = 1;
 }
 
 bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count) {
-	if (!arena) {
+	if (!arena || !group_runs) {
 		return false;
 	}
 	if (skipped_opportunities > 0) {
 		skipped_opportunities--;
 		return false;
 	}
+	clustered.BindGroupRuns(group_runs.get());
 	if (count >= ClusteredAggr::SAMPLE_SIZE &&
 	    clustered.TryClustered(group_ids, static_cast<sel_t>(count), arena.get(), slots.get())) {
 		clustered.state = this;
