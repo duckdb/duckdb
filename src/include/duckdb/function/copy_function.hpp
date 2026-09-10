@@ -25,6 +25,8 @@ class Binder;
 class ColumnDataCollection;
 class ExecutionContext;
 class PhysicalOperatorLogger;
+struct ColumnDataAppendState;
+struct TupleDataChunkState;
 
 struct CopyFunctionInfo {
 	virtual ~CopyFunctionInfo() = default;
@@ -232,6 +234,46 @@ public:
 
 	const optional_idx batch_size;
 	const optional_idx batch_size_bytes;
+};
+
+//! Appends chunks into a batch collection, cutting within a chunk to respect BATCH_SIZE_BYTES.
+//! A batch can only end on an append boundary, so a chunk wider than the limit makes it unreachable
+class CopyBatchAppender {
+public:
+	CopyBatchAppender(const vector<LogicalType> &types, const optional_idx &batch_size,
+	                  const optional_idx &batch_size_bytes);
+	~CopyBatchAppender();
+
+public:
+	//! Appends rows from offset and returns whether the collection meets the flush criteria.
+	//! Always appends at least one row, so looping until offset == chunk.size() terminates
+	bool AppendUntilFull(ColumnDataCollection &collection, ColumnDataAppendState &append_state, DataChunk &chunk,
+	                     idx_t &offset);
+	//! Bytes already in the collection - 0 when fresh
+	void SetCollectionBytes(idx_t bytes) {
+		collection_bytes = bytes;
+	}
+
+private:
+	void Append(ColumnDataCollection &collection, ColumnDataAppendState &append_state, DataChunk &chunk, idx_t &offset);
+	//! Fills row_bytes_state with the per-row heap sizes of chunk
+	void ComputeRowBytes(DataChunk &chunk);
+	//! Rows from offset that still fit in budget, at least one
+	idx_t RowsThatFit(idx_t count, idx_t offset, idx_t budget) const;
+
+private:
+	const optional_idx batch_size;
+	const optional_idx batch_size_bytes;
+	//! Bytes a row occupies regardless of its contents
+	idx_t fixed_row_bytes = 0;
+	//! Whether any column can carry a variable-sized payload
+	bool variable_row_bytes = false;
+	//! Per-row sizes of the chunk being appended, only filled if variable_row_bytes
+	unique_ptr<TupleDataChunkState> row_bytes_state;
+	//! View used to append part of a chunk
+	unique_ptr<DataChunk> partial;
+	//! Bytes held by the collection, carried so SizeInBytes() is called once per append
+	idx_t collection_bytes = 0;
 };
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
