@@ -209,8 +209,8 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &
 //! The function a collation pushes into a query, it writes the sort key as a blob
 static ScalarFunction GetCollateFunction(const string &collation, const string &tag) {
 	string fname = IcuBindData::EncodeFunctionName(collation);
-	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::BLOB, ICUCollateFunction<false>,
-	                      ICUCollateBind);
+	ScalarFunction result(Identifier(fname), {}, LogicalType::BLOB, ICUCollateFunction<false>, ICUCollateBind);
+	result.GetSignature().AddParameter("str", LogicalType::VARCHAR);
 	//! collation tag is added into the Function extra info
 	result.extra_info = tag;
 	result.SetInitStateCallback(CollatorLocalState::Init);
@@ -223,8 +223,8 @@ static ScalarFunction GetCollateFunction(const string &collation, const string &
 //! queries and plans that call it directly keep working
 static ScalarFunction GetICUCollateFunction(const string &collation, const string &tag) {
 	string fname = IcuBindData::EncodeHexFunctionName(collation);
-	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction<true>,
-	                      ICUCollateBind);
+	ScalarFunction result(Identifier(fname), {}, LogicalType::VARCHAR, ICUCollateFunction<true>, ICUCollateBind);
+	result.GetSignature().AddParameter("str", LogicalType::VARCHAR);
 	result.extra_info = tag;
 	result.SetInitStateCallback(CollatorLocalState::Init);
 	result.SetSerializeCallback(IcuBindData::Serialize);
@@ -430,8 +430,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterCollation(info);
 	loader.RegisterFunction(GetICUCollateFunction("noaccent", "und-u-ks-level1-kc-true"));
 
-	ScalarFunction sort_key("icu_sort_key", {{"str", LogicalType::VARCHAR}, {"collator", LogicalType::VARCHAR}},
-	                        LogicalType::VARCHAR, ICUCollateFunction<true>, ICUSortKeyBind);
+	ScalarFunction sort_key("icu_sort_key", {}, LogicalType::VARCHAR, ICUCollateFunction<true>, ICUSortKeyBind);
+	sort_key.GetSignature().AddParameter("str", LogicalType::VARCHAR).AddParameter("collator", LogicalType::VARCHAR);
 	sort_key.SetInitStateCallback(CollatorLocalState::Init);
 	loader.RegisterFunction(sort_key);
 

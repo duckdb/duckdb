@@ -299,9 +299,14 @@ struct ICUDateAdd : public ICUDateFunc {
 	static void AddDateAgeFunctions(const Identifier &name, ExtensionLoader &loader) {
 		//	age(temporal, temporal)
 		ScalarFunctionSet set {name};
-		set.AddFunction(GetBinaryAgeFunction<timestamp_tz_t, timestamp_tz_t, ICUCalendarAge>(
-		    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ));
-		set.AddFunction(GetUnaryAgeFunction<timestamp_tz_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ));
+		auto binary_fun = GetBinaryAgeFunction<timestamp_tz_t, timestamp_tz_t, ICUCalendarAge>(
+		    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ);
+		binary_fun.GetSignature().GetParameter(0).SetName("timestamp1");
+		binary_fun.GetSignature().GetParameter(1).SetName("timestamp2");
+		set.AddFunction(binary_fun);
+		auto unary_fun = GetUnaryAgeFunction<timestamp_tz_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ);
+		unary_fun.GetSignature().GetParameter(0).SetName("timestamp");
+		set.AddFunction(unary_fun);
 		// throws for dates that overflow the timestamp range
 		set.SetFallible();
 		loader.RegisterFunction(set);
