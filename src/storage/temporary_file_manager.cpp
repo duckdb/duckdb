@@ -671,8 +671,9 @@ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext co
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto block_header_size = index.block_header_size.GetIndex();
-	auto buffer = buffer_manager.ConstructManagedBuffer(buffer_manager.GetBlockAllocSize() - block_header_size,
-	                                                    block_header_size, std::move(reusable_buffer), index.buffer_type);
+	auto buffer =
+	    buffer_manager.ConstructManagedBuffer(buffer_manager.GetBlockAllocSize() - block_header_size, block_header_size,
+	                                          std::move(reusable_buffer), index.buffer_type);
 	buffer = handle->ReadTemporaryBuffer(context, index, std::move(buffer));
 	{
 		// remove the block (and potentially erase the temp file)
