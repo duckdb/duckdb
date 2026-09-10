@@ -232,3 +232,18 @@ SELECT remap_struct(
 {'id': 2, 'lst2': [1, 2, 3]}
 {'id': 3, 'lst2': [1, 2, 3]}
 {'id': 4, 'lst2': [1, 2, 3]}
+
+# constant map child in a flat struct
+query I
+SELECT remap_struct(
+    {'id': i, 'mp': map([1], ['one'])},
+    NULL::STRUCT(id INTEGER, mp2 MAP(INTEGER, VARCHAR)),
+    {'id': 'id', 'mp2': ROW('mp', {'key': 'key', 'value': 'value'})},
+    NULL
+) FROM range(5) tbl(i);
+----
+{'id': 0, 'mp2': {1=one}}
+{'id': 1, 'mp2': {1=one}}
+{'id': 2, 'mp2': {1=one}}
+{'id': 3, 'mp2': {1=one}}
+{'id': 4, 'mp2': {1=one}}
