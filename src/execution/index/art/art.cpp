@@ -33,6 +33,8 @@
 namespace duckdb {
 
 struct ARTIndexScanState : public IndexScanState {
+	//! All equality keys; a non-null empty chunk represents an empty batch, not a full scan.
+	unique_ptr<DataChunk> equality_keys;
 	//! The predicates to scan.
 	//! A single predicate for point lookups, and two predicates for range scans.
 	Value values[2];
@@ -253,6 +255,15 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 	}
 	// Greater-than predicate.
 	return InitializeScanSinglePredicate(high_value, high_comparison_type);
+}
+
+unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> keys) const {
+	if (!keys || keys->GetTypes() != logical_types) {
+		throw InternalException("ART batch scan keys must have the index's logical types");
+	}
+	auto result = make_uniq<ARTIndexScanState>();
+	result->equality_keys = std::move(keys);
+	return std::move(result);
 }
 
 unique_ptr<IndexScanState> ART::InitializeFullScan() {
@@ -773,8 +784,46 @@ bool ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound,
 	return it.Scan(upper_bound, row_ids, right_equal) == ARTScanResult::COMPLETED;
 }
 
+bool ART::ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const {
+	D_ASSERT(input.GetTypes() == logical_types);
+	if (input.size() == 0) {
+		return true;
+	}
+	ArenaAllocator arena(Allocator::Get(db));
+	unsafe_vector<ARTKey> keys(input.size());
+	if (HasLegacyGeometryKeys()) {
+		DataChunk converted;
+		ConvertKeyInput(input, converted);
+		GenerateKeys<>(arena, converted, keys);
+	} else {
+		GenerateKeys<>(arena, input, keys);
+	}
+	lock_guard<mutex> guard(lock);
+	for (const auto &key : keys) {
+		if (!key.Empty() && !SearchEqual(key, row_ids)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
+	if (scan_state.equality_keys) {
+		auto &keys = *scan_state.equality_keys;
+		if (keys.size() <= STANDARD_VECTOR_SIZE) {
+			return ScanBatch(keys, row_ids);
+		}
+		DataChunk chunk;
+		chunk.InitializeEmpty(keys.GetTypes());
+		for (idx_t offset = 0; offset < keys.size(); offset += STANDARD_VECTOR_SIZE) {
+			chunk.Slice(keys, offset, MinValue<idx_t>(offset + STANDARD_VECTOR_SIZE, keys.size()));
+			if (!ScanBatch(chunk, row_ids)) {
+				return false;
+			}
+		}
+		return true;
+	}
 	if (scan_state.values[0].IsNull()) {
 		// full scan
 		lock_guard<mutex> l(lock);

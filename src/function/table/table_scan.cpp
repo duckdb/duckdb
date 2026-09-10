@@ -683,28 +683,6 @@ void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnR
 	}
 }
 
-vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, const TableFilter &filter,
-                                                        idx_t storage_idx) {
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExtractFilterExpressions");
-	ColumnBinding binding(TableIndex(0), ProjectionIndex(storage_idx));
-	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
-
-	// Extract all exact values we can derive from the filter tree.
-	vector<unique_ptr<Expression>> expressions;
-	value_set_t values;
-	if (ExtractValuesFromExpression(*expr_filter.expr, values)) {
-		ExtractExpressionsFromValues(values, *bound_ref, expressions);
-	}
-
-	// Attempt matching the top-level filter to the index expression.
-	if (expressions.empty()) {
-		auto filter_expr = expr_filter.ToExpression(*bound_ref);
-		expressions.push_back(std::move(filter_expr));
-	}
-
-	return expressions;
-}
-
 bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list, TableFunctionInitInput &input,
                   TableFilterSet &filter_set, RowIdVectorOutput &row_ids) {
 	row_ids.Reset();
@@ -755,7 +733,51 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 		return false;
 	}
 
-	auto expressions = ExtractFilterExpressions(col, *filter, storage_index.GetIndex());
+	// Extract exact values once, preserving the batch instead of creating a predicate per key.
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(*filter, "TryScanIndex");
+	ColumnBinding binding(TableIndex(0), storage_index);
+	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
+	value_set_t batch_values;
+	ExtractValuesFromExpression(*expr_filter.expr, batch_values);
+	bool can_batch = batch_values.size() > 1;
+	for (const auto &value : batch_values) {
+		if (value.type() != col.Type()) {
+			can_batch = false;
+			break;
+		}
+	}
+	if (can_batch) {
+		auto representative =
+		    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, std::move(bound_ref),
+		                                      make_uniq<BoundConstantExpression>(*batch_values.begin()));
+		if (!art->TryInitializeScan(*index_expr, *representative)) {
+			return false;
+		}
+		auto key_chunk = make_uniq<DataChunk>();
+		key_chunk->Initialize(Allocator::DefaultAllocator(), {col.Type()}, batch_values.size());
+		for (const auto &value : batch_values) {
+			key_chunk->data[0].Append(value);
+		}
+		auto scan_state = art->InitializeBatchScan(std::move(key_chunk));
+		if (!art->Scan(*scan_state, row_ids)) {
+			row_ids.Reset();
+			return false;
+		}
+		for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
+			auto delta_index = art.FindDelta(delta);
+			if (delta_index && !delta_index->Scan(*scan_state, row_ids)) {
+				row_ids.Reset();
+				return false;
+			}
+		}
+		return true;
+	}
+
+	vector<unique_ptr<Expression>> expressions;
+	ExtractExpressionsFromValues(batch_values, *bound_ref, expressions);
+	if (expressions.empty()) {
+		expressions.push_back(expr_filter.ToExpression(*bound_ref));
+	}
 	for (const auto &filter_expr : expressions) {
 		auto scan_state = art->TryInitializeScan(*index_expr, *filter_expr);
 		if (!scan_state) {

@@ -1,0 +1,54 @@
+# name: test/sql/index/art/scan/test_batch_scan_transaction.test
+# description: Reuse a multi-chunk scan state across the main index and deleted-row delta
+# group: [scan]
+
+statement ok
+CREATE TABLE t AS SELECT i, i AS payload FROM range(10000) r(i);
+
+statement ok
+CREATE UNIQUE INDEX idx ON t(i);
+
+statement ok old
+BEGIN;
+
+query I old
+SELECT count(*) FROM t;
+----
+10000
+
+statement ok
+DELETE FROM t WHERE i IN (1, 19);
+
+statement ok
+INSERT INTO t VALUES (1, 1000), (19, 2000);
+
+# Reuse the full, multi-chunk key state for both the main index and deleted-row delta.
+statement ok old
+SET dynamic_or_filter_threshold=3000;
+
+statement ok old
+SET index_scan_max_count=10000;
+
+query II old
+EXPLAIN ANALYZE SELECT sum(payload) FROM t SEMI JOIN (SELECT i*3+1 AS i FROM range(3000) r(i)) keys USING(i);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I old
+SELECT sum(payload) FROM t SEMI JOIN (SELECT i*3+1 AS i FROM range(3000) r(i)) keys USING(i);
+----
+13498500
+
+statement ok
+SET dynamic_or_filter_threshold=3000;
+
+statement ok
+SET index_scan_max_count=10000;
+
+query I
+SELECT sum(payload) FROM t SEMI JOIN (SELECT i*3+1 AS i FROM range(3000) r(i)) keys USING(i);
+----
+13501480
+
+statement ok old
+ROLLBACK;

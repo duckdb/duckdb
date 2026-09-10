@@ -77,8 +77,12 @@ public:
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr) const;
 	unique_ptr<IndexScanState> InitializeFullScan();
 	//! Perform a lookup on the ART, fetching up to the collection capacity.
-	//! If all row IDs were fetched, it return true, else false.
+	//! Returns false on capacity exhaustion; the caller must discard any partial output.
+	//! Equality batches skip NULL keys and append matching row IDs.
 	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const;
+	//! Take ownership of evaluated equality keys with the index's logical types, including an empty batch.
+	//! The returned state can be scanned repeatedly, including against compatible delta indexes.
+	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> keys) const;
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.
@@ -176,6 +180,7 @@ private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
+	bool ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const;
 	bool FullScan(RowIdVectorOutput &row_ids) const;
 	bool SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const;
 	bool SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const;
