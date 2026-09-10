@@ -180,7 +180,7 @@ private:
 	uint8_t prefix_count;
 
 	bool ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const;
-	bool ScanBatchChunk(DataChunk &input, RowIdVectorOutput &row_ids) const;
+	bool ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const;
 	bool FullScan(RowIdVectorOutput &row_ids) const;
 	bool SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const;
 	bool SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const;

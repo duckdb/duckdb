@@ -780,7 +780,7 @@ bool ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound,
 	return it.Scan(upper_bound, row_ids, right_equal) == ARTScanResult::COMPLETED;
 }
 
-bool ART::ScanBatchChunk(DataChunk &input, RowIdVectorOutput &row_ids) const {
+bool ART::ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const {
 	D_ASSERT(input.GetTypes() == logical_types);
 	D_ASSERT(input.size() <= STANDARD_VECTOR_SIZE);
 	if (input.size() == 0) {
@@ -808,13 +808,13 @@ bool ART::ScanBatchChunk(DataChunk &input, RowIdVectorOutput &row_ids) const {
 
 bool ART::ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const {
 	if (values.size() <= STANDARD_VECTOR_SIZE) {
-		return ScanBatchChunk(values, row_ids);
+		return ScanChunk(values, row_ids);
 	}
 	DataChunk chunk;
 	chunk.InitializeEmpty(values.GetTypes());
 	for (idx_t offset = 0; offset < values.size(); offset += STANDARD_VECTOR_SIZE) {
 		chunk.Slice(values, offset, MinValue<idx_t>(offset + STANDARD_VECTOR_SIZE, values.size()));
-		if (!ScanBatchChunk(chunk, row_ids)) {
+		if (!ScanChunk(chunk, row_ids)) {
 			return false;
 		}
 	}
