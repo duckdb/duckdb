@@ -12,12 +12,12 @@ CREATE TABLE t(x INTEGER)
 
 # regression guard: the duplicated value form must NOT appear
 query II
-EXPLAIN SELECT count(*) FROM t WHERE x * 0 = 1
+EXPLAIN SELECT count(*) FROM t WHERE x * 0 = x
 ----
 physical_plan	<!REGEX>:.*constant_or_null\(0, 0,.*
 
 # the non-duplicated form (value once, then child) must appear
 query II
-EXPLAIN SELECT count(*) FROM t WHERE x * 0 = 1
+EXPLAIN SELECT count(*) FROM t WHERE x * 0 = x
 ----
 physical_plan	<REGEX>:.*constant_or_null\(0, x\).*
