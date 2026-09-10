@@ -1,0 +1,30 @@
+# name: test/sql/variant/variant_nested_arrays.test
+# description: Test the nesting level limit (16) of variant arrays
+# group: [variant]
+
+require parquet
+
+
+# nested VARIANT with 16 levels (limit)
+query I
+SELECT variant_to_parquet_variant(
+    variant_bytes_to_variant(X'1100000301003d0301003903010035030100310301002d0301002903010025030100210301001d0301001903010015030100110301000d03010009030100050301000100')
+) IS NOT NULL
+----
+true
+
+# nested VARIANT with 17 levels (exceeding the maximum depth)
+statement error
+SELECT variant_to_parquet_variant(
+    variant_bytes_to_variant(X'110000030100410301003d0301003903010035030100310301002d0301002903010025030100210301001d0301001903010015030100110301000d03010009030100050301000100')
+)
+----
+VARIANT nesting exceeds maximum
+
+# nested VARIANT with 18 levels (exceeding the maximum depth)
+statement error
+SELECT variant_to_parquet_variant(
+    variant_bytes_to_variant(X'11000003010045030100410301003d0301003903010035030100310301002d0301002903010025030100210301001d0301001903010015030100110301000d03010009030100050301000100')
+)
+----
+VARIANT nesting exceeds maximum

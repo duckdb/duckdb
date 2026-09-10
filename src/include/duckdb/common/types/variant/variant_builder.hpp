@@ -29,7 +29,6 @@
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/limits.hpp"
-//#include "duckdb/extension/parquet/include/reader/variant/parquet_variant_iterator.hpp"
 
 #include <type_traits>
 #include <cstring>
@@ -102,7 +101,7 @@ struct VariantBuilder {
 	//! maps a key string to its (unsorted) dictionary index, owned by the result's keys vector
 	OrderedOwningStringMap<uint32_t> &dictionary;
 
-	static constexpr idx_t MAX_RECURSION_DEPTH = 16;
+	static constexpr idx_t MAX_NESTING_DEPTH = 16;
 
 	//! the offsets at which the current row's entries begin
 	idx_t row_values = 0;
@@ -157,10 +156,7 @@ struct VariantBuilder {
 
 	//! Emit an ARRAY value with 'n' elements. 'emit_fn(i)' must emit exactly one value for element i.
 	template <class EMIT_FN>
-	void EmitArray(idx_t n, EMIT_FN &&emit_fn, idx_t depth = 0) {
-		if (depth >= MAX_RECURSION_DEPTH) {
-			throw InvalidInputException("VARIANT nesting exceeds maximum of %d", MAX_RECURSION_DEPTH);
-		}
+	void EmitArray(idx_t n, EMIT_FN &&emit_fn) {
 		auto byte_offset = NumericCast<uint32_t>(blob.size());
 		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::ARRAY));
 		byte_offsets.push_back(byte_offset);
@@ -462,24 +458,9 @@ struct VariantBuilder {
 		}
 	}
 
-	idx_t BeginObject(idx_t n) {
+	idx_t BeginContainer(VariantLogicalType type_id, idx_t n) {
 		auto byte_offset = NumericCast<uint32_t>(blob.size());
-		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::OBJECT));
-		byte_offsets.push_back(byte_offset);
-		VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(n));
-		if (!n) {
-			return DConstants::INVALID_INDEX;
-		}
-		VariantBuilderAppendVarint(blob, LocalChild());
-		auto block = child_value_ids.size();
-		child_value_ids.resize(block + n);
-		child_key_ids.resize(block + n);
-		return block;
-	}
-
-	idx_t BeginArray(idx_t n) {
-		auto byte_offset = NumericCast<uint32_t>(blob.size());
-		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::ARRAY));
+		type_ids.push_back(static_cast<uint8_t>(type_id));
 		byte_offsets.push_back(byte_offset);
 		VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(n));
 		if (!n) {
@@ -530,10 +511,11 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 		idx_t index = 0;
 		idx_t block = 0;
 		vector<EntryT> object_children;
-		unique_ptr<ArrayIterT> array_children;
+		optional<ArrayIterT> array_children;
 	};
 
 	vector<Frame> stack;
+	stack.reserve(VariantBuilder::MAX_NESTING_DEPTH);
 
 	auto ProcessNode = [&](const NODE &node) {
 		if (node.IsNull() || node.IsMissing()) {
@@ -545,7 +527,10 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 		case VariantLogicalType::OBJECT: {
 			auto children = CollectObjectChildren(node);
 			auto n = children.size();
-			auto block = builder.BeginObject(n);
+			if (stack.size() >= VariantBuilder::MAX_NESTING_DEPTH) {
+				throw InvalidInputException("VARIANT nesting exceeds maximum of %d", VariantBuilder::MAX_NESTING_DEPTH);
+			}
+			auto block = builder.BeginContainer(VariantLogicalType::OBJECT, n);
 			if (block != DConstants::INVALID_INDEX) {
 				Frame frame;
 				frame.is_object = true;
@@ -558,12 +543,15 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 		case VariantLogicalType::ARRAY: {
 			auto array_iter = node.GetArrayChildren();
 			auto n = array_iter.size();
-			auto block = builder.BeginArray(n);
+			if (stack.size() >= VariantBuilder::MAX_NESTING_DEPTH) {
+				throw InvalidInputException("VARIANT nesting exceeds maximum of %d", VariantBuilder::MAX_NESTING_DEPTH);
+			}
+			auto block = builder.BeginContainer(VariantLogicalType::ARRAY, n);
 			if (block != DConstants::INVALID_INDEX) {
 				Frame frame;
 				frame.is_object = false;
 				frame.block = block;
-				frame.array_children = unique_ptr<ArrayIterT>(new ArrayIterT(std::move(array_iter)));
+				frame.array_children.emplace(std::move(array_iter));
 				stack.push_back(std::move(frame));
 			}
 			break;
@@ -578,23 +566,26 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 
 	while (!stack.empty()) {
 		auto &frame = stack.back();
-		idx_t count = frame.is_object ? frame.object_children.size() : frame.array_children->size();
+
+		const idx_t count = frame.is_object ? frame.object_children.size() : frame.array_children->size();
+
 		if (frame.index >= count) {
 			stack.pop_back();
 			continue;
 		}
-		idx_t i = frame.index++;
-		if (frame.is_object) {
+
+		const bool is_object = frame.is_object;
+		const idx_t block = frame.block;
+		const idx_t i = frame.index++;
+
+		if (is_object) {
 			auto &entry = frame.object_children[i];
-			builder.AssignObjectChild(frame.block, i, entry.key);
+			builder.AssignObjectChild(block, i, entry.key);
 			ProcessNode(entry.value);
 		} else {
-			builder.AssignArrayChild(frame.block, i);
+			builder.AssignArrayChild(block, i);
 			ProcessNode((*frame.array_children)[i]);
 		}
-		// frame may be invalidated by ProcessNode's push_back reallocating `stack` —
-		// nothing below this line touches frame, and the loop re-fetches stack.back()
-		// fresh on the next iteration.
 	}
 }
 
