@@ -1,4 +1,6 @@
 #include "duckdb/parser/peg/ast/column_constraint_entry.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/ast/column_constraints.hpp"
 #include "duckdb/parser/peg/ast/column_elements.hpp"
 #include "duckdb/parser/peg/ast/create_table_column_element.hpp"

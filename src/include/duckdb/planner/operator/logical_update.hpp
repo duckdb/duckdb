@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/row_id_handling.hpp"
 
 namespace duckdb {
+struct CreateInfo;
 class TableCatalogEntry;
 class LogicalGet;
 class LogicalProjection;

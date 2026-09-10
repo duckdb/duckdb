@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
+class MultiFileList;
 
 // The OpenerFileSystem is wrapper for a file system that pushes an appropriate FileOpener into the various API calls
 class OpenerFileSystem : public FileSystem {

@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/ast/add_column_entry.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/ast/column_constraint_entry.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"

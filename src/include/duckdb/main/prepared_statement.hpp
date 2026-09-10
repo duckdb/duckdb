@@ -21,6 +21,7 @@
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 class ClientContext;
 class SQLStatement;
 

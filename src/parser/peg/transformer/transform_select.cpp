@@ -1,4 +1,7 @@
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/peg/ast/distinct_clause.hpp"
@@ -58,11 +61,13 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectStatementInter
 	}
 	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(1));
 
-	if (!cte_map.map.empty()) {
-		select_statement->node->cte_map = std::move(cte_map);
-	}
 	vector<unique_ptr<ResultModifier>> result_modifiers;
 	transformer.TransformOptional<vector<unique_ptr<ResultModifier>>>(list_pr, 2, result_modifiers);
+	if (!cte_map.map.empty()) {
+		// the CTEs are visible while transforming the select statement and its result modifiers
+		transformer.stored_cte_map.pop_back();
+		select_statement->node->cte_map = std::move(cte_map);
+	}
 	for (auto &result_modifier : result_modifiers) {
 		select_statement->node->modifiers.push_back(std::move(result_modifier));
 	}
@@ -123,6 +128,10 @@ PEGTransformerFactory::FinalizeSelectStatementInternalTrampoline(PEGTransformer 
 
 	CommonTableExpressionMap cte_map;
 	if (process.child_results[0]) {
+		if (!process.GetResult<CommonTableExpressionMap>(0).map.empty()) {
+			// the CTEs are visible while transforming the select statement and its result modifiers
+			transformer.stored_cte_map.pop_back();
+		}
 		cte_map = process.TakeResult<CommonTableExpressionMap>(0);
 	}
 	auto select_statement = process.TakeResult<unique_ptr<SelectStatement>>(1);

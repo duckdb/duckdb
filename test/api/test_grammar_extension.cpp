@@ -17,6 +17,23 @@
 
 using namespace duckdb;
 
+struct RegisteredTransformResult {
+	idx_t value;
+};
+
+namespace duckdb {
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.test.RegisteredTransformResult", ::RegisteredTransformResult);
+} // namespace duckdb
+
+TEST_CASE("Transform result types use stable registered names", "[api][grammar_extension]") {
+	TypedTransformResult<RegisteredTransformResult> result({42});
+	auto copied_type_name = string(TransformResultTypeName<RegisteredTransformResult>());
+
+	REQUIRE(result.GetValuePointer(copied_type_name.c_str()) == &result.value);
+	REQUIRE(TryGetTransformResult<RegisteredTransformResult>(result) == &result.value);
+	REQUIRE(TryGetTransformResult<bool>(result) == nullptr);
+}
+
 class GrammarExtensionTestValueTransformProcess final : public TransformProcess {
 public:
 	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override {

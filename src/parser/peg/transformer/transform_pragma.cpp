@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 

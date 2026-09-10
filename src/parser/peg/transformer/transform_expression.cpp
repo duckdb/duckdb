@@ -1,4 +1,6 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
@@ -227,24 +229,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		lowercase_name = "count_star";
 	}
 
-	if (lowercase_name == "if") {
-		if (function_children.size() != 3) {
-			throw ParserException("Wrong number of arguments to IF.");
-		}
-		for (auto &arg : function_children) {
-			if (arg.HasName()) {
-				throw ParserException("Named arguments are not supported in IF expressions");
-			}
-		}
-
-		auto expr = make_uniq<CaseExpression>();
-		CaseCheck check;
-		check.when_expr = std::move(function_children[0].GetExpressionMutable());
-		check.then_expr = std::move(function_children[1].GetExpressionMutable());
-		expr->CaseChecksMutable().push_back(std::move(check));
-		expr->ElseMutable() = std::move(function_children[2].GetExpressionMutable());
-		return std::move(expr);
-	}
 	if (lowercase_name == "unpack") {
 		if (function_children.size() != 1) {
 			throw ParserException("Wrong number of arguments to the UNPACK operator");

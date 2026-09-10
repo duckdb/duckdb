@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"

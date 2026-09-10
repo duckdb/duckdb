@@ -1,6 +1,4 @@
-#include "duckdb/main/http/http_util.hpp"
-#include "duckdb/main/http/http_retry_budget.hpp"
-
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/hash_functions.hpp"
@@ -11,6 +9,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_file_opener.hpp"
+#include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/http/http_retry_budget.hpp"
 #include "duckdb/main/settings.hpp"
 
 #ifdef DISABLE_DUCKDB_REMOTE_INSTALL

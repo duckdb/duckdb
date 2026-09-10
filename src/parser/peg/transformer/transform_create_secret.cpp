@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
