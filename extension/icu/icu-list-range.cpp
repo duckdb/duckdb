@@ -166,8 +166,8 @@ struct ICUListRange : public ICUDateFunc {
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		ScalarFunctionSet generate_series("generate_series");
-		ScalarFunction generate_series_fun({}, LogicalType::LIST(LogicalType::TIMESTAMP_TZ),
-		                                   ICUListRangeFunction<true>, Bind);
+		ScalarFunction generate_series_fun({}, LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<true>,
+		                                   Bind);
 		generate_series_fun.GetSignature()
 		    .AddParameter("start", LogicalType::TIMESTAMP_TZ)
 		    .AddParameter("stop", LogicalType::TIMESTAMP_TZ)

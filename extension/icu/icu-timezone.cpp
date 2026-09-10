@@ -651,8 +651,8 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 
 	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
-		ScalarFunction ts_fun({}, LogicalType::TIMESTAMP_TZ, Execute<ICUFromNaiveTimestamp, timestamp_t, timestamp_tz_t>,
-		                      Bind);
+		ScalarFunction ts_fun({}, LogicalType::TIMESTAMP_TZ,
+		                      Execute<ICUFromNaiveTimestamp, timestamp_t, timestamp_tz_t>, Bind);
 		ts_fun.GetSignature()
 		    .AddParameter("timezone", LogicalType::VARCHAR)
 		    .AddParameter("timestamp", LogicalType::TIMESTAMP);

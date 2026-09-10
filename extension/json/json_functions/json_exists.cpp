@@ -21,7 +21,9 @@ static void GetExistsFunctionsInternal(ScalarFunctionSet &set, const LogicalType
 	set.AddFunction(single_fun);
 	ScalarFunction many_fun({}, LogicalType::LIST(LogicalType::BOOLEAN), ManyExistsFunction,
 	                        JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init);
-	many_fun.GetSignature().AddParameter("json", input_type).AddParameter("path", LogicalType::LIST(LogicalType::VARCHAR));
+	many_fun.GetSignature()
+	    .AddParameter("json", input_type)
+	    .AddParameter("path", LogicalType::LIST(LogicalType::VARCHAR));
 	set.AddFunction(many_fun);
 }
 

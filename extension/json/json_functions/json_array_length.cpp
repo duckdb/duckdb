@@ -29,7 +29,9 @@ static void GetArrayLengthFunctionsInternal(ScalarFunctionSet &set, const Logica
 	set.AddFunction(path_fun);
 	ScalarFunction many_fun({}, LogicalType::LIST(LogicalType::UBIGINT), ManyArrayLengthFunction,
 	                        JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init);
-	many_fun.GetSignature().AddParameter("json", input_type).AddParameter("path", LogicalType::LIST(LogicalType::VARCHAR));
+	many_fun.GetSignature()
+	    .AddParameter("json", input_type)
+	    .AddParameter("path", LogicalType::LIST(LogicalType::VARCHAR));
 	set.AddFunction(many_fun);
 }
 

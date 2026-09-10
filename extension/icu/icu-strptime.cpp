@@ -627,7 +627,9 @@ struct ICUStrftime : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		ScalarFunction tstz_fun({}, LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_t>, Bind);
-		tstz_fun.GetSignature().AddParameter("data", LogicalType::TIMESTAMP_TZ).AddParameter("format", LogicalType::VARCHAR);
+		tstz_fun.GetSignature()
+		    .AddParameter("data", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("format", LogicalType::VARCHAR);
 		set.AddFunction(tstz_fun);
 		ScalarFunction tstz_ns_fun({}, LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_ns_t>, Bind);
 		tstz_ns_fun.GetSignature()

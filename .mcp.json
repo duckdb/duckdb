@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "clion": {
+      "url": "http://127.0.0.1:64362/stream",
+      "type": "http"
+    }
+  }
+}
