@@ -673,63 +673,41 @@ static bool ExtractValuesFromExpression(const Expression &expr, value_set_t &val
 	return !values.empty();
 }
 
-static void ExtractExpressionsFromValues(const value_set_t &unique_values, const BoundColumnRefExpression &bound_ref,
-                                        vector<unique_ptr<Expression>> &expressions) {
-	for (const auto &value : unique_values) {
-		auto bound_constant = make_uniq<BoundConstantExpression>(value);
-		auto filter_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
-		                                                     std::move(bound_constant));
-		expressions.push_back(std::move(filter_expr));
-	}
-}
-
-static vector<unique_ptr<IndexScanState>>
-TryInitializeIndexScans(const IndexReadHandle<ART> &art, const Expression &index_expr, const ColumnDefinition &col,
-                        const TableFilter &filter, ProjectionIndex storage_index) {
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "TryInitializeIndexScans");
+static unique_ptr<IndexScanState> TryInitializeIndexScan(const IndexReadHandle<ART> &art, const Expression &index_expr,
+                                                       const ColumnDefinition &col, const TableFilter &filter,
+                                                       ProjectionIndex storage_index) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "TryInitializeIndexScan");
 	ColumnBinding binding(TableIndex(0), storage_index);
 	BoundColumnRefExpression bound_ref(col.Name(), col.Type(), binding);
 
-	// Keep extracted equality values together when they can use the batch API.
 	value_set_t values;
-	ExtractValuesFromExpression(*expr_filter.expr, values);
-	bool can_batch = values.size() > 1;
-	for (const auto &value : values) {
-		if (value.type() != col.Type()) {
-			can_batch = false;
-			break;
-		}
+	if (!ExtractValuesFromExpression(*expr_filter.expr, values)) {
+		// Ranges and other filters use the existing expression-based initializer.
+		auto filter_expr = expr_filter.ToExpression(bound_ref);
+		return art->TryInitializeScan(index_expr, *filter_expr);
 	}
-	if (can_batch) {
-		// Extracted values compare the column itself, which must match the indexed expression.
-		if (!bound_ref.Equals(index_expr)) {
-			return {};
-		}
-		auto value_chunk = make_uniq<DataChunk>();
-		value_chunk->Initialize(Allocator::DefaultAllocator(), {col.Type()}, values.size());
-		for (const auto &value : values) {
-			value_chunk->data[0].Append(value);
-		}
-		vector<unique_ptr<IndexScanState>> states;
-		states.push_back(art->InitializeBatchScan(std::move(value_chunk)));
-		return states;
+	if (values.size() == 1) {
+		// Preserve the scalar path when the filter resolves to a single equality.
+		auto filter_expr = BoundComparisonExpression::Create(
+		    ExpressionType::COMPARE_EQUAL, bound_ref.Copy(), make_uniq<BoundConstantExpression>(*values.begin()));
+		return art->TryInitializeScan(index_expr, *filter_expr);
 	}
 
-	// Preserve expression-based initialization for single values, ranges, and values requiring fallback.
-	vector<unique_ptr<Expression>> expressions;
-	ExtractExpressionsFromValues(values, bound_ref, expressions);
-	if (expressions.empty()) {
-		expressions.push_back(expr_filter.ToExpression(bound_ref));
+	// A batch contains values of the column itself, so it requires a matching index expression and types.
+	if (!bound_ref.Equals(index_expr)) {
+		return nullptr;
 	}
-	vector<unique_ptr<IndexScanState>> states;
-	for (const auto &filter_expr : expressions) {
-		auto state = art->TryInitializeScan(index_expr, *filter_expr);
-		if (!state) {
-			return {};
+	for (const auto &value : values) {
+		if (value.type() != col.Type()) {
+			return nullptr;
 		}
-		states.push_back(std::move(state));
 	}
-	return states;
+	auto value_chunk = make_uniq<DataChunk>();
+	value_chunk->Initialize(Allocator::DefaultAllocator(), {col.Type()}, values.size());
+	for (const auto &value : values) {
+		value_chunk->data[0].Append(value);
+	}
+	return art->InitializeBatchScan(std::move(value_chunk));
 }
 
 bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list, TableFunctionInitInput &input,
@@ -782,21 +760,19 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 		return false;
 	}
 
-	auto scan_states = TryInitializeIndexScans(art, *index_expr, col, *filter, storage_index);
-	if (scan_states.empty()) {
+	auto scan_state = TryInitializeIndexScan(art, *index_expr, col, *filter, storage_index);
+	if (!scan_state) {
 		return false;
 	}
-	for (const auto &scan_state : scan_states) {
-		if (!art->Scan(*scan_state, row_ids)) {
+	if (!art->Scan(*scan_state, row_ids)) {
+		row_ids.Reset();
+		return false;
+	}
+	for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
+		auto delta_index = art.FindDelta(delta);
+		if (delta_index && !delta_index->Scan(*scan_state, row_ids)) {
 			row_ids.Reset();
 			return false;
-		}
-		for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
-			auto delta_index = art.FindDelta(delta);
-			if (delta_index && !delta_index->Scan(*scan_state, row_ids)) {
-				row_ids.Reset();
-				return false;
-			}
 		}
 	}
 	return true;
