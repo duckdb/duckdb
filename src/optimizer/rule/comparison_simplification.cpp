@@ -78,6 +78,12 @@ static bool ConstantCastIsInvertible(BoundFunctionExpression &expr, BoundFunctio
 	if (cast_constant.IsNull() || BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
 		return true;
 	}
+	// This asks about the constant, not the column, and the constant was cast strictly just above - for
+	// integers that already proves it is exactly representable, so no type-level guarantee is needed. The
+	// column side is checked separately by the caller.
+	if (cast_expression.GetReturnType().IsIntegral() && target_type.IsIntegral()) {
+		return true;
+	}
 	if (target_type.id() != LogicalTypeId::DATE || cast_expression.GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
 		return false;
 	}

@@ -56,7 +56,7 @@ public:
 		D_ASSERT(TryGetTransformResult<bool>(*child_result));
 		auto statement = make_uniq<SelectStatement>();
 		auto select_node = make_uniq<SelectNode>();
-		select_node->select_list.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
+		select_node->select_list.push_back(ConstantExpression::Integer(42));
 		select_node->from_table = make_uniq<EmptyTableRef>();
 		statement->node = std::move(select_node);
 		return TransformStep::Complete(
