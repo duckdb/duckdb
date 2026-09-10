@@ -1226,6 +1226,7 @@ ScalarFunctionSet RoundEvenFun::GetFunctions() {
 		}
 		round_even.AddFunction(std::move(round_even_function));
 	}
+	round_even.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round_even;
 }
 

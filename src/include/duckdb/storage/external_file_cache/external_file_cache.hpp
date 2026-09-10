@@ -45,7 +45,7 @@ struct CacheValidationInfo {
 	//! Last modified time. Zero/non-finite if the storage backend does not provide one.
 	timestamp_t last_modified = timestamp_t(0);
 	//! Freshness deadline for files without validators (e.g., HTTP Cache-Control).
-	//! The deadline is inclusive: cached data may be served while the current time is at or before it.
+	//! The deadline is exclusive: cached data may be served only while the current time is before it.
 	//! Unset means the storage backend does not provide expiry information.
 	//! Positive/negative infinity mean always valid/invalid.
 	optional<timestamp_t> cache_valid_until;
