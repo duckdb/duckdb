@@ -139,6 +139,38 @@ void PrefixHandle::Append(ART &art, PrefixHandle prefix, NodePtr other) {
 	prefix.Child(art) = other;
 }
 
+NodePtr PrefixHandle::Split(ART &art, NodePtr &node, NodePtr &replacement, const uint8_t pos) {
+	D_ASSERT(node.HasMetadata());
+	D_ASSERT(node.GetType() == PREFIX);
+	D_ASSERT(replacement.HasMetadata());
+
+	NodePtr child;
+	{
+		PrefixHandle prefix(NodeHandle(art, node));
+		const auto count = prefix.GetCount(art);
+		D_ASSERT(pos < count);
+
+		if (pos + 1 < count) {
+			const auto suffix_count = UnsafeNumericCast<uint8_t>(count - pos - 1);
+			auto suffix = NewInternal(art, child, prefix.Data(), suffix_count, pos + 1);
+			Append(art, std::move(suffix), prefix.Child(art));
+		} else {
+			child = prefix.Child(art);
+		}
+
+		if (pos != 0) {
+			prefix.SetCount(art, pos);
+			prefix.Child(art) = replacement;
+			return child;
+		}
+		replacement.SetGateStatus(node.GetGateStatus());
+	}
+
+	NodePtr::FreeNode(art, node);
+	node = replacement;
+	return child;
+}
+
 void Prefix::Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte,
                     const GateStatus node4_status, const GateStatus status) {
 	// We have four situations from which we enter here:
