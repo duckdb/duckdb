@@ -146,15 +146,17 @@ ScalarFunctionSet SwitchFun::GetFunctions() {
 	auto val_type = LogicalType::TEMPLATE("V");
 	ScalarFunctionSet func_set;
 
-	vector<vector<pair<Identifier, LogicalType>>> function_variations = {
-	    {{"key", key_type}, {"map", LogicalType::MAP(key_type, val_type)}},
-	    {{"key", key_type}, {"map", LogicalType::MAP(key_type, val_type)}, {"value", val_type}},
-	    {{"map", LogicalType::MAP(key_type, val_type)}, {"value", val_type}},
-	    {{"map", LogicalType::MAP(key_type, val_type)}}};
+	// each variation is paired with the bind function matching the position of its MAP(K, V) parameter
+	vector<pair<vector<pair<Identifier, LogicalType>>, bind_scalar_function_t>> function_variations = {
+	    {{{"key", key_type}, {"map", LogicalType::MAP(key_type, val_type)}}, SwitchBindReturnType<1>},
+	    {{{"key", key_type}, {"map", LogicalType::MAP(key_type, val_type)}, {"value", val_type}},
+	     SwitchBindReturnType<1>},
+	    {{{"map", LogicalType::MAP(key_type, val_type)}, {"value", val_type}}, SwitchBindReturnType<0>},
+	    {{{"map", LogicalType::MAP(key_type, val_type)}}, SwitchBindReturnType<0>}};
 
 	for (const auto &variation : function_variations) {
-		auto switch_expression = ScalarFunction(vector<LogicalType> {}, val_type, nullptr, SwitchBindReturnType, nullptr);
-		for (const auto &param : variation) {
+		auto switch_expression = ScalarFunction(vector<LogicalType> {}, val_type, nullptr, variation.second, nullptr);
+		for (const auto &param : variation.first) {
 			switch_expression.GetSignature().AddParameter(param.first, param.second);
 		}
 		switch_expression.SetBindExpressionCallback(SwitchBindExpression);
