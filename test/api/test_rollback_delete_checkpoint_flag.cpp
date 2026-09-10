@@ -11,8 +11,10 @@
 
 using namespace duckdb; // NOLINT
 
-TEST_CASE("Rolled-back DELETE must not stick uncheckpointed_delete_commit flag", "[storage][rollback][checkpoint]") {
-	DuckDB db;
+TEST_CASE("Rolled-back DELETE must not stick uncheckpointed_delete_commit flag",           "[storage][rollback][checkpoint]") {
+	auto path = TestCreatePath("rollback_delete_checkpoint_flag.db");
+	DeleteDatabase(path);
+	DuckDB db(path);
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(k INTEGER)"));
