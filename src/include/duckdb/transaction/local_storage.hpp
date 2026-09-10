@@ -94,7 +94,7 @@ public:
 	//! Whether this storage holds optimistically written (flushed) row groups
 	bool HasFlushedRowGroups() const;
 	void Rollback();
-	idx_t EstimatedSize();
+	idx_t EstimatedSize() const;
 
 	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
 	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);
@@ -158,8 +158,8 @@ public:
 	void Scan(CollectionScanState &state, const vector<StorageIndex> &column_ids, DataChunk &result);
 
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
-	bool NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
-	                      CollectionScanState &scan_state);
+	optional_idx NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
+	                              CollectionScanState &scan_state, bool initialize_columns = true);
 
 	//! Begin appending to the local storage
 	void InitializeAppend(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
@@ -220,6 +220,9 @@ public:
 
 	ClientContext &GetClientContext() const {
 		return context;
+	}
+	DuckTransaction &GetTransaction() const {
+		return transaction;
 	}
 
 	void FlushBulkAppendBlocksAndSync(AttachedDatabase &db);

@@ -57,3 +57,90 @@ query I
 SELECT COUNT(*) FROM duckdb_triggers();
 ----
 1
+
+# RENAME COLUMN: UPDATE OF column list must track the rename (issue #24209)
+statement ok
+CREATE TABLE t2(i INT, j INT);
+
+statement ok
+CREATE TABLE audit2(x INT);
+
+statement ok
+CREATE TRIGGER tr2 AFTER UPDATE OF j ON t2 FOR EACH STATEMENT
+INSERT INTO audit2 VALUES (1);
+
+statement ok
+INSERT INTO t2 VALUES (0, 0);
+
+# trigger fires before rename
+statement ok
+UPDATE t2 SET j = 1;
+
+query I
+SELECT COUNT(*) FROM audit2;
+----
+1
+
+statement ok
+ALTER TABLE t2 RENAME COLUMN j TO k;
+
+# trigger must still fire after rename
+statement ok
+UPDATE t2 SET k = 2;
+
+query I
+SELECT COUNT(*) FROM audit2;
+----
+2
+
+# updating a column not in the OF list must not fire
+statement ok
+UPDATE t2 SET i = 99;
+
+query I
+SELECT COUNT(*) FROM audit2;
+----
+2
+
+# ToSQL output must reflect the new column name
+query I
+SELECT sql FROM duckdb_triggers() WHERE trigger_name = 'tr2';
+----
+CREATE TRIGGER tr2 AFTER UPDATE OF k ON t2 FOR EACH STATEMENT INSERT INTO audit2 (VALUES (1));
+
+# rename a second column not in the OF list — trigger must remain unchanged
+statement ok
+ALTER TABLE t2 RENAME COLUMN i TO m;
+
+statement ok
+UPDATE t2 SET k = 3;
+
+query I
+SELECT COUNT(*) FROM audit2;
+----
+3
+
+# RENAME COLUMN must not corrupt a trigger that references another table in its
+# body — the trigger must still fire correctly after the rename.
+statement ok
+CREATE TABLE t3(a INT, b INT);
+
+statement ok
+CREATE TABLE dep_log(x INT);
+
+statement ok
+CREATE TRIGGER tr3 AFTER UPDATE OF b ON t3 INSERT INTO dep_log VALUES (1);
+
+statement ok
+ALTER TABLE t3 RENAME COLUMN b TO c;
+
+statement ok
+INSERT INTO t3 VALUES (0, 0);
+
+statement ok
+UPDATE t3 SET c = 1;
+
+query I
+SELECT COUNT(*) FROM dep_log;
+----
+1

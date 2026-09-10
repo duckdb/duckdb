@@ -138,8 +138,12 @@ public:
 
 private:
 	inline bool EntryShouldBeAdded(const string_t &sort_key) {
+		if (heap_size == 0) {
+			// the heap has no capacity (LIMIT 0) - no entry can ever be added
+			return false;
+		}
 		if (heap.size() < heap_size) {
-			// heap is full - check the latest entry
+			// heap is not full yet - the entry can be added
 			return true;
 		}
 		if (sort_key < heap.front().sort_key) {
@@ -151,7 +155,9 @@ private:
 	}
 
 	inline void AddEntryToHeap(const TopNEntry &entry) {
+		D_ASSERT(heap_size > 0);
 		if (heap.size() >= heap_size) {
+			D_ASSERT(!heap.empty());
 			std::pop_heap(heap.begin(), heap.end());
 			heap.pop_back();
 		}
@@ -347,6 +353,11 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, To
 void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_boundary) {
 	static constexpr idx_t SMALL_HEAP_THRESHOLD = 100;
 
+	if (heap_size == 0) {
+		// LIMIT 0 without OFFSET - the heap can never hold any entry, so there is nothing to do
+		return;
+	}
+
 	// compute the ordering values for the new chunk
 	sort_chunk.Reset();
 	executor.Execute(input, sort_chunk);
@@ -372,7 +383,7 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 
 	// if we modified the heap we might be able to update the global boundary
 	// note that the global boundary only applies to FULL heaps
-	if (heap.size() >= heap_size && global_boundary) {
+	if (!heap.empty() && heap.size() >= heap_size && global_boundary) {
 		global_boundary->UpdateValue(heap.front().sort_key);
 	}
 }

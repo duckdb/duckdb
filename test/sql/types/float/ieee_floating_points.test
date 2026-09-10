@@ -33,6 +33,21 @@ inf	nan
 statement ok
 SET ieee_floating_point_ops = false;
 
+# division by zero is an error without IEEE behavior
+statement error
+SELECT val, val / 0::{type} FROM tbl
+----
+<REGEX>:.*Division by zero.*
+
+statement error
+SELECT val, val % 0::{type} FROM tbl
+----
+<REGEX>:.*Division by zero.*
+
+# unless null_on_division_by_zero is set
+statement ok
+SET null_on_division_by_zero = true;
+
 # division by zero
 query II
 SELECT val, val / 0::{type} FROM tbl
@@ -52,6 +67,9 @@ SELECT val, val % 0::{type} FROM tbl
 0.0	NULL
 nan	NULL
 inf	NULL
+
+statement ok
+SET null_on_division_by_zero = false;
 
 # math domain cases still error when IEEE behavior is disabled
 statement ok

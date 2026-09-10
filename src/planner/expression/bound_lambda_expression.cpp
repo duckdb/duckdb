@@ -10,7 +10,13 @@ BoundLambdaExpression::BoundLambdaExpression(ExpressionType type_p, LogicalType 
 }
 
 string BoundLambdaExpression::ToString() const {
-	return lambda_expr->ToString();
+	if (parameter_names.empty()) {
+		// we do not know the parameter names, e.g. for an internally synthesized lambda
+		return lambda_expr->ToString();
+	}
+	auto parameters = StringUtil::Join(parameter_names, parameter_names.size(), ", ",
+	                                   [](const Identifier &name) { return name.GetIdentifierName(); });
+	return "lambda " + parameters + ": " + lambda_expr->ToString();
 }
 
 bool BoundLambdaExpression::Equals(const BaseExpression &other_p) const {
@@ -32,6 +38,7 @@ bool BoundLambdaExpression::Equals(const BaseExpression &other_p) const {
 
 unique_ptr<Expression> BoundLambdaExpression::Copy() const {
 	auto copy = make_uniq<BoundLambdaExpression>(type, return_type, lambda_expr->Copy(), parameter_count);
+	copy->parameter_names = parameter_names;
 	for (auto &capture : captures) {
 		copy->captures.push_back(capture->Copy());
 	}

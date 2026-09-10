@@ -3,55 +3,84 @@
 
 namespace duckdb {
 
-//! Internal recursive diff. Returns nullptr to signal "no changes" to the caller,
+//! Internal diff. Returns nullptr to signal "no changes" to the caller,
 //! which is used to skip unchanged keys in the parent object's diff.
+//! lists still handled by recursive yyjson function
 static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjson_val *new_val) {
-	// Both objects: compute recursive structural diff
-	if (yyjson_is_obj(old_val) && yyjson_is_obj(new_val)) {
-		auto builder = yyjson_mut_obj(doc);
-		bool has_diff = false;
+	struct stack_item {
+		yyjson_mut_val *key;
+		yyjson_val *old_node;
+		yyjson_val *new_node;
+		yyjson_mut_val *parent_builder;
+		yyjson_mut_val *builder;
+		bool finalize;
+	};
 
-		// Keys in old but not in new: removed (emit null)
-		{
-			idx_t idx, max;
-			yyjson_val *key, *old_child;
-			yyjson_obj_foreach(old_val, idx, max, key, old_child) {
-				if (!yyjson_obj_getn(new_val, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key))) {
-					yyjson_mut_obj_add(builder, yyjson_val_mut_copy(doc, key), yyjson_mut_null(doc));
-					has_diff = true;
-				}
+	yyjson_mut_val *result = nullptr;
+	auto stack = std::vector<stack_item>();
+	stack.push_back(stack_item {nullptr, old_val, new_val, nullptr, nullptr, false});
+
+	while (!stack.empty()) {
+		auto item = stack.back();
+		stack.pop_back();
+
+		// finalize phase: update result
+		if (item.finalize) {
+			bool has_diff = yyjson_mut_obj_size(item.builder) > 0;
+
+			if (item.parent_builder && has_diff) {
+				yyjson_mut_obj_add(item.parent_builder, item.key, item.builder);
+			} else {
+				result = has_diff ? item.builder : nullptr;
 			}
+			continue;
 		}
 
-		// Keys in new: added or changed
-		{
-			idx_t idx, max;
-			yyjson_val *key, *new_child;
-			yyjson_obj_foreach(new_val, idx, max, key, new_child) {
-				auto old_child = yyjson_obj_getn(old_val, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-				if (!old_child) {
-					// Key added
-					yyjson_mut_obj_add(builder, yyjson_val_mut_copy(doc, key), yyjson_val_mut_copy(doc, new_child));
-					has_diff = true;
-				} else {
-					// Key exists in both: recurse
-					auto sub_diff = ComputeDiff(doc, old_child, new_child);
-					if (sub_diff) {
-						yyjson_mut_obj_add(builder, yyjson_val_mut_copy(doc, key), sub_diff);
-						has_diff = true;
+		// Both objects: compute structural diff
+		if (item.old_node && item.new_node && yyjson_is_obj(item.old_node) && yyjson_is_obj(item.new_node)) {
+			auto builder = yyjson_mut_obj(doc);
+
+			// Keys in old but not in new: removed (emit null)
+			{
+				idx_t idx, max;
+				yyjson_val *key, *old_child;
+				yyjson_obj_foreach(item.old_node, idx, max, key, old_child) {
+					if (!yyjson_obj_getn(item.new_node, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key))) {
+						yyjson_mut_obj_add(builder, yyjson_val_mut_copy(doc, key), yyjson_mut_null(doc));
 					}
 				}
 			}
+
+			stack.push_back({item.key, nullptr, nullptr, item.parent_builder, builder, true});
+
+			// Keys in new: collect in order
+			{
+				idx_t idx, max;
+				yyjson_val *key, *new_child;
+				std::vector<stack_item> children;
+				yyjson_obj_foreach(item.new_node, idx, max, key, new_child) {
+					auto old_child =
+					    yyjson_obj_getn(item.old_node, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+					auto mut_key = yyjson_val_mut_copy(doc, key);
+
+					children.push_back({mut_key, old_child, new_child, builder, nullptr, false});
+				}
+				// push to stack in reverse to preserve order in output
+				for (auto it = children.rbegin(); it != children.rend(); ++it) {
+					stack.push_back(*it);
+				}
+			}
+		} else if (!item.old_node || !yyjson_equals(item.old_node, item.new_node)) {
+			auto diff_val = yyjson_val_mut_copy(doc, item.new_node);
+			if (item.parent_builder) {
+				yyjson_mut_obj_add(item.parent_builder, item.key, diff_val);
+			} else {
+				result = diff_val;
+			}
 		}
-
-		return has_diff ? builder : nullptr;
 	}
 
-	// Not both objects: use yyjson's built-in deep equality
-	if (yyjson_equals(old_val, new_val)) {
-		return nullptr;
-	}
-	return yyjson_val_mut_copy(doc, new_val);
+	return result;
 }
 
 //! Compute the minimal RFC 7396 merge patch that transforms old_val into new_val.
@@ -108,6 +137,7 @@ ScalarFunctionSet JSONFunctions::GetMergePatchDiffFunction() {
 	ScalarFunction fun("json_merge_patch_diff", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
 	                   MergePatchDiffFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 
 	return ScalarFunctionSet(fun);
 }

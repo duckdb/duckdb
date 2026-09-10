@@ -93,11 +93,27 @@ string SQLIdentifier::ToString(const string &identifier) {
 	return SQLQuotedIdentifier::ToString(identifier);
 }
 
+string SQLIdentifier::ToString(const Identifier &identifier) {
+	return ToString(identifier.GetIdentifierName());
+}
+
+string SQLIdentifier::ToString(const char *identifier) {
+	return ToString(string(identifier));
+}
+
 SQLQuotedIdentifier::SQLQuotedIdentifier(const Identifier &id) : raw_string(id.GetIdentifierName()) {
 }
 
 string SQLQuotedIdentifier::ToString(const string &identifier) {
 	return KeywordHelper::WriteQuotedAndEscaped(identifier, '"');
+}
+
+string SQLQuotedIdentifier::ToString(const Identifier &identifier) {
+	return ToString(identifier.GetIdentifierName());
+}
+
+string SQLQuotedIdentifier::ToString(const char *identifier) {
+	return ToString(string(identifier));
 }
 
 string SQLString::ToString(const string &literal) {

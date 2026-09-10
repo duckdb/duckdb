@@ -151,6 +151,8 @@ public:
 struct ParquetWriterOptions {
 	//! The file path to use for the written parquet file
 	string file_name;
+	//! The flags to use when opening the written parquet file
+	FileOpenFlags open_flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
 	//! Types of the columns
 	vector<LogicalType> sql_types;
 	//! Names of the columns

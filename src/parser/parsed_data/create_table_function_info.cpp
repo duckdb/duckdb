@@ -12,9 +12,7 @@ CreateTableFunctionInfo::CreateTableFunctionInfo(TableFunction function)
 CreateTableFunctionInfo::CreateTableFunctionInfo(TableFunctionSet set)
     : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY), functions(std::move(set)) {
 	SetFunctionName(functions.name);
-	for (auto &func : functions.functions) {
-		func.name = functions.name;
-	}
+	functions.ApplyToFunctions([&](TableFunction &func) { func.name = functions.name; });
 	internal = true;
 }
 

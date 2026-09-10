@@ -17,7 +17,6 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
@@ -26,6 +25,7 @@
 #include "duckdb/planner/operator/logical_trigger.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
@@ -71,6 +71,7 @@ static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t dep
 	}
 }
 
+#ifdef D_ASSERT_IS_ENABLED
 static bool ContainsDependentJoin(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		return true;
@@ -132,6 +133,7 @@ static bool VerifyPlannedExpressions(const LogicalOperator &plan) {
 	}
 	return true;
 }
+#endif
 
 static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundStatement &statement) {
 	for (auto &planner_extension : PlannerExtension::Iterate(context)) {
@@ -295,7 +297,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 		return;
 	}
 	// verify the column bindings of the plan
-	ColumnBindingResolver::Verify(context, *op);
+	LogicalPlanVerifier::Verify(context, *op);
 	if (!Settings::Get<DebugVerifySerializerSetting>(context)) {
 		return;
 	}

@@ -39,6 +39,39 @@ WindowAggregatorGlobalState::WindowAggregatorGlobalState(ClientContext &client, 
 	}
 }
 
+void WindowAggregatorGlobalState::BuildPartitionOffsets(const idx_t group_count, const ValidityMask &partition_mask) {
+	partition_offsets.clear();
+
+	// Locate the partition boundaries
+	if (partition_mask.CannotHaveNull()) {
+		partition_offsets.emplace_back(0);
+	} else {
+		idx_t entry_idx;
+		idx_t shift;
+		for (idx_t start = 0; start < group_count;) {
+			partition_mask.GetEntryIndex(start, entry_idx, shift);
+
+			//	If start is aligned with the start of a block,
+			//	and the block is blank, then skip forward one block.
+			const auto block = partition_mask.GetValidityEntry(entry_idx);
+			if (partition_mask.NoneValid(block) && !shift) {
+				start += ValidityMask::BITS_PER_VALUE;
+				continue;
+			}
+
+			// Loop over the block
+			for (; shift < ValidityMask::BITS_PER_VALUE && start < group_count; ++shift, ++start) {
+				if (partition_mask.RowIsValid(block, shift)) {
+					partition_offsets.emplace_back(start);
+				}
+			}
+		}
+	}
+
+	// Add final guard
+	partition_offsets.emplace_back(group_count);
+}
+
 unique_ptr<GlobalSinkState> WindowAggregator::GetGlobalState(ClientContext &context, idx_t group_count,
                                                              const ValidityMask &) const {
 	return make_uniq<WindowAggregatorGlobalState>(context, *this, group_count);

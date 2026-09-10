@@ -29,6 +29,8 @@ public:
 	               shared_ptr<CatalogSet> inherited_triggers = nullptr);
 
 public:
+	const ColumnList &GetColumns() const override;
+
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
 	unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction, AlterInfo &info) override;
 	void UndoAlter(ClientContext &context, AlterInfo &info) override;
@@ -70,6 +72,7 @@ public:
 	virtual_column_map_t GetVirtualColumns() const override;
 
 	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) override;
+	optional_ptr<CatalogEntry> GetTrigger(CatalogTransaction transaction, const Identifier &name) const override;
 	void ScanTriggers(CatalogTransaction transaction,
 	                  const std::function<void(CatalogEntry &)> &callback) const override;
 	//! Scan all triggers without a transaction (used by checkpoint writer)
@@ -97,6 +100,10 @@ private:
 	void UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index, const vector<LogicalIndex> &adjusted_indices,
 	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info,
 	                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool is_generated);
+
+protected:
+	//! A list of columns that are part of this table
+	ColumnList columns;
 
 private:
 	//! A reference to the underlying storage unit used for this table

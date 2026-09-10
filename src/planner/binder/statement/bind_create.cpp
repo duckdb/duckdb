@@ -114,8 +114,14 @@ void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name) {
-	auto catalog = qualified_name.Catalog();
-	auto schema = qualified_name.Schema();
+	auto &path = qualified_name.Path();
+	if (path.size() != 2) {
+		// only a lone qualifier ("x.name") can be either a schema or a catalog - any deeper qualification is
+		// positional and is resolved by ResolveCatalog
+		return;
+	}
+	Identifier catalog;
+	Identifier schema = path[0];
 	BindSchemaOrCatalog(retriever, catalog, schema);
 	qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
 }
@@ -167,7 +173,11 @@ void Binder::SearchSchema(CreateInfo &info) {
 		schema_path.push_back(default_entry.GetSchema());
 	} else if (schema_path.empty()) {
 		// a catalog was given but no schema: use the catalog's default schema
-		schema_path.push_back(search_path->GetDefaultSchema(context, catalog));
+		auto default_schema = search_path->GetDefaultSchema(context, catalog);
+		if (!default_schema) {
+			throw BinderException("Catalog \"%s\" has no default schema - specify a schema explicitly", catalog);
+		}
+		schema_path.push_back(*default_schema);
 	} else if (IsInvalidCatalog(catalog)) {
 		// a schema was given but no catalog: resolve the catalog that holds it
 		catalog = Identifier(search_path->GetDefaultCatalog(schema_path[0]));
@@ -266,7 +276,19 @@ QualifiedName Binder::BindTableName(const QualifiedName &name) {
 	return BindTableName(retriever, name);
 }
 
+void Binder::RegisterEntryRead(optional_ptr<Binder> binder, ClientContext &context, CatalogEntry &entry) {
+	if (!binder) {
+		// no binder available (e.g. when re-binding a deserialized plan) - nothing is cached in that case
+		return;
+	}
+	binder->GetStatementProperties().RegisterDBRead(entry.ParentCatalog(), context);
+}
+
 void Binder::BindCreateSchema(CreateSchemaInfo &info) {
+	if (info.temporary) {
+		// unsupported - otherwise the schema silently lands in (and is persisted to) the default catalog
+		throw BinderException("Temporary schemas are not supported");
+	}
 	// the qualified name carries the dotted path with the new schema as the last component; resolve its leading
 	// component into a catalog (prepending the default catalog when it is a schema)
 	info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
@@ -542,8 +564,9 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			auto expression = function->Cast<ScalarMacroFunction>().expression->Copy();
 			ExpressionBinder::QualifyColumnNames(*this, expression);
 			try {
-				error = binder.Bind(expression, 0, false);
-				if (error.HasError()) {
+				auto bind_result = binder.Bind(expression, 0, false);
+				if (bind_result.HasError()) {
+					error = std::move(bind_result.error);
 					error.Throw();
 				}
 			} catch (const std::exception &ex) {
@@ -578,17 +601,17 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr) {
+LogicalType Binder::BindLogicalType(const ParsedExpression &type_expr) {
 	ConstantBinder binder(*this, context, "Type binding");
-	auto copy = type_expr->Copy();
+	auto copy = type_expr.Copy();
 	auto expr = binder.Bind(copy);
 
 	if (!expr->IsFoldable()) {
-		throw BinderException(*type_expr, "Type expression is not constant");
+		throw BinderException(type_expr, "Type expression is not constant");
 	}
 
 	if (expr->GetReturnType() != LogicalTypeId::TYPE) {
-		throw BinderException(*type_expr, "Expected a type returning expression, but got expression of type '%s'",
+		throw BinderException(type_expr, "Expected a type returning expression, but got expression of type '%s'",
 		                      expr->GetReturnType().ToString());
 	}
 
@@ -616,7 +639,7 @@ void Binder::BindLogicalType(LogicalType &type) {
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &ty) {
 		if (ty.id() == LogicalTypeId::UNBOUND) {
 			auto &type_expr = UnboundType::GetTypeExpression(ty);
-			return BindLogicalTypeInternal(type_expr);
+			return BindLogicalType(*type_expr);
 		}
 
 		return ty;
@@ -626,10 +649,11 @@ void Binder::BindLogicalType(LogicalType &type) {
 bool BoundBodyContainsTrigger(const LogicalOperator &op);
 
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
+	if (create_trigger_info.temporary) {
+		// unsupported - a trigger is temporary iff its base table is (see below)
+		throw BinderException("Temporary triggers are not supported");
+	}
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres).
-	// Promote a catalog-qualified base table (e.g. attached_db.tbl) so downstream lookups carry the resolved
-	// catalog instead of a bare schema (matches the DROP TRIGGER path).
-	BindSchemaOrCatalog(create_trigger_info.base_table->GetQualifiedNameMutable());
 	TableDescription table_description(create_trigger_info.base_table->GetQualifiedName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
@@ -642,9 +666,14 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw BinderException("CREATE TRIGGER requires a base table");
 	}
 	auto &table = *table_ptr;
+	// Dropping the trigger's own table must not require CASCADE. If the trigger body also references this table,
+	// the body-reference dependency below merges in ALTER-blocking flags.
+	create_trigger_info.dependencies.AddDependency(table, DependencyDependentFlags());
 
 	// Trigger inherits the catalog and the (possibly nested) schema from the base table
 	create_trigger_info.SetQualifiedName(table.schema.GetQualifiedName(create_trigger_info.GetQualifiedName().Name()));
+	// ... and its temporariness, so that a trigger on a temporary table lands in the temp catalog
+	create_trigger_info.temporary = table.temporary;
 
 	auto &schema = BindCreateSchema(create_trigger_info);
 
@@ -727,6 +756,24 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
 	validation_binder->global_binder_state->trigger_creation_table = &table;
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.GetTriggerName();
+	// Track every catalog entry resolved while binding the trigger body as a dependency, so an ALTER that could
+	// invalidate the body is blocked, and DROP of a table/view/function referenced by the body is blocked too -
+	// except for the trigger's own base table, which can never outlive it regardless of what the body reads.
+	validation_binder->SetCatalogLookupCallback([&create_trigger_info, &catalog, &table](CatalogEntry &entry) {
+		if (&catalog != &entry.ParentCatalog()) {
+			if (entry.internal) {
+				return;
+			}
+			throw BinderException("Trigger \"%s\" cannot reference \"%s\" from a different catalog (\"%s\")",
+			                      create_trigger_info.GetTriggerName(), entry.name, entry.ParentCatalog().GetName());
+		}
+		DependencyDependentFlags flags;
+		flags.SetAlterBlocking();
+		if (&entry != &table) {
+			flags.SetBlocking();
+		}
+		create_trigger_info.dependencies.AddDependency(entry, flags);
+	});
 	auto body_copy = create_trigger_info.trigger_action->Copy();
 
 	for (const auto &alias : {create_trigger_info.referencing_new_table, create_trigger_info.referencing_old_table}) {
@@ -734,7 +781,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
 		}
 	}
-	// For FOR EACH ROW: register NEW (INSERT) or OLD (DELETE) as a generic binding so BindCorrelatedColumns can
+	// For FOR EACH ROW: register NEW (INSERT) or OLD (DELETE) as a generic binding so that scope resolution can
 	// resolve NEW.col / OLD.col references.
 	unique_ptr<ExpressionBinder> row_scope_binder;
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
@@ -758,7 +805,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (row_scope_binder) {
 		auto body_binder = Binder::CreateBinder(context, validation_binder.get());
 		auto bound_body = body_binder->Bind(*body_copy);
-		validation_binder->GetActiveBinders().pop_back();
+		validation_binder->PopScope();
 		if (body_binder->correlated_columns.empty()) {
 			throw BinderException("FOR EACH ROW trigger %s on table %s must reference at least one NEW or OLD "
 			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",
@@ -773,9 +820,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	} else {
 		validation_binder->Bind(*body_copy);
 	}
-
-	// Add table dependency
-	create_trigger_info.dependencies.AddDependency(table);
 
 	return schema;
 }
@@ -856,6 +900,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::INDEX_ENTRY: {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
+		if (create_index_info.temporary) {
+			// unsupported - an index is temporary iff the table it is created on is (see below)
+			throw BinderException("Temporary indexes are not supported");
+		}
 
 		// Plan the table scan - the table lives in the same (possibly nested) schema as the index.
 		TableDescription table_description(create_index_info.GetQualifiedName().WithName(create_index_info.table));

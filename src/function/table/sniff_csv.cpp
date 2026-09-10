@@ -18,10 +18,6 @@ struct CSVSniffFunctionData : public TableFunctionData {
 	string path;
 	// The CSV reader options
 	CSVReaderOptions options;
-	// Return Types of CSV (If given by the user)
-	vector<LogicalType> return_types_csv;
-	// Column Names of CSV (If given by the user)
-	vector<string> names_csv;
 	// If we want to force the match of the sniffer types
 	bool force_match = true;
 };
@@ -145,13 +141,6 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	sniffer_options.file_path = files[0].path;
 
 	auto buffer_manager = CSVBufferManager::Open(context, sniffer_options, sniffer_options.file_path, false);
-	if (sniffer_options.name_list.empty()) {
-		sniffer_options.name_list = data.names_csv;
-	}
-
-	if (sniffer_options.sql_type_list.empty()) {
-		sniffer_options.sql_type_list = data.return_types_csv;
-	}
 	MultiFileOptions file_options;
 	CSVSniffer sniffer(sniffer_options, file_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);

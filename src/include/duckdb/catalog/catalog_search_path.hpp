@@ -10,6 +10,7 @@
 
 #include <functional>
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -76,7 +77,8 @@ public:
 	DUCKDB_API const CatalogSearchEntry &GetDefault() const;
 	//! FIXME: this method is deprecated
 	DUCKDB_API Identifier GetDefaultSchema(const Identifier &catalog) const;
-	DUCKDB_API Identifier GetDefaultSchema(ClientContext &context, const Identifier &catalog) const;
+	//! Returns nullopt if the catalog exists but has no default schema
+	DUCKDB_API optional<Identifier> GetDefaultSchema(ClientContext &context, const Identifier &catalog) const;
 	DUCKDB_API Identifier GetDefaultCatalog(const Identifier &schema) const;
 
 	DUCKDB_API vector<Identifier> GetSchemasForCatalog(const Identifier &catalog) const;

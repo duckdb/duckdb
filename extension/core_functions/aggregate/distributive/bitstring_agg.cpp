@@ -90,8 +90,14 @@ struct BitStringAggOperation {
 				    NumericHelper::ToString(state.min), NumericHelper::ToString(state.max));
 			}
 			idx_t len = Bit::ComputeBitstringLen(bit_range);
-			auto target = len > string_t::INLINE_LENGTH ? string_t(new char[len], UnsafeNumericCast<uint32_t>(len))
-			                                            : string_t(UnsafeNumericCast<uint32_t>(len));
+
+			string_t target;
+			if (len <= string_t::INLINE_LENGTH) {
+				target = string_t(UnsafeNumericCast<uint32_t>(len));
+			} else {
+				target = string_t(char_ptr_cast(unary_input.input.allocator.Allocate(len)),
+				                  UnsafeNumericCast<uint32_t>(len));
+			}
 			Bit::SetEmptyBitString(target, bit_range);
 
 			state.value = target;
@@ -134,12 +140,12 @@ struct BitStringAggOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &unary_input) {
 		if (!source.is_set) {
 			return;
 		}
 		if (!target.is_set) {
-			Assign(target, source.value);
+			Assign(target, source.value, unary_input);
 			target.is_set = true;
 			target.min = source.min;
 			target.max = source.max;
@@ -149,15 +155,15 @@ struct BitStringAggOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE &state, INPUT_TYPE input) {
+	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &unary_input) {
 		D_ASSERT(state.is_set == false);
 		if (input.IsInlined()) {
 			state.value = input;
 		} else { // non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
-			auto ptr = new char[len];
+			auto ptr = unary_input.allocator.Allocate(len);
 			memcpy(ptr, input.GetData(), len);
-			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
+			state.value = string_t(char_ptr_cast(ptr), UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 
@@ -167,13 +173,6 @@ struct BitStringAggOperation {
 			finalize_data.ReturnNull();
 		} else {
 			target = StringVector::AddStringOrBlob(finalize_data.result, state.value);
-		}
-	}
-
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.is_set && !state.value.IsInlined()) {
-			delete[] state.value.GetData();
 		}
 	}
 

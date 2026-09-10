@@ -259,9 +259,11 @@ unique_ptr<FunctionData> ListReduceBind(BindScalarFunctionInput &input) {
 		throw BinderException("Could not cast lambda return type %s to accumulator type %s",
 		                      lambda_return_type.ToString(), accumulator_type.ToString());
 	}
-	bound_function.SetReturnType(cast_lambda_expr->GetReturnType());
-	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(cast_lambda_expr), has_index,
-	                                     has_initial);
+	// cast in place, so that the bound lambda expression stays intact as a child of the function
+	bound_lambda_expr.LambdaExprMutable() = std::move(cast_lambda_expr);
+	bound_function.SetReturnType(bound_lambda_expr.LambdaExpr()->GetReturnType());
+	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), bound_lambda_expr.LambdaExpr()->Copy(),
+	                                     has_index, has_initial);
 }
 
 LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType> &function_child_types,

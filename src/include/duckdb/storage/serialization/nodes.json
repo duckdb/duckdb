@@ -700,6 +700,12 @@
         "id": 107,
         "name": "allow_empty",
         "type": "bool"
+      },
+      {
+        "id": 108,
+        "name": "maximum_sample_files",
+        "type": "idx_t",
+        "default": "1"
       }
     ],
     "pointer_type": "none"
@@ -790,8 +796,9 @@
       {
         "id": 103,
         "name": "compression",
-        "type": "FileCompressionType",
-        "property": "options.compression"
+        "type": "string",
+        "serialize_property": "options.compression.ToString()",
+        "deserialize_property": "options.compression"
       },
       {
         "id": 104,
@@ -972,7 +979,7 @@
       {
         "id": 133,
         "name": "name_list",
-        "type": "vector<string>",
+        "type": "vector<Identifier>",
         "property": "options.name_list"
       },
       {

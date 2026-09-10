@@ -63,6 +63,19 @@ A	NULL
 NULL	NULL
 B	B
 
+# Regression: later NULL rows should not overwrite the found value
+query II
+WITH src(id, x) AS (VALUES (1, 10), (2, 20), (3, NULL), (4, 30))
+SELECT id, NTH_VALUE(x, 2 IGNORE NULLS) OVER (
+	ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+) AS actual
+FROM src ORDER BY id
+----
+1	NULL
+2	20
+3	20
+4	20
+
 # Test short circuit
 query II
 select i, nth_value(i, 2049) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) n

@@ -146,6 +146,7 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 
 void BoundFunctionExpression::Verify() const {
 	D_ASSERT(!function.GetName().empty());
+	D_ASSERT(function.GetDefinition());
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {
@@ -164,6 +165,34 @@ void BoundFunctionExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(202, "is_operator", is_operator);
 }
 
+namespace {
+
+//! Plans serialized before the lambda expression was kept in the children do not contain it. Recover it from
+//! the bind data, so that the children line up with the function's arguments either way.
+void RestoreErasedLambdaChild(const BoundScalarFunction &function, optional_ptr<FunctionData> bind_info,
+                              vector<unique_ptr<Expression>> &children) {
+	if (!function.HasBindLambdaCallback() || !bind_info) {
+		return;
+	}
+	auto &arguments = function.GetArguments();
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (arguments[i].id() != LogicalTypeId::LAMBDA) {
+			continue;
+		}
+		if (i < children.size() && children[i]->GetReturnType().id() == LogicalTypeId::LAMBDA) {
+			// the lambda is already where it belongs
+			return;
+		}
+		auto lambda_child = bind_info->Cast<LambdaFunctionData>().RecoverLambdaChild();
+		if (lambda_child && i <= children.size()) {
+			children.insert(children.begin() + NumericCast<int64_t>(i), std::move(lambda_child));
+		}
+		return;
+	}
+}
+
+} // namespace
+
 unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
@@ -172,6 +201,8 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
 
 	auto is_operator = deserializer.ReadProperty<bool>(202, "is_operator");
+
+	RestoreErasedLambdaChild(entry.first, entry.second.get(), children);
 
 	if (entry.first.HasBindExpressionCallback()) {
 		// bind the function expression

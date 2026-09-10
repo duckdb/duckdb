@@ -193,6 +193,15 @@ def generate_member_comparison(member, indent='\t'):
             f'{indent}\treturn false;',
             f'{indent}}}',
         ]
+    elif type_str == 'TypeExpression*':
+        return [
+            f'{indent}if (static_cast<bool>({field_name}) != static_cast<bool>(other_p.{field_name})) {{',
+            f'{indent}\treturn false;',
+            f'{indent}}}',
+            f'{indent}if ({field_name} && !{field_name}->Equals(*other_p.{field_name})) {{',
+            f'{indent}\treturn false;',
+            f'{indent}}}',
+        ]
     elif type_str == 'SelectStatement*':
         return [
             f'{indent}if (!{field_name} || !other_p.{field_name} || !{field_name}->Equals(*other_p.{field_name})) {{',
@@ -294,6 +303,11 @@ def generate_member_copy(member, indent='\t'):
     if is_order_modifier_ptr(type_str):
         base = member.get('base', 'ResultModifier')
         return [f'{indent}copy->{field} = {field} ? unique_ptr_cast<{base}, OrderModifier>({field}->Copy()) : nullptr;']
+
+    if type_str == 'TypeExpression*':
+        return [
+            f'{indent}copy->{field} = {field} ? unique_ptr_cast<ParsedExpression, TypeExpression>({field}->Copy()) : nullptr;'
+        ]
 
     if type_str == 'SelectStatement*':
         return [
@@ -403,6 +417,8 @@ def generate_member_hash(member, indent='\t'):
     field_name = get_member_field_name(member)
     type_str = member['type']
 
+    if type_str == 'TypeExpression*':
+        return [f'{indent}hash = CombineHash(hash, {field_name} ? {field_name}->Hash() : 0);']
     # Covered by EnumerateChildren in ParsedExpression::Hash
     if is_parsed_expression_ptr(type_str):
         return []
@@ -740,7 +756,6 @@ def _generate_base_children_switch(entries, base_functions, sig, result_type, me
             lines.extend(member_appends_fn(member, 'cast_expr'))
         lines.append('\t\tbreak;')
         lines.append('\t}')
-    lines.append('\tcase ExpressionClass::BOUND_EXPRESSION:')
     for enum_val in no_child_enums:
         lines.append(f'\tcase ExpressionClass::{enum_val}:')
     lines.append('\t\t// these node types have no children')

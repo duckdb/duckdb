@@ -58,7 +58,7 @@ public:
 		return qualified_name.Catalog();
 	}
 	void SetCatalogName(Identifier catalog_name) {
-		qualified_name = QualifiedName(std::move(catalog_name), qualified_name.Schema(), qualified_name.Name());
+		qualified_name = qualified_name.WithCatalog(std::move(catalog_name));
 	}
 	//! The schema name (if any)
 	const Identifier &GetSchemaName() const {

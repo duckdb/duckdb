@@ -1,0 +1,20 @@
+# name: benchmark/micro/result_collection/stream_drop.benchmark
+# description: Streaming result: blocking Fetch drives execution, chunks dropped
+# group: [result_collection]
+
+name stream_drop
+group micro
+subgroup result_collection
+
+resultmode streaming drop
+
+cache stream_drain_data.duckdb
+
+init
+set streaming_buffer_size='1000000b';
+
+load
+create table tbl as select 'this is a reasonably long string ' || i as a from range(25000000) t(i);
+
+run
+select * from tbl;

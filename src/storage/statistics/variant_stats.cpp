@@ -11,7 +11,7 @@
 
 #include "duckdb/common/types/variant_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 
 namespace duckdb {
 
@@ -850,7 +850,7 @@ unique_ptr<BaseStatistics> VariantStats::PushdownExtract(const BaseStatistics &s
 	auto &cast_type = last_index.GetType();
 	if (child_type != cast_type) {
 		//! FIXME: support try_cast
-		return StatisticsPropagator::TryPropagateCast(typed_value_stats, child_type, cast_type);
+		return CastStatistics::TryPropagate(typed_value_stats, child_type, cast_type);
 	}
 	auto result = typed_value_stats.ToUnique();
 	return result;

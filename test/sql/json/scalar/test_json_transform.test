@@ -378,7 +378,7 @@ Binder Error: DECIMAL type scale cannot be greater than width
 statement error
 select json_transform('42', '"DECIMAL(5,1,1)"')
 ----
-Binder Error: DECIMAL type can take at most two type modifiers, width and scale
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER, INTEGER, INTEGER\).*
 
 # uuid
 query T

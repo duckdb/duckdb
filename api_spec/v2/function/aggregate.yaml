@@ -1,0 +1,1232 @@
+module: aggregate
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  aggregate_function:
+    description: |
+      An owned opaque handle to a custom aggregate function being built. Created with
+      `[[aggregate_function_create_with_connection]]` or `[[aggregate_function_create_with_extension]]`, configured with
+      the setter functions (e.g. `[[aggregate_function_set_name]]`, `[[aggregate_function_set_update_callback]]`, etc.)
+      and the signature obtained via `[[aggregate_function_get_signature]]`, made available with
+      `[[aggregate_function_register]]`, and destroyed with `[[aggregate_function_destroy]]`.
+
+  aggregate_function_bind_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an aggregate function during the query preparation
+      "bind" phase. The "bind" callback receives this handle and can use it to e.g. inspect the arguments given
+      to the function, initialize some constant state and set the return type.
+
+  aggregate_function_size_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an aggregate function during the state sizing "size"
+      phase. The "size" callback receives this handle and must use it to report the size of a single aggregate
+      state in bytes.
+
+  aggregate_function_init_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an aggregate function during the state
+      initialization "init" phase. The "init" callback receives this handle and can use it to access the array
+      of aggregate states it must initialize in place.
+
+  aggregate_function_update_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an aggregate function during the "update" phase.
+      The "update" callback receives this handle and can use it to access the input argument vectors, the
+      number of rows to process, and the aggregate state each row must be aggregated into.
+
+  aggregate_function_combine_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an aggregate function during the "combine" phase.
+      The "combine" callback receives this handle and can use it to access the source and target aggregate
+      state arrays to merge.
+
+  aggregate_function_finalize_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an aggregate function during the "finalize" phase.
+      The "finalize" callback receives this handle and can use it to access the aggregate states and the result
+      vector and offset to write their final values to.
+
+  aggregate_function_destroy_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an aggregate function during the state destruction
+      "destroy" phase. The "destroy" callback receives this handle and can use it to access the array of
+      aggregate states whose resources must be released.
+#-----------------------------------------------------------------------------------------------------------------------
+# Callbacks
+#-----------------------------------------------------------------------------------------------------------------------
+callbacks:
+  aggregate_function_bind_callback:
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  aggregate_function_size_callback:
+    parameters:
+      info:
+        type: aggregate_function_size_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  aggregate_function_init_callback:
+    parameters:
+      info:
+        type: aggregate_function_init_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  aggregate_function_update_callback:
+    parameters:
+      info:
+        type: aggregate_function_update_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  aggregate_function_combine_callback:
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  aggregate_function_finalize_callback:
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  aggregate_function_destroy_callback:
+    parameters:
+      info:
+        type: aggregate_function_destroy_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback. Errors reported by this callback are ignored.
+    return_type: void
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_create_with_connection:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Creates a new aggregate function that will be registered on the connection's database.
+
+      The function starts out empty: configure it with the setter functions (e.g.
+      `[[aggregate_function_set_name]]`, `[[aggregate_function_set_update_callback]]`, etc.) and the
+      signature obtained via `[[aggregate_function_get_signature]]`, then make it available with
+      `[[aggregate_function_register]]`. The caller owns the returned handle and must destroy it with
+      `[[aggregate_function_destroy]]`, also after registration.
+    parameters:
+      connection:
+        type: connection
+        description: The connection to create the function in.
+      function:
+        type: aggregate_function
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created aggregate function. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_create_with_extension:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Creates a new aggregate function that will be registered on the loading extension's database.
+
+      Use this from an extension load callback, where an extension handle is available. The function starts out
+      empty: configure it with the setter functions (e.g. `[[aggregate_function_set_name]]`,
+      `[[aggregate_function_set_update_callback]]`, etc.) and the signature obtained via
+      `[[aggregate_function_get_signature]]`, then make it available with `[[aggregate_function_register]]`.
+      The caller owns the returned handle and must destroy it with `[[aggregate_function_destroy]]`, also after
+      registration.
+    parameters:
+      extension:
+        type: extension
+        description: The extension to create the function in.
+      function:
+        type: aggregate_function
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created aggregate function. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Properties
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_set_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the name of the aggregate function.
+
+      The name is borrowed and copied. Calling this again replaces the previous name.
+      A name must be set before registration.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the name of.
+      name:
+        type: str
+        indirection: 1
+        description: The name to set. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_get_signature:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the function's signature so it can be configured.
+
+      Add parameters with `[[function_signature_add_parameter]]`, set a variadic tail with
+      `[[function_signature_set_varargs]]` and set the return type with `[[function_signature_set_return_type]]`.
+      The signature is modified in place; the function must be given a signature with a return type before
+      registration.
+    parameters:
+      function:
+        type: aggregate_function
+        kind: IN
+        description: The function to get the signature of.
+      sig:
+        type: function_signature
+        indirection: 1
+        kind: OUT
+        description: The returned signature. Borrowed and valid for the lifetime of the function handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_set_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets arbitrary user data on the aggregate function.
+
+      Associates an opaque pointer with the function, retrievable from each callback via its user data accessor
+      (e.g. `[[aggregate_function_bind_get_user_data]]`, `[[aggregate_function_update_get_user_data]]`, etc.).
+      The opaque handle bundles the pointer with an optional destructor, invoked when the data is no longer
+      needed.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the user data of.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the user data pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_set_property:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-31" ]
+    description: |
+      Sets a property on the aggregate function.
+
+      Configures a function property that influences planning and execution, such as stability, NULL handling,
+      fallibility, collation handling, or the aggregate-specific order/DISTINCT dependence. The value must be
+      one of the `[[FUNCTION_PROPERTY_VALUE]]` entries belonging to `key`; passing a value that does not belong
+      to the key, or a key that is not valid for aggregate functions, results in an error.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the property of.
+      key:
+        type: FUNCTION_PROPERTY_KEY
+        description: The property to set.
+      value:
+        type: FUNCTION_PROPERTY_VALUE
+        description: The value to set for the property. Must belong to `key`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_set_bind_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the optional bind callback of the aggregate function.
+
+      The bind callback is invoked during query planning for each call site of the function. It can inspect the
+      argument types and constant argument values, set a concrete return type, and set "bind data" that is
+      shared with the other callbacks.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the bind callback of.
+      callback:
+        type: aggregate_function_bind_callback
+        description: The bind callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_set_size_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the size callback of the aggregate function.
+
+      The size callback reports the size of a single aggregate state in bytes via
+      `[[aggregate_function_size_set_state_size]]`; DuckDB uses it to allocate state memory.
+      A size callback must be set before registration.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the size callback of.
+      callback:
+        type: aggregate_function_size_callback
+        description: The size callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_set_init_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the init callback of the aggregate function.
+
+      The init callback initializes freshly allocated aggregate states in place, obtained via
+      `[[aggregate_function_init_get_states]]`. An init callback must be set before registration.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the init callback of.
+      callback:
+        type: aggregate_function_init_callback
+        description: The init callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_set_update_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the update callback of the aggregate function.
+
+      The update callback is invoked during query execution with a batch of input rows: row i of every argument
+      vector must be aggregated into state i of the state array. An update callback must be set before
+      registration.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the update callback of.
+      callback:
+        type: aggregate_function_update_callback
+        description: The update callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_set_combine_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the combine callback of the aggregate function.
+
+      The combine callback merges partial aggregate states computed in parallel: source state i must be
+      combined into target state i. A combine callback must be set before registration.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the combine callback of.
+      callback:
+        type: aggregate_function_combine_callback
+        description: The combine callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_set_finalize_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the finalize callback of the aggregate function.
+
+      The finalize callback produces the function's result: state i must be finalized into result row
+      offset + i of the result vector. A finalize callback must be set before registration.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the finalize callback of.
+      callback:
+        type: aggregate_function_finalize_callback
+        description: The finalize callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_set_destroy_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the destroy callback for the aggregate function. Optional: only
+      needed when aggregate states own resources that must be released. The
+      callback runs on states that are discarded without being finalized; it
+      must not fail, an error reported through its error slot is ignored.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the destroy callback of.
+      callback:
+        type: aggregate_function_destroy_callback
+        description: The destroy callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Bind Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_bind_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+        description: The bind info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_bind_set_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the function's "bind data" from the bind callback.
+
+      The bind data is stored with the bound call site and retrievable from the other callbacks.
+      The opaque handle bundles the pointer with an optional destructor, invoked when the bind data is no
+      longer needed, and an optional equality callback used when comparing two bound call sites; without one,
+      pointer equality is used.
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+        description: The bind info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_bind_get_arg_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: |
+      Returns the number of arguments of the call site being bound.
+
+      Variadic tail arguments are included. Valid indices for `[[aggregate_function_bind_get_arg_type]]` and
+      `[[aggregate_function_bind_get_arg_value]]` are [0, count).
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+        description: The bind info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of arguments.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_bind_get_arg_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: |
+      Retrieves the type of the argument at the given index.
+
+      Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed
+      via `[[logical_type_destroy]]`.
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the argument to get the type of.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the argument type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_bind_get_arg_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: |
+      Folds the argument at the given index to a constant value.
+
+      The argument must be foldable to a constant (e.g. a literal or a constant expression); otherwise the call
+      fails with an error, as it does when the index is out of bounds. The resulting value may be NULL.
+      The returned value is owned by the caller and must be destroyed via `[[value_destroy]]`.
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the argument to extract a constant value from.
+      value:
+        type: value
+        indirection: 1
+        kind: OUT
+        description: Receives the constant value. Owned by the caller; destroy via `[[value_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_bind_set_return_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the concrete return type of the call site being bound.
+
+      Overrides the return type declared in the signature. Register the function with an ANY return type and set
+      the concrete type here, derived from the argument types, to build a function whose result type depends on
+      its input. The type is borrowed and copied.
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+        description: The bind info handle.
+      return_type:
+        type: logical_type
+        description: The return type to set. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Size Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_size_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
+    parameters:
+      info:
+        type: aggregate_function_size_info
+        description: The size info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_size_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: aggregate_function_size_info
+        description: The size info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_size_set_state_size:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the size of a single aggregate state, in bytes. The size callback
+      must set this; DuckDB uses it to allocate state memory.
+    parameters:
+      info:
+        type: aggregate_function_size_info
+        description: The size info handle.
+      size:
+        type: idx
+        description: The size of a single aggregate state, in bytes.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Init Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_init_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
+    parameters:
+      info:
+        type: aggregate_function_init_info
+        description: The init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_init_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: aggregate_function_init_info
+        description: The init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_init_get_state_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many aggregate states this invocation must initialize.
+      This is the length of the array returned by
+      `[[aggregate_function_init_get_states]]`.
+    parameters:
+      info:
+        type: aggregate_function_init_info
+        description: The init info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of states.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_init_get_states:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of aggregate states to initialize, one pointer per
+      state. Each state points to uninitialized memory of the size reported by
+      the size callback; the init callback must initialize all of them in
+      place.
+    parameters:
+      info:
+        type: aggregate_function_init_info
+        description: The init info handle.
+      states:
+        type: void
+        indirection: 3
+        kind: OUT
+        description: Receives the array of aggregate state pointers. Borrowed; valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Update Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_update_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
+    parameters:
+      info:
+        type: aggregate_function_update_info
+        description: The update info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_update_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: aggregate_function_update_info
+        description: The update info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_update_get_row_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many input rows this invocation carries. This is the length
+      of the argument vectors and of the state array: row i of every argument
+      vector must be aggregated into state i.
+    parameters:
+      info:
+        type: aggregate_function_update_info
+        description: The update info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of rows.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_update_get_arg_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many argument vectors this invocation carries: one per
+      argument of the call, variadic tail arguments included. Valid indices
+      for `[[aggregate_function_update_get_arg]]` are [0, count).
+    parameters:
+      info:
+        type: aggregate_function_update_info
+        description: The update info handle.
+      count:
+        type: u32
+        indirection: 1
+        kind: OUT
+        description: Receives the number of argument vectors.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_update_get_arg:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Retrieves the argument vector at the given index.
+
+      The vector holds the argument's values for the current batch; use
+      `[[aggregate_function_update_get_row_count]]` for the number of rows. Fails if the index is out of
+      bounds. Borrowed; valid only for the duration of the callback.
+    parameters:
+      info:
+        type: aggregate_function_update_info
+        description: The update info handle.
+      index:
+        type: u32
+        description: The index of the argument vector to get.
+      vector:
+        type: vector
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed argument vector.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_update_get_states:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of aggregate states to update, one pointer per input
+      row: row i of every argument vector must be aggregated into state i.
+      Different rows may point to the same state.
+    parameters:
+      info:
+        type: aggregate_function_update_info
+        description: The update info handle.
+      states:
+        type: void
+        indirection: 3
+        kind: OUT
+        description: Receives the array of aggregate state pointers. Borrowed; valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Combine Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_combine_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+        description: The combine info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_combine_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+        description: The combine info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_combine_get_state_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many source/target state pairs this invocation must combine.
+      This is the length of both the sources and the targets array.
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+        description: The combine info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of state pairs.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_combine_get_sources:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of source aggregate states, one pointer per pair.
+      Source i must be combined into target i; the source must not be
+      modified.
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+        description: The combine info handle.
+      states:
+        type: void
+        indirection: 3
+        kind: OUT
+        description: Receives the array of source aggregate state pointers. Borrowed; valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_combine_get_targets:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of target aggregate states, one pointer per pair.
+      Source i must be combined into target i.
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+        description: The combine info handle.
+      states:
+        type: void
+        indirection: 3
+        kind: OUT
+        description: Receives the array of target aggregate state pointers. Borrowed; valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Finalize Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_finalize_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+        description: The finalize info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_finalize_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+        description: The finalize info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_finalize_get_state_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many aggregate states this invocation must finalize. This is
+      the length of the state array and the number of rows to write to the
+      result vector.
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+        description: The finalize info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of states.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_finalize_get_states:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of aggregate states to finalize, one pointer per
+      state. State i must be finalized into result row offset + i.
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+        description: The finalize info handle.
+      states:
+        type: void
+        indirection: 3
+        kind: OUT
+        description: Receives the array of aggregate state pointers. Borrowed; valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_finalize_get_result:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Retrieves the result vector the finalize callback must write into.
+
+      State i must be finalized into result row offset + i, with the offset from
+      `[[aggregate_function_finalize_get_result_offset]]`. Borrowed; valid only for the duration of the
+      callback.
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+        description: The finalize info handle.
+      vector:
+        type: vector
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed result vector to write into.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_finalize_get_result_offset:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the offset in the result vector at which to start writing:
+      state i must be finalized into result row offset + i.
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+        description: The finalize info handle.
+      offset:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the result offset.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_destroy_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
+    parameters:
+      info:
+        type: aggregate_function_destroy_info
+        description: The destroy info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_destroy_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: aggregate_function_destroy_info
+        description: The destroy info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_destroy_get_state_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many aggregate states this invocation must destroy. This is
+      the length of the state array.
+    parameters:
+      info:
+        type: aggregate_function_destroy_info
+        description: The destroy info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of states.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  aggregate_function_destroy_get_states:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of aggregate states to destroy, one pointer per state.
+      The callback must release any resources the states own.
+    parameters:
+      info:
+        type: aggregate_function_destroy_info
+        description: The destroy info handle.
+      states:
+        type: void
+        indirection: 3
+        kind: OUT
+        description: Receives the array of aggregate state pointers. Borrowed; valid only for the duration of the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Register
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_register:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Registers the aggregate function, making it available for use in SQL queries.
+
+      The function is registered on the target given at creation: the connection's database or the loading
+      extension. Registration requires a name, the size, init, update, combine and finalize callbacks, and a
+      signature with a complete return type; an ANY return type is accepted only together with a bind callback
+      that sets the concrete type per call site. The caller still owns the handle after registration and must
+      destroy it with `[[aggregate_function_destroy]]`, which does not affect the registered function.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Destroys the aggregate function, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to
+      prevent double-destruction. Destroying the handle after registration does not affect the registered
+      function.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to destroy.
+        indirection: 1
+    return_type: ERROR

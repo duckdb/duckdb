@@ -39,6 +39,12 @@ public:
 	idx_t &ParameterCountMutable() {
 		return parameter_count;
 	}
+	const vector<Identifier> &ParameterNames() const {
+		return parameter_names;
+	}
+	void SetParameterNames(vector<Identifier> names) {
+		parameter_names = std::move(names);
+	}
 
 	string ToString() const override;
 	bool Equals(const BaseExpression &other) const override;
@@ -55,5 +61,9 @@ private:
 	vector<unique_ptr<Expression>> captures;
 	//! The number of lhs parameters of the lambda function
 	idx_t parameter_count;
+	//! The names of the lhs parameters, purely for display - they do not take part in Equals, because two
+	//! lambdas that differ only in their parameter names are the same expression. Can be empty, in which case
+	//! ToString falls back to printing only the body
+	vector<Identifier> parameter_names;
 };
 } // namespace duckdb

@@ -331,8 +331,8 @@ static AggregateFunction GetMinMaxOperator(const LogicalType &type) {
 	}
 }
 
-const AggregateFunction &GetCollatedMinMaxFunction(ClientContext &context, const Identifier &name,
-                                                   const vector<LogicalType> &types) {
+shared_ptr<const AggregateFunction> GetCollatedMinMaxFunction(ClientContext &context, const Identifier &name,
+                                                              const vector<LogicalType> &types) {
 	const auto function_name = name == "min" ? "arg_min" : "arg_max";
 	QueryErrorContext error_context;
 	auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
@@ -373,7 +373,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 		// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
 		// to make sure the result's correctness.
 		vector<LogicalType> types {arguments[0]->GetReturnType(), collated_arg->GetReturnType()};
-		function.ReplaceImplementation(GetCollatedMinMaxFunction(context, function.GetName(), types));
+		function.ReplaceImplementation(*GetCollatedMinMaxFunction(context, function.GetName(), types));
 		function.SetSingleValueIdentity(true);
 
 		// Bind function like arg_min/arg_max.
@@ -398,11 +398,15 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	minmax_func.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	minmax_func.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	minmax_func.SetSingleValueIdentity(true);
+	minmax_func.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 
 	auto expr = minmax_func.Bind(context, std::move(arguments));
 	arguments = std::move(expr->GetChildrenMutable());
 
+	auto definition = function.GetDefinition();
 	function = std::move(expr->FunctionMutable());
+	// the specialized implementation is not the function we were bound from
+	function.SetDefinition(std::move(definition));
 	return std::move(expr->BindInfoMutable());
 }
 
@@ -475,7 +479,6 @@ void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_
 
 		// Initialize the heap if necessary and add the input to the heap
 		if (!state.is_initialized) {
-			static constexpr int64_t MAX_N = 1000000;
 			const auto nidx = n_format.sel->get_index(i);
 			if (!n_format.validity.RowIsValid(nidx)) {
 				throw InvalidInputException("Invalid input for MIN/MAX: n value cannot be NULL");
@@ -484,8 +487,8 @@ void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_
 			if (nval <= 0) {
 				throw InvalidInputException("Invalid input for MIN/MAX: n value must be > 0");
 			}
-			if (nval >= MAX_N) {
-				throw InvalidInputException("Invalid input for MIN/MAX: n value must be < %d", MAX_N);
+			if (nval >= MIN_MAX_N_MAX_VALUE) {
+				throw InvalidInputException("Invalid input for MIN/MAX: n value must be < %d", MIN_MAX_N_MAX_VALUE);
 			}
 			state.Initialize(aggr_input.allocator, UnsafeNumericCast<idx_t>(nval));
 		}
@@ -550,16 +553,21 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 		if (ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
 			vector<LogicalType> types {arguments[0]->GetReturnType(), collated_arg->GetReturnType(),
 			                           arguments[1]->GetReturnType()};
-			auto &collated_function = GetCollatedMinMaxFunction(context, function.GetName(), types);
+			auto collated_function = GetCollatedMinMaxFunction(context, function.GetName(), types);
 
 			vector<unique_ptr<Expression>> collated_arguments;
 			collated_arguments.reserve(3);
 			collated_arguments.push_back(std::move(arguments[0]));
 			collated_arguments.push_back(std::move(collated_arg));
 			collated_arguments.push_back(std::move(arguments[1]));
-			auto expr = collated_function.Bind(context, std::move(collated_arguments));
+			FunctionBinder function_binder(context);
+			auto expr =
+			    function_binder.BindAggregateFunction(std::move(collated_function), std::move(collated_arguments));
 			arguments = std::move(expr->GetChildrenMutable());
+			auto definition = function.GetDefinition();
 			function = std::move(expr->FunctionMutable());
+			// the collated implementation is not the function we were bound from
+			function.SetDefinition(std::move(definition));
 			return std::move(expr->BindInfoMutable());
 		}
 	}

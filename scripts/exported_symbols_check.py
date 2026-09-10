@@ -1,24 +1,14 @@
+import os
 import subprocess
 import sys
-import os
-import re
 
-if len(sys.argv) < 2 or not os.path.isfile(sys.argv[1]):
-    print("Usage: [libduckdb dynamic library file, release build]")
-    exit(1)
-
-res = subprocess.run('nm -g -C -P'.split(' ') + [sys.argv[1]], check=True, capture_output=True)
-if res.returncode != 0:
-    raise ValueError('Failed to run `nm`')
-
-culprits = []
-
-whitelist = [
+WHITELIST = [
     '@GLIBC',
     '@GCC',
     '@CXXABI',
     '__cxa_call_terminate',
     '__gnu_cxx::',
+    '_ZNSt4pairI',
     'std::',
     'N6duckdb',
     'duckdb::',
@@ -44,32 +34,52 @@ whitelist = [
     'Adbc',
     'ErrorArrayStream',
     'ErrorFromArrayStream',
+    'CreateAPIv1()',
 ]
 
-for value in res.stdout.decode('utf-8').split('\n'):
-    symbol = value.strip()
-    if not symbol:
-        continue
-    if re.search(r' [Uw]$', symbol):  # undefined because dynamic linker
-        continue
-    if re.search(r' [Uw] 0 0$', symbol) and "random_device" not in symbol:  # undefined because dynamic linker
-        continue
 
-    is_whitelisted = False
-    for entry in whitelist:
-        if entry in symbol and "random_device" not in symbol:
-            is_whitelisted = True
-    if is_whitelisted:
-        continue
-
-    culprits.append(symbol)
-
-
-if len(culprits) > 0:
-    print("Found leaked symbols. Either white-list above or change visibility:")
-    for symbol in culprits:
-        print(symbol)
-    sys.exit(1)
+def get_symbols(library: str, selection: str) -> list[str]:
+    result = subprocess.run(
+        [
+            'nm',
+            '--extern-only',
+            '--demangle',
+            '--format=just-symbols',
+            selection,
+            library,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [symbol.strip() for symbol in result.stdout.splitlines() if symbol.strip()]
 
 
-sys.exit(0)
+def find_culprits(defined_symbols: list[str], undefined_symbols: list[str]) -> list[str]:
+    candidates = defined_symbols + [symbol for symbol in undefined_symbols if 'random_device' in symbol]
+    return [
+        symbol for symbol in candidates if not any(entry in symbol for entry in WHITELIST) or 'random_device' in symbol
+    ]
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 2 or not os.path.isfile(argv[1]):
+        print("Usage: [libduckdb dynamic library file, release build]")
+        return 1
+
+    library = argv[1]
+    defined_symbols = get_symbols(library, '--defined-only')
+    undefined_symbols = get_symbols(library, '--undefined-only')
+    culprits = find_culprits(defined_symbols, undefined_symbols)
+
+    if culprits:
+        print("Found leaked symbols. Either white-list above or change visibility:")
+        for symbol in culprits:
+            print(symbol)
+        return 1
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

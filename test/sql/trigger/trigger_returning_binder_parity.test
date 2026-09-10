@@ -58,7 +58,7 @@ statement error
 INSERT INTO returning_window_target VALUES (1), (2)
 RETURNING row_number() OVER (ORDER BY a), a;
 ----
-<REGEX>:.*WINDOW.*
+<REGEX>:Binder Error:.*Window functions are not supported here.*
 
 # Schema-qualified target columns bind the same way as the no-trigger path.
 statement ok

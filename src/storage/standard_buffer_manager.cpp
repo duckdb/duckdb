@@ -244,14 +244,22 @@ void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
 	// Allocate a buffer to hold the data of all blocks.
 	auto block_alloc_size = run.handles[0]->GetBlockAllocSize();
 	auto total_block_size = block_count * block_alloc_size;
-	auto batch_memory = RegisterMemory(MemoryTag::BASE_TABLE, total_block_size, 0, true);
-	auto intermediate_buffer = Pin(batch_memory);
+	// prefetching is best effort, on memory pressure the run is left for the scan to pin its blocks on demand
+	unique_ptr<FileBuffer> staging_reuse;
+	auto staging_result = buffer_pool.EvictBlocks(context, MemoryTag::BASE_TABLE, GetAllocSize(total_block_size),
+	                                              buffer_pool.maximum_memory, &staging_reuse);
+	if (!staging_result.success) {
+		return;
+	}
+	// the reservation is held for the staging buffer's lifetime, released when this function returns
+	auto intermediate_buffer =
+	    ConstructManagedBuffer(total_block_size, 0, std::move(staging_reuse), FileBufferType::MANAGED_BUFFER);
 
 	// perform a batch read of the blocks into the buffer
 	auto &block_manager = run.handles[0]->GetBlockManager();
-	block_manager.ReadBlocks(context, intermediate_buffer.GetFileBuffer(), run.first_block, block_count);
+	block_manager.ReadBlocks(context, *intermediate_buffer, run.first_block, block_count);
 
-	// the blocks are read - now we need to assign them to the individual blocks
+	// the blocks are read, now assign them to the individual block handles
 	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
 		auto &handle = run.handles[block_idx];
 		D_ASSERT(handle->BlockId() == run.first_block + NumericCast<block_id_t>(block_idx));
@@ -260,22 +268,24 @@ void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
 		auto &block_memory = handle->GetMemory();
 		idx_t required_memory = block_memory.GetMemoryUsage();
 		unique_ptr<FileBuffer> reusable_buffer;
-		auto reservation = EvictBlocksOrThrow(context, block_memory.GetMemoryTag(), required_memory, &reusable_buffer,
-		                                      "failed to pin block of size %s%s",
-		                                      StringUtil::BytesToHumanReadableString(required_memory));
-		// now load the block from the buffer
-		// note that we discard the buffer handle - we do not keep it around
-		// the prefetching relies on the block handle being pinned again during the actual read before it is evicted
+		auto block_result = buffer_pool.EvictBlocks(context, block_memory.GetMemoryTag(), required_memory,
+		                                            buffer_pool.maximum_memory, &reusable_buffer);
+		if (!block_result.success) {
+			// the remaining blocks do not fit next to what the pool holds, the scan pins them on demand
+			return;
+		}
+		// load the block, the handle is not kept, the scan pins it again before it can be evicted
 		BufferHandle buf;
 		{
 			auto lock = block_memory.GetLock();
 			if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
-				// the block is loaded already by another thread - free up the reservation and continue
-				reservation.Resize(0);
+				// the block is loaded already by another thread, free up the reservation and continue
+				block_result.reservation.Resize(0);
 				continue;
 			}
-			auto block_ptr = intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * block_alloc_size;
-			buf = handle->LoadFromBuffer(lock, block_ptr, std::move(reusable_buffer), std::move(reservation));
+			auto block_ptr = intermediate_buffer->InternalBuffer() + block_idx * block_alloc_size;
+			buf = handle->LoadFromBuffer(lock, block_ptr, std::move(reusable_buffer),
+			                             std::move(block_result.reservation));
 		}
 	}
 }
@@ -290,10 +300,26 @@ StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles
 		}
 	}
 	vector<PrefetchRun> plan;
-	for (auto &entry : to_be_loaded) {
-		if (plan.empty() ||
-		    plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first) {
-			// this block is not adjacent to the previous block, start a new run
+	if (to_be_loaded.empty()) {
+		return plan;
+	}
+	// each run is read with a single pread into one staging buffer, cap the read size
+	static constexpr idx_t MAX_PREFETCH_RUN_SIZE = 32ULL * 1024 * 1024;
+	const idx_t block_size = to_be_loaded.begin()->second->GetBlockAllocSize();
+	for (auto it = to_be_loaded.begin(); it != to_be_loaded.end(); ++it) {
+		auto &entry = *it;
+		bool new_run = plan.empty() ||
+		               plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first;
+		if (!new_run) {
+			const auto run_size = plan.back().handles.size() * block_size;
+			auto next = std::next(it);
+			// a lone trailing block is not worth a run of its own, let a run within the cap grow by it instead
+			const bool last_of_region = next == to_be_loaded.end() || next->first != entry.first + 1;
+			new_run =
+			    run_size + block_size > MAX_PREFETCH_RUN_SIZE && !(last_of_region && run_size <= MAX_PREFETCH_RUN_SIZE);
+		}
+		if (new_run) {
+			// the block is not adjacent to the previous block or the run is full, start a new run
 			plan.push_back(PrefetchRun {entry.first, {}});
 		}
 		plan.back().handles.push_back(std::move(entry.second));
@@ -478,7 +504,8 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 
 string StandardBufferManager::GetTemporaryPath(block_id_t id) {
 	auto &fs = FileSystem::GetFileSystem(db);
-	return fs.JoinPath(temporary_directory.path, "duckdb_temp_block-" + to_string(id) + ".block");
+	return fs.JoinPath(temporary_directory.path,
+	                   temporary_directory.handle->GetFilePrefix() + "block-" + to_string(id) + ".block");
 }
 
 void StandardBufferManager::RequireTemporaryDirectory() {
@@ -576,18 +603,35 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	handle->Read(context, &block_header_size, sizeof(idx_t), sizeof(idx_t));
 
 	idx_t offset = sizeof(idx_t) * 2;
+	if (EncryptTemporaryFiles()) {
+		offset += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+	}
+
+	// block_size and block_header_size are read off disk: validate them against the physical file before
+	// using them to size an allocation or to offset into the buffer. WriteTemporaryBuffer lays out the file
+	// as [size][header_size][optional nonce/tag][payload], where the payload is GetAllocSize(header + size).
+	auto file_size = handle->GetFileSize();
+	if (block_header_size > file_size || block_size > file_size) {
+		throw IOException(
+		    "Corrupt temporary file \"%s\": block header size (%llu) or block size (%llu) exceeds file size %llu", path,
+		    block_header_size, block_size, file_size);
+	}
+	if (offset + GetAllocSize(block_header_size + block_size) != file_size) {
+		throw IOException("Corrupt temporary file \"%s\": header describes %llu bytes but file is %llu", path,
+		                  offset + GetAllocSize(block_header_size + block_size), file_size);
+	}
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
 	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer));
 
 	if (EncryptTemporaryFiles()) {
-		// encrypted
+		// encrypted: the nonce/tag sit between the two size words and the payload (which starts at offset)
 		//! Read nonce and tag from file.
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
-		handle->Read(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
+		handle->Read(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, sizeof(idx_t) * 2);
 
 		//! Read and decrypt the buffer.
-		buffer->Read(context, *handle, offset + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+		buffer->Read(context, *handle, offset);
 		EncryptionEngine::DecryptTemporaryBuffer(GetDatabase(), buffer->InternalBuffer(), buffer->AllocSize(),
 		                                         encryption_metadata);
 	} else {

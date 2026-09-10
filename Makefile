@@ -26,6 +26,9 @@ PYTHON ?= python3
 FORMAT_VENV ?= .cache/format-venv
 FORMAT_PYTHON := $(FORMAT_VENV)/bin/python
 FORMAT_SETUP_DEPS := format_venv
+CAPIGEN_VENV ?= .cache/capigen-venv
+CAPIGEN_PYTHON := $(CAPIGEN_VENV)/bin/python
+CAPIGEN_SETUP_DEPS := capigen_venv
 
 EXE_SUFFIX :=
 ifeq ($(OS),Windows_NT)
@@ -120,16 +123,18 @@ SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
 CORE_EXTENSIONS ?=
 UNSAFE_NUMERIC_CAST ?=
-ifdef OVERRIDE_GIT_DESCRIBE
-        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE="${OVERRIDE_GIT_DESCRIBE}"
-else
-        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE=""
-endif
-
-ifdef DUCKDB_EXPLICIT_VERSION
+ifdef DUCKDB_VERSION
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${DUCKDB_VERSION}"
+else ifdef OVERRIDE_GIT_DESCRIBE
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${OVERRIDE_GIT_DESCRIBE}"
+else ifdef DUCKDB_EXPLICIT_VERSION
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${DUCKDB_EXPLICIT_VERSION}"
 else
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION=""
+endif
+
+ifdef DUCKDB_COMMIT
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DGIT_COMMIT_HASH="${DUCKDB_COMMIT}"
 endif
 
 ifneq (${CXX_STANDARD}, )
@@ -360,14 +365,11 @@ endif
 ifeq (${NATIVE_ARCH}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DNATIVE_ARCH=1
 endif
+ifneq (${DUCKDB_OPTIMIZATION_PROFILE}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_OPTIMIZATION_PROFILE=${DUCKDB_OPTIMIZATION_PROFILE}
+endif
 ifeq (${OVERRIDE_NEW_DELETE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOVERRIDE_NEW_DELETE=1
-endif
-ifeq (${MAIN_BRANCH_VERSIONING}, 0)
-	CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
-endif
-ifeq (${MAIN_BRANCH_VERSIONING}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
 endif
 ifeq (${STANDALONE_DEBUG}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DSTANDALONE_DEBUG=1
@@ -406,6 +408,9 @@ endif
 
 ifneq ("${LTO}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO='${LTO}'
+endif
+ifneq ("${LTO_JOBS}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO_JOBS='${LTO_JOBS}'
 endif
 ifeq (${EXPORT_DYNAMIC_SYMBOLS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DEXPORT_DYNAMIC_SYMBOLS=1
@@ -539,7 +544,7 @@ TEST_CONFIGS_QUERY_VERIFICATION := \
 	test/configs/disable_optimizer.json \
 	test/configs/verification_projection.json \
 	test/configs/verify_column_bindings.json \
-	test/configs/transformer_trampoline_style.json
+	test/configs/heap_based_parser.json
 
 TEST_CONFIGS_EXECUTION := \
 	test/configs/internal_vector_serialization.json \
@@ -673,6 +678,11 @@ cli-release-artifact:
 shared-libs-release-artifact:
 	bash scripts/package_release_artifact.sh shared-libs "$(ARTIFACT_SUFFIX)" $(SHARED_LIBRARIES)
 
+.PHONY: static-libs-release-artifact
+
+static-libs-release-artifact:
+	bash scripts/package_release_artifact.sh static-libs "$(ARTIFACT_SUFFIX)" $(STATIC_LIBRARIES)
+
 .PHONY: symbol-checks symbol-leakage-check banned-symbol-check
 
 symbol-checks: symbol-leakage-check banned-symbol-check
@@ -774,6 +784,16 @@ format_venv:
 	@$(FORMAT_PYTHON) -m pip show cmake-format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install cmake-format
 	@$(FORMAT_PYTHON) -m pip show clang_format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install clang_format==11.0.1
 
+# Venv holding capigen (the C API generator) and the formatters it needs, pinned by api_spec/pyproject.toml
+.PHONY: capigen_venv
+capigen_venv:
+	@if [ ! -x "$(CAPIGEN_PYTHON)" ]; then \
+		mkdir -p "$(dir $(CAPIGEN_VENV))" && \
+		$(PYTHON) -m venv "$(CAPIGEN_VENV)" && \
+		$(CAPIGEN_PYTHON) -m pip install -U pip; \
+	fi
+	@$(CAPIGEN_PYTHON) -m pip show capigen >/dev/null 2>&1 || $(CAPIGEN_PYTHON) -m pip install --group api_spec/pyproject.toml:generate
+
 benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \
@@ -832,6 +852,7 @@ format-parser-grammar: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/parser/peg/transformer/peg_transformer.hpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated_trampoline.cpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher_factory.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher.cpp --fix --noconfirm
 
 .PHONY: parser-grammar-tools parser-grammar
@@ -906,8 +927,8 @@ generate-files-deps:
 	$(PYTHON) -m pip install --group api_spec/pyproject.toml:generate
 	$(PYTHON) -m pip install cxxheaderparser pcpp
 
-generate-files:
-	./scripts/capi_v1_regen.sh
+generate-files: $(CAPIGEN_SETUP_DEPS)
+	CAPIGEN_PYTHON="$(abspath $(CAPIGEN_PYTHON))" ./scripts/capi_v1_regen.sh
 	$(PYTHON) scripts/generate_functions.py
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py
@@ -951,14 +972,20 @@ bundle-library-obj: bundle-setup
 bundle-library: release
 	make bundle-library-o
 
-gather-libs: release
-	cd build/release && \
+.PHONY: gather-libs
+
+GATHER_LIBS_BUILD_DIR ?= build/release
+GATHER_LIBS_PREFIX ?= lib
+GATHER_LIBS_EXTENSION ?= a
+
+gather-libs:
+	cd $(GATHER_LIBS_BUILD_DIR) && \
 	rm -rf libs && \
 	mkdir -p libs && \
-	cp src/libduckdb_static.a libs/. && \
-	cp third_party/*/libduckdb_*.a libs/. && \
-	cp extension/libduckdb_generated_extension_loader.a libs/. && \
-	cp extension/*/lib*_extension.a libs/.
+	cp src/$(GATHER_LIBS_PREFIX)duckdb_static.$(GATHER_LIBS_EXTENSION) libs/. && \
+	cp third_party/*/$(GATHER_LIBS_PREFIX)duckdb_*.$(GATHER_LIBS_EXTENSION) libs/. && \
+	cp extension/$(GATHER_LIBS_PREFIX)duckdb_generated_extension_loader.$(GATHER_LIBS_EXTENSION) libs/. && \
+	cp extension/*/$(GATHER_LIBS_PREFIX)*_extension.$(GATHER_LIBS_EXTENSION) libs/.
 
 #### Setup VCPKG to correct version 2025.12.12 tag is 84bab45d415d22042bd0b9081aea57f362da3f35
 vcpkg/scripts/buildsystems/vcpkg.cmake:

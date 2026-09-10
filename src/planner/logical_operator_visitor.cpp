@@ -247,6 +247,9 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_FUNCTION:
 		result = VisitReplace(expr.Cast<BoundFunctionExpression>(), expression);
 		break;
+	case ExpressionClass::BOUND_LAMBDA:
+		result = VisitReplace(expr.Cast<BoundLambdaExpression>(), expression);
+		break;
 	case ExpressionClass::BOUND_SUBQUERY:
 		result = VisitReplace(expr.Cast<BoundSubqueryExpression>(), expression);
 		break;
@@ -307,6 +310,11 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundConjunctionExpr
 }
 
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundConstantExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
+	return nullptr;
+}
+
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundLambdaExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

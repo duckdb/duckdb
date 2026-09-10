@@ -6,33 +6,26 @@
 
 namespace duckdb {
 
-class OperatorMatcher : public Matcher {
+class OperatorMatcher : public AtomicMatcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
 
 public:
-	explicit OperatorMatcher() : Matcher(TYPE) {
+	explicit OperatorMatcher() : AtomicMatcher(TYPE) {
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		if (!MatchOperator(state)) {
-			return MatchResultType::FAIL;
-		}
-		return MatchResultType::SUCCESS;
-	}
-
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchAtomic(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 		auto &token_text = token->text;
 		auto start_offset = optional_idx(token->offset);
 		auto token_length = optional_idx(token->length);
 		if (!MatchOperator(state)) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
-		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text, start_offset, token_length));
+		return state.AllocateParseResult<OperatorParseResult>(token_text, start_offset, token_length);
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {

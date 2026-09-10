@@ -5,32 +5,22 @@
 namespace duckdb {
 
 //! Consumes the END_OF_INPUT sentinel; wired into the grammar's EndOfInput rule.
-class EndOfInputMatcher : public Matcher {
+class EndOfInputMatcher : public AtomicMatcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::END_OF_INPUT;
 
 public:
-	EndOfInputMatcher() : Matcher(TYPE) {
+	EndOfInputMatcher() : AtomicMatcher(TYPE) {
 	}
 
-	MatchResultType Match(MatchState &state) const override {
+	MatcherResult MatchAtomic(MatchState &state) const override {
 		auto current = state.token_iterator.Current();
 		if (current && current->type == TokenType::END_OF_INPUT) {
 			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
-			return MatchResultType::SUCCESS;
+			return state.AllocateParseResult<EndOfInputParseResult>();
 		}
-		return MatchResultType::FAIL;
-	}
-
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		auto current = state.token_iterator.Current();
-		if (current && current->type == TokenType::END_OF_INPUT) {
-			state.token_iterator.Advance();
-			state.UpdateMaxTokenIndex();
-			return state.allocator.Allocate(make_uniq<EndOfInputParseResult>());
-		}
-		return nullptr;
+		return MatcherResult::Failure();
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {

@@ -238,7 +238,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 			}
 
 			//  Lazily initialise frame state
-			window_state.SetCount(frames.back().end - frames.front().start);
+			window_state.SetCount(FrameSet(frames).Size());
 			auto index2 = window_state.m.data();
 			D_ASSERT(index2);
 

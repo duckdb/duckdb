@@ -30,6 +30,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
@@ -147,8 +148,9 @@ virtual_column_map_t DuckTableEntry::GetVirtualColumns() const {
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                shared_ptr<DataTable> inherited_storage, shared_ptr<CatalogSet> inherited_triggers)
-    : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
-      triggers(std::move(inherited_triggers)), column_dependency_manager(std::move(info.column_dependency_manager)) {
+    : TableCatalogEntry(catalog, schema, info.Base()), columns(std::move(info.Base().columns)),
+      storage(std::move(inherited_storage)), triggers(std::move(inherited_triggers)),
+      column_dependency_manager(std::move(info.column_dependency_manager)) {
 	if (!triggers) {
 		triggers = make_shared_ptr<CatalogSet>(catalog);
 	}
@@ -240,8 +242,28 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	}
 }
 
+const ColumnList &DuckTableEntry::GetColumns() const {
+	return columns;
+}
+
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, const StorageIndex &column_id) {
-	return storage->GetStatistics(context, column_id);
+	// Get the committed statistics
+	auto stats = storage->GetStatistics(context, column_id);
+	if (!stats) {
+		return nullptr;
+	}
+	// Merge the transaction-local statistics in so the result describes the transaction-visible data.
+	auto &local_storage = LocalStorage::Get(context, ParentCatalog());
+	auto local_table_storage = local_storage.GetStorage(*storage);
+	if (!local_table_storage) {
+		return stats;
+	}
+	auto local_stats = local_table_storage->GetCollection().CopyStats(column_id);
+	if (!local_stats) {
+		return stats;
+	}
+	stats->Merge(*local_stats);
+	return stats;
 }
 
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, column_t column_id) {
@@ -254,7 +276,7 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 		return nullptr;
 	}
 	auto storage_index = GetStorageIndex(ColumnIndex(column_id));
-	return storage->GetStatistics(context, storage_index);
+	return GetStatistics(context, storage_index);
 }
 
 unique_ptr<BlockingSample> DuckTableEntry::GetSample() {
@@ -484,6 +506,44 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 	SetAlterDependencies(*bound_create_info, info);
+
+	// Update any UPDATE OF triggers whose column list references the renamed column.
+	// Also detect concurrent uncommitted (or recently-committed) triggers that reference the same
+	// column: the snapshot scan cannot see them, so we raise a write-write conflict so the caller
+	// retries after the concurrent transaction completes.
+	auto txn = catalog.GetCatalogTransaction(context);
+	vector<Identifier> triggers_to_update;
+	triggers->ScanWithConflictDetection(
+	    txn,
+	    [&](CatalogEntry &raw_entry) {
+		    auto &trig = raw_entry.Cast<TriggerCatalogEntry>();
+		    for (const auto &col : trig.columns) {
+			    if (col == info.old_name) {
+				    triggers_to_update.push_back(trig.name);
+				    break;
+			    }
+		    }
+	    },
+	    [&](CatalogEntry &concurrent_entry) {
+		    if (concurrent_entry.type != CatalogType::TRIGGER_ENTRY || concurrent_entry.deleted) {
+			    return;
+		    }
+		    auto &trig = concurrent_entry.Cast<TriggerCatalogEntry>();
+		    for (const auto &col : trig.columns) {
+			    if (col == info.old_name) {
+				    throw TransactionException("Catalog write-write conflict on alter with \"%s\": trigger \"%s\" "
+				                               "references column \"%s\" which is being renamed",
+				                               name, trig.name, info.old_name);
+			    }
+		    }
+	    });
+	// Use a copy of info without new_dependencies so AlterObject does not
+	// replace the trigger's own dependency edges with the table's dep list.
+	auto trigger_alter_info = info.Copy();
+	for (const auto &trigger_name : triggers_to_update) {
+		triggers->AlterEntry(txn, trigger_name, *trigger_alter_info);
+	}
+
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
@@ -1112,6 +1172,14 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
 	auto not_null_idx = GetColumnIndex(info.column_name);
+	if (const auto pk = GetPrimaryKey()) {
+		auto &unique = pk->Cast<UniqueConstraint>();
+		for (const auto &pk_index : unique.GetLogicalIndexes(columns)) {
+			if (pk_index == not_null_idx) {
+				throw CatalogException("column %s is in a primary key", info.column_name);
+			}
+		}
+	}
 
 	auto create_info = GetInfo();
 	auto &table_info = create_info->Cast<CreateTableInfo>();
@@ -1185,6 +1253,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 		create_info->columns.AddColumn(std::move(copy));
 	}
 
+	// If the changed column has a NOT NULL constraint, keep it so we can re-verify the rewritten values before
+	// committing the ALTER; as of now other constraint types below are still rejected up front.
+	unique_ptr<BoundConstraint> constraint_to_verify;
 	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
 		auto constraint = constraints[constr_idx]->Copy();
 		switch (constraint->type) {
@@ -1196,8 +1267,13 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 			}
 			break;
 		}
-		case ConstraintType::NOT_NULL:
+		case ConstraintType::NOT_NULL: {
+			auto &bound_not_null = bound_constraints[constr_idx]->Cast<BoundNotNullConstraint>();
+			if (bound_not_null.index == columns.LogicalToPhysical(change_idx)) {
+				constraint_to_verify = bound_constraints[constr_idx]->Copy();
+			}
 			break;
+		}
 		case ConstraintType::UNIQUE: {
 			auto &bound_unique = bound_constraints[constr_idx]->Cast<BoundUniqueConstraint>();
 			auto physical_index = columns.LogicalToPhysical(change_idx);
@@ -1237,9 +1313,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 		storage_oids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 
-	auto new_storage =
-	    make_shared_ptr<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(change_idx)).index,
-	                               info.target_type, std::move(storage_oids), *bound_expression);
+	auto new_storage = make_shared_ptr<DataTable>(
+	    context, *storage, columns.LogicalToPhysical(LogicalIndex(change_idx)).index, info.target_type,
+	    std::move(storage_oids), *bound_expression, constraint_to_verify.get());
 	auto result = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage, triggers);
 	return std::move(result);
 }
@@ -1317,9 +1393,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		return;
 	}
 
-	// Rolls back any physical index creation.
-	// FIXME: Currently only works for PKs.
-	// FIXME: Should be changed to work for any index-based constraint.
+	// Rolls back any physical index creation for index-based constraints.
 
 	auto &table = Cast<DuckTableEntry>();
 	auto &prev_table = prev_entry.Cast<DuckTableEntry>();
@@ -1335,10 +1409,8 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 			continue;
 		}
 		const auto &unique = constraint->Cast<UniqueConstraint>();
-		if (unique.is_primary_key) {
-			auto index_name = unique.GetName(prev_table.name);
-			names.insert(index_name);
-		}
+		auto index_name = unique.GetName(prev_table.name);
+		names.insert(index_name);
 	}
 
 	for (const auto &constraint : GetConstraints()) {
@@ -1346,9 +1418,6 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 			continue;
 		}
 		const auto &unique = constraint->Cast<UniqueConstraint>();
-		if (!unique.IsPrimaryKey()) {
-			continue;
-		}
 		auto index_name = unique.GetName(table.name);
 		if (names.find(index_name) == names.end()) {
 			prev_indexes.RemoveIndex(index_name);
@@ -1487,6 +1556,10 @@ optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction tran
 void DuckTableEntry::ScanTriggers(CatalogTransaction transaction,
                                   const std::function<void(CatalogEntry &)> &callback) const {
 	triggers->Scan(transaction, callback);
+}
+
+optional_ptr<CatalogEntry> DuckTableEntry::GetTrigger(CatalogTransaction transaction, const Identifier &name) const {
+	return triggers->GetEntry(transaction, name);
 }
 
 void DuckTableEntry::ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback) {

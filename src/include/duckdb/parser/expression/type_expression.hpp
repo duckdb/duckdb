@@ -25,6 +25,11 @@ public:
 	TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children);
 
 public:
+	//! The type expression that binds back to `type`. The inverse of binding a TypeExpression: every
+	//! parameterised built-in is written out with its parameters, and a type that carries an alias (a
+	//! user-defined type) is named by that alias. Throws for types that have no SQL spelling.
+	DUCKDB_API static unique_ptr<TypeExpression> FromLogicalType(const LogicalType &type);
+
 	const QualifiedName &GetQualifiedName() const {
 		return qualified_name;
 	}
@@ -50,7 +55,7 @@ public:
 		return qualified_name.Catalog();
 	}
 	void SetCatalog(Identifier new_catalog) {
-		qualified_name = QualifiedName(std::move(new_catalog), qualified_name.Schema(), qualified_name.Name());
+		qualified_name = qualified_name.WithCatalog(std::move(new_catalog));
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;

@@ -911,3 +911,33 @@ query I
 SELECT id FROM del_replace_log ORDER BY id;
 ----
 7
+
+# COPY FROM fires a row trigger for each inserted row
+statement ok
+CREATE TABLE copy_row_source (id INTEGER);
+
+statement ok
+INSERT INTO copy_row_source VALUES (1), (2), (3);
+
+statement ok
+COPY copy_row_source TO '{TEST_DIR}/trigger_copy_row.csv';
+
+statement ok
+CREATE TABLE copy_row_target (id INTEGER);
+
+statement ok
+CREATE TABLE copy_row_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER copy_row_trg AFTER INSERT ON copy_row_target FOR EACH ROW
+    INSERT INTO copy_row_log VALUES (NEW.id);
+
+statement ok
+COPY copy_row_target FROM '{TEST_DIR}/trigger_copy_row.csv';
+
+query I
+SELECT id FROM copy_row_log ORDER BY id;
+----
+1
+2
+3

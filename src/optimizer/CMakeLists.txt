@@ -29,12 +29,14 @@ add_library_unity(
   multi_stage_aggregate_rewriter.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
+  filter_statistics.cpp
   filter_combiner.cpp
   filter_pullup.cpp
   filter_pushdown.cpp
   grouping_sets_optimizer.cpp
   in_clause_rewriter.cpp
   join_filter_pushdown_optimizer.cpp
+  runtime_filter_cast.cpp
   late_materialization.cpp
   late_materialization_helper.cpp
   optimizer.cpp

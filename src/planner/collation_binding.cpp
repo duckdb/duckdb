@@ -132,7 +132,8 @@ static unique_ptr<Expression> ApplyCollationFunction(ClientContext &context, con
 static bool PushNestedCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &child_type,
                                 CollationType type, const CollationBinding &binding) {
 	// build a lambda body that applies the collation to the lambda parameter (a reference to the child element)
-	unique_ptr<Expression> lambda_body = make_uniq<BoundReferenceExpression>(child_type, idx_t(0));
+	const Identifier lambda_parameter("x");
+	unique_ptr<Expression> lambda_body = make_uniq<BoundReferenceExpression>(lambda_parameter, child_type, idx_t(0));
 	if (!binding.PushCollation(context, lambda_body, child_type, type)) {
 		// the child type does not require collation - nothing to push
 		return false;
@@ -149,6 +150,7 @@ static bool PushNestedCollation(ClientContext &context, unique_ptr<Expression> &
 
 	auto bound_lambda =
 	    make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, std::move(lambda_body), 1);
+	bound_lambda->SetParameterNames({lambda_parameter});
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
 	children.push_back(std::move(bound_lambda));
@@ -159,9 +161,6 @@ static bool PushNestedCollation(ClientContext &context, unique_ptr<Expression> &
 	if (!function) {
 		error.Throw();
 	}
-	// the lambda expression is consumed by the bind - remove it from the children
-	auto &bound_function = function->Cast<BoundFunctionExpression>();
-	bound_function.GetChildrenMutable().erase_at(1);
 	source = std::move(function);
 	return true;
 }

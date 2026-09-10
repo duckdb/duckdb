@@ -7,8 +7,126 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from scripts.regression.benchmark import (
+    BenchmarkRunner,
+    EXTENSION_DIRECTORY_ENV,
+    find_benchmark_cache_directory,
+    find_extension_directory,
+)
 from scripts.regression.comparison import benchmark_measurement, confirmation_run_count, sampling_batch_sizes
+
+
+class TestBenchmarkRunner(unittest.TestCase):
+    def test_finds_artifact_local_extension_directory(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            release_directory = Path(temp_directory) / "release"
+            runner_path = release_directory / "benchmark" / "benchmark_runner"
+            extension_directory = release_directory / "repository" / "v1.4.0" / "linux_amd64"
+            extension_directory.mkdir(parents=True)
+            (extension_directory / "fts.duckdb_extension").touch()
+
+            self.assertEqual(find_extension_directory(str(runner_path)), str(extension_directory.resolve()))
+
+    def test_rejects_multiple_artifact_extension_directories(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            release_directory = Path(temp_directory) / "release"
+            runner_path = release_directory / "benchmark" / "benchmark_runner"
+            for platform in ["linux_amd64", "linux_arm64"]:
+                extension_directory = release_directory / "repository" / "v1.4.0" / platform
+                extension_directory.mkdir(parents=True)
+                (extension_directory / "fts.duckdb_extension").touch()
+
+            with self.assertRaisesRegex(ValueError, "multiple extension directories"):
+                find_extension_directory(str(runner_path))
+
+    def test_finds_shared_artifact_benchmark_cache_directory(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            build_directory = Path(temp_directory) / "build"
+            runner_paths = [
+                build_directory / "base" / "release" / "benchmark" / "benchmark_runner",
+                build_directory / "current" / "release" / "benchmark" / "benchmark_runner",
+            ]
+            cache_directories = {find_benchmark_cache_directory(str(path)) for path in runner_paths}
+            expected_directory = os.path.abspath(build_directory / "duckdb_benchmark_data")
+            self.assertEqual(cache_directories, {expected_directory})
+
+    def test_passes_artifact_extension_directory_to_runner(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            release_directory = Path(temp_directory) / "release"
+            runner_path = release_directory / "benchmark" / "benchmark_runner"
+            extension_directory = release_directory / "repository" / "v1.4.0" / "linux_amd64"
+            extension_directory.mkdir(parents=True)
+            (extension_directory / "fts.duckdb_extension").touch()
+            completed_process = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="", stderr="name\trun\ttiming\nquery\t1\t1.0\n"
+            )
+
+            with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process) as run:
+                timings, error = BenchmarkRunner(str(runner_path), "current").run("query.benchmark", 1)
+
+            self.assertEqual(timings, [1.0])
+            self.assertIsNone(error)
+            self.assertEqual(run.call_args.kwargs["env"][EXTENSION_DIRECTORY_ENV], str(extension_directory.resolve()))
+
+    def test_surfaces_incorrect_result_diagnostic(self):
+        completed_process = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr=(
+                "name\trun\ttiming\n"
+                "query.benchmark\t1\tINCORRECT\n"
+                "INCORRECT RESULT: Invalid Input Error: attempted to read past the end of the segment\n"
+            ),
+        )
+
+        with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process):
+            timings, error = BenchmarkRunner("benchmark_runner", "current").run("query.benchmark", 1)
+
+        self.assertIsNone(timings)
+        self.assertEqual(
+            error,
+            "current benchmark runner reported INCORRECT for query.benchmark on run 1:\n"
+            "INCORRECT RESULT: Invalid Input Error: attempted to read past the end of the segment",
+        )
+
+    def test_surfaces_error_diagnostic(self):
+        completed_process = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="name\trun\ttiming\nquery.benchmark\t2\tERROR\nData Corruption Error: invalid segment size\n",
+        )
+
+        with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process):
+            timings, error = BenchmarkRunner("benchmark_runner", "current").run("query.benchmark", 2)
+
+        self.assertIsNone(timings)
+        self.assertEqual(
+            error,
+            "current benchmark runner reported ERROR for query.benchmark on run 2:\n"
+            "Data Corruption Error: invalid segment size",
+        )
+
+    def test_uses_stdout_failure_summary_when_stderr_has_no_diagnostic(self):
+        completed_process = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="failure summary with the underlying exception\n",
+            stderr="name\trun\ttiming\nquery.benchmark\t1\tINCORRECT\n",
+        )
+
+        with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process):
+            timings, error = BenchmarkRunner("benchmark_runner", "current").run("query.benchmark", 1)
+
+        self.assertIsNone(timings)
+        self.assertEqual(
+            error,
+            "current benchmark runner reported INCORRECT for query.benchmark on run 1:\n"
+            "failure summary with the underlying exception",
+        )
 
 
 class TestBenchmarkComparison(unittest.TestCase):
@@ -190,6 +308,39 @@ import sys
 
 print("name\\trun\\ttiming", file=sys.stderr)
 print("not-a-valid-timing-row", file=sys.stderr)
+"""
+
+    incorrect_runner_source = """#!/usr/bin/env python3
+import sys
+
+print("name\\trun\\ttiming", file=sys.stderr)
+print(f"{sys.argv[1]}\\t1\\tINCORRECT", file=sys.stderr)
+print("INCORRECT RESULT: Data Corruption Error: attempted to read past the end of the segment", file=sys.stderr)
+"""
+
+    shared_state_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+label = os.path.basename(sys.argv[0])
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(f"{label}:{runs}\\n")
+if "--root-dir" in sys.argv:
+    state_directory = Path(sys.argv[sys.argv.index("--root-dir") + 1]) / "duckdb_benchmark_data"
+else:
+    state_directory = Path(os.environ["BENCHMARK_COUNTER_DIR"])
+owner_path = state_directory / "shared-owner"
+previous_owner = owner_path.read_text(encoding="utf-8") if owner_path.exists() else None
+owner_path.write_text(label, encoding="utf-8")
+print("name\\trun\\timing", file=sys.stderr)
+if label == "old" and previous_owner == "new":
+    print(f"{sys.argv[1]}\\t1\\tINCORRECT", file=sys.stderr)
+    print("INCORRECT RESULT: old runner opened state written by new runner", file=sys.stderr)
+else:
+    for run in range(1, runs + 1):
+        print(f"{sys.argv[1]}\\t{run}\\t1.0", file=sys.stderr)
 """
 
     def run_regression_test(
@@ -490,6 +641,35 @@ print("not-a-valid-timing-row", file=sys.stderr)
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
         self.assertLess(plain_output.index("FAILURES SUMMARY"), plain_output.index("geomean:"))
         self.assertTrue(plain_output.rstrip().endswith("result: failed; benchmark failure; no query regressions"))
+
+    def test_incorrect_result_diagnostic_reaches_failure_summary(self):
+        process, _, _ = self.run_regression_test(self.incorrect_runner_source)
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertIn(
+            "INCORRECT RESULT: Data Corruption Error: attempted to read past the end of the segment",
+            process.stdout,
+        )
+        self.assertNotIn("could not convert string to float", process.stdout)
+
+    def test_failure_identifies_runner_that_previously_wrote_shared_state(self):
+        process, order, _ = self.run_regression_test(self.shared_state_runner_source)
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:5", "new:5", "old:5"])
+        self.assertIn("Base benchmark runner reported INCORRECT", process.stdout)
+        self.assertIn("Comparison batch 2 ran PR immediately before Base.", process.stdout)
+        self.assertIn(
+            "Both runners use the same benchmark cache, so files may have been last written by PR.", process.stdout
+        )
+        self.assertIn("PR:\n No failure", process.stdout)
+
+    def test_clear_cache_isolates_runner_writable_state(self):
+        process, order, _ = self.run_regression_test(
+            self.shared_state_runner_source, extra_args=["--benchmark-cache=clear"]
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, self.expected_order(10))
+        self.assertNotIn("opened state written by", process.stdout)
+        self.assertIn("benchmark cache: isolated Base and PR directories", process.stdout)
 
 
 if __name__ == "__main__":

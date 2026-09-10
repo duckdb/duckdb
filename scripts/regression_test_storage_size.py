@@ -3,6 +3,11 @@ import argparse
 import subprocess
 import tempfile
 
+if __package__:
+    from .regression.local_extensions import extension_loading_args
+else:
+    from regression.local_extensions import extension_loading_args
+
 # the threshold at which we consider something a regression (percentage)
 regression_threshold_percentage = 0.05
 
@@ -25,12 +30,13 @@ if not os.path.isfile(new_runner):
     exit(1)
 
 
-def load_data(shell_path, load_script):
+def load_data(shell_path, load_script, extension):
     with tempfile.NamedTemporaryFile() as f:
         filename = f.name
     proc = subprocess.Popen(
         [
             shell_path,
+            *extension_loading_args(shell_path, [extension]),
             '-storage_version',
             'latest',
             '-c',
@@ -49,14 +55,14 @@ def load_data(shell_path, load_script):
     return os.path.getsize(filename)
 
 
-def run_benchmark(load_script, benchmark_name):
+def run_benchmark(load_script, benchmark_name, extension):
     print('----------------------------')
     print(f'Running benchmark {benchmark_name}')
     print('----------------------------')
-    old_size = load_data(old_runner, load_script)
+    old_size = load_data(old_runner, load_script, extension)
     if old_size is None:
         return False
-    new_size = load_data(new_runner, load_script)
+    new_size = load_data(new_runner, load_script, extension)
     if new_size is None:
         return False
     print(f'Database size with old runner: {old_size}')
@@ -77,10 +83,10 @@ tpch_load = 'CALL dbgen(sf=1);'
 tpcds_load = 'CALL dsdgen(sf=1);'
 
 
-benchmarks = [[tpch_load, 'TPC-H SF1'], [tpcds_load, 'TPC-DS SF1']]
+benchmarks = [[tpch_load, 'TPC-H SF1', 'tpch'], [tpcds_load, 'TPC-DS SF1', 'tpcds']]
 
 for benchmark in benchmarks:
-    if not run_benchmark(benchmark[0], benchmark[1]):
+    if not run_benchmark(benchmark[0], benchmark[1], benchmark[2]):
         print(f'Database size increased in {benchmark[1]}')
         exit_code = 1
 

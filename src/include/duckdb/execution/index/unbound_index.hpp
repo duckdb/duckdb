@@ -15,8 +15,10 @@
 
 namespace duckdb {
 
+class BoundIndex;
 class ColumnDataCollection;
 class DataChunk;
+class IndexBinder;
 
 enum class BufferedIndexReplay : uint8_t { INSERT_ENTRY = 0, DEL_ENTRY = 1 };
 
@@ -73,9 +75,14 @@ private:
 	//! Derived from this index's column IDs at construction, deduplicated and sorted.
 	vector<StorageIndex> mapped_column_ids;
 
+	//! Whether persistent blocks referenced by `storage_info` have been reclaimed
+	//! or handed off to a bound index.
+	bool storage_reclaimed = false;
+
 public:
 	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
 	             AttachedDatabase &db);
+	~UnboundIndex() override;
 
 public:
 	void ResetStorage() override;
@@ -98,6 +105,7 @@ public:
 	const IndexStorageInfo &GetStorageInfo() const {
 		return storage_info;
 	}
+	IndexStorageInfo CopyStorageInfo() const;
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {
 		return GetCreateInfo().parsed_expressions;
 	}
@@ -109,6 +117,7 @@ public:
 	//! table_chunk uses physical table layout: data[j] holds physical column j. It may be sparse,
 	//! but all columns required by this index must be populated.
 	void BufferChunk(DataChunk &table_chunk, Vector &row_ids, BufferedIndexReplay replay_type);
+	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types);
 	bool HasBufferedReplays() const {
 		return buffered_replays.HasBufferedReplays();
 	}

@@ -155,8 +155,10 @@ PhysicalType LogicalType::GetInternalType() {
 		}
 		return EnumType::GetPhysicalType(*this);
 	}
-	case LogicalTypeId::TABLE:
 	case LogicalTypeId::LAMBDA:
+		// a lambda has no value of its own - it occupies an argument slot that holds a constant placeholder
+		return PhysicalType::UINT8;
+	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
@@ -1276,6 +1278,14 @@ void LogicalType::Serialize(Serializer &serializer) const {
 				bound_type.Serialize(serializer);
 				return;
 			}
+		} catch (const InternalException &) {
+			throw;
+		} catch (const OutOfMemoryException &) {
+			// binding allocates, and a failure to allocate is not a failure to bind: falling back here reports it
+			// as "Cannot serialize non-constant type parameter", which says nothing about what went wrong
+			throw;
+		} catch (const InterruptException &) {
+			throw;
 		} catch (...) {
 			// Ignore errors, just try to write as a USER type instead
 		}
@@ -1948,11 +1958,11 @@ static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
 		switch (arg->GetExpressionType()) {
 		case ExpressionType::TYPE: {
 			auto type = TryDefaultBindTypeExpression(*arg);
-			bound_args.emplace_back(arg->GetName(), Value::TYPE(type));
+			bound_args.emplace_back(arg->GetAlias().GetIdentifierName(), Value::TYPE(type));
 		} break;
 		case ExpressionType::VALUE_CONSTANT: {
 			auto &const_expr = arg->Cast<ConstantExpression>();
-			bound_args.emplace_back(arg->GetName(), const_expr.GetValue());
+			bound_args.emplace_back(arg->GetAlias().GetIdentifierName(), const_expr.GetValue());
 		} break;
 		default:
 			throw InvalidInputException("Cannot default bind unbound type with non-type, non-expression parameter");
@@ -1978,6 +1988,10 @@ LogicalType UnboundType::TryDefaultBind(const LogicalType &unbound_type) {
 	}
 	auto &expr = UnboundType::GetTypeExpression(unbound_type);
 	return TryDefaultBindTypeExpression(*expr);
+}
+
+LogicalType UnboundType::TryDefaultBind(const ParsedExpression &type_expr) {
+	return TryDefaultBindTypeExpression(type_expr);
 }
 
 //===--------------------------------------------------------------------===//

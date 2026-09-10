@@ -1,4 +1,5 @@
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
@@ -13,6 +14,7 @@
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/catalog/dependency_catalog_set.hpp"
 #include "duckdb/parser/qualified_name.hpp"
@@ -36,16 +38,22 @@ MangledEntryName::MangledEntryName(const CatalogEntryInfo &info) {
 	auto &type = info.type;
 	auto &schema_path = info.schema_path;
 	auto &name = info.name;
+	auto &table = info.table;
 
-	// Format: Type\0[Schema\0 for each containing schema]Name - the schema path is null-separated so distinct nestings
-	// produce distinct keys (SQL identifiers cannot contain null bytes)
+	// Format: Type\0[Schema\0 for each containing schema]Name[\0Table] - the schema path is null-separated so distinct
+	// produce distinct keys (SQL identifiers cannot contain null bytes).
 	string mangled = CatalogTypeToString(type) + '\0';
 	for (auto &schema : schema_path) {
 		mangled += schema.GetIdentifierName() + '\0';
 	}
 	mangled += name;
+	idx_t expected_null_bytes = 1 + schema_path.size();
+	if (!table.empty()) {
+		mangled += '\0' + table.GetIdentifierName();
+		expected_null_bytes++;
+	}
 	this->name = Identifier(mangled);
-	AssertMangledName(this->name.GetIdentifierName(), 1 + schema_path.size());
+	AssertMangledName(this->name.GetIdentifierName(), expected_null_bytes);
 }
 
 MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to) {
@@ -93,9 +101,7 @@ MangledEntryName DependencyManager::MangleName(const CatalogEntry &entry) {
 		auto &dependency_entry = entry.Cast<DependencyEntry>();
 		return dependency_entry.EntryMangledName();
 	}
-	CatalogEntryInfo info {entry.type, GetSchemaPath(entry), entry.name};
-
-	return MangleName(info);
+	return MangleName(GetLookupProperties(entry));
 }
 
 DependencyInfo DependencyInfo::FromSubject(DependencyEntry &dep) {
@@ -247,10 +253,9 @@ void DependencyManager::CreateDependent(CatalogTransaction transaction, const De
 }
 
 static string CatalogEntryInfoToString(const CatalogEntryInfo &entry) {
-	auto schema = StringUtil::Join(entry.schema_path, entry.schema_path.size(), ".", [](const Identifier &id) {
-		return SQLIdentifier::ToString(id.GetIdentifierName());
-	});
-	return schema + "." + SQLIdentifier::ToString(entry.name.GetIdentifierName()) +
+	auto schema = StringUtil::Join(entry.schema_path, entry.schema_path.size(), ".",
+	                               [](const Identifier &id) { return SQLIdentifier::ToString(id); });
+	return schema + "." + SQLIdentifier::ToString(entry.name) +
 	       StringUtil::Format("(%s)", CatalogTypeToString(entry.type));
 }
 
@@ -299,12 +304,6 @@ void DependencyManager::CreateDependency(CatalogTransaction transaction, Depende
 
 void DependencyManager::CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
                                            const LogicalDependencyList &dependencies) {
-	DependencyDependentFlags dependency_flags;
-	if (object.type != CatalogType::INDEX_ENTRY) {
-		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
-		dependency_flags.SetBlocking();
-	}
-
 	const auto object_info = GetLookupProperties(object);
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dependency : dependencies.Set()) {
@@ -317,9 +316,18 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 	}
 
 	// add the object to the dependents_map of each object that it depends on
+	// backward compatibility for indexes: they differed from the default and were actually never blocking, so correct
+	// that legacy placeholder value for them specifically, for storage files that were written before we started
+	// serializing flags
+	const auto legacy_marker = DependencyDependentFlags().SetBlocking();
 	for (auto &dependency : dependencies.Set()) {
+		auto flags = dependency.flags;
+		if (object.type == CatalogType::INDEX_ENTRY && flags == legacy_marker) {
+			// the legacy flags used to be for INDEX_ENTRY before we started serializing flags into the storage
+			flags = DependencyDependentFlags();
+		}
 		DependencyInfo info {
-		    /*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
+		    /*dependent = */ DependencyDependent {object_info, flags},
 		    /*subject = */ DependencySubject {dependency.entry, DependencySubjectFlags(), optional_idx()}};
 		CreateDependency(transaction, info);
 	}
@@ -350,7 +358,13 @@ CatalogEntryInfo DependencyManager::GetLookupProperties(const CatalogEntry &entr
 		auto &dependency_entry = entry.Cast<DependencyEntry>();
 		return dependency_entry.EntryInfo();
 	}
-	return CatalogEntryInfo {entry.type, GetSchemaPath(entry), entry.name};
+	if (entry.type == CatalogType::TRIGGER_ENTRY) {
+		// triggers live in the catalog set of the table they are defined on, and are only unique within that table
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		return CatalogEntryInfo {entry.type, GetSchemaPath(entry), entry.name,
+		                         trigger.base_table->GetQualifiedName().Name()};
+	}
+	return CatalogEntryInfo {entry.type, GetSchemaPath(entry), entry.name, Identifier()};
 }
 
 optional_ptr<SchemaCatalogEntry> DependencyManager::NavigateSchemaPath(CatalogTransaction transaction,
@@ -386,7 +400,21 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	if (!schema) {
 		return nullptr;
 	}
+	if (type == CatalogType::TRIGGER_ENTRY) {
+		// triggers are not stored in the schema, look them up through the table they are defined on
+		return LookupTrigger(transaction, *schema, info);
+	}
 	return schema->GetEntry(transaction, type, name);
+}
+
+optional_ptr<CatalogEntry> DependencyManager::LookupTrigger(CatalogTransaction transaction,
+                                                            SchemaCatalogEntry &schema_entry,
+                                                            const CatalogEntryInfo &info) {
+	auto table_entry = schema_entry.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table);
+	if (!table_entry || table_entry->type != CatalogType::TABLE_ENTRY) {
+		return nullptr;
+	}
+	return table_entry->Cast<TableCatalogEntry>().GetTrigger(transaction, info.name);
 }
 
 optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
@@ -470,7 +498,7 @@ static string EntryToString(CatalogEntryInfo &info) {
 		return StringUtil::Format("secret function %s", info.name);
 	}
 	case CatalogType::TRIGGER_ENTRY: {
-		return StringUtil::Format("trigger %s", info.name);
+		return StringUtil::Format("trigger %s on table %s", info.name, info.table);
 	}
 	default:
 		throw InternalException("CatalogType not handled in EntryToString (DependencyManager) for %s",
@@ -541,7 +569,7 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 	}
 }
 
-void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transaction_t start_time,
+void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, VisibilityBound visibility_bound,
                                          CatalogEntry &object) {
 	if (IsSystemEntry(object)) {
 		return;
@@ -549,7 +577,7 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 	auto info = GetLookupProperties(object);
 	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
 		auto dep_committed_at = dep.timestamp.load();
-		if (dep_committed_at > start_time) {
+		if (dep_committed_at >= visibility_bound) {
 			// In the event of a CASCADE, the dependency drop has not committed yet
 			// so we would be halted by the existence of a dependency we are already dropping unless we check the
 			// timestamp
@@ -567,7 +595,7 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 			return;
 		}
 		D_ASSERT(dep.Subject().flags.IsOwnership());
-		if (dep_committed_at > start_time) {
+		if (dep_committed_at >= visibility_bound) {
 			// Same as above, objects that are owned by the object that is being dropped will be dropped as part of this
 			// transaction. Only objects that were introduced by other transactions, that this transaction could not
 			// see, should cause this error:
@@ -643,21 +671,19 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 
 void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, ClientContext &context) {
 	auto transaction = catalog.GetCatalogTransaction(context);
-	// Read all the entries visible to this snapshot
-	ReorderEntries(entries, transaction);
+	// Read all the entries visible to this snapshot. Internal entries are not exported
+	ReorderEntries(entries, transaction, false);
 }
 
 void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries) {
-	// Read all committed entries
-	CatalogTransaction transaction(catalog.GetDatabase(), TRANSACTION_ID_START - 1, TRANSACTION_ID_START - 1);
-	ReorderEntries(entries, transaction);
+	// Read all committed entries. A checkpoint writes internal entries too
+	CatalogTransaction transaction(catalog.GetDatabase(), MAX_COMMIT_ID, VisibilityBound::Before(MAX_COMMIT_ID));
+	ReorderEntries(entries, transaction, true);
 }
 
 void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,
-                                     catalog_entry_vector_t &order) {
+                                     catalog_entry_vector_t &order, bool allow_internal) {
 	auto &catalog_entry = *LookupEntry(transaction, entry);
-	// We use this in CheckpointManager, it has the highest commit ID, allowing us to read any committed data
-	bool allow_internal = transaction.start_time == TRANSACTION_ID_START - 1;
 	if (visited.count(catalog_entry) || (!allow_internal && catalog_entry.internal)) {
 		// Already seen and ordered appropriately
 		return;
@@ -668,7 +694,7 @@ void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntr
 	auto info = GetLookupProperties(entry);
 	ScanSubjects(transaction, info, [&](DependencyEntry &dep) { dependents.push_back(dep); });
 	for (auto &dep : dependents) {
-		ReorderEntry(transaction, dep, visited, order);
+		ReorderEntry(transaction, dep, visited, order, allow_internal);
 	}
 
 	// Then write the entry
@@ -676,11 +702,12 @@ void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntr
 	order.push_back(catalog_entry);
 }
 
-void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction) {
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction,
+                                       bool allow_internal) {
 	catalog_entry_vector_t reordered;
 	catalog_entry_set_t visited;
 	for (auto &entry : entries) {
-		ReorderEntry(transaction, entry, visited, reordered);
+		ReorderEntry(transaction, entry, visited, reordered, allow_internal);
 	}
 	// If this would fail, that means there are more entries that we somehow reached through the dependency manager
 	// but those entries should not actually be visible to this transaction
@@ -734,6 +761,15 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		}
 		default:
 			break;
+		}
+
+		bool renames_owning_table = alter_info.type == AlterType::ALTER_TABLE &&
+		                            alter_info.Cast<AlterTableInfo>().alter_table_type == AlterTableType::RENAME_TABLE;
+		if (dep.EntryInfo().type == CatalogType::TRIGGER_ENTRY && !dep.Dependent().flags.IsAlterBlocking() &&
+		    !renames_owning_table) {
+			// a trigger does not prevent altering the table it is defined on unless its body reads from it too
+			// or the table is being renamed (its stored identity is keyed on the table's name)
+			disallow_alter = false;
 		}
 		if (disallow_alter) {
 			throw DependencyException("Cannot alter entry %s because there are entries that "

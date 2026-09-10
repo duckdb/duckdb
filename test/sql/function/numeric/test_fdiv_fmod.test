@@ -37,6 +37,21 @@ NULL
 NULL
 NULL
 
+# division by zero is an error when IEEE behavior is disabled
+statement error
+SELECT fmod(42, 0)
+----
+<REGEX>:.*Division by zero.*
+
+statement error
+SELECT fdiv(42, 0)
+----
+<REGEX>:.*Division by zero.*
+
+# unless null_on_division_by_zero is set
+statement ok
+SET null_on_division_by_zero=true;
+
 # fmod by 0 results in NULL: should be NaN (if supported)
 query I
 SELECT fmod(42, 0)
@@ -66,6 +81,9 @@ query I
 SELECT fdiv(0, 0)
 ----
 NULL
+
+statement ok
+SET null_on_division_by_zero=false;
 
 query R
 SELECT fmod(12.3456789, 5)

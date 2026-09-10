@@ -1,0 +1,51 @@
+# name: test/parquet/variant/variant_shredding_serialize.test
+# description: Test serializing the Parquet SHREDDING option
+# group: [variant]
+
+require parquet
+
+foreach serialize_enabled true false
+
+statement ok
+SET debug_verify_serializer = {serialize_enabled}
+
+statement ok
+COPY (
+	SELECT {'a': 42::INTEGER}::VARIANT AS v
+) TO '{TEST_DIR}/variant_shredding_serialize.parquet' (
+	SHREDDING {v: 'STRUCT(a INTEGER, b VARCHAR)'}
+)
+
+query I
+SELECT name
+FROM parquet_schema('{TEST_DIR}/variant_shredding_serialize.parquet')
+WHERE name IN ('a', 'b')
+ORDER BY column_id
+----
+a
+b
+
+query I
+SELECT v
+FROM read_parquet('{TEST_DIR}/variant_shredding_serialize.parquet')
+----
+{'a': 42}
+
+statement ok
+COPY (
+	SELECT {'a': 1::INTEGER, 'b': {'x': 2}::VARIANT}::VARIANT AS v
+) TO '{TEST_DIR}/variant_nested_shredding_serialize.parquet' (
+	SHREDDING {v: 'STRUCT(a INTEGER, b VARIANT)'}
+);
+
+query I
+SELECT name
+FROM parquet_schema('{TEST_DIR}/variant_nested_shredding_serialize.parquet')
+WHERE name IN ('a', 'b')
+ORDER BY column_id;
+----
+a
+b
+
+# serialize_enabled
+endloop

@@ -43,7 +43,7 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 	bool has_standard_table_function = false;
 	bool has_table_parameter = false;
 	for (idx_t function_idx = 0; function_idx < table_function.functions.Size(); function_idx++) {
-		const auto &function = table_function.functions.GetFunctionByOffset(function_idx);
+		const auto &function = *table_function.functions.GetFunctionByOffset(function_idx);
 		for (auto &arg : function.GetArguments()) {
 			if (arg.id() == LogicalTypeId::TABLE) {
 				has_table_parameter = true;
@@ -119,7 +119,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION &&
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
-			const auto &fun = table_function.functions.GetFunctionByOffset(0);
+			const auto &fun = *table_function.functions.GetFunctionByOffset(0);
 			if (table_function.functions.Size() != 1 || fun.GetArguments().empty()) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
@@ -449,7 +449,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}
-	auto table_function = function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	// copied out of the set: BindTableFunctionInternal fills in the bound arguments/return types
+	auto table_function = *function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
