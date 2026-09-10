@@ -34,10 +34,8 @@ string UniqueConstraint::ToString() const {
 		base += SQLIdentifier(columns[i]);
 	}
 	base += ")";
-	if (timing == ConstraintTiming::DEFERRED) {
-		base += " DEFERRED";
-	} else if (timing == ConstraintTiming::IMMEDIATE) {
-		base += " IMMEDIATE";
+	if (timing != ConstraintTiming::DEFAULT) {
+		base += " " + EnumUtil::ToString(timing);
 	}
 	return base;
 }

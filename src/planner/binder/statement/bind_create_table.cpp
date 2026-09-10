@@ -167,7 +167,7 @@ unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint
 	return std::move(bound_constraint);
 }
 
-void Binder::VerifyConstraintTiming(const Constraint &constraint, Catalog &catalog, bool temporary) {
+void Binder::VerifyConstraintTimingStorageVersion(const Constraint &constraint, Catalog &catalog, bool temporary) {
 	if (constraint.type != ConstraintType::UNIQUE || temporary || !catalog.IsDuckCatalog() || catalog.InMemory()) {
 		return;
 	}
@@ -719,7 +719,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 		bound_constraints = BindNewConstraints(base.constraints, base.GetTableName(), base.columns);
 		for (auto &constraint : base.constraints) {
-			VerifyConstraintTiming(*constraint, catalog, base.temporary);
+			VerifyConstraintTimingStorageVersion(*constraint, catalog, base.temporary);
 		}
 		if (bind_mode != AlterBindMode::SKIP_BINDING) {
 			// bind the default values
