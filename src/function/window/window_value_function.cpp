@@ -571,8 +571,8 @@ static WindowFunction GetLeadLagFunction(const char *name, const ExpressionType 
 	auto &sig = func.GetSignature();
 
 	// Type of the default value is not actually T, as it is force-cast to the return type - not unified.
-	sig.AddParameter("expr", LogicalType::TEMPLATE("T"));
-	sig.AddParameter("n", LogicalType::BIGINT, Value::BIGINT(1));
+	sig.AddParameter("col", LogicalType::TEMPLATE("T"));
+	sig.AddParameter("offset", LogicalType::BIGINT, Value::BIGINT(1));
 	sig.AddParameter("default", LogicalTypeId::ANY, Value(LogicalTypeId::SQLNULL));
 	sig.SetReturnType(LogicalType::TEMPLATE("T"));
 

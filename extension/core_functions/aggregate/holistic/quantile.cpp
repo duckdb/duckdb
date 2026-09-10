@@ -716,7 +716,7 @@ struct DiscreteQuantileListFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetSignature().AddParameter("pos", LogicalType::LIST(LogicalType::DOUBLE));
+		fun.GetSignature().AddParameter("quantile", LogicalType::LIST(LogicalType::DOUBLE));
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return fun;
 	}
@@ -745,7 +745,7 @@ struct DiscreteQuantileFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetSignature().AddParameter("pos", LogicalType::DOUBLE);
+		fun.GetSignature().AddParameter("quantile", LogicalType::DOUBLE);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return fun;
 	}
@@ -779,7 +779,7 @@ struct ContinuousQuantileFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetSignature().AddParameter("pos", LogicalType::DOUBLE);
+		fun.GetSignature().AddParameter("quantile", LogicalType::DOUBLE);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return fun;
 	}
@@ -812,7 +812,7 @@ struct ContinuousQuantileListFunction {
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
 		auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
-		fun.GetSignature().AddParameter("pos", list_of_double);
+		fun.GetSignature().AddParameter("quantile", list_of_double);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return fun;
 	}
@@ -842,7 +842,7 @@ static AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalT
 	AggregateFunction fun({std::move(input)}, result, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, OP::Bind);
 	fun.GetSignature().GetParameter(0).SetName("x");
 	if (extra_arg.id() != LogicalTypeId::INVALID) {
-		fun.GetSignature().AddParameter("pos", extra_arg);
+		fun.GetSignature().AddParameter("quantile", extra_arg);
 	}
 	fun.SetSerializeCallback(QuantileBindData::Serialize);
 	fun.SetDeserializeCallback(OP::Deserialize);
