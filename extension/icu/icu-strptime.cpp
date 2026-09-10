@@ -626,10 +626,14 @@ struct ICUStrftime : public ICUDateFunc {
 
 	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
-		set.AddFunction(ScalarFunction({{"data", LogicalType::TIMESTAMP_TZ}, {"format", LogicalType::VARCHAR}},
-		                               LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_t>, Bind));
-		set.AddFunction(ScalarFunction({{"data", LogicalType::TIMESTAMP_TZ_NS}, {"format", LogicalType::VARCHAR}},
-		                               LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_ns_t>, Bind));
+		ScalarFunction tstz_fun({}, LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_t>, Bind);
+		tstz_fun.GetSignature().AddParameter("data", LogicalType::TIMESTAMP_TZ).AddParameter("format", LogicalType::VARCHAR);
+		set.AddFunction(tstz_fun);
+		ScalarFunction tstz_ns_fun({}, LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_ns_t>, Bind);
+		tstz_ns_fun.GetSignature()
+		    .AddParameter("data", LogicalType::TIMESTAMP_TZ_NS)
+		    .AddParameter("format", LogicalType::VARCHAR);
+		set.AddFunction(tstz_ns_fun);
 		// throws for unsupported format specifiers
 		set.SetFallible();
 		loader.RegisterFunction(set);

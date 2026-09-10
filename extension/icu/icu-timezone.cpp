@@ -651,12 +651,23 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 
 	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
-		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP_TZ,
-		                               Execute<ICUFromNaiveTimestamp, timestamp_t, timestamp_tz_t>, Bind));
-		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP,
-		                               Execute<ICUToNaiveTimestamp, timestamp_tz_t, timestamp_t>, Bind));
-		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
-		                               Execute<ICUToTimeTZ, dtime_tz_t, dtime_tz_t>, Bind));
+		ScalarFunction ts_fun({}, LogicalType::TIMESTAMP_TZ, Execute<ICUFromNaiveTimestamp, timestamp_t, timestamp_tz_t>,
+		                      Bind);
+		ts_fun.GetSignature()
+		    .AddParameter("timezone", LogicalType::VARCHAR)
+		    .AddParameter("timestamp", LogicalType::TIMESTAMP);
+		set.AddFunction(ts_fun);
+		ScalarFunction tstz_fun({}, LogicalType::TIMESTAMP, Execute<ICUToNaiveTimestamp, timestamp_tz_t, timestamp_t>,
+		                        Bind);
+		tstz_fun.GetSignature()
+		    .AddParameter("timezone", LogicalType::VARCHAR)
+		    .AddParameter("timestamp", LogicalType::TIMESTAMP_TZ);
+		set.AddFunction(tstz_fun);
+		ScalarFunction timetz_fun({}, LogicalType::TIME_TZ, Execute<ICUToTimeTZ, dtime_tz_t, dtime_tz_t>, Bind);
+		timetz_fun.GetSignature()
+		    .AddParameter("timezone", LogicalType::VARCHAR)
+		    .AddParameter("time_tz", LogicalType::TIME_TZ);
+		set.AddFunction(timetz_fun);
 		set.ApplyToFunctions([](ScalarFunction &func) {
 			func.SetFallible();
 			func.SetInitStateCallback(InitCalendarCache);
