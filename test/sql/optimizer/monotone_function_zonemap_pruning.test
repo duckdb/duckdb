@@ -131,3 +131,22 @@ FROM monotone_math
 WHERE tanh(x) > 0.5;
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+# Rounding 10.2, 20.2, and 60.2 leaves only the third row group above 50.
+statement ok
+ATTACH '{TEST_DIR}/round_even_prune.duckdb' AS round_even_db (ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE TABLE round_even_db.t AS
+SELECT CASE WHEN range < 2048 THEN 10.2 WHEN range < 4096 THEN 20.2 ELSE 60.2 END::DOUBLE AS x
+FROM range(6144);
+
+query I
+SELECT count(*) FROM round_even_db.t WHERE round_even(x, 0) > 50;
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT x FROM round_even_db.t WHERE round_even(x, 0) > 50;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
