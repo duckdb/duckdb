@@ -403,10 +403,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto expr = minmax_func.Bind(context, std::move(arguments));
 	arguments = std::move(expr->GetChildrenMutable());
 
-	auto definition = function.GetDefinition();
-	function = std::move(expr->FunctionMutable());
-	// the specialized implementation is not the function we were bound from
-	function.SetDefinition(std::move(definition));
+	function.ReplaceImplementation(expr->Function());
 	return std::move(expr->BindInfoMutable());
 }
 
@@ -564,10 +561,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 			auto expr =
 			    function_binder.BindAggregateFunction(std::move(collated_function), std::move(collated_arguments));
 			arguments = std::move(expr->GetChildrenMutable());
-			auto definition = function.GetDefinition();
-			function = std::move(expr->FunctionMutable());
-			// the collated implementation is not the function we were bound from
-			function.SetDefinition(std::move(definition));
+			function.ReplaceImplementation(expr->Function());
 			return std::move(expr->BindInfoMutable());
 		}
 	}
