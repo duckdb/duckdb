@@ -613,16 +613,17 @@ auto SqlStatement::GetText() const -> std::string_view {
 	return FromStr(text);
 }
 
-auto SqlStatement::GetParameterCount() const -> idx_t {
+auto SqlStatement::GetParameterNames() const -> std::vector<std::string_view> {
 	idx_t count = 0;
 	CheckedAPICall(duckdb_v2_sql_statement_get_parameter_count, handle(), &count);
-	return count;
-}
-
-auto SqlStatement::GetParameterName(idx_t index) const -> std::string_view {
-	duckdb_v2_identifier_t name = {nullptr, 0};
-	CheckedAPICall(duckdb_v2_sql_statement_get_parameter_name, handle(), index, &name);
-	return FromStr(name);
+	std::vector<std::string_view> names;
+	names.reserve(count);
+	for (idx_t i = 0; i < count; i++) {
+		duckdb_v2_identifier_t name = {nullptr, 0};
+		CheckedAPICall(duckdb_v2_sql_statement_get_parameter_name, handle(), i, &name);
+		names.push_back(FromStr(name));
+	}
+	return names;
 }
 
 StatementIterator::StatementIterator(void *impl) : detail::Handle<StatementIterator>(impl) {

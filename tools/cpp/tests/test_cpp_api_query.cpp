@@ -174,14 +174,12 @@ TEST_CASE("Stable C++API: SqlStatement parse-time metadata", "[cpp_api][sql_stat
 
 	REQUIRE(first.GetStatementType() == StatementType::SELECT);
 	REQUIRE(first.GetText() == "select $1; ");
-	REQUIRE(first.GetParameterCount() == 1);
-	REQUIRE(first.GetParameterName(0) == "1");
-	REQUIRE_THROWS_MATCHES(first.GetParameterName(1), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_OUT_OF_RANGE));
-	REQUIRE(conn.Bind(first).parameters.GetFieldName(0) == first.GetParameterName(0));
+	REQUIRE(first.GetParameterNames() == std::vector<std::string_view> {"1"});
+	REQUIRE(conn.Bind(first).parameters.GetFieldName(0) == first.GetParameterNames()[0]);
 
 	REQUIRE(second.GetStatementType() == StatementType::SELECT);
 	REQUIRE(second.GetText() == "select 21");
-	REQUIRE(second.GetParameterCount() == 0);
+	REQUIRE(second.GetParameterNames().empty());
 
 	// The type is the parser's, before execution rewrites the statement; the enum reaches core's newest members.
 	REQUIRE(conn.ParseSQL("PRAGMA version").Next().GetStatementType() == StatementType::PRAGMA);

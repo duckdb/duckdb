@@ -534,16 +534,11 @@ public:
 	/// @return A view borrowed from this statement, valid until it is destroyed.
 	auto GetText() const -> std::string_view;
 
-	/// How many distinct parameters the statement declares. Parse-time, so it needs no catalog; only the parameter
-	/// types wait for `Connection::Bind`.
-	auto GetParameterCount() const -> idx_t;
-
-	/// The name of one parameter, in binding order: the order of `Connection::Bind`'s `parameters` schema, so
-	/// position i here names field i there. "1", "2", ... for positional parameters ($1 or ?), the identifier for
-	/// named ones ($name).
-	/// @param index Parameter position in [0, GetParameterCount()).
-	/// @return A view borrowed from this statement, valid until it is destroyed.
-	auto GetParameterName(idx_t index) const -> std::string_view;
+	/// The names of the statement's parameters, in binding order: the order of `Connection::Bind`'s `parameters`
+	/// schema, so element i here names field i there. "1", "2", ... for positional parameters ($1 or ?), the
+	/// identifier for named ones ($name). Parse-time, so it needs no catalog; only the types wait for `Bind`.
+	/// @return Views borrowed from this statement, valid until it is destroyed.
+	auto GetParameterNames() const -> std::vector<std::string_view>;
 
 private:
 	explicit SqlStatement(void *impl);
