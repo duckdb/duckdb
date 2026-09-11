@@ -10,6 +10,36 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Value expression conversion preserves VARIANT payloads and floating zero", "[literal][value_sql]") {
+	DuckDB db;
+	Connection con(db);
+	for (auto sql : {"'hello'::VARIANT", "7::SMALLINT::VARIANT", "{'x': 7::SMALLINT::VARIANT}::VARIANT",
+	                 "[7::SMALLINT::VARIANT, 'x'::VARIANT]::VARIANT", "'-0.0'::FLOAT", "'-0.0'::DOUBLE",
+	                 "'-0.0'::FLOAT::VARIANT", "'-0.0'::DOUBLE::VARIANT"}) {
+		INFO(sql);
+		auto original = con.Query("SELECT " + string(sql));
+		REQUIRE_NO_FAIL(*original);
+		auto value = original->GetValue(0, 0);
+		auto parsed = ConstantExpression::FromValue(value);
+		auto rendered = parsed->ToString();
+		INFO(rendered);
+		auto restored = con.Query("SELECT " + rendered);
+		REQUIRE_NO_FAIL(*restored);
+		REQUIRE(restored->GetTypes() == original->GetTypes());
+		REQUIRE_FALSE(ValueOperations::DistinctFrom(restored->GetValue(0, 0), value));
+		if (value.type().id() == LogicalTypeId::VARIANT) {
+			auto types = con.Query("SELECT variant_typeof(" + string(sql) + ") = variant_typeof(" + rendered + ")");
+			REQUIRE_NO_FAIL(*types);
+			REQUIRE(types->GetValue(0, 0) == Value::BOOLEAN(true));
+		}
+		if (string(sql).find("-0.0") != string::npos) {
+			auto signs = con.Query("SELECT 1.0 / (" + string(sql) + ")::DOUBLE = 1.0 / (" + rendered + ")::DOUBLE");
+			REQUIRE_NO_FAIL(*signs);
+			REQUIRE(signs->GetValue(0, 0) == Value::BOOLEAN(true));
+		}
+	}
+}
+
 // Parses "SELECT <text>" and returns the constant the parser produced for it.
 static Value ParseConstant(const string &text) {
 	auto expressions = Parser::ParseExpressionList(text);
