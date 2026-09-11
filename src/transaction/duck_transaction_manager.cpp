@@ -64,7 +64,7 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 }
 
 DuckTransactionManager::~DuckTransactionManager() {
-	D_ASSERT(!HasUnsyncedCommits() || durability_failed);
+	D_ASSERT(DurabilitySettled());
 }
 
 DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
@@ -321,19 +321,20 @@ DuckTransactionManager::DurableSnapshot DuckTransactionManager::GetDurableSnapsh
 	return durable;
 }
 
+bool DuckTransactionManager::DurabilitySettled() {
+	return !HasUnsyncedCommits() || durability_failed;
+}
+
 void DuckTransactionManager::WaitForDurability(optional_ptr<ClientContext> context) {
 	unique_lock<mutex> guard(transaction_lock);
-	auto drained = [&]() {
-		return !HasUnsyncedCommits() || durability_failed;
-	};
-	while (!drained()) {
+	while (!DurabilitySettled()) {
 		if (!context) {
 			// nothing to cancel (shutdown, or inside a checkpoint where throwing would invalidate)
 			durability_cv.wait(guard);
 			continue;
 		}
 		// this waits on fsyncs issued by other connections, so poll rather than block outright
-		if (!durability_cv.wait_for(guard, std::chrono::milliseconds(10), drained)) {
+		if (!durability_cv.wait_for(guard, std::chrono::milliseconds(10), [&]() { return DurabilitySettled(); })) {
 			guard.unlock();
 			context->InterruptCheck();
 			guard.lock();
@@ -552,7 +553,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			durability_failed = true;
 		}
 		QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
-		bool notify_others = !synced || !HasUnsyncedCommits();
+		bool notify_others = DurabilitySettled();
 		t_lock.unlock();
 		if (notify_others) {
 			durability_cv.notify_all();

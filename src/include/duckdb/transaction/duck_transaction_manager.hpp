@@ -133,6 +133,9 @@ private:
 	//! Whether a commit that needed a WAL sync is still in its commit path, possibly inside SyncUpTo
 	//! (transaction lock held)
 	bool HasUnsyncedCommits();
+	//! Whether durability waiters can stop waiting: no commit awaits its sync, or a sync has failed
+	//! (transaction lock held)
+	bool DurabilitySettled();
 	struct DurableSnapshot {
 		//! Every commit before this bound is durable
 		VisibilityBound visibility_bound = VisibilityBound::IncludingUncommitted();
