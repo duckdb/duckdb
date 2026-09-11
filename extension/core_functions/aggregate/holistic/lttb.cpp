@@ -398,10 +398,11 @@ auto LTTBStateLayout(AggregateLayoutInput &input) -> AggregateStateLayout {
 //! -> LIST(STRUCT(x, y))
 template <class XTYPE, class YTYPE>
 AggregateFunction GetLTTBFunction(const LogicalType &x_type, const LogicalType &y_type) {
-	AggregateFunction fun("lttb", {x_type, y_type, LogicalType::BIGINT},
-	                      LogicalType::LIST(LTTBStructType(x_type, y_type)), AggregateFunction::StateSize<LTTBState>,
+	AggregateFunction fun("lttb", {}, LogicalType::LIST(LTTBStructType(x_type, y_type)),
+	                      AggregateFunction::StateSize<LTTBState>,
 	                      AggregateFunction::StateInitialize<LTTBState, LTTBFunction>, LTTBUpdate,
 	                      ListCombineFunction<LTTBFunction>, LTTBFinalize<XTYPE, YTYPE>, LTTBClusterUpdate, LTTBBind);
+	fun.GetSignature().AddParameter("x", x_type).AddParameter("y", y_type).AddParameter("n", LogicalType::BIGINT);
 	fun.SetSerializeCallback(LTTBSerialize);
 	fun.SetDeserializeCallback(LTTBDeserialize);
 	fun.SetStructStateExport(LTTBStateLayout);

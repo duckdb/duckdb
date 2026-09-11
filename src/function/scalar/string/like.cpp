@@ -663,6 +663,8 @@ ScalarFunction NotLikeFun::GetFunction() {
 	ScalarFunction not_like("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                        RegularLikeFunction<NotLikeOperator, true>, LikeBindFunction);
 	not_like.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	not_like.GetSignature().GetParameter(0).SetName("string");
+	not_like.GetSignature().GetParameter(1).SetName("pattern");
 	return not_like;
 }
 
@@ -670,6 +672,8 @@ ScalarFunction GlobPatternFun::GetFunction() {
 	ScalarFunction glob("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                    ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator>);
 	glob.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	glob.GetSignature().GetParameter(0).SetName("string");
+	glob.GetSignature().GetParameter(1).SetName("pattern");
 	return glob;
 }
 
@@ -677,6 +681,8 @@ ScalarFunction ILikeFun::GetFunction() {
 	ScalarFunction ilike("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                     ILikeFunction<ILikeOperator, false>, nullptr, ILikePropagateStats<ILikeOperatorASCII>);
 	ilike.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	ilike.GetSignature().GetParameter(0).SetName("string");
+	ilike.GetSignature().GetParameter(1).SetName("pattern");
 	return ilike;
 }
 
@@ -685,6 +691,8 @@ ScalarFunction NotILikeFun::GetFunction() {
 	                         ILikeFunction<NotILikeOperator, true>, nullptr,
 	                         ILikePropagateStats<NotILikeOperatorASCII>);
 	not_ilike.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	not_ilike.GetSignature().GetParameter(0).SetName("string");
+	not_ilike.GetSignature().GetParameter(1).SetName("pattern");
 	return not_ilike;
 }
 
@@ -692,34 +700,47 @@ ScalarFunction LikeFun::GetFunction() {
 	ScalarFunction like("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                    RegularLikeFunction<LikeOperator, false>, LikeBindFunction);
 	like.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	like.GetSignature().GetParameter(0).SetName("string");
+	like.GetSignature().GetParameter(1).SetName("pattern");
 	return like;
 }
 
 ScalarFunction NotLikeEscapeFun::GetFunction() {
-	ScalarFunction not_like_escape("not_like_escape",
-	                               {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                               LogicalType::BOOLEAN, LikeEscapeFunction<NotLikeEscapeOperator>);
+	ScalarFunction not_like_escape("not_like_escape", {}, LogicalType::BOOLEAN,
+	                               LikeEscapeFunction<NotLikeEscapeOperator>);
+	not_like_escape.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("like_specifier", LogicalType::VARCHAR)
+	    .AddParameter("escape_character", LogicalType::VARCHAR);
 	not_like_escape.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return not_like_escape;
 }
 
 ScalarFunction IlikeEscapeFun::GetFunction() {
-	ScalarFunction ilike_escape("ilike_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                            LogicalType::BOOLEAN, ILikeEscapeFunction<false>);
+	ScalarFunction ilike_escape("ilike_escape", {}, LogicalType::BOOLEAN, ILikeEscapeFunction<false>);
+	ilike_escape.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("like_specifier", LogicalType::VARCHAR)
+	    .AddParameter("escape_character", LogicalType::VARCHAR);
 	ilike_escape.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return ilike_escape;
 }
 
 ScalarFunction NotIlikeEscapeFun::GetFunction() {
-	ScalarFunction not_ilike_escape("not_ilike_escape",
-	                                {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                LogicalType::BOOLEAN, ILikeEscapeFunction<true>);
+	ScalarFunction not_ilike_escape("not_ilike_escape", {}, LogicalType::BOOLEAN, ILikeEscapeFunction<true>);
+	not_ilike_escape.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("like_specifier", LogicalType::VARCHAR)
+	    .AddParameter("escape_character", LogicalType::VARCHAR);
 	not_ilike_escape.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return not_ilike_escape;
 }
 ScalarFunction LikeEscapeFun::GetFunction() {
-	ScalarFunction like_escape("like_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                           LogicalType::BOOLEAN, LikeEscapeFunction<LikeEscapeOperator>);
+	ScalarFunction like_escape("like_escape", {}, LogicalType::BOOLEAN, LikeEscapeFunction<LikeEscapeOperator>);
+	like_escape.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("like_specifier", LogicalType::VARCHAR)
+	    .AddParameter("escape_character", LogicalType::VARCHAR);
 	like_escape.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return like_escape;
 }

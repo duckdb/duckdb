@@ -226,6 +226,8 @@ ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &result_typ
 ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	ScalarFunction result(Identifier(IntegralCompressFunctionName(result_type)), {input_type, input_type}, result_type,
 	                      GetIntegralCompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
+	result.GetSignature().GetParameter(0).SetName("value");
+	result.GetSignature().GetParameter(1).SetName("min");
 	result.SetSerializeCallback(CMIntegralSerialize);
 	result.SetDeserializeCallback(CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>);
 #if defined(D_ASSERT_IS_ENABLED)
@@ -240,6 +242,8 @@ ScalarFunction CMIntegralDecompressFun::GetFunction(const LogicalType &input_typ
 	ScalarFunction result(Identifier(IntegralDecompressFunctionName(result_type)), {input_type, result_type},
 	                      result_type, GetIntegralDecompressFunctionInputSwitch(input_type, result_type),
 	                      CMUtils::Bind);
+	result.GetSignature().GetParameter(0).SetName("value");
+	result.GetSignature().GetParameter(1).SetName("min");
 	result.SetSerializeCallback(CMIntegralSerialize);
 	result.SetDeserializeCallback(CMIntegralDeserialize<GetIntegralDecompressFunctionInputSwitch>);
 	return result;
