@@ -80,7 +80,6 @@ struct ConcurrentCommits {
 	}
 };
 
-// The per-benchmark body only forwards its three parameters
 #define CONCURRENT_COMMITS_BENCHMARK(NUM_THREADS, COMMITS_PER_THREAD, DELAY_US)                                        \
 	duckdb::unique_ptr<DuckDBBenchmarkState> CreateBenchmarkState() override {                                         \
 		return make_uniq<ConcurrentCommitState>(DELAY_US);                                                             \
