@@ -400,3 +400,93 @@ SELECT count(*) FROM rows_aaaaa MATCH_RECOGNIZE(
 )
 ----
 5
+
+# a state that failed under one set of matched rows can succeed under another, so a condition that
+# navigates the match cannot leave that state recorded as a dead end for the alternative beside it
+query I
+FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n
+    PATTERN ((A | B) C)
+    DEFINE A AS true, B AS true, C AS FIRST(B.x) IS NOT NULL
+)
+----
+2
+
+# the same pattern with the shared symbol written out per alternative has always worked
+query I
+FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n
+    PATTERN (A C | B C)
+    DEFINE A AS true, B AS true, C AS FIRST(B.x) IS NOT NULL
+)
+----
+2
+
+# a state a failed attempt walked past the end of its partition is the first row of the next one, and
+# what it was recorded under does not hold there
+query I
+SELECT count(*)
+FROM (VALUES (0::BIGINT), (11::BIGINT)) t(p) MATCH_RECOGNIZE (
+    PARTITION BY p MEASURES count(*) AS n
+    PATTERN (A? B)
+    DEFINE A AS true, B AS p % 2 = 1
+)
+----
+1
+
+query I
+SELECT count(*)
+FROM (VALUES (0::BIGINT), (11::BIGINT)) t(p) MATCH_RECOGNIZE (
+    PARTITION BY p MEASURES count(*) AS n
+    PATTERN (A? B)
+    DEFINE A AS false, B AS p % 2 = 1
+)
+----
+1
+
+# Cycle detection over a nullable repetition. Matching a row opens a scope of its own, so an
+# alternative left behind under an earlier one has to see the marks that scope had taken: without
+# them it walks the empty loop again, matches the same row again, and never stops.
+query I
+FROM range(1) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n
+    PATTERN ((A*)* B)
+    DEFINE A AS true, B AS FIRST(A.x) < 0
+)
+----
+
+query I
+FROM range(1) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n
+    PATTERN ((A+)* B)
+    DEFINE A AS true, B AS FIRST(A.x) < 0
+)
+----
+
+query I
+FROM range(4) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n
+    PATTERN ((A*)* B)
+    DEFINE A AS x < 2, B AS FIRST(A.x) = 0
+)
+----
+3
+
+# a reluctant nullable repetition takes the way out first, and still may not spin in the loop
+query I
+FROM range(3) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n
+    PATTERN ((A*?)*? B)
+    DEFINE A AS true, B AS FIRST(A.x) < 0
+)
+----
+
+# backtracking after rows have been matched still finds the alternative that works
+query I
+FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n
+    PATTERN ((A | B) C)
+    DEFINE A AS false, B AS true, C AS FIRST(B.x) IS NOT NULL
+)
+----
+2

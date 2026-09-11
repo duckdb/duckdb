@@ -562,3 +562,73 @@ SELECT count(*), max(len) FROM abc MATCH_RECOGNIZE(
 )
 ----
 1	4
+
+# a repetition of a subpattern that has to match n rows can only be reached as often as the rows allow
+query I
+SELECT count(*) FROM range(700) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN ((A{700}){700})
+)
+----
+0
+
+statement error
+FROM range(700) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN ((((A?){700}){700}){3})
+)
+----
+<REGEX>:Invalid Input Error:.*compiles to more than.*instructions.*
+
+# The pattern is a tree of its own, compiled into the matcher's program rather than bound as an
+# expression. It still says everything the pattern algebra can say, and still survives being written
+# out and read back.
+
+query II
+FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES CLASSIFIER() AS c ALL ROWS PER MATCH
+    PATTERN ((A | B) C) DEFINE A AS x = 1, B AS x = 2, C AS true
+)
+----
+1	A
+2	C
+
+query I
+FROM range(6) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2,3})
+)
+----
+3
+3
+
+query I
+FROM range(6) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2,3}?)
+)
+----
+2
+2
+2
+
+query I
+FROM range(4) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (^ A+ $)
+)
+----
+4
+
+# two patterns that differ only in their bounds are not the same pattern
+query II
+SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2})))) AS a,
+       (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{3})))) AS b
+----
+6	6
+
+query II
+SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS x < 3))) AS a,
+       (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS x < 5))) AS b
+----
+3	5
+

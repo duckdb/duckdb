@@ -237,8 +237,7 @@
     {
       "reason": "MATCH_RECOGNIZE is a new table reference type that older versions cannot deserialize.",
       "paths": [
-        "test/sql/match_recognize/test_match_recognize_composition.test",
-        "test/sql/match_recognize/test_match_recognize_review_3.test"
+        "test/sql/match_recognize/test_match_recognize_composition.test"
       ]
     },
     {

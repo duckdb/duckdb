@@ -213,7 +213,7 @@ SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) PATTERN (A) DEFINE A
 statement error
 SELECT * FROM q MATCH_RECOGNIZE(ORDER BY i PATTERN (A) DEFINE A as true)
 ----
-<REGEX>:Binder Error:.*ONE ROW PER MATCH has nothing to return.*
+<REGEX>:Binder Error:.*ONE ROW PER MATCH reports the match rather than its rows.*
 
 # a measure is enough to have something to report
 query I
@@ -312,3 +312,94 @@ SELECT count(*) FROM skips MATCH_RECOGNIZE(
 )
 ----
 <REGEX>:Parser Error.*syntax error.*
+
+# a condition decides whether a row is the variable, so it has to produce a boolean
+query I
+FROM (VALUES (1)) t(x) MATCH_RECOGNIZE (
+    MEASURES count(*) AS n PATTERN (A) DEFINE A AS NULL
+)
+----
+
+query I
+FROM (VALUES (1)) t(x) MATCH_RECOGNIZE (
+    MEASURES count(*) AS n PATTERN (A) DEFINE A AS x
+)
+----
+1
+
+statement error
+FROM (VALUES (1)) t(x) MATCH_RECOGNIZE (
+    MEASURES count(*) AS n PATTERN (A) DEFINE A AS 'nope'
+)
+----
+<REGEX>:Conversion Error:.*
+
+# the window function the clause is planned as is not one to call
+statement error
+SELECT "match_recognize"(1) OVER ()
+----
+<REGEX>:Binder Error:.*cannot be used directly.*
+
+# what a condition cannot be
+statement error
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS sum(x) > 0
+)
+----
+cannot be an aggregate
+
+statement error
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS x > (SELECT 1)
+)
+----
+may not contain a subquery
+
+statement error
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS LAST(CLASSIFIER()) = 'A'
+)
+----
+CLASSIFIER() only means something while the matcher is assembling a match
+
+statement error
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A B) DEFINE B AS x > LAST(FIRST(x))
+)
+----
+Nested row pattern navigation is not supported
+
+# AFTER MATCH SKIP TO a variable the pattern never mentions has nowhere to resume from, and saying so
+# while binding is more use than a match that never finds a row matched to it
+statement error
+FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP TO FIRST Z PATTERN (A B)
+)
+----
+not a pattern variable
+
+query I
+FROM (VALUES (1), (2), (3), (4)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP TO LAST B PATTERN (A B)
+)
+----
+2
+2
+2
+
+# A condition only decides rows for the variable the pattern matches with it, so one for a variable
+# the pattern never mentions decides nothing at all - which is rarely what was meant.
+statement error
+FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A) DEFINE A AS true, Q AS false
+)
+----
+which its PATTERN does not use
+
+query I
+FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A) DEFINE A AS true
+)
+----
+1
+1

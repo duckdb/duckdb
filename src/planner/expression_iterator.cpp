@@ -1,7 +1,5 @@
 #include "duckdb/planner/expression_iterator.hpp"
 
-#include "duckdb/function/match_recognize.hpp"
-
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 #include "duckdb/common/enum_util.hpp"
