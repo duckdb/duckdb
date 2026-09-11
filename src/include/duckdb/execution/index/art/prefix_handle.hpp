@@ -44,8 +44,12 @@ public:
 	//! Create a non-empty prefix chain and return its root pointer and pinned final child location.
 	static PrefixChain New(ART &art, const ARTKey &key, const idx_t depth, const idx_t count);
 
-	//! Retain bytes before pos, install replacement, and return the subtree after the split byte.
-	//! The caller must attach the returned subtree to replacement under the split byte.
+	//! Splits the prefix at pos. replacement must identify an already allocated, ungated node.
+	//! If pos > 0, node retains the bytes before pos and points to replacement; its gate status is unchanged.
+	//! If pos == 0, the prefix is freed and node is set to replacement, which inherits the prefix's gate status.
+	//! Returns the child containing the remaining bytes and subtree after the split byte.
+	//! The caller must save the split byte before calling and attach the returned child to replacement under that byte.
+	//! Gate status is handled internally; the caller does not need to set it after splitting.
 	static NodePtr Split(ART &art, NodePtr &node, NodePtr &replacement, const uint8_t pos);
 
 	//! Create a new deprecated prefix node and return a handle to it.
