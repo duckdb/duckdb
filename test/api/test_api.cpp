@@ -551,8 +551,36 @@ TEST_CASE("Test connection API", "[api]") {
 }
 
 TEST_CASE("Test parser tokenize", "[api]") {
-	Parser parser;
-	REQUIRE_NOTHROW(parser.Tokenize("SELECT * FROM table WHERE i+1=3 AND j='hello'; --tokenize example query"));
+	string sql = "SELECT * FROM table WHERE i+1=3 AND j='hello'; --tokenize example query";
+	auto tokens = Parser::Tokenize(sql);
+
+	using T = SimplifiedTokenType;
+	vector<pair<T, idx_t>> expected {
+	    {T::SIMPLIFIED_TOKEN_KEYWORD, 0},           // SELECT
+	    {T::SIMPLIFIED_TOKEN_OPERATOR, 7},          // *
+	    {T::SIMPLIFIED_TOKEN_KEYWORD, 9},           // FROM
+	    {T::SIMPLIFIED_TOKEN_KEYWORD, 14},          // table
+	    {T::SIMPLIFIED_TOKEN_KEYWORD, 20},          // WHERE
+	    {T::SIMPLIFIED_TOKEN_IDENTIFIER, 26},       // i
+	    {T::SIMPLIFIED_TOKEN_OPERATOR, 27},         // +
+	    {T::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT, 28}, // 1
+	    {T::SIMPLIFIED_TOKEN_OPERATOR, 29},         // =
+	    {T::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT, 30}, // 3
+	    {T::SIMPLIFIED_TOKEN_KEYWORD, 32},          // AND
+	    {T::SIMPLIFIED_TOKEN_IDENTIFIER, 36},       // j
+	    {T::SIMPLIFIED_TOKEN_OPERATOR, 37},         // =
+	    {T::SIMPLIFIED_TOKEN_STRING_CONSTANT, 38},  // 'hello'
+	    {T::SIMPLIFIED_TOKEN_OPERATOR, 45},         // ;
+	    {T::SIMPLIFIED_TOKEN_COMMENT, 47},          // --tokenize example query
+	};
+	REQUIRE(tokens.size() >= expected.size());
+	for (idx_t i = 0; i < expected.size(); i++) {
+		REQUIRE(tokens[i].type == expected[i].first);
+		REQUIRE(tokens[i].start == expected[i].second);
+	}
+	// The end-of-input sentinel is not a token: nothing starts at or past the input length.
+	REQUIRE(tokens.back().start < sql.size());
+	REQUIRE(tokens.size() == expected.size());
 }
 
 TEST_CASE("Test opening an invalid database file", "[api]") {

@@ -511,6 +511,37 @@ private:
 	explicit StatementIterator(void *impl);
 };
 
+/// The lexical class of a token, as `Connection::Tokenize` reports it: what the tokenizer assigns before parsing, with
+/// no catalog or grammar-role refinement.
+enum class TokenType : uint8_t {
+	/// Never the class of a token; the value of a zero-initialized `Token`.
+	INVALID = 0,
+	/// A keyword of the connection's grammar.
+	KEYWORD = 1,
+	/// A bare or double-quoted identifier, quotes included.
+	IDENTIFIER = 2,
+	/// A quoted or dollar-quoted string, delimiters included.
+	STRING_LITERAL = 3,
+	/// A numeric literal.
+	NUMBER_LITERAL = 4,
+	/// An operator or punctuation run other than the statement terminator.
+	OPERATOR = 5,
+	/// A line or block comment, delimiters included.
+	COMMENT = 6,
+	/// A statement-terminating semicolon.
+	TERMINATOR = 7,
+};
+
+/// One token of a SQL string: its class and its byte range in the input, so `sql.substr(start, length)` is the lexeme.
+struct Token {
+	/// The token's lexical class.
+	TokenType type = TokenType::INVALID;
+	/// Byte offset of the token in the input.
+	idx_t start = 0;
+	/// Byte length of the token.
+	idx_t length = 0;
+};
+
 /// A statement bound and planned once, executable repeatedly. Produced by `Connection::Prepare`.
 /// Where `Connection::Execute` re-binds on every call, this may run the plan it built at prepare time; ask
 /// `ReusesPlan` which one you got. Execution returns the same `QueryResult`, with identical behaviour.
@@ -623,6 +654,14 @@ public:
 	auto ParseSQL(const std::string &sql) -> StatementIterator {
 		return ParseSQL(sql.c_str());
 	}
+
+	/// Splits a SQL string into its tokens without parsing it: no binding, no catalog access, no transaction. The
+	/// connection supplies the grammar whose keyword set decides KEYWORD versus IDENTIFIER. Offsets are byte offsets
+	/// into `sql` exactly as given, and whitespace is not a token. Malformed input does not throw: an unterminated
+	/// string, block comment or dollar-quoted string yields a token that runs to the end of the input.
+	/// @param sql The SQL text; may contain interior null bytes.
+	/// @return The tokens in input order, empty for empty or whitespace-only input.
+	auto Tokenize(std::string_view sql) const -> std::vector<Token>;
 
 	/// Executes a statement, borrowing it rather than consuming it, so the same statement can be executed again.
 	/// @param statement The statement to execute.

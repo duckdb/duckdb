@@ -3252,6 +3252,117 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_schema_destroy(duckdb_v2_schema_handle *s
 /* --- Struct definitions for schema --- */
 
 /* ============================================================================
+ * MODULE: tokenizer
+ * ============================================================================ */
+
+/* --- Enums for tokenizer --- */
+
+//! The lexical class of a token.
+typedef enum DUCKDB_V2_TOKEN_TYPE {
+	//! Not an actual token class; out_type is set to this when `duckdb_v2_token_iterator_next()` fails.
+	DUCKDB_V2_TOKEN_TYPE_INVALID = 0,
+
+	//! A keyword of the connection's grammar.
+	DUCKDB_V2_TOKEN_TYPE_KEYWORD = 1,
+
+	//! A bare or double-quoted identifier, quotes included.
+	DUCKDB_V2_TOKEN_TYPE_IDENTIFIER = 2,
+
+	//! A quoted or dollar-quoted string, delimiters included.
+	DUCKDB_V2_TOKEN_TYPE_STRING_LITERAL = 3,
+
+	//! A numeric literal.
+	DUCKDB_V2_TOKEN_TYPE_NUMBER_LITERAL = 4,
+
+	//! An operator or punctuation run other than the statement terminator.
+	DUCKDB_V2_TOKEN_TYPE_OPERATOR = 5,
+
+	//! A line or block comment, delimiters included.
+	DUCKDB_V2_TOKEN_TYPE_COMMENT = 6,
+
+	//! A statement-terminating semicolon.
+	DUCKDB_V2_TOKEN_TYPE_TERMINATOR = 7,
+
+	/*!
+	 * Not a token; reported by token_iterator_next once the input is exhausted, with start equal to the input length
+	 * and length 0.
+	 */
+	DUCKDB_V2_TOKEN_TYPE_END_OF_INPUT = 8,
+	DUCKDB_V2_TOKEN_TYPE_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_TOKEN_TYPE;
+
+/* --- Struct forward declarations for tokenizer --- */
+
+/* --- Types for tokenizer --- */
+
+//! An opaque, owned handle to an iterator over the tokens of a SQL string, produced by tokenize_sql.
+typedef struct _duckdb_v2_token_iterator {
+	void *internal_ptr;
+} * duckdb_v2_token_iterator_handle;
+
+/* --- Constants for tokenizer --- */
+
+/* --- Function pointer typedefs for tokenizer --- */
+
+/* --- Functions for tokenizer --- */
+
+/*!
+ * Tokenizes a SQL string into an iterator over its tokens.
+ *
+ * Lexical tokenization, in the context of whatever grammar extensions are loaded on the given connection. Closing the
+ * connection or changing settings afterwards does not affect the tokens. The SQL string is borrowed for the call only,
+ * the caller may free it once this call returns. Whitespace is not a token. Malformed input is not an error.
+ *
+ * *out_iterator is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection supplying the grammar.
+ * @param sql The SQL text. Borrowed for the call only; may contain interior null bytes. {NULL, 0} is the empty input.
+ * @param out_iterator Receives the new iterator handle. Destroy via token_iterator_destroy.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle conn, duckdb_v2_str sql,
+                                                    duckdb_v2_token_iterator_handle *out_iterator,
+                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Yields the next token, or END_OF_INPUT once exhausted.
+ *
+ * On success writes the token's class, byte offset and byte length into the out-parameters. The lexeme is the input
+ * bytes [start, start + length). Once the input is exhausted, every call gives TOKEN_TYPE_END_OF_INPUT with start equal
+ * to the input length and length 0. On failure out params are set to TOKEN_TYPE_INVALID, 0, 0.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param iterator The iterator to advance.
+ * @param out_type Receives the token's class, or TOKEN_TYPE_END_OF_INPUT once exhausted.
+ * @param out_start Receives the token's byte offset into the input; the input length for END_OF_INPUT.
+ * @param out_length Receives the token's byte length; 0 for END_OF_INPUT.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_token_iterator_next(duckdb_v2_token_iterator_handle iterator,
+                                                           DUCKDB_V2_TOKEN_TYPE *out_type, idx_t *out_start,
+                                                           idx_t *out_length, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys a token iterator handle.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param iterator The iterator to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_token_iterator_destroy(duckdb_v2_token_iterator_handle *iterator);
+
+/* --- Struct definitions for tokenizer --- */
+
+/* ============================================================================
  * MODULE: vector
  * ============================================================================ */
 

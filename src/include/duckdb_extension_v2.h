@@ -1309,6 +1309,13 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_projection_pushdown)
 	(duckdb_v2_table_function_handle function, bool enable, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_token_iterator_destroy)(duckdb_v2_token_iterator_handle *iterator);
+	DUCKDB_V2_ERROR(*duckdb_v2_token_iterator_next)
+	(duckdb_v2_token_iterator_handle iterator, DUCKDB_V2_TOKEN_TYPE *out_type, idx_t *out_start, idx_t *out_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql)
+	(duckdb_v2_connection_handle conn, duckdb_v2_str sql, duckdb_v2_token_iterator_handle *out_iterator,
+	 duckdb_v2_error_info_handle *err);
 	// capigen:end appended
 } duckdb_ext_api_v2;
 
@@ -1905,6 +1912,9 @@ typedef struct {
 #define duckdb_v2_table_function_set_filter_pushdown_callback                                                          \
 	duckdb_ext_api.duckdb_v2_table_function_set_filter_pushdown_callback
 #define duckdb_v2_table_function_set_projection_pushdown duckdb_ext_api.duckdb_v2_table_function_set_projection_pushdown
+#define duckdb_v2_token_iterator_destroy                 duckdb_ext_api.duckdb_v2_token_iterator_destroy
+#define duckdb_v2_token_iterator_next                    duckdb_ext_api.duckdb_v2_token_iterator_next
+#define duckdb_v2_tokenize_sql                           duckdb_ext_api.duckdb_v2_tokenize_sql
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 
