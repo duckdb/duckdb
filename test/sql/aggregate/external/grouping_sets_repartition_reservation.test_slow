@@ -1,0 +1,44 @@
+# name: test/sql/aggregate/external/grouping_sets_repartition_reservation.test_slow
+# description: Test external hash aggregate repartitioning with many grouping sets under low memory
+# group: [external]
+
+require noforcestorage
+
+require skip_reload
+
+require 64bit
+
+# This test relies on the default vector size and block size for the memory threshold.
+require vector_size 2048
+
+require block_size 262144
+
+statement ok
+SET temp_directory='{TEST_DIR}/grouping_sets_repartition_reservation'
+
+statement ok
+SET threads=4
+
+statement ok
+SET memory_limit='140MB'
+
+statement ok
+SET preserve_insertion_order=false
+
+# Avoid compressed materialization hiding the intended hash aggregate memory pressure.
+statement ok
+SET disabled_optimizers='compressed_materialization'
+
+query I
+WITH t AS (
+	SELECT concat(i::VARCHAR, repeat('x', 64)) AS g
+	FROM range(1000000) r(i)
+)
+SELECT count(*)
+FROM (
+	SELECT g, count(*) AS c
+	FROM t
+	GROUP BY CUBE(g, g, g, g)
+) q
+----
+15000001
