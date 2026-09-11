@@ -171,8 +171,9 @@ private:
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting
 	mutex start_transaction_lock;
 
-	//! Every commit before this bound is durable. A transaction stays in active_transactions until
-	//! its commit is durable, so new snapshots are bounded below commits a crash could still lose
+	//! Every commit before this bound is durable; it only ever advances. A transaction stays in
+	//! active_transactions until its commit is durable, so new snapshots are bounded below commits a
+	//! crash could still lose
 	VisibilityBound durable_bound;
 	//! Signalled (under transaction_lock) when no active transaction awaits its WAL sync, or when a
 	//! sync fails
