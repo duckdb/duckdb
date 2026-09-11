@@ -119,7 +119,6 @@ public:
 	}
 
 	ParseResultRef GetParseResult() const {
-		D_ASSERT(HasParseResult());
 		return parse_result;
 	}
 
