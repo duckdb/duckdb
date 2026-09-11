@@ -130,11 +130,6 @@ private:
 	bool HasOtherTransactions(DuckTransaction &transaction);
 	void CleanupTransactions();
 
-	//! Record a published commit's flush marker; the transaction stays active until the WAL is synced
-	//! up to it (transaction lock held)
-	void RegisterUnsyncedCommit(DuckTransaction &transaction, idx_t wal_sync_offset);
-	//! Advance the durable bound over every commit the completed sync covered (transaction lock held)
-	void AdvanceDurableBound(idx_t synced_offset);
 	//! Mark that a WAL sync has failed, waking up durability waiters
 	void MarkDurabilityFailed();
 	//! Whether a registered commit is still in its commit path, possibly inside SyncUpTo (transaction lock held)

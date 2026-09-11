@@ -323,30 +323,6 @@ DuckTransactionManager::DurableSnapshot DuckTransactionManager::GetDurableSnapsh
 	return durable;
 }
 
-void DuckTransactionManager::RegisterUnsyncedCommit(DuckTransaction &transaction, idx_t wal_sync_offset) {
-	D_ASSERT(wal_sync_offset > 0);
-	if (!HasUnsyncedCommits()) {
-		// nothing pending: everything before this commit is durable
-		durable_bound = VisibilityBound::Before(transaction.commit_id);
-	}
-	D_ASSERT(transaction.commit_id >= durable_bound);
-	transaction.wal_sync_offset = wal_sync_offset;
-	transaction.catalog_version_before_commit = last_committed_version;
-}
-
-void DuckTransactionManager::AdvanceDurableBound(idx_t synced_offset) {
-	// advance over every commit the sync covered, including ones whose threads have not woken up
-	// yet, so that an acknowledgement always implies observability
-	auto new_bound = durable_bound;
-	for (auto &active_transaction : active_transactions) {
-		if (active_transaction->wal_sync_offset != 0 && active_transaction->wal_sync_offset <= synced_offset &&
-		    active_transaction->commit_id >= new_bound) {
-			new_bound = VisibilityBound::Through(active_transaction->commit_id);
-		}
-	}
-	durable_bound = new_bound;
-}
-
 void DuckTransactionManager::MarkDurabilityFailed() {
 	{
 		lock_guard<mutex> guard(transaction_lock);
@@ -516,8 +492,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// (offset 0) means nothing reached the WAL, so there is nothing to wait for
 			commit_wal = db.GetStorageManager().GetWAL();
 			if (commit_wal) {
-				// registration precedes this commit's own catalog-version bump below
-				RegisterUnsyncedCommit(transaction, info.wal_sync_offset);
+				// the transaction stays active until the WAL is synced up to its flush marker; the
+				// catalog version is recorded before this commit's own bump below
+				D_ASSERT(info.commit_id >= durable_bound);
+				transaction.wal_sync_offset = info.wal_sync_offset;
+				transaction.catalog_version_before_commit = last_committed_version;
 				commit_registered = true;
 			}
 		}
@@ -589,7 +568,15 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// durable (or durability has failed): now leave the list of active transactions
 		t_lock.lock();
 		if (synced) {
-			AdvanceDurableBound(info.wal_sync_offset);
+			// advance the durable bound over every commit the sync covered, including ones whose
+			// threads have not woken up yet, so that an acknowledgement always implies observability
+			for (auto &active_transaction : active_transactions) {
+				if (active_transaction->wal_sync_offset != 0 &&
+				    active_transaction->wal_sync_offset <= info.wal_sync_offset &&
+				    active_transaction->commit_id >= durable_bound) {
+					durable_bound = VisibilityBound::Through(active_transaction->commit_id);
+				}
+			}
 		}
 		QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
 		bool drained = !HasUnsyncedCommits();
