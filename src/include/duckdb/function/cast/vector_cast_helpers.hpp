@@ -76,8 +76,8 @@ struct VectorTryCastStringOperator {
 		        OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data.result, data.parameters))) {
 			return output;
 		}
-		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask,
-		                                                     idx, data);
+		return HandleVectorCastError::Operation<RESULT_TYPE>(
+		    CastExceptionText<INPUT_TYPE>(input, data.result.GetType()), mask, idx, data);
 	}
 };
 

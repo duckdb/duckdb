@@ -23,6 +23,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 struct CastParameters;
@@ -67,6 +68,23 @@ static string CastExceptionText(SRC input) {
 	}
 	return "Type " + TypeIdToString(GetTypeId<SRC>()) + " with value " + ConvertToString::Operation<SRC>(input) +
 	       " can't be cast to the destination type " + TypeIdToString(GetTypeId<DST>());
+}
+
+template <class SRC>
+static string CastExceptionText(SRC input, const LogicalType &target_type) {
+	if (std::is_same<SRC, string_t>()) {
+		return StringUtil::Format("Could not convert string '%s' to %s", ConvertToString::Operation<SRC>(input),
+		                          target_type.ToString());
+	}
+	return StringUtil::Format("Type %s with value %s can't be cast to the destination type %s",
+	                          TypeIdToString(GetTypeId<SRC>()), ConvertToString::Operation<SRC>(input),
+	                          target_type.ToString());
+}
+
+template <class SRC>
+static string CastExceptionText(SRC input, const LogicalType &source_type, const LogicalType &target_type) {
+	return StringUtil::Format("Type %s with value %s can't be cast to the destination type %s",
+	                          source_type.ToString(), ConvertToString::Operation<SRC>(input), target_type.ToString());
 }
 
 struct Cast {
