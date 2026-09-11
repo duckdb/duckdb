@@ -81,6 +81,11 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		const vector<LogicalType> function_child_types;
 		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, function_child_types, nullptr, nullptr);
 	}
+	case ExpressionClass::PATTERN:
+		// a row pattern is matched by MATCH_RECOGNIZE rather than evaluated, so it is not an expression
+		// anywhere an expression is expected
+		return BindResult(BinderException::Unsupported(expr_ref, "A row pattern is only meaningful in the PATTERN "
+		                                                         "clause of MATCH_RECOGNIZE"));
 	case ExpressionClass::OPERATOR:
 		return BindExpression(expr_ref.Cast<OperatorExpression>(), depth);
 	case ExpressionClass::SUBQUERY:

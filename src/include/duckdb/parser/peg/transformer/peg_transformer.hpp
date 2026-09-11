@@ -2968,6 +2968,179 @@ public:
 	                                                            GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
 	FinalizeDropExtensionRepositoryStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeTableMatchRecognizeClauseTrampoline(PEGTransformer &transformer,
+	                                                          GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeTableMatchRecognizeClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeMatchRecognizeBodyTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMatchRecognizeBodyTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
+	static void InitializeMatchRecognizeClauseTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMatchRecognizeClauseTrampoline(PEGTransformer &transformer,
+	                                                                               GeneratedTransformProcess &process);
+	static void InitializeMRPartitionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMRPartitionTrampoline(PEGTransformer &transformer,
+	                                                                      GeneratedTransformProcess &process);
+	static void InitializeMROrderByTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMROrderByTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
+	static void InitializeMRMeasuresTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMRMeasuresTrampoline(PEGTransformer &transformer,
+	                                                                     GeneratedTransformProcess &process);
+	static void InitializeMRRowsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMRRowsTrampoline(PEGTransformer &transformer,
+	                                                                 GeneratedTransformProcess &process);
+	static void InitializeMRSkipTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMRSkipTrampoline(PEGTransformer &transformer,
+	                                                                 GeneratedTransformProcess &process);
+	static void InitializeMRPatternTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMRPatternTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
+	static void InitializeMRSubsetTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMRSubsetTrampoline(PEGTransformer &transformer,
+	                                                                   GeneratedTransformProcess &process);
+	static void InitializeMRDefineAutoTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMRDefineAutoTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
+	static void InitializeMRDefineTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMRDefineTrampoline(PEGTransformer &transformer,
+	                                                                   GeneratedTransformProcess &process);
+	static void InitializeMeasuresClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMeasuresClauseTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeMeasuresElementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMeasuresElementTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeMeasureSemanticsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeMeasureSemanticsTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeRunningSemanticsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRunningSemanticsTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeFinalSemanticsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeFinalSemanticsTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeRowsPerMatchTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowsPerMatchTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
+	static void InitializeOneRowPerMatchTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeOneRowPerMatchTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeAllRowsPerMatchTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeAllRowsPerMatchTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeAfterMatchSkipTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeAfterMatchSkipTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeAfterMatchSkipTargetTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeAfterMatchSkipTargetTrampoline(PEGTransformer &transformer,
+	                                                                               GeneratedTransformProcess &process);
+	static void InitializeSkipToNextRowTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeSkipToNextRowTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeSkipPastLastRowTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeSkipPastLastRowTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeSkipToFirstVarTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeSkipToFirstVarTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeSkipToLastVarTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeSkipToLastVarTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializePatternClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizePatternClauseTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeRowPatternTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternTrampoline(PEGTransformer &transformer,
+	                                                                     GeneratedTransformProcess &process);
+	static void InitializeRowPatternAlternativeTrampoline(PEGTransformer &transformer,
+	                                                      GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternAlternativeTrampoline(PEGTransformer &transformer,
+	                                                                                GeneratedTransformProcess &process);
+	static void InitializeRowPatternTermTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternTermTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeRowPatternFactorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternFactorTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeRowPatternPrimaryTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternPrimaryTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
+	static void InitializeRowPatternPermuteTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternPermuteTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
+	static void InitializeRowPatternAnchorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternAnchorTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializePatternStartTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizePatternStartTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
+	static void InitializePatternEndTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizePatternEndTrampoline(PEGTransformer &transformer,
+	                                                                     GeneratedTransformProcess &process);
+	static void InitializeRowPatternGroupTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternGroupTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeRowPatternExclusionTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternExclusionTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
+	static void InitializeRowPatternLabelTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternLabelTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeRowPatternQuantifierTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternQuantifierTrampoline(PEGTransformer &transformer,
+	                                                                               GeneratedTransformProcess &process);
+	static void InitializeRowPatternQuantifierKindTrampoline(PEGTransformer &transformer,
+	                                                         GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeRowPatternQuantifierKindTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeQuantifierReluctantTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierReluctantTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
+	static void InitializeQuantifierStarTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierStarTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeQuantifierPlusTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierPlusTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeQuantifierOptionalTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierOptionalTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
+	static void InitializeQuantifierRangeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierRangeTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeQuantifierBoundsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierBoundsTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeQuantifierMinMaxTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierMinMaxTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeQuantifierMinTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierMinTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeQuantifierMaxTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierMaxTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeQuantifierExactTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeQuantifierExactTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeSubsetClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeSubsetClauseTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
+	static void InitializeSubsetElementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeSubsetElementTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeDefineClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDefineClauseTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
+	static void InitializeDefineElementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDefineElementTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
 	static void InitializeMergeIntoStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeMergeIntoStatementTrampoline(PEGTransformer &transformer,
 	                                                                             GeneratedTransformProcess &process);
@@ -6624,6 +6797,195 @@ public:
 	static unique_ptr<SQLStatement> TransformDropExtensionRepositoryStmt(PEGTransformer &transformer,
 	                                                                     const optional<bool> &if_exists,
 	                                                                     const Identifier &col_id_or_string);
+	static unique_ptr<TransformResultValue> TransformTableMatchRecognizeClauseInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformTableMatchRecognizeClause(PEGTransformer &transformer,
+	                                                               unique_ptr<TableRef> match_recognize_body,
+	                                                               const optional<TableAlias> &table_alias);
+	static unique_ptr<TransformResultValue> TransformMatchRecognizeBodyInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformMatchRecognizeBody(PEGTransformer &transformer,
+	                                                        vector<MatchRecognizeClause> match_recognize_clause);
+	static unique_ptr<TransformResultValue> TransformMatchRecognizeClauseInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformMRPartitionInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static MatchRecognizeClause TransformMRPartition(PEGTransformer &transformer,
+	                                                 vector<unique_ptr<ParsedExpression>> window_partition);
+	static unique_ptr<TransformResultValue> TransformMROrderByInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static MatchRecognizeClause TransformMROrderBy(PEGTransformer &transformer, vector<OrderByNode> order_by_clause);
+	static unique_ptr<TransformResultValue> TransformMRMeasuresInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static MatchRecognizeClause TransformMRMeasures(PEGTransformer &transformer,
+	                                                vector<unique_ptr<ParsedExpression>> measures_clause);
+	static unique_ptr<TransformResultValue> TransformMRRowsInternal(PEGTransformer &transformer,
+	                                                                ParseResult &parse_result);
+	static MatchRecognizeClause TransformMRRows(PEGTransformer &transformer, const MatchRecognizeRows &rows_per_match);
+	static unique_ptr<TransformResultValue> TransformMRSkipInternal(PEGTransformer &transformer,
+	                                                                ParseResult &parse_result);
+	static MatchRecognizeClause TransformMRSkip(PEGTransformer &transformer,
+	                                            MatchRecognizeAfterMatchClause after_match_skip);
+	static unique_ptr<TransformResultValue> TransformMRPatternInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static MatchRecognizeClause TransformMRPattern(PEGTransformer &transformer,
+	                                               unique_ptr<ParsedExpression> pattern_clause);
+	static unique_ptr<TransformResultValue> TransformMRSubsetInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static MatchRecognizeClause TransformMRSubset(PEGTransformer &transformer,
+	                                              vector<MatchRecognizeSubset> subset_clause);
+	static unique_ptr<TransformResultValue> TransformMRDefineAutoInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static MatchRecognizeClause TransformMRDefineAuto(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformMRDefineInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static MatchRecognizeClause TransformMRDefine(PEGTransformer &transformer,
+	                                              vector<unique_ptr<ParsedExpression>> define_clause);
+	static unique_ptr<TransformResultValue> TransformMeasuresClauseInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>>
+	TransformMeasuresClause(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> measures_element);
+	static unique_ptr<TransformResultValue> TransformMeasuresElementInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformMeasuresElement(PEGTransformer &transformer,
+	                                                             const optional<bool> &measure_semantics,
+	                                                             unique_ptr<ParsedExpression> expression,
+	                                                             const Identifier &col_label_or_string);
+	static unique_ptr<TransformResultValue> TransformMeasureSemanticsInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformRunningSemanticsInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static bool TransformRunningSemantics(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformFinalSemanticsInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static bool TransformFinalSemantics(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformRowsPerMatchInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformOneRowPerMatchInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static MatchRecognizeRows TransformOneRowPerMatch(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformAllRowsPerMatchInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static MatchRecognizeRows TransformAllRowsPerMatch(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformAfterMatchSkipInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformAfterMatchSkipTargetInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSkipToNextRowInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static MatchRecognizeAfterMatchClause TransformSkipToNextRow(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSkipPastLastRowInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static MatchRecognizeAfterMatchClause TransformSkipPastLastRow(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSkipToFirstVarInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static MatchRecognizeAfterMatchClause TransformSkipToFirstVar(PEGTransformer &transformer,
+	                                                              const Identifier &col_label_or_string);
+	static unique_ptr<TransformResultValue> TransformSkipToLastVarInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static MatchRecognizeAfterMatchClause TransformSkipToLastVar(PEGTransformer &transformer,
+	                                                             const Identifier &col_label_or_string);
+	static unique_ptr<TransformResultValue> TransformPatternClauseInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformRowPatternInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformRowPattern(PEGTransformer &transformer, unique_ptr<ParsedExpression> row_pattern_term,
+	                    optional<vector<unique_ptr<ParsedExpression>>> row_pattern_alternative);
+	static unique_ptr<TransformResultValue> TransformRowPatternAlternativeInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformRowPatternTermInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformRowPatternTerm(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> row_pattern_factor);
+	static unique_ptr<TransformResultValue> TransformRowPatternFactorInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformRowPatternFactor(PEGTransformer &transformer, unique_ptr<ParsedExpression> row_pattern_primary,
+	                          const optional<MatchRecognizeQuantifier> &row_pattern_quantifier);
+	static unique_ptr<TransformResultValue> TransformRowPatternPrimaryInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformRowPatternPermuteInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformRowPatternPermute(PEGTransformer &transformer,
+	                                                               vector<unique_ptr<ParsedExpression>> row_pattern);
+	static unique_ptr<TransformResultValue> TransformRowPatternAnchorInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformPatternStartInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformPatternStart(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformPatternEndInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformPatternEnd(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformRowPatternGroupInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformRowPatternExclusionInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformRowPatternExclusion(PEGTransformer &transformer,
+	                                                                 unique_ptr<ParsedExpression> row_pattern);
+	static unique_ptr<TransformResultValue> TransformRowPatternLabelInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformRowPatternLabel(PEGTransformer &transformer,
+	                                                             const Identifier &col_label_or_string);
+	static unique_ptr<TransformResultValue> TransformRowPatternQuantifierInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static MatchRecognizeQuantifier
+	TransformRowPatternQuantifier(PEGTransformer &transformer,
+	                              const MatchRecognizeQuantifier &row_pattern_quantifier_kind,
+	                              const optional<bool> &quantifier_reluctant);
+	static unique_ptr<TransformResultValue> TransformRowPatternQuantifierKindInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformQuantifierReluctantInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static bool TransformQuantifierReluctant(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformQuantifierStarInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static MatchRecognizeQuantifier TransformQuantifierStar(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformQuantifierPlusInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static MatchRecognizeQuantifier TransformQuantifierPlus(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformQuantifierOptionalInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static MatchRecognizeQuantifier TransformQuantifierOptional(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformQuantifierRangeInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformQuantifierBoundsInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformQuantifierMinMaxInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static MatchRecognizeQuantifier TransformQuantifierMinMax(PEGTransformer &transformer,
+	                                                          unique_ptr<ParsedExpression> number_literal,
+	                                                          unique_ptr<ParsedExpression> number_literal_1);
+	static unique_ptr<TransformResultValue> TransformQuantifierMinInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static MatchRecognizeQuantifier TransformQuantifierMin(PEGTransformer &transformer,
+	                                                       unique_ptr<ParsedExpression> number_literal);
+	static unique_ptr<TransformResultValue> TransformQuantifierMaxInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static MatchRecognizeQuantifier TransformQuantifierMax(PEGTransformer &transformer,
+	                                                       unique_ptr<ParsedExpression> number_literal);
+	static unique_ptr<TransformResultValue> TransformQuantifierExactInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static MatchRecognizeQuantifier TransformQuantifierExact(PEGTransformer &transformer,
+	                                                         unique_ptr<ParsedExpression> number_literal);
+	static unique_ptr<TransformResultValue> TransformSubsetClauseInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static vector<MatchRecognizeSubset> TransformSubsetClause(PEGTransformer &transformer,
+	                                                          vector<MatchRecognizeSubset> subset_element);
+	static unique_ptr<TransformResultValue> TransformSubsetElementInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static MatchRecognizeSubset TransformSubsetElement(PEGTransformer &transformer,
+	                                                   const Identifier &col_label_or_string,
+	                                                   const vector<Identifier> &col_label_or_string_1);
+	static unique_ptr<TransformResultValue> TransformDefineClauseInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>>
+	TransformDefineClause(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> define_element);
+	static unique_ptr<TransformResultValue> TransformDefineElementInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformDefineElement(PEGTransformer &transformer,
+	                                                           const Identifier &col_label_or_string,
+	                                                           unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformMergeIntoStatementInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static unique_ptr<SQLStatement>

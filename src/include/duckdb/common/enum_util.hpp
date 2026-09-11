@@ -338,6 +338,14 @@ enum class MapInvalidReason : uint8_t;
 
 enum class MatchMode : uint8_t;
 
+enum class MatchRecognizeAfterMatch : uint8_t;
+
+enum class MatchRecognizeClauseKind : uint8_t;
+
+enum class MatchRecognizePatternType : uint8_t;
+
+enum class MatchRecognizeRows : uint8_t;
+
 enum class MemoryTag : uint8_t;
 
 enum class MergeActionCondition : uint8_t;
@@ -403,6 +411,10 @@ enum class PartitionedColumnDataType : uint8_t;
 enum class PartitionedTupleDataType : uint8_t;
 
 enum class PatternMatchType : uint8_t;
+
+enum class PatternMemo : uint8_t;
+
+enum class PatternOp : uint8_t;
 
 enum class PendingExecutionResult : uint8_t;
 
@@ -1103,6 +1115,18 @@ template<>
 const char* EnumUtil::ToChars<MatchMode>(MatchMode value);
 
 template<>
+const char* EnumUtil::ToChars<MatchRecognizeAfterMatch>(MatchRecognizeAfterMatch value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeClauseKind>(MatchRecognizeClauseKind value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizePatternType>(MatchRecognizePatternType value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeRows>(MatchRecognizeRows value);
+
+template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
 
 template<>
@@ -1200,6 +1224,12 @@ const char* EnumUtil::ToChars<PartitionedTupleDataType>(PartitionedTupleDataType
 
 template<>
 const char* EnumUtil::ToChars<PatternMatchType>(PatternMatchType value);
+
+template<>
+const char* EnumUtil::ToChars<PatternMemo>(PatternMemo value);
+
+template<>
+const char* EnumUtil::ToChars<PatternOp>(PatternOp value);
 
 template<>
 const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult value);
@@ -2019,6 +2049,18 @@ template<>
 MatchMode EnumUtil::FromString<MatchMode>(const char *value);
 
 template<>
+MatchRecognizeAfterMatch EnumUtil::FromString<MatchRecognizeAfterMatch>(const char *value);
+
+template<>
+MatchRecognizeClauseKind EnumUtil::FromString<MatchRecognizeClauseKind>(const char *value);
+
+template<>
+MatchRecognizePatternType EnumUtil::FromString<MatchRecognizePatternType>(const char *value);
+
+template<>
+MatchRecognizeRows EnumUtil::FromString<MatchRecognizeRows>(const char *value);
+
+template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
 
 template<>
@@ -2116,6 +2158,12 @@ PartitionedTupleDataType EnumUtil::FromString<PartitionedTupleDataType>(const ch
 
 template<>
 PatternMatchType EnumUtil::FromString<PatternMatchType>(const char *value);
+
+template<>
+PatternMemo EnumUtil::FromString<PatternMemo>(const char *value);
+
+template<>
+PatternOp EnumUtil::FromString<PatternOp>(const char *value);
 
 template<>
 PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *value);

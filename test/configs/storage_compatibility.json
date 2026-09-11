@@ -235,6 +235,12 @@
       ]
     },
     {
+      "reason": "MATCH_RECOGNIZE is a new table reference type that older versions cannot deserialize.",
+      "paths": [
+        "test/sql/match_recognize/test_match_recognize_composition.test"
+      ]
+    },
+    {
       "reason": "test_all_types() require latest storage",
       "paths": [
         "test/fuzzer/sqlsmith/statistics_assertion_trigger.test",

@@ -1,0 +1,69 @@
+# name: test/sql/match_recognize/test_match_recognize_limits.test
+# description: MATCH_RECOGNIZE - what the matcher accounts for, and what it refuses to spend
+# group: [match_recognize]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma threads=1
+
+# the record the matcher keeps counts against the memory limit
+statement ok
+SET memory_limit='20MB';
+
+statement error
+FROM range(700) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (((A?){700}){700})
+)
+----
+<REGEX>:Out of Memory Error:.*
+
+statement ok
+RESET memory_limit;
+
+# matching is interruptible
+statement ok
+SET max_execution_time=50;
+
+statement error
+FROM range(15000) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+ B) DEFINE B AS MATCH_NUMBER() < 0
+)
+----
+<REGEX>:INTERRUPT Error:.*
+
+statement error
+FROM range(15000) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A+ B) DEFINE B AS FIRST(x) < 0
+)
+----
+<REGEX>:INTERRUPT Error:.*
+
+statement ok
+SET max_execution_time=0;
+
+# The memberships of the rows in overlapping matches are held in blocks that count against the memory
+# limit, so a pattern that produces far more of them than there are rows fails rather than growing
+# outside it.
+statement ok
+SET memory_limit='20MB';
+
+statement error
+SELECT count(*) FROM range(1500) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n
+    AFTER MATCH SKIP TO NEXT ROW PATTERN (A+)
+);
+----
+Out of Memory Error
+
+statement ok
+RESET memory_limit;
+
+query I
+SELECT count(*) FROM range(1500) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n
+    AFTER MATCH SKIP TO NEXT ROW PATTERN (A+)
+);
+----
+1500
