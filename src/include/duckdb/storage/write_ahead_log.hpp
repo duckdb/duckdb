@@ -122,6 +122,7 @@ public:
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer.
 	//! Used during RevertCommit.
 	void Truncate(idx_t size);
+	//! Write a WAL_FLUSH marker and sync the WAL up to it
 	void Flush();
 	//! Write a WAL_FLUSH marker and push the buffer to the OS without syncing it. Returns the
 	//! offset covering the marker, to be passed to SyncUpTo. Caller must hold the WAL lock
