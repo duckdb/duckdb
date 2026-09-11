@@ -35,6 +35,7 @@ static void AliasFunction(DataChunk &args, ExpressionState &state, Vector &resul
 ScalarFunction AliasFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, AliasFunction, AliasBind);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.GetProperties().SetRequiresExpressionNames(true);
 	return fun;
 }
 

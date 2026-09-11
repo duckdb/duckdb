@@ -82,10 +82,6 @@ unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
 
 } // namespace
 
-unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
-	return make_uniq<ConstantOrNullBindData>(std::move(value));
-}
-
 bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
 	if (expr.Function().GetName() != "constant_or_null") {
 		return false;

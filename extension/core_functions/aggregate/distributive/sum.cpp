@@ -6,6 +6,9 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -237,7 +240,25 @@ void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionD
 }
 
 unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
-	function.SetReturnType(deserializer.Get<const LogicalType &>());
+	auto &context = deserializer.Get<ClientContext &>();
+	auto &return_type = deserializer.Get<const LogicalType &>();
+	auto &children = deserializer.Get<const const_expression_list_t &>();
+	vector<unique_ptr<Expression>> arguments;
+	vector<LogicalType> argument_types;
+	for (auto &child : children) {
+		arguments.push_back(child.get().Copy());
+		argument_types.push_back(child.get().GetReturnType());
+	}
+	auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier("sum")));
+	FunctionBinder binder(context);
+	auto logical = binder.ResolveFunction(entry.functions.GetFunctionByArguments(context, argument_types), arguments);
+	if (logical.second || (!return_type.IsAggregateState() && logical.first.GetReturnType() != return_type)) {
+		throw SerializationException("Cannot reconstruct the logical sum signature");
+	}
+	logical.first.ReplaceImplementation(function);
+	function = std::move(logical.first);
+	function.SetReturnType(return_type);
 	return nullptr;
 }
 

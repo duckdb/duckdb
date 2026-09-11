@@ -227,7 +227,12 @@ string PEGTransformerFactory::TransformDoubleType(PEGTransformer &transformer) {
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformFloatType(PEGTransformer &transformer,
                                           optional<unique_ptr<ParsedExpression>> number_literal) {
-	return make_uniq<TypeExpression>(Identifier("FLOAT"), vector<unique_ptr<ParsedExpression>> {});
+	if (!number_literal) {
+		return make_uniq<TypeExpression>(Identifier("FLOAT"), vector<unique_ptr<ParsedExpression>> {});
+	}
+	vector<unique_ptr<ParsedExpression>> modifiers;
+	modifiers.push_back(std::move(number_literal.value()));
+	return make_uniq<TypeExpression>(Identifier("FLOAT"), std::move(modifiers));
 }
 
 unique_ptr<ParsedExpression>

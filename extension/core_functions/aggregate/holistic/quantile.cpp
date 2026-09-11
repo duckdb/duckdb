@@ -102,7 +102,8 @@ QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
 	}
 }
 
-QuantileBindData::QuantileBindData(const QuantileBindData &other) : order(other.order), desc(other.desc) {
+QuantileBindData::QuantileBindData(const QuantileBindData &other)
+    : FunctionData(other), order(other.order), desc(other.desc) {
 	for (const auto &q : other.quantiles) {
 		quantiles.emplace_back(q);
 	}
