@@ -4,6 +4,7 @@
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/prefix_handle.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
@@ -279,16 +280,13 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		const auto r_byte = Prefix::GetByte(art, entry.right, cast_pos);
 
 		// Split and reduce.
-		reference<NodePtr> left_ref(entry.left);
-		NodePtr l_child;
-		const auto status = Prefix::Split(art, left_ref, l_child, cast_pos);
+		NodePtr replacement;
+		Node4::New(art, replacement);
+		auto l_child = PrefixHandle::Split(art, entry.left, replacement, cast_pos);
 		Prefix::Reduce(art, entry.right, cast_pos);
 
-		Node4::New(art, left_ref);
-		left_ref.get().SetGateStatus(status);
-
-		Node4::InsertChild(art, left_ref, l_byte, l_child);
-		Node4::InsertChild(art, left_ref, r_byte, entry.right);
+		Node4::InsertChild(art, replacement, l_byte, l_child);
+		Node4::InsertChild(art, replacement, r_byte, entry.right);
 		entry.right.Clear();
 		return;
 	}
