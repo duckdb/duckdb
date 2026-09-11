@@ -132,7 +132,8 @@ private:
 
 	//! Mark that a WAL sync has failed, waking up durability waiters
 	void MarkDurabilityFailed();
-	//! Whether a registered commit is still in its commit path, possibly inside SyncUpTo (transaction lock held)
+	//! Whether a commit that needed a WAL sync is still in its commit path, possibly inside SyncUpTo
+	//! (transaction lock held)
 	bool HasUnsyncedCommits();
 	struct DurableSnapshot {
 		//! Every commit before this bound is durable

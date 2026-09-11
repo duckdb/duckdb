@@ -292,8 +292,8 @@ transaction_t DuckTransactionManager::GetCommitTimestamp() {
 
 bool DuckTransactionManager::HasUnsyncedCommits() {
 	for (auto &active_transaction : active_transactions) {
-		// registered commits stay active until their own thread has left SyncUpTo, even when another
-		// thread's sync already made them durable: a checkpoint may destroy the WAL once this is false
+		// a commit that needed a WAL sync stays active until its own thread has left SyncUpTo, even when
+		// another thread's sync already made it durable: a checkpoint may destroy the WAL once this is false
 		if (active_transaction->wal_sync_offset != 0) {
 			return true;
 		}
@@ -393,7 +393,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	unique_lock<mutex> held_wal_lock;
 	unique_ptr<StorageCommitState> commit_state;
 	optional_ptr<WriteAheadLog> commit_wal;
-	bool commit_registered = false;
+	bool needs_wal_sync = false;
 	bool skip_wal_write_due_to_checkpoint = false;
 	bool wal_written = false;
 	if (checkpoint_decision.can_checkpoint) {
@@ -496,7 +496,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 				D_ASSERT(info.commit_id >= durable_bound);
 				transaction.wal_sync_offset = info.wal_sync_offset;
 				transaction.catalog_version_before_commit = last_committed_version;
-				commit_registered = true;
+				needs_wal_sync = true;
 			}
 		}
 
@@ -518,13 +518,13 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			lock.reset();
 		}
 
-		if (!commit_registered) {
+		if (!needs_wal_sync) {
 			// Remove the transaction from the list of active transactions and gather cleanup information.
 			// A registered commit stays active until its WAL sync below has completed.
 			QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
 		}
 	} catch (...) {
-		if (commit_registered) {
+		if (needs_wal_sync) {
 			// the commit can never be finished: it would bound every new snapshot and hang every
 			// checkpoint, so invalidate rather than leave a healthy-looking database
 			durability_failed = true;
@@ -544,7 +544,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		held_wal_lock.unlock();
 	}
 
-	if (commit_registered) {
+	if (needs_wal_sync) {
 		// make the commit durable before acknowledging it; one fsync can cover many commits. The
 		// WAL pointer stays valid without the lock: checkpoints destroy it only after draining
 		D_ASSERT(!error.HasError());
