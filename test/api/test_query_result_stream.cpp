@@ -6,7 +6,6 @@
 #include "duckdb/main/query_result_stream.hpp"
 #include "result_wait_helpers.hpp"
 
-
 using namespace duckdb;
 
 #ifndef DUCKDB_NO_THREADS
