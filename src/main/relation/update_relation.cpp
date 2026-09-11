@@ -1,3 +1,4 @@
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/main/relation/update_relation.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -40,7 +41,17 @@ unique_ptr<QueryNode> UpdateRelation::GetQueryNode() {
 }
 
 string UpdateRelation::GetQuery() {
-	return string();
+	string result = "UPDATE " + ParseInfo::QualifierToString(catalog_name, schema_name, table_name) + " SET ";
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		if (i > 0) {
+			result += ", ";
+		}
+		result += SQLIdentifier(update_columns[i]) + " = " + expressions[i]->ToString();
+	}
+	if (condition) {
+		result += " WHERE " + condition->ToString();
+	}
+	return result;
 }
 
 const vector<ColumnDefinition> &UpdateRelation::Columns() {
@@ -48,15 +59,7 @@ const vector<ColumnDefinition> &UpdateRelation::Columns() {
 }
 
 string UpdateRelation::ToString(idx_t depth) {
-	string str = RenderWhitespace(depth) + "UPDATE " +
-	             ParseInfo::QualifierToString(catalog_name, schema_name, table_name) + " SET\n";
-	for (idx_t i = 0; i < expressions.size(); i++) {
-		str += update_columns[i] + " = " + expressions[i]->ToString() + "\n";
-	}
-	if (condition) {
-		str += "WHERE " + condition->ToString() + "\n";
-	}
-	return str;
+	return RenderWhitespace(depth) + GetQuery();
 }
 
 } // namespace duckdb
