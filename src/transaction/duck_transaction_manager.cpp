@@ -321,14 +321,6 @@ DuckTransactionManager::DurableSnapshot DuckTransactionManager::GetDurableSnapsh
 	return durable;
 }
 
-void DuckTransactionManager::MarkDurabilityFailed() {
-	{
-		lock_guard<mutex> guard(transaction_lock);
-		durability_failed = true;
-	}
-	durability_cv.notify_all();
-}
-
 void DuckTransactionManager::WaitForDurability(optional_ptr<ClientContext> context) {
 	unique_lock<mutex> guard(transaction_lock);
 	auto drained = [&]() {
@@ -539,13 +531,12 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			commit_wal->SyncUpTo(info.wal_sync_offset);
 			synced = true;
 		} catch (std::exception &ex) {
-			// published and no longer revertable, but not durable: poison so drains fail, then
-			// invalidate. The WAL keeps the bytes; whether a restart replays them is in doubt
+			// published and no longer revertable, but not durable: invalidate. The WAL keeps the
+			// bytes; whether a restart replays them is in doubt
 			error = ErrorData(ex);
-			MarkDurabilityFailed();
 			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing: " + error.Message());
 		}
-		// durable (or durability has failed): now leave the list of active transactions
+		// durable, or durability has failed: now leave the list of active transactions
 		t_lock.lock();
 		if (synced) {
 			// advance the durable bound over every commit the sync covered
@@ -556,11 +547,14 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 					durable_bound = VisibilityBound::Through(active_transaction->commit_id);
 				}
 			}
+		} else {
+			// poison durability, so that drains fail instead of waiting for a sync that never completes
+			durability_failed = true;
 		}
 		QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
-		bool drained = !HasUnsyncedCommits();
+		bool wake_waiters = !synced || !HasUnsyncedCommits();
 		t_lock.unlock();
-		if (drained) {
+		if (wake_waiters) {
 			// notify without holding the lock, so waiters do not wake up into a held mutex
 			durability_cv.notify_all();
 		}

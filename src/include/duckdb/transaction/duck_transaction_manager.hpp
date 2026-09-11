@@ -130,8 +130,6 @@ private:
 	bool HasOtherTransactions(DuckTransaction &transaction);
 	void CleanupTransactions();
 
-	//! Mark that a WAL sync has failed, waking up durability waiters
-	void MarkDurabilityFailed();
 	//! Whether a commit that needed a WAL sync is still in its commit path, possibly inside SyncUpTo
 	//! (transaction lock held)
 	bool HasUnsyncedCommits();
