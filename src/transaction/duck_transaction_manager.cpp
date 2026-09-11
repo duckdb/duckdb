@@ -520,7 +520,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 		if (!needs_wal_sync) {
 			// Remove the transaction from the list of active transactions and gather cleanup information.
-			// A registered commit stays active until its WAL sync below has completed.
+			// A commit that needs a WAL sync stays active until the sync below has completed.
 			QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
 		}
 	} catch (...) {
@@ -559,7 +559,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			MarkDurabilityFailed();
 			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing: " + error.Message());
 		} catch (...) {
-			// as above - nothing may escape leaving the commit registered but unfinished
+			// as above - nothing may escape leaving the commit published but not durable
 			MarkDurabilityFailed();
 			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing (unknown error)");
 			throw;
