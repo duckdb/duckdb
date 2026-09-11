@@ -55,7 +55,8 @@ functions:
 
       Lexical tokenization, in the context of whatever grammar extensions are loaded on the given connection. Closing
       the connection or changing settings afterwards does not affect the tokens. The SQL string is borrowed for the call
-      only, the caller may free it once this call returns. Whitespace is not a token. Malformed input is not an error.
+      only, the caller may free it once this call returns. Whitespace is not a token. Malformed input is not an error;
+      `[[token_iterator_ends_unterminated]]` reports whether the input ended inside an open token.
 
       *out_iterator is set to NULL on failure.
     role: constructor
@@ -109,6 +110,35 @@ functions:
         indirection: 1
         kind: OUT
         description: Receives the token's byte length; 0 for END_OF_INPUT.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  token_iterator_ends_unterminated:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-11" ]
+    description: |
+      Reports whether the input ended before the closing delimiter of its last token.
+
+      True when the input ends inside an open string, quoted identifier, block comment or dollar-quoted string, or in a
+      line comment with no trailing newline; false otherwise, including for empty or whitespace-only input.
+      Equivalently, the last token `[[token_iterator_next]]` yields before TOKEN_TYPE_END_OF_INPUT is the open one, so
+      its class and lexeme say which delimiter is missing. A property of the input, not of the iterator position: the
+      answer is the same before, during and after draining. The only failure is a null argument.
+    role: getter
+    belongs_to: token_iterator
+    parameters:
+      iterator:
+        type: token_iterator
+        description: The iterator.
+      out_ends_unterminated:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the input ended inside an open token.
       err:
         type: error_info
         indirection: 1

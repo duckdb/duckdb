@@ -542,6 +542,16 @@ struct Token {
 	idx_t length = 0;
 };
 
+/// The tokens of a SQL string, as `Connection::Tokenize` reports them.
+struct TokenList {
+	/// The tokens in input order; empty for empty or whitespace-only input.
+	std::vector<Token> tokens;
+	/// Whether the input ended before the closing delimiter of its last token: inside an open string, quoted
+	/// identifier, block comment or dollar-quoted string, or in a line comment with no trailing newline. When true,
+	/// the last token is the open one.
+	bool ends_unterminated = false;
+};
+
 /// A statement bound and planned once, executable repeatedly. Produced by `Connection::Prepare`.
 /// Where `Connection::Execute` re-binds on every call, this may run the plan it built at prepare time; ask
 /// `ReusesPlan` which one you got. Execution returns the same `QueryResult`, with identical behaviour.
@@ -658,10 +668,11 @@ public:
 	/// Splits a SQL string into its tokens without parsing it: no binding, no catalog access, no transaction. The
 	/// connection supplies the grammar whose keyword set decides KEYWORD versus IDENTIFIER. Offsets are byte offsets
 	/// into `sql` exactly as given, and whitespace is not a token. Malformed input does not throw: an unterminated
-	/// string, block comment or dollar-quoted string yields a token that runs to the end of the input.
+	/// string, block comment or dollar-quoted string yields a token that runs to the end of the input, and
+	/// `TokenList::ends_unterminated` reports it.
 	/// @param sql The SQL text; may contain interior null bytes.
-	/// @return The tokens in input order, empty for empty or whitespace-only input.
-	auto Tokenize(std::string_view sql) const -> std::vector<Token>;
+	/// @return The tokens in input order, and whether the input ended inside an open token.
+	auto Tokenize(std::string_view sql) const -> TokenList;
 
 	/// Executes a statement, borrowing it rather than consuming it, so the same statement can be executed again.
 	/// @param statement The statement to execute.

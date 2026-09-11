@@ -641,10 +641,10 @@ static_assert(static_cast<uint8_t>(TokenType::COMMENT) == DUCKDB_V2_TOKEN_TYPE_C
 static_assert(static_cast<uint8_t>(TokenType::TERMINATOR) == DUCKDB_V2_TOKEN_TYPE_TERMINATOR,
               "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
 
-auto Connection::Tokenize(std::string_view sql) const -> std::vector<Token> {
+auto Connection::Tokenize(std::string_view sql) const -> TokenList {
 	duckdb_v2_token_iterator_handle iterator = nullptr;
 	CheckedAPICall(duckdb_v2_tokenize_sql, handle(), ToStr(sql), &iterator);
-	std::vector<Token> tokens;
+	TokenList list;
 	try {
 		while (true) {
 			auto type = DUCKDB_V2_TOKEN_TYPE_INVALID;
@@ -654,14 +654,15 @@ auto Connection::Tokenize(std::string_view sql) const -> std::vector<Token> {
 			if (type == DUCKDB_V2_TOKEN_TYPE_END_OF_INPUT) {
 				break;
 			}
-			tokens.push_back(Token {static_cast<TokenType>(type), start, length});
+			list.tokens.push_back(Token {static_cast<TokenType>(type), start, length});
 		}
+		CheckedAPICall(duckdb_v2_token_iterator_ends_unterminated, iterator, &list.ends_unterminated);
 	} catch (...) {
 		duckdb_v2_token_iterator_destroy(&iterator);
 		throw;
 	}
 	duckdb_v2_token_iterator_destroy(&iterator);
-	return tokens;
+	return list;
 }
 
 auto Connection::Execute(const SqlStatement &statement, const Value *parameters, idx_t parameter_count) -> QueryResult {

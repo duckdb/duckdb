@@ -1245,6 +1245,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_projection_pushdown)
 	(duckdb_v2_table_function_handle function, bool enable, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_token_iterator_destroy)(duckdb_v2_token_iterator_handle *iterator);
+	DUCKDB_V2_ERROR(*duckdb_v2_token_iterator_ends_unterminated)
+	(duckdb_v2_token_iterator_handle iterator, bool *out_ends_unterminated, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_token_iterator_next)
 	(duckdb_v2_token_iterator_handle iterator, DUCKDB_V2_TOKEN_TYPE *out_type, idx_t *out_start, idx_t *out_length,
 	 duckdb_v2_error_info_handle *err);
@@ -1804,6 +1806,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	    duckdb_v2_table_function_set_filter_pushdown_callback;
 	result.duckdb_v2_table_function_set_projection_pushdown = duckdb_v2_table_function_set_projection_pushdown;
 	result.duckdb_v2_token_iterator_destroy = duckdb_v2_token_iterator_destroy;
+	result.duckdb_v2_token_iterator_ends_unterminated = duckdb_v2_token_iterator_ends_unterminated;
 	result.duckdb_v2_token_iterator_next = duckdb_v2_token_iterator_next;
 	result.duckdb_v2_tokenize_sql = duckdb_v2_tokenize_sql;
 	return result;

@@ -3311,7 +3311,8 @@ typedef struct _duckdb_v2_token_iterator {
  *
  * Lexical tokenization, in the context of whatever grammar extensions are loaded on the given connection. Closing the
  * connection or changing settings afterwards does not affect the tokens. The SQL string is borrowed for the call only,
- * the caller may free it once this call returns. Whitespace is not a token. Malformed input is not an error.
+ * the caller may free it once this call returns. Whitespace is not a token. Malformed input is not an error;
+ * `duckdb_v2_token_iterator_ends_unterminated()` reports whether the input ended inside an open token.
  *
  * *out_iterator is set to NULL on failure.
  *
@@ -3348,6 +3349,27 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle 
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_token_iterator_next(duckdb_v2_token_iterator_handle iterator,
                                                            DUCKDB_V2_TOKEN_TYPE *out_type, idx_t *out_start,
                                                            idx_t *out_length, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reports whether the input ended before the closing delimiter of its last token.
+ *
+ * True when the input ends inside an open string, quoted identifier, block comment or dollar-quoted string, or in a
+ * line comment with no trailing newline; false otherwise, including for empty or whitespace-only input. Equivalently,
+ * the last token `duckdb_v2_token_iterator_next()` yields before TOKEN_TYPE_END_OF_INPUT is the open one, so its class
+ * and lexeme say which delimiter is missing. A property of the input, not of the iterator position: the answer is the
+ * same before, during and after draining. The only failure is a null argument.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param iterator The iterator.
+ * @param out_ends_unterminated Receives whether the input ended inside an open token.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_token_iterator_ends_unterminated(duckdb_v2_token_iterator_handle iterator,
+                                                                        bool *out_ends_unterminated,
+                                                                        duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys a token iterator handle.

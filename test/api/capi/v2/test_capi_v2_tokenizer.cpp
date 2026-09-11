@@ -33,6 +33,32 @@ std::ostream &operator<<(std::ostream &os, const Tok &tok) {
 
 using Toks = std::vector<Tok>;
 
+// What tokenize_sql produces for one input: the tokens up to END_OF_INPUT, and the ends_unterminated flag.
+struct Lexed {
+	Toks tokens;
+	bool ends_unterminated;
+
+	bool operator==(const Lexed &other) const {
+		return tokens == other.tokens && ends_unterminated == other.ends_unterminated;
+	}
+};
+
+std::ostream &operator<<(std::ostream &os, const Lexed &lexed) {
+	os << (lexed.ends_unterminated ? "unterminated " : "complete ") << "{";
+	for (auto &tok : lexed.tokens) {
+		os << " " << tok;
+	}
+	return os << " }";
+}
+
+Lexed Complete(Toks tokens) {
+	return Lexed {std::move(tokens), false};
+}
+
+Lexed Unterminated(Toks tokens) {
+	return Lexed {std::move(tokens), true};
+}
+
 constexpr auto KEYWORD = DUCKDB_V2_TOKEN_TYPE_KEYWORD;
 constexpr auto IDENTIFIER = DUCKDB_V2_TOKEN_TYPE_IDENTIFIER;
 constexpr auto STRING = DUCKDB_V2_TOKEN_TYPE_STRING_LITERAL;
@@ -72,18 +98,28 @@ Toks TokDrain(duckdb_v2_token_iterator_handle it, idx_t len) {
 	return out;
 }
 
-// Tokenize a length-delimited view, drain, destroy.
-Toks TokenizeAll(duckdb_v2_connection_handle conn, duckdb_v2_str sql) {
-	duckdb_v2_token_iterator_handle it = nullptr;
-	REQUIRE(duckdb_v2_tokenize_sql(conn, sql, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(it != nullptr);
-	auto out = TokDrain(it, sql.len);
-	REQUIRE(duckdb_v2_token_iterator_destroy(&it) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(it == nullptr);
+// The ends_unterminated flag, primed so a test can tell "written" from "left alone".
+bool EndsUnterminated(duckdb_v2_token_iterator_handle it) {
+	bool out = true;
+	REQUIRE(duckdb_v2_token_iterator_ends_unterminated(it, &out, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return out;
 }
 
-Toks TokenizeAll(duckdb_v2_connection_handle conn, const std::string &sql) {
+// Tokenize a length-delimited view, drain, destroy. The flag is read before and after draining and must agree.
+Lexed TokenizeAll(duckdb_v2_connection_handle conn, duckdb_v2_str sql) {
+	duckdb_v2_token_iterator_handle it = nullptr;
+	REQUIRE(duckdb_v2_tokenize_sql(conn, sql, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(it != nullptr);
+	auto before = EndsUnterminated(it);
+	auto tokens = TokDrain(it, sql.len);
+	auto after = EndsUnterminated(it);
+	REQUIRE(duckdb_v2_token_iterator_destroy(&it) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(it == nullptr);
+	REQUIRE(before == after);
+	return Lexed {std::move(tokens), after};
+}
+
+Lexed TokenizeAll(duckdb_v2_connection_handle conn, const std::string &sql) {
 	return TokenizeAll(conn, Convert(sql));
 }
 
@@ -127,15 +163,16 @@ TEST_CASE("V2 tokenizer: all seven lexical classes in one statement", "[capi_v2]
 	    {COMMENT, 50, 7},    // /* d */
 	    {TERMINATOR, 57, 1}, // ;
 	};
-	REQUIRE(TokenizeAll(fx.conn, sql) == expected);
+	REQUIRE(TokenizeAll(fx.conn, sql) == Complete(expected));
 }
 
 TEST_CASE("V2 tokenizer: keyword versus identifier follows the grammar", "[capi_v2][tokenizer]") {
 	EnvFixture fx;
 	// Casing does not matter for keywords; a non-keyword word is an identifier.
-	REQUIRE(TokenizeAll(fx.conn, "select Select foo") == Toks {{KEYWORD, 0, 6}, {KEYWORD, 7, 6}, {IDENTIFIER, 14, 3}});
+	REQUIRE(TokenizeAll(fx.conn, "select Select foo") ==
+	        Complete({{KEYWORD, 0, 6}, {KEYWORD, 7, 6}, {IDENTIFIER, 14, 3}}));
 	// Quoting a keyword makes it an identifier.
-	REQUIRE(TokenizeAll(fx.conn, "\"select\"") == Toks {{IDENTIFIER, 0, 8}});
+	REQUIRE(TokenizeAll(fx.conn, "\"select\"") == Complete({{IDENTIFIER, 0, 8}}));
 }
 
 TEST_CASE("V2 tokenizer: parameters", "[capi_v2][tokenizer]") {
@@ -149,24 +186,26 @@ TEST_CASE("V2 tokenizer: parameters", "[capi_v2][tokenizer]") {
 	    {OPERATOR, 11, 1},   // $
 	    {IDENTIFIER, 12, 3}, // foo
 	};
-	REQUIRE(TokenizeAll(fx.conn, "SELECT $1, $foo") == expected);
+	REQUIRE(TokenizeAll(fx.conn, "SELECT $1, $foo") == Complete(expected));
 }
 
 TEST_CASE("V2 tokenizer: operators and the trailing-plus trimming rule", "[capi_v2][tokenizer]") {
 	EnvFixture fx;
 	// An operator run cannot end in '+' unless it contains a special character, so '+-' splits.
 	REQUIRE(TokenizeAll(fx.conn, "a+-b") ==
-	        Toks {{IDENTIFIER, 0, 1}, {OPERATOR, 1, 1}, {OPERATOR, 2, 1}, {IDENTIFIER, 3, 1}});
+	        Complete({{IDENTIFIER, 0, 1}, {OPERATOR, 1, 1}, {OPERATOR, 2, 1}, {IDENTIFIER, 3, 1}}));
 	// '~' is special, so '~+' stays one operator.
-	REQUIRE(TokenizeAll(fx.conn, "a~+b") == Toks {{IDENTIFIER, 0, 1}, {OPERATOR, 1, 2}, {IDENTIFIER, 3, 1}});
+	REQUIRE(TokenizeAll(fx.conn, "a~+b") == Complete({{IDENTIFIER, 0, 1}, {OPERATOR, 1, 2}, {IDENTIFIER, 3, 1}}));
 	// Multi-character operators stay whole.
-	REQUIRE(TokenizeAll(fx.conn, "a->>b") == Toks {{IDENTIFIER, 0, 1}, {OPERATOR, 1, 3}, {IDENTIFIER, 4, 1}});
-	REQUIRE(TokenizeAll(fx.conn, "x::int") == Toks {{IDENTIFIER, 0, 1}, {OPERATOR, 1, 2}, {KEYWORD, 3, 3}});
+	REQUIRE(TokenizeAll(fx.conn, "a->>b") == Complete({{IDENTIFIER, 0, 1}, {OPERATOR, 1, 3}, {IDENTIFIER, 4, 1}}));
+	REQUIRE(TokenizeAll(fx.conn, "x::int") == Complete({{IDENTIFIER, 0, 1}, {OPERATOR, 1, 2}, {KEYWORD, 3, 3}}));
 	// Parentheses and commas are operator tokens, one byte each.
-	REQUIRE(
-	    TokenizeAll(fx.conn, "f(1,2)") ==
-	    Toks {
-	        {IDENTIFIER, 0, 1}, {OPERATOR, 1, 1}, {NUMBER, 2, 1}, {OPERATOR, 3, 1}, {NUMBER, 4, 1}, {OPERATOR, 5, 1}});
+	REQUIRE(TokenizeAll(fx.conn, "f(1,2)") == Complete({{IDENTIFIER, 0, 1},
+	                                                    {OPERATOR, 1, 1},
+	                                                    {NUMBER, 2, 1},
+	                                                    {OPERATOR, 3, 1},
+	                                                    {NUMBER, 4, 1},
+	                                                    {OPERATOR, 5, 1}}));
 }
 
 // ===========================================================================
@@ -189,7 +228,7 @@ TEST_CASE("V2 tokenizer: terminators only at statement level", "[capi_v2][tokeni
 	    {NUMBER, 34, 1},     // 2
 	    {TERMINATOR, 35, 1}, // ;
 	};
-	REQUIRE(TokenizeAll(fx.conn, sql) == expected);
+	REQUIRE(TokenizeAll(fx.conn, sql) == Complete(expected));
 }
 
 TEST_CASE("V2 tokenizer: multi-statement input with a trailing comment", "[capi_v2][tokenizer]") {
@@ -204,16 +243,17 @@ TEST_CASE("V2 tokenizer: multi-statement input with a trailing comment", "[capi_
 	    {NUMBER, 17, 1},    // 2
 	    {COMMENT, 19, 5},   // -- x\n
 	};
-	REQUIRE(TokenizeAll(fx.conn, sql) == expected);
+	REQUIRE(TokenizeAll(fx.conn, sql) == Complete(expected));
 }
 
 TEST_CASE("V2 tokenizer: line comment endings", "[capi_v2][tokenizer]") {
 	EnvFixture fx;
 	// No newline: the comment runs to the end of the input, and END_OF_INPUT follows at len.
-	REQUIRE(TokenizeAll(fx.conn, "SELECT 1 -- end") == Toks {{KEYWORD, 0, 6}, {NUMBER, 7, 1}, {COMMENT, 9, 6}});
+	REQUIRE(TokenizeAll(fx.conn, "SELECT 1 -- end") ==
+	        Unterminated({{KEYWORD, 0, 6}, {NUMBER, 7, 1}, {COMMENT, 9, 6}}));
 	// \r\n: the comment ends after the \r; the \n is whitespace.
 	REQUIRE(TokenizeAll(fx.conn, "SELECT 1 -- x\r\n2") ==
-	        Toks {{KEYWORD, 0, 6}, {NUMBER, 7, 1}, {COMMENT, 9, 5}, {NUMBER, 15, 1}});
+	        Complete({{KEYWORD, 0, 6}, {NUMBER, 7, 1}, {COMMENT, 9, 5}, {NUMBER, 15, 1}}));
 }
 
 // ===========================================================================
@@ -222,10 +262,33 @@ TEST_CASE("V2 tokenizer: line comment endings", "[capi_v2][tokenizer]") {
 
 TEST_CASE("V2 tokenizer: unterminated tokens run to the end of the input", "[capi_v2][tokenizer]") {
 	EnvFixture fx;
-	REQUIRE(TokenizeAll(fx.conn, "SELECT 'abc") == Toks {{KEYWORD, 0, 6}, {STRING, 7, 4}});
-	REQUIRE(TokenizeAll(fx.conn, "SELECT \"abc") == Toks {{KEYWORD, 0, 6}, {IDENTIFIER, 7, 4}});
-	REQUIRE(TokenizeAll(fx.conn, "SELECT /* abc") == Toks {{KEYWORD, 0, 6}, {COMMENT, 7, 6}});
-	REQUIRE(TokenizeAll(fx.conn, "SELECT $tag$abc") == Toks {{KEYWORD, 0, 6}, {STRING, 7, 8}});
+	REQUIRE(TokenizeAll(fx.conn, "SELECT 'abc") == Unterminated({{KEYWORD, 0, 6}, {STRING, 7, 4}}));
+	REQUIRE(TokenizeAll(fx.conn, "SELECT \"abc") == Unterminated({{KEYWORD, 0, 6}, {IDENTIFIER, 7, 4}}));
+	REQUIRE(TokenizeAll(fx.conn, "SELECT /* abc") == Unterminated({{KEYWORD, 0, 6}, {COMMENT, 7, 6}}));
+	REQUIRE(TokenizeAll(fx.conn, "SELECT $tag$abc") == Unterminated({{KEYWORD, 0, 6}, {STRING, 7, 8}}));
+
+	// The closed counterparts, each ending the input on its closing delimiter.
+	REQUIRE(TokenizeAll(fx.conn, "SELECT 'abc'") == Complete({{KEYWORD, 0, 6}, {STRING, 7, 5}}));
+	REQUIRE(TokenizeAll(fx.conn, "SELECT \"abc\"") == Complete({{KEYWORD, 0, 6}, {IDENTIFIER, 7, 5}}));
+	REQUIRE(TokenizeAll(fx.conn, "SELECT /* abc */") == Complete({{KEYWORD, 0, 6}, {COMMENT, 7, 9}}));
+	REQUIRE(TokenizeAll(fx.conn, "SELECT $tag$abc$tag$") == Complete({{KEYWORD, 0, 6}, {STRING, 7, 13}}));
+}
+
+TEST_CASE("V2 tokenizer: ends_unterminated is a property of the input", "[capi_v2][tokenizer]") {
+	EnvFixture fx;
+	duckdb_v2_token_iterator_handle it = nullptr;
+	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, Convert("SELECT 'abc"), &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	// Before, during and after draining, and after exhaustion, the answer is the same.
+	REQUIRE(EndsUnterminated(it));
+	REQUIRE(TokNext(it) == Tok {KEYWORD, 0, 6});
+	REQUIRE(EndsUnterminated(it));
+	REQUIRE(TokNext(it) == Tok {STRING, 7, 4});
+	REQUIRE(TokNext(it) == Tok {END, 11, 0});
+	REQUIRE(EndsUnterminated(it));
+	REQUIRE(TokNext(it) == Tok {END, 11, 0});
+	REQUIRE(EndsUnterminated(it));
+	duckdb_v2_token_iterator_destroy(&it);
 }
 
 TEST_CASE("V2 tokenizer: bytes, not characters", "[capi_v2][tokenizer]") {
@@ -233,18 +296,19 @@ TEST_CASE("V2 tokenizer: bytes, not characters", "[capi_v2][tokenizer]") {
 	// SELECT 'héllo' AS ü: é and ü are two bytes each, and offsets count bytes.
 	std::string sql = "SELECT 'h\xc3\xa9llo' AS \xc3\xbc";
 	REQUIRE(sql.size() == 21);
-	REQUIRE(TokenizeAll(fx.conn, sql) == Toks {{KEYWORD, 0, 6}, {STRING, 7, 8}, {KEYWORD, 16, 2}, {IDENTIFIER, 19, 2}});
+	REQUIRE(TokenizeAll(fx.conn, sql) ==
+	        Complete({{KEYWORD, 0, 6}, {STRING, 7, 8}, {KEYWORD, 16, 2}, {IDENTIFIER, 19, 2}}));
 
 	// Invalid UTF-8 is not validated: a lone 0xFF byte is an identifier character.
 	std::string invalid = "SELECT a\xff"
 	                      "b";
 	REQUIRE(invalid.size() == 10);
-	REQUIRE(TokenizeAll(fx.conn, invalid) == Toks {{KEYWORD, 0, 6}, {IDENTIFIER, 7, 3}});
+	REQUIRE(TokenizeAll(fx.conn, invalid) == Complete({{KEYWORD, 0, 6}, {IDENTIFIER, 7, 3}}));
 
 	// An interior NUL is an ordinary byte; the view's length, not a terminator, bounds the input.
 	std::string with_nul("SELECT 1\0SELECT 2", 17);
 	REQUIRE(TokenizeAll(fx.conn, with_nul) ==
-	        Toks {{KEYWORD, 0, 6}, {NUMBER, 7, 1}, {IDENTIFIER, 8, 7}, {NUMBER, 16, 1}});
+	        Complete({{KEYWORD, 0, 6}, {NUMBER, 7, 1}, {IDENTIFIER, 8, 7}, {NUMBER, 16, 1}}));
 }
 
 // ===========================================================================
@@ -263,16 +327,17 @@ TEST_CASE("V2 tokenizer: exhaustion is in-band and idempotent", "[capi_v2][token
 	for (int i = 0; i < 3; i++) {
 		REQUIRE(TokNext(it) == Tok {END, sql.size(), 0});
 	}
+	REQUIRE_FALSE(EndsUnterminated(it));
 	duckdb_v2_token_iterator_destroy(&it);
 }
 
 TEST_CASE("V2 tokenizer: empty and whitespace-only input", "[capi_v2][tokenizer]") {
 	EnvFixture fx;
-	REQUIRE(TokenizeAll(fx.conn, "") == Toks {});
-	REQUIRE(TokenizeAll(fx.conn, duckdb_v2_str {nullptr, 0}) == Toks {});
+	REQUIRE(TokenizeAll(fx.conn, "") == Complete({}));
+	REQUIRE(TokenizeAll(fx.conn, duckdb_v2_str {nullptr, 0}) == Complete({}));
 	// Whitespace is not a token, and END_OF_INPUT still sits at the input length.
 	std::string blank = " \t\r\n ";
-	REQUIRE(TokenizeAll(fx.conn, blank) == Toks {});
+	REQUIRE(TokenizeAll(fx.conn, blank) == Complete({}));
 }
 
 // ===========================================================================
@@ -289,19 +354,21 @@ TEST_CASE("V2 tokenizer: the input is borrowed for the call only", "[capi_v2][to
 	delete buffer;
 
 	REQUIRE(TokDrain(it, 9) == Toks {{KEYWORD, 0, 6}, {NUMBER, 7, 2}});
+	REQUIRE_FALSE(EndsUnterminated(it));
 	duckdb_v2_token_iterator_destroy(&it);
 }
 
 TEST_CASE("V2 tokenizer: the iterator outlives the connection and the database", "[capi_v2][tokenizer]") {
 	EnvFixture fx;
 	duckdb_v2_token_iterator_handle it = nullptr;
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, Convert("SELECT 1;"), &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, Convert("SELECT 1; 'x"), &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	REQUIRE(duckdb_v2_disconnect(&fx.conn) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_close(&fx.db) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_destroy_environment(&fx.env) == DUCKDB_V2_ERROR_NONE);
 
-	REQUIRE(TokDrain(it, 9) == Toks {{KEYWORD, 0, 6}, {NUMBER, 7, 1}, {TERMINATOR, 8, 1}});
+	REQUIRE(TokDrain(it, 12) == Toks {{KEYWORD, 0, 6}, {NUMBER, 7, 1}, {TERMINATOR, 8, 1}, {STRING, 10, 2}});
+	REQUIRE(EndsUnterminated(it));
 	duckdb_v2_token_iterator_destroy(&it);
 }
 
@@ -311,15 +378,15 @@ TEST_CASE("V2 tokenizer: the keyword set is the connection's grammar", "[capi_v2
 	duckdb::GrammarExtension::Register(instance, duckdb::make_shared_ptr<TokenizerTestKeywordExtension>());
 
 	// Base grammar: ANSWER is a plain identifier.
-	REQUIRE(TokenizeAll(fx.conn, "ANSWER") == Toks {{IDENTIFIER, 0, 6}});
+	REQUIRE(TokenizeAll(fx.conn, "ANSWER") == Complete({{IDENTIFIER, 0, 6}}));
 
 	// Selecting the extension makes it a keyword on that connection only.
 	ExecSQL(fx.conn, "SET active_grammar_extensions = ['tokenizer_test_keyword']");
-	REQUIRE(TokenizeAll(fx.conn, "ANSWER") == Toks {{KEYWORD, 0, 6}});
+	REQUIRE(TokenizeAll(fx.conn, "ANSWER") == Complete({{KEYWORD, 0, 6}}));
 
 	duckdb_v2_connection_handle other = nullptr;
 	REQUIRE(duckdb_v2_connect(fx.db, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(TokenizeAll(other, "ANSWER") == Toks {{IDENTIFIER, 0, 6}});
+	REQUIRE(TokenizeAll(other, "ANSWER") == Complete({{IDENTIFIER, 0, 6}}));
 	duckdb_v2_disconnect(&other);
 
 	// The grammar is read when the iterator is created, not when it is stepped.
@@ -328,7 +395,7 @@ TEST_CASE("V2 tokenizer: the keyword set is the connection's grammar", "[capi_v2
 	ExecSQL(fx.conn, "RESET active_grammar_extensions");
 	REQUIRE(TokDrain(it, 6) == Toks {{KEYWORD, 0, 6}});
 	duckdb_v2_token_iterator_destroy(&it);
-	REQUIRE(TokenizeAll(fx.conn, "ANSWER") == Toks {{IDENTIFIER, 0, 6}});
+	REQUIRE(TokenizeAll(fx.conn, "ANSWER") == Complete({{IDENTIFIER, 0, 6}}));
 }
 
 // ===========================================================================
@@ -379,6 +446,21 @@ TEST_CASE("V2 tokenizer: next argument checks", "[capi_v2][tokenizer]") {
 
 	// The failed calls did not advance the iterator.
 	REQUIRE(TokDrain(it, 8) == Toks {{KEYWORD, 0, 6}, {NUMBER, 7, 1}});
+	duckdb_v2_token_iterator_destroy(&it);
+}
+
+TEST_CASE("V2 tokenizer: ends_unterminated argument checks", "[capi_v2][tokenizer]") {
+	EnvFixture fx;
+	duckdb_v2_token_iterator_handle it = nullptr;
+	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, Convert("SELECT 'abc"), &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	// A null slot is an input error; a null iterator fails and resets the slot.
+	REQUIRE(duckdb_v2_token_iterator_ends_unterminated(it, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	bool out = true;
+	REQUIRE(duckdb_v2_token_iterator_ends_unterminated(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE_FALSE(out);
+
+	REQUIRE(EndsUnterminated(it));
 	duckdb_v2_token_iterator_destroy(&it);
 }
 
