@@ -622,7 +622,8 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	}
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
-	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer));
+	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer),
+	                                     block.GetMemory().GetBufferType());
 
 	if (EncryptTemporaryFiles()) {
 		// encrypted: the nonce/tag sit between the two size words and the payload (which starts at offset)

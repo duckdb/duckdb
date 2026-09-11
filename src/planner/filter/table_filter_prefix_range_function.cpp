@@ -136,16 +136,22 @@ public:
 
 	template <typename T, typename CONVERTER>
 	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const {
+		D_ASSERT(count <= keys.size());
+		auto key_entries = keys.Values<T>();
 		idx_t found_count = 0;
-		for (const auto &entry : keys.template ValidValues<T>()) {
-			const U comparable = CONVERTER::Convert(entry.GetValue());
+		for (idx_t i = 0; i < count; i++) {
+			const auto key_entry = key_entries[i];
+			if (!key_entry.IsValid()) {
+				continue;
+			}
+			const U comparable = CONVERTER::Convert(key_entry.GetValue());
 			const U y = comparable - min;
 			const U bit_idx = y >> shift;
 			const uint8_t in_range = y <= span;
 			const uint32_t word_idx = (bit_idx >> WORD_SHIFT) & (0U - in_range);
 			const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
 
-			result_sel.set_index(found_count, entry.GetIndex());
+			result_sel.set_index(found_count, i);
 			found_count += bit & in_range;
 		}
 		return found_count;
@@ -153,18 +159,14 @@ public:
 
 	template <typename T, typename CONVERTER>
 	idx_t LookupKeys(Vector &keys, const SelectionVector &sel, SelectionVector &result_sel, idx_t count) const {
-		UnifiedVectorFormat key_data;
-		keys.ToUnifiedFormat(key_data);
-
-		const auto keys_data = UnifiedVectorFormat::GetData<T>(key_data);
+		auto key_entries = keys.Values<T>();
 		idx_t found_count = 0;
 		for (idx_t i = 0; i < count; i++) {
-			const auto idx = sel.get_index_unsafe(i);
-			const auto key_idx = key_data.sel->get_index(idx);
-			if (!key_data.validity.RowIsValid(key_idx)) {
+			const auto key_entry = key_entries[sel.get_index_unsafe(i)];
+			if (!key_entry.IsValid()) {
 				continue;
 			}
-			const U comparable = CONVERTER::Convert(keys_data[key_idx]);
+			const U comparable = CONVERTER::Convert(key_entry.GetValue());
 			const U y = comparable - min;
 			const U bit_idx = y >> shift;
 			const uint8_t in_range = y <= span;
