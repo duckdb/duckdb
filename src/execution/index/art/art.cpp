@@ -33,14 +33,12 @@
 namespace duckdb {
 
 struct ARTIndexScanState : public IndexScanState {
+	unique_ptr<DataChunk> batch_equality_values;
 	//! The predicates to scan.
 	//! A single predicate for point lookups, and two predicates for range scans.
 	Value values[2];
 	//! The expressions over the scan predicates.
 	ExpressionType expressions[2];
-	bool checked = false;
-	//! All scanned row IDs.
-	set<row_t> row_ids;
 };
 
 //===--------------------------------------------------------------------===//
@@ -253,6 +251,15 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 	}
 	// Greater-than predicate.
 	return InitializeScanSinglePredicate(high_value, high_comparison_type);
+}
+
+unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> values) const {
+	if (!values || values->GetTypes() != logical_types) {
+		throw InternalException("ART batch scan keys must have the index's logical types");
+	}
+	auto result = make_uniq<ARTIndexScanState>();
+	result->batch_equality_values = std::move(values);
+	return std::move(result);
 }
 
 unique_ptr<IndexScanState> ART::InitializeFullScan() {
@@ -773,8 +780,58 @@ bool ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound,
 	return it.Scan(upper_bound, row_ids, right_equal) == ARTScanResult::COMPLETED;
 }
 
+bool ART::ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const {
+	D_ASSERT(input.GetTypes() == logical_types);
+	D_ASSERT(input.size() <= STANDARD_VECTOR_SIZE);
+	if (input.size() == 0) {
+		return true;
+	}
+	ArenaAllocator arena(Allocator::Get(db));
+	unsafe_vector<ARTKey> keys(input.size());
+	if (HasLegacyGeometryKeys()) {
+		DataChunk converted;
+		ConvertKeyInput(input, converted);
+		GenerateKeys<>(arena, converted, keys);
+	} else {
+		GenerateKeys<>(arena, input, keys);
+	}
+	lock_guard<mutex> guard(lock);
+	for (const auto &key : keys) {
+		if (!key.Empty() && !SearchEqual(key, row_ids)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ART::ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const {
+	if (values.size() <= STANDARD_VECTOR_SIZE) {
+		return ScanChunk(values, row_ids);
+	}
+	DataChunk chunk;
+	chunk.InitializeEmpty(values.GetTypes());
+	for (idx_t offset = 0; offset < values.size(); offset += STANDARD_VECTOR_SIZE) {
+		chunk.Slice(values, offset, MinValue<idx_t>(offset + STANDARD_VECTOR_SIZE, values.size()));
+		if (!ScanChunk(chunk, row_ids)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
+	if (!ScanInternal(state, row_ids)) {
+		row_ids.Reset();
+		return false;
+	}
+	return true;
+}
+
+bool ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
+	if (scan_state.batch_equality_values) {
+		return ScanBatch(*scan_state.batch_equality_values, row_ids);
+	}
 	if (scan_state.values[0].IsNull()) {
 		// full scan
 		lock_guard<mutex> l(lock);

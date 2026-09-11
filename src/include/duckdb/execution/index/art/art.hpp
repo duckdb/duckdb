@@ -76,6 +76,7 @@ public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr) const;
 	unique_ptr<IndexScanState> InitializeFullScan();
+	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> values) const;
 	//! Perform a lookup on the ART, fetching up to the collection capacity.
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const;
@@ -176,6 +177,9 @@ private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
+	bool ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const;
+	bool ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const;
+	bool ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const;
 	bool FullScan(RowIdVectorOutput &row_ids) const;
 	bool SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const;
 	bool SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const;
