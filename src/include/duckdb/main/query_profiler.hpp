@@ -112,6 +112,8 @@ public:
 	DUCKDB_API void TrackBytesRead(idx_t amount, idx_t elapsed_us);
 	//! Track bytes written and the time spent writing.
 	DUCKDB_API void TrackBytesWritten(idx_t amount, idx_t elapsed_us);
+	//! Track bytes spilled to the temporary directory (always tracked, even when profiling disabled).
+	DUCKDB_API void TrackBytesSpilled(idx_t amount);
 	//! Track the compressed size of column data scanned (always tracked, even when profiling disabled). Unlike
 	//! query.total_bytes_scanned, the running total includes scans inside secure views
 	DUCKDB_API void TrackBytesScanned(idx_t amount);
