@@ -648,7 +648,7 @@ DUCKDB_V2_ERROR duckdb_v2_result_get_statement_type(duckdb_v2_result_handle resu
 	return WithErrorHandler(err, [&]() {
 		auto *r = Convert(result);
 		r->RequireMetadata();
-		*out_type = static_cast<DUCKDB_V2_STATEMENT_TYPE>(r->statement_type);
+		*out_type = Convert(r->statement_type);
 	});
 }
 

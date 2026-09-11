@@ -476,6 +476,44 @@ private:
 // syntactic: it touches no catalog and opens no transaction, so unknown tables and type errors surface at bind or
 // execution time instead.
 
+/// The kind of a SQL statement, as the parser classifies it.
+enum class StatementType : uint8_t {
+	INVALID = 0,
+	SELECT = 1,
+	INSERT = 2,
+	UPDATE = 3,
+	CREATE = 4,
+	DELETE = 5,
+	PREPARE = 6,
+	EXECUTE = 7,
+	ALTER = 8,
+	TRANSACTION = 9,
+	COPY = 10,
+	ANALYZE = 11,
+	VARIABLE_SET = 12,
+	CREATE_FUNC = 13,
+	EXPLAIN = 14,
+	DROP = 15,
+	EXPORT = 16,
+	PRAGMA = 17,
+	VACUUM = 18,
+	CALL = 19,
+	SET = 20,
+	LOAD = 21,
+	RELATION = 22,
+	EXTENSION = 23,
+	LOGICAL_PLAN = 24,
+	ATTACH = 25,
+	DETACH = 26,
+	MULTI = 27,
+	COPY_DATABASE = 28,
+	UPDATE_EXTENSIONS = 29,
+	MERGE_INTO = 30,
+	CONNECT = 31,
+	DISCONNECT = 32,
+	EXTERNAL_RESOURCE = 33,
+};
+
 /// An owned, parsed SQL statement, produced by `StatementIterator::Next` and executed by `Connection::Execute`.
 /// Executing borrows the statement, so the same one can be executed any number of times.
 class SqlStatement final : public detail::Handle<SqlStatement> {
@@ -486,6 +524,26 @@ public:
 	SqlStatement &operator=(SqlStatement &&) noexcept = default;
 
 	~SqlStatement() override;
+
+	/// The parser's classification of the statement, available without binding. It is the type before the rewrites
+	/// execution applies, so a PRAGMA reports PRAGMA; `QueryResult::GetStatementType` reports what it became.
+	auto GetStatementType() const -> StatementType;
+
+	/// The statement's own text: its slice of the parsed string, from its first token up to the first token of the
+	/// next statement or the end of the input, so a trailing `;` and the whitespace after it are included.
+	/// @return A view borrowed from this statement, valid until it is destroyed.
+	auto GetText() const -> std::string_view;
+
+	/// How many distinct parameters the statement declares. Parse-time, so it needs no catalog; only the parameter
+	/// types wait for `Connection::Bind`.
+	auto GetParameterCount() const -> idx_t;
+
+	/// The name of one parameter, in binding order: the order of `Connection::Bind`'s `parameters` schema, so
+	/// position i here names field i there. "1", "2", ... for positional parameters ($1 or ?), the identifier for
+	/// named ones ($name).
+	/// @param index Parameter position in [0, GetParameterCount()).
+	/// @return A view borrowed from this statement, valid until it is destroyed.
+	auto GetParameterName(idx_t index) const -> std::string_view;
 
 private:
 	explicit SqlStatement(void *impl);
@@ -2679,40 +2737,8 @@ public:
 		NOTHING = 2,
 	};
 
-	/// The kind of SQL statement a result came from.
-	enum class StatementType : uint8_t {
-		INVALID = 0,
-		SELECT = 1,
-		INSERT = 2,
-		UPDATE = 3,
-		CREATE = 4,
-		DELETE = 5,
-		PREPARE = 6,
-		EXECUTE = 7,
-		ALTER = 8,
-		TRANSACTION = 9,
-		COPY = 10,
-		ANALYZE = 11,
-		VARIABLE_SET = 12,
-		CREATE_FUNC = 13,
-		EXPLAIN = 14,
-		DROP = 15,
-		EXPORT = 16,
-		PRAGMA = 17,
-		VACUUM = 18,
-		CALL = 19,
-		SET = 20,
-		LOAD = 21,
-		RELATION = 22,
-		EXTENSION = 23,
-		LOGICAL_PLAN = 24,
-		ATTACH = 25,
-		DETACH = 26,
-		MULTI = 27,
-		COPY_DATABASE = 28,
-		UPDATE_EXTENSIONS = 29,
-		MERGE_INTO = 30,
-	};
+	/// The kind of SQL statement a result came from; see `cxx::StatementType`.
+	using StatementType = cxx::StatementType;
 
 	QueryResult(QueryResult &&) noexcept = default;
 	QueryResult &operator=(QueryResult &&) noexcept = default;
