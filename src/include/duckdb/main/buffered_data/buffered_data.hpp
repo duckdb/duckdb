@@ -21,7 +21,6 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/thread_annotation.hpp"
-#include "duckdb/main/query_result_notifier.hpp"
 
 namespace duckdb {
 
@@ -80,8 +79,6 @@ public:
 	shared_ptr<ClientContext> GetContext() {
 		return context.lock();
 	}
-	//! Set the notifier rung when the buffer turns non-empty and when a producer parks undecided
-	void SetResultNotifier(shared_ptr<QueryResultNotifier> notifier_p) DUCKDB_EXCLUDES(glock);
 	//! The highest number of bytes the buffer ever held.
 	virtual idx_t PeakBufferedBytes() = 0;
 	//! Whether a producer is parked for space.
@@ -122,9 +119,6 @@ public:
 	}
 
 protected:
-	//! Fire the notifier captured at a transition. The caller holds no engine lock: the callback is
-	//! user code
-	static void Signal(const shared_ptr<QueryResultNotifier> &notifier);
 	//! Record on the result that it is no longer the connection's active query, and report it as an
 	//! error state
 	static QueryResultState Cancelled(QueryResult &result);
@@ -146,9 +140,6 @@ protected:
 	atomic<ResultLifetime> lifetime;
 	//! Producers parked with their first chunk unconsumed, until the retention is decided
 	vector<InterruptState> undecided_sinks DUCKDB_GUARDED_BY(glock);
-	//! Rung when the buffer turns non-empty and when the first producer parks undecided (may be
-	//! null). Captured under glock at the transition, called after glock is released
-	shared_ptr<QueryResultNotifier> result_notifier DUCKDB_GUARDED_BY(glock);
 };
 
 } // namespace duckdb

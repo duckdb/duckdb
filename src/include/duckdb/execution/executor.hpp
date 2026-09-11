@@ -14,7 +14,6 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/main/query_result_notifier.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/execution/progress_data.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -99,7 +98,9 @@ public:
 	//! Returns the progress of the pipelines
 	idx_t GetPipelinesProgress(ProgressData &progress);
 
-	void CompletePipeline();
+	void CompletePipeline() {
+		completed_pipelines++;
+	}
 	ProducerToken &GetToken() {
 		return *producer;
 	}
@@ -126,11 +127,6 @@ public:
 	//! Set the buffer of the result this query produces. Called at submission, before execution starts
 	void SetResultBuffer(shared_ptr<BufferedData> result_buffer_p);
 	shared_ptr<BufferedData> GetResultBuffer();
-	//! Set the notifier of the result this query produces (may be null)
-	void SetResultNotifier(shared_ptr<QueryResultNotifier> result_notifier_p);
-	shared_ptr<QueryResultNotifier> GetResultNotifier();
-	//! Run the notify callback because execution finished or failed
-	void NotifyResultTerminal();
 
 	idx_t GetTotalPipelines() const {
 		return total_pipelines;
@@ -217,11 +213,6 @@ private:
 	mutex result_buffer_lock;
 	//! The buffer of the result this query produces, or null for a query that has none
 	shared_ptr<BufferedData> result_buffer;
-	//! Leaf lock for the notifier slot. PushError can run while a thread holds executor_lock during
-	//! event scheduling, so the slot must not share that lock
-	mutex result_notifier_lock;
-	//! Rung on the terminal transitions, for a retained result as well (may be null)
-	shared_ptr<QueryResultNotifier> result_notifier;
 
 	//! Total time blocked while waiting on tasks, in microseconds
 	atomic<idx_t> blocked_thread_time;

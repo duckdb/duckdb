@@ -235,10 +235,6 @@ void QueryResult::WaitForTask() {
 }
 
 void QueryResult::Close() {
-	if (notifier) {
-		// The barrier: after Close returns the callback never runs again
-		notifier->Clear();
-	}
 	if (buffer) {
 		buffer->Close();
 	}

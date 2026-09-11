@@ -17,7 +17,6 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_properties.hpp"
-#include "duckdb/main/query_result_notifier.hpp"
 
 namespace duckdb {
 class BoxRendererContext;
@@ -140,7 +139,7 @@ public:
 	//! Blocks until a task is runnable or the engine is waiting on the caller. Runs no task.
 	DUCKDB_API void WaitForTask();
 	//! Non-blocking. Tells the engine to fully materialize the result into a CDC. Call Collection(), Fetch[Raw](), or
-	//! ExecuteTask() to execute tasks, or (if multithreaded) either Poll or wait on a notification.
+	//! ExecuteTask() to execute tasks, or (if multithreaded) Poll until the result is complete.
 	DUCKDB_API void Materialize();
 	//! Blocking. Tells the engine to fully materialize the result into a CDC. Participates in execution of the query.
 	DUCKDB_API void Complete();
@@ -226,8 +225,6 @@ private:
 	//! The buffer created for this query at submission. It carries the retention decision and, for
 	//! a stream, the chunks (null for a detached or an error result)
 	shared_ptr<BufferedData> buffer;
-	//! Fired when this result's observable state may have changed (may be null)
-	shared_ptr<QueryResultNotifier> notifier;
 	//! The retained storage (may be null)
 	unique_ptr<ColumnDataCollection> collection;
 	//! Row collection, only created if GetValue is called

@@ -343,10 +343,6 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
                                           optional_ptr<ErrorData> previous_error) {
-	{
-		lock_guard<mutex> guard(notifier_lock);
-		active_result_notifier.reset();
-	}
 	if (active_query->executor) {
 		active_query->executor->CancelTasks();
 	}
@@ -670,16 +666,6 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	}
 	executor.SetResultBuffer(buffer);
 
-	shared_ptr<QueryResultNotifier> notifier;
-	if (parameters.notify_callback) {
-		// Set before execution starts, so no notification can be missed
-		notifier = make_shared_ptr<QueryResultNotifier>();
-		notifier->Set(parameters.notify_callback);
-		if (buffer) {
-			buffer->SetResultNotifier(notifier);
-		}
-		executor.SetResultNotifier(notifier);
-	}
 	// Read before Initialize starts the workers: a SET statement writes the settings from a task
 	auto client_properties = GetClientProperties();
 	auto types = statement_data.types;
@@ -690,11 +676,6 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 
 	auto result = make_uniq<QueryResult>(shared_from_this(), *statement_data_p, std::move(types),
 	                                     std::move(client_properties), std::move(buffer));
-	if (notifier) {
-		result->notifier = notifier;
-		lock_guard<mutex> guard(notifier_lock);
-		active_result_notifier = std::move(notifier);
-	}
 	active_query->prepared = std::move(statement_data_p);
 	active_query->SetOpenResult(*result);
 	if (delegating) {
@@ -758,10 +739,6 @@ QueryResultState ClientContext::ExecuteTaskInternal(ClientContextLock &lock, Bas
 		if (IsInterrupted()) {
 			throw InterruptException();
 		}
-		// Producer tasks can run on this thread below. Their notifications are suppressed: this
-		// caller observes the state itself, through the return value
-		auto notifier = active_query->executor->GetResultNotifier();
-		QueryResultNotifier::ParticipationGuard participation(notifier.get());
 		auto state = active_query->executor->ExecuteTask();
 		UpdateProgressInternal(state);
 		return state;
@@ -821,9 +798,6 @@ void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	//! Cleanup any open results and reset the interrupted flag
 	CleanupInternal(lock);
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
-	// Also covers a notifier set by a query whose creation failed before it could run
-	lock_guard<mutex> guard(notifier_lock);
-	active_result_notifier.reset();
 }
 
 StatementIterator ClientContext::IterateStatements(const string &query) {
@@ -1381,19 +1355,6 @@ unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, u
 void ClientContext::Interrupt() {
 	ClientInterruptState expected = ClientInterruptState::NOT_INTERRUPTED;
 	interrupt_state.compare_exchange_strong(expected, ClientInterruptState::INTERRUPTED);
-}
-
-void ClientContext::InterruptAndNotify() {
-	// The flag is set before the ring, so the woken consumer's next call observes it
-	Interrupt();
-	shared_ptr<QueryResultNotifier> notifier;
-	{
-		lock_guard<mutex> guard(notifier_lock);
-		notifier = active_result_notifier;
-	}
-	if (notifier) {
-		notifier->Notify();
-	}
 }
 
 bool ClientContext::IsInterrupted() const {

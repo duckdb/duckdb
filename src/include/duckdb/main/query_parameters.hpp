@@ -14,8 +14,6 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 
-#include <functional>
-
 namespace duckdb {
 
 struct QueryParameters {
@@ -27,8 +25,6 @@ struct QueryParameters {
 	//! Where a retained result keeps its rows: the default allocator, or the buffer manager so a
 	//! large result can spill to disk
 	QueryResultMemoryType memory_type = QueryResultMemoryType::IN_MEMORY;
-	//! Called whenever the result's observable state may have changed. See QueryResultNotifier
-	std::function<void()> notify_callback;
 };
 
 } // namespace duckdb

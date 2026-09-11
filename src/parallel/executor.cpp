@@ -282,16 +282,6 @@ void Executor::CancelTasks() {
 		lock_guard<mutex> guard(result_buffer_lock);
 		result_buffer.reset();
 	}
-	shared_ptr<QueryResultNotifier> notifier;
-	{
-		lock_guard<mutex> guard(result_notifier_lock);
-		notifier = std::move(result_notifier);
-	}
-	if (notifier) {
-		// Workers can still ring notifications while the query is torn down. Clear silences every
-		// reference to the notifier
-		notifier->Clear();
-	}
 	reference_map_t<Task, shared_ptr<Task>> to_destroy;
 	{
 		lock_guard<mutex> elock(executor_lock);
@@ -586,8 +576,6 @@ void Executor::PushError(ErrorData exception) {
 		pipeline->FinishSourceAndPreventBlocking(context);
 		pipeline->PreventSinkBlocking();
 	}
-	// An error flips ExecutionIsFinished. Wake a consumer waiting on the notification
-	NotifyResultTerminal();
 }
 
 bool Executor::HasError() {
@@ -649,33 +637,6 @@ void Executor::SetResultBuffer(shared_ptr<BufferedData> result_buffer_p) {
 shared_ptr<BufferedData> Executor::GetResultBuffer() {
 	lock_guard<mutex> guard(result_buffer_lock);
 	return result_buffer;
-}
-
-void Executor::SetResultNotifier(shared_ptr<QueryResultNotifier> result_notifier_p) {
-	lock_guard<mutex> guard(result_notifier_lock);
-	result_notifier = std::move(result_notifier_p);
-}
-
-shared_ptr<QueryResultNotifier> Executor::GetResultNotifier() {
-	lock_guard<mutex> guard(result_notifier_lock);
-	return result_notifier;
-}
-
-void Executor::CompletePipeline() {
-	auto completed = ++completed_pipelines;
-	// The last completion flips ExecutionIsFinished, the transition a notified consumer waits for.
-	// The notify must not hang off task destruction: the last task reference can die on a consumer
-	// thread that restarted a blocked sink
-	if (completed >= total_pipelines) {
-		NotifyResultTerminal();
-	}
-}
-
-void Executor::NotifyResultTerminal() {
-	auto notifier = GetResultNotifier();
-	if (notifier) {
-		notifier->Notify();
-	}
 }
 
 bool Executor::ResultStoreCanPark() {

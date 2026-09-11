@@ -48,19 +48,11 @@ void BufferedData::DecideDraining() {
 }
 
 bool BufferedData::ParkUndecided(const InterruptState &blocked_sink) {
-	shared_ptr<QueryResultNotifier> notifier;
-	{
-		annotated_lock_guard<annotated_mutex> lock(glock);
-		if (lifetime != ResultLifetime::UNDECIDED) {
-			return false;
-		}
-		if (undecided_sinks.empty()) {
-			// Only the first park is a transition: the consumer's answer releases all of them
-			notifier = result_notifier;
-		}
-		undecided_sinks.push_back(blocked_sink);
+	annotated_lock_guard<annotated_mutex> lock(glock);
+	if (lifetime != ResultLifetime::UNDECIDED) {
+		return false;
 	}
-	Signal(notifier);
+	undecided_sinks.push_back(blocked_sink);
 	return true;
 }
 
@@ -75,17 +67,6 @@ bool BufferedData::WaitsOnConsumer() {
 	// A space park is only the consumer's to release when a pop is possible: the batched buffer also
 	// parks read-ahead batches while the read queue is empty, and the minimum batch releases those
 	return HasBlockedSink() && HasObservableChunk();
-}
-
-void BufferedData::SetResultNotifier(shared_ptr<QueryResultNotifier> notifier_p) {
-	annotated_lock_guard<annotated_mutex> lock(glock);
-	result_notifier = std::move(notifier_p);
-}
-
-void BufferedData::Signal(const shared_ptr<QueryResultNotifier> &notifier) {
-	if (notifier) {
-		notifier->Notify();
-	}
 }
 
 QueryResultState BufferedData::Cancelled(QueryResult &result) {

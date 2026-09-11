@@ -13,7 +13,6 @@
 #include "duckdb/main/query_result_stream.hpp"
 #include "result_wait_helpers.hpp"
 
-#include <atomic>
 #include <chrono>
 #include <thread>
 
@@ -131,16 +130,10 @@ TEST_CASE("A submitted query parks for the consumer's choice", "[api][query_resu
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	std::atomic<idx_t> notifications {0};
-	QueryParameters parameters;
-	parameters.notify_callback = [&notifications]() {
-		notifications++;
-	};
-	auto handle = Submit(con, "SELECT i FROM range(500000) t(i)", parameters);
+	auto handle = Submit(con, "SELECT i FROM range(500000) t(i)");
 
-	// The park is reported before its notification runs, so wait for both
 	Deadline deadline;
-	while (handle->Poll() != QueryResultState::READY || notifications.load() == 0) {
+	while (handle->Poll() != QueryResultState::READY) {
 		REQUIRE(!deadline.Passed());
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
 	}
@@ -148,11 +141,6 @@ TEST_CASE("A submitted query parks for the consumer's choice", "[api][query_resu
 	REQUIRE(handle->GetBufferedData().WaitsOnConsumer());
 	REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::UNDECIDED);
 	REQUIRE(handle->GetBufferedData().PeakBufferedBytes() == 0);
-	// The park is one transition, however many producers park on it, and nothing else can ring
-	// while the retention stays undecided
-	REQUIRE(notifications.load() == 1);
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	REQUIRE(notifications.load() == 1);
 }
 
 TEST_CASE("ExecuteTask on a parked undecided handle reports READY and runs nothing", "[api][query_result]") {
@@ -187,17 +175,12 @@ TEST_CASE("Materialize returns at once and the workers complete the query", "[ap
 
 	// The unordered plan uses the simple store, the table scan the batched one
 	for (auto query : {"SELECT i FROM range(200000) t(i)", "SELECT i FROM t"}) {
-		std::atomic<idx_t> notifications {0};
-		QueryParameters parameters;
-		parameters.notify_callback = [&notifications]() {
-			notifications++;
-		};
-		auto handle = Submit(con, query, parameters);
+		auto handle = Submit(con, query);
 
 		handle->Materialize();
-		// Nothing else is asked of the consumer: the terminal notification announces completion
+		// Nothing else is asked of the consumer: the workers run the query to completion
 		Deadline deadline;
-		while (notifications.load() == 0 || handle->Poll() != QueryResultState::FINISHED) {
+		while (handle->Poll() != QueryResultState::FINISHED) {
 			REQUIRE(!deadline.Passed());
 			std::this_thread::sleep_for(std::chrono::microseconds(100));
 		}
