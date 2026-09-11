@@ -11,8 +11,7 @@
 using namespace duckdb;
 
 // A LocalFileSystem that makes each WAL fsync cost a fixed delay, emulating high-latency
-// durable storage (e.g. networked disks); this covers the checkpoint and recovery WALs too,
-// which are <db>.wal.checkpoint and <db>.wal.recovery. With delay 0 the real fsync is performed
+// durable storage (e.g. networked disks)
 class DelayFsyncFileSystem : public LocalFileSystem {
 public:
 	explicit DelayFsyncFileSystem(int64_t delay_us_p) : delay_us(delay_us_p) {
