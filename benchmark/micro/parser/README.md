@@ -1,0 +1,117 @@
+# Parser microbenchmarks
+
+These C++ benchmarks call `Parser::ParseQuery()` directly. They do not bind, optimize,
+or execute SQL, and do not require tables, generated datasets, or optional extensions.
+The realistic workloads read existing SQL files from the checkout before timing.
+The implementation is in `benchmark/micro/parser.cpp`; the regression list is
+`.github/regression/parser.csv`.
+
+## Measurement boundary
+
+Before timing, each benchmark constructs or loads its SQL inputs, compiles the base grammar
+once, and checks that the input parses to the expected number of statements.
+The runner then performs one warmup batch and five timed batches by default.
+
+Each timed batch repeats the same fixed inputs in order and includes:
+
+- Construction of a fresh `Parser` using the shared compiled grammar.
+- `ParseQuery`: tokenization, matching, and transformation into SQL statement ASTs.
+- Statement-count checks and destruction of the parser and its results.
+
+Grammar construction, query generation, file loading, database setup, and SQL execution are not
+timed. This measures warm-grammar parsing, not first-query startup or just matching.
+Parser options use their production defaults, including the choice of matcher.
+There is no parsed-result cache shared between calls.
+
+## Fixed workloads
+
+| Benchmark | Input | Calls per timed batch | Statements per call |
+|---|---|---:|---:|
+| `ParserSimpleSelect` | `SELECT 1` | 10,000 | 1 |
+| `ParserKeywordIdentifiers` | Mixed-case SELECT with keyword identifiers, filtering and ordering | 2,000 | 1 |
+| `ParserWideSelect` | 128 arithmetic projection expressions and aliases | 500 | 1 |
+| `ParserNestedExpressions` | 32 nested `coalesce` calls | 1,000 | 1 |
+| `ParserCTEs` | 16 chained CTEs | 500 | 1 |
+| `ParserStatements` | 32 SELECT statements, quoted aliases and comments | 1,000 | 32 |
+| `ParserTPCH` | All 22 TPC-H queries, repeated 50 times | 1,100 | 1 |
+| `ParserTPCDS` | All 99 TPC-DS query files, repeated 10 times | 990 | 1 |
+| `ParserFlummi` | The approximately 373 KiB generated Flummi ray-tracing query, repeated 5 times | 5 | 1 |
+
+The small synthetic cases help isolate regressions. TPC-H and TPC-DS cover realistic
+joins, subqueries, aggregation, CTEs and window functions; Flummi stresses parsing
+one very large generated SQL statement with a recursive CTE.
+
+SQL sources, loaded in numeric query order:
+
+- TPC-H: `extension/tpch/dbgen/queries/q01.sql` through `q22.sql`.
+- TPC-DS: `extension/tpcds/dsdgen/queries/01.sql` through `99.sql`.
+- Flummi: `benchmark/recursive_cte/queries/performance/flummi_ray.sql`.
+
+Each file is a separate `ParseQuery` call, not one concatenated script. Missing,
+empty or invalid files fail the benchmark rather than silently reducing the corpus.
+TPC scale factors do not apply: only the SQL text is parsed, without generating data.
+
+The runner reports **seconds per fixed batch**. To calculate microseconds per
+`ParseQuery` call, multiply seconds by 1,000,000 and divide by the call count.
+For `ParserStatements`, divide by another 32 for time per statement.
+
+Keep the SQL files, input sizes and iteration counts unchanged when comparing revisions. If a
+workload changes materially, give it a new benchmark name to preserve its history.
+The count checks detect parse failures and missing statements; they are not a
+replacement for parser correctness tests.
+
+## Build and run
+
+From the repository root, build an optimized runner:
+
+```sh
+BUILD_BENCHMARK=1 make reldebug
+```
+
+Keep runtime artifacts outside the checkout. Make the existing SQL inputs visible
+under the temporary root using symlinks (run this from the repository root):
+
+```sh
+parser_benchmark_tmp=$(mktemp -d /tmp/duckdb-parser-bench.XXXXXX)
+ln -s "$PWD/benchmark" "$parser_benchmark_tmp/benchmark"
+ln -s "$PWD/extension" "$parser_benchmark_tmp/extension"
+build/reldebug/benchmark/benchmark_runner 'Parser.*' \
+  --root-dir "$parser_benchmark_tmp" --timed-runs 10
+```
+
+Use `ParserSimpleSelect` instead of `Parser.*` to select one case. Add `--query` to
+print its exact SQL, or `--info` for the fixed batch size. Query-execution profiling
+does not apply to these parser-only benchmarks.
+For a corpus, `--query` prints all of its input files in their parsing order.
+
+## Compare revisions with the regression runner
+
+Both binaries must contain these C++ benchmark registrations. Adding the CSV to
+an old checkout alone is insufficient. For an older baseline, apply the same
+benchmark harness and build-system addition there before building its runner;
+keep the parser implementation under comparison unchanged.
+The harness requires `CompiledGrammar` and `ParserOptions::compiled_grammar`;
+older yacc-based revisions need an adapter that preserves the inputs and timed loop.
+
+From the checkout containing the regression scripts:
+
+```sh
+python3 scripts/regression/test_runner.py \
+  --old /path/to/base/build/reldebug/benchmark/benchmark_runner \
+  --new /path/to/current/build/reldebug/benchmark/benchmark_runner \
+  --benchmarks .github/regression/parser.csv \
+  --samples 10 --threads 1
+```
+
+The regression script uses isolated temporary working directories and paired,
+alternating samples. Both binaries read the same SQL files from the checkout where
+the script is invoked. Use identical optimized build settings on both revisions,
+the same machine and power mode, and avoid concurrent builds or other CPU-heavy
+work. The parser workloads themselves are single-threaded.
+
+Use clean build directories for comparisons. The regression script rejects a
+build directory containing extension artifacts from multiple revisions.
+
+The parser list is deliberately not yet added to the automatic regression workflow:
+its baseline runner must first contain this harness. Enable that CI comparison
+once both sides can recognize these benchmarks.
