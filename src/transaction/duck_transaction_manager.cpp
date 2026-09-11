@@ -1,5 +1,4 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
-
 #include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/main/client_data.hpp"
