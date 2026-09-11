@@ -183,6 +183,7 @@
 #include "duckdb/parallel/pipeline_schedule.hpp"
 #include "duckdb/parallel/scan_read_ahead.hpp"
 #include "duckdb/parallel/task.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
@@ -6445,6 +6446,24 @@ const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value) {
 template<>
 TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value) {
 	return static_cast<TaskExecutionResult>(StringUtil::StringToEnum(GetTaskExecutionResultValues(), 4, "TaskExecutionResult", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTaskExecutorModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TaskExecutorMode::BACKGROUND), "BACKGROUND" },
+		{ static_cast<uint32_t>(TaskExecutorMode::JOINED), "JOINED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TaskExecutorMode>(TaskExecutorMode value) {
+	return StringUtil::EnumToString(GetTaskExecutorModeValues(), 2, "TaskExecutorMode", static_cast<uint32_t>(value));
+}
+
+template<>
+TaskExecutorMode EnumUtil::FromString<TaskExecutorMode>(const char *value) {
+	return static_cast<TaskExecutorMode>(StringUtil::StringToEnum(GetTaskExecutorModeValues(), 2, "TaskExecutorMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTaskSchedulerTypeValues() {

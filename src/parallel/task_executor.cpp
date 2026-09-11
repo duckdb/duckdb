@@ -4,12 +4,12 @@
 
 namespace duckdb {
 
-TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p)
-    : scheduler(scheduler), type(type_p), token(scheduler.CreateProducer()) {
+TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p, TaskExecutorMode mode_p)
+    : scheduler(scheduler), type(type_p), mode(mode_p), token(scheduler.CreateProducer()) {
 }
 
-TaskExecutor::TaskExecutor(ClientContext &context_p, TaskSchedulerType type_p)
-    : TaskExecutor(TaskScheduler::GetScheduler(context_p), type_p) {
+TaskExecutor::TaskExecutor(ClientContext &context_p, TaskSchedulerType type_p, TaskExecutorMode mode_p)
+    : TaskExecutor(TaskScheduler::GetScheduler(context_p), type_p, mode_p) {
 	context = context_p;
 }
 
@@ -38,6 +38,11 @@ void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 	{
 		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
 		++total_tasks;
+		if (mode == TaskExecutorMode::JOINED && !parked_task) {
+			// the joining thread has to wait for the other tasks anyway - park this one for it to execute
+			parked_task = std::move(task);
+			return;
+		}
 	}
 	try {
 		scheduler.ScheduleTask(*token, std::move(task), type);
@@ -62,10 +67,12 @@ void TaskExecutor::DrainTasks() {
 	while (true) {
 		{
 			annotated_unique_lock<annotated_mutex> lk(token->producer_lock);
-			if (completed_tasks == total_tasks) {
+			if (parked_task) {
+				// a task can be parked at any point, also while we are draining - check on every iteration
+				task_from_producer = std::move(parked_task);
+			} else if (completed_tasks == total_tasks) {
 				break;
-			}
-			if (!scheduler.GetTaskFromProducerLocked(*token, task_from_producer)) {
+			} else if (!scheduler.GetTaskFromProducerLocked(*token, task_from_producer)) {
 				token->producer_cv.wait(lk);
 				continue;
 			}
