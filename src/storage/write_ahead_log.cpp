@@ -606,11 +606,11 @@ idx_t WriteAheadLog::FlushMarker() {
 
 	// push to the OS without syncing: SyncUpTo does that, potentially batched with other commits
 	writer->Flush();
-	storage_manager.SetWALSize(writer->GetFileSize());
+	auto marker_file_pos = writer->GetFileSize();
+	storage_manager.SetWALSize(marker_file_pos);
 	// the logical offset is never reused, so it identifies this marker uniquely; the file
 	// position is recorded with it for the failure path
 	auto marker_offset = writer->GetTotalWritten();
-	auto marker_file_pos = writer->GetFileSize();
 	{
 		lock_guard<mutex> guard(sync_lock);
 		if (marker_offset > requested_sync_offset) {
