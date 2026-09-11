@@ -36,6 +36,7 @@ ScalarFunction AliasFun::GetFunction() {
 	auto fun = ScalarFunction({}, LogicalType::VARCHAR, AliasFunction, AliasBind);
 	fun.GetSignature().AddParameter("expr", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.GetProperties().SetRequiresExpressionNames(true);
 	return fun;
 }
 
