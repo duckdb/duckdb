@@ -225,8 +225,8 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	if (ValidChecker::IsInvalidated(db)) {
 		throw IOException("%s", ValidChecker::InvalidatedMessage(db));
 	}
-	// drain pending commits here, where the query is still cancellable: inside the checkpoint an
-	// exception would invalidate the database. The authoritative drain under the WAL lock follows
+	// wait for pending commits to become durable while cancelling is still safe: the checkpoint
+	// waits again under the WAL lock, where an exception would invalidate the database
 	if (!db.IsSystem() && db.HasStorageManager() && !db.GetStorageManager().InMemory()) {
 		WaitForDurability(context);
 	}
