@@ -138,7 +138,7 @@ struct MatchRecognizeFunctionData : FunctionData {
 		res->row_scoped = row_scoped;
 		res->after_match = after_match;
 		res->after_match_variable = after_match_variable;
-		return res;
+		return std::move(res);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<MatchRecognizeFunctionData>();
