@@ -29,7 +29,7 @@ struct ArgMinMaxValueAssign {
 template <>
 struct ArgMinMaxValueAssign<string_t> {
 	//! The size of the arena allocation for a non-inlined string value
-	uint32_t alloc_size;
+	idx_t alloc_size;
 
 	void Assign(string_t &target, string_t new_value, AggregateInputData &aggregate_input_data) {
 		if (new_value.IsInlined()) {
@@ -41,7 +41,9 @@ struct ArgMinMaxValueAssign<string_t> {
 			if (alloc_size >= len) {
 				ptr = target.GetDataWriteable();
 			} else {
-				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+				// NextPowerOfTwo(len) can exceed UINT32_MAX for len close to it, so alloc_size
+				// must not be narrowed back to uint32_t here
+				alloc_size = NextPowerOfTwo(len);
 				ptr = char_ptr_cast(aggregate_input_data.allocator.Allocate(alloc_size));
 			}
 			memcpy(ptr, new_value.GetData(), len);
