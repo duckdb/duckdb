@@ -16,7 +16,7 @@ namespace duckdb {
 
 struct VariantMetadataHeader {
 public:
-	static VariantMetadataHeader FromHeaderByte(uint8_t byte);
+	DUCKDB_API static VariantMetadataHeader FromHeaderByte(uint8_t byte);
 
 public:
 	//! The version of the protocol used (only '1' supported for now)
@@ -29,7 +29,7 @@ public:
 
 struct VariantMetadata {
 public:
-	explicit VariantMetadata(const string_t &metadata);
+	DUCKDB_API explicit VariantMetadata(const string_t &metadata);
 
 public:
 	const string_t &metadata;
@@ -80,7 +80,7 @@ public:
 	}
 
 public:
-	static VariantValueMetadata FromHeaderByte(uint8_t byte);
+	DUCKDB_API static VariantValueMetadata FromHeaderByte(uint8_t byte);
 	static VariantBasicType VariantBasicTypeFromByte(uint8_t byte) {
 		if (byte >= static_cast<uint8_t>(VariantBasicType::INVALID)) {
 			throw NotImplementedException("Variant BasicType (%d) is not supported", byte);
