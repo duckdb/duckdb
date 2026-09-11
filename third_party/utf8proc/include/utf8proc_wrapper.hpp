@@ -22,9 +22,10 @@ enum class UnicodeInvalidReason { BYTE_MISMATCH, INVALID_UNICODE };
 class Utf8Proc {
 public:
 	//! Distinguishes ASCII, Valid UTF8 and Invalid UTF8 strings
-	static UnicodeType Analyze(const char *s, size_t len, UnicodeInvalidReason *invalid_reason = nullptr, size_t *invalid_pos = nullptr);
+	static UnicodeType Analyze(const char *s, size_t len, UnicodeInvalidReason *invalid_reason = nullptr,
+	                           size_t *invalid_pos = nullptr);
 	//! Performs UTF NFC normalization of string, return value needs to be free'd
-	static char* Normalize(const char* s, size_t len);
+	static char *Normalize(const char *s, size_t len);
 	//! Returns whether or not the UTF8 string is valid
 	static bool IsValid(const char *s, size_t len);
 	//! Makes Invalid Unicode valid by replacing invalid parts with a given character
@@ -40,8 +41,13 @@ public:
 	static bool CodepointToUtf8(int cp, int &sz, char *c);
 	//! Returns the codepoint length in bytes when encoded in UTF8
 	static int CodepointLength(int cp);
-	//! Transform a UTF8 string to a codepoint; returns the codepoint and writes the length of the codepoint (in UTF8) to sz
+	//! Transform a UTF8 string to a codepoint; returns the codepoint and writes the length of the codepoint (in UTF8)
+	//! to sz
 	static int32_t UTF8ToCodepoint(const char *c, int &sz);
+	//! Decodes the character at "s" (of at most "len" bytes) and writes its codepoint to "codepoint" (-1 when the
+	//! sequence is invalid or truncated). Returns the number of bytes consumed, which is always >= 1 so that iterating
+	//! over invalid input still advances and stays in bounds.
+	static size_t DecodeCharacter(const char *s, size_t len, int32_t &codepoint);
 	//! Returns the render width of a single character in a string
 	static size_t RenderWidth(const char *s, size_t len, size_t pos);
 	static size_t RenderWidth(const std::string &str);
@@ -54,8 +60,6 @@ public:
 
 	//! Returns the number of grapheme clusters in a string
 	static size_t GraphemeCount(const char *s, size_t len);
-
-
 };
 
 struct GraphemeCluster {
@@ -99,5 +103,4 @@ public:
 	}
 };
 
-
-}
+} // namespace duckdb
