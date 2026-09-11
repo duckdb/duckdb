@@ -663,6 +663,8 @@ ScalarFunction NotLikeFun::GetFunction() {
 	ScalarFunction not_like("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                        RegularLikeFunction<NotLikeOperator, true>, LikeBindFunction);
 	not_like.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	not_like.GetSignature().GetParameter(0).SetName("string");
+	not_like.GetSignature().GetParameter(1).SetName("pattern");
 	return not_like;
 }
 
@@ -670,6 +672,8 @@ ScalarFunction GlobPatternFun::GetFunction() {
 	ScalarFunction glob("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                    ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator>);
 	glob.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	glob.GetSignature().GetParameter(0).SetName("string");
+	glob.GetSignature().GetParameter(1).SetName("pattern");
 	return glob;
 }
 
@@ -677,6 +681,8 @@ ScalarFunction ILikeFun::GetFunction() {
 	ScalarFunction ilike("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                     ILikeFunction<ILikeOperator, false>, nullptr, ILikePropagateStats<ILikeOperatorASCII>);
 	ilike.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	ilike.GetSignature().GetParameter(0).SetName("string");
+	ilike.GetSignature().GetParameter(1).SetName("pattern");
 	return ilike;
 }
 
@@ -685,6 +691,8 @@ ScalarFunction NotILikeFun::GetFunction() {
 	                         ILikeFunction<NotILikeOperator, true>, nullptr,
 	                         ILikePropagateStats<NotILikeOperatorASCII>);
 	not_ilike.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	not_ilike.GetSignature().GetParameter(0).SetName("string");
+	not_ilike.GetSignature().GetParameter(1).SetName("pattern");
 	return not_ilike;
 }
 
@@ -692,6 +700,8 @@ ScalarFunction LikeFun::GetFunction() {
 	ScalarFunction like("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                    RegularLikeFunction<LikeOperator, false>, LikeBindFunction);
 	like.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	like.GetSignature().GetParameter(0).SetName("string");
+	like.GetSignature().GetParameter(1).SetName("pattern");
 	return like;
 }
 

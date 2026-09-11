@@ -49,6 +49,5 @@ query I
 SELECT count(*) FROM duckdb_functions()
 WHERE (function_type == 'window' OR function_type == 'scalar' or function_type == 'aggregate')
     AND list_contains(parameters, 'col0')
-    AND internal == false
 ----
 0
