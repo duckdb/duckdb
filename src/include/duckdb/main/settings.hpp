@@ -949,7 +949,7 @@ struct DebugWalFsyncFailureRateSetting {
 	static constexpr const char *Description =
 	    "DEBUG SETTING: probability (0-1) that a WAL fsync fails, used for testing durability error handling";
 	static constexpr const char *InputType = "DOUBLE";
-	static constexpr bool IsDebug = false;
+	static constexpr bool IsDebug = true;
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "0.0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
@@ -962,7 +962,7 @@ struct DebugWalFsyncSleepMsSetting {
 	static constexpr const char *Description =
 	    "DEBUG SETTING: time to sleep during each WAL fsync, emulating high-latency durable storage";
 	static constexpr const char *InputType = "UBIGINT";
-	static constexpr bool IsDebug = false;
+	static constexpr bool IsDebug = true;
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
