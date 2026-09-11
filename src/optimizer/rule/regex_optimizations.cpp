@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -200,7 +201,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		}
 
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
-		auto contains = GetStringContains().Bind(GetContext(), std::move(root.GetChildrenMutable()));
+		auto contains = BindBuiltinScalarFunction(GetContext(), "contains", std::move(root.GetChildrenMutable()));
 
 		contains->GetChildrenMutable()[1] = std::move(parameter);
 
@@ -221,7 +222,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		D_ASSERT(root.GetChildrenMutable().size() == 2);
 	}
 
-	auto like_expression = LikeFun::GetFunction().Bind(GetContext(), std::move(root.GetChildrenMutable()));
+	auto like_expression = BindBuiltinScalarFunction(GetContext(), LikeFun::Name, std::move(root.GetChildrenMutable()));
 
 	// Clear the bind info, as the LikeFun bind info is not valid for this new expression.
 	like_expression->BindInfoMutable().reset();

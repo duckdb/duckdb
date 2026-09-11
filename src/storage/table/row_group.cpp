@@ -1521,11 +1521,17 @@ idx_t RowGroup::GetCommittedRowCount() {
 }
 
 idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
+	return GetVisibleRowCount(transaction, 0, count);
+}
+
+idx_t RowGroup::GetVisibleRowCount(TransactionData transaction, idx_t start_vector, idx_t scan_count) {
+	D_ASSERT(start_vector * STANDARD_VECTOR_SIZE <= count);
+	D_ASSERT(scan_count <= count - start_vector * STANDARD_VECTOR_SIZE);
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return count;
+		return scan_count;
 	}
-	return vinfo->GetRowCount(transaction, count);
+	return vinfo->GetRowCount(transaction, start_vector, scan_count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {

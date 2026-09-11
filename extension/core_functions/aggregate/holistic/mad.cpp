@@ -1,97 +1,16 @@
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 namespace {
-
-struct FrameSet {
-	inline explicit FrameSet(const SubFrames &frames_p) : frames(frames_p) {
-	}
-
-	inline idx_t Size() const {
-		idx_t result = 0;
-		for (const auto &frame : frames) {
-			result += frame.end - frame.start;
-		}
-
-		return result;
-	}
-
-	inline bool Contains(idx_t i) const {
-		for (idx_t f = 0; f < frames.size(); ++f) {
-			const auto &frame = frames[f];
-			if (frame.start <= i && i < frame.end) {
-				return true;
-			}
-		}
-		return false;
-	}
-	const SubFrames &frames;
-};
-
-struct QuantileReuseUpdater {
-	idx_t *index;
-	idx_t j;
-
-	inline QuantileReuseUpdater(idx_t *index, idx_t j) : index(index), j(j) {
-	}
-
-	inline void Neither(idx_t begin, idx_t end) {
-	}
-
-	inline void Left(idx_t begin, idx_t end) {
-	}
-
-	inline void Right(idx_t begin, idx_t end) {
-		for (; begin < end; ++begin) {
-			index[j++] = begin;
-		}
-	}
-
-	inline void Both(idx_t begin, idx_t end) {
-	}
-};
-
-void ReuseIndexes(idx_t *index, const SubFrames &currs, const SubFrames &prevs) {
-	//  Copy overlapping indices by scanning the previous set and copying down into holes.
-	//	We copy instead of leaving gaps in case there are fewer values in the current frame.
-	FrameSet prev_set(prevs);
-	FrameSet curr_set(currs);
-	const auto prev_count = prev_set.Size();
-	idx_t j = 0;
-	for (idx_t p = 0; p < prev_count; ++p) {
-		auto idx = index[p];
-
-		//  Shift down into any hole
-		if (j != p) {
-			index[j] = idx;
-		}
-
-		//  Skip overlapping values
-		if (curr_set.Contains(idx)) {
-			++j;
-		}
-	}
-
-	//  Insert new indices
-	if (j > 0) {
-		QuantileReuseUpdater updater(index, j);
-		AggregateExecutor::IntersectFrames(prevs, currs, updater);
-	} else {
-		//  No overlap: overwrite with new values
-		for (const auto &curr : currs) {
-			for (auto idx = curr.start; idx < curr.end; ++idx) {
-				index[j++] = idx;
-			}
-		}
-	}
-}
 
 //===--------------------------------------------------------------------===//
 // Median Absolute Deviation
@@ -171,6 +90,52 @@ struct MadAccessor<dtime_t, interval_t, dtime_t> {
 	}
 };
 
+// Find the element at zero-based rank k in the union of two sorted ranges.
+// Instead of combining and sorting the ranges, partition each range so that their two lower partitions together
+// contain the first k + 1 elements of the union. The largest element in that combined partition is the element at
+// rank k.
+template <typename RESULT_TYPE, typename LEFT_OP, typename RIGHT_OP>
+static RESULT_TYPE SelectUnionNth(idx_t left_count, idx_t right_count, idx_t k, LEFT_OP &&left, RIGHT_OP &&right) {
+	D_ASSERT(k < left_count + right_count);
+
+	// Lower bound: assume the right range contributes as many elements as it can, leftovers are supplied by the left
+	// range.
+	idx_t lo = k + 1 > right_count ? k + 1 - right_count : 0;
+	// Upper bound: the left range cannot contribute more elements than it contains.
+	idx_t hi = MinValue(k + 1, left_count);
+
+	// Binary-search the number of elements contributed by the left range.
+	while (lo < hi) {
+		const idx_t i = lo + (hi - lo) / 2;
+		const idx_t j = k + 1 - i;
+
+		D_ASSERT(i < left_count);
+		D_ASSERT(j > 0);
+
+		if (LessThan::Operation(left(i), right(j - 1))) {
+			// The chosen partition size for the left range is too small. The next unselected value from the left range
+			// precedes the last selected value from the right range, so that left value belongs in the combined lower
+			// partition.
+			lo = i + 1;
+		} else {
+			hi = i;
+		}
+	}
+
+	const idx_t i = lo;
+	const idx_t j = k + 1 - i;
+	if (i == 0) {
+		return right(j - 1);
+	}
+	if (j == 0) {
+		return left(i - 1);
+	}
+
+	const auto l = left(i - 1);
+	const auto r = right(j - 1);
+	return LessThan::Operation(r, l) ? l : r;
+}
+
 template <typename MEDIAN_TYPE>
 struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	template <class T, class STATE>
@@ -197,8 +162,6 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row, idx_t count,
 	                   Vector &result, idx_t row_idx) {
 		using MAD = MadAccessor<INPUT_TYPE, RESULT_TYPE, MEDIAN_TYPE>;
-		using ID = QuantileIndirect<INPUT_TYPE>;
-		using MadIndirect = QuantileComposed<MAD, ID>;
 
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
@@ -216,8 +179,10 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &quantile = bind_data.quantiles[0];
+
 		auto &window_state = state.GetOrCreateWindowState();
 		auto &prevs = window_state.prevs;
+		vector<RESULT_TYPE> deviations;
 		MEDIAN_TYPE med;
 
 		for (idx_t ridx = 0; ridx < count; ++ridx) {
@@ -228,7 +193,6 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 				continue;
 			}
 
-			//	Compute the median
 			if (gstate && gstate->HasTree()) {
 				med = gstate->GetWindowState().template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result,
 				                                                                         quantile);
@@ -237,26 +201,53 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 				med = window_state.template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
 			}
 
-			//  Lazily initialise frame state
-			window_state.SetCount(FrameSet(frames).Size());
-			auto index2 = window_state.m.data();
-			D_ASSERT(index2);
-
-			// The replacement trick does not work on the second index because if
-			// the median has changed, the previous order is not correct.
-			// It is probably close, however, and so reuse is helpful.
-			ReuseIndexes(index2, frames, prevs);
-			std::partition(index2, index2 + window_state.count, included);
-
 			QuantileInterpolator<false> interp(quantile, n, false);
-
-			// Compute mad from the second index
-			ID indirect(data);
-
 			MAD mad(med);
 
-			MadIndirect mad_indirect(mad, indirect);
-			rdata[ridx] = interp.template Operation<idx_t, RESULT_TYPE, MadIndirect>(index2, result, mad_indirect);
+			if (gstate && gstate->HasTree()) {
+				deviations.clear();
+				deviations.reserve(n);
+
+				if (included.AllValid()) {
+					for (const auto &frame : frames) {
+						for (auto i = frame.start; i < frame.end; ++i) {
+							deviations.push_back(mad(data[i]));
+						}
+					}
+				} else {
+					for (const auto &frame : frames) {
+						for (auto i = frame.start; i < frame.end; ++i) {
+							if (included(i)) {
+								deviations.push_back(mad(data[i]));
+							}
+						}
+					}
+				}
+
+				D_ASSERT(deviations.size() == n);
+				rdata[ridx] = interp.template Operation<RESULT_TYPE, RESULT_TYPE>(deviations.data(), result);
+			} else {
+				// The median lies between the two halves of the values stored in the sorted skip list. Absolute
+				// deviations decrease as values in the lower half approach the median and increase as values in the
+				// upper half move away from the median. Reading the lower half in reverse therefore produces two
+				// non-decreasing deviation ranges without materializing or sorting those ranges.
+				const auto left_count = (n + 1) / 2;
+				const auto right_count = n - left_count;
+				auto left = [&](idx_t i) {
+					return mad(window_state.SkipNth(left_count - i - 1));
+				};
+				auto right = [&](idx_t i) {
+					return mad(window_state.SkipNth(left_count + i));
+				};
+
+				array<RESULT_TYPE, 2> dest;
+				dest[0] = SelectUnionNth<RESULT_TYPE>(left_count, right_count, interp.FRN, left, right);
+				if (interp.CRN != interp.FRN) {
+					dest[1] = SelectUnionNth<RESULT_TYPE>(left_count, right_count, interp.CRN, left, right);
+				}
+
+				rdata[ridx] = interp.template Extract<RESULT_TYPE, RESULT_TYPE>(dest.data(), result);
+			}
 
 			//	Prev is used by both skip lists and increments
 			prevs = frames;

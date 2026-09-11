@@ -1,8 +1,8 @@
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
 
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -71,14 +71,11 @@ FrequencyAggregateFinalizeInput::FrequencyAggregateFinalizeInput(
 }
 
 static unique_ptr<BoundAggregateExpression> BindMinAggregate(ClientContext &context, unique_ptr<Expression> child) {
-	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
-	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "min"));
-	const auto &function = entry.functions.GetFunctionByArguments(context, {child->GetReturnType()});
+	auto function = GetBuiltinAggregateFunction(context, MinFun::Name, {child->GetReturnType()});
 	FunctionBinder function_binder(context);
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(child));
-	return function_binder.BindAggregateFunction(function, std::move(children));
+	return function_binder.BindAggregateFunction(std::move(function), std::move(children));
 }
 
 static unique_ptr<Expression> CreateAggregateSortKey(ClientContext &context, const BoundOrderModifier &order_bys) {
@@ -126,7 +123,8 @@ unique_ptr<AggregateRewritePlan> FrequencyAggregateRewrite::Create(AggregateRewr
 	if (!input.aggregate.IsDistinct()) {
 		count_column = frequency_aggregates.size();
 		FunctionBinder function_binder(input.context);
-		frequency_aggregates.push_back(function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}));
+		auto count_star = GetBuiltinAggregateFunction(input.context, CountStarFun::Name, {});
+		frequency_aggregates.push_back(function_binder.BindAggregateFunction(std::move(count_star), {}));
 	}
 
 	optional_idx order_column;

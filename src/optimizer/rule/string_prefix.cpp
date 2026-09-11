@@ -3,6 +3,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/matcher/type_matcher_id.hpp"
@@ -152,7 +153,7 @@ unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<refer
 
 	// The constant is longer than the extracted prefix, so the comparison can only be FALSE
 	if (constant_length > num_characters) {
-		return ExpressionRewriter::ConstantOrNull(std::move(children[0]), Value::BOOLEAN(false));
+		return ExpressionRewriter::ConstantOrNull(GetContext(), std::move(children[0]), Value::BOOLEAN(false));
 	}
 
 	// A prefix extraction can only return fewer than n characters if it returns the entire string.
@@ -164,8 +165,7 @@ unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<refer
 	vector<unique_ptr<Expression>> prefix_children;
 	prefix_children.emplace_back(std::move(children[0]));
 	prefix_children.emplace_back(make_uniq<BoundConstantExpression>(constant.GetValue()));
-	auto prefix_expr = PrefixFun::GetFunction().Bind(GetContext(), std::move(prefix_children));
-	return std::move(prefix_expr);
+	return BindBuiltinScalarFunction(GetContext(), PrefixFun::Name, std::move(prefix_children));
 }
 
 unique_ptr<Expression> InstrPrefixRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
@@ -184,7 +184,7 @@ unique_ptr<Expression> InstrPrefixRule::Apply(LogicalOperator &op, vector<refere
 	vector<unique_ptr<Expression>> prefix_children;
 	prefix_children.emplace_back(std::move(children[0]));
 	prefix_children.emplace_back(make_uniq<BoundConstantExpression>(needle.GetValue()));
-	return PrefixFun::GetFunction().Bind(GetContext(), std::move(prefix_children));
+	return BindBuiltinScalarFunction(GetContext(), PrefixFun::Name, std::move(prefix_children));
 }
 
 } // namespace duckdb

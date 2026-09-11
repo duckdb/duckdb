@@ -2641,6 +2641,7 @@ ScalarFunctionSet LastDayFun::GetFunctions() {
 	last_day.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DATE,
 	                                    DatePart::UnaryFunction<timestamp_t, date_t, LastDayOperator>));
 	last_day.SetFallible();
+	last_day.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return last_day;
 }
 
