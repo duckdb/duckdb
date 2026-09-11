@@ -128,7 +128,7 @@ public:
 	string GetQuery() override {
 		switch (workload) {
 		case ParserWorkload::KEYWORD_IDENTIFIERS:
-			return "SeLeCt abort, action, comment, database, first, last FROM source_table "
+			return "SELECT abort, action, comment, database, first, last FROM source_table "
 			       "WHERE action IS NOT NULL AND comment <> 'value' ORDER BY first, last";
 		case ParserWorkload::WIDE_SELECT: {
 			string query = "SELECT ";

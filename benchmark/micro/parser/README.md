@@ -38,7 +38,7 @@ Grammar extensions are not included in any of these benchmarks.
 
 | Benchmark | Input | Calls per timed batch | Statements per call |
 |---|---|---:|---:|
-| `ParserKeywordIdentifiers` | Mixed-case SELECT with keyword identifiers, filtering and ordering | 2,000 | 1 |
+| `ParserKeywordIdentifiers` | SELECT with keyword identifiers, filtering and ordering | 2,000 | 1 |
 | `ParserWideSelect` | 128 arithmetic projection expressions and aliases | 500 | 1 |
 | `ParserNestedExpressions` | 32 nested `coalesce` calls | 1,000 | 1 |
 | `ParserMalformedSelect` | `select (((((((((((((;` (13 unmatched opening parentheses) | 1,000 | Expected syntax error |
@@ -101,14 +101,13 @@ backtracking test below. The expressions are never evaluated.
 `ParserKeywordIdentifiers` parses this exact query:
 
 ```sql
-SeLeCt abort, action, comment, database, first, last FROM source_table
+SELECT abort, action, comment, database, first, last FROM source_table
 WHERE action IS NOT NULL AND comment <> 'value' ORDER BY first, last
 ```
 
 All six projected column names are built-in unreserved keywords. The parser must
 recognize them as keywords while allowing them in identifier positions; `action`,
-`comment`, `first` and `last` recur in other clauses. The mixed-case `SeLeCt` also
-exercises case-insensitive literal matching. This measures the full parse of a
+`comment`, `first` and `last` recur in other clauses. This measures the full parse of a
 keyword-heavy query, not just one lookup operation, and does not cover every keyword
 category. No table lookup, column binding or extension helper is involved.
 
