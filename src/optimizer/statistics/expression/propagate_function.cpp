@@ -6,11 +6,13 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 
-static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionExpression &func,
-                                   const vector<Value> &arg_values, Value &result) {
+namespace {
+bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionExpression &func,
+                            const vector<Value> &arg_values, Value &result) {
 	vector<unique_ptr<Expression>> children;
 	children.reserve(arg_values.size());
 	for (auto &v : arg_values) {
@@ -19,6 +21,56 @@ static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionEx
 	auto bind_info_clone = func.BindInfo() ? func.BindInfo()->Copy() : nullptr;
 	BoundFunctionExpression clone(func.Function(), std::move(children), std::move(bind_info_clone), func.IsOperator());
 	return ExpressionExecutor::TryEvaluateScalar(context, clone, result);
+}
+
+// Equal bounds need not imply identical inputs for certain types, so we skip this optimization for them.
+bool CanInferConstantFromNumericBounds(PhysicalType type) {
+	return type != PhysicalType::FLOAT && type != PhysicalType::DOUBLE && type != PhysicalType::INTERVAL;
+}
+} // namespace
+
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateConstantInputs(ClientContext &context,
+                                                                         const BoundFunctionExpression &func,
+                                                                         const vector<BaseStatistics> &child_stats) {
+	if (func.Function().GetStability() != FunctionStability::CONSISTENT || func.GetChildren().empty()) {
+		return nullptr;
+	}
+	vector<Value> values;
+	values.reserve(func.GetChildren().size());
+	for (idx_t idx = 0; idx < func.GetChildren().size(); ++idx) {
+		auto &child = *func.GetChildren()[idx];
+		auto &stats = child_stats[idx];
+		Value value;
+		if (child.IsFoldable()) {
+			if (!ExpressionExecutor::TryEvaluateScalar(context, child, value)) {
+				return nullptr;
+			}
+		} else if (!stats.CanHaveNoNull()) {
+			// Evaluate NULL arguments too.
+			value = Value(child.GetReturnType());
+		} else if (stats.CanHaveNull()) {
+			return nullptr;
+		} else if (stats.GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(stats)) {
+			if (!CanInferConstantFromNumericBounds(stats.GetType().InternalType()) ||
+			    NumericStats::Min(stats) != NumericStats::Max(stats)) {
+				return nullptr;
+			}
+			value = NumericStats::Min(stats);
+		} else if ((stats.GetType().id() == LogicalTypeId::VARCHAR || stats.GetType().id() == LogicalTypeId::BLOB) &&
+		           StringStats::HasMinMax(stats) && StringStats::GetMinType(stats) == StringStatsType::EXACT_STATS &&
+		           StringStats::GetMaxType(stats) == StringStatsType::EXACT_STATS &&
+		           StringStats::Min(stats) == StringStats::Max(stats)) {
+			value = Value::BLOB_RAW(StringStats::Min(stats)).WithType(stats.GetType());
+		} else {
+			return nullptr;
+		}
+		values.emplace_back(std::move(value));
+	}
+	Value result;
+	if (!TryEvaluateAtConstants(context, func, values, result)) {
+		return nullptr;
+	}
+	return BaseStatistics::FromConstant(result).ToUnique();
 }
 
 //! Evaluate `func` at the lo/hi corner of each child's value range to derive output min/max.
@@ -143,6 +195,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		} else {
 			stats.push_back(stat->Copy());
 		}
+	}
+	auto constant_stats = PropagateConstantInputs(context, func, stats);
+	if (constant_stats) {
+		return constant_stats;
 	}
 	if (func.Function().HasStatisticsCallback()) {
 		FunctionStatisticsInput input(func, func.BindInfo().get(), stats, &expr_ptr);
