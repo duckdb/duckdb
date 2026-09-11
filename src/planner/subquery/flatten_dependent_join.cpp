@@ -514,11 +514,17 @@ vector<optional_idx> FlattenDependentJoins::GetCTERefCorrelatedPositions(const L
 	}
 	auto rec_cte = binder.recursive_ctes.find(cteref.cte_index);
 	if (rec_cte == binder.recursive_ctes.end()) {
-		throw InternalException("Correlated CTE reference has no CTE metadata");
+		throw InternalException(
+		    "Correlated CTE reference has no CTE metadata (CTE index: %llu, reference correlated columns: "
+		    "%llu, reference columns: %llu, required correlated columns: %llu)",
+		    cteref.cte_index.index, cteref.correlated_columns, cteref.chunk_types.size(), correlated_columns.size());
 	}
 	auto &cte_corr_cols = rec_cte->second->Cast<LogicalCTE>().correlated_columns;
 	if (cteref.correlated_columns > cte_corr_cols.size() || cteref.correlated_columns > cteref.chunk_types.size()) {
-		throw InternalException("Correlated CTE reference has inconsistent column counts");
+		throw InternalException("Correlated CTE reference has inconsistent column counts (CTE index: %llu, reference "
+		                        "correlated columns: %llu, CTE correlated columns: %llu, reference columns: %llu)",
+		                        cteref.cte_index.index, cteref.correlated_columns, cte_corr_cols.size(),
+		                        cteref.chunk_types.size());
 	}
 	// A nested dependent join can request a different order or subset of the CTE's correlated columns.
 	// Match their original bindings instead of assuming that both correlated column lists share positions.
