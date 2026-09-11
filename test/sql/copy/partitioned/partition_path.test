@@ -1,0 +1,248 @@
+# name: test/sql/copy/partitioned/partition_path.test
+# description: Test the PARTITION_PATH option, which computes the directory of each partition
+# group: [partitioned]
+
+require parquet
+
+statement ok
+CREATE TABLE sales AS
+SELECT i AS id,
+       DATE '2024-01-15' + (i * 20)::INTEGER AS d,
+       CASE i % 3 WHEN 0 THEN 'eu' WHEN 1 THEN 'us' ELSE NULL END AS region
+FROM range(10) t(i);
+
+# map partition values to custom directories
+statement ok
+COPY sales TO '{TEST_DIR}/partition_path_case' (FORMAT parquet, PARTITION_BY (region),
+PARTITION_PATH CASE WHEN region = 'eu' THEN 'europe' ELSE 'region=' || coalesce(region, 'unknown') END);
+
+query II
+SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_case/(.*)/[^/]*$', 1) AS dir, count(*)
+FROM read_parquet('{TEST_DIR}/partition_path_case/**/*.parquet', hive_partitioning = false)
+GROUP BY dir ORDER BY dir;
+----
+europe	4
+region=unknown	3
+region=us	3
+
+# nested directories, with multiple partitions sharing a directory
+statement ok
+COPY sales TO '{TEST_DIR}/partition_path_date' (FORMAT parquet, PARTITION_BY (d),
+PARTITION_PATH format('{}/{:02d}', year(d), month(d)));
+
+query III
+SELECT dir, count(*), count(DISTINCT filename) FROM (
+	SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_date/(.*)/[^/]*$', 1) AS dir, filename
+	FROM read_parquet('{TEST_DIR}/partition_path_date/*/*/*.parquet', hive_partitioning = false)
+) GROUP BY dir ORDER BY dir;
+----
+2024/01	1	1
+2024/02	2	2
+2024/03	1	1
+2024/04	2	2
+2024/05	1	1
+2024/06	2	2
+2024/07	1	1
+
+# multiple partition columns, writing the partition columns
+statement ok
+COPY (SELECT *, month(d) AS m FROM sales) TO '{TEST_DIR}/partition_path_multi' (FORMAT parquet,
+PARTITION_BY (region, m), PARTITION_PATH coalesce(region, 'none') || '/month_' || m::VARCHAR, WRITE_PARTITION_COLUMNS);
+
+query II
+SELECT count(*), count(DISTINCT regexp_extract(replace(filename, '\', '/'), 'partition_path_multi/(.*)/[^/]*$', 1))
+FROM read_parquet('{TEST_DIR}/partition_path_multi/*/month_*/*.parquet', hive_partitioning = false);
+----
+10	10
+
+query I
+SELECT count(*) FROM (
+	SELECT id, d, region, month(d) FROM sales
+	EXCEPT
+	SELECT id, d, region, m FROM read_parquet('{TEST_DIR}/partition_path_multi/*/*/*.parquet', hive_partitioning = false)
+);
+----
+0
+
+# a CASE over multiple partition columns
+statement ok
+CREATE TABLE regions AS SELECT * FROM (VALUES
+	(1, 'eu', 'us-east-1'), (2, 'eu', 'us-west-2'), (3, 'us', 'us-east-1'), (4, 'eu', 'us-east-1'), (5, 'us', NULL)
+) v(id, region, other_col);
+
+statement ok
+COPY regions TO '{TEST_DIR}/partition_path_multi_case' (FORMAT parquet, PARTITION_BY (region, other_col),
+PARTITION_PATH CASE WHEN region = 'eu' AND other_col = 'us-east-1' THEN 'val1/val2'
+ELSE 'region=' || region || '/other_col=' || coalesce(other_col, '__HIVE_DEFAULT_PARTITION__') END);
+
+query II
+SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_multi_case/(.*)/[^/]*$', 1) AS dir, list(id ORDER BY id)
+FROM read_parquet('{TEST_DIR}/partition_path_multi_case/*/*/*.parquet', hive_partitioning = false)
+GROUP BY dir ORDER BY dir;
+----
+region=eu/other_col=us-west-2	[2]
+region=us/other_col=__HIVE_DEFAULT_PARTITION__	[5]
+region=us/other_col=us-east-1	[3]
+val1/val2	[1, 4]
+
+# || propagates NULL
+statement error
+COPY regions TO '{TEST_DIR}/partition_path_multi_case_null' (FORMAT parquet, PARTITION_BY (region, other_col),
+PARTITION_PATH 'region=' || region || '/other_col=' || other_col);
+----
+PARTITION_PATH evaluated to NULL for partition region=us, other_col=NULL
+
+# a constant path puts all partitions in the same directory
+statement ok
+COPY sales TO '{TEST_DIR}/partition_path_const' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH 'all');
+
+query II
+SELECT count(*), count(DISTINCT filename) FROM read_parquet('{TEST_DIR}/partition_path_const/all/*.parquet');
+----
+10	3
+
+# an empty path writes to the COPY target itself
+statement ok
+COPY sales TO '{TEST_DIR}/partition_path_empty' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH '');
+
+query II
+SELECT count(*), count(DISTINCT filename) FROM read_parquet('{TEST_DIR}/partition_path_empty/*.parquet');
+----
+10	3
+
+# non-VARCHAR results are cast, parentheses are allowed
+statement ok
+COPY sales TO '{TEST_DIR}/partition_path_int' (FORMAT parquet, PARTITION_BY (d), PARTITION_PATH (month(d)));
+
+query II
+SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_int/(.*)/[^/]*$', 1) AS dir, count(*)
+FROM read_parquet('{TEST_DIR}/partition_path_int/*/*.parquet', hive_partitioning = false)
+GROUP BY dir ORDER BY dir;
+----
+1	1
+2	2
+3	1
+4	2
+5	1
+6	2
+7	1
+
+# CSV
+statement ok
+COPY sales TO '{TEST_DIR}/partition_path_csv' (FORMAT csv, PARTITION_BY (region), PARTITION_PATH coalesce(region, 'none'));
+
+query II
+SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_csv/(.*)/[^/]*$', 1) AS dir, count(*)
+FROM read_csv('{TEST_DIR}/partition_path_csv/*/*.csv', hive_partitioning = false, filename = true)
+GROUP BY dir ORDER BY dir;
+----
+eu	4
+none	3
+us	3
+
+# file rotation within custom directories keeps file names unique
+statement ok
+COPY (SELECT i % 2 AS p, i AS v FROM range(20000) t(i)) TO '{TEST_DIR}/partition_path_rotation'
+(FORMAT parquet, PARTITION_BY (p), PARTITION_PATH 'part_' || p::VARCHAR, ROW_GROUP_SIZE 1024, FILE_SIZE_BYTES '1kb');
+
+query III
+SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_rotation/(.*)/[^/]*$', 1) AS dir, count(*),
+       count(DISTINCT filename) > 1
+FROM read_parquet('{TEST_DIR}/partition_path_rotation/*/*.parquet', hive_partitioning = false)
+GROUP BY dir ORDER BY dir;
+----
+part_0	10000	true
+part_1	10000	true
+
+query I
+SELECT count(DISTINCT filename) = count(DISTINCT parse_filename(filename))
+FROM read_parquet('{TEST_DIR}/partition_path_rotation/*/*.parquet', hive_partitioning = false);
+----
+true
+
+# OVERWRITE
+statement ok
+COPY sales TO '{TEST_DIR}/partition_path_case' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH 'all', OVERWRITE);
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/partition_path_case/**/*.parquet', hive_partitioning = false);
+----
+10
+
+# prepared statement parameters
+statement ok
+PREPARE partition_path_prepared AS COPY sales TO '{TEST_DIR}/partition_path_prepared'
+(FORMAT parquet, PARTITION_BY (region), PARTITION_PATH coalesce(region, $1));
+
+statement ok
+EXECUTE partition_path_prepared('none');
+
+query II
+SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_prepared/(.*)/[^/]*$', 1) AS dir, count(*)
+FROM read_parquet('{TEST_DIR}/partition_path_prepared/*/*.parquet', hive_partitioning = false)
+GROUP BY dir ORDER BY dir;
+----
+eu	4
+none	3
+us	3
+
+# errors
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_PATH 'dir');
+----
+PARTITION_PATH requires PARTITION_BY
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH);
+----
+PARTITION_PATH expects an expression
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH id::VARCHAR);
+----
+Column "id" referenced in PARTITION_PATH is not a PARTITION_BY column
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH nonexistent);
+----
+Column "nonexistent" referenced in PARTITION_PATH is not a PARTITION_BY column
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH max(region));
+----
+aggregate functions are not allowed in PARTITION_PATH
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH row_number() OVER ());
+----
+window functions are not allowed in PARTITION_PATH
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH (SELECT 'dir'));
+----
+cannot use subquery in PARTITION_PATH
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH 'dir', HIVE_FILE_PATTERN false);
+----
+Can't combine HIVE_FILE_PATTERN and PARTITION_PATH
+
+statement error
+COPY sales FROM '{TEST_DIR}/partition_path_error.csv' (PARTITION_PATH 'dir');
+----
+Option partition_path is not supported for reading
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error_null' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH region);
+----
+PARTITION_PATH evaluated to NULL for partition region=NULL
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error_absolute' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH '/tmp/' || coalesce(region, 'none'));
+----
+PARTITION_PATH must be relative to the COPY target
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error_parent' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH '../' || coalesce(region, 'none'));
+----
+PARTITION_PATH cannot contain ".."
