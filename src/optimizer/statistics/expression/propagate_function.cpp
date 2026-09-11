@@ -24,9 +24,19 @@ bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionExpressio
 	return ExpressionExecutor::TryEvaluateScalar(context, *clone, result);
 }
 
-// Equal bounds need not imply identical inputs for certain types, so we skip this optimization for them.
-bool CanInferConstantFromNumericBounds(PhysicalType type) {
-	return type != PhysicalType::FLOAT && type != PhysicalType::DOUBLE && type != PhysicalType::INTERVAL;
+// Equal bounds need not imply identical inputs for certain types, so we skip this optimization for those values.
+// Floating-point bounds only lose information for the sign of zero.
+bool CanInferConstantFromNumericBounds(const Value &value) {
+	switch (value.type().InternalType()) {
+	case PhysicalType::FLOAT:
+		return value.GetValue<float>() != 0.0F;
+	case PhysicalType::DOUBLE:
+		return value.GetValue<double>() != 0.0;
+	case PhysicalType::INTERVAL:
+		return false;
+	default:
+		return true;
+	}
 }
 } // namespace
 
@@ -53,11 +63,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateConstantInputs(ClientC
 		} else if (stats.CanHaveNull()) {
 			return nullptr;
 		} else if (stats.GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(stats)) {
-			if (!CanInferConstantFromNumericBounds(stats.GetType().InternalType()) ||
-			    NumericStats::Min(stats) != NumericStats::Max(stats)) {
+			auto min = NumericStats::Min(stats);
+			if (min != NumericStats::Max(stats) || !CanInferConstantFromNumericBounds(min)) {
 				return nullptr;
 			}
-			value = NumericStats::Min(stats);
+			value = std::move(min);
 		} else if ((stats.GetType().id() == LogicalTypeId::VARCHAR || stats.GetType().id() == LogicalTypeId::BLOB) &&
 		           StringStats::HasMinMax(stats) && StringStats::GetMinType(stats) == StringStatsType::EXACT_STATS &&
 		           StringStats::GetMaxType(stats) == StringStatsType::EXACT_STATS &&
