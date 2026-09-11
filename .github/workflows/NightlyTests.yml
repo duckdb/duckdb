@@ -140,7 +140,7 @@ jobs:
       env:
         FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
-        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
+        vcpkgGitCommitId: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
 
     - name: Build
       shell: bash
@@ -260,7 +260,7 @@ jobs:
       env:
         FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
-        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
+        vcpkgGitCommitId: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
 
     - name: Build
       shell: bash
