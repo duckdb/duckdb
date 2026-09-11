@@ -56,8 +56,9 @@ public:
 	transaction_t GetLastCommit() const {
 		return last_commit;
 	}
-	//! Wait until every published commit is durable; cancellable when a client context is given
-	void WaitForDurability(optional_ptr<ClientContext> context = nullptr);
+	//! Wait until every published commit is durable. Called under the WAL lock, so no new commit can
+	//! enter its sync window and the wait is bounded by the syncs in flight
+	void WaitForDurability();
 	optional_idx GetActiveCheckpoint() const {
 		auto id = active_checkpoint.load();
 		return id == 0 ? optional_idx() : optional_idx(id);

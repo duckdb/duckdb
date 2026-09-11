@@ -258,8 +258,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 		guard = GetWALLock();
 	}
 	// drain under the WAL lock before the checkpoint transaction starts: its snapshot would
-	// otherwise be bounded below commits whose WAL this checkpoint deletes. No context, as an
-	// exception here would invalidate the database - Checkpoint() pre-drains cancellably
+	// otherwise be bounded below commits whose WAL this checkpoint deletes
 	auto &transaction_manager = DuckTransactionManager::Get(db);
 	transaction_manager.WaitForDurability();
 	if (options.type == CheckpointType::FULL_CHECKPOINT &&

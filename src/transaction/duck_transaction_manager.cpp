@@ -216,11 +216,6 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	if (ValidChecker::IsInvalidated(db)) {
 		throw IOException("%s", ValidChecker::InvalidatedMessage(db));
 	}
-	// wait for pending commits to become durable while cancelling is still safe: the checkpoint
-	// waits again under the WAL lock, where an exception would invalidate the database
-	if (!db.IsSystem() && db.HasStorageManager() && !db.GetStorageManager().InMemory()) {
-		WaitForDurability(context);
-	}
 	auto &storage_manager = db.GetStorageManager();
 	auto current = Transaction::TryGet(context, db);
 	if (current) {
@@ -325,21 +320,9 @@ bool DuckTransactionManager::DurabilitySettled() {
 	return !HasUnsyncedCommits() || durability_failed;
 }
 
-void DuckTransactionManager::WaitForDurability(optional_ptr<ClientContext> context) {
+void DuckTransactionManager::WaitForDurability() {
 	unique_lock<mutex> guard(transaction_lock);
-	while (!DurabilitySettled()) {
-		if (!context) {
-			// nothing to cancel (shutdown, or inside a checkpoint where throwing would invalidate)
-			durability_cv.wait(guard);
-			continue;
-		}
-		// this waits on fsyncs issued by other connections, so poll rather than block outright
-		if (!durability_cv.wait_for(guard, std::chrono::milliseconds(10), [&]() { return DurabilitySettled(); })) {
-			guard.unlock();
-			context->InterruptCheck();
-			guard.lock();
-		}
-	}
+	durability_cv.wait(guard, [&]() { return DurabilitySettled(); });
 	if (durability_failed && HasUnsyncedCommits()) {
 		throw IOException("Cannot wait for WAL durability: a WAL sync has failed");
 	}
