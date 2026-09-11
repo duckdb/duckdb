@@ -1,9 +1,9 @@
-ParserSimpleSelect
 ParserKeywordIdentifiers
 ParserWideSelect
 ParserNestedExpressions
-ParserCTEs
+ParserMalformedSelect
 ParserStatements
 ParserTPCH
 ParserTPCDS
 ParserFlummi
+ParserGrammarConstruction

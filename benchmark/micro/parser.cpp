@@ -1,6 +1,7 @@
 #include "benchmark_runner.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -11,11 +12,10 @@
 namespace duckdb {
 
 enum class ParserWorkload : uint8_t {
-	SIMPLE_SELECT,
 	KEYWORD_IDENTIFIERS,
 	WIDE_SELECT,
 	NESTED_EXPRESSIONS,
-	CTES,
+	MALFORMED_SELECT,
 	STATEMENTS,
 	TPCH,
 	TPCDS,
@@ -26,6 +26,7 @@ struct ParserBenchmarkState : public BenchmarkState {
 	ParserOptions options;
 	vector<string> queries;
 	idx_t statements_parsed = 0;
+	idx_t parser_errors = 0;
 	bool valid_statement_counts = true;
 	atomic<bool> interrupted {false};
 };
@@ -41,6 +42,10 @@ public:
 		auto state = make_uniq<ParserBenchmarkState>();
 		state->queries = LoadQueries();
 		state->options.compiled_grammar = CompiledGrammar::Create();
+		// Keep malformed-input backtracking under the runner's timeout in Run.
+		if (workload == ParserWorkload::MALFORMED_SELECT) {
+			return std::move(state);
+		}
 		for (idx_t i = 0; i < state->queries.size(); i++) {
 			Parser parser(state->options);
 			parser.ParseQuery(state->queries[i]);
@@ -55,11 +60,16 @@ public:
 	void Run(BenchmarkState *state_p) override {
 		auto &state = static_cast<ParserBenchmarkState &>(*state_p);
 		state.statements_parsed = 0;
+		state.parser_errors = 0;
 		state.valid_statement_counts = true;
 		for (idx_t i = 0; i < iterations; i++) {
 			for (auto &query : state.queries) {
 				if (state.interrupted.load()) {
 					return;
+				}
+				if (workload == ParserWorkload::MALFORMED_SELECT) {
+					state.parser_errors += RejectMalformedQuery(state.options, query);
+					continue;
 				}
 				Parser parser(state.options);
 				parser.ParseQuery(query);
@@ -76,6 +86,10 @@ public:
 
 	string Verify(BenchmarkState *state_p) override {
 		auto &state = static_cast<ParserBenchmarkState &>(*state_p);
+		if (workload == ParserWorkload::MALFORMED_SELECT) {
+			return state.parser_errors == iterations * QueryCount() ? string()
+			                                                        : "Expected a ParserException on every call";
+		}
 		if (!state.valid_statement_counts || state.statements_parsed != iterations * QueryCount() * statement_count) {
 			return "Unexpected number of parsed statements";
 		}
@@ -92,11 +106,19 @@ public:
 	}
 
 	string DisplayName() override {
+		if (workload == ParserWorkload::MALFORMED_SELECT) {
+			return StringUtil::Format("%s (%llu expected ParserExceptions/run)", name, iterations);
+		}
 		return StringUtil::Format("%s (%llu inputs x %llu repetitions, %llu statements/input)", name, QueryCount(),
 		                          iterations, statement_count);
 	}
 
 	string BenchmarkInfo() override {
+		if (workload == ParserWorkload::MALFORMED_SELECT) {
+			return StringUtil::Format("Parser::ParseQuery, %llu rejected inputs/run; reused compiled grammar, "
+			                          "includes failed matching, error construction and cleanup",
+			                          iterations);
+		}
 		return StringUtil::Format("Parser::ParseQuery, %llu calls/run, %llu statements/call; "
 		                          "default parser options, reused compiled grammar, no query execution",
 		                          iterations * QueryCount(), statement_count);
@@ -104,8 +126,6 @@ public:
 
 	string GetQuery() override {
 		switch (workload) {
-		case ParserWorkload::SIMPLE_SELECT:
-			return "SELECT 1";
 		case ParserWorkload::KEYWORD_IDENTIFIERS:
 			return "SeLeCt abort, action, comment, database, first, last FROM source_table "
 			       "WHERE action IS NOT NULL AND comment <> 'value' ORDER BY first, last";
@@ -126,14 +146,8 @@ public:
 			}
 			return "SELECT " + expression + " FROM source_table";
 		}
-		case ParserWorkload::CTES: {
-			string query = "WITH cte_0 AS (SELECT 1 AS value_column)";
-			for (idx_t i = 1; i < 16; i++) {
-				query += ", cte_" + to_string(i) + " AS (SELECT value_column + 1 AS value_column FROM cte_" +
-				         to_string(i - 1) + " WHERE value_column < 100)";
-			}
-			return query + " SELECT * FROM cte_15";
-		}
+		case ParserWorkload::MALFORMED_SELECT:
+			return "select (((((((((((((;";
 		case ParserWorkload::STATEMENTS: {
 			string query;
 			for (idx_t i = 0; i < 32; i++) {
@@ -151,6 +165,16 @@ public:
 	}
 
 private:
+	static bool RejectMalformedQuery(const ParserOptions &options, const string &query) {
+		Parser parser(options);
+		try {
+			parser.ParseQuery(query);
+		} catch (const ParserException &) {
+			return true;
+		}
+		return false;
+	}
+
 	idx_t QueryCount() const {
 		switch (workload) {
 		case ParserWorkload::TPCH:
@@ -202,14 +226,73 @@ private:
 	idx_t statement_count;
 };
 
-ParserMicroBenchmark parser_simple_select("ParserSimpleSelect", ParserWorkload::SIMPLE_SELECT, 10000);
 ParserMicroBenchmark parser_keyword_identifiers("ParserKeywordIdentifiers", ParserWorkload::KEYWORD_IDENTIFIERS, 2000);
 ParserMicroBenchmark parser_wide_select("ParserWideSelect", ParserWorkload::WIDE_SELECT, 500);
 ParserMicroBenchmark parser_nested_expressions("ParserNestedExpressions", ParserWorkload::NESTED_EXPRESSIONS, 1000);
-ParserMicroBenchmark parser_ctes("ParserCTEs", ParserWorkload::CTES, 500);
+ParserMicroBenchmark parser_malformed_select("ParserMalformedSelect", ParserWorkload::MALFORMED_SELECT, 1000, 0);
 ParserMicroBenchmark parser_statements("ParserStatements", ParserWorkload::STATEMENTS, 1000, 32);
 ParserMicroBenchmark parser_tpch("ParserTPCH", ParserWorkload::TPCH, 50);
 ParserMicroBenchmark parser_tpcds("ParserTPCDS", ParserWorkload::TPCDS, 10);
 ParserMicroBenchmark parser_flummi("ParserFlummi", ParserWorkload::FLUMMI, 5);
+
+struct ParserGrammarConstructionState : public BenchmarkState {
+	idx_t grammars_constructed = 0;
+	atomic<bool> interrupted {false};
+};
+
+class ParserGrammarConstructionBenchmark : public Benchmark {
+public:
+	ParserGrammarConstructionBenchmark() : Benchmark(true, "ParserGrammarConstruction", "[parser]") {
+	}
+
+	unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override {
+		return make_uniq<ParserGrammarConstructionState>();
+	}
+
+	void Run(BenchmarkState *state_p) override {
+		auto &state = static_cast<ParserGrammarConstructionState &>(*state_p);
+		state.grammars_constructed = 0;
+		for (idx_t i = 0; i < ITERATIONS; i++) {
+			if (state.interrupted.load()) {
+				return;
+			}
+			auto grammar = CompiledGrammar::Create();
+			state.grammars_constructed += grammar != nullptr;
+		}
+	}
+
+	void Cleanup(BenchmarkState *state_p) override {
+		auto &state = static_cast<ParserGrammarConstructionState &>(*state_p);
+		state.interrupted.store(false);
+	}
+
+	string Verify(BenchmarkState *state_p) override {
+		auto &state = static_cast<ParserGrammarConstructionState &>(*state_p);
+		return state.grammars_constructed == ITERATIONS ? string() : "Unexpected number of constructed grammars";
+	}
+
+	void Interrupt(BenchmarkState *state_p) override {
+		auto &state = static_cast<ParserGrammarConstructionState &>(*state_p);
+		state.interrupted.store(true);
+	}
+
+	string GetLogOutput(BenchmarkState *state) override {
+		return string();
+	}
+
+	string DisplayName() override {
+		return StringUtil::Format("%s (%llu grammar constructions/run)", name, ITERATIONS);
+	}
+
+	string BenchmarkInfo() override {
+		return "Construct and destroy the compiled base grammar; includes grammar parsing, keyword tables and matcher "
+		       "construction, excludes SQL parsing and grammar extensions";
+	}
+
+private:
+	static constexpr idx_t ITERATIONS = 500;
+};
+
+ParserGrammarConstructionBenchmark parser_grammar_construction;
 
 } // namespace duckdb
