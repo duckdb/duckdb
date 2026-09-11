@@ -68,8 +68,7 @@ void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &option
 	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
 	transaction.SetIsCheckpointTransaction();
 	checkpoint_transaction = &transaction;
-	// the caller drained pending durability under the WAL lock it still holds, so no in-flight commit
-	// capped this snapshot: the checkpoint sees every published commit
+	// the checkpoint sees every commit before it started
 	D_ASSERT(transaction.view.visibility_bound == VisibilityBound::Before(transaction.start_time));
 	options.checkpoint_id = transaction_manager.NextCheckpointId();
 	options.visibility_bound = transaction.view.visibility_bound;
