@@ -89,7 +89,10 @@ static inline uint64_t slot_hash(uint64_t gid) {
 	return ((gid * 3217161767) ^ (gid >> ClusteredAggr::HASHTAB_LOG2)) & (ClusteredAggr::HASHTAB_SZ - 1);
 }
 
-bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *arena, uint64_t *slots) {
+bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *arena, uint64_t *slots,
+                                 GroupRun *runs) {
+	group_runs = runs;
+
 	constexpr sel_t HALF_VEC = STANDARD_VECTOR_SIZE / 2;
 	constexpr idx_t MAX_HOT_PER_CURSOR = MAX_HOTKEYS / 2;
 	idx_t tuples_in_large = 0;
@@ -241,6 +244,7 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 }
 
 void ClusteredAggr::SetSingleRun(data_ptr_t state, idx_t count) {
+	D_ASSERT(group_runs == &single_run);
 	n_group_runs = 1;
 	group_runs[0].state = state;
 	group_runs[0].sel = nullptr;
@@ -269,17 +273,30 @@ const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const 
 		return nullptr;
 	}
 	if (cached_dict_sel == dict_data) {
-		return composed_sel_data;
+		return state ? state->composed_sel_data.get() : local_composed_sel_data.get();
+	}
+	// Most clustered updates operate on flat or unified vectors. Only dictionary vectors need a
+	// composed selection, so allocate this scratch lazily. Hash-table users reuse the buffer in
+	// ClusteredAggrState; SetSingleRun users keep a private heap-backed buffer.
+	sel_t *composed_sel_data;
+	if (state) {
+		if (!state->composed_sel_data) {
+			state->composed_sel_data = make_unsafe_uniq_array_uninitialized<sel_t>(STANDARD_VECTOR_SIZE);
+		}
+		composed_sel_data = state->composed_sel_data.get();
+	} else {
+		if (!local_composed_sel_data) {
+			local_composed_sel_data = make_unsafe_uniq_array_uninitialized<sel_t>(STANDARD_VECTOR_SIZE);
+		}
+		composed_sel_data = local_composed_sel_data.get();
 	}
 	idx_t pos = 0;
-	for (idx_t r = 0; r < n_group_runs; r++) {
-		const auto *run_sel = group_runs[r].sel;
-		const auto run_count = group_runs[r].count;
-		for (idx_t k = 0; k < run_count; k++) {
-			auto idx = run_sel ? run_sel[k] : k;
+	for (auto &run : runs()) {
+		for (idx_t k = 0; k < run.count; k++) {
+			auto idx = run.sel ? run.sel[k] : k;
 			composed_sel_data[pos + k] = dict_data[idx];
 		}
-		pos += run_count;
+		pos += run.count;
 	}
 	cached_dict_sel = dict_data;
 	return composed_sel_data;
@@ -290,13 +307,14 @@ void ClusteredAggrState::Initialize() {
 	// Total = 2 * (MAX_HOTKEYS/2 + 1) * HALF_VEC = (MAX_HOTKEYS/2 + 1) * STANDARD_VECTOR_SIZE.
 	arena = make_unsafe_uniq_array_uninitialized<sel_t>((ClusteredAggr::MAX_HOTKEYS / 2 + 1) * STANDARD_VECTOR_SIZE);
 	slots = make_unsafe_uniq_array_uninitialized<uint64_t>(2 * ClusteredAggr::HASHTAB_SZ);
+	group_runs = make_unsafe_uniq_array_uninitialized<ClusteredAggr::GroupRun>(ClusteredAggr::MAX_RUNS);
 	std::fill_n(slots.get(), 2 * ClusteredAggr::HASHTAB_SZ, ClusteredAggr::FREE_SLOT);
 	skipped_opportunities = 0;
 	retry_backoff = 1;
 }
 
 bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count) {
-	if (!arena) {
+	if (!arena || !group_runs) {
 		return false;
 	}
 	if (skipped_opportunities > 0) {
@@ -304,7 +322,7 @@ bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *grou
 		return false;
 	}
 	if (count >= ClusteredAggr::SAMPLE_SIZE &&
-	    clustered.TryClustered(group_ids, static_cast<sel_t>(count), arena.get(), slots.get())) {
+	    clustered.TryClustered(group_ids, static_cast<sel_t>(count), arena.get(), slots.get(), group_runs.get())) {
 		clustered.state = this;
 		skipped_opportunities = 0;
 		retry_backoff = 1;

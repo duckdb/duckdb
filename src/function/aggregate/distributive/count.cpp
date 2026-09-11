@@ -149,10 +149,10 @@ struct CountFunction : public BaseCountFunction {
 	static void CountClusteredRuns(const ClusteredAggr &cs, const ValidityMask &validity, INDEXER indexer) {
 		const bool all_valid = !validity.CanHaveNull();
 		idx_t pos = 0;
-		for (idx_t r = 0; r < cs.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE *>(cs.group_runs[r].state);
-			const auto *run_sel = cs.group_runs[r].sel;
-			const auto run_count = cs.group_runs[r].count;
+		for (auto &run : cs.runs()) {
+			auto &state = *reinterpret_cast<STATE *>(run.state);
+			const auto *run_sel = run.sel;
+			const auto run_count = run.count;
 			if (all_valid) {
 				state += UnsafeNumericCast<STATE>(run_count);
 			} else {
@@ -200,9 +200,9 @@ struct CountFunction : public BaseCountFunction {
 			if (ConstantVector::IsNull(inputs[0])) {
 				return;
 			}
-			for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-				auto &state = *reinterpret_cast<STATE *>(clustered.group_runs[r].state);
-				state += UnsafeNumericCast<STATE>(clustered.group_runs[r].count);
+			for (auto &run : clustered.runs()) {
+				auto &state = *reinterpret_cast<STATE *>(run.state);
+				state += UnsafeNumericCast<STATE>(run.count);
 			}
 			return;
 		}

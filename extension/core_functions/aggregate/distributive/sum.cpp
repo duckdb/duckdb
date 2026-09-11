@@ -95,10 +95,10 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 	static void ExecuteFlatI64HugeintSum(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
 	                                     const SelectionVector *isel, const sel_t *cluster_iter) {
 		idx_t pos = 0;
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
-			const auto *run_sel = clustered.group_runs[r].sel;
-			const idx_t run_count = clustered.group_runs[r].count;
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
+			const auto *run_sel = run.sel;
+			const idx_t run_count = run.count;
 			if (run_count == 0) {
 				continue;
 			}
@@ -144,10 +144,10 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 		input.ToUnifiedFormat(idata);
 		const auto *dict_sel = idata.sel->data();
 		auto &validity = idata.validity;
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
-			const auto *run_sel = clustered.group_runs[r].sel;
-			const idx_t run_count = clustered.group_runs[r].count;
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
+			const auto *run_sel = run.sel;
+			const idx_t run_count = run.count;
 			int64_t local64 = 0;
 			if (run_sel) {
 				for (idx_t k = 0; k < run_count; k++) {
