@@ -10,8 +10,12 @@
 
 namespace duckdb {
 
+//! Process-wide: a failure report is a sequence of writes to stderr, and test files running
+//! concurrently would otherwise shred each other's output.
+mutex SQLLogicTestLogger::log_mutex;
+
 SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &command)
-    : connection(command.CommandConnection(context)), log_lock(command.runner.log_lock), file_name(command.file_name),
+    : connection(command.CommandConnection(context)), log_lock(log_mutex), file_name(command.file_name),
       query_line(command.query_line), sql_query(context.sql_query) {
 }
 

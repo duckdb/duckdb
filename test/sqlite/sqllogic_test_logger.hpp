@@ -66,6 +66,9 @@ public:
 	string ResultToString(MaterializedQueryResult &result);
 
 private:
+	static mutex log_mutex;
+
+private:
 	Connection &connection;
 	lock_guard<mutex> log_lock;
 	string file_name;
