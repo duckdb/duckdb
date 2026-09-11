@@ -31,11 +31,11 @@ SELECT count(*) FROM t
 ----
 Failed to sync the WAL after committing
 
-# reopening must not resurrect the commit that reported failure: its WAL bytes were never
-# durable, so they are removed rather than replayed
+# the commit that reported failure is in doubt: its WAL bytes reached the OS before the sync
+# failed, so a reopen on the same machine replays them. Either way the database reopens cleanly
 restart
 
 query I
 SELECT count(*) FROM t
 ----
-1
+2

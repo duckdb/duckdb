@@ -594,15 +594,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 				GarbageCollectDurableTransactions();
 			}
 		} catch (std::exception &ex) {
-			// published and no longer revertable, but not durable: poison first so drains fail and
-			// release the WAL lock, then drop the never-durable tail so a restart cannot replay it
+			// published and no longer revertable, but not durable: poison so drains fail, then
+			// invalidate. The WAL keeps the bytes; whether a restart replays them is in doubt
 			error = ErrorData(ex);
 			MarkDurabilityFailed();
-			try {
-				auto wal_guard = db.GetStorageManager().GetWALLock();
-				commit_wal->TruncateUnsyncedTail();
-			} catch (...) { // NOLINT: the database is being invalidated regardless
-			}
 			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing: " + error.Message());
 		} catch (...) {
 			// as above - nothing may escape leaving the commit registered but unfinished

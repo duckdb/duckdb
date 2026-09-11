@@ -66,11 +66,6 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 		} else {
 			storage_manager.SetWALSize(writer->GetFileSize());
 		}
-		// logical offset 0 is this file's current end, not its start: bytes inherited from an
-		// earlier session are already durable, and a failed sync must not truncate past them
-		lock_guard<mutex> sync_guard(sync_lock);
-		durable_file_pos = writer->GetFileSize();
-		requested_sync_file_pos = durable_file_pos;
 		init_state = WALInitState::INITIALIZED;
 	}
 	return *writer;
@@ -96,12 +91,8 @@ void WriteAheadLog::Truncate(idx_t size) {
 	writer->Truncate(size);
 	storage_manager.SetWALSize(writer->GetFileSize());
 
-	// the logical offsets need no adjustment: they are never reused, so no in-flight sync can be
-	// confused by a file position coming back. Only the recorded file positions rewind
-	lock_guard<mutex> guard(sync_lock);
-	auto truncated_file_pos = writer->GetFileSize();
-	durable_file_pos = MinValue<idx_t>(durable_file_pos, truncated_file_pos);
-	requested_sync_file_pos = MinValue<idx_t>(requested_sync_file_pos, truncated_file_pos);
+	// the logical sync offsets need no adjustment: they are never reused, so no in-flight sync can
+	// be confused by the file rewinding
 }
 
 bool WriteAheadLog::Initialized() const {
@@ -606,34 +597,16 @@ idx_t WriteAheadLog::FlushMarker() {
 
 	// push to the OS without syncing: SyncUpTo does that, potentially batched with other commits
 	writer->Flush();
-	auto marker_file_pos = writer->GetFileSize();
-	storage_manager.SetWALSize(marker_file_pos);
-	// the logical offset is never reused, so it identifies this marker uniquely; the file
-	// position is recorded with it for the failure path
+	storage_manager.SetWALSize(writer->GetFileSize());
+	// the logical offset is never reused, so it identifies this marker uniquely
 	auto marker_offset = writer->GetTotalWritten();
 	{
 		lock_guard<mutex> guard(sync_lock);
 		if (marker_offset > requested_sync_offset) {
 			requested_sync_offset = marker_offset;
-			requested_sync_file_pos = marker_file_pos;
 		}
 	}
 	return marker_offset;
-}
-
-void WriteAheadLog::TruncateUnsyncedTail() {
-	if (!writer) {
-		return;
-	}
-	// drop every byte past the durable prefix: no snapshot can observe those commits, and leaving
-	// them would let a restart replay a commit whose COMMIT reported failure
-	lock_guard<mutex> guard(sync_lock);
-	if (writer->GetFileSize() <= durable_file_pos) {
-		return;
-	}
-	writer->Truncate(durable_file_pos);
-	storage_manager.SetWALSize(writer->GetFileSize());
-	requested_sync_file_pos = MinValue<idx_t>(requested_sync_file_pos, durable_file_pos);
 }
 
 void WriteAheadLog::SyncUpTo(idx_t offset) {
@@ -657,7 +630,6 @@ void WriteAheadLog::SyncUpTo(idx_t offset) {
 //! around the file syncs
 void WriteAheadLog::SyncAsLeader(unique_lock<mutex> &guard) {
 	auto target = requested_sync_offset;
-	auto target_file_pos = requested_sync_file_pos;
 	auto &db_instance = GetDatabase().GetDatabase();
 	auto fsync_sleep_ms = Settings::Get<DebugWalFsyncSleepMsSetting>(db_instance);
 	auto force_fsync_failure = Settings::Get<DebugForceWalFsyncFailureSetting>(db_instance);
@@ -686,7 +658,6 @@ void WriteAheadLog::SyncAsLeader(unique_lock<mutex> &guard) {
 	// a truncation during the sync needs no handling: it only removed unregistered entries
 	if (target > durable_offset) {
 		durable_offset = target;
-		durable_file_pos = target_file_pos;
 	}
 	// reset so waiters elect a new leader; clobbering a concurrent leader costs a spurious fsync
 	syncing_offset = durable_offset;
