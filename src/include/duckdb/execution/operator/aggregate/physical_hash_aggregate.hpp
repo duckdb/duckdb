@@ -23,8 +23,7 @@ class PhysicalHashAggregate;
 
 struct HashAggregateGroupingData {
 public:
-	HashAggregateGroupingData(ClientContext &context, GroupingSet &grouping_set_p,
-	                          const GroupedAggregateData &grouped_aggregate_data,
+	HashAggregateGroupingData(GroupingSet &grouping_set_p, const GroupedAggregateData &grouped_aggregate_data,
 	                          unique_ptr<DistinctAggregateCollectionInfo> &info, TupleDataValidityType group_validity,
 	                          TupleDataValidityType distinct_validity);
 
@@ -55,8 +54,6 @@ public:
 	unique_ptr<LocalSinkState> table_state;
 	// Local states of the DISTINCT aggregates hashtables
 	vector<unique_ptr<LocalSinkState>> distinct_states;
-	//! Per-thread state for preparing collation-aware DISTINCT input
-	unique_ptr<DistinctAggregateLocalState> distinct_prepare_state;
 };
 
 //! PhysicalHashAggregate is a group-by and aggregate implementation that uses a hash table to perform the grouping
