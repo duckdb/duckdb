@@ -1,0 +1,59 @@
+# name: test/sql/index/art/scan/test_art_row_id_scan_fetch_batches.test
+# description: ART Fetch-only runs stay within output batches inside one RowGroup
+# group: [scan]
+
+require exact_vector_size 2048
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+statement ok
+ATTACH '{TEST_DIR}/art_row_id_fetch_batches.db' AS fetch_batches (ROW_GROUP_SIZE 8192);
+
+# VARCHAR columns use FetchRows even when half of each physical vector is selected.
+statement ok
+CREATE TABLE fetch_batches.t(key VARCHAR USING COMPRESSION UNCOMPRESSED, payload VARCHAR USING COMPRESSION UNCOMPRESSED);
+
+statement ok
+INSERT INTO fetch_batches.t SELECT CASE WHEN i % 2048 < 1024 THEN 'hit' ELSE 'miss' END, 'p' || i::VARCHAR
+FROM range(8192) r(i);
+
+statement ok
+CHECKPOINT fetch_batches;
+
+query I
+SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('fetch_batches.t');
+----
+1
+
+statement ok
+CREATE INDEX t_key ON fetch_batches.t USING ART(key);
+
+query II
+EXPLAIN ANALYZE SELECT payload FROM fetch_batches.t WHERE key = 'hit';
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+foreach thread_count 1 8
+
+statement ok
+SET threads = {thread_count};
+
+foreach fetch true false
+
+statement ok
+SET debug_force_fetch_row = {fetch};
+
+# Four windows form two batches. Each merged run must contain exactly two windows.
+query III
+SELECT count(*), sum(rowid), bool_and(payload = 'p' || rowid::VARCHAR)
+FROM fetch_batches.t WHERE key = 'hit';
+----
+4096	14678016	true
+
+endloop
+
+endloop

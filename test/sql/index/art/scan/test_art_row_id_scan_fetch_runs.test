@@ -1,0 +1,161 @@
+# name: test/sql/index/art/scan/test_art_row_id_scan_fetch_runs.test
+# description: ART Fetch-only runs respect RowGroup boundaries, decoder ownership, MVCC and mixed windows
+# group: [scan]
+
+require exact_vector_size 2048
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+statement ok
+ATTACH '{TEST_DIR}/art_row_id_fetch_runs.db' AS fetch_runs (ROW_GROUP_SIZE 8192);
+
+statement ok
+CREATE TABLE fetch_runs.t(
+    scan_key INTEGER USING COMPRESSION UNCOMPRESSED,
+    select_key INTEGER USING COMPRESSION UNCOMPRESSED,
+    fetch_key INTEGER USING COMPRESSION UNCOMPRESSED,
+    filter_key INTEGER USING COMPRESSION RLE,
+    payload BIGINT USING COMPRESSION UNCOMPRESSED,
+    text_payload VARCHAR USING COMPRESSION UNCOMPRESSED,
+    pair BIGINT[2]
+);
+
+statement ok
+INSERT INTO fetch_runs.t
+SELECT CASE WHEN i BETWEEN 2048 AND 4095 OR i IN (8193, 10245) OR i BETWEEN 12288 AND 14335 OR i >= 16384 THEN 7 ELSE 8 END,
+       CASE WHEN i BETWEEN 2051 AND 2067 OR i IN (8193, 8195, 10245, 10247) OR i BETWEEN 12291 AND 12307 OR i >= 16384 THEN 7 ELSE 8 END,
+       CASE WHEN i IN (1, 2053, 4103, 6161, 8193, 10245, 12295, 14353, 16385, 16400) THEN 7 ELSE 8 END,
+       CASE WHEN i IN (1, 2053, 4103, 6161, 8193, 10245, 12295, 14353, 16385, 16400) THEN 7 ELSE 8 END,
+       i, CASE WHEN i % 5 = 0 THEN NULL ELSE 'r' || i::VARCHAR END, [i, i + 1]::BIGINT[2]
+FROM range(16401) r(i);
+
+statement ok
+CHECKPOINT fetch_runs;
+
+statement ok
+DETACH fetch_runs;
+
+statement ok
+ATTACH '{TEST_DIR}/art_row_id_fetch_runs.db' AS fetch_runs (ROW_GROUP_SIZE 8192);
+
+query III
+SELECT count(DISTINCT row_group_id),
+       count(*) FILTER (WHERE column_name = 'payload' AND compression = 'Uncompressed') > 0,
+       count(*) FILTER (WHERE column_name = 'filter_key' AND compression = 'RLE') > 0
+FROM pragma_storage_info('fetch_runs.t');
+----
+3	true	true
+
+foreach key scan_key select_key fetch_key filter_key
+
+statement ok
+CREATE INDEX t_{key} ON fetch_runs.t USING ART({key});
+
+query II
+EXPLAIN ANALYZE SELECT payload, text_payload, pair FROM fetch_runs.t WHERE {key} = 7;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+endloop
+
+foreach thread_count 1 8
+
+statement ok
+SET threads = {thread_count};
+
+foreach fetch true false
+
+statement ok
+SET debug_force_fetch_row = {fetch};
+
+# A/vector 1: Scan, B/vectors 0 and 1: merged Fetch, B/vector 2: Scan, C: full short tail.
+# A's decoder ends at offset 4096, which must not be reused as B's vector 2 decoder.
+query III
+SELECT count(*), sum(payload), bool_and(payload = rowid AND pair[1] = rowid AND pair[2] = rowid + 1
+    AND text_payload IS NOT DISTINCT FROM CASE WHEN rowid % 5 = 0 THEN NULL ELSE 'r' || rowid::VARCHAR END)
+FROM fetch_runs.t WHERE scan_key = 7;
+----
+4115	33849486	true
+
+# The same decoder ownership transition with Select. The run consumes two windows with four candidates;
+# the following Select window must still be materialized.
+query III
+SELECT count(*), sum(payload), bool_and(payload = rowid AND pair[1] = rowid AND pair[2] = rowid + 1
+    AND text_payload IS NOT DISTINCT FROM CASE WHEN rowid % 5 = 0 THEN NULL ELSE 'r' || rowid::VARCHAR END)
+FROM fetch_runs.t WHERE select_key = 7;
+----
+55	559630	true
+
+# Two RowGroups of Fetch-only windows followed by a partially selected short tail.
+query III
+SELECT count(*), sum(payload), bool_and(payload = rowid AND pair[1] = rowid AND pair[2] = rowid + 1
+    AND text_payload IS NOT DISTINCT FROM CASE WHEN rowid % 5 = 0 THEN NULL ELSE 'r' || rowid::VARCHAR END)
+FROM fetch_runs.t WHERE fetch_key = 7;
+----
+10	90189	true
+
+# The RLE filter column takes Select even though it is absent from the final projection.
+query III
+SELECT count(*), sum(payload), bool_and(payload = rowid AND pair[1] = rowid AND pair[2] = rowid + 1)
+FROM fetch_runs.t WHERE filter_key = 7;
+----
+10	90189	true
+
+endloop
+
+endloop
+
+statement ok
+SET threads = 1;
+
+statement ok
+BEGIN TRANSACTION;
+
+# Leave invisible candidates inside both merged runs and in the short tail.
+statement ok
+DELETE FROM fetch_runs.t WHERE payload IN (2053, 12295, 16385);
+
+statement ok
+UPDATE fetch_runs.t SET text_payload = 'updated' WHERE payload = 10245;
+
+foreach fetch true false
+
+statement ok
+SET debug_force_fetch_row = {fetch};
+
+query III
+SELECT count(*), sum(payload), bool_and(payload = rowid AND pair[1] = rowid AND pair[2] = rowid + 1
+    AND text_payload IS NOT DISTINCT FROM CASE WHEN rowid = 10245 THEN 'updated'
+        WHEN rowid % 5 = 0 THEN NULL ELSE 'r' || rowid::VARCHAR END)
+FROM fetch_runs.t WHERE fetch_key = 7;
+----
+7	59456	true
+
+endloop
+
+# A fully invisible merged run must still consume its candidates and preserve later output.
+statement ok
+DELETE FROM fetch_runs.t WHERE fetch_key = 7 AND payload < 8192;
+
+foreach fetch true false
+
+statement ok
+SET debug_force_fetch_row = {fetch};
+
+query III
+SELECT count(*), sum(payload), bool_and(payload = rowid AND pair[1] = rowid AND pair[2] = rowid + 1)
+FROM fetch_runs.t WHERE fetch_key = 7;
+----
+4	49191	true
+
+endloop
+
+statement ok
+ROLLBACK;
