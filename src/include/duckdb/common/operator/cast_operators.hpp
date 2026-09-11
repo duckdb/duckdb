@@ -72,7 +72,7 @@ static string CastExceptionText(SRC input) {
 
 template <class SRC>
 static string CastExceptionText(SRC input, const LogicalType &target_type) {
-	if (std::is_same<SRC, string_t>()) {
+	if constexpr (std::is_same<SRC, string_t>::value) {
 		return StringUtil::Format("Could not convert string '%s' to %s", ConvertToString::Operation<SRC>(input),
 		                          target_type.ToString());
 	}
@@ -83,8 +83,8 @@ static string CastExceptionText(SRC input, const LogicalType &target_type) {
 
 template <class SRC>
 static string CastExceptionText(SRC input, const LogicalType &source_type, const LogicalType &target_type) {
-	return StringUtil::Format("Type %s with value %s can't be cast to the destination type %s",
-	                          source_type.ToString(), ConvertToString::Operation<SRC>(input), target_type.ToString());
+	return StringUtil::Format("Type %s with value %s can't be cast to the destination type %s", source_type.ToString(),
+	                          ConvertToString::Operation<SRC>(input), target_type.ToString());
 }
 
 struct Cast {
