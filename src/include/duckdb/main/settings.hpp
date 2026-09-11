@@ -780,6 +780,19 @@ struct ForceVariantShredding {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DebugForceWalFsyncFailureSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_wal_fsync_failure";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: makes every WAL fsync fail, used for testing durability error handling";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugOrderVerificationSetting {
 	using RETURN_TYPE = DebugOrderVerification;
 	static constexpr const char *Name = "debug_order_verification";
@@ -941,19 +954,6 @@ struct DebugVerifyVectorSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
-struct DebugWalFsyncFailureRateSetting {
-	using RETURN_TYPE = double;
-	static constexpr const char *Name = "debug_wal_fsync_failure_rate";
-	static constexpr const char *Description =
-	    "DEBUG SETTING: probability (0-1) that a WAL fsync fails, used for testing durability error handling";
-	static constexpr const char *InputType = "DOUBLE";
-	static constexpr bool IsDebug = true;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "0.0";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct DebugWalFsyncSleepMsSetting {

@@ -31,7 +31,7 @@ SELECT count(*) FROM t
 1
 
 statement ok
-SET debug_wal_fsync_failure_rate=1.0
+SET debug_force_wal_fsync_failure=true
 
 statement error
 INSERT INTO t VALUES (2)

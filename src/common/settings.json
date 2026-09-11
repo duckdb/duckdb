@@ -438,6 +438,14 @@
         "struct": "ForceVariantShredding"
     },
     {
+        "name": "debug_force_wal_fsync_failure",
+        "description": "DEBUG SETTING: makes every WAL fsync fail, used for testing durability error handling",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false",
+        "is_debug": true
+    },
+    {
         "name": "debug_order_verification",
         "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
         "type": "ENUM<DebugOrderVerification>",
@@ -526,14 +534,6 @@
         "type": "ENUM<DebugVectorVerification>",
         "default_scope": "global",
         "default_value": "NONE"
-    },
-    {
-        "name": "debug_wal_fsync_failure_rate",
-        "description": "DEBUG SETTING: probability (0-1) that a WAL fsync fails, used for testing durability error handling",
-        "type": "DOUBLE",
-        "default_scope": "global",
-        "default_value": "0.0",
-        "is_debug": true
     },
     {
         "name": "debug_wal_fsync_sleep_ms",

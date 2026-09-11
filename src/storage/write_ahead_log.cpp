@@ -10,7 +10,6 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/checksum.hpp"
-#include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
@@ -663,7 +662,7 @@ void WriteAheadLog::SyncAsLeader(unique_lock<mutex> &guard) {
 	// strand every waiter behind a sync nobody is performing
 	auto &db_instance = GetDatabase().GetDatabase();
 	auto fsync_sleep_ms = Settings::Get<DebugWalFsyncSleepMsSetting>(db_instance);
-	auto fsync_failure_rate = Settings::Get<DebugWalFsyncFailureRateSetting>(db_instance);
+	auto force_fsync_failure = Settings::Get<DebugForceWalFsyncFailureSetting>(db_instance);
 	syncing_offset = target;
 	guard.unlock();
 	ErrorData error;
@@ -671,12 +670,8 @@ void WriteAheadLog::SyncAsLeader(unique_lock<mutex> &guard) {
 		if (fsync_sleep_ms > 0) {
 			ThreadUtil::SleepMs(fsync_sleep_ms);
 		}
-		if (fsync_failure_rate > 0.0) {
-			// RandomEngine, not std::random_device: that leaks a versioned libstdc++ symbol
-			thread_local RandomEngine debug_rng;
-			if (debug_rng.NextRandom() < fsync_failure_rate) {
-				throw IOException("debug_wal_fsync_failure_rate: injected WAL fsync failure");
-			}
+		if (force_fsync_failure) {
+			throw IOException("debug_force_wal_fsync_failure: injected WAL fsync failure");
 		}
 		writer->SyncHandle();
 	} catch (std::exception &ex) {
