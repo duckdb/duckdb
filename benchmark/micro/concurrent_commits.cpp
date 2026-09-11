@@ -30,13 +30,13 @@ private:
 
 // Owns a persistent database whose WAL fsync latency is simulated. The base
 // DuckDBBenchmarkState db/conn (in-memory) are unused; all work runs on gc_db.
-struct GroupCommitState : public DuckDBBenchmarkState {
+struct ConcurrentCommitState : public DuckDBBenchmarkState {
 	duckdb::unique_ptr<DuckDB> gc_db;
 
-	explicit GroupCommitState(int64_t delay_us) : DuckDBBenchmarkState(string()) {
+	explicit ConcurrentCommitState(int64_t delay_us) : DuckDBBenchmarkState(string()) {
 		DBConfig config;
 		config.file_system = make_uniq<VirtualFileSystem>(make_uniq<DelayFsyncFileSystem>(delay_us));
-		string path = "duckdb_group_commit_bench.db";
+		string path = "duckdb_concurrent_commits_bench.db";
 		DeleteDatabase(path);
 		gc_db = make_uniq<DuckDB>(path, &config);
 		Connection con(*gc_db);
@@ -47,14 +47,14 @@ struct GroupCommitState : public DuckDBBenchmarkState {
 
 // NUM_THREADS connections each commit COMMITS_PER_THREAD single-row INSERTs. Every auto-commit
 // INSERT is its own transaction, so concurrent committers share their WAL fsyncs
-struct GroupCommit {
+struct ConcurrentCommits {
 	static void Load(DuckDBBenchmarkState *state_p) {
-		auto state = (GroupCommitState *)state_p;
+		auto state = (ConcurrentCommitState *)state_p;
 		Connection con(*state->gc_db);
 		con.Query("CREATE TABLE integers(i INTEGER, t INTEGER)");
 	}
 	static void Run(DuckDBBenchmarkState *state_p, int64_t num_threads, int64_t commits_per_thread) {
-		auto state = (GroupCommitState *)state_p;
+		auto state = (ConcurrentCommitState *)state_p;
 		std::vector<std::thread> threads;
 		for (int64_t t = 0; t < num_threads; t++) {
 			threads.emplace_back([state, t, commits_per_thread]() {
@@ -69,97 +69,97 @@ struct GroupCommit {
 		}
 	}
 	static void Cleanup(DuckDBBenchmarkState *state_p) {
-		auto state = (GroupCommitState *)state_p;
+		auto state = (ConcurrentCommitState *)state_p;
 		Connection con(*state->gc_db);
 		con.Query("DROP TABLE integers");
 		con.Query("CREATE TABLE integers(i INTEGER, t INTEGER)");
 	}
 	static string Info(int64_t num_threads, int64_t commits_per_thread, int64_t delay_us) {
 		return std::to_string(num_threads) + " threads commit " + std::to_string(num_threads * commits_per_thread) +
-		       " INSERT transactions, " + std::to_string(delay_us) + "us simulated WAL fsync latency (group commit)";
+		       " INSERT transactions, " + std::to_string(delay_us) + "us simulated WAL fsync latency";
 	}
 };
 
 // The per-benchmark body only forwards its three parameters
-#define GROUP_COMMIT_BENCHMARK(NUM_THREADS, COMMITS_PER_THREAD, DELAY_US)                                              \
+#define CONCURRENT_COMMITS_BENCHMARK(NUM_THREADS, COMMITS_PER_THREAD, DELAY_US)                                        \
 	duckdb::unique_ptr<DuckDBBenchmarkState> CreateBenchmarkState() override {                                         \
-		return make_uniq<GroupCommitState>(DELAY_US);                                                                  \
+		return make_uniq<ConcurrentCommitState>(DELAY_US);                                                             \
 	}                                                                                                                  \
 	void Load(DuckDBBenchmarkState *state) override {                                                                  \
-		GroupCommit::Load(state);                                                                                      \
+		ConcurrentCommits::Load(state);                                                                                \
 	}                                                                                                                  \
 	void RunBenchmark(DuckDBBenchmarkState *state) override {                                                          \
-		GroupCommit::Run(state, NUM_THREADS, COMMITS_PER_THREAD);                                                      \
+		ConcurrentCommits::Run(state, NUM_THREADS, COMMITS_PER_THREAD);                                                \
 	}                                                                                                                  \
 	void Cleanup(DuckDBBenchmarkState *state) override {                                                               \
-		GroupCommit::Cleanup(state);                                                                                   \
+		ConcurrentCommits::Cleanup(state);                                                                             \
 	}                                                                                                                  \
 	string VerifyResult(QueryResult *result) override {                                                                \
 		return string();                                                                                               \
 	}                                                                                                                  \
 	string BenchmarkInfo() override {                                                                                  \
-		return GroupCommit::Info(NUM_THREADS, COMMITS_PER_THREAD, DELAY_US);                                           \
+		return ConcurrentCommits::Info(NUM_THREADS, COMMITS_PER_THREAD, DELAY_US);                                     \
 	}
 
 // real local fsync (fixed 16000 total commits)
-DUCKDB_BENCHMARK(GroupCommit1Thread, "[wal]")
-GROUP_COMMIT_BENCHMARK(1, 16000, 0)
-FINISH_BENCHMARK(GroupCommit1Thread)
+DUCKDB_BENCHMARK(ConcurrentCommits1Thread, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(1, 16000, 0)
+FINISH_BENCHMARK(ConcurrentCommits1Thread)
 
-DUCKDB_BENCHMARK(GroupCommit4Threads, "[wal]")
-GROUP_COMMIT_BENCHMARK(4, 4000, 0)
-FINISH_BENCHMARK(GroupCommit4Threads)
+DUCKDB_BENCHMARK(ConcurrentCommits4Threads, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(4, 4000, 0)
+FINISH_BENCHMARK(ConcurrentCommits4Threads)
 
-DUCKDB_BENCHMARK(GroupCommit8Threads, "[wal]")
-GROUP_COMMIT_BENCHMARK(8, 2000, 0)
-FINISH_BENCHMARK(GroupCommit8Threads)
+DUCKDB_BENCHMARK(ConcurrentCommits8Threads, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(8, 2000, 0)
+FINISH_BENCHMARK(ConcurrentCommits8Threads)
 
-DUCKDB_BENCHMARK(GroupCommit16Threads, "[wal]")
-GROUP_COMMIT_BENCHMARK(16, 1000, 0)
-FINISH_BENCHMARK(GroupCommit16Threads)
+DUCKDB_BENCHMARK(ConcurrentCommits16Threads, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(16, 1000, 0)
+FINISH_BENCHMARK(ConcurrentCommits16Threads)
 
-DUCKDB_BENCHMARK(GroupCommit32Threads, "[wal]")
-GROUP_COMMIT_BENCHMARK(32, 500, 0)
-FINISH_BENCHMARK(GroupCommit32Threads)
+DUCKDB_BENCHMARK(ConcurrentCommits32Threads, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(32, 500, 0)
+FINISH_BENCHMARK(ConcurrentCommits32Threads)
 
 // 1ms simulated fsync latency (fixed 800 total commits)
-DUCKDB_BENCHMARK(GroupCommit1Thread1ms, "[wal]")
-GROUP_COMMIT_BENCHMARK(1, 800, 1000)
-FINISH_BENCHMARK(GroupCommit1Thread1ms)
+DUCKDB_BENCHMARK(ConcurrentCommits1Thread1ms, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(1, 800, 1000)
+FINISH_BENCHMARK(ConcurrentCommits1Thread1ms)
 
-DUCKDB_BENCHMARK(GroupCommit4Threads1ms, "[wal]")
-GROUP_COMMIT_BENCHMARK(4, 200, 1000)
-FINISH_BENCHMARK(GroupCommit4Threads1ms)
+DUCKDB_BENCHMARK(ConcurrentCommits4Threads1ms, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(4, 200, 1000)
+FINISH_BENCHMARK(ConcurrentCommits4Threads1ms)
 
-DUCKDB_BENCHMARK(GroupCommit8Threads1ms, "[wal]")
-GROUP_COMMIT_BENCHMARK(8, 100, 1000)
-FINISH_BENCHMARK(GroupCommit8Threads1ms)
+DUCKDB_BENCHMARK(ConcurrentCommits8Threads1ms, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(8, 100, 1000)
+FINISH_BENCHMARK(ConcurrentCommits8Threads1ms)
 
-DUCKDB_BENCHMARK(GroupCommit16Threads1ms, "[wal]")
-GROUP_COMMIT_BENCHMARK(16, 50, 1000)
-FINISH_BENCHMARK(GroupCommit16Threads1ms)
+DUCKDB_BENCHMARK(ConcurrentCommits16Threads1ms, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(16, 50, 1000)
+FINISH_BENCHMARK(ConcurrentCommits16Threads1ms)
 
-DUCKDB_BENCHMARK(GroupCommit32Threads1ms, "[wal]")
-GROUP_COMMIT_BENCHMARK(32, 25, 1000)
-FINISH_BENCHMARK(GroupCommit32Threads1ms)
+DUCKDB_BENCHMARK(ConcurrentCommits32Threads1ms, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(32, 25, 1000)
+FINISH_BENCHMARK(ConcurrentCommits32Threads1ms)
 
 // 10ms simulated fsync latency (fixed 160 total commits)
-DUCKDB_BENCHMARK(GroupCommit1Thread10ms, "[wal]")
-GROUP_COMMIT_BENCHMARK(1, 160, 10000)
-FINISH_BENCHMARK(GroupCommit1Thread10ms)
+DUCKDB_BENCHMARK(ConcurrentCommits1Thread10ms, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(1, 160, 10000)
+FINISH_BENCHMARK(ConcurrentCommits1Thread10ms)
 
-DUCKDB_BENCHMARK(GroupCommit4Threads10ms, "[wal]")
-GROUP_COMMIT_BENCHMARK(4, 40, 10000)
-FINISH_BENCHMARK(GroupCommit4Threads10ms)
+DUCKDB_BENCHMARK(ConcurrentCommits4Threads10ms, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(4, 40, 10000)
+FINISH_BENCHMARK(ConcurrentCommits4Threads10ms)
 
-DUCKDB_BENCHMARK(GroupCommit8Threads10ms, "[wal]")
-GROUP_COMMIT_BENCHMARK(8, 20, 10000)
-FINISH_BENCHMARK(GroupCommit8Threads10ms)
+DUCKDB_BENCHMARK(ConcurrentCommits8Threads10ms, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(8, 20, 10000)
+FINISH_BENCHMARK(ConcurrentCommits8Threads10ms)
 
-DUCKDB_BENCHMARK(GroupCommit16Threads10ms, "[wal]")
-GROUP_COMMIT_BENCHMARK(16, 10, 10000)
-FINISH_BENCHMARK(GroupCommit16Threads10ms)
+DUCKDB_BENCHMARK(ConcurrentCommits16Threads10ms, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(16, 10, 10000)
+FINISH_BENCHMARK(ConcurrentCommits16Threads10ms)
 
-DUCKDB_BENCHMARK(GroupCommit32Threads10ms, "[wal]")
-GROUP_COMMIT_BENCHMARK(32, 5, 10000)
-FINISH_BENCHMARK(GroupCommit32Threads10ms)
+DUCKDB_BENCHMARK(ConcurrentCommits32Threads10ms, "[wal]")
+CONCURRENT_COMMITS_BENCHMARK(32, 5, 10000)
+FINISH_BENCHMARK(ConcurrentCommits32Threads10ms)
