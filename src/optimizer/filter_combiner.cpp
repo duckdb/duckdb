@@ -535,7 +535,10 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto table = get.GetTable();
-	if (table && table->IsDuckTable() && CanPushdownMultiColumnExpression(expr, bindings)) {
+	if (CanPushdownMultiColumnExpression(expr, bindings)) {
+		if ((!table || !table->IsDuckTable()) && !get.function.pushdown_expression(context, get, expr)) {
+			return FilterPushdownResult::NO_PUSHDOWN;
+		}
 		auto filter = TryCreateMultiColumnExpressionFilter(get, expr, bindings);
 		if (!filter) {
 			return FilterPushdownResult::NO_PUSHDOWN;
