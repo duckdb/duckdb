@@ -27,18 +27,21 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 	}
 	// read the binary packed lengths
 	auto &block = *reader.block;
-	auto &allocator = reader.reader.allocator;
-	DeltaByteArrayDecoder::ReadDbpData(allocator, block, length_buffer, byte_array_count);
+	auto &buffer_manager = reader.reader.buffer_manager;
+	reader.PinBlock();
+	length_buffer.Pin(buffer_manager);
+	DeltaByteArrayDecoder::ReadDbpData(buffer_manager, block, length_buffer, byte_array_count);
 
 	// Verify that the sum of DBP string lengths match up with the available string data
 	idx_t total_string_length = 0;
-	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 	for (idx_t i = 0; i < byte_array_count; i++) {
 		total_string_length += length_data[i];
 	}
-	block.available(total_string_length);
+	block.Available(total_string_length);
 
 	length_idx = 0;
+	length_buffer.Unpin();
 }
 
 void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
@@ -65,7 +68,8 @@ template <bool HAS_DEFINES, bool VALIDATE_INDIVIDUAL_STRINGS>
 void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *const defines,
                                                const idx_t read_count, Vector &result, const idx_t result_offset) {
 	auto &block = *block_ref;
-	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	length_buffer.Pin(reader.reader.buffer_manager);
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 
 	if (!HAS_DEFINES) {
 		// Fast path: take this out of the loop below
@@ -80,7 +84,7 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 	const auto &string_column_reader = reader.Cast<StringColumnReader>();
 	string_column_reader.SetCurrentResult(result);
 
-	const auto start_ptr = block.ptr;
+	const auto start_ptr = block.GetCurrentLoc();
 	auto result_data = FlatVector::Writer<string_t>(result, read_count, result_offset);
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
 		const auto result_idx = result_offset + row_idx;
@@ -98,19 +102,22 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 		}
 		const auto &str_len = length_data[length_idx++];
 		if (VALIDATE_INDIVIDUAL_STRINGS) {
-			auto verified = string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+			auto verified = string_column_reader.VerifyString(char_ptr_cast(block.GetCurrentLoc()), str_len);
 			result_data.WriteValue(verified);
 		} else {
-			result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
+			result_data.WriteValue(string_t(char_ptr_cast(block.GetCurrentLoc()), str_len));
 		}
-		block.unsafe_inc(str_len);
+		block.UnsafeInc(str_len);
 	}
 
 	if (!VALIDATE_INDIVIDUAL_STRINGS) {
-		string_column_reader.VerifyString(char_ptr_cast(start_ptr), NumericCast<uint32_t>(block.ptr - start_ptr));
+		string_column_reader.VerifyString(char_ptr_cast(start_ptr),
+		                                  NumericCast<uint32_t>(block.GetCurrentLoc() - start_ptr));
 	}
 
-	StringColumnReader::ReferenceBlock(result, block_ref);
+	auto &buffer_manager = reader.reader.buffer_manager;
+	StringColumnReader::ReferenceBlock(result, block_ref, buffer_manager);
+	length_buffer.Unpin();
 }
 
 void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
@@ -124,7 +131,8 @@ void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 template <bool HAS_DEFINES>
 void DeltaLengthByteArrayDecoder::SkipInternal(uint8_t *defines, idx_t skip_count) {
 	auto &block = *reader.block;
-	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	length_buffer.Pin(reader.reader.buffer_manager);
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 
 	if (!HAS_DEFINES) {
 		// Fast path: take this out of the loop below
@@ -151,7 +159,8 @@ void DeltaLengthByteArrayDecoder::SkipInternal(uint8_t *defines, idx_t skip_coun
 		}
 		skip_bytes += length_data[length_idx++];
 	}
-	block.inc(skip_bytes);
+	block.Inc(skip_bytes);
+	length_buffer.Unpin();
 }
 
 } // namespace duckdb

@@ -275,8 +275,8 @@ private:
 		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
 			// we can memcpy
 			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
-			memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
-			plain_data.unsafe_inc(copy_count);
+			memcpy(result_ptr + result_offset, plain_data.GetCurrentLoc(), copy_count);
+			plain_data.UnsafeInc(copy_count);
 			return;
 		}
 		auto &result_mask = FlatVector::ValidityMutable(result);
@@ -294,9 +294,9 @@ private:
 	                                const uint64_t num_values, idx_t row_offset = 0) {
 		if (!HAS_DEFINES && CONVERSION::PlainConstantSize() > 0) {
 			if (CHECKED) {
-				plain_data.inc(num_values * CONVERSION::PlainConstantSize());
+				plain_data.Inc(num_values * CONVERSION::PlainConstantSize());
 			} else {
-				plain_data.unsafe_inc(num_values * CONVERSION::PlainConstantSize());
+				plain_data.UnsafeInc(num_values * CONVERSION::PlainConstantSize());
 			}
 			return;
 		}
@@ -347,6 +347,7 @@ private:
 
 protected:
 	Allocator &GetAllocator();
+	BufferManager &GetBufferManager();
 	// readers that use the default Read() need to implement those
 	virtual void PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values);
 	virtual void Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, idx_t result_offset, Vector &result);
@@ -377,6 +378,8 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
+	void PinBlock();
+	void RebaseDecoders();
 	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
 	                 idx_t rows_to_skip = 0);
 	void PreparePage(PageHeader &page_hdr);
@@ -398,6 +401,9 @@ private:
 	ColumnEncoding encoding = ColumnEncoding::INVALID;
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> repeated_decoder;
+	//! Fixed offsets used to recompute decoder's location after a re-pin.
+	idx_t defined_decoder_offset = 0;
+	idx_t repeated_decoder_offset = 0;
 	DictionaryDecoder dictionary_decoder;
 	DeltaBinaryPackedDecoder delta_binary_packed_decoder;
 	RLEDecoder rle_decoder;
