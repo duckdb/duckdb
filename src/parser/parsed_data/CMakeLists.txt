@@ -9,6 +9,7 @@ add_library_unity(
   attach_info.cpp
   comment_on_column_info.cpp
   connect_info.cpp
+  external_resource_options.cpp
   copy_info.cpp
   create_info.cpp
   create_function_info.cpp

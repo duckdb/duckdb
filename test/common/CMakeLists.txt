@@ -19,6 +19,7 @@ add_library_unity(
   test_numeric_utils.cpp
   test_parse_expression.cpp
   test_parse_load_statement.cpp
+  test_parse_external_resource_source.cpp
   test_parse_logical_type.cpp
   test_parse_memory_limit_slurm.cpp
   test_recursive_cte_metrics.cpp

@@ -109,6 +109,8 @@ SQLStatement:
     - UseStatement
     - VacuumStatement
     - PragmaAssignOrFunction
+    - AttachToExternalResource
+    - ConnectToExternalResource
     - ExternalResourceStatement
     - CreateExternalResourceStmt
     - RegisterExternalResourceStmt
@@ -725,6 +727,14 @@ StringList:
     - OptionalParensNameList
     - ParenthesizedNameList
     - BareNameList
+
+ExternalResourceOptionsPtr:
+  type: "unique_ptr<ExternalResourceOptions>"
+  by_value: true
+  rules:
+    - ExternalResourceSource
+    - ExternalResourceCreateClause
+    - ExternalResourceReferenceClause
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
@@ -1822,6 +1832,8 @@ packrat_memoized_rules:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  # Syntax only: the 'EXTERNAL' 'RESOURCE' keyword pair, shared by every singular form.
+  - ExternalResourceKeyword
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm

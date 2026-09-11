@@ -197,6 +197,8 @@ DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<Create
                                       unique_ptr<CreateStatement>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<CreateTypeInfo>", unique_ptr<CreateTypeInfo>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<DropStatement>", unique_ptr<DropStatement>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<ExternalResourceOptions>",
+                                      unique_ptr<ExternalResourceOptions>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<MacroFunction>", unique_ptr<MacroFunction>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<MergeIntoAction>",
                                       unique_ptr<MergeIntoAction>);
@@ -648,6 +650,11 @@ public:
 	static void SplitGenericOptions(const vector<GenericCopyOption> &options_in,
 	                                case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_options,
 	                                unordered_map<string, Value> &options, const char *statement_name);
+	//! Fold `(k v, ...)` into unbound expressions, for statements that resolve every option at bind time
+	//! instead of splitting literals out at parse time. Validates like SplitGenericOptions.
+	static void CollectGenericOptions(const vector<GenericCopyOption> &options_in,
+	                                  case_insensitive_map_t<unique_ptr<ParsedExpression>> &options,
+	                                  const char *statement_name);
 	static void AddToMultiStatement(const unique_ptr<MultiStatement> &multi_statement,
 	                                unique_ptr<AlterInfo> alter_info);
 	static void AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, const string &column_name,
@@ -3006,6 +3013,26 @@ public:
 	                                                                GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
 	FinalizeExternalResourceCreationOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeAttachToExternalResourceTrampoline(PEGTransformer &transformer,
+	                                                         GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeAttachToExternalResourceTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeConnectToExternalResourceTrampoline(PEGTransformer &transformer,
+	                                                          GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeConnectToExternalResourceTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeExternalResourceSourceTrampoline(PEGTransformer &transformer,
+	                                                       GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeExternalResourceSourceTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeExternalResourceCreateClauseTrampoline(PEGTransformer &transformer,
+	                                                             GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeExternalResourceCreateClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeExternalResourceReferenceClauseTrampoline(PEGTransformer &transformer,
+	                                                                GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeExternalResourceReferenceClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeInsertStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeInsertStatementTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
@@ -6645,6 +6672,28 @@ public:
 	static bool TransformShowAllModifier(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue>
 	TransformExternalResourceCreationOptionsInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformAttachToExternalResourceInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformAttachToExternalResource(
+	    PEGTransformer &transformer, unique_ptr<ExternalResourceOptions> external_resource_source,
+	    const Identifier &attach_alias, const optional<vector<GenericCopyOption>> &attach_options);
+	static unique_ptr<TransformResultValue> TransformConnectToExternalResourceInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<SQLStatement>
+	TransformConnectToExternalResource(PEGTransformer &transformer,
+	                                   unique_ptr<ExternalResourceOptions> external_resource_source,
+	                                   const optional<vector<GenericCopyOption>> &attach_options);
+	static unique_ptr<TransformResultValue> TransformExternalResourceSourceInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformExternalResourceCreateClauseInternal(PEGTransformer &transformer,
+	                                                                                      ParseResult &parse_result);
+	static unique_ptr<ExternalResourceOptions> TransformExternalResourceCreateClause(
+	    PEGTransformer &transformer, const string &string_literal,
+	    const optional<vector<GenericCopyOption>> &external_resource_creation_options);
+	static unique_ptr<TransformResultValue>
+	TransformExternalResourceReferenceClauseInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<ExternalResourceOptions> TransformExternalResourceReferenceClause(PEGTransformer &transformer,
+	                                                                                    const Identifier &col_id);
 	static unique_ptr<TransformResultValue> TransformInsertStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement>
