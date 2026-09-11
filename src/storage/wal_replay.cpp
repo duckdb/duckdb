@@ -27,6 +27,7 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -923,7 +924,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
 	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
-	if (!alter_info.IsAddUniqueConstraint()) {
+	if (!alter_info.IsAddUniqueConstraint() && !alter_info.IsAddForeignKey()) {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
@@ -935,11 +936,26 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &table_info = alter_info.Cast<AlterTableInfo>();
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	auto table_name = ReplayQualifiedName(catalog, table_info.GetQualifiedName(), table_info.GetQualifiedName().Name());
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, table_name).Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
+
+	// Resolve the indexed columns and constraint type based on the constraint kind.
+	vector<LogicalIndex> logical_indexes;
+	IndexConstraintType constraint_type;
+	if (alter_info.IsAddUniqueConstraint()) {
+		auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
+		logical_indexes = unique_info.GetLogicalIndexes(column_list);
+		constraint_type = unique_info.GetIndexConstraintType();
+	} else {
+		auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
+		for (const auto &physical_index : fk.info.fk_keys) {
+			auto &col = column_list.GetColumn(physical_index);
+			logical_indexes.push_back(col.Logical());
+		}
+		constraint_type = IndexConstraintType::FOREIGN;
+	}
 
 	// Add the table to the bind context to bind the parsed expressions.
 	auto binder = Binder::CreateBinder(context);
@@ -958,7 +974,6 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	// Bind the parsed expressions to create unbound expressions.
 	vector<unique_ptr<Expression>> unbound_expressions;
-	auto logical_indexes = unique_info.GetLogicalIndexes(column_list);
 	for (const auto &logical_index : logical_indexes) {
 		auto &col = column_list.GetColumn(logical_index);
 		unique_ptr<ParsedExpression> parsed =
@@ -973,9 +988,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto &storage = table.GetStorage();
-	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, unique_info.GetIndexConstraintType(),
-	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
-	                       index_storage_info.options);
+	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, constraint_type, index_storage_info.name,
+	                       column_ids, unbound_expressions, index_storage_info, index_storage_info.options);
 
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
 	auto index_instance = index_type->create_instance(input);

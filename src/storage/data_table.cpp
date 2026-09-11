@@ -171,7 +171,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
-	if (constraint.type != ConstraintType::UNIQUE) {
+	if ((constraint.type != ConstraintType::UNIQUE) && (constraint.type != ConstraintType::FOREIGN_KEY)) {
 		VerifyNewConstraint(local_storage, parent, constraint);
 	}
 	local_storage.MoveStorage(parent, *this);
@@ -695,11 +695,15 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	// Global constraint verification.
 	auto &data_table = table_entry.GetStorage();
 	auto &local_storage = LocalStorage::Get(context, db);
+	// For APPEND_FK: consult the PK table's local delete_indexes so that a PK row deleted
+	// in this transaction is treated as absent by ART::VerifyLeaf. NULL FK values still go
+	// through AddNull and are treated as satisfied (SQL semantics allow NULL FK).
+	auto pk_local_storage = is_append ? local_storage.GetStorage(data_table) : storage;
+	auto pk_delete_indexes = pk_local_storage ? &pk_local_storage->delete_indexes : nullptr;
+	data_table.info->indexes.VerifyForeignKey(pk_delete_indexes, dst_keys_ptr, dst_chunk, global_conflict_manager);
+
 	auto sibling_storage = local_storage.GetStorage(data_table);
 	auto sibling_delete_indexes = sibling_storage ? &sibling_storage->delete_indexes : nullptr;
-
-	data_table.info->indexes.VerifyForeignKey(sibling_delete_indexes, dst_keys_ptr, dst_chunk, global_conflict_manager);
-
 	// Check if we can insert the chunk into the local storage.
 	bool local_error = false;
 	auto local_verification = sibling_storage != nullptr;
@@ -785,6 +789,11 @@ void DataTable::VerifyAppendForeignKeyConstraint(optional_ptr<LocalTableStorage>
                                                  const BoundForeignKeyConstraint &bound_foreign_key,
                                                  ClientContext &context, DataChunk &chunk) {
 	VerifyForeignKeyConstraint(storage, bound_foreign_key, context, chunk, VerifyExistenceType::APPEND_FK);
+}
+
+void DataTable::VerifyFKReferentialIntegrity(const BoundForeignKeyConstraint &bound_fk, ClientContext &context,
+                                             DataChunk &chunk) {
+	VerifyAppendForeignKeyConstraint(nullptr, bound_fk, context, chunk);
 }
 
 void DataTable::VerifyDeleteForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
