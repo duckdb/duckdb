@@ -12,7 +12,6 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/common/queue.hpp"
-#include "duckdb/common/deque.hpp"
 
 #include <condition_variable>
 
@@ -131,15 +130,14 @@ private:
 	bool HasOtherTransactions(DuckTransaction &transaction);
 	void CleanupTransactions();
 
-	//! Register a published commit whose flush marker is not yet synced (transaction + WAL lock held)
-	void RegisterUnsyncedCommit(transaction_t commit_id, idx_t wal_offset, idx_t catalog_version);
-	//! Advance the durable bound over the completed sync and drop this thread's entry; returns
-	//! whether the bound advanced
-	bool AdvanceDurableBound(transaction_t commit_id, idx_t synced_offset);
+	//! Record a published commit's flush marker; the transaction stays active until the WAL is synced
+	//! up to it (transaction lock held)
+	void RegisterUnsyncedCommit(DuckTransaction &transaction, idx_t wal_sync_offset);
+	//! Advance the durable bound over every commit the completed sync covered (transaction lock held)
+	void AdvanceDurableBound(idx_t synced_offset);
 	//! Mark that a WAL sync has failed, waking up durability waiters
 	void MarkDurabilityFailed();
-	//! Sweep transactions pinned only by not-yet-durable commits; nothing else re-triggers it
-	void GarbageCollectDurableTransactions();
+	//! Whether a registered commit is still in its commit path, possibly inside SyncUpTo (transaction lock held)
 	bool HasUnsyncedCommits();
 	struct DurableSnapshot {
 		//! Every commit before this bound is durable
@@ -148,18 +146,8 @@ private:
 		idx_t catalog_version = DConstants::INVALID_INDEX;
 	};
 	//! The most recent snapshot that contains only durable commits; unbounded when none is pending
+	//! (transaction lock held)
 	DurableSnapshot GetDurableSnapshot();
-
-	//! Commits are published before their WAL flush marker is synced: until then they are tracked
-	//! here and new snapshots are bounded below them, so no transaction can observe a commit a
-	//! crash could still lose
-	struct UnsyncedCommit {
-		transaction_t commit_id;
-		//! The WAL offset covering the commit's flush marker
-		idx_t wal_offset;
-		//! The committed catalog version just before this commit published
-		idx_t catalog_version;
-	};
 
 private:
 	//! The current start timestamp used by transactions
@@ -188,14 +176,12 @@ private:
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting
 	mutex start_transaction_lock;
 
-	//! Protects all durability state below
-	mutex durability_lock;
-	//! Published commits whose flush marker is not yet durable (in commit order)
-	deque<UnsyncedCommit> unsynced_commits;
-	//! Signalled when unsynced_commits becomes empty, or when a sync fails
-	std::condition_variable durability_cv;
-	//! Every commit before this bound is durable
+	//! Every commit before this bound is durable. A transaction stays in active_transactions until
+	//! its commit is durable, so new snapshots are bounded below commits a crash could still lose
 	VisibilityBound durable_bound;
+	//! Signalled (under transaction_lock) when no active transaction awaits its WAL sync, or when a
+	//! sync fails
+	std::condition_variable durability_cv;
 	//! Set when a WAL sync has failed (the database is poisoned)
 	bool durability_failed = false;
 

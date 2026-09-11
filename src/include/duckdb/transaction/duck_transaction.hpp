@@ -47,6 +47,11 @@ public:
 	SnapshotView view;
 	//! The commit id of this transaction, if it has successfully been committed
 	transaction_t commit_id;
+	//! WAL offset covering the commit's flush marker, set when the commit is published; the commit
+	//! is durable once the WAL is synced up to it (0 while uncommitted or when nothing was written)
+	idx_t wal_sync_offset = 0;
+	//! The committed catalog version just before this commit published
+	idx_t catalog_version_before_commit = 0;
 
 	atomic<idx_t> catalog_version;
 
