@@ -35,6 +35,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateConstantInputs(ClientC
 	if (func.Function().GetStability() != FunctionStability::CONSISTENT || func.GetChildren().empty()) {
 		return nullptr;
 	}
+	// Lambda arguments are placeholders, not SQL values that can be evaluated independently.
+	if (func.Function().HasBindLambdaCallback()) {
+		return nullptr;
+	}
 	vector<Value> values;
 	values.reserve(func.GetChildren().size());
 	for (idx_t idx = 0; idx < func.GetChildren().size(); ++idx) {
