@@ -129,11 +129,6 @@ public:
 	idx_t FlushMarker();
 	//! Block until the WAL is durable up to the given offset
 	void SyncUpTo(idx_t offset);
-
-private:
-	void SyncAsLeader(unique_lock<mutex> &guard);
-
-public:
 	//! Increment the WAL entry count, which is used for the auto-checkpoint threshold.
 	void IncrementWALEntriesCount();
 	void WriteCheckpoint(MetaBlockPointer meta_block);
@@ -153,10 +148,11 @@ protected:
 	//! truncation rewinds the file, so a file position can be reused but a logical one never is
 	//! The WAL is durable up to this logical offset
 	idx_t durable_offset = 0;
-	//! An in-flight sync will make the WAL durable up to this logical offset
-	idx_t syncing_offset = 0;
 	//! The highest logical offset for which a sync has been requested
 	idx_t requested_sync_offset = 0;
+	//! Whether a sync is in flight: only one runs at a time, the next covers every marker flushed
+	//! meanwhile
+	bool sync_in_flight = false;
 	//! Set when a sync has failed: the OS may have dropped the dirty pages, so all further
 	//! syncs of this WAL fail
 	bool sync_failed = false;

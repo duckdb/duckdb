@@ -608,59 +608,49 @@ idx_t WriteAheadLog::FlushMarker() {
 
 void WriteAheadLog::SyncUpTo(idx_t offset) {
 	D_ASSERT(writer && offset > 0);
+	auto &db_instance = GetDatabase().GetDatabase();
+	auto fsync_sleep_ms = Settings::Get<DebugWalFsyncSleepMsSetting>(db_instance);
+	auto force_fsync_failure = Settings::Get<DebugForceWalFsyncFailureSetting>(db_instance);
 	unique_lock<mutex> guard(sync_lock);
 	// durable_offset only advances on successful syncs, so an offset it covers stays durable
 	while (durable_offset < offset) {
 		if (sync_failed) {
 			throw IOException("Cannot sync WAL \"%s\": a previous sync of this WAL has failed", wal_path);
 		}
-		if (syncing_offset >= offset) {
-			// an in-flight sync already covers this offset - wait for it to complete
+		if (sync_in_flight) {
+			// one sync at a time: the next leader covers every marker flushed meanwhile
 			sync_cv.wait(guard);
-		} else {
-			SyncAsLeader(guard);
+			continue;
 		}
-	}
-}
-
-//! Sync on behalf of everything requested so far. Enters with the sync lock held, releases it
-//! around the file syncs
-void WriteAheadLog::SyncAsLeader(unique_lock<mutex> &guard) {
-	auto target = requested_sync_offset;
-	auto &db_instance = GetDatabase().GetDatabase();
-	auto fsync_sleep_ms = Settings::Get<DebugWalFsyncSleepMsSetting>(db_instance);
-	auto force_fsync_failure = Settings::Get<DebugForceWalFsyncFailureSetting>(db_instance);
-	syncing_offset = target;
-	guard.unlock();
-	ErrorData error;
-	try {
-		if (fsync_sleep_ms > 0) {
-			ThreadUtil::SleepMs(fsync_sleep_ms);
-		}
-		if (force_fsync_failure) {
-			throw IOException("debug_force_wal_fsync_failure: injected WAL fsync failure");
-		}
-		writer->SyncHandle();
-	} catch (std::exception &ex) {
-		error = ErrorData(ex);
-	}
-	guard.lock();
-	if (error.HasError()) {
-		// the OS may have dropped the dirty pages: this WAL must never be synced again
-		sync_failed = true;
+		// lead: sync everything flushed so far, on behalf of every waiter
+		auto target = requested_sync_offset;
+		sync_in_flight = true;
 		guard.unlock();
+		ErrorData error;
+		try {
+			if (fsync_sleep_ms > 0) {
+				ThreadUtil::SleepMs(fsync_sleep_ms);
+			}
+			if (force_fsync_failure) {
+				throw IOException("debug_force_wal_fsync_failure: injected WAL fsync failure");
+			}
+			writer->SyncHandle();
+		} catch (std::exception &ex) {
+			error = ErrorData(ex);
+		}
+		guard.lock();
+		sync_in_flight = false;
+		if (error.HasError()) {
+			// the OS may have dropped the dirty pages: this WAL must never be synced again
+			sync_failed = true;
+		} else {
+			durable_offset = target;
+		}
 		sync_cv.notify_all();
-		error.Throw();
+		if (error.HasError()) {
+			error.Throw();
+		}
 	}
-	// a truncation during the sync needs no handling: it only removed unregistered entries
-	if (target > durable_offset) {
-		durable_offset = target;
-	}
-	// reset so waiters elect a new leader
-	syncing_offset = durable_offset;
-	guard.unlock();
-	sync_cv.notify_all();
-	guard.lock();
 }
 
 void WriteAheadLog::IncrementWALEntriesCount() {
