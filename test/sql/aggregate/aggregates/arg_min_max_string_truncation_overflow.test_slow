@@ -1,0 +1,20 @@
+# name: test/sql/aggregate/aggregates/arg_min_max_string_truncation_overflow.test_slow
+# description: Regression test for integer truncation in ArgMinMaxValueAssign<string_t>::Assign
+# group: [aggregates]
+
+# For a non-inlined string with a length just above 2^31, NextPowerOfTwo(len) is 2^32.
+# Before the fix, casting that back to uint32_t truncated the arena allocation size to 0,
+# so the following memcpy overflowed the heap instead of failing cleanly.
+# A memory_limit below the (correct) 4GB allocation makes this deterministic regardless of
+# how much physical memory is actually available.
+
+statement ok
+SET threads=1;
+
+statement ok
+SET memory_limit='3GB';
+
+statement error
+SELECT length(arg_min(s, 1)) FROM (SELECT repeat('A', 2147483649) AS s) t;
+----
+Out of Memory Error
