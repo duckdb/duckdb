@@ -59,6 +59,7 @@
 #include "duckdb/common/enums/current_transaction_state.hpp"
 #include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
@@ -766,7 +767,12 @@ void ClientContext::VerifyDeferredForeignKeys() {
 	auto query_number = transaction.GetActiveQuery();
 	auto &meta_transaction = MetaTransaction::Get(*this);
 	for (auto &database : meta_transaction.OpenedTransactions()) {
-		auto &local_storage = LocalStorage::Get(*this, database.get());
+		// only DuckDB databases have transaction-local storage
+		auto db_transaction = meta_transaction.TryGetTransaction(database.get());
+		if (!db_transaction || !db_transaction->IsDuckTransaction()) {
+			continue;
+		}
+		auto &local_storage = db_transaction->Cast<DuckTransaction>().GetLocalStorage();
 		auto appended_rows = local_storage.GetAppendedRows(query_number);
 		for (auto &entry : appended_rows) {
 			bool has_foreign_key = false;
