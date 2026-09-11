@@ -94,10 +94,11 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	transaction_t start_time = current_start_timestamp++;
 	transaction_t transaction_id = current_transaction_id++;
 	// snapshots must not observe commits that are not yet durable, nor a newer catalog version
-	auto caps = GetDurabilityCaps();
+	auto durable = GetDurableSnapshot();
 	// the transaction sees its own writes, and every durable commit before its start time
-	SnapshotView view(transaction_id, VisibilityBound::Min(VisibilityBound::Before(start_time), caps.visibility_bound));
-	auto catalog_version = MinValue<idx_t>(last_committed_version, caps.catalog_version);
+	SnapshotView view(transaction_id,
+	                  VisibilityBound::Min(VisibilityBound::Before(start_time), durable.visibility_bound));
+	auto catalog_version = MinValue<idx_t>(last_committed_version, durable.catalog_version);
 	if (active_transactions.empty()) {
 		lowest_visibility_bound = view.visibility_bound;
 	}
@@ -303,9 +304,9 @@ bool DuckTransactionManager::HasUnsyncedCommits() {
 	return !unsynced_commits.empty();
 }
 
-DuckTransactionManager::DurabilityCaps DuckTransactionManager::GetDurabilityCaps() {
+DuckTransactionManager::DurableSnapshot DuckTransactionManager::GetDurableSnapshot() {
 	lock_guard<mutex> guard(durability_lock);
-	DurabilityCaps caps;
+	DurableSnapshot durable;
 	for (auto &entry : unsynced_commits) {
 		if (entry.commit_id <= durable_commit_bound) {
 			// durable already - its own thread has not removed the entry yet
@@ -313,11 +314,11 @@ DuckTransactionManager::DurabilityCaps DuckTransactionManager::GetDurabilityCaps
 		}
 		// the first commit that is not durable: a snapshot stops below it, and the catalog version
 		// recorded just before it published is exactly the one that snapshot observes
-		caps.visibility_bound = VisibilityBound::Before(entry.commit_id);
-		caps.catalog_version = entry.catalog_version;
+		durable.visibility_bound = VisibilityBound::Before(entry.commit_id);
+		durable.catalog_version = entry.catalog_version;
 		break;
 	}
-	return caps;
+	return durable;
 }
 
 void DuckTransactionManager::RegisterUnsyncedCommit(transaction_t commit_id, idx_t wal_offset, idx_t catalog_version) {
@@ -741,7 +742,7 @@ idx_t DuckTransactionManager::UpdateLowestVisibilityBound(optional_ptr<DuckTrans
 	}
 	// commits pending durability pin the bound: snapshots capped below them may need the old versions
 	computed_lowest_visibility_bound =
-	    VisibilityBound::Min(computed_lowest_visibility_bound, GetDurabilityCaps().visibility_bound);
+	    VisibilityBound::Min(computed_lowest_visibility_bound, GetDurableSnapshot().visibility_bound);
 	lowest_visibility_bound = computed_lowest_visibility_bound;
 	return exclude_index;
 }

@@ -141,16 +141,16 @@ private:
 	//! Sweep transactions pinned only by not-yet-durable commits; nothing else re-triggers it
 	void GarbageCollectDurableTransactions();
 	bool HasUnsyncedCommits();
-	struct DurabilityCaps {
-		//! The highest visibility bound that observes only durable commits
+	struct DurableSnapshot {
+		//! Every commit before this bound is durable
 		VisibilityBound visibility_bound = VisibilityBound::IncludingUncommitted();
 		//! The catalog version that snapshot observes. Prepared statements compare versions for
 		//! equality, so this has to be exact: any other value can match a plan bound against a
 		//! different catalog state and skip a re-bind that was needed
 		idx_t catalog_version = DConstants::INVALID_INDEX;
 	};
-	//! The caps a new snapshot must respect while commits are pending durability (none otherwise)
-	DurabilityCaps GetDurabilityCaps();
+	//! The most recent snapshot that contains only durable commits; unbounded when none is pending
+	DurableSnapshot GetDurableSnapshot();
 
 	//! Commits are published before their WAL flush marker is synced: until then they are tracked
 	//! here and new snapshots are bounded below them, so no transaction can observe a commit a
