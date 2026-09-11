@@ -16,7 +16,9 @@ static bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParame
 		auto key = EnumType::GetPos(res_enum_type, dictionary_data[value]);
 		if (key == -1) {
 			if (!parameters.error_message) {
-				HandleCastError::AssignError(CastExceptionText<SRC_TYPE, RES_TYPE>(value), vector_cast_data.parameters);
+				HandleCastError::AssignError(
+				    CastExceptionText<string_t>(dictionary_data[value], source.GetType(), res_enum_type),
+				    vector_cast_data.parameters);
 				vector_cast_data.all_converted = false;
 			}
 			return nullopt;
