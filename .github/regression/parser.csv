@@ -6,4 +6,5 @@ ParserStatements
 ParserTPCH
 ParserTPCDS
 ParserFlummi
+ParserAoC
 ParserGrammarConstruction

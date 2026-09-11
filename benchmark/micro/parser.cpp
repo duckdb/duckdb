@@ -19,7 +19,8 @@ enum class ParserWorkload : uint8_t {
 	STATEMENTS,
 	TPCH,
 	TPCDS,
-	FLUMMI
+	FLUMMI,
+	AOC
 };
 
 struct ParserBenchmarkState : public BenchmarkState {
@@ -158,6 +159,7 @@ public:
 		case ParserWorkload::TPCH:
 		case ParserWorkload::TPCDS:
 		case ParserWorkload::FLUMMI:
+		case ParserWorkload::AOC:
 			return StringUtil::Join(LoadQueries(), "\n");
 		default:
 			throw InternalException("Unknown parser benchmark workload");
@@ -181,6 +183,8 @@ private:
 			return 22;
 		case ParserWorkload::TPCDS:
 			return 99;
+		case ParserWorkload::AOC:
+			return 25;
 		default:
 			return 1;
 		}
@@ -205,14 +209,22 @@ private:
 	}
 
 	vector<string> LoadQueries() {
-		if (workload == ParserWorkload::FLUMMI) {
+		string prefix;
+		switch (workload) {
+		case ParserWorkload::FLUMMI:
 			return {ReadQuery("benchmark/recursive_cte/queries/performance/flummi_ray.sql")};
-		}
-		if (workload != ParserWorkload::TPCH && workload != ParserWorkload::TPCDS) {
+		case ParserWorkload::TPCH:
+			prefix = "extension/tpch/dbgen/queries/q";
+			break;
+		case ParserWorkload::TPCDS:
+			prefix = "extension/tpcds/dsdgen/queries/";
+			break;
+		case ParserWorkload::AOC:
+			prefix = "benchmark/aoc24/queries/day";
+			break;
+		default:
 			return {GetQuery()};
 		}
-		const string prefix =
-		    workload == ParserWorkload::TPCH ? "extension/tpch/dbgen/queries/q" : "extension/tpcds/dsdgen/queries/";
 		vector<string> queries;
 		for (idx_t i = 1; i <= QueryCount(); i++) {
 			queries.push_back(ReadQuery(prefix + (i < 10 ? "0" : "") + to_string(i) + ".sql"));
@@ -234,6 +246,7 @@ ParserMicroBenchmark parser_statements("ParserStatements", ParserWorkload::STATE
 ParserMicroBenchmark parser_tpch("ParserTPCH", ParserWorkload::TPCH, 50);
 ParserMicroBenchmark parser_tpcds("ParserTPCDS", ParserWorkload::TPCDS, 10);
 ParserMicroBenchmark parser_flummi("ParserFlummi", ParserWorkload::FLUMMI, 5);
+ParserMicroBenchmark parser_aoc("ParserAoC", ParserWorkload::AOC, 10);
 
 struct ParserGrammarConstructionState : public BenchmarkState {
 	idx_t grammars_constructed = 0;

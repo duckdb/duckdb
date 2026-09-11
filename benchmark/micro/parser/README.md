@@ -46,16 +46,21 @@ Grammar extensions are not included in any of these benchmarks.
 | `ParserTPCH` | All 22 TPC-H queries, repeated 50 times | 1,100 | 1 |
 | `ParserTPCDS` | All 99 TPC-DS query files, repeated 10 times | 990 | 1 |
 | `ParserFlummi` | The approximately 373 KiB generated Flummi ray-tracing query, repeated 5 times | 5 | 1 |
+| `ParserAoC` | All 25 Advent of Code 2024 query files, repeated 10 times | 250 | 1 |
 
 The small synthetic cases help isolate regressions. TPC-H and TPC-DS cover realistic
 joins, subqueries, aggregation, CTEs and window functions; Flummi stresses parsing
 one very large generated SQL statement with a recursive CTE.
+AoC adds varied algorithmic SQL with recursive CTEs, string processing, nested queries
+and embedded input strings. It measures parsing, not solving the puzzles.
 
 SQL sources, loaded in numeric query order:
 
 - TPC-H: `extension/tpch/dbgen/queries/q01.sql` through `q22.sql`.
 - TPC-DS: `extension/tpcds/dsdgen/queries/01.sql` through `99.sql`.
 - Flummi: `benchmark/recursive_cte/queries/performance/flummi_ray.sql`.
+- AoC: `benchmark/aoc24/queries/day01.sql` through `day25.sql`; provenance and license
+  are documented in `benchmark/aoc24/README.md` and `benchmark/aoc24/LICENSE`.
 
 Each file is a separate `ParseQuery` call, not one concatenated script. Missing,
 empty or invalid files fail the benchmark rather than silently reducing the corpus.
