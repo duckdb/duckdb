@@ -743,9 +743,12 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 		if (!global_conflicts && !local_conflicts) {
 			conflict = 0;
 		} else if (!global_conflicts && local_conflicts) {
-			conflict = local_conflict_manager.GetFirstInvalidIndex(count);
+			// The validity array records which rows were found, so we need
+			// to negate: the first row without a hit is the first missing
+			// one, which is the row the error message should report.
+			conflict = local_conflict_manager.GetFirstInvalidIndex(count, true);
 		} else if (global_conflicts && !local_conflicts) {
-			conflict = global_conflict_manager.GetFirstInvalidIndex(count);
+			conflict = global_conflict_manager.GetFirstInvalidIndex(count, true);
 		} else {
 			auto &global_validity = global_conflict_manager.GetFirstValidity();
 			auto &local_validity = local_conflict_manager.GetFirstValidity();

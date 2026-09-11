@@ -1,0 +1,42 @@
+# name: test/sql/constraints/foreignkey/fk_error_message_key.test
+# description: Issue #25588: the foreign key constraint error message must report the key of the first missing row, not the key of an earlier row that exists only in the transaction-local index of the referenced table.
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE fk_local_p(id INT PRIMARY KEY);
+
+statement ok
+CREATE TABLE fk_local_c(pid INT, FOREIGN KEY (pid) REFERENCES fk_local_p(id));
+
+# the parent keys are inserted in the same transaction, so they only exist
+# in the transaction-local index; the reported key must still be the
+# missing one (30), not the first row of the insert (10)
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO fk_local_p VALUES (10), (20);
+
+statement error
+INSERT INTO fk_local_c VALUES (10), (20), (30);
+----
+<REGEX>:Violates foreign key constraint because key "id: 30" does not exist in the referenced table.*
+
+statement ok
+ROLLBACK;
+
+# the parent table is empty again, so the first missing key is 10
+statement error
+INSERT INTO fk_local_c VALUES (10), (20), (30);
+----
+<REGEX>:Violates foreign key constraint because key "id: 10" does not exist in the referenced table.*
+
+# parent keys committed in an earlier transaction: missing key 30 is
+# reported correctly
+statement ok
+INSERT INTO fk_local_p VALUES (10), (20);
+
+statement error
+INSERT INTO fk_local_c VALUES (10), (20), (30);
+----
+<REGEX>:Violates foreign key constraint because key "id: 30" does not exist in the referenced table.*
