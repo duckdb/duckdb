@@ -61,7 +61,6 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  OVERRIDE_JOBS: windows
   # Run only specific jobs in CI (separated by whitespace) and skip the rest.
   #
   # Add the CI job's `needs:` list here as well. Otherwise, those are skipped
@@ -190,6 +189,8 @@ jobs:
       - name: Select CI jobs
         id: selection
         shell: bash
+        env:
+          OVERRIDE_JOBS: linux-relassert windows
         run: |
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           python3 scripts/ci/job_stages.py \

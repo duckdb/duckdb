@@ -1607,6 +1607,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 }
 
 static bool TryMoveFileWithPosixSemantics(const std::wstring &source, const std::wstring &target) {
+	constexpr DWORD delete_access = 0x00010000L;                                     // DELETE
 	constexpr auto file_rename_info_ex = static_cast<FILE_INFO_BY_HANDLE_CLASS>(22); // FileRenameInfoEx
 	const auto file_name_length = target.size() * sizeof(WCHAR);
 	const auto rename_info_size = offsetof(FILE_RENAME_INFO, FileName) + file_name_length + sizeof(WCHAR);
@@ -1621,7 +1622,7 @@ static bool TryMoveFileWithPosixSemantics(const std::wstring &source, const std:
 	// FileRenameInfoEx renames the file identified by a handle opened with DELETE access.
 	// See https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info
 	auto raw_source_handle =
-	    CreateFileW(source.c_str(), DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+	    CreateFileW(source.c_str(), delete_access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
 	                OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
 	if (raw_source_handle == INVALID_HANDLE_VALUE) {
 		return false;
