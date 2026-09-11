@@ -604,8 +604,6 @@ enum class TransactionModifierType : uint8_t;
 
 enum class TransactionType : uint8_t;
 
-enum class TransformFrameState : uint8_t;
-
 enum class TriggerEventType : uint8_t;
 
 enum class TriggerForEach : uint8_t;
@@ -1514,9 +1512,6 @@ const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType v
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
-
-template<>
-const char* EnumUtil::ToChars<TransformFrameState>(TransformFrameState value);
 
 template<>
 const char* EnumUtil::ToChars<TriggerEventType>(TriggerEventType value);
@@ -2451,9 +2446,6 @@ TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);
-
-template<>
-TransformFrameState EnumUtil::FromString<TransformFrameState>(const char *value);
 
 template<>
 TriggerEventType EnumUtil::FromString<TriggerEventType>(const char *value);

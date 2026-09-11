@@ -868,18 +868,12 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, TableFunctionGetStatisticsInput &input) {
 	auto &column_id = input.column_index;
-	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
-	auto &local_storage = LocalStorage::Get(context, duck_table.catalog);
-
-	// Don't emit statistics for tables with outstanding transaction-local data.
-	if (local_storage.Find(duck_table.GetStorage())) {
-		return nullptr;
-	}
-
 	if (column_id.IsRowIdColumn() || column_id.IsRowNumberColumn()) {
 		return nullptr;
 	}
+
+	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
+	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	auto &column = duck_table.GetColumn(LogicalIndex(column_id.GetPrimaryIndex()));
 	if (column.Generated()) {
 		return nullptr;

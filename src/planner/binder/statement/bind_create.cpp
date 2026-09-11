@@ -601,17 +601,17 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr) {
+LogicalType Binder::BindLogicalType(const ParsedExpression &type_expr) {
 	ConstantBinder binder(*this, context, "Type binding");
-	auto copy = type_expr->Copy();
+	auto copy = type_expr.Copy();
 	auto expr = binder.Bind(copy);
 
 	if (!expr->IsFoldable()) {
-		throw BinderException(*type_expr, "Type expression is not constant");
+		throw BinderException(type_expr, "Type expression is not constant");
 	}
 
 	if (expr->GetReturnType() != LogicalTypeId::TYPE) {
-		throw BinderException(*type_expr, "Expected a type returning expression, but got expression of type '%s'",
+		throw BinderException(type_expr, "Expected a type returning expression, but got expression of type '%s'",
 		                      expr->GetReturnType().ToString());
 	}
 
@@ -639,7 +639,7 @@ void Binder::BindLogicalType(LogicalType &type) {
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &ty) {
 		if (ty.id() == LogicalTypeId::UNBOUND) {
 			auto &type_expr = UnboundType::GetTypeExpression(ty);
-			return BindLogicalTypeInternal(type_expr);
+			return BindLogicalType(*type_expr);
 		}
 
 		return ty;

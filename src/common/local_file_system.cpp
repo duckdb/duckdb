@@ -376,10 +376,8 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		// need Read or Write
 		D_ASSERT(flags.OpenForWriting());
 		open_flags |= O_CLOEXEC;
-		if (flags.CreateFileIfNotExists()) {
+		if (flags.CreateFileIfNotExists() || flags.OverwriteExistingFile()) {
 			open_flags |= O_CREAT;
-		} else if (flags.OverwriteExistingFile()) {
-			open_flags |= O_CREAT | O_TRUNC;
 		}
 		if (flags.OpenForAppending()) {
 			open_flags |= O_APPEND;
@@ -439,6 +437,9 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	TryAcquireFileLock(*this, fd, path, flags);
 
 	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags, FileOpener::TryGetDatabase(opener));
+	if (flags.OverwriteExistingFile() && StatsInternal(fd, path).file_type == FileType::FILE_TYPE_REGULAR) {
+		Truncate(*file_handle, 0);
+	}
 	if (opener) {
 		file_handle->TryAddLogger(*opener);
 		DUCKDB_LOG_FILE_SYSTEM_OPEN((*file_handle));
@@ -516,7 +517,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 	while (bytes_to_write > 0) {
 		int64_t bytes_written = pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(bytes_to_write),
 		                               UnsafeNumericCast<off_t>(current_location));
-		if (bytes_written < 0) {
+		if (bytes_written < 0 || bytes_written > bytes_to_write) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
@@ -542,7 +543,7 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 		auto bytes_to_write_this_call =
 		    MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(bytes_to_write));
 		int64_t current_bytes_written = write(fd, buffer, bytes_to_write_this_call);
-		if (current_bytes_written <= 0) {
+		if (current_bytes_written <= 0 || idx_t(current_bytes_written) > bytes_to_write_this_call) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
@@ -1332,7 +1333,7 @@ static int64_t FSWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t n
 	while (nr_bytes > 0) {
 		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
 		DWORD current_bytes_written = FSInternalWrite(handle, hFile, buffer, bytes_to_write, location);
-		if (current_bytes_written <= 0) {
+		if (current_bytes_written <= 0 || current_bytes_written > bytes_to_write) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
