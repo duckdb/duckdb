@@ -658,8 +658,6 @@ void WriteAheadLog::SyncUpTo(idx_t offset) {
 void WriteAheadLog::SyncAsLeader(unique_lock<mutex> &guard) {
 	auto target = requested_sync_offset;
 	auto target_file_pos = requested_sync_file_pos;
-	// read the debug hooks before claiming leadership: throwing after syncing_offset is set would
-	// strand every waiter behind a sync nobody is performing
 	auto &db_instance = GetDatabase().GetDatabase();
 	auto fsync_sleep_ms = Settings::Get<DebugWalFsyncSleepMsSetting>(db_instance);
 	auto force_fsync_failure = Settings::Get<DebugForceWalFsyncFailureSetting>(db_instance);
