@@ -127,8 +127,7 @@ public:
 	//! Write a WAL_FLUSH marker and push the buffer to the OS without syncing it. Returns the
 	//! offset covering the marker, to be passed to SyncUpTo. Caller must hold the WAL lock
 	idx_t FlushMarker();
-	//! Block until the WAL is durable up to the given offset. One caller syncs on behalf of every
-	//! offset pushed so far, so a single fsync can cover many commits. Called without the WAL lock
+	//! Block until the WAL is durable up to the given offset
 	void SyncUpTo(idx_t offset);
 
 private:
