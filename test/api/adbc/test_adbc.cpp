@@ -88,7 +88,7 @@ public:
 		return ArrowTestHelper::RunArrowComparison(separate_conn, query, arrow_stream);
 	}
 
-	unique_ptr<MaterializedQueryResult> Query(const string &query) {
+	unique_ptr<QueryResult> Query(const string &query) {
 		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
 		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
 		return cconn->Query(query);

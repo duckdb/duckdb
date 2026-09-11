@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/stream_execution_result.hpp
+// duckdb/common/enums/query_result_memory_type.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,14 +12,7 @@
 
 namespace duckdb {
 
-enum class StreamExecutionResult : uint8_t {
-	CHUNK_READY,
-	CHUNK_NOT_READY,
-	EXECUTION_ERROR,
-	EXECUTION_CANCELLED,
-	BLOCKED,
-	NO_TASKS_AVAILABLE,
-	EXECUTION_FINISHED
-};
+//! Where a retained result keeps its rows
+enum class QueryResultMemoryType : uint8_t { IN_MEMORY, BUFFER_MANAGED };
 
 } // namespace duckdb

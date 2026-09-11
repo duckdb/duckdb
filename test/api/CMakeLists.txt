@@ -34,6 +34,8 @@ set(TEST_API_OBJECTS
     test_lifecycle_hooks.cpp
     test_extension_schema_api.cpp
     test_pending_query.cpp
+    test_query_result.cpp
+    test_query_result_stream.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
     test_stream_result_buffer.cpp

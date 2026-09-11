@@ -25,8 +25,9 @@ unique_ptr<PhysicalOperator> PhysicalResultCollector::GetResultCollector(ClientC
 	auto &physical_plan = *data.physical_plan;
 	auto &root = physical_plan.Root();
 
-	const auto lifetime = data.output_type == QueryResultOutputType::ALLOW_STREAMING ? ResultLifetime::UNDECIDED
-	                                                                                 : ResultLifetime::RETAINED;
+	// The plan always leaves the retention open; the consumer's first call settles it, and the
+	// submission pre-decides it for a query that must not park
+	const auto lifetime = ResultLifetime::UNDECIDED;
 	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, root)) {
 		return make_uniq<PhysicalResultSink>(physical_plan, data, lifetime, ResultOrdering::UNORDERED);
 	}

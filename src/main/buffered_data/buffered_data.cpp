@@ -2,7 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/execution/executor.hpp"
-#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -56,7 +56,7 @@ bool BufferedData::ParkUndecided(const InterruptState &blocked_sink) {
 	return true;
 }
 
-bool BufferedData::HasParkedProducer() {
+bool BufferedData::WaitsOnConsumer() {
 	// The undecided list is empty once the retention is settled: ParkUndecided re-checks under glock
 	if (lifetime == ResultLifetime::UNDECIDED) {
 		annotated_lock_guard<annotated_mutex> lock(glock);
@@ -64,25 +64,13 @@ bool BufferedData::HasParkedProducer() {
 			return true;
 		}
 	}
-	return HasBlockedSink();
+	// A space park is only the consumer's to release when a pop is possible: the batched buffer also
+	// parks read-ahead batches while the read queue is empty, and the minimum batch releases those
+	return HasBlockedSink() && HasObservableChunk();
 }
 
-StreamExecutionResult BufferedData::MapExecutionResult(PendingExecutionResult execution_result) {
-	switch (execution_result) {
-	case PendingExecutionResult::BLOCKED:
-	case PendingExecutionResult::RESULT_READY:
-		return StreamExecutionResult::BLOCKED;
-	case PendingExecutionResult::NO_TASKS_AVAILABLE:
-	case PendingExecutionResult::RESULT_NOT_READY:
-		return StreamExecutionResult::CHUNK_NOT_READY;
-	case PendingExecutionResult::EXECUTION_FINISHED:
-		return StreamExecutionResult::EXECUTION_FINISHED;
-	case PendingExecutionResult::EXECUTION_ERROR:
-		return StreamExecutionResult::EXECUTION_ERROR;
-	default:
-		throw InternalException("No conversion from PendingExecutionResult (%s) -> StreamExecutionResult",
-		                        EnumUtil::ToString(execution_result));
-	}
+QueryResultState BufferedData::Cancelled(QueryResult &result) {
+	return result.Cancelled();
 }
 
 unique_ptr<DataChunk> BufferedData::CopyForBuffering(DataChunk &chunk) {
@@ -96,13 +84,13 @@ idx_t BufferedData::LowWaterMark(idx_t capacity) {
 	return MaxValue<idx_t>(capacity / 2, 1);
 }
 
-StreamExecutionResult BufferedData::ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock) {
+QueryResultState BufferedData::Participate(ClientContextLock &context_lock, QueryResult &result) {
 	auto cc = context.lock();
 	if (!cc) {
-		return StreamExecutionResult::EXECUTION_CANCELLED;
+		return Cancelled(result);
 	}
 	if (!cc->IsActiveResult(context_lock, result)) {
-		return StreamExecutionResult::EXECUTION_CANCELLED;
+		return Cancelled(result);
 	}
 	DecideDraining();
 	// Checked with chunks poppable too, so a cancel ends the drain early. A worker error also raises
@@ -112,35 +100,63 @@ StreamExecutionResult BufferedData::ExecuteTaskInternal(StreamQueryResult &resul
 		throw InterruptException();
 	}
 	if (!interrupted && ReplenishSatisfied()) {
-		return StreamExecutionResult::CHUNK_READY;
+		return QueryResultState::READY;
 	}
 	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
 	auto execution_result = cc->ExecuteTaskInternal(context_lock, result);
-	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
+	if (execution_result == QueryResultState::EXECUTION_ERROR) {
 		// The query has ended, so a still-buffered chunk must not be reported as poppable
 		Close();
-		return StreamExecutionResult::EXECUTION_ERROR;
+		return QueryResultState::EXECUTION_ERROR;
 	}
 	if (ReplenishSatisfied()) {
-		return StreamExecutionResult::CHUNK_READY;
+		return QueryResultState::READY;
 	}
-	if (execution_result == PendingExecutionResult::BLOCKED ||
-	    execution_result == PendingExecutionResult::RESULT_READY) {
-		return StreamExecutionResult::BLOCKED;
-	}
-	return MapExecutionResult(execution_result);
+	// Engine READY means a parked producer with a chunk to pop, which satisfies the replenish above
+	D_ASSERT(execution_result != QueryResultState::READY);
+	return execution_result;
 }
 
-StreamExecutionResult BufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
+QueryResultState BufferedData::Poll(ClientContextLock &context_lock, QueryResult &result) {
 	auto cc = context.lock();
 	if (!cc) {
-		return StreamExecutionResult::EXECUTION_CANCELLED;
+		return Cancelled(result);
+	}
+	if (!cc->IsActiveResult(context_lock, result)) {
+		return Cancelled(result);
+	}
+	// Checked before the buffer, so a cancel is seen even with chunks poppable. A worker error also
+	// raises the flag; only a flag without an executor error is a real cancel
+	const bool interrupted = cc->interrupt_state.load() == ClientInterruptState::INTERRUPTED;
+	if (interrupted && !Executor::Get(*cc).HasError()) {
+		throw InterruptException();
+	}
+	if (!interrupted && HasObservableChunk()) {
+		return QueryResultState::READY;
+	}
+	auto execution_result = cc->PollInternal(context_lock, result);
+	if (execution_result == QueryResultState::EXECUTION_ERROR) {
+		Close();
+		return QueryResultState::EXECUTION_ERROR;
+	}
+	if (HasObservableChunk()) {
+		return QueryResultState::READY;
+	}
+	// Engine READY means a parked producer with a chunk to pop, which the check above would have seen
+	D_ASSERT(execution_result != QueryResultState::READY);
+	return execution_result;
+}
+
+QueryResultState BufferedData::ReplenishBuffer(ClientContextLock &context_lock, QueryResult &result) {
+	auto cc = context.lock();
+	if (!cc) {
+		return Cancelled(result);
 	}
 
-	StreamExecutionResult execution_result;
-	while (!StreamQueryResult::IsChunkReady(execution_result = ExecuteTaskInternal(result, context_lock))) {
-		if (execution_result == StreamExecutionResult::BLOCKED) {
+	QueryResultState execution_result;
+	while (!IsObservable(execution_result = Participate(context_lock, result))) {
+		if (execution_result == QueryResultState::BLOCKED) {
 			UnblockSinks();
 			cc->WaitForTask(context_lock, result);
 		}

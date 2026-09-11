@@ -77,51 +77,34 @@ void Connection::ForceParallelism() {
 	ClientConfig::GetConfig(*context).verify_parallelism = true;
 }
 
-unique_ptr<QueryResult> Connection::SendQuery(const string &query, QueryParameters query_parameters) {
-	return context->Query(query, query_parameters);
+unique_ptr<QueryResult> Connection::Query(const string &query) {
+	return context->Query(query, QueryParameters());
 }
 
-unique_ptr<QueryResult> Connection::SendQuery(unique_ptr<SQLStatement> statement, QueryParameters query_parameters) {
+unique_ptr<QueryResult> Connection::Query(unique_ptr<SQLStatement> statement, QueryResultMemoryType memory_type) {
+	QueryParameters query_parameters;
+	query_parameters.memory_type = memory_type;
 	return context->Query(std::move(statement), query_parameters);
 }
 
-unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
-	QueryParameters query_parameters;
-	query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
-	auto result = context->Query(query, query_parameters);
-	D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
-	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+unique_ptr<QueryResult> Connection::Submit(const string &query, const QueryParameters &query_parameters) {
+	return context->Submit(query, query_parameters);
 }
 
-unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement,
-                                                      QueryResultMemoryType memory_type) {
-	QueryParameters query_parameters;
-	query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
-	query_parameters.memory_type = memory_type;
-	auto result = context->Query(std::move(statement), query_parameters);
-	D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
-	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement,
+                                           const QueryParameters &query_parameters) {
+	return context->Submit(std::move(statement), query_parameters);
 }
 
-unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, QueryParameters query_parameters) {
-	return context->PendingQuery(query, query_parameters);
+unique_ptr<QueryResult> Connection::Submit(const string &query, identifier_map_t<BoundParameterData> &named_values,
+                                           const QueryParameters &query_parameters) {
+	return context->Submit(query, named_values, query_parameters);
 }
 
-unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                        QueryParameters query_parameters) {
-	return context->PendingQuery(std::move(statement), query_parameters);
-}
-
-unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
-                                                        identifier_map_t<BoundParameterData> &named_values,
-                                                        QueryParameters query_parameters) {
-	return context->PendingQuery(query, named_values, query_parameters);
-}
-
-unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                        identifier_map_t<BoundParameterData> &named_values,
-                                                        QueryParameters query_parameters) {
-	return context->PendingQuery(std::move(statement), named_values, query_parameters);
+unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement,
+                                           identifier_map_t<BoundParameterData> &named_values,
+                                           const QueryParameters &query_parameters) {
+	return context->Submit(std::move(statement), named_values, query_parameters);
 }
 
 static identifier_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
@@ -133,20 +116,16 @@ static identifier_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> 
 	return named_values;
 }
 
-unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, vector<Value> &values,
-                                                        QueryParameters query_parameters) {
+unique_ptr<QueryResult> Connection::Submit(const string &query, vector<Value> &values,
+                                           const QueryParameters &query_parameters) {
 	auto named_params = ConvertParamListToMap(values);
-	return context->PendingQuery(query, named_params, query_parameters);
+	return context->Submit(query, named_params, query_parameters);
 }
 
-unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
-                                                        QueryParameters query_parameters) {
+unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement, vector<Value> &values,
+                                           const QueryParameters &query_parameters) {
 	auto named_params = ConvertParamListToMap(values);
-	return context->PendingQuery(std::move(statement), named_params, query_parameters);
-}
-
-unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, PendingQueryParameters parameters) {
-	return context->PendingQuery(query, parameters);
+	return context->Submit(std::move(statement), named_params, query_parameters);
 }
 
 unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {
@@ -159,15 +138,11 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
 	auto named_params = ConvertParamListToMap(values);
-	PendingQueryParameters parameters;
-	parameters.parameters = &named_params;
-	parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
-	parameters.query_parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
-	auto pending = PendingQuery(query, parameters);
-	if (pending->HasError()) {
-		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
-	}
-	return pending->Execute();
+	QueryParameters parameters;
+	parameters.statement_args = named_params;
+	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
+	parameters.result_eagerness = ResultEagerness::FORCED;
+	return context->Query(query, parameters);
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const Identifier &database_name, const Identifier &schema_name,

@@ -13,7 +13,6 @@ using duckdb::ErrorData;
 using duckdb::ExtractStatementsWrapper;
 using duckdb::hugeint_t;
 using duckdb::LogicalType;
-using duckdb::MaterializedQueryResult;
 using duckdb::optional_ptr;
 using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResultType;
@@ -432,7 +431,7 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 
 	duckdb::unique_ptr<duckdb::QueryResult> result;
 	try {
-		result = wrapper->statement->Execute(wrapper->values, false);
+		result = wrapper->statement->Execute(wrapper->values);
 	} catch (...) {
 		return DuckDBError;
 	}
@@ -447,8 +446,14 @@ duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepare
 	}
 
 	try {
-		auto result = wrapper->statement->Execute(wrapper->values, true);
-		return DuckDBTranslateResult(std::move(result), out_result);
+		auto result = wrapper->statement->Submit(wrapper->values);
+		if (result->HasError() ||
+		    result->GetStatementProperties().result_eagerness == duckdb::ResultEagerness::FORCED) {
+			// The statement cannot be streamed: it completes before its result is returned
+			result->Complete();
+			return DuckDBTranslateResult(std::move(result), out_result);
+		}
+		return DuckDBTranslateStreamResult(duckdb::make_uniq<duckdb::QueryResultStream>(std::move(result)), out_result);
 	} catch (...) {
 		return DuckDBError;
 	}

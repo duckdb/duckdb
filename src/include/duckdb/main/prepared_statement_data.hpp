@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/query_result_memory_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -44,8 +45,6 @@ public:
 
 	//! The map of parameter index to the actual value entry
 	bound_parameter_map_t value_map;
-	//! Whether we are creating a streaming result or not
-	QueryResultOutputType output_type;
 	//! Whether we are creating a buffer-managed result or not
 	QueryResultMemoryType memory_type;
 

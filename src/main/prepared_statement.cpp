@@ -105,56 +105,50 @@ PreparedStatement::CreateExecuteStatement(const identifier_map_t<BoundParameterD
 	return std::move(execute);
 }
 
-unique_ptr<QueryResult> PreparedStatement::Execute(identifier_map_t<BoundParameterData> &named_values,
-                                                   bool allow_stream_result) {
+unique_ptr<QueryResult> PreparedStatement::Execute(identifier_map_t<BoundParameterData> &named_values) {
 	if (!success) {
-		return make_uniq<MaterializedQueryResult>(
+		return make_uniq<QueryResult>(
 		    ErrorData(InvalidInputException("Attempting to execute an unsuccessfully prepared statement!")));
 	}
 	auto client_context = context.lock();
 	if (!client_context) {
-		return make_uniq<MaterializedQueryResult>(ErrorData(
+		return make_uniq<QueryResult>(ErrorData(
 		    InvalidInputException("Attempting to execute a prepared statement after its connection was closed!")));
 	}
-	PendingQueryParameters parameters;
-	parameters.query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
+	QueryParameters parameters;
 	return client_context->RunInternalStatement(CreateExecuteStatement(named_values), parameters);
 }
 
-unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
+unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values) {
 	identifier_map_t<BoundParameterData> named_values;
 	for (idx_t i = 0; i < values.size(); i++) {
 		named_values[Identifier(std::to_string(i + 1))] = BoundParameterData(values[i]);
 	}
-	return Execute(named_values, allow_stream_result);
+	return Execute(named_values);
 }
 
-unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &values, bool allow_stream_result) {
+unique_ptr<QueryResult> PreparedStatement::Submit(vector<Value> &values, const QueryParameters &query_parameters) {
 	identifier_map_t<BoundParameterData> named_values;
 	for (idx_t i = 0; i < values.size(); i++) {
 		auto &val = values[i];
 		named_values[Identifier(std::to_string(i + 1))] = BoundParameterData(val);
 	}
-	return PendingQuery(named_values, allow_stream_result);
+	return Submit(named_values, query_parameters);
 }
 
-unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(identifier_map_t<BoundParameterData> &named_values,
-                                                               bool allow_stream_result) {
+unique_ptr<QueryResult> PreparedStatement::Submit(identifier_map_t<BoundParameterData> &named_values,
+                                                  const QueryParameters &query_parameters) {
 	if (!success) {
 		auto exception = InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
-		return make_uniq<PendingQueryResult>(ErrorData(exception));
+		return make_uniq<QueryResult>(ErrorData(exception));
 	}
 	auto client_context = context.lock();
 	if (!client_context) {
 		auto exception =
 		    InvalidInputException("Attempting to execute a prepared statement after its connection was closed!");
-		return make_uniq<PendingQueryResult>(ErrorData(exception));
+		return make_uniq<QueryResult>(ErrorData(exception));
 	}
-	PendingQueryParameters parameters;
-	parameters.query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
-	return client_context->PendingInternalStatement(CreateExecuteStatement(named_values), parameters);
+	return client_context->SubmitInternalStatement(CreateExecuteStatement(named_values), query_parameters);
 }
 
 } // namespace duckdb

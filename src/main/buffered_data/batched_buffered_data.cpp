@@ -1,7 +1,7 @@
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/stack.hpp"
 
@@ -221,7 +221,7 @@ unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 	{
 		annotated_lock_guard<annotated_mutex> lock(glock);
 		if (read_queue.empty()) {
-			context.reset();
+			Close();
 			D_ASSERT(blocked_sinks.empty());
 			D_ASSERT(buffer.empty());
 			return nullptr;

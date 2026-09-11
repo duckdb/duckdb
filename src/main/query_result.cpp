@@ -1,9 +1,17 @@
 #include "duckdb/main/query_result.hpp"
 
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/column_data_collection_render_interface.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/execution/executor.hpp"
+#include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
+
 namespace duckdb {
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p,
@@ -78,6 +86,9 @@ const vector<Identifier> &BaseQueryResult::GetNames() const {
 	return names;
 }
 
+//===--------------------------------------------------------------------===//
+// Construction
+//===--------------------------------------------------------------------===//
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
                          vector<LogicalType> types_p, vector<Identifier> names_p, ClientProperties client_properties_p)
     : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
@@ -89,7 +100,26 @@ QueryResult::QueryResult(QueryResultType type, ErrorData error)
       client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr) {
 }
 
+QueryResult::QueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
+                         vector<LogicalType> types_p, ClientProperties client_properties_p,
+                         shared_ptr<BufferedData> buffer_p)
+    : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement.statement_type, statement.properties,
+                      std::move(types_p), statement.names),
+      client_properties(std::move(client_properties_p)), context(std::move(context_p)), buffer(std::move(buffer_p)) {
+}
+
+QueryResult::QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names_p,
+                         unique_ptr<ColumnDataCollection> collection_p, ClientProperties client_properties_p)
+    : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties),
+                      collection_p->Types(), std::move(names_p)),
+      client_properties(std::move(client_properties_p)), collection(std::move(collection_p)) {
+}
+
+QueryResult::QueryResult(ErrorData error) : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)) {
+}
+
 QueryResult::~QueryResult() {
+	Close();
 }
 
 void QueryResult::DeduplicateColumns(vector<string> &names) {
@@ -124,8 +154,246 @@ const Identifier &QueryResult::ColumnName(idx_t index) const {
 	return names[index];
 }
 
-string QueryResult::ToBox(BoxRendererContext &context, const BoxRendererConfig &config) {
-	return ToString();
+//===--------------------------------------------------------------------===//
+// Execution
+//===--------------------------------------------------------------------===//
+unique_ptr<ClientContextLock> QueryResult::LockContext() {
+	if (!context) {
+		string error_str = "Attempting to execute an unsuccessful or closed query result";
+		if (HasError()) {
+			error_str += StringUtil::Format("\nError: %s", GetError());
+		}
+		throw InvalidInputException(error_str);
+	}
+	return context->LockContext();
+}
+
+bool QueryResult::IsOpenInternal(ClientContextLock &lock) {
+	if (HasError() || !context) {
+		return false;
+	}
+	return context->IsActiveResult(lock, *this);
+}
+
+void QueryResult::CheckExecutableInternal(ClientContextLock &lock) {
+	if (!IsOpenInternal(lock)) {
+		string error_str = "Attempting to execute an unsuccessful or closed query result";
+		if (HasError()) {
+			error_str += StringUtil::Format("\nError: %s", GetError());
+		}
+		throw InvalidInputException(error_str);
+	}
+}
+
+bool QueryResult::IsOpen() {
+	if (HasError() || !context) {
+		return false;
+	}
+	auto lock = LockContext();
+	return IsOpenInternal(*lock);
+}
+
+QueryResultState QueryResult::Cancelled() {
+	if (!HasError()) {
+		SetError(ErrorData(ExceptionType::INTERRUPT,
+		                   "The execution of the query was cancelled before it could finish, likely caused by "
+		                   "executing a different query"));
+	}
+	return QueryResultState::EXECUTION_ERROR;
+}
+
+QueryResultState QueryResult::Poll() {
+	if (HasError()) {
+		return QueryResultState::EXECUTION_ERROR;
+	}
+	if (collection || !context) {
+		// The result was collected, or the query already ended: keep reporting the terminal state
+		return QueryResultState::FINISHED;
+	}
+	auto lock = LockContext();
+	if (!IsOpenInternal(*lock)) {
+		return Cancelled();
+	}
+	return context->PollInternal(*lock, *this);
+}
+
+QueryResultState QueryResult::ExecuteTask() {
+	auto lock = LockContext();
+	CheckExecutableInternal(*lock);
+	return context->ExecuteTaskInternal(*lock, *this);
+}
+
+void QueryResult::WaitForTask() {
+	if (!context) {
+		return;
+	}
+	auto lock = LockContext();
+	if (!IsOpenInternal(*lock)) {
+		return;
+	}
+	context->WaitForTask(*lock, *this);
+}
+
+void QueryResult::Close() {
+	if (buffer) {
+		buffer->Close();
+	}
+	if (context) {
+		auto lock = LockContext();
+		if (context->IsActiveResult(*lock, *this)) {
+			// Abandoned before the result was consumed: release the active-query state now (matching
+			// InitialCleanup) instead of leaking it until the next query or context teardown
+			context->CleanupInternal(*lock, this, false);
+		}
+	}
+	context.reset();
+}
+
+//===--------------------------------------------------------------------===//
+// Retention
+//===--------------------------------------------------------------------===//
+void QueryResult::Materialize() {
+	if (collection || HasError() || !context) {
+		return;
+	}
+	auto lock = LockContext();
+	if (!IsOpenInternal(*lock)) {
+		Cancelled();
+		context.reset();
+		return;
+	}
+	D_ASSERT(buffer);
+	buffer->Decide(ResultLifetime::RETAINED);
+}
+
+void QueryResult::Complete() {
+	if (collection || HasError() || !context) {
+		return;
+	}
+	// The handle may hold the last reference to the context, which the lock below outlives
+	auto keep_alive = context;
+	auto lock = keep_alive->LockContext();
+	CompleteInternal(*lock);
+}
+
+void QueryResult::CompleteInternal(ClientContextLock &lock) {
+	if (collection || HasError() || !context) {
+		return;
+	}
+	if (!IsOpenInternal(lock)) {
+		Cancelled();
+		context.reset();
+		return;
+	}
+	D_ASSERT(buffer);
+	buffer->Decide(ResultLifetime::RETAINED);
+	QueryResultState state;
+	while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
+		if (state == QueryResultState::BLOCKED || state == QueryResultState::READY) {
+			context->WaitForTask(lock, *this);
+		}
+	}
+	if (state == QueryResultState::FINISHED) {
+		auto produced = context->GetExecutor().GetResult();
+		// Cleanup can fail on an autocommit commit; it records the error on this result
+		context->CleanupInternal(lock, this, false);
+		if (!HasError()) {
+			collection = produced->TakeCollection();
+		}
+	}
+	context.reset();
+}
+
+void QueryResult::ThrowNoCollection() const {
+	throw InvalidInputException("This query result no longer holds a collection: it was taken with TakeCollection, or "
+	                            "the result was closed before it was collected");
+}
+
+ColumnDataCollection &QueryResult::Collection() {
+	Complete();
+	if (HasError()) {
+		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
+		                            GetError());
+	}
+	if (!collection) {
+		ThrowNoCollection();
+	}
+	return *collection;
+}
+
+unique_ptr<ColumnDataCollection> QueryResult::TakeCollection() {
+	Complete();
+	if (HasError()) {
+		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
+		                            GetError());
+	}
+	if (!collection) {
+		ThrowNoCollection();
+	}
+	return std::move(collection);
+}
+
+Value QueryResult::GetValue(idx_t column_idx, idx_t row_idx) {
+	Complete();
+	if (HasError()) {
+		ThrowError();
+	}
+	if (!row_collection) {
+		if (!collection) {
+			ThrowNoCollection();
+		}
+		row_collection = make_uniq<ColumnDataRowCollection>(collection->GetRows());
+	}
+	return row_collection->GetValue(column_idx, row_idx);
+}
+
+idx_t QueryResult::RowCount() {
+	Complete();
+	return collection ? collection->Count() : 0;
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch
+//===--------------------------------------------------------------------===//
+void QueryResult::EndQuery(ClientContextLock &lock, bool invalidate_transaction) {
+	context->CleanupInternal(lock, this, invalidate_transaction);
+}
+
+void QueryResult::HandleFetchFailure(ClientContextLock &lock, ErrorData error) {
+	bool invalidate_query = true;
+	if (!context->ErrorInvalidatesTransaction(error.Type())) {
+		// standard exceptions do not invalidate the current transaction
+		invalidate_query = false;
+	} else if (Exception::InvalidatesDatabase(error.Type())) {
+		// fatal exceptions invalidate the entire database
+		auto &db_instance = DatabaseInstance::GetDatabase(*context);
+		ValidChecker::Invalidate(db_instance, error.RawMessage());
+	}
+	context->ProcessError(error, context->GetCurrentQuery());
+	SetError(std::move(error));
+	context->CleanupInternal(lock, this, invalidate_query);
+}
+
+unique_ptr<DataChunk> QueryResult::FetchInternal() {
+	Complete();
+	if (HasError()) {
+		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
+	}
+	if (!collection) {
+		ThrowNoCollection();
+	}
+	auto result = make_uniq<DataChunk>();
+	collection->InitializeScanChunk(*result);
+	if (!scan_initialized) {
+		// we disallow zero copy so the chunk is independently usable even after the result is destroyed
+		collection->InitializeScan(scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
+		scan_initialized = true;
+	}
+	collection->Scan(scan_state, *result);
+	if (result->size() == 0) {
+		return nullptr;
+	}
+	return result;
 }
 
 unique_ptr<DataChunk> QueryResult::Fetch() {
@@ -139,6 +407,39 @@ unique_ptr<DataChunk> QueryResult::Fetch() {
 
 unique_ptr<DataChunk> QueryResult::FetchRaw() {
 	return FetchInternal();
+}
+
+//===--------------------------------------------------------------------===//
+// Rendering
+//===--------------------------------------------------------------------===//
+string QueryResult::ToString() {
+	if (HasError()) {
+		return GetError() + "\n";
+	}
+	string result = HeaderToString();
+	auto &coll = Collection();
+	result += "[ Rows: " + to_string(coll.Count()) + "]\n";
+	for (auto &row : coll.Rows()) {
+		for (idx_t col_idx = 0; col_idx < coll.ColumnCount(); col_idx++) {
+			if (col_idx > 0) {
+				result += "\t";
+			}
+			auto val = row.GetValue(col_idx);
+			result += val.IsNull() ? "NULL" : StringUtil::Replace(val.ToString(), string("\0", 1), "\\0");
+		}
+		result += "\n";
+	}
+	result += "\n";
+	return result;
+}
+
+string QueryResult::ToBox(BoxRendererContext &context_p, const BoxRendererConfig &config) {
+	if (HasError()) {
+		return GetError() + "\n";
+	}
+	BoxRenderer renderer(config);
+	ColumnDataCollectionWrapper wrapper(Collection());
+	return renderer.ToString(context_p, IdentifiersToStrings(GetNames()), wrapper);
 }
 
 bool QueryResult::Equals(QueryResult &other, bool compare_names) { // LCOV_EXCL_START

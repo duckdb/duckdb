@@ -158,6 +158,11 @@ bool ValidateEnvPassthrough(string &error);
 bool NO_FAIL(QueryResult &result);
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
 
+//! Submit a query and open a stream on its handle
+duckdb::unique_ptr<duckdb::QueryResultStream> OpenStream(duckdb::Connection &con, const string &query);
+//! Drain a stream into a retained result, so it can be checked with CHECK_COLUMN
+duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream &stream);
+
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())
 

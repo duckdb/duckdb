@@ -189,8 +189,7 @@ TEST_CASE("Test specific serialized plans", "[.][serialization]") {
 
 		deserialized_plan->ResolveOperatorTypes();
 
-		auto deserialized_results =
-		    con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);
+		auto deserialized_results = con.Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)));
 		REQUIRE_NO_FAIL(*deserialized_results);
 
 		// Now execute the original statement as well and compare results
@@ -233,7 +232,7 @@ TEST_CASE("Test specific serialized plans", "[.][serialization]") {
 		roundtrip_deserializer.End();
 
 		roundtrip_plan->ResolveOperatorTypes();
-		auto roundtrip_results = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(roundtrip_plan)), false);
+		auto roundtrip_results = con.Query(make_uniq<LogicalPlanStatement>(std::move(roundtrip_plan)));
 		REQUIRE_NO_FAIL(*roundtrip_results);
 
 		con.Rollback();
@@ -259,8 +258,7 @@ void test_deserialization(const string &file_location) {
 		deserializer.End();
 
 		deserialized_plan->ResolveOperatorTypes();
-		auto deserialized_results =
-		    con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);
+		auto deserialized_results = con.Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)));
 		REQUIRE_NO_FAIL(*deserialized_results);
 
 		Parser p;

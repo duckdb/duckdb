@@ -5,8 +5,6 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 
-#include "duckdb/main/stream_query_result.hpp"
-
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/main/query_result.hpp"
@@ -86,13 +84,6 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
-	if (result.GetResultType() == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = result.Cast<StreamQueryResult>();
-		if (!stream_result.IsOpen()) {
-			my_stream->last_error = ErrorData("Query Stream is closed");
-			return -1;
-		}
-	}
 	if (my_stream->column_types.empty()) {
 		my_stream->column_types = result.GetTypes();
 		my_stream->column_names = IdentifiersToStrings(result.GetNames());
@@ -117,14 +108,6 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	if (result.HasError()) {
 		my_stream->last_error = result.GetErrorObject();
 		return -1;
-	}
-	if (result.GetResultType() == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = result.Cast<StreamQueryResult>();
-		if (!stream_result.IsOpen()) {
-			// Nothing to output
-			out->release = nullptr;
-			return 0;
-		}
 	}
 	if (my_stream->column_types.empty()) {
 		my_stream->column_types = result.GetTypes();

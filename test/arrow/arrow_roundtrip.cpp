@@ -331,15 +331,15 @@ TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
 	if (!db.ExtensionIsLoaded("tpch")) {
 		return;
 	}
-	con.SendQuery("CALL dbgen(sf=0.5)");
+	con.Query("CALL dbgen(sf=0.5)");
 
 	// REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM lineitem;", false));
 	// REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT l_orderkey, l_shipdate, l_comment FROM lineitem ORDER BY
 	// l_orderkey DESC;", false)); REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT lineitem FROM lineitem;",
 	// false)); REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT [lineitem] FROM lineitem;", false));
 
-	con.SendQuery("create table lineitem_no_constraint as from lineitem;");
-	con.SendQuery("update lineitem_no_constraint set l_comment=null where l_orderkey%2=0;");
+	con.Query("create table lineitem_no_constraint as from lineitem;");
+	con.Query("update lineitem_no_constraint set l_comment=null where l_orderkey%2=0;");
 
 	// REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM lineitem_no_constraint;", false));
 	REQUIRE(ArrowTestHelper::RunArrowComparison(

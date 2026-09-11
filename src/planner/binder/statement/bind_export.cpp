@@ -320,7 +320,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.plan = std::move(export_node);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

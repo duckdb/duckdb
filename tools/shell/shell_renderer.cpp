@@ -141,8 +141,7 @@ public:
 		if (!result) {
 			return;
 		}
-		auto &query_result = result->result;
-		auto nCol = query_result.ColumnCount();
+		auto nCol = result->ColumnCount();
 		row_data.data.resize(nCol, string());
 		row_data.is_null.resize(nCol, false);
 		row_data.row_index = 0;
@@ -224,6 +223,10 @@ RenderingQueryResult::RenderingQueryResult(duckdb::QueryResult &result, ShellRen
     : result(result), renderer(renderer), metadata(result) {
 }
 
+RenderingQueryResult::RenderingQueryResult(duckdb::QueryResultStream &stream, ShellRenderer &renderer)
+    : stream(stream), renderer(renderer), metadata(stream) {
+}
+
 RenderingResultIterator RenderingQueryResult::begin() {
 	return RenderingResultIterator(*this);
 }
@@ -232,9 +235,20 @@ RenderingResultIterator RenderingQueryResult::end() {
 	return RenderingResultIterator(nullptr);
 }
 
+SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResultStream &stream,
+                                           PagerMode pager_overwrite) {
+	RenderingQueryResult render_result(stream, renderer);
+	return RenderPreparedResult(renderer, render_result, pager_overwrite);
+}
+
 SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &query_result,
                                            PagerMode pager_overwrite) {
 	RenderingQueryResult render_result(query_result, renderer);
+	return RenderPreparedResult(renderer, render_result, pager_overwrite);
+}
+
+SuccessState ShellState::RenderPreparedResult(ShellRenderer &renderer, RenderingQueryResult &render_result,
+                                              PagerMode pager_overwrite) {
 	renderer.Analyze(render_result);
 	if (seenInterrupt) {
 		return SuccessState::FAILURE;
@@ -314,16 +328,24 @@ string GetTypeName(duckdb::LogicalType &type) {
 	}
 }
 
-ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
+ResultMetadata::ResultMetadata(const vector<duckdb::Identifier> &names,
+                               const vector<duckdb::LogicalType> &result_types) {
 	// initialize the result and the column names
-	idx_t nCol = result.ColumnCount();
+	idx_t nCol = names.size();
 	column_names.reserve(nCol);
 	types.reserve(nCol);
 	for (idx_t c = 0; c < nCol; c++) {
-		column_names.push_back(result.ColumnName(c).GetIdentifierName());
-		types.push_back(result.GetTypes()[c]);
+		column_names.push_back(names[c].GetIdentifierName());
+		types.push_back(result_types[c]);
 		type_names.push_back(GetTypeName(types.back()));
 	}
+}
+
+ResultMetadata::ResultMetadata(duckdb::QueryResult &result) : ResultMetadata(result.GetNames(), result.GetTypes()) {
+}
+
+ResultMetadata::ResultMetadata(duckdb::QueryResultStream &stream)
+    : ResultMetadata(stream.GetNames(), stream.GetTypes()) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -353,14 +375,14 @@ bool RenderingQueryResult::TryConvertChunk() {
 	if (exhausted_result) {
 		return false;
 	}
-	auto chunk = result.Fetch();
+	auto chunk = stream ? stream->Fetch() : result->Fetch();
 	if (!chunk) {
 		exhausted_result = true;
 		return false;
 	}
 	auto varchar_chunk = renderer.ConvertChunk(*chunk);
 	if (renderer.HasConvertValue()) {
-		for (idx_t c = 0; c < result.ColumnCount(); c++) {
+		for (idx_t c = 0; c < ColumnCount(); c++) {
 			auto &str_vec = varchar_chunk->data[c];
 			auto strings = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(str_vec);
 			for (idx_t r = 0; r < varchar_chunk->size(); r++) {
@@ -1618,11 +1640,9 @@ void ModeDuckBoxRenderer::RemoveRenderLimits() {
 
 void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	duckdb::BoxRenderer renderer(config);
-	auto &query_result = result.result;
-	auto &materialized = query_result.Cast<duckdb::MaterializedQueryResult>();
 	auto &con = *state.conn;
 	try {
-		wrapper = make_uniq<duckdb::ColumnDataCollectionWrapper>(materialized.Collection());
+		wrapper = make_uniq<duckdb::ColumnDataCollectionWrapper>(result.result->Collection());
 		render_context = make_uniq<duckdb::ClientBoxRendererContext>(*con.context);
 		render_state = renderer.Prepare(*render_context, result.metadata.column_names, *wrapper);
 	} catch (std::exception &ex) {
@@ -1647,7 +1667,7 @@ bool ModeDuckBoxRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode
 	// if this is larger than pager_min_rows - we actually check the row count of the result
 	if (config.max_rows >= state.pager_min_rows) {
 		// show the pager if the row count exceeds the min rows
-		if (result.result.Cast<MaterializedQueryResult>().RowCount() >= state.pager_min_rows) {
+		if (result.result->RowCount() >= state.pager_min_rows) {
 			return true;
 		}
 	}
@@ -1691,7 +1711,7 @@ SuccessState ModeDescribeRenderer::RenderQueryResult(PrintStream &out, ShellStat
 	vector<ShellTableInfo> result;
 	ShellTableInfo table;
 	table.table_name = state.describe_table_name;
-	for (auto &row : res.result) {
+	for (auto &row : *res.result) {
 		ShellColumnInfo column;
 		column.column_name = row.GetValue<string>(0);
 		column.column_type = row.GetValue<string>(1);
