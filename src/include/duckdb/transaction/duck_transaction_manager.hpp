@@ -152,10 +152,7 @@ private:
 
 	//! Commits are published before their WAL flush marker is synced: until then they are tracked
 	//! here and new snapshots are bounded below them, so no transaction can observe a commit a
-	//! crash could still lose. An entry is removed only by its own thread after it leaves
-	//! WriteAheadLog::SyncUpTo, making WaitForDurability a quiescence barrier for checkpoints.
-	//! Teardown does not rely on that drain - a committing thread holds the AttachedDatabase - so
-	//! the destructor asserts the queue is empty instead, except after a failed sync
+	//! crash could still lose
 	struct UnsyncedCommit {
 		transaction_t commit_id;
 		//! The WAL offset covering the commit's flush marker
