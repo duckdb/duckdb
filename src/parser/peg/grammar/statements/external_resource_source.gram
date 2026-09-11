@@ -6,5 +6,5 @@
 AttachToExternalResource <- 'ATTACH' 'TO' ExternalResourceSource AttachAlias AttachOptions?
 ConnectToExternalResource <- 'CONNECT' 'TO' ExternalResourceSource AttachOptions?
 ExternalResourceSource <- ExternalResourceCreateClause / ExternalResourceReferenceClause
-ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' 'EXTERNAL' 'RESOURCE' StringLiteral ExternalResourceCreationOptions?
-ExternalResourceReferenceClause <- 'EXTERNAL' 'RESOURCE' ColId
+ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' ExternalResourceKeyword StringLiteral ExternalResourceCreationOptions?
+ExternalResourceReferenceClause <- ExternalResourceKeyword ColId

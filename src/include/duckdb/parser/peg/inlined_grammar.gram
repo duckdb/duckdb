@@ -1568,11 +1568,14 @@ ExtractDatePart <-
 
 ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / ShowExternalResourcesStmt
 
-CreateExternalResourceStmt <- 'CREATE' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? ExternalResourceCreationOptions?
-RegisterExternalResourceStmt <- 'REGISTER' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? 'FROM' Expression
-DestroyExternalResourceStmt <- 'DESTROY' 'EXTERNAL' 'RESOURCE' ColId
+CreateExternalResourceStmt <- 'CREATE' ExternalResourceKeyword StringLiteral AttachAlias? ExternalResourceCreationOptions?
+RegisterExternalResourceStmt <- 'REGISTER' ExternalResourceKeyword StringLiteral AttachAlias? 'FROM' Expression
+DestroyExternalResourceStmt <- 'DESTROY' ExternalResourceKeyword ColId
 ShowExternalResourcesStmt <- 'SHOW' ShowAllModifier? 'EXTERNAL' 'RESOURCES'
 ShowAllModifier <- 'ALL'
+
+# Syntax only: the keyword pair every singular form repeats. The plural in SHOW cannot share it.
+ExternalResourceKeyword <- 'EXTERNAL' 'RESOURCE'
 
 # The recipe's create params. Its own rule rather than AttachOptions: the two option bags are
 # distinct, and a statement can carry both.
@@ -1586,8 +1589,8 @@ ExternalResourceCreationOptions <- GenericCopyOptionList
 AttachToExternalResource <- 'ATTACH' 'TO' ExternalResourceSource AttachAlias AttachOptions?
 ConnectToExternalResource <- 'CONNECT' 'TO' ExternalResourceSource AttachOptions?
 ExternalResourceSource <- ExternalResourceCreateClause / ExternalResourceReferenceClause
-ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' 'EXTERNAL' 'RESOURCE' StringLiteral ExternalResourceCreationOptions?
-ExternalResourceReferenceClause <- 'EXTERNAL' 'RESOURCE' ColId
+ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' ExternalResourceKeyword StringLiteral ExternalResourceCreationOptions?
+ExternalResourceReferenceClause <- ExternalResourceKeyword ColId
 
 InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 

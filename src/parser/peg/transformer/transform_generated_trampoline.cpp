@@ -18143,13 +18143,13 @@ void PEGTransformerFactory::InitializeCreateExternalResourceStmtTrampoline(PEGTr
                                                                            GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(2);
-	auto &external_resource_creation_options_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	auto &external_resource_creation_options_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	if (external_resource_creation_options_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("ExternalResourceCreationOptions"),
 		                   external_resource_creation_options_opt.GetResult()},
 		                  1);
 	}
-	auto &attach_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	auto &attach_alias_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (attach_alias_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("AttachAlias"), attach_alias_opt.GetResult()}, 0);
 	}
@@ -18159,7 +18159,7 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeCreateExternalResourceStmtTrampoline(PEGTransformer &transformer,
                                                                     GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(3));
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(2));
 	optional<Identifier> attach_alias {};
 	if (process.child_results[0]) {
 		attach_alias = process.TakeResult<Identifier>(0);
@@ -18177,8 +18177,8 @@ void PEGTransformerFactory::InitializeRegisterExternalResourceStmtTrampoline(PEG
                                                                              GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(2);
-	process.PushChild({transformer.GetRule("Expression"), list_pr.GetChild(6)}, 1);
-	auto &attach_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	process.PushChild({transformer.GetRule("Expression"), list_pr.GetChild(5)}, 1);
+	auto &attach_alias_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (attach_alias_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("AttachAlias"), attach_alias_opt.GetResult()}, 0);
 	}
@@ -18188,7 +18188,7 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeRegisterExternalResourceStmtTrampoline(PEGTransformer &transformer,
                                                                       GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(3));
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(2));
 	optional<Identifier> attach_alias {};
 	if (process.child_results[0]) {
 		attach_alias = process.TakeResult<Identifier>(0);
@@ -18203,7 +18203,7 @@ void PEGTransformerFactory::InitializeDestroyExternalResourceStmtTrampoline(PEGT
                                                                             GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("ColId"), list_pr.GetChild(3)}, 0);
+	process.PushChild({transformer.GetRule("ColId"), list_pr.GetChild(2)}, 0);
 }
 
 unique_ptr<TransformResultValue>
@@ -18335,7 +18335,7 @@ void PEGTransformerFactory::InitializeExternalResourceCreateClauseTrampoline(PEG
                                                                              GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(1);
-	auto &external_resource_creation_options_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	auto &external_resource_creation_options_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	if (external_resource_creation_options_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("ExternalResourceCreationOptions"),
 		                   external_resource_creation_options_opt.GetResult()},
@@ -18347,7 +18347,7 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeExternalResourceCreateClauseTrampoline(PEGTransformer &transformer,
                                                                       GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(4));
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(3));
 	optional<vector<GenericCopyOption>> external_resource_creation_options {};
 	if (process.child_results[0]) {
 		external_resource_creation_options = process.TakeResult<vector<GenericCopyOption>>(0);
@@ -18361,7 +18361,7 @@ void PEGTransformerFactory::InitializeExternalResourceReferenceClauseTrampoline(
                                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("ColId"), list_pr.GetChild(2)}, 0);
+	process.PushChild({transformer.GetRule("ColId"), list_pr.GetChild(1)}, 0);
 }
 
 unique_ptr<TransformResultValue>

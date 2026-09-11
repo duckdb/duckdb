@@ -1832,6 +1832,8 @@ packrat_memoized_rules:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  # Syntax only: the 'EXTERNAL' 'RESOURCE' keyword pair, shared by every singular form.
+  - ExternalResourceKeyword
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm
