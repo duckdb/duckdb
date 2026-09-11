@@ -189,6 +189,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/grammar_change.hpp"
+#include "duckdb/parser/literal.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
@@ -3321,6 +3322,31 @@ LimitValueType EnumUtil::FromString<LimitValueType>(const char *value) {
 	return static_cast<LimitValueType>(StringUtil::StringToEnum(GetLimitValueTypeValues(), 2, "LimitValueType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetLiteralKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LiteralKind::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(LiteralKind::NULL_LITERAL), "NULL_LITERAL" },
+		{ static_cast<uint32_t>(LiteralKind::BOOLEAN), "BOOLEAN" },
+		{ static_cast<uint32_t>(LiteralKind::INTEGER), "INTEGER" },
+		{ static_cast<uint32_t>(LiteralKind::NUMERIC), "NUMERIC" },
+		{ static_cast<uint32_t>(LiteralKind::STRING), "STRING" },
+		{ static_cast<uint32_t>(LiteralKind::HEX), "HEX" },
+		{ static_cast<uint32_t>(LiteralKind::BIT), "BIT" },
+		{ static_cast<uint32_t>(LiteralKind::POINTER), "POINTER" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LiteralKind>(LiteralKind value) {
+	return StringUtil::EnumToString(GetLiteralKindValues(), 9, "LiteralKind", static_cast<uint32_t>(value));
+}
+
+template<>
+LiteralKind EnumUtil::FromString<LiteralKind>(const char *value) {
+	return static_cast<LiteralKind>(StringUtil::StringToEnum(GetLiteralKindValues(), 9, "LiteralKind", value));
+}
+
 const StringUtil::EnumStringLiteral *GetLoadTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LoadType::LOAD), "LOAD" },
@@ -3783,6 +3809,25 @@ const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value) {
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value) {
 	return static_cast<Monotonicity>(StringUtil::StringToEnum(GetMonotonicityValues(), 6, "Monotonicity", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMultiFileClaimResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MultiFileClaimResult::CLAIMED), "CLAIMED" },
+		{ static_cast<uint32_t>(MultiFileClaimResult::EXHAUSTED), "EXHAUSTED" },
+		{ static_cast<uint32_t>(MultiFileClaimResult::WAIT_OPEN), "WAIT_OPEN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MultiFileClaimResult>(MultiFileClaimResult value) {
+	return StringUtil::EnumToString(GetMultiFileClaimResultValues(), 3, "MultiFileClaimResult", static_cast<uint32_t>(value));
+}
+
+template<>
+MultiFileClaimResult EnumUtil::FromString<MultiFileClaimResult>(const char *value) {
+	return static_cast<MultiFileClaimResult>(StringUtil::StringToEnum(GetMultiFileClaimResultValues(), 3, "MultiFileClaimResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {

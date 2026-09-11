@@ -1,4 +1,5 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"

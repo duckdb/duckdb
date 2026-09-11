@@ -1,4 +1,6 @@
 #include "duckdb/storage/table/table_index_list.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"

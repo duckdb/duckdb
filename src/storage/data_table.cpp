@@ -1,4 +1,5 @@
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
@@ -179,7 +180,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
-                     const vector<StorageIndex> &bound_columns, Expression &cast_expr)
+                     const vector<StorageIndex> &bound_columns, Expression &cast_expr,
+                     optional_ptr<BoundConstraint> constraint_to_verify)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
 	auto &transaction = DuckTransaction::Get(context, db);
 	auto &local_storage = LocalStorage::Get(transaction);
@@ -218,6 +220,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 		// scan the original table, and fill the new column with the transformed value
 		local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);
+
+		// re-verify any column constraint that the rewrite could have violated (e.g. NOT NULL)
+		if (constraint_to_verify) {
+			VerifyNewConstraint(local_storage, *this, *constraint_to_verify);
+		}
 	} catch (...) {
 		// nothing reached the catalog, so no undo entry will restore the parent
 		parent.version = previous_version;
@@ -302,21 +309,20 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 	local_storage.InitializeParallelScan(*this, state.local_state);
 }
 
-idx_t DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state) {
-	if (row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state)) {
-		return scan_state.table_state.row_group->GetCount();
+optional_idx DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state,
+                                         TableScanState &scan_state, bool initialize_columns) {
+	const auto rows =
+	    row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state, initialize_columns);
+	if (rows.IsValid()) {
+		return rows;
 	}
 	if (state.scan_state.row_number_base.IsValid()) {
 		// start the row number for transaction-local rows from the final row count in the base table
 		scan_state.local_state.row_number_base = state.scan_state.row_number_base.GetIndex();
 	}
 	auto &local_storage = LocalStorage::Get(context, db);
-	if (local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state)) {
-		return scan_state.local_state.row_group->GetCount();
-	} else {
-		// finished all scans: no more scans remaining
-		return 0;
-	}
+	return local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state,
+	                                      initialize_columns);
 }
 
 void DataTable::Scan(DuckTransaction &transaction, DataChunk &result, TableScanState &state) {
