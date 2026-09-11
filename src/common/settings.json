@@ -270,8 +270,7 @@
         "name": "current_dialect",
         "description": "The SQL dialect used by the parser",
         "type": "VARCHAR",
-        "scope": "global",
-        "default_value": "duckdb",
+        "scope": "local",
         "on_callbacks": [
             "set",
             "reset"

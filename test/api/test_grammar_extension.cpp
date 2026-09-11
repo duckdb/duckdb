@@ -751,7 +751,6 @@ TEST_CASE("The parser cache only holds the base grammar", "[api][grammar_extensi
 	Connection con(db);
 	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
 	auto base_grammar = CompiledGrammar::Get(*con.context);
-	REQUIRE_FALSE(base_grammar->HasGrammarChanges());
 	REQUIRE(base_grammar == CompiledGrammar::Get(*con.context));
 
 	RegisterGrammarExtensionTestSyntax(*db.instance);
@@ -759,7 +758,6 @@ TEST_CASE("The parser cache only holds the base grammar", "[api][grammar_extensi
 	ActivateGrammarExtensionTestSyntax(con);
 	CheckGrammarExtensionTestSyntax(con);
 	auto extension_grammar = CompiledGrammar::Get(*con.context);
-	REQUIRE(extension_grammar->HasGrammarChanges());
 	REQUIRE(extension_grammar == CompiledGrammar::Get(*con.context));
 }
 

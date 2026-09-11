@@ -45,6 +45,7 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/parser/peg/dialect_extension.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 
 #include "mbedtls_wrapper.hpp"
@@ -1754,14 +1755,55 @@ void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
 }
 
-void CurrentDialectSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+void CurrentDialectSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (!OnLocalSet(context, input)) {
+		return;
+	}
+	auto &client_config = ClientConfig::GetConfig(context);
+	auto &config = DatabaseInstance::GetDatabase(context).config;
+
 	if (input.IsNull()) {
-		throw InvalidInputException("current_dialect setting cannot be NULL");
+		client_config.current_dialect = std::nullopt;
+		return;
 	}
 	auto dialect_name = input.GetValue<string>();
-	if (!info.config.GetCallbackManager().HasDialectExtension(dialect_name)) {
+
+	auto dialect_extension_p = config.GetCallbackManager().GetDialectExtension(dialect_name);
+	if (!dialect_extension_p) {
 		throw InvalidInputException("Dialect \"%s\" is not installed", dialect_name);
 	}
+	auto &dialect_extension = *dialect_extension_p;
+	//! The grammar gets lazily compiled, load it if it wasn't compiled yet
+	(void)dialect_extension.GetCompiledGrammar(context);
+	client_config.current_dialect = dialect_name;
+	auto &compatibility_mode = dialect_extension.GetCompatibilityMode();
+	if (compatibility_mode) {
+		Settings::Set<DialectCompatibilityModeSetting>(context, SetScope::LOCAL,
+		                                               Value(EnumUtil::ToString(*compatibility_mode)));
+	}
+}
+
+void CurrentDialectSetting::ResetLocal(ClientContext &context) {
+	if (!OnLocalReset(context)) {
+		return;
+	}
+	ClientConfig::GetConfig(context).current_dialect = std::nullopt;
+}
+
+bool CurrentDialectSetting::OnLocalSet(ClientContext &context, const Value &input) {
+	return true;
+}
+
+bool CurrentDialectSetting::OnLocalReset(ClientContext &context) {
+	return true;
+}
+
+Value CurrentDialectSetting::GetSetting(const ClientContext &context) {
+	auto &client_config = ClientConfig::GetConfig(context);
+	if (client_config.current_dialect) {
+		return Value(*client_config.current_dialect);
+	}
+	return Value();
 }
 
 void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Value &input) {
