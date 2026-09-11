@@ -656,7 +656,7 @@ void WriteAheadLog::SyncAsLeader(unique_lock<mutex> &guard) {
 	if (target > durable_offset) {
 		durable_offset = target;
 	}
-	// reset so waiters elect a new leader; clobbering a concurrent leader costs a spurious fsync
+	// reset so waiters elect a new leader
 	syncing_offset = durable_offset;
 	// notify without holding the lock, so waiters do not wake up into a held mutex
 	guard.unlock();
