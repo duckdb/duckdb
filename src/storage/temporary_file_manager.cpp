@@ -838,13 +838,16 @@ void TemporaryDirectoryHandle::ClaimOwner() {
 	// count from zero. It is not locked, and nothing ever opens anybody else's: existing is its job.
 	for (;;) {
 		owner.instance = NextInstanceId();
+		auto marker_path = fs.JoinPath(temp_directory, TemporaryOwnerMarkerName(owner));
 		try {
-			auto marker = fs.OpenFile(fs.JoinPath(temp_directory, TemporaryOwnerMarkerName(owner)),
-			                          FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+			auto marker = fs.OpenFile(marker_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 			marker->Close();
 			break;
 		} catch (std::exception &) {
 			// taken, by a live instance or by one that died holding it - either way not ours
+			if (!fs.FileExists(marker_path)) {
+				throw;
+			}
 		}
 	}
 	file_prefix = TemporaryFilePrefix(owner);
