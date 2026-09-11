@@ -1,0 +1,100 @@
+# name: test/sql/copy/csv/csv_hive_sample_size.test
+# description: Test the hive_sample_size option that limits the files inspected during binding
+# group: [csv]
+
+# three partitions - the third one is not a date, so scanning all files detects VARCHAR
+statement ok
+COPY (SELECT 42 AS i, '2012-01-01' AS part UNION ALL SELECT 43, '2013-01-01' UNION ALL SELECT 44, 'not_a_date')
+TO '{TEST_DIR}/hive_sample_types' (FORMAT CSV, PARTITION_BY ('part'));
+
+query I
+SELECT column_type FROM (DESCRIBE SELECT * FROM read_csv('{TEST_DIR}/hive_sample_types/**/*.csv', hive_partitioning=true)) WHERE column_name='part'
+----
+VARCHAR
+
+# -1 is the default: inspect all files
+query I
+SELECT column_type FROM (DESCRIBE SELECT * FROM read_csv('{TEST_DIR}/hive_sample_types/**/*.csv', hive_partitioning=true, hive_sample_size=-1)) WHERE column_name='part'
+----
+VARCHAR
+
+# only looking at the first file(s) detects DATE
+query I
+SELECT column_type FROM (DESCRIBE SELECT * FROM read_csv('{TEST_DIR}/hive_sample_types/**/*.csv', hive_partitioning=true, hive_sample_size=1)) WHERE column_name='part'
+----
+DATE
+
+query I
+SELECT column_type FROM (DESCRIBE SELECT * FROM read_csv('{TEST_DIR}/hive_sample_types/**/*.csv', hive_partitioning=true, hive_sample_size=2)) WHERE column_name='part'
+----
+DATE
+
+# a sample size exceeding the file count is the same as inspecting everything
+query I
+SELECT column_type FROM (DESCRIBE SELECT * FROM read_csv('{TEST_DIR}/hive_sample_types/**/*.csv', hive_partitioning=true, hive_sample_size=100)) WHERE column_name='part'
+----
+VARCHAR
+
+# explicit hive_types are not overwritten by the sampled types
+query I
+SELECT column_type FROM (DESCRIBE SELECT * FROM read_csv('{TEST_DIR}/hive_sample_types/**/*.csv', hive_partitioning=true, hive_sample_size=1, hive_types={'part': 'VARCHAR'})) WHERE column_name='part'
+----
+VARCHAR
+
+query III
+SELECT i, part, typeof(part) FROM read_csv('{TEST_DIR}/hive_sample_types/**/*.csv', hive_partitioning=true, hive_sample_size=1, hive_types={'part': 'VARCHAR'}) ORDER BY i
+----
+42	2012-01-01	VARCHAR
+43	2013-01-01	VARCHAR
+44	not_a_date	VARCHAR
+
+# a file with a different partition key that sorts after the other partitions
+statement ok
+COPY (SELECT 1 AS i, 'a' AS part UNION ALL SELECT 2, 'b') TO '{TEST_DIR}/hive_sample_detect' (FORMAT CSV, PARTITION_BY ('part'));
+
+statement ok
+COPY (SELECT 3 AS i, 'zzz' AS zpart) TO '{TEST_DIR}/hive_sample_detect' (FORMAT CSV, PARTITION_BY ('zpart'), OVERWRITE_OR_IGNORE 1);
+
+# autodetection scans all files and gives up because of the mismatching partition key
+query I
+SELECT count(*) FROM (DESCRIBE SELECT * FROM read_csv('{TEST_DIR}/hive_sample_detect/**/*.csv')) WHERE column_name='part'
+----
+0
+
+query I
+SELECT count(*) FROM (DESCRIBE SELECT * FROM read_csv('{TEST_DIR}/hive_sample_detect/**/*.csv', hive_sample_size=2)) WHERE column_name='part'
+----
+1
+
+# the same holds for the consistency check that runs when hive partitioning is set explicitly
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/hive_sample_detect/**/*.csv', hive_partitioning=true)
+----
+<REGEX>:Binder Error:.*Hive partition mismatch.*
+
+query I
+SELECT count(*) FROM (DESCRIBE SELECT * FROM read_csv('{TEST_DIR}/hive_sample_detect/**/*.csv', hive_partitioning=true, hive_sample_size=2)) WHERE column_name='part'
+----
+1
+
+# invalid values
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/hive_sample_types/**/*.csv', hive_partitioning=true, hive_sample_size=0)
+----
+<REGEX>:Binder Error:.*HIVE_SAMPLE_SIZE.*
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/hive_sample_types/**/*.csv', hive_partitioning=true, hive_sample_size=-2)
+----
+<REGEX>:Binder Error:.*HIVE_SAMPLE_SIZE.*
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/hive_sample_types/**/*.csv', hive_partitioning=true, hive_sample_size=NULL)
+----
+<REGEX>:Invalid Input Error:.*Cannot use NULL as argument.*
+
+# read_blob/read_text do not expose the option
+statement error
+SELECT * FROM read_blob('{TEST_DIR}/hive_sample_types/**/*.csv', hive_sample_size=1)
+----
+<REGEX>:Binder Error:.*Invalid named parameter.*

@@ -706,6 +706,12 @@
         "name": "maximum_sample_files",
         "type": "idx_t",
         "default": "1"
+      },
+      {
+        "id": 109,
+        "name": "hive_sample_size",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "pointer_type": "none"
