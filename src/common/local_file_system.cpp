@@ -131,8 +131,7 @@ static std::wstring ConvertPathToNormalizedAbsolute(const std::wstring &path) {
 }
 
 static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const string &path,
-                                                     optional_ptr<FileOpener> opener,
-                                                     bool force_extended_path = false) {
+                                                     optional_ptr<FileOpener> opener) {
 	string normalized_path = fs.ExpandPath(path, opener);
 	std::wstring unicode_path = ConvertPathToUnicode(normalized_path);
 
@@ -141,8 +140,8 @@ static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const strin
 	// We are doing it for all paths to not perform current working dir resolving twice.
 	std::wstring abs_path = ConvertPathToNormalizedAbsolute(unicode_path);
 
-	if ((!force_extended_path && abs_path.length() <= WINDOWS_MAX_SHORT_PATH) ||
-	    abs_path.find(WINDOWS_LOCAL_LONG_PATH_PREFIX) == 0 || abs_path.find(WINDOWS_UNC_LONG_PATH_PREFIX) == 0) {
+	if (abs_path.length() <= WINDOWS_MAX_SHORT_PATH || abs_path.find(WINDOWS_LOCAL_LONG_PATH_PREFIX) == 0 ||
+	    abs_path.find(WINDOWS_UNC_LONG_PATH_PREFIX) == 0) {
 		return abs_path;
 	}
 
@@ -153,7 +152,7 @@ static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const strin
 	}
 
 	if (abs_path.find(L"\\\\") == 0) {
-		return WINDOWS_UNC_LONG_PATH_PREFIX + abs_path;
+		return WINDOWS_UNC_LONG_PATH_PREFIX + abs_path.substr(2);
 	}
 
 	return WINDOWS_LOCAL_LONG_PATH_PREFIX + abs_path;
@@ -1607,7 +1606,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
-	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener, true);
+	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
 	constexpr DWORD delete_access = 0x00010000L;                                     // DELETE
 	constexpr auto file_rename_info_ex = static_cast<FILE_INFO_BY_HANDLE_CLASS>(22); // FileRenameInfoEx
 	const auto file_name_length = target_unicode.size() * sizeof(WCHAR);
