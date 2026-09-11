@@ -555,7 +555,6 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		bool wake_waiters = !synced || !HasUnsyncedCommits();
 		t_lock.unlock();
 		if (wake_waiters) {
-			// notify without holding the lock, so waiters do not wake up into a held mutex
 			durability_cv.notify_all();
 		}
 	}

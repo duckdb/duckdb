@@ -658,7 +658,6 @@ void WriteAheadLog::SyncAsLeader(unique_lock<mutex> &guard) {
 	}
 	// reset so waiters elect a new leader
 	syncing_offset = durable_offset;
-	// notify without holding the lock, so waiters do not wake up into a held mutex
 	guard.unlock();
 	sync_cv.notify_all();
 	guard.lock();
