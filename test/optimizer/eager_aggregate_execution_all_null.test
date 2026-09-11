@@ -40,6 +40,16 @@ CREATE TABLE t_all_null (i INTEGER)
 statement ok
 INSERT INTO t_all_null SELECT NULL::INTEGER FROM range(4096)
 
+# BOOLEAN folds as well: the first row group holds only false, the second only true
+statement ok
+CREATE TABLE t_bool (b BOOLEAN)
+
+statement ok
+INSERT INTO t_bool SELECT false AS b FROM range(2048)
+
+statement ok
+INSERT INTO t_bool SELECT true AS b FROM range(2048)
+
 # Work-around for unsetting version info
 statement ok
 ATTACH '{TEST_DIR}/eager_agg_null_tmp.duckdb' AS tmp
@@ -189,3 +199,15 @@ query II
 EXPLAIN SELECT max(i) FROM t_null
 ----
 physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# BOOLEAN is orderable and keeps its min/max in the numeric statistics, but it is not covered by
+# LogicalType::IsNumeric(), so min/max over a BOOLEAN column used to always fall back to a scan
+query II
+EXPLAIN SELECT min(b), max(b) FROM t_bool
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT min(b), max(b) FROM t_bool
+----
+false	true

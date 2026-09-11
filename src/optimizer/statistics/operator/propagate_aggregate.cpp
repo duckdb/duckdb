@@ -75,7 +75,7 @@ unique_ptr<ValueComparator> GetComparator(const Identifier &fun_name) {
 unique_ptr<ValueComparator> GetComparator(const Identifier &fun_name, const LogicalType &type) {
 	if (type == LogicalType::VARCHAR) {
 		return GetComparator<StringStats>(fun_name);
-	} else if (type.IsNumeric() || type.IsTemporal()) {
+	} else if (type.IsNumeric() || type.IsTemporal() || type.id() == LogicalTypeId::BOOLEAN) {
 		return GetComparator<NumericStats>(fun_name);
 	}
 	return nullptr;
