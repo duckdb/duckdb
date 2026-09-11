@@ -54,11 +54,20 @@ ATTACH '{TEST_DIR}/attach_or_replace.db' AS db2;
 statement ok
 SELECT * FROM db2.all_types;
 
-# ATTACH is not transactional: rolling back a transaction that replaced an attachment does not restore
-# the replaced one. The replacement is undone and the original stays detached, so the name is left
-# unattached entirely.
 statement ok
 ATTACH '{TEST_DIR}/attach_or_replace_txn.db' AS db3;
+
+statement ok
+CREATE TABLE db3.marker AS SELECT 3 AS value;
+
+statement ok
+ATTACH '{TEST_DIR}/attach_or_replace_txn_new.db' AS db4;
+
+statement ok
+CREATE TABLE db4.marker AS SELECT 4 AS value;
+
+statement ok
+DETACH db4;
 
 statement ok
 BEGIN;
@@ -66,11 +75,148 @@ BEGIN;
 statement ok
 ATTACH OR REPLACE '{TEST_DIR}/attach_or_replace_txn_new.db' AS db3;
 
+query I
+SELECT value FROM db3.marker;
+----
+4
+
+statement error
+ATTACH '{TEST_DIR}/attach_or_replace_txn.db' AS db5;
+----
+already attached
+
 statement ok
 ROLLBACK;
 
 query I
-SELECT count(*) FROM duckdb_databases() WHERE database_name = 'db3';
+SELECT value FROM db3.marker;
+----
+3
+
+# Uncommitted replacements cannot be detached or renamed
+statement ok
+BEGIN;
+
+statement ok
+ATTACH OR REPLACE '{TEST_DIR}/attach_or_replace_txn_new.db' AS db3;
+
+statement error
+DETACH db3;
+----
+uncommitted attachment changes
+
+statement ok
+ROLLBACK;
+
+statement ok
+BEGIN;
+
+statement ok
+ATTACH OR REPLACE '{TEST_DIR}/attach_or_replace_txn_new.db' AS db3;
+
+statement error
+ALTER DATABASE db3 SET ALIAS TO db5;
+----
+uncommitted attachment changes
+
+statement ok
+ROLLBACK;
+
+# A path-conflict rejection leaves the original database attached
+statement ok
+ATTACH '{TEST_DIR}/attach_or_replace_txn_new.db' AS db4;
+
+statement ok
+BEGIN;
+
+statement error
+ATTACH OR REPLACE '{TEST_DIR}/attach_or_replace_txn_new.db' AS db3;
+----
+already attached
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT value FROM db3.marker;
+----
+3
+
+statement ok
+DETACH db4;
+
+# Committing keeps the replacement
+statement ok
+BEGIN;
+
+statement ok
+ATTACH OR REPLACE '{TEST_DIR}/attach_or_replace_txn_new.db' AS db3;
+
+statement ok
+COMMIT;
+
+query I
+SELECT value FROM db3.marker;
+----
+4
+
+statement ok
+DETACH db3;
+
+statement ok
+ATTACH '{TEST_DIR}/attach_or_replace_txn.db' AS db3;
+
+query I
+SELECT value FROM db3.marker;
+----
+3
+
+# In-memory replacements restore the original catalog on rollback
+statement ok
+ATTACH ':memory:' AS memory_db;
+
+statement ok
+CREATE TABLE memory_db.marker AS SELECT 5 AS value;
+
+statement ok
+BEGIN;
+
+statement ok
+ATTACH OR REPLACE '' AS memory_db;
+
+statement ok
+CREATE TABLE memory_db.replacement AS SELECT 6 AS value;
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT value FROM memory_db.marker;
+----
+5
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE database_name = 'memory_db' AND table_name = 'replacement';
 ----
 0
 
+# Read-only replacements restore the original catalog on rollback
+statement ok
+DETACH db3;
+
+statement ok
+ATTACH '{TEST_DIR}/attach_or_replace_txn.db' AS db3 (READ_ONLY);
+
+statement ok
+BEGIN;
+
+statement ok
+ATTACH OR REPLACE '{TEST_DIR}/attach_or_replace_txn_new.db' AS db3 (READ_ONLY);
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT value FROM db3.marker;
+----
+3

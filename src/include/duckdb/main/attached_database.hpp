@@ -143,6 +143,12 @@ public:
 	bool IsInitialDatabase() const;
 	void SetInitialDatabase();
 	void SetReadOnlyDatabase();
+	bool IsPendingReplacement() const {
+		return pending_replacement;
+	}
+	void SetPendingReplacement(bool value) {
+		pending_replacement = value;
+	}
 	void OnDetach(ClientContext &context);
 	RecoveryMode GetRecoveryMode() const {
 		return recovery_mode;
@@ -187,6 +193,7 @@ private:
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool ephemeral = false;
 	bool is_initial_database = false;
+	atomic<bool> pending_replacement = false;
 	bool is_closed = false;
 	bool is_closing = false;
 	shared_ptr<mutex> close_lock;

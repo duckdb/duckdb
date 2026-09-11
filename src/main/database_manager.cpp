@@ -14,6 +14,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
@@ -225,36 +226,44 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
                                                                shared_ptr<AttachedDatabase> attached_db) {
 	const auto name = attached_db->GetName();
 	attached_db->oid = NextOid();
+	auto &meta_transaction = MetaTransaction::Get(context);
+	auto &transaction = DuckTransaction::Get(context, *system);
+	auto &transaction_manager = DuckTransactionManager::Get(*system);
 	shared_ptr<AttachedDatabase> detached_db;
+	optional_ptr<AttachedDatabase> db_ref;
 	{
 		lock_guard<mutex> guard(databases_lock);
-		auto entry = databases.emplace(name, attached_db);
-		if (!entry.second) {
+		auto entry = databases.find(name);
+		if (entry != databases.end()) {
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-				// override existing entry
-				detached_db = std::move(entry.first->second);
-				databases[name] = attached_db;
+				if (entry->second->IsPendingReplacement()) {
+					throw TransactionException(
+					    "Cannot replace database %s because it has uncommitted attachment changes", name);
+				}
+				detached_db = entry->second;
+				meta_transaction.ReplaceDatabase(detached_db);
 			} else {
 				throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 			}
 		}
+		db_ref = detached_db ? meta_transaction.AttachDatabase(attached_db) : meta_transaction.UseDatabase(attached_db);
+		transaction_manager.PushAttach(transaction, *db_ref, detached_db);
+		attached_db->SetPendingReplacement(detached_db != nullptr);
+		if (entry == databases.end()) {
+			auto inserted = databases.emplace(name, attached_db);
+			D_ASSERT(inserted.second);
+		} else {
+			entry->second = attached_db;
+		}
 	}
-	auto &meta_transaction = MetaTransaction::Get(context);
 	if (detached_db) {
 		if (detached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 			--remote_catalog_count;
 		}
-		meta_transaction.DetachDatabase(*detached_db);
-		detached_db->OnDetach(context);
-		detached_db.reset();
 	}
 	if (attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		++remote_catalog_count;
 	}
-	auto &db_ref = meta_transaction.UseDatabase(attached_db);
-	auto &transaction = DuckTransaction::Get(context, *system);
-	auto &transaction_manager = DuckTransactionManager::Get(*system);
-	transaction_manager.PushAttach(transaction, db_ref);
 	return db_ref;
 }
 
@@ -309,6 +318,10 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 			}
 			return;
 		}
+		if (old_entry->second->IsPendingReplacement()) {
+			throw TransactionException("Cannot rename database %s because it has uncommitted attachment changes",
+			                           old_name);
+		}
 
 		auto new_entry = databases.find(new_name);
 		if (new_entry != databases.end()) {
@@ -331,6 +344,9 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &n
 		if (entry == databases.end()) {
 			return nullptr;
 		}
+		if (entry->second->IsPendingReplacement()) {
+			throw TransactionException("Cannot detach database %s because it has uncommitted attachment changes", name);
+		}
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
 	}
@@ -338,6 +354,33 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &n
 		--remote_catalog_count;
 	}
 	return attached_db;
+}
+
+void DatabaseManager::RollbackAttach(AttachedDatabase &database, optional_ptr<AttachedDatabase> replaced_database) {
+	bool detached_remote_database = false;
+	bool restored_remote_database = false;
+	{
+		lock_guard<mutex> guard(databases_lock);
+		auto entry = databases.find(database.GetName());
+		if (replaced_database) {
+			D_ASSERT(entry != databases.end() && entry->second.get() == &database);
+			if (entry != databases.end() && entry->second.get() == &database) {
+				detached_remote_database = database.GetCatalog().Supports(RemoteCapability::IS_REMOTE);
+				restored_remote_database = replaced_database->GetCatalog().Supports(RemoteCapability::IS_REMOTE);
+				entry->second = replaced_database->shared_from_this();
+			}
+		} else if (entry != databases.end() && entry->second.get() == &database) {
+			detached_remote_database = database.GetCatalog().Supports(RemoteCapability::IS_REMOTE);
+			databases.erase(entry);
+		}
+		database.SetPendingReplacement(false);
+	}
+	if (detached_remote_database) {
+		--remote_catalog_count;
+	}
+	if (restored_remote_database) {
+		++remote_catalog_count;
+	}
 }
 
 idx_t DatabaseManager::ApproxDatabaseCount() {
