@@ -9,7 +9,7 @@ using namespace duckdb;
 
 static unique_ptr<TransformResultValue> TransformDialectDemoExpression(PEGTransformer &transformer,
                                                                        ParseResult &parse_result) {
-	auto result = make_uniq<ConstantExpression>(Value("Hello from the dialect extension demo"));
+	auto result = ConstantExpression::String("Hello from the dialect extension demo");
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
