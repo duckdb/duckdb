@@ -194,8 +194,8 @@ private:
 	deque<UnsyncedCommit> unsynced_commits;
 	//! Signalled when unsynced_commits becomes empty, or when a sync fails
 	std::condition_variable durability_cv;
-	//! The highest commit id for which it and all lower commits are durable
-	transaction_t max_durable_commit_id = 0;
+	//! Every commit before this bound is durable
+	VisibilityBound durable_bound;
 	//! Set when a WAL sync has failed (the database is poisoned)
 	bool durability_failed = false;
 

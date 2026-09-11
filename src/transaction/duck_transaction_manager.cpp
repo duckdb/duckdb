@@ -308,7 +308,7 @@ DuckTransactionManager::DurableSnapshot DuckTransactionManager::GetDurableSnapsh
 	lock_guard<mutex> guard(durability_lock);
 	DurableSnapshot durable;
 	for (auto &entry : unsynced_commits) {
-		if (entry.commit_id <= max_durable_commit_id) {
+		if (entry.commit_id < durable_bound) {
 			// durable already - its own thread has not removed the entry yet
 			continue;
 		}
@@ -324,12 +324,12 @@ DuckTransactionManager::DurableSnapshot DuckTransactionManager::GetDurableSnapsh
 void DuckTransactionManager::RegisterUnsyncedCommit(transaction_t commit_id, idx_t wal_offset, idx_t catalog_version) {
 	lock_guard<mutex> guard(durability_lock);
 	if (unsynced_commits.empty()) {
-		// nothing pending: everything below this commit is durable
-		max_durable_commit_id = commit_id - 1;
+		// nothing pending: everything before this commit is durable
+		durable_bound = VisibilityBound::Before(commit_id);
 	}
-	// the front entry may sit at or below the bound, but a new commit always registers above it
+	// the front entry may sit below the bound, but a new commit always registers at or above it
 	D_ASSERT(wal_offset > 0);
-	D_ASSERT(commit_id > max_durable_commit_id);
+	D_ASSERT(commit_id >= durable_bound);
 	D_ASSERT(unsynced_commits.empty() || unsynced_commits.back().wal_offset <= wal_offset);
 	unsynced_commits.push_back(UnsyncedCommit {commit_id, wal_offset, catalog_version});
 }
@@ -338,19 +338,21 @@ bool DuckTransactionManager::AdvanceDurableBound(transaction_t commit_id, idx_t 
 	unique_lock<mutex> guard(durability_lock);
 	// advance over every commit the sync covered, including ones whose threads have not woken up
 	// yet, so that an ack implies observability; then drop this thread's entry
-	auto new_max = max_durable_commit_id;
+	auto new_bound = durable_bound;
 	for (auto it = unsynced_commits.begin(); it != unsynced_commits.end(); it++) {
 		if (it->wal_offset > synced_offset) {
 			break;
 		}
-		new_max = MaxValue<transaction_t>(new_max, it->commit_id);
+		if (it->commit_id >= new_bound) {
+			new_bound = VisibilityBound::Through(it->commit_id);
+		}
 		if (it->commit_id == commit_id) {
 			unsynced_commits.erase(it);
 			break;
 		}
 	}
-	bool advanced = new_max > max_durable_commit_id;
-	max_durable_commit_id = new_max;
+	bool advanced = new_bound != durable_bound;
+	durable_bound = new_bound;
 #ifdef DEBUG
 	// offsets are registered in flush order, so the walk always reaches this thread's entry
 	for (auto &entry : unsynced_commits) {
