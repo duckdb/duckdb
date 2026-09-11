@@ -36,13 +36,9 @@ public:
 
 	//! Revert the commit
 	virtual void RevertCommit() = 0;
-	//! Write the commit's WAL flush marker and push it to the OS. This does NOT make the commit
-	//! durable: the fsync happens afterwards over the offset returned by GetWALSyncOffset
-	virtual void FlushCommit() = 0;
-	//! WAL offset covering the flush marker written by FlushCommit (0 if none)
-	virtual idx_t GetWALSyncOffset() {
-		return 0;
-	}
+	//! Write the commit's WAL flush marker and push it to the OS; returns the WAL offset to sync up
+	//! to for the commit to become durable (0 if nothing was written)
+	virtual idx_t FlushCommit() = 0;
 
 	virtual void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                             unique_ptr<PersistentCollectionData> row_group_data) = 0;

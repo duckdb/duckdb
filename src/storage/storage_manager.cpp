@@ -633,10 +633,7 @@ public:
 	//! Revert the commit
 	void RevertCommit() override;
 	// Make the commit persistent
-	void FlushCommit() override;
-	idx_t GetWALSyncOffset() override {
-		return wal_sync_offset;
-	}
+	idx_t FlushCommit() override;
 
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
@@ -646,7 +643,6 @@ public:
 private:
 	idx_t initial_wal_size = 0;
 	idx_t initial_written = 0;
-	idx_t wal_sync_offset = 0;
 	WriteAheadLog &wal;
 	WALCommitState state;
 	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
@@ -688,14 +684,15 @@ void SingleFileStorageCommitState::RevertCommit() {
 	state = WALCommitState::TRUNCATED;
 }
 
-void SingleFileStorageCommitState::FlushCommit() {
+idx_t SingleFileStorageCommitState::FlushCommit() {
 	if (state != WALCommitState::IN_PROGRESS) {
-		return;
+		return 0;
 	}
 	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
 	// only the marker is written here: the sync happens once the locks are released
-	wal_sync_offset = wal.FlushMarker();
+	auto wal_sync_offset = wal.FlushMarker();
 	state = WALCommitState::FLUSHED;
+	return wal_sync_offset;
 }
 
 void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
