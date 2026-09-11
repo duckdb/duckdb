@@ -157,6 +157,8 @@ void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op
 	column_binding_set_t existing_bindings(proj_bindings.begin(), proj_bindings.end());
 	auto projection_to_move = std::move(op);
 	op = std::move(projection_to_move->children[0]);
+	projection_to_move->has_estimated_cardinality = insert_at_node.has_estimated_cardinality;
+	projection_to_move->estimated_cardinality = insert_at_node.estimated_cardinality;
 
 	idx_t next_col = proj.expressions.size();
 	for (idx_t i = 0; i < insert_bindings.size(); i++) {
@@ -287,7 +289,6 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &proj = op->Cast<LogicalProjection>();
 		auto proj_bindings = proj.GetColumnBindings();
-
 		// Check if all expressions are simple column refs
 		// Cannot pull this projection up safely if any expression is not a column ref
 		bool all_column_refs = true;
@@ -297,7 +298,7 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 			if (proj.expressions[i]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				all_column_refs = false;
 			}
-			if (proj.expressions[i]->IsVolatile()) {
+			if (proj.expressions[i]->IsVolatile() || proj.expressions[i]->CanThrow()) {
 				ProjectionPullup next(optimizer, root);
 				next.Optimize(proj.children[0]);
 				return; // bail

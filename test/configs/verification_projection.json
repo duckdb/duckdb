@@ -18,6 +18,12 @@
         "test/sql/cte/recursive_cte_logging.test",
         "test/sql/optimizer/expression/test_row_comparison_simplification.test"
       ]
+    },
+    {
+      "reason": "Cost-aware projection placement tests assert topology changed by synthetic verification projections.",
+      "paths": [
+        "test/optimizer/projection_placement.test"
+      ]
     }
   ]
 }
