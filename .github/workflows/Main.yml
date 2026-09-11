@@ -187,8 +187,6 @@ jobs:
       - name: Select CI jobs
         id: selection
         shell: bash
-        env:
-          OVERRIDE_JOBS: linux-relassert windows
         run: |
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           python3 scripts/ci/job_stages.py \
