@@ -552,9 +552,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			durability_failed = true;
 		}
 		QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
-		bool wake_waiters = !synced || !HasUnsyncedCommits();
+		bool notify_others = !synced || !HasUnsyncedCommits();
 		t_lock.unlock();
-		if (wake_waiters) {
+		if (notify_others) {
 			durability_cv.notify_all();
 		}
 	}
