@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/parallel/scan_read_ahead.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -43,4 +44,13 @@ TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding"
 	REQUIRE(percentage > 0);
 	REQUIRE(percentage < 5);
 	stream.reset();
+}
+
+TEST_CASE("Read-ahead inline task draining surfaces async errors", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	ScanReadAhead read_ahead(*con.context, 1, nullptr);
+	read_ahead.PushError(ErrorData("injected read-ahead error"));
+	REQUIRE_THROWS(read_ahead.TryRunPendingTask());
 }

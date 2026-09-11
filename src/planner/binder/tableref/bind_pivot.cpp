@@ -145,16 +145,16 @@ static unique_ptr<SelectNode> ConstructInitialGrouping(PivotRef &ref, vector<uni
 			auto &columnref = column_entry->Cast<ColumnRefExpression>();
 			if (handled_columns.find(columnref.GetColumnName()) == handled_columns.end()) {
 				// not handled - add to grouping set
-				subquery->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
-				    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery->select_list.size() + 1))));
+				subquery->groups.group_expressions.push_back(
+				    ConstantExpression::Integer(NumericCast<int64_t>(subquery->select_list.size() + 1)));
 				subquery->select_list.push_back(make_uniq<ColumnRefExpression>(columnref.GetColumnName()));
 			}
 		}
 	} else {
 		// if rows are specified only the columns mentioned in rows are added as groups
 		for (auto &row : ref.groups) {
-			subquery->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
-			    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery->select_list.size() + 1))));
+			subquery->groups.group_expressions.push_back(
+			    ConstantExpression::Integer(NumericCast<int64_t>(subquery->select_list.size() + 1)));
 			subquery->select_list.push_back(make_uniq<ColumnRefExpression>(row));
 		}
 	}
@@ -174,7 +174,7 @@ static unique_ptr<SelectNode> PivotFilteredAggregate(ClientContext &context, Piv
 		for (auto &pivot_column : ref.pivots) {
 			for (auto &pivot_expr : pivot_column.pivot_expressions) {
 				auto column_ref = make_uniq<CastExpression>(LogicalType::VARCHAR, pivot_expr->Copy());
-				auto constant_value = make_uniq<ConstantExpression>(
+				auto constant_value = ConstantExpression::FromValue(
 				    pivot_value.values[pivot_value_idx++].DefaultCastAs(LogicalType::VARCHAR));
 				auto comp_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
 				                                                 std::move(column_ref), std::move(constant_value));
@@ -237,8 +237,8 @@ static unique_ptr<SelectNode> PivotInitialAggregate(ClientContext &context, Pivo
 				pivot_expr->SetAlias(Identifier("__internal_pivot_ref" + std::to_string(++pivot_count)));
 			}
 			auto pivot_alias = pivot_expr->GetAlias();
-			subquery_stage1->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
-			    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery_stage1->select_list.size() + 1))));
+			subquery_stage1->groups.group_expressions.push_back(
+			    ConstantExpression::Integer(NumericCast<int64_t>(subquery_stage1->select_list.size() + 1)));
 			subquery_stage1->select_list.push_back(std::move(pivot_expr));
 			pivot_expr = make_uniq<ColumnRefExpression>(pivot_alias);
 		}
@@ -271,7 +271,7 @@ unique_ptr<ParsedExpression> ConstructPivotExpression(unique_ptr<ParsedExpressio
 	auto cast = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(pivot_expr));
 	vector<unique_ptr<ParsedExpression>> coalesce_children;
 	coalesce_children.push_back(std::move(cast));
-	coalesce_children.push_back(make_uniq<ConstantExpression>(Value("NULL")));
+	coalesce_children.push_back(ConstantExpression::String("NULL"));
 	auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE, std::move(coalesce_children));
 	return std::move(coalesce);
 }
@@ -286,8 +286,8 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 
 	// add all of the groups
 	for (idx_t gr = 0; gr < bind_state.internal_group_names.size(); gr++) {
-		subquery_stage2->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
-		    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery_stage2->select_list.size() + 1))));
+		subquery_stage2->groups.group_expressions.push_back(
+		    ConstantExpression::Integer(NumericCast<int64_t>(subquery_stage2->select_list.size() + 1)));
 		auto group_reference = make_uniq<ColumnRefExpression>(bind_state.internal_group_names[gr]);
 		group_reference->SetAlias(bind_state.internal_group_names[gr]);
 		subquery_stage2->select_list.push_back(std::move(group_reference));
@@ -315,7 +315,7 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 				// string concat
 				vector<unique_ptr<ParsedExpression>> concat_children;
 				concat_children.push_back(std::move(expr));
-				concat_children.push_back(make_uniq<ConstantExpression>(Value("_")));
+				concat_children.push_back(ConstantExpression::String("_"));
 				concat_children.push_back(std::move(coalesce));
 				auto concat = make_uniq<FunctionExpression>("concat", std::move(concat_children));
 				expr = std::move(concat);
@@ -536,7 +536,7 @@ static bool TryExtractUnpivotList(ParsedExpression &expr, vector<Identifier> &co
 	}
 	case ExpressionType::VALUE_CONSTANT: {
 		auto &constant = expr.Cast<ConstantExpression>();
-		column_names.push_back(Identifier(constant.GetValue().ToString()));
+		column_names.push_back(Identifier(constant.GetLiteral().ToValue().ToString()));
 		return true;
 	}
 	case ExpressionType::FUNCTION: {
@@ -937,7 +937,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 
 	// construct the UNNEST expression for the set of names (constant)
 	auto unpivot_list = Value::LIST(LogicalType::VARCHAR, std::move(unpivot_names));
-	auto unpivot_name_expr = make_uniq<ConstantExpression>(std::move(unpivot_list));
+	auto unpivot_name_expr = ConstantExpression::FromValue(unpivot_list);
 	unpivot_name_expr->SetAlias(select_names[column_count]);
 	select_node->select_list.push_back(std::move(unpivot_name_expr));
 

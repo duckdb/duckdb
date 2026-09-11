@@ -10,7 +10,6 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
-#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
 namespace duckdb {
@@ -78,7 +77,7 @@ public:
 	//! Scan all triggers without a transaction (used by checkpoint writer)
 	void ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback);
 	//! Drop a trigger by name
-	bool DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade);
+	bool DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade) override;
 
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);

@@ -191,19 +191,13 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          extra_args=(--benchmark-cache=clear)
-          if [[ "${{ matrix.benchmark }}" == ".github/regression/realnest.csv" ]]; then
-            extra_args=()
-          fi
-
           python scripts/regression/test_runner.py \
             --old build/base/release/benchmark/benchmark_runner \
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks "${{ matrix.benchmark }}" \
             --verbose \
             --early-stop \
-            --threads 2 \
-            "${extra_args[@]}"
+            --threads 2
 
   regression-bench-tpc:
     name: Bench ${{ matrix.name }}
@@ -267,7 +261,6 @@ jobs:
             --benchmarks ${{ matrix.benchmarks }} \
             --verbose \
             --early-stop \
-            --benchmark-cache=clear \
             --disable-timeout \
             --benchmark-argument sf=${{ matrix.sf }} \
             --threads ${{ matrix.threads }}
@@ -319,7 +312,7 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2 --benchmark-cache=clear
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2
 
   regression-test-storage:
     name: Storage Size Regression Test

@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
 
@@ -24,6 +25,10 @@ OperatorExpression::OperatorExpression(ExpressionType type, vector<unique_ptr<Pa
 
 string OperatorExpression::ToString() const {
 	return ToString<OperatorExpression, ParsedExpression>(*this);
+}
+
+unique_ptr<ParsedExpression> OperatorExpression::EmptySliceBound() {
+	return make_uniq<FunctionExpression>("list_value", vector<unique_ptr<ParsedExpression>>());
 }
 
 } // namespace duckdb

@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
