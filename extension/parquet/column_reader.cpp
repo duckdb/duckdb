@@ -332,12 +332,13 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		uncompressed = true;
 	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
-		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
-			throw InvalidInputException("Failed to read file \"%s\": Page size mismatch", Reader().GetFileName());
-		}
 		uncompressed = true;
 	}
 	if (uncompressed) {
+		// the page is read straight into a block sized by the uncompressed size, so the two must agree
+		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+			throw InvalidInputException("Failed to read file \"%s\": Page size mismatch", Reader().GetFileName());
+		}
 		ReadData(block->ptr, page_hdr.compressed_page_size, page_hdr.type);
 		return;
 	}
