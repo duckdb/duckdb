@@ -591,9 +591,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	if (checkpoint_decision.can_checkpoint && (undo_properties.has_updates || undo_properties.has_dropped_entries) &&
 	    GetLastCommit() >= LowestVisibilityBound()) {
-		// a snapshot bounded below this commit started during the sync window and still needs the
-		// pre-commit state - skip the checkpoint, as GetCheckpointType would have. The skip-wal
-		// case holds the WAL lock and registers nothing, so no bounded snapshot can exist there
+		// GetCheckpointType refused to checkpoint if another transaction might still need the state
+		// from before this commit. It decided before the sync, and transactions that started during
+		// the sync are bounded below this commit, so they need exactly that state: refuse now for
+		// them. This cannot happen when the checkpoint replaces the WAL write, as no snapshot is
+		// bounded below a commit that never awaited a sync
 		D_ASSERT(!skip_wal_write_due_to_checkpoint);
 		checkpoint_decision = CheckpointDecision("snapshots bounded below this commit need its pre-commit state");
 		lock.reset();
