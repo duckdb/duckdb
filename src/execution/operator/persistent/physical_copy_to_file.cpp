@@ -8,8 +8,11 @@
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/window/window_collection.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
@@ -1350,6 +1353,9 @@ public:
 	vector<LogicalType> write_types;
 	vector<column_t> raw_columns;
 
+	//! Directory of a partition's files relative to the COPY target: PARTITION_PATH, or the hive layout by default
+	unique_ptr<Expression> partition_path;
+
 	//! Partition/sort strategy with PhysicalOperator-like interface
 	const unique_ptr<const SortStrategy> sort_strategy;
 
@@ -1437,8 +1443,45 @@ static bool UsePerPartitionFileOffsets(const PhysicalCopyToFile &op) {
 	return op.hive_file_pattern && !op.partition_path_expression;
 }
 
-static string EvaluatePartitionPath(ClientContext &context, const PhysicalCopyToFile &op, const vector<Value> &values) {
-	D_ASSERT(op.partition_path_expression);
+static void HivePartitionPathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	// the arguments are (name, value) pairs - type-erased, as the values can have any type
+	D_ASSERT(args.ColumnCount() % 2 == 0);
+	auto writer = FlatVector::Writer<string_t>(result, args.size());
+	for (idx_t row = 0; row < args.size(); row++) {
+		string path;
+		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx += 2) {
+			auto value = args.data[col_idx + 1].GetValue(row);
+			path += col_idx > 0 ? "/" : "";
+			path += HivePartitioning::Escape(args.data[col_idx].GetValue(row).ToString());
+			path += "=";
+			path += value.IsNull() ? HivePartitioning::DEFAULT_PARTITION_NAME
+			                       : HivePartitioning::EscapeValue(value.ToString());
+		}
+		writer.WriteValue(string_t(path.c_str(), UnsafeNumericCast<uint32_t>(path.size())));
+	}
+}
+
+//! The hive layout, e.g. year=2024/month=1, as an expression over the partition values
+static unique_ptr<Expression> CreateHivePartitionPath(ClientContext &context, const PhysicalCopyToFile &op) {
+	if (op.partition_columns.empty()) {
+		return nullptr;
+	}
+	vector<unique_ptr<Expression>> children;
+	for (idx_t i = 0; i < op.partition_columns.size(); i++) {
+		auto col_idx = op.partition_columns[i];
+		children.push_back(make_uniq<BoundConstantExpression>(Value(op.names[col_idx].GetIdentifierName())));
+		children.push_back(make_uniq<BoundReferenceExpression>(op.expected_types[col_idx], i));
+	}
+	ScalarFunction function("hive_partition_path", {}, LogicalType::VARCHAR, HivePartitionPathFunction);
+	function.SetVarArgs(LogicalType::ANY);
+	// NULL values map to the default partition
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	FunctionBinder function_binder(context);
+	return function_binder.BindScalarFunction(function, std::move(children));
+}
+
+static string EvaluatePartitionPath(ClientContext &context, const PhysicalCopyToFile &op,
+                                    const Expression &partition_path, const vector<Value> &values) {
 	D_ASSERT(values.size() == op.partition_columns.size());
 	vector<LogicalType> types;
 	for (auto &col_idx : op.partition_columns) {
@@ -1451,7 +1494,7 @@ static string EvaluatePartitionPath(ClientContext &context, const PhysicalCopyTo
 	}
 	partition_values.CheckCardinality(1);
 
-	ExpressionExecutor executor(context, *op.partition_path_expression);
+	ExpressionExecutor executor(context, partition_path);
 	Vector result(LogicalType::VARCHAR, 1);
 	executor.ExecuteExpression(partition_values, result);
 	auto path = result.GetValue(0);
@@ -2560,6 +2603,11 @@ PartitionedCopy::PartitionedCopy(const PhysicalCopyToFile &op_p, ClientContext &
 			write_types.push_back(op.expected_types[col_idx]);
 		}
 	}
+	if (op.partition_path_expression) {
+		partition_path = op.partition_path_expression->Copy();
+	} else if (op.hive_file_pattern) {
+		partition_path = CreateHivePartitionPath(context, op);
+	}
 }
 
 unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
@@ -3028,41 +3076,28 @@ vector<FileStateHandle> PartitionFileRequestBuilder::TakeFilesToFinalize() {
 }
 
 PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) const {
-	auto &fs = FileSystem::GetFileSystem(partitioned_copy.context);
 	PartitionDirectory result;
 	result.path = std::move(path);
-	if (partitioned_copy.op.partition_path_expression) {
-		auto partition_path = EvaluatePartitionPath(partitioned_copy.context, partitioned_copy.op, values);
-		if (fs.IsPathAbsolute(partition_path) || FileSystem::IsRemoteFile(partition_path)) {
-			throw InvalidInputException("PARTITION_PATH must be relative to the COPY target, but got \"%s\"",
-			                            partition_path);
+	if (!partitioned_copy.partition_path) {
+		return result;
+	}
+	auto &context = partitioned_copy.context;
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto partition_path = EvaluatePartitionPath(context, partitioned_copy.op, *partitioned_copy.partition_path, values);
+	if (fs.IsPathAbsolute(partition_path) || FileSystem::IsRemoteFile(partition_path)) {
+		throw InvalidInputException("PARTITION_PATH must be relative to the COPY target, but got \"%s\"",
+		                            partition_path);
+	}
+	auto separator = fs.PathSeparator(partition_path);
+	for (auto &component : StringUtil::Split(fs.ConvertSeparators(partition_path), separator)) {
+		if (component.empty() || component == ".") {
+			continue;
 		}
-		auto separator = fs.PathSeparator(partition_path);
-		for (auto &component : StringUtil::Split(fs.ConvertSeparators(partition_path), separator)) {
-			if (component.empty() || component == ".") {
-				continue;
-			}
-			if (component == "..") {
-				throw InvalidInputException("PARTITION_PATH cannot contain \"..\", but got \"%s\"", partition_path);
-			}
-			result.path = fs.JoinPath(result.path, component);
-			result.directories.push_back(result.path);
+		if (component == "..") {
+			throw InvalidInputException("PARTITION_PATH cannot contain \"..\", but got \"%s\"", partition_path);
 		}
-	} else if (partitioned_copy.op.hive_file_pattern) {
-		for (idx_t i = 0; i < partitioned_copy.op.partition_columns.size(); i++) {
-			const auto &partition_col_name = partitioned_copy.op.names[partitioned_copy.op.partition_columns[i]];
-			const auto &partition_value = values[i];
-			string p_dir;
-			p_dir += HivePartitioning::Escape(partition_col_name.GetIdentifierName());
-			p_dir += "=";
-			if (partition_value.IsNull()) {
-				p_dir += HivePartitioning::DEFAULT_PARTITION_NAME;
-			} else {
-				p_dir += HivePartitioning::EscapeValue(partition_value.ToString());
-			}
-			result.path = fs.JoinPath(result.path, p_dir);
-			result.directories.push_back(result.path);
-		}
+		result.path = fs.JoinPath(result.path, component);
+		result.directories.push_back(result.path);
 	}
 	return result;
 }
