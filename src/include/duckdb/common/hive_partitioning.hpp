@@ -19,6 +19,7 @@ struct MultiFilePushdownInfo;
 
 struct HivePartitioningFilterInfo {
 	unordered_map<string, column_t> column_map;
+	string filename_column;
 	bool hive_enabled;
 	bool filename_enabled;
 };
