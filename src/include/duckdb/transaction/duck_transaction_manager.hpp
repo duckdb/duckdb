@@ -195,7 +195,7 @@ private:
 	//! Signalled when unsynced_commits becomes empty, or when a sync fails
 	std::condition_variable durability_cv;
 	//! The highest commit id for which it and all lower commits are durable
-	transaction_t durable_commit_bound = 0;
+	transaction_t max_durable_commit_id = 0;
 	//! Set when a WAL sync has failed (the database is poisoned)
 	bool durability_failed = false;
 

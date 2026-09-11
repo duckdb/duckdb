@@ -308,7 +308,7 @@ DuckTransactionManager::DurableSnapshot DuckTransactionManager::GetDurableSnapsh
 	lock_guard<mutex> guard(durability_lock);
 	DurableSnapshot durable;
 	for (auto &entry : unsynced_commits) {
-		if (entry.commit_id <= durable_commit_bound) {
+		if (entry.commit_id <= max_durable_commit_id) {
 			// durable already - its own thread has not removed the entry yet
 			continue;
 		}
@@ -325,11 +325,11 @@ void DuckTransactionManager::RegisterUnsyncedCommit(transaction_t commit_id, idx
 	lock_guard<mutex> guard(durability_lock);
 	if (unsynced_commits.empty()) {
 		// nothing pending: everything below this commit is durable
-		durable_commit_bound = commit_id - 1;
+		max_durable_commit_id = commit_id - 1;
 	}
 	// the front entry may sit at or below the bound, but a new commit always registers above it
 	D_ASSERT(wal_offset > 0);
-	D_ASSERT(commit_id > durable_commit_bound);
+	D_ASSERT(commit_id > max_durable_commit_id);
 	D_ASSERT(unsynced_commits.empty() || unsynced_commits.back().wal_offset <= wal_offset);
 	unsynced_commits.push_back(UnsyncedCommit {commit_id, wal_offset, catalog_version});
 }
@@ -338,19 +338,19 @@ bool DuckTransactionManager::AdvanceDurableBound(transaction_t commit_id, idx_t 
 	unique_lock<mutex> guard(durability_lock);
 	// advance over every commit the sync covered, including ones whose threads have not woken up
 	// yet, so that an ack implies observability; then drop this thread's entry
-	auto new_bound = durable_commit_bound;
+	auto new_max = max_durable_commit_id;
 	for (auto it = unsynced_commits.begin(); it != unsynced_commits.end(); it++) {
 		if (it->wal_offset > synced_offset) {
 			break;
 		}
-		new_bound = MaxValue<transaction_t>(new_bound, it->commit_id);
+		new_max = MaxValue<transaction_t>(new_max, it->commit_id);
 		if (it->commit_id == commit_id) {
 			unsynced_commits.erase(it);
 			break;
 		}
 	}
-	bool advanced = new_bound > durable_commit_bound;
-	durable_commit_bound = new_bound;
+	bool advanced = new_max > max_durable_commit_id;
+	max_durable_commit_id = new_max;
 #ifdef DEBUG
 	// offsets are registered in flush order, so the walk always reaches this thread's entry
 	for (auto &entry : unsynced_commits) {
