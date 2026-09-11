@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -70,6 +71,16 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
+static FilterPropagateResult ConstantOrNullFilterPrune(const FunctionStatisticsPruneInput &input) {
+	for (idx_t i = 0; i < input.function.GetChildren().size(); i++) {
+		auto stats = input.ChildStats(i);
+		if (stats && !stats->CanHaveNoNull()) {
+			return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+		}
+	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
 unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto &function = input.GetBoundFunction();
@@ -96,6 +107,7 @@ ScalarFunction ConstantOrNullFun::GetFunction() {
 	auto fun = ScalarFunction("constant_or_null", {{"arg1", LogicalType::ANY}, {"arg2", LogicalType::ANY}},
 	                          LogicalType::ANY, ConstantOrNullFunction);
 	fun.SetBindCallback(ConstantOrNullBind);
+	fun.SetFilterPruneCallback(ConstantOrNullFilterPrune);
 	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }
