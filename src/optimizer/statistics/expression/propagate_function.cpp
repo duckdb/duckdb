@@ -38,6 +38,29 @@ bool CanInferConstantFromNumericBounds(const Value &value) {
 		return true;
 	}
 }
+
+bool TryInferConstantBounds(const BaseStatistics &stats, Value &constant) {
+	if (stats.CanHaveNull()) {
+		return false;
+	}
+	if (stats.GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(stats)) {
+		auto min = NumericStats::Min(stats);
+		auto max = NumericStats::Max(stats);
+		if (min != max || !CanInferConstantFromNumericBounds(min)) {
+			return false;
+		}
+		constant = std::move(min);
+		return true;
+	}
+	if ((stats.GetType().id() == LogicalTypeId::VARCHAR || stats.GetType().id() == LogicalTypeId::BLOB) &&
+	    StringStats::HasMinMax(stats) && StringStats::GetMinType(stats) == StringStatsType::EXACT_STATS &&
+	    StringStats::GetMaxType(stats) == StringStatsType::EXACT_STATS &&
+	    StringStats::Min(stats) == StringStats::Max(stats)) {
+		constant = Value::BLOB_RAW(StringStats::Min(stats)).WithType(stats.GetType());
+		return true;
+	}
+	return false;
+}
 } // namespace
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateConstantInputs(ClientContext &context,
@@ -60,20 +83,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateConstantInputs(ClientC
 			if (!ExpressionExecutor::TryEvaluateScalar(context, child, value)) {
 				return nullptr;
 			}
-		} else if (stats.CanHaveNull()) {
-			return nullptr;
-		} else if (stats.GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(stats)) {
-			auto min = NumericStats::Min(stats);
-			if (min != NumericStats::Max(stats) || !CanInferConstantFromNumericBounds(min)) {
-				return nullptr;
-			}
-			value = std::move(min);
-		} else if ((stats.GetType().id() == LogicalTypeId::VARCHAR || stats.GetType().id() == LogicalTypeId::BLOB) &&
-		           StringStats::HasMinMax(stats) && StringStats::GetMinType(stats) == StringStatsType::EXACT_STATS &&
-		           StringStats::GetMaxType(stats) == StringStatsType::EXACT_STATS &&
-		           StringStats::Min(stats) == StringStats::Max(stats)) {
-			value = Value::BLOB_RAW(StringStats::Min(stats)).WithType(stats.GetType());
-		} else {
+		} else if (!TryInferConstantBounds(stats, value)) {
 			return nullptr;
 		}
 		values.emplace_back(std::move(value));
