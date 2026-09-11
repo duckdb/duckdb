@@ -19,6 +19,48 @@ namespace duckdb {
 class ClientContext;
 
 class FunctionSerializer {
+private:
+	class DeserializeContext {
+	public:
+		DeserializeContext(Deserializer &deserializer_p, const LogicalType &return_type,
+		                   const const_expression_list_t &children)
+		    : deserializer(deserializer_p) {
+			deserializer.Set<const LogicalType &>(return_type);
+			try {
+				deserializer.Set<const const_expression_list_t &>(children);
+			} catch (...) {
+				deserializer.Unset<LogicalType>();
+				throw;
+			}
+		}
+		~DeserializeContext() {
+			deserializer.Unset<const_expression_list_t>();
+			deserializer.Unset<LogicalType>();
+		}
+		DeserializeContext(const DeserializeContext &) = delete;
+		DeserializeContext &operator=(const DeserializeContext &) = delete;
+
+	private:
+		Deserializer &deserializer;
+	};
+
+	template <class FUNC>
+	static void RestoreLogicalSignature(FUNC &function, const vector<unique_ptr<Expression>> &children,
+	                                    const LogicalType &return_type) {
+		auto arguments = function.GetArguments();
+		for (idx_t index = 0; index < arguments.size() && index < children.size(); index++) {
+			if (!arguments[index].IsComplete()) {
+				arguments[index] = children[index]->GetReturnType();
+			}
+		}
+		function.SetLogicalArguments(std::move(arguments));
+		function.SetLogicalReturnType(return_type.IsAggregateState() ? function.GetReturnType() : return_type);
+	}
+
+	static void RestoreLogicalSignature(BoundWindowFunction &, const vector<unique_ptr<Expression>> &,
+	                                    const LogicalType &) {
+	}
+
 public:
 	template <class FUNC>
 	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
@@ -197,7 +239,7 @@ public:
 			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
-		const auto &function = functions.functions.GetFunctionByArguments(context, arguments);
+		const auto function = functions.functions.GetFunctionByArguments(context, arguments);
 
 		// Does this function support serializing its bound data?
 		if (!has_serialize) {
@@ -222,11 +264,18 @@ public:
 		// Otherwise, construct the bound function from its parts
 		FUNC bound_function(function);
 		bound_function.GetArguments() = std::move(arguments);
+		RestoreLogicalSignature(bound_function, children, return_type);
 
 		// Invoke deserialization function
-		deserializer.Set<const LogicalType &>(return_type);
-		auto bound_data = FunctionDeserialize(deserializer, bound_function);
-		deserializer.Unset<LogicalType>();
+		const_expression_list_t child_references;
+		for (auto &child : children) {
+			child_references.emplace_back(*child);
+		}
+		unique_ptr<FunctionData> bound_data;
+		{
+			DeserializeContext scope(deserializer, return_type, child_references);
+			bound_data = FunctionDeserialize(deserializer, bound_function);
+		}
 
 		if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 			bound_function.SetReturnType(std::move(return_type));

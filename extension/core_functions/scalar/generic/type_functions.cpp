@@ -124,6 +124,7 @@ ScalarFunction MakeTypeFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::TYPE(), MakeTypeFunction);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindMakeTypeFunctionExpression);
+	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }

@@ -53,8 +53,9 @@ static bool BoundCastCanThrow(const BoundCastInfo &bound_cast, const LogicalType
 struct CastFunctionData : public FunctionData {
 	CastFunctionData(LogicalType source_type_p, LogicalType target_type_p, BoundCastInfo bound_cast_p, bool try_cast_p,
 	                 bool is_default_cast_p)
-	    : source_type(std::move(source_type_p)), target_type(std::move(target_type_p)),
-	      bound_cast(std::move(bound_cast_p)), try_cast(try_cast_p), is_default_cast(is_default_cast_p) {
+	    : FunctionData(InternalKind::BOUND_CAST), source_type(std::move(source_type_p)),
+	      target_type(std::move(target_type_p)), bound_cast(std::move(bound_cast_p)), try_cast(try_cast_p),
+	      is_default_cast(is_default_cast_p) {
 	}
 
 	LogicalType source_type;
@@ -230,6 +231,20 @@ LogicalType BoundCastExpression::SourceType(const BoundFunctionExpression &cast_
 
 bool BoundCastExpression::IsTryCast(const BoundFunctionExpression &cast_expr) {
 	return cast_expr.BindInfo()->Cast<CastFunctionData>().try_cast;
+}
+
+bool BoundCastExpression::HasValidBindData(const BoundFunctionExpression &cast_expr) {
+	if (cast_expr.GetChildren().size() != 1 || !cast_expr.GetChildren()[0] || !cast_expr.BindInfo() ||
+	    cast_expr.BindInfo()->GetInternalKind() != FunctionData::InternalKind::BOUND_CAST) {
+		return false;
+	}
+	auto &data = cast_expr.BindInfo()->Cast<CastFunctionData>();
+	return data.source_type == cast_expr.GetChildren()[0]->GetReturnType() &&
+	       data.target_type == cast_expr.GetReturnType();
+}
+
+bool BoundCastExpression::IsDefaultCast(const BoundFunctionExpression &cast_expr) {
+	return cast_expr.BindInfo()->Cast<CastFunctionData>().is_default_cast;
 }
 
 const BoundCastInfo &BoundCastExpression::GetBoundCast(const BoundFunctionExpression &cast_expr) {
