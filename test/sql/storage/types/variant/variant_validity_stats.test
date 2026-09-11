@@ -1,0 +1,30 @@
+# name: test/sql/storage/types/variant/variant_validity_stats.test
+# description: Appending VARIANT values updates top-level validity statistics
+# group: [variant]
+
+statement ok
+CREATE TABLE v AS
+SELECT i::VARIANT AS non_null, NULL::VARIANT AS all_null,
+       (CASE WHEN i = 0 THEN i END)::VARIANT AS mixed
+FROM range(2) t(i);
+
+query III
+SELECT non_null, all_null, mixed FROM v ORDER BY rowid;
+----
+0	NULL	0
+1	NULL	NULL
+
+query II
+SELECT s.has_no_null, s.has_null FROM (SELECT stats(non_null) s FROM v LIMIT 1);
+----
+true	false
+
+query II
+SELECT s.has_no_null, s.has_null FROM (SELECT stats(all_null) s FROM v LIMIT 1);
+----
+false	true
+
+query II
+SELECT s.has_no_null, s.has_null FROM (SELECT stats(mixed) s FROM v LIMIT 1);
+----
+true	true
