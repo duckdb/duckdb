@@ -134,9 +134,6 @@ private:
 	//! Whether a commit that needed a WAL sync is still in its commit path, possibly inside SyncUpTo
 	//! (transaction lock held)
 	bool HasUnsyncedCommits();
-	//! Whether durability waiters can stop waiting: no commit awaits its sync, or a sync has failed
-	//! (transaction lock held)
-	bool DurabilitySettled();
 	struct DurableSnapshot {
 		//! Every commit before this bound is durable
 		VisibilityBound visibility_bound = VisibilityBound::IncludingUncommitted();
@@ -178,11 +175,8 @@ private:
 	//! active_transactions until its commit is durable, so new snapshots are bounded below commits a
 	//! crash could still lose
 	VisibilityBound durable_bound;
-	//! Signalled (under transaction_lock) when no active transaction awaits its WAL sync, or when a
-	//! sync fails
+	//! Signalled (under transaction_lock) when no active transaction awaits its WAL sync
 	std::condition_variable durability_cv;
-	//! Set when a WAL sync has failed (the database is poisoned)
-	bool durability_failed = false;
 
 	atomic<idx_t> last_uncommitted_catalog_version = {TRANSACTION_ID_START};
 	idx_t last_committed_version = 0;

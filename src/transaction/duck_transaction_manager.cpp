@@ -64,7 +64,7 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 }
 
 DuckTransactionManager::~DuckTransactionManager() {
-	D_ASSERT(DurabilitySettled());
+	D_ASSERT(!HasUnsyncedCommits());
 }
 
 DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
@@ -316,16 +316,9 @@ DuckTransactionManager::DurableSnapshot DuckTransactionManager::GetDurableSnapsh
 	return durable;
 }
 
-bool DuckTransactionManager::DurabilitySettled() {
-	return !HasUnsyncedCommits() || durability_failed;
-}
-
 void DuckTransactionManager::WaitForDurability() {
 	unique_lock<mutex> guard(transaction_lock);
-	durability_cv.wait(guard, [&]() { return DurabilitySettled(); });
-	if (durability_failed && HasUnsyncedCommits()) {
-		throw IOException("Cannot wait for WAL durability: a WAL sync has failed");
-	}
+	durability_cv.wait(guard, [&]() { return !HasUnsyncedCommits(); });
 }
 
 void DuckTransactionManager::CleanupTransactions() {
@@ -531,12 +524,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 					durable_bound = VisibilityBound::Through(active_transaction->commit_id);
 				}
 			}
-		} else {
-			// poison durability, so that drains fail instead of waiting for a sync that never completes
-			durability_failed = true;
 		}
 		QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
-		bool notify_others = DurabilitySettled();
+		bool notify_others = !HasUnsyncedCommits();
 		t_lock.unlock();
 		if (notify_others) {
 			durability_cv.notify_all();
