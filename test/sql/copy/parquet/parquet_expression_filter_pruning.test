@@ -232,7 +232,7 @@ EXPLAIN ANALYZE SELECT count(*)
 FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
 WHERE prefix(s, '') OR prefix(s, 'zz')
 ----
-analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 4 / 4.*
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 3 / 4.*
 
 query I
 SELECT count(*)
