@@ -1136,8 +1136,10 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 			filter_expr = std::move(column_ref);
 		}
 		filter_expressions.push_back(std::move(filter_expr));
+	}
+	for (auto &filter_expression : filter_expressions) {
 		//! Now visit the filter to add to the 'column_references'
-		VisitExpression(&filter_expressions.back());
+		VisitExpression(&filter_expression);
 	}
 	for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
 		const auto &expression_filter = ExpressionFilter::GetExpressionFilter(*filter, "RemoveUnusedColumns::VisitGet");
