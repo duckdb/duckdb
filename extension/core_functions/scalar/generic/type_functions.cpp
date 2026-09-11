@@ -28,7 +28,8 @@ static unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressio
 }
 
 ScalarFunction TypeOfFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, TypeOfFunction);
+	auto fun = ScalarFunction({}, LogicalType::VARCHAR, TypeOfFunction);
+	fun.GetSignature().AddParameter("expression", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindTypeOfFunctionExpression);
 	return fun;
@@ -65,7 +66,8 @@ static unique_ptr<Expression> BindGetTypeFunctionExpression(FunctionBindExpressi
 }
 
 ScalarFunction GetTypeFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::TYPE(), GetTypeFunction, BindGetTypeFunction);
+	auto fun = ScalarFunction({}, LogicalType::TYPE(), GetTypeFunction, BindGetTypeFunction);
+	fun.GetSignature().AddParameter("expression", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindGetTypeFunctionExpression);
 	return fun;
@@ -121,7 +123,8 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 }
 
 ScalarFunction MakeTypeFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::TYPE(), MakeTypeFunction);
+	auto fun = ScalarFunction({}, LogicalType::TYPE(), MakeTypeFunction);
+	fun.GetSignature().AddParameter("name", LogicalType::VARCHAR);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindMakeTypeFunctionExpression);
 	fun.GetProperties().SetRequiresExpressionNames(true);

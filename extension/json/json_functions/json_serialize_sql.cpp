@@ -241,8 +241,9 @@ static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vec
 
 ScalarFunctionSet JSONFunctions::GetDeserializeSqlFunction() {
 	ScalarFunctionSet set("json_deserialize_sql");
-	auto function = ScalarFunction({LogicalType::JSON()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init);
+	auto function = ScalarFunction({}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr, nullptr,
+	                               JSONFunctionLocalState::Init);
+	function.GetSignature().AddParameter("json", LogicalType::JSON());
 	function.SetFallible();
 	set.AddFunction(std::move(function));
 	return set;

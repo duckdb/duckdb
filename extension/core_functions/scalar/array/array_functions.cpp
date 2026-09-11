@@ -242,21 +242,26 @@ static auto ArrayGenericFoldStats(ClientContext &context, FunctionStatisticsInpu
 // extension.
 
 template <class OP>
-static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
-	const auto array = LogicalType::ARRAY(type, optional_idx());
-	if (type.id() == LogicalTypeId::FLOAT) {
-		ScalarFunction function({array, array}, type, ArrayGenericFold<float, OP>, ArrayGenericBinaryBind,
-		                        ArrayGenericFoldStats);
-		function.SetFallible();
-		set.AddFunction(function);
-	} else if (type.id() == LogicalTypeId::DOUBLE) {
-		ScalarFunction function({array, array}, type, ArrayGenericFold<double, OP>, ArrayGenericBinaryBind,
-		                        ArrayGenericFoldStats);
-		function.SetFallible();
-		set.AddFunction(function);
-	} else {
+static scalar_function_t GetArrayFoldFunction(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::FLOAT:
+		return ArrayGenericFold<float, OP>;
+	case LogicalTypeId::DOUBLE:
+		return ArrayGenericFold<double, OP>;
+	default:
 		throw NotImplementedException("Array function not implemented for type %s", type.ToString());
 	}
+}
+
+template <class OP>
+static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
+	ScalarFunction func({}, type, GetArrayFoldFunction<OP>(type), ArrayGenericBinaryBind, ArrayGenericFoldStats);
+	auto array = LogicalType::ARRAY(type, optional_idx());
+
+	func.SetFallible();
+	func.GetSignature().AddParameter("array1", array).AddParameter("array2", array);
+
+	set.AddFunction(func);
 }
 
 ScalarFunctionSet ArrayDistanceFun::GetFunctions() {
@@ -304,11 +309,17 @@ ScalarFunctionSet ArrayCrossProductFun::GetFunctions() {
 
 	auto float_array = LogicalType::ARRAY(LogicalType::FLOAT, 3);
 	auto double_array = LogicalType::ARRAY(LogicalType::DOUBLE, 3);
-	set.AddFunction(
-	    ScalarFunction({float_array, float_array}, float_array, ArrayFixedCombine<float, CrossProductOp, 3>));
-	set.AddFunction(
-	    ScalarFunction({double_array, double_array}, double_array, ArrayFixedCombine<double, CrossProductOp, 3>));
+
+	ScalarFunction float_fun({}, float_array, ArrayFixedCombine<float, CrossProductOp, 3>);
+	float_fun.GetSignature().AddParameter("array1", float_array).AddParameter("array2", float_array);
+	set.AddFunction(float_fun);
+
+	ScalarFunction double_fun({}, double_array, ArrayFixedCombine<double, CrossProductOp, 3>);
+	double_fun.GetSignature().AddParameter("array1", double_array).AddParameter("array2", double_array);
+	set.AddFunction(double_fun);
+
 	set.SetFallible();
+
 	return set;
 }
 
