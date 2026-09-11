@@ -160,6 +160,32 @@ TEST_CASE("Stable C++API: ParseSQL iterates statements into Execute", "[cpp_api]
 	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT 1; SELECT 2"), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	REQUIRE_THROWS_MATCHES(conn.Execute(""), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
+TEST_CASE("Stable C++API: SqlStatement parse-time metadata", "[cpp_api][sql_statement]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	auto statements = conn.ParseSQL("select $1; select 21");
+	auto first = statements.Next();
+	auto second = statements.Next();
+	REQUIRE(!statements.Next());
+
+	REQUIRE(first.GetStatementType() == StatementType::SELECT);
+	REQUIRE(first.GetText() == "select $1; ");
+	REQUIRE(first.GetParameterNames() == std::vector<std::string_view> {"1"});
+	REQUIRE(conn.Bind(first).parameters.GetFieldName(0) == first.GetParameterNames()[0]);
+
+	REQUIRE(second.GetStatementType() == StatementType::SELECT);
+	REQUIRE(second.GetText() == "select 21");
+	REQUIRE(second.GetParameterNames().empty());
+
+	// The type is the parser's, before execution rewrites the statement; the enum reaches core's newest members.
+	REQUIRE(conn.ParseSQL("PRAGMA version").Next().GetStatementType() == StatementType::PRAGMA);
+	REQUIRE(conn.ParseSQL("CONNECT ':memory:'").Next().GetStatementType() == StatementType::CONNECT);
+}
+
 TEST_CASE("Stable C++API: Bind", "[cpp_api][statement_bind]") {
 	using namespace duckdb::cxx;
 
