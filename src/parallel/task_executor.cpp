@@ -14,6 +14,12 @@ TaskExecutor::TaskExecutor(ClientContext &context_p, TaskSchedulerType type_p)
 }
 
 TaskExecutor::~TaskExecutor() {
+	// tasks can still be queued if we unwound between scheduling them and draining them
+	// they hold a reference to this executor, so they must not outlive it
+	try {
+		CancelAndDrain();
+	} catch (...) { // NOLINT
+	}
 }
 
 void TaskExecutor::PushError(ErrorData error) {
