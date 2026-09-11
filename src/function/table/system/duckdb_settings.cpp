@@ -81,10 +81,10 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 	for (idx_t i = 0; i < options_count; i++) {
 		auto option = DBConfig::GetOptionByIndex(i);
 		D_ASSERT(option);
-		if (!bind_data.debug && option->is_debug) {
+		if (bind_data.debug != option->is_debug) {
 			continue;
 		}
-		if (!bind_data.deprecated && option->is_deprecated) {
+		if (bind_data.deprecated != option->is_deprecated) {
 			continue;
 		}
 		DuckDBSettingValue value;
@@ -116,6 +116,12 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		result->settings.push_back(std::move(value));
 	}
 	for (auto &ext_param : config.GetExtensionSettings()) {
+		if (bind_data.debug != ext_param.second.is_debug) {
+			continue;
+		}
+		if (bind_data.deprecated != ext_param.second.is_deprecated) {
+			continue;
+		}
 		Value setting_val;
 		auto scope = SettingScope::GLOBAL;
 		auto lookup_result = context.TryGetCurrentSetting(ext_param.first, setting_val);
