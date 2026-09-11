@@ -544,11 +544,6 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			error = ErrorData(ex);
 			MarkDurabilityFailed();
 			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing: " + error.Message());
-		} catch (...) {
-			// as above - nothing may escape leaving the commit published but not durable
-			MarkDurabilityFailed();
-			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing (unknown error)");
-			throw;
 		}
 		// durable (or durability has failed): now leave the list of active transactions
 		t_lock.lock();
