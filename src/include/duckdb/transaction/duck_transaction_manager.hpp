@@ -135,7 +135,7 @@ private:
 	void RegisterUnsyncedCommit(transaction_t commit_id, idx_t wal_offset, idx_t catalog_version);
 	//! Advance the durable bound over the completed sync and drop this thread's entry; returns
 	//! whether the bound advanced
-	bool FinishCommitDurability(transaction_t commit_id, idx_t synced_offset);
+	bool AdvanceDurableBound(transaction_t commit_id, idx_t synced_offset);
 	//! Mark that a WAL sync has failed, waking up durability waiters
 	void MarkDurabilityFailed();
 	//! Sweep transactions pinned only by not-yet-durable commits; nothing else re-triggers it

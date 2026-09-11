@@ -334,7 +334,7 @@ void DuckTransactionManager::RegisterUnsyncedCommit(transaction_t commit_id, idx
 	unsynced_commits.push_back(UnsyncedCommit {commit_id, wal_offset, catalog_version});
 }
 
-bool DuckTransactionManager::FinishCommitDurability(transaction_t commit_id, idx_t synced_offset) {
+bool DuckTransactionManager::AdvanceDurableBound(transaction_t commit_id, idx_t synced_offset) {
 	unique_lock<mutex> guard(durability_lock);
 	// advance over every commit the sync covered, including ones whose threads have not woken up
 	// yet, so that an ack implies observability; then drop this thread's entry
@@ -597,7 +597,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		D_ASSERT(!error.HasError());
 		try {
 			commit_wal->SyncUpTo(info.wal_sync_offset);
-			if (FinishCommitDurability(info.commit_id, info.wal_sync_offset)) {
+			if (AdvanceDurableBound(info.commit_id, info.wal_sync_offset)) {
 				// the bound advanced: sweep the transactions it was pinning
 				GarbageCollectDurableTransactions();
 			}
