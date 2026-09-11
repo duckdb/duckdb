@@ -128,11 +128,11 @@ ORDER BY g NULLS LAST;
 NULL	2
 
 # Multi-argument aggregates can mix normalized and direct DISTINCT keys
-query I
-SELECT list_count(arg_min(DISTINCT name, g, 4))
+query T
+SELECT lower(arg_min(DISTINCT name, -g))
 FROM collated_values;
 ----
-3
+bob
 
 statement ok
 CREATE TABLE accented_values(name VARCHAR COLLATE NOACCENT.NOCASE);
