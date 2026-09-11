@@ -993,13 +993,6 @@ public:
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
-			auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
-			auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
-			if (gstate.global_state && bind_data.interface &&
-			    bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
-				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
-				return;
-			}
 			data_p.async_result = SourceResultType::FINISHED;
 			return;
 		}
@@ -1016,7 +1009,11 @@ public:
 				case ScanReadAheadAcquire::PARKED:
 					return;
 				case ScanReadAheadAcquire::EXHAUSTED:
-					if (bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
+					// If a thread is exhausted without getting a job, data.job
+					// is nullptr. If FinalizeScan returns true, duckdb calls
+					// scan function again, and after it returns, calls
+					// MultiFileGetPartitionData which in turn uses data.job.
+					if (data.job && bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
 						data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 						return;
 					}
