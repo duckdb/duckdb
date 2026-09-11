@@ -84,7 +84,7 @@ unique_ptr<QueryResult> Connection::Query(const string &query) {
 unique_ptr<QueryResult> Connection::Query(unique_ptr<SQLStatement> statement, QueryResultMemoryType memory_type) {
 	QueryParameters query_parameters;
 	query_parameters.memory_type = memory_type;
-	return context->Query(std::move(statement), std::move(query_parameters));
+	return context->Query(std::move(statement), query_parameters);
 }
 
 unique_ptr<QueryResult> Connection::Submit(const string &query, const QueryParameters &query_parameters) {
@@ -97,14 +97,14 @@ unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement,
 }
 
 unique_ptr<QueryResult> Connection::Submit(const string &query, identifier_map_t<BoundParameterData> &named_values,
-                                           QueryParameters query_parameters) {
-	return context->Submit(query, named_values, std::move(query_parameters));
+                                           const QueryParameters &query_parameters) {
+	return context->Submit(query, named_values, query_parameters);
 }
 
 unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement,
                                            identifier_map_t<BoundParameterData> &named_values,
-                                           QueryParameters query_parameters) {
-	return context->Submit(std::move(statement), named_values, std::move(query_parameters));
+                                           const QueryParameters &query_parameters) {
+	return context->Submit(std::move(statement), named_values, query_parameters);
 }
 
 static identifier_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
@@ -117,15 +117,15 @@ static identifier_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> 
 }
 
 unique_ptr<QueryResult> Connection::Submit(const string &query, vector<Value> &values,
-                                           QueryParameters query_parameters) {
+                                           const QueryParameters &query_parameters) {
 	auto named_params = ConvertParamListToMap(values);
-	return context->Submit(query, named_params, std::move(query_parameters));
+	return context->Submit(query, named_params, query_parameters);
 }
 
 unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement, vector<Value> &values,
-                                           QueryParameters query_parameters) {
+                                           const QueryParameters &query_parameters) {
 	auto named_params = ConvertParamListToMap(values);
-	return context->Submit(std::move(statement), named_params, std::move(query_parameters));
+	return context->Submit(std::move(statement), named_params, query_parameters);
 }
 
 unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {
@@ -142,7 +142,7 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	parameters.statement_args = named_params;
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 	parameters.result_eagerness = ResultEagerness::FORCED;
-	return context->Query(query, std::move(parameters));
+	return context->Query(query, parameters);
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const Identifier &database_name, const Identifier &schema_name,

@@ -94,13 +94,13 @@ public:
 	                                          const QueryParameters &query_parameters = {});
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
 	                                          identifier_map_t<BoundParameterData> &named_values,
-	                                          QueryParameters query_parameters = {});
+	                                          const QueryParameters &query_parameters = {});
 	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, identifier_map_t<BoundParameterData> &named_values,
-	                                          QueryParameters query_parameters = {});
+	                                          const QueryParameters &query_parameters = {});
 	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, vector<Value> &values,
-	                                          QueryParameters query_parameters = {});
+	                                          const QueryParameters &query_parameters = {});
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement, vector<Value> &values,
-	                                          QueryParameters query_parameters = {});
+	                                          const QueryParameters &query_parameters = {});
 
 	//! Prepare the specified query, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
