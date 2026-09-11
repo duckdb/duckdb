@@ -516,10 +516,39 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 	}
 	lock_guard<mutex> guard(temporary_directory.lock);
 	if (!temporary_directory.handle) {
-		// temp directory has not been created yet: initialize it
-		temporary_directory.handle = make_uniq<TemporaryDirectoryHandle>(
-		    db, temporary_directory.path, temporary_directory.size_on_disk, temporary_directory.maximum_swap_space);
+		// temp directory has not been created yet: initialize it, reclaiming what dead processes left
+		CreateTemporaryDirectoryHandle(true);
 	}
+}
+
+void StandardBufferManager::CreateTemporaryDirectoryHandle(bool sweep) {
+	temporary_directory.handle = make_uniq<TemporaryDirectoryHandle>(
+	    db, temporary_directory.path, temporary_directory.size_on_disk, temporary_directory.maximum_swap_space, sweep);
+}
+
+vector<TemporaryFileInformation> StandardBufferManager::InitializeTemporaryDirectory(bool sweep, bool silent) {
+	if (temporary_directory.path.empty()) {
+		// a missing temp_directory is a misconfiguration, not a race, so silent does not cover it
+		throw InvalidInputException("Cannot initialize the temporary directory because none is set. Set one with "
+		                            "SET temp_directory='/path/to/tmp.tmp'");
+	}
+	lock_guard<mutex> guard(temporary_directory.lock);
+	if (temporary_directory.handle) {
+		if (silent && temporary_directory.handle->AskedToSweep() == sweep) {
+			// somebody got here first and made the same choice, so there is nothing to report and
+			// nothing the caller would have done differently
+			return vector<TemporaryFileInformation>();
+		}
+		throw InvalidInputException(
+		    "The temporary directory of this database is already in use, and was initialized %s reclaiming what "
+		    "other processes left behind. That choice is settled the first time the directory is used, and it "
+		    "cannot be taken again%s",
+		    temporary_directory.handle->AskedToSweep() ? "with" : "without",
+		    silent ? " - silent := true covers being second, not being overruled"
+		           : ". Pass silent := true to accept being second when the choice is the same one");
+	}
+	CreateTemporaryDirectoryHandle(sweep);
+	return temporary_directory.handle->GetReclaimedFiles();
 }
 
 bool StandardBufferManager::EncryptTemporaryFiles() {
@@ -713,15 +742,19 @@ BlockManager &StandardBufferManager::GetTemporaryBlockManager() {
 	return *temp_block_manager;
 }
 
-vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
+vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles(bool external) {
 	vector<TemporaryFileInformation> result;
 	if (temporary_directory.path.empty()) {
 		return result;
 	}
+	// the grouped files this instance writes are described by the manager that owns them, which
+	// knows how much of each one is in use - a size the directory cannot tell us
+	string own_prefix;
 	{
 		lock_guard<mutex> temp_handle_guard(temporary_directory.lock);
 		if (temporary_directory.handle) {
 			result = temporary_directory.handle->GetTempFile().GetTemporaryFiles();
+			own_prefix = temporary_directory.handle->GetFilePrefix();
 		}
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
@@ -729,18 +762,40 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 		if (is_dir) {
 			return;
 		}
-		if (!StringUtil::EndsWith(name, ".block")) {
+		TemporaryFileOwner owner;
+		if (!TryParseTemporaryFileOwner(name, owner)) {
+			// nothing duckdb wrote here
+			return;
+		}
+		const auto is_ours = !own_prefix.empty() && StringUtil::StartsWith(name, own_prefix);
+		if (!is_ours && !external) {
+			// another instance's, and the caller asked about its own
+			return;
+		}
+		if (!external && StringUtil::EndsWith(name, "__claim")) {
+			// the claim on an id holds no data, so it is not one of this instance's temporary
+			// files - describing it would leave "is anything still spilled here" unable to answer
+			// no for as long as the directory is in use. Asking about the whole directory is a
+			// different question, and there it is one of the things in it
+			return;
+		}
+		if (is_ours && StringUtil::EndsWith(name, ".tmp")) {
+			// a grouped file, already described above and with a better size - our .block spills
+			// are not in its books, so those still come from the directory
 			return;
 		}
 
+		// ListFiles hands back a name, not a path, and the file is not in the working directory
+		auto path = fs.JoinPath(temporary_directory.path, name);
+
 		// Another process or thread can delete the file before we can get its file size.
-		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 		if (!handle) {
 			return;
 		}
 
 		TemporaryFileInformation info;
-		info.path = name;
+		info.path = path;
 		info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
 		handle.reset();
 		result.push_back(info);

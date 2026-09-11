@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/process_util.hpp"
@@ -723,8 +724,15 @@ string TemporaryFilePrefix(const TemporaryFileOwner &owner) {
 	return TEMPORARY_FILE_PREFIX + to_string(owner.pid) + "_" + to_string(owner.instance) + "_";
 }
 
-string TemporaryOwnerMarkerName(const TemporaryFileOwner &owner) {
-	return TemporaryFilePrefix(owner) + "owner";
+//! The extra underscore is not decoration: '_' sorts below every letter a suffix starts with, so
+//! the claim heads its owner's files in a plain directory listing
+string TemporaryOwnerClaimName(const TemporaryFileOwner &owner) {
+	return TemporaryFilePrefix(owner) + "_claim";
+}
+
+//! Whether a name is somebody's claim rather than one of their data files
+static bool IsTemporaryOwnerClaim(const string &file_name) {
+	return StringUtil::EndsWith(file_name, "__claim");
 }
 
 //! Only unsigned decimal, so nothing a version naming its files differently wrote can parse
@@ -812,8 +820,8 @@ void TemporaryFileManager::EraseFileHandle(TemporaryFileManagerLock &, const Tem
 // TemporaryDirectoryHandle
 //===--------------------------------------------------------------------===//
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, atomic<idx_t> &size_on_disk,
-                                                   optional_idx max_swap_space)
-    : db(db), temp_directory(std::move(path_p)) {
+                                                   optional_idx max_swap_space, bool sweep)
+    : db(db), temp_directory(std::move(path_p)), asked_to_sweep(sweep) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	D_ASSERT(!temp_directory.empty());
 	if (!fs.DirectoryExists(temp_directory)) {
@@ -823,8 +831,10 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
 	ClaimOwner();
 	// reap whatever earlier instances left behind - a crash never reaches teardown. Once per
 	// directory: repeating it per instance only multiplies the chances of misjudging a live process.
-	if (ClaimDirectorySweep(temp_directory)) {
-		SweepAbandonedInstances();
+	// the claim is taken either way: declining the sweep has to decline it for the directory, or the
+	// next spill in this process would do what this instance was told not to
+	if (ClaimDirectorySweep(temp_directory) && sweep) {
+		reclaimed_files = SweepAbandonedInstances();
 	}
 	temp_file = make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk, file_prefix);
 	temp_file->SetMaxSwapSpace(max_swap_space);
@@ -833,15 +843,15 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
 void TemporaryDirectoryHandle::ClaimOwner() {
 	auto &fs = FileSystem::GetFileSystem(db);
 	owner.pid = ProcessUtil::CurrentProcessId();
-	// Creating the marker is what claims the id, because it is the only step that is atomic against
+	// Creating the claim is what takes the id, because it is the only step that is atomic against
 	// an instance that shares our pid but not our counter - two copies of duckdb in one process each
 	// count from zero. It is not locked, and nothing ever opens anybody else's: existing is its job.
 	for (;;) {
 		owner.instance = NextInstanceId();
 		try {
-			auto marker = fs.OpenFile(fs.JoinPath(temp_directory, TemporaryOwnerMarkerName(owner)),
-			                          FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
-			marker->Close();
+			auto claim = fs.OpenFile(fs.JoinPath(temp_directory, TemporaryOwnerClaimName(owner)),
+			                         FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+			claim->Close();
 			break;
 		} catch (std::exception &) {
 			// taken, by a live instance or by one that died holding it - either way not ours
@@ -852,14 +862,14 @@ void TemporaryDirectoryHandle::ClaimOwner() {
 
 vector<string> TemporaryDirectoryHandle::ListOwnFiles() {
 	auto &fs = FileSystem::GetFileSystem(db);
-	auto marker_name = TemporaryOwnerMarkerName(owner);
+	auto claim_name = TemporaryOwnerClaimName(owner);
 	vector<string> result;
 	fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
 		TemporaryFileOwner found;
 		if (is_dir || !TryParseTemporaryFileOwner(name, found) || !(found == owner)) {
 			return;
 		}
-		if (name == marker_name) {
+		if (name == claim_name) {
 			// the claim itself, removed on its own once everything it reserves is gone
 			return;
 		}
@@ -868,8 +878,8 @@ vector<string> TemporaryDirectoryHandle::ListOwnFiles() {
 	return result;
 }
 
-void TemporaryDirectoryHandle::SweepAbandonedInstances() {
-	auto &fs = FileSystem::GetFileSystem(db);
+vector<TemporaryFileInformation> ReapAbandonedTemporaryFiles(FileSystem &fs, const string &temp_directory) {
+	vector<TemporaryFileInformation> reclaimed;
 	try {
 		// the instance an id belongs to never affects the verdict, only the process it ran in does
 		unordered_map<int64_t, vector<string>> by_pid;
@@ -884,11 +894,38 @@ void TemporaryDirectoryHandle::SweepAbandonedInstances() {
 			if (ProcessUtil::ProcessIsRunning(entry.first)) {
 				continue;
 			}
-			fs.RemoveFiles(entry.second);
+			// the claim goes last, as it does at teardown: while it stands, a process that takes
+			// this pid back cannot claim the same id and start writing the paths we are deleting
+			std::stable_partition(entry.second.begin(), entry.second.end(),
+			                      [](const string &path) { return !IsTemporaryOwnerClaim(path); });
+			for (auto &path : entry.second) {
+				try {
+					TemporaryFileInformation info;
+					info.path = path;
+					info.size = 0;
+					auto handle =
+					    fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+					if (handle) {
+						info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
+						handle.reset();
+					}
+					if (fs.TryRemoveFile(path)) {
+						reclaimed.push_back(std::move(info));
+					}
+				} catch (std::exception &) {
+					// one file nobody can remove - another instance got there first, or Windows
+					// still holds it open - is no reason to leave the rest of them behind
+				}
+			}
 		}
 	} catch (...) { // NOLINT
 		            // reclaiming disk is not worth failing an open over - a later process tries again
 	}
+	return reclaimed;
+}
+
+vector<TemporaryFileInformation> TemporaryDirectoryHandle::SweepAbandonedInstances() {
+	return ReapAbandonedTemporaryFiles(FileSystem::GetFileSystem(db), temp_directory);
 }
 
 TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
@@ -916,7 +953,7 @@ void TemporaryDirectoryHandle::CleanupTemporaryDirectory() {
 	fs.RemoveFiles(ListOwnFiles());
 	// the claim goes last - while it stands nobody can take our id and create a file under our name
 	// that we would then delete out from under them
-	fs.TryRemoveFile(fs.JoinPath(temp_directory, TemporaryOwnerMarkerName(owner)));
+	fs.TryRemoveFile(fs.JoinPath(temp_directory, TemporaryOwnerClaimName(owner)));
 	if (created_directory) {
 		// only if nothing else is in it: another instance may have joined us here, and removing the
 		// directory is recursive - it would take their files with it
