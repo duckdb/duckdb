@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/limits.hpp"
 #include <cmath>
 
 namespace duckdb {
@@ -18,6 +19,19 @@ struct DivideOperator {
 	static inline TR Operation(TA left, TB right) {
 		D_ASSERT(right != 0); // this should be checked before!
 		return left / right;
+	}
+};
+
+struct TryDivideOperator {
+	template <class T>
+	static inline bool Operation(T left, T right, T &result) {
+		D_ASSERT(right != 0); // this should be checked before!
+		// with a non-zero divisor, division only overflows for the minimum value divided by -1
+		if (left == NumericLimits<T>::Minimum() && right == T(-1)) {
+			return false;
+		}
+		result = DivideOperator::Operation<T, T, T>(left, right);
+		return true;
 	}
 };
 

@@ -12,9 +12,7 @@ CreateAggregateFunctionInfo::CreateAggregateFunctionInfo(AggregateFunction funct
 CreateAggregateFunctionInfo::CreateAggregateFunctionInfo(AggregateFunctionSet set)
     : CreateFunctionInfo(CatalogType::AGGREGATE_FUNCTION_ENTRY), functions(std::move(set)) {
 	SetFunctionName(functions.name);
-	for (auto &func : functions.functions) {
-		func.name = functions.name;
-	}
+	functions.ApplyToFunctions([&](AggregateFunction &func) { func.name = functions.name; });
 	internal = true;
 }
 

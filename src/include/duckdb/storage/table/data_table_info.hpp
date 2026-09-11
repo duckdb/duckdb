@@ -26,8 +26,8 @@ public:
 	              Identifier table);
 
 	//! Bind unknown indexes throwing an exception if binding fails.
-	//! Only binds the specified index type, or all, if nullptr.
-	void BindIndexes(ClientContext &context, const char *index_type = nullptr);
+	//! Only binds the specified index type, or all if no type is specified.
+	void BindIndexes(ClientContext &context, const optional<string> &index_type = {});
 
 	//! Whether or not the table is temporary
 	bool IsTemporary() const;
@@ -48,9 +48,9 @@ public:
 	unique_ptr<StorageLockKey> GetSharedLock() {
 		return checkpoint_lock.GetSharedLock();
 	}
-	bool AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id);
+	bool AppendRequiresNewRowGroup(RowGroupCollection &collection, optional_idx checkpoint_id);
 	optional_idx CheckpointRowGroupCount(const CheckpointOptions &options) const;
-	void VerifyIndexBuffers();
+	void VerifyIndexBuffers() const;
 
 	Identifier GetSchemaName();
 	//! The full (possibly nested) schema path of the table

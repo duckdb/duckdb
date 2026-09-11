@@ -22,11 +22,13 @@
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 
 namespace duckdb {
 
-StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, LogicalOperator &root_p)
-    : optimizer(optimizer_p), context(optimizer.context), root(&root_p) {
+StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, LogicalOperator &root_p,
+                                           StatisticsPropagationMode mode_p)
+    : optimizer(optimizer_p), context(optimizer.context), mode(mode_p), root(&root_p) {
 	root->ResolveOperatorTypes();
 }
 
@@ -80,6 +82,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		result = PropagateStatistics(node.Cast<LogicalJoin>(), node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		result = PropagateStatistics(node.Cast<LogicalLimit>(), node_ptr);
+		break;
 	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
 		result = PropagateStatistics(node.Cast<LogicalPositionalJoin>(), node_ptr);
 		break;
@@ -98,7 +103,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		result = PropagateChildren(node, node_ptr);
 	}
 
-	if (!optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
+	if (mode == StatisticsPropagationMode::FULL &&
+	    !optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
 		// compress data based on statistics for materializing operators
 		CompressedMaterialization compressed_materialization(optimizer, *root, statistics_map);
 		compressed_materialization.Compress(node_ptr);

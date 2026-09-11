@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -83,7 +84,8 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 		if (&catalog != &entry.ParentCatalog()) {
 			return;
 		}
-		dependencies.AddDependency(entry);
+		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
+		dependencies.AddDependency(entry, DependencyDependentFlags());
 	});
 
 	// Bind the index expressions.

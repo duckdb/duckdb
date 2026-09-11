@@ -65,6 +65,7 @@ bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
 	case ExceptionType::PARAMETER_NOT_ALLOWED:
 	case ExceptionType::PARSER:
 	case ExceptionType::PERMISSION:
+	case ExceptionType::RESOURCE_IN_USE:
 		return false;
 	default:
 		return true;
@@ -156,7 +157,8 @@ static constexpr ExceptionEntry EXCEPTION_MAP[] = {{ExceptionType::INVALID, "Inv
                                                    {ExceptionType::AUTOLOAD, "Extension Autoloading"},
                                                    {ExceptionType::SEQUENCE, "Sequence"},
                                                    {ExceptionType::INVALID_CONFIGURATION, "Invalid Configuration"},
-                                                   {ExceptionType::DATA_CORRUPTION, "Data Corruption"}};
+                                                   {ExceptionType::DATA_CORRUPTION, "Data Corruption"},
+                                                   {ExceptionType::RESOURCE_IN_USE, "Resource In Use"}};
 
 string Exception::ExceptionTypeToString(ExceptionType type) {
 	for (auto &e : EXCEPTION_MAP) {
@@ -317,6 +319,9 @@ IOException::IOException(const unordered_map<string, string> &extra_info, const 
 }
 
 DataCorruptionException::DataCorruptionException(const string &msg) : Exception(ExceptionType::DATA_CORRUPTION, msg) {
+}
+
+ResourceInUseException::ResourceInUseException(const string &msg) : Exception(ExceptionType::RESOURCE_IN_USE, msg) {
 }
 
 NotImplementedException::NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg)

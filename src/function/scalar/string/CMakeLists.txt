@@ -18,6 +18,7 @@ add_library_unity(
   sha1.cpp
   sha256.cpp
   strip_accents.cpp
+  string_common.cpp
   string_split.cpp
   string_slice.cpp
   suffix.cpp

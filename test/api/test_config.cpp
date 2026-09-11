@@ -1,6 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
-#include "duckdb/common/http_util.hpp"
+#include "duckdb/main/http/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 #include <set>
@@ -139,6 +139,18 @@ TEST_CASE("Test user_agent", "[api]") {
 		REQUIRE(user_agent.back() != ' ');
 		REQUIRE(user_agent.back() != '\t');
 	}
+}
+
+TEST_CASE("HTTPHeaders preserves repeated field values", "[api]") {
+	HTTPHeaders headers;
+	headers.Insert("Cache-Control", "max-age=600");
+	headers.Append("cache-control", "no-store");
+
+	REQUIRE(headers.GetHeaderValue("CACHE-CONTROL") == "max-age=600");
+	const auto values = headers.GetHeaderValues("Cache-Control");
+	REQUIRE(values.size() == 2);
+	REQUIRE(values[0] == "max-age=600");
+	REQUIRE(values[1] == "no-store");
 }
 
 TEST_CASE("Test secret_directory configuration", "[api]") {

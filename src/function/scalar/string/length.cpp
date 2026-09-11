@@ -61,6 +61,7 @@ struct BitStringLenOperator {
 	}
 };
 
+template <bool COUNTS_CODEPOINTS>
 unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
@@ -82,8 +83,13 @@ unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, Function
 			// ASCII-only: the character count is exactly the byte count
 			min_length = NumericCast<int64_t>(min_string_length.GetIndex());
 		} else if (min_string_length.GetIndex() > 0) {
-			// non-empty strings contain at least one character
-			min_length = 1;
+			if (COUNTS_CODEPOINTS) {
+				// every codepoint takes at most four bytes
+				min_length = NumericCast<int64_t>((min_string_length.GetIndex() + 3) / 4);
+			} else {
+				// a grapheme cluster can span arbitrarily many codepoints - no better bound exists
+				min_length = 1;
+			}
 		}
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
@@ -265,7 +271,7 @@ ScalarFunctionSet LengthFun::GetFunctions() {
 	ScalarFunctionSet length("length");
 	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
-	                                  LengthPropagateStats));
+	                                  LengthPropagateStats<true>));
 	length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
 	length.AddFunction(
@@ -277,7 +283,7 @@ ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 	ScalarFunctionSet length_grapheme("length_grapheme");
 	length_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                           ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
-	                                           nullptr, LengthPropagateStats));
+	                                           nullptr, LengthPropagateStats<false>));
 	return (length_grapheme);
 }
 
@@ -287,9 +293,7 @@ ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
 	array_length.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
 	                                        LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind));
-	for (auto &func : array_length.functions) {
-		func.SetFallible();
-	}
+	array_length.SetFallible();
 	return (array_length);
 }
 

@@ -62,27 +62,16 @@ MetaPipeline &MetaPipeline::GetLastChild() {
 	return *current_children.get().back();
 }
 
-const meta_pipeline_dependency_map_t &MetaPipeline::GetDependencies() const {
-	return pipeline_dependencies;
-}
-
 bool MetaPipeline::RemoveOptionalDependency(Pipeline &pipeline, Pipeline &dependency) {
-	auto entry = pipeline_dependencies.find(pipeline);
-	if (entry == pipeline_dependencies.end()) {
-		return false;
-	}
-	for (auto dependency_entry = entry->second.begin(); dependency_entry != entry->second.end(); dependency_entry++) {
-		if (dependency_entry->type == MetaPipelineDependencyType::OPTIONAL_DEPENDENCY &&
-		    RefersToSameObject(dependency_entry->pipeline.get(), dependency)) {
-			entry->second.erase(dependency_entry);
-			return true;
-		}
-	}
-	return false;
+	return pipeline.RemoveOptionalIntraDependency(dependency);
 }
 
 void MetaPipeline::AddOptionalDependency(Pipeline &pipeline, Pipeline &dependency) {
-	pipeline_dependencies[pipeline].emplace_back(dependency, MetaPipelineDependencyType::OPTIONAL_DEPENDENCY);
+	AddPipelineDependency(pipeline, dependency, PipelineDependencyType::OPTIONAL_DEPENDENCY);
+}
+
+void MetaPipeline::AddPipelineDependency(Pipeline &dependant, Pipeline &dependency, PipelineDependencyType type) {
+	dependant.AddIntraDependency(dependency, type);
 }
 
 MetaPipelineType MetaPipeline::Type() const {
@@ -139,7 +128,7 @@ Pipeline &MetaPipeline::CreatePipeline() {
 
 vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependant, const Pipeline &start,
                                                                const bool including,
-                                                               MetaPipelineDependencyType dependency_type) {
+                                                               PipelineDependencyType dependency_type) {
 	// find 'start'
 	auto it = pipelines.begin();
 	for (; !RefersToSameObject(**it, start); it++) {
@@ -160,9 +149,8 @@ vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependa
 	}
 
 	// add them to the dependencies
-	auto &explicit_deps = pipeline_dependencies[dependant];
 	for (auto &created_pipeline : created_pipelines) {
-		explicit_deps.emplace_back(*created_pipeline, dependency_type);
+		AddPipelineDependency(dependant, *created_pipeline, dependency_type);
 	}
 
 	return created_pipelines;
@@ -208,9 +196,8 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 				continue;
 			}
 			auto dependency_type = dependency_mode == RecursiveDependencyMode::FORCE
-			                           ? MetaPipelineDependencyType::REQUIRED
-			                           : MetaPipelineDependencyType::OPTIONAL_DEPENDENCY;
-			auto &pipeline_deps = pipeline_dependencies[*pipeline];
+			                           ? PipelineDependencyType::REQUIRED
+			                           : PipelineDependencyType::OPTIONAL_DEPENDENCY;
 			for (auto &new_dependency : new_dependencies) {
 				if (dataflow_mode == DataflowDependencyMode::SKIP_CONFLICTING) {
 					bool conflicts_with_dataflow = pipeline->HasExternalInputProducer(*new_dependency);
@@ -230,7 +217,7 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 				    !PipelineExceedsThreadCount(*new_dependency, thread_count)) {
 					continue;
 				}
-				pipeline_deps.emplace_back(*new_dependency, dependency_type);
+				AddPipelineDependency(*pipeline, *new_dependency, dependency_type);
 			}
 		}
 	}
@@ -270,17 +257,13 @@ Pipeline &MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 	state.SetPipelineSink(union_pipeline, sink, 0);
 
 	// 'union_pipeline' inherits ALL dependencies of 'current' (within this MetaPipeline, and across MetaPipelines)
-	union_pipeline.dependencies = current.dependencies;
+	union_pipeline.InheritDependencies(current);
 	union_pipeline.dataflow_dependencies = current.dataflow_dependencies;
 	union_pipeline.input_mode = current.input_mode;
 	union_pipeline.external_input_producers = current.external_input_producers;
-	auto it = pipeline_dependencies.find(current);
-	if (it != pipeline_dependencies.end()) {
-		pipeline_dependencies[union_pipeline] = it->second;
-	}
 	if (order_matters) {
 		// if we need to preserve order, or if the sink is not parallel, we set a dependency
-		pipeline_dependencies[union_pipeline].emplace_back(current, MetaPipelineDependencyType::REQUIRED);
+		AddPipelineDependency(union_pipeline, current);
 	}
 
 	return union_pipeline;
@@ -297,9 +280,9 @@ void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator &op, 
 
 	// child pipeline has a dependency (within this MetaPipeline on all pipelines that were scheduled
 	// between 'current' and now (including 'current') - set them up
-	pipeline_dependencies[child_pipeline].emplace_back(current, MetaPipelineDependencyType::REQUIRED);
+	AddPipelineDependency(child_pipeline, current);
 	AddDependenciesFrom(child_pipeline, last_pipeline, false);
-	D_ASSERT(pipeline_dependencies.find(child_pipeline) != pipeline_dependencies.end());
+	D_ASSERT(!child_pipeline.GetIntraDependencies().empty());
 }
 
 } // namespace duckdb

@@ -34,6 +34,15 @@ NULL
 statement ok
 SET ieee_floating_point_ops=false;
 
+# division by zero is an error by default
+statement error
+SELECT 4 / 0
+----
+<REGEX>:.*Division by zero.*
+
+statement ok
+SET null_on_division_by_zero=true;
+
 # division by zero
 query I
 SELECT 4 / 0

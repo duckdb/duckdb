@@ -2,7 +2,9 @@ name: Swift
 on:
   workflow_call:
     inputs:
-      git_ref:
+      duckdb_commit:
+        type: string
+      duckdb_version:
         type: string
       runner_macos_arm64:
         type: string
@@ -12,6 +14,10 @@ on:
 concurrency:
   group: swift-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
+
+env:
+  DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
+  DUCKDB_VERSION: ${{ inputs.duckdb_version }}
 
 jobs:
   test-apple-platforms:
@@ -40,7 +46,7 @@ jobs:
           runner_provider: ${{ inputs.runner_provider }}
           # we need tags for the ubiquity build script to run without errors
           fetch_depth: '0'
-          ref: ${{ inputs.git_ref != '' && inputs.git_ref || github.sha }}
+          ref: ${{ inputs.duckdb_commit != '' && inputs.duckdb_commit || github.sha }}
 
       - name: Configure Xcode Caching
         if: ${{ inputs.runner_provider == 'namespace' }}

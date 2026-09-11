@@ -144,9 +144,7 @@ ScalarFunctionSet JSONFunctions::GetContainsFunction() {
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::VARCHAR);
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::JSON());
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR);
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::JSON());
 	// TODO: implement json_contains that accepts path argument as well
 

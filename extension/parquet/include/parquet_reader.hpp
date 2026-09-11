@@ -54,6 +54,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "parquet_column_schema.hpp"
 #include "thrift/protocol/TProtocol.h"
+#include "reader/string_column_reader.hpp"
 
 namespace duckdb_apache {
 namespace thrift {
@@ -121,6 +122,13 @@ const char *EnumUtil::ToChars<ParquetPrefetchStrategyOption>(ParquetPrefetchStra
 
 template <>
 ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption>(const char *value);
+
+template <>
+const char *EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringColumnReader::Utf8ValidationOption value);
+
+template <>
+StringColumnReader::Utf8ValidationOption
+EnumUtil::FromString<StringColumnReader::Utf8ValidationOption>(const char *value);
 
 struct ParquetScanFilter {
 	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
@@ -241,7 +249,12 @@ public:
 
 struct ParquetColumnDefinition {
 public:
-	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
+	static vector<ParquetColumnDefinition> FromSchemaMap(ClientContext &context, const Value &schema_value);
+	MultiFileColumnDefinition ToMultiFileColumnDefinition() const;
+	bool operator==(const ParquetColumnDefinition &other) const {
+		return field_id == other.field_id && name == other.name && type == other.type &&
+		       default_value == other.default_value && identifier == other.identifier && children == other.children;
+	}
 
 public:
 	// DEPRECATED, use 'identifier' instead
@@ -250,6 +263,7 @@ public:
 	LogicalType type;
 	Value default_value;
 	Value identifier;
+	vector<ParquetColumnDefinition> children;
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -270,6 +284,8 @@ struct ParquetOptions {
 	idx_t explicit_cardinality = 0;
 	bool can_have_nan = false; // if floats or doubles can contain NaN values
 	ParquetPrefetchStrategyOption prefetch_strategy = ParquetPrefetchStrategyOption::AUTO;
+	StringColumnReader::Utf8ValidationOption utf8_validation_option =
+	    StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
 };
 
 struct ParquetOptionsSerialization {

@@ -8,6 +8,7 @@ add_library_unity(
   duckdb_storage_compression
   OBJECT
   numeric_constant.cpp
+  compression_segment_reader.cpp
   fixed_size_uncompressed.cpp
   rle.cpp
   dictionary_compression.cpp

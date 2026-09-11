@@ -14,6 +14,26 @@ SELECT a FROM test LIMIT 1
 ----
 11
 
+# LIMIT is redundant when the maximum cardinality is smaller than the limit
+query I
+SELECT * FROM range(10) LIMIT 20
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+query II
+EXPLAIN SELECT * FROM range(10) LIMIT 20
+----
+physical_plan	<!REGEX>:.*STREAMING_LIMIT.*
+
 # decimal limit
 query I
 SELECT a FROM test LIMIT 1.25
@@ -48,7 +68,7 @@ SELECT a FROM test LIMIT SUM(42)
 statement error
 SELECT a FROM test LIMIT row_number() OVER ()
 ----
-<REGEX>:Not implemented Error:.*expression class.*
+<REGEX>:Binder Error:.*Window functions are not supported here.*
 
 # LIMIT Bug #321 Crazy Result
 statement ok

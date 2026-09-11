@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -158,22 +159,22 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 		    std::move(root.GetChildrenMutable()[0]), std::move(root.GetChildrenMutable()[1]));
 	} else if (PatternIsPrefix(patt_str, match_type)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
-		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like, match_type);
+		return ApplyRule(root, "prefix", patt_str, is_not_like, match_type);
 	} else if (PatternIsSuffix(patt_str, match_type)) {
 		// Suffix LIKE pattern: [%]+[^%_]*, ignoring underscore
-		return ApplyRule(root, SuffixFun::GetFunction(), patt_str, is_not_like, match_type);
+		return ApplyRule(root, "suffix", patt_str, is_not_like, match_type);
 	} else if (PatternIsContains(patt_str, match_type)) {
 		// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring underscore
-		return ApplyRule(root, GetStringContains(), patt_str, is_not_like, match_type);
+		return ApplyRule(root, "contains", patt_str, is_not_like, match_type);
 	}
 	return nullptr;
 }
 
-unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, const ScalarFunction &function,
+unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, const Identifier &function_name,
                                                        string pattern, bool is_not_like,
                                                        PatternMatchType match_type) const {
 	// replace LIKE by an optimized function
-	auto result = function.Bind(GetContext(), std::move(expr.GetChildrenMutable()));
+	auto result = BindBuiltinScalarFunction(GetContext(), function_name, std::move(expr.GetChildrenMutable()));
 
 	// removing wildcard from the pattern
 	char wildcard_any = match_type == PatternMatchType::GLOB ? '*' : '%';

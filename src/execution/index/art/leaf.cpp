@@ -159,7 +159,7 @@ void Leaf::DeprecatedFree(ART &art, NodePtr &node) {
 	node.Clear();
 }
 
-bool Leaf::DeprecatedGetRowIds(ART &art, const NodePtr &node, set<row_t> &row_ids, const idx_t max_count) {
+bool Leaf::DeprecatedGetRowIds(const ART &art, const NodePtr &node, set<row_t> &row_ids, const idx_t max_count) {
 	D_ASSERT(node.GetType() == LEAF);
 
 	NodePtr current = node;

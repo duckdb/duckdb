@@ -18,7 +18,6 @@ namespace duckdb {
 class BoundFunctionExpression;
 
 struct ConstantOrNull {
-	static unique_ptr<FunctionData> Bind(Value value);
 	static bool IsConstantOrNull(BoundFunctionExpression &expr, const Value &val);
 };
 

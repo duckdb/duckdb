@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_duckdb.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
@@ -20,12 +21,12 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
 	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
-	                     BaseFileReaderOptions &options, vector<string> &expected_names,
+	                     BaseFileReaderOptions &options, vector<Identifier> &expected_names,
 	                     vector<LogicalType> &expected_types) override;
 	bool ParseOption(ClientContext &context, const Identifier &key, const Value &val, MultiFileOptions &file_options,
 	                 BaseFileReaderOptions &options) override;
-	void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options, const vector<string> &expected_names,
-	                      const vector<LogicalType> &expected_types) override;
+	void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
+	                      const vector<Identifier> &expected_names, const vector<LogicalType> &expected_types) override;
 	void FinalizeBindData(MultiFileBindData &multi_file_data) override;
 
 	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
@@ -375,7 +376,7 @@ unique_ptr<BaseFileReaderOptions> DuckDBMultiFileInfo::InitializeOptions(ClientC
 }
 
 bool DuckDBMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
-                                          BaseFileReaderOptions &options, vector<string> &expected_names,
+                                          BaseFileReaderOptions &options, vector<Identifier> &expected_names,
                                           vector<LogicalType> &expected_types) {
 	return false;
 }
@@ -395,7 +396,7 @@ bool DuckDBMultiFileInfo::ParseOption(ClientContext &context, const Identifier &
 }
 
 void DuckDBMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
-                                           const vector<string> &expected_names,
+                                           const vector<Identifier> &expected_names,
                                            const vector<LogicalType> &expected_types) {
 	throw InternalException("Unimplemented method in DuckDBMultiFileInfo");
 }
@@ -539,7 +540,7 @@ unique_ptr<TableRef> ReadDuckDBTableFunction::ReplacementScan(ClientContext &con
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("read_duckdb", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {

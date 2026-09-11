@@ -636,7 +636,7 @@ TABLE t;
 statement ok
 CALL disable_logging();
 
-query IIIIIIIIII
+query IIIIIIIIIIIIIII
 SELECT info.key_delta_work_ns::UBIGINT > 0,
        info.key_delta_candidate_rows::UBIGINT = 5,
        info.key_delta_touched_keys::UBIGINT = 4,
@@ -646,11 +646,16 @@ SELECT info.key_delta_work_ns::UBIGINT > 0,
 	   info.key_preaggregation_work_ns::UBIGINT = 0,
 	   info.key_preaggregation_combine_work_ns::UBIGINT = 0,
 	   info.key_preaggregation_candidate_rows::UBIGINT = 0,
-	   info.key_preaggregation_groups::UBIGINT = 0
+	   info.key_preaggregation_groups::UBIGINT = 0,
+	   info.local_key_preaggregation_work_ns::UBIGINT = 0,
+	   info.local_key_preaggregation_candidate_rows::UBIGINT = 0,
+	   info.local_key_preaggregation_groups::UBIGINT = 0,
+	   info.local_key_preaggregation_states::UBIGINT = 0,
+	   info.local_key_preaggregation_residual_rows::UBIGINT = 0
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
 ----
-1	1	1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
 
 statement ok
 CALL enable_logging('PhysicalOperator');
@@ -658,7 +663,12 @@ CALL enable_logging('PhysicalOperator');
 statement ok
 CALL truncate_duckdb_logs();
 
-# Duplicate-heavy epochs activate preaggregation.
+# Duplicate-heavy epochs activate preaggregation after streaming at most the current frontier.
+# The bounded classifier can stream multiple sample batches, so validate the attribution invariant rather than an
+# exact local-versus-residual split that depends on vector layout.
+statement ok
+SET threads=1;
+
 query II
 WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
 	SELECT i, 3
@@ -673,18 +683,78 @@ SELECT count(*) = current_setting('standard_vector_size')::BIGINT, max(v) FROM t
 statement ok
 CALL disable_logging();
 
-query IIIIIII
+query IIIIIIIIIIIII
 SELECT info.key_preaggregation_classification_work_ns::UBIGINT > 0,
-	   info.key_preaggregation_work_ns::UBIGINT > 0,
 	   info.key_preaggregation_combine_work_ns::UBIGINT > 0,
-	   info.key_preaggregation_candidate_rows::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 32,
-	   info.key_preaggregation_groups::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 4,
+	   info.local_key_preaggregation_classification_work_ns::UBIGINT > 0,
+	   info.local_key_preaggregation_work_ns::UBIGINT > 0,
+	   info.local_key_preaggregation_candidate_rows::UBIGINT > 0,
+	   info.local_key_preaggregation_groups::UBIGINT > 0,
+	   info.local_key_preaggregation_groups::UBIGINT <= info.local_key_preaggregation_candidate_rows::UBIGINT,
+	   info.local_key_preaggregation_states::UBIGINT > 0,
+	   info.local_key_preaggregation_residual_rows::UBIGINT > 0,
+	   info.local_key_preaggregation_candidate_rows::UBIGINT +
+	       info.local_key_preaggregation_residual_rows::UBIGINT = info.key_delta_candidate_rows::UBIGINT,
+	   info.key_preaggregation_candidate_rows::UBIGINT <= info.local_key_preaggregation_residual_rows::UBIGINT,
 	   info.key_delta_candidate_rows::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 32,
 	   info.key_delta_touched_keys::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 4
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
 ----
-1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1
+
+statement ok
+SET threads=8;
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Preaggregated worker output and a raw residual preserve one pre-epoch delta snapshot. The classifier's streamed
+# sample is part of the residual, so the exact split depends on vector layout.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	(
+		SELECT i, 2
+		FROM range(current_setting('standard_vector_size')::BIGINT) r(i), range(32) duplicates(_)
+	)
+	UNION ALL
+	(
+		SELECT current_setting('standard_vector_size')::BIGINT + i, 2
+		FROM range(1) r(i)
+	)
+	UNION
+	SELECT k, v - 1 FROM t WHERE v > 0
+)
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT + 1, max(v) FROM t;
+----
+1	0
+
+statement ok
+CALL disable_logging();
+
+query IIIIIIIIII
+SELECT info.local_key_preaggregation_candidate_rows::UBIGINT > 0,
+	   info.local_key_preaggregation_groups::UBIGINT > 0,
+	   info.local_key_preaggregation_groups::UBIGINT <
+	       info.local_key_preaggregation_candidate_rows::UBIGINT / 4,
+	   info.local_key_preaggregation_states::UBIGINT > 0,
+	   info.local_key_preaggregation_residual_rows::UBIGINT > 0,
+	   info.local_key_preaggregation_candidate_rows::UBIGINT +
+	       info.local_key_preaggregation_residual_rows::UBIGINT =
+	       current_setting('standard_vector_size')::UBIGINT * 32 + 1,
+	   info.key_delta_candidate_rows::UBIGINT =
+	       current_setting('standard_vector_size')::UBIGINT * 32 +
+	       (current_setting('standard_vector_size')::UBIGINT + 1) * 2 + 1,
+	   info.key_delta_touched_keys::UBIGINT = (current_setting('standard_vector_size')::UBIGINT + 1) * 3,
+	   info.key_delta_new_keys::UBIGINT = current_setting('standard_vector_size')::UBIGINT + 1,
+	   info.key_delta_changed_keys::UBIGINT = (current_setting('standard_vector_size')::UBIGINT + 1) * 2
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1	1	1	1	1	1	1
 
 statement ok
 CALL enable_logging('PhysicalOperator');
@@ -706,13 +776,19 @@ TABLE t;
 statement ok
 CALL disable_logging();
 
-query IIIII
+query IIIIIIIIIII
 SELECT info.keyed_hash_commit_work_ns::UBIGINT > 0,
        info.key_preaggregation_work_ns::UBIGINT = 0,
        info.key_preaggregation_combine_work_ns::UBIGINT = 0,
        info.key_preaggregation_candidate_rows::UBIGINT = 0,
-       info.key_preaggregation_groups::UBIGINT = 0
+       info.key_preaggregation_groups::UBIGINT = 0,
+	   info.local_key_preaggregation_classification_work_ns::UBIGINT = 0,
+	   info.local_key_preaggregation_work_ns::UBIGINT = 0,
+	   info.local_key_preaggregation_candidate_rows::UBIGINT = 0,
+	   info.local_key_preaggregation_groups::UBIGINT = 0,
+	   info.local_key_preaggregation_states::UBIGINT = 0,
+	   info.local_key_preaggregation_residual_rows::UBIGINT = 0
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
 ----
-1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1

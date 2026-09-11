@@ -13,12 +13,15 @@ add_library_unity(
   test_caching_file_system_wrapper.cpp
   test_external_file_cache.cpp
   test_hyperlog.cpp
+  test_http_transport_manager.cpp
+  test_literal.cpp
   test_lru_cache.cpp
-  test_numeric_cast.cpp
+  test_numeric_utils.cpp
   test_parse_expression.cpp
   test_parse_load_statement.cpp
   test_parse_external_resource_source.cpp
   test_parse_logical_type.cpp
+  test_parse_memory_limit_slurm.cpp
   test_recursive_cte_metrics.cpp
   test_scalar_executor.cpp
   test_logical_type_is_complete.cpp
@@ -30,10 +33,13 @@ add_library_unity(
   test_strftime.cpp
   test_string_util.cpp
   test_substring_oob.cpp
+  test_swar.cpp
   test_utf8_codepoint_oob.cpp
   test_temporary_memory_manager.cpp
   test_versioning_utils.cpp
-  test_value_to_sql_string.cpp)
+  test_value_to_sql_string.cpp
+  test_value_to_expression.cpp
+  test_musl_stack_size.cpp)
 
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_common>

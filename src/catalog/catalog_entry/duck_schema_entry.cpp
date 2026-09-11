@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
@@ -42,6 +43,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/parser/parsed_data/create_window_function_info.hpp"
 
 namespace duckdb {
 
@@ -190,15 +192,10 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 	auto table = make_uniq<DuckTableEntry>(catalog, *this, info);
 	auto &dependencies = info.Base().dependencies;
 
-	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	FindForeignKeyInformation(*table, AlterForeignKeyType::AFT_ADD, fk_arrays);
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
-		// alter primary key table
 		auto &fk_info = *fk_arrays[i];
-		Alter(transaction, fk_info);
-
-		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
 		dependencies.AddDependency(*set.GetEntry(transaction, fk_info.GetQualifiedName().Name()));
 	}
@@ -209,6 +206,11 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, dependencies);
 	if (!entry) {
 		return nullptr;
+	}
+
+	// add a foreign key constraint in main key table if there is a foreign key constraint
+	for (auto &fk_info : fk_arrays) {
+		Alter(transaction, *fk_info);
 	}
 
 	return entry;
@@ -287,7 +289,8 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateView(CatalogTransaction transa
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
                                                         TableCatalogEntry &table) {
-	info.dependencies.AddDependency(table);
+	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
+	info.dependencies.AddDependency(table, DependencyDependentFlags());
 
 	// currently, we can not alter PK/FK/UNIQUE constraints
 	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog

@@ -106,7 +106,7 @@ statement ok
 DROP TABLE t1 CASCADE;
 
 statement ok
-DROP TABLE log_table;
+DROP TABLE log_table CASCADE;
 
 # --- Trigger inherits schema from its table ---
 statement ok

@@ -68,8 +68,7 @@ public:
 			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
-		auto function = functions.functions.GetFunctionByArguments(context, arguments);
-		return function;
+		return *functions.functions.GetFunctionByArguments(context, arguments);
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>

@@ -827,7 +827,7 @@ public:
 		}
 
 		STATE_TYPE &Get() {
-			return *reinterpret_cast<STATE_TYPE *>(&storage);
+			return *reinterpret_cast<STATE_TYPE *>(storage);
 		}
 
 		void Initialize() {
@@ -845,7 +845,7 @@ public:
 		}
 
 	private:
-		typename std::aligned_storage<sizeof(STATE_TYPE), alignof(STATE_TYPE)>::type storage;
+		alignas(STATE_TYPE) data_t storage[sizeof(STATE_TYPE)];
 		AggregateInputData &aggr_input_data;
 		bool initialized = false;
 	};

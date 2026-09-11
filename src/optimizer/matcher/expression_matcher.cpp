@@ -153,6 +153,11 @@ bool FoldableConstantMatcher::Match(Expression &expr, vector<reference<Expressio
 	if (!expr.IsFoldable()) {
 		return false;
 	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_LAMBDA) {
+		// a lambda has no value of its own, so it cannot be replaced by a constant - it does not stop the
+		// function it belongs to from being folded though
+		return false;
+	}
 	bindings.push_back(expr);
 	return true;
 }

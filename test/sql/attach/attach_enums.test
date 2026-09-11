@@ -21,7 +21,7 @@ SELECT enum_range(NULL::db1.main.mood) AS my_enum_range;
 statement error
 SELECT enum_range(NULL::xx.db1.main.mood) AS my_enum_range;
 ----
-Type with name "xx.db1.main" does not exist because schema "xx.db1" does not exist.
+Type with name "xx.db1.main.mood" does not exist because schema "xx.db1.main" does not exist.
 
 statement ok
 DROP TYPE db1.mood

@@ -16,6 +16,7 @@ add_library_unity(
   materialized_aggregate_reuse.cpp
   aggregate_rewrite_helper.cpp
   build_probe_side_optimizer.cpp
+  builtin_function_lookup.cpp
   column_binding_replacer.cpp
   column_lifetime_analyzer.cpp
   empty_result_pullup.cpp
@@ -29,12 +30,14 @@ add_library_unity(
   multi_stage_aggregate_rewriter.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
+  filter_statistics.cpp
   filter_combiner.cpp
   filter_pullup.cpp
   filter_pushdown.cpp
   grouping_sets_optimizer.cpp
   in_clause_rewriter.cpp
   join_filter_pushdown_optimizer.cpp
+  runtime_filter_cast.cpp
   late_materialization.cpp
   late_materialization_helper.cpp
   optimizer.cpp

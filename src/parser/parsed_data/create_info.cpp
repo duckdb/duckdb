@@ -32,10 +32,9 @@ string CreateInfo::QualifiedNameToString() const {
 		return qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	}
 	// for temporary entries the catalog is implied, so it is omitted from the rendered name
-	auto &path = qualified_name.Path();
-	vector<Identifier> schema_path(path.begin() + (path.size() >= 3 ? 1 : 0), path.end() - 1);
-	return QualifiedName(std::move(schema_path), qualified_name.Name())
-	    .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	auto name = qualified_name;
+	name.StripCatalog();
+	return name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 }
 
 string CreateInfo::GetCreatePrefix(const string &entry) const {

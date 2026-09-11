@@ -15,6 +15,7 @@
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
@@ -204,5 +205,8 @@ private:
 	bool UseBatchIndex(PhysicalOperator &plan);
 	optional_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
 	                                                PhysicalOperator &build);
+	optional_ptr<PhysicalOperator> PlanAsOfInequalityJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
+	                                                      PhysicalOperator &build, const idx_t lhs_cardinality,
+	                                                      const idx_t rhs_cardinality);
 };
 } // namespace duckdb

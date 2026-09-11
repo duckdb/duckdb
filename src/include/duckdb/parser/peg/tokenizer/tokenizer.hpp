@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-struct ParserCache;
-
 enum class TokenizeState {
 	STANDARD = 0,
 	SINGLE_LINE_COMMENT,
@@ -50,6 +48,8 @@ public:
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
+	bool has_block_comment = false;
+	idx_t last_block_comment_position = 0;
 	friend class Tokenizer;
 };
 
@@ -68,6 +68,7 @@ private:
 	//! `TokenizeInput()` is the one that appends `GetTerminator()` (clean) or `END_OF_INPUT`
 	//! (dirty) based on the return value.
 	bool TokenizeInputInternal(TokenizerBehavior &behavior) const;
+	static void PushOperatorToken(TokenizerBehavior &behavior, idx_t start, idx_t end);
 
 public:
 	bool IsSpecialOperator(const string &sql, idx_t pos, idx_t &op_len) const;

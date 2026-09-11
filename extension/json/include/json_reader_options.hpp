@@ -105,6 +105,10 @@ struct JSONReaderOptions {
 	idx_t maximum_object_size = 16777216;
 	//! Whether we auto-detect a schema
 	bool auto_detect = false;
+	//! Whether "format" was explicitly specified
+	bool format_specified = false;
+	//! Whether "auto_detect" was explicitly specified
+	bool auto_detect_specified = false;
 	//! Sample size for detecting schema
 	idx_t sample_size = idx_t(STANDARD_VECTOR_SIZE) * 10;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
@@ -124,7 +128,7 @@ struct JSONReaderOptions {
 	//! we infer it as MAP type
 	idx_t map_inference_threshold = 200;
 	//! User-provided list of names (in order)
-	vector<string> name_list;
+	vector<Identifier> name_list;
 	//! User-provided list of types (in order)
 	vector<LogicalType> sql_type_list;
 	//! Forced date/timestamp formats

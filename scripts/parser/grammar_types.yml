@@ -34,6 +34,9 @@
 # transformer generator should treat only `identifier` and `reserved_identifier`
 # entries as direct IdentifierParseResult-producing rules.
 #
+# additional_transform_result_types: result types used by transformer infrastructure
+# rather than as the declared return type of a grammar rule.
+#
 # packrat_memoized_rules: named grammar rules that should use packrat
 # memoization in MatchParseResult. Keep this selective because cache lookup and
 # parse-result sharing are only worthwhile for rules with repeated backtracking.
@@ -41,6 +44,10 @@
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
 # ---------------------------------------------------------------------------
+
+additional_transform_result_types:
+  - "unique_ptr<TransformResultValue>"
+  - "vector<Identifier>"
 
 SQLStatementList:
   type: "vector<unique_ptr<SQLStatement>>"
@@ -109,6 +116,9 @@ SQLStatement:
     - RegisterExternalResourceStmt
     - DestroyExternalResourceStmt
     - ShowExternalResourcesStmt
+    - ExtensionRepositoryStatement
+    - CreateExtensionRepositoryStmt
+    - DropExtensionRepositoryStmt
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -142,10 +152,12 @@ QueryNode:
   type: "unique_ptr<QueryNode>"
   by_value: true
   rules:
-    - ShowSelect
+    - ShowDeprecatedSelect
+    - DescribeSelect
     - ShowTables
     - ShowAllTables
-    - ShowQualifiedName
+    - ShowByName
+    - DescribeByName
 
 SelectNode:
   type: "unique_ptr<SelectNode>"
@@ -214,6 +226,7 @@ AlterTableInfo:
   rules:
     - AlterTableOptions
     - AddColumn
+    - DropConstraint
     - DropColumn
     - SetPartitionedBy
     - ResetPartitionedBy
@@ -539,6 +552,7 @@ ColumnRefExpression:
   by_value: true
   rules:
     - NestedColumnName
+    - NestedSchemaTableColumnName
     - CatalogReservedSchemaTableColumnName
     - SchemaReservedTableColumnName
     - TableReservedColumnName
@@ -592,6 +606,7 @@ BaseTableRef:
     - UnqualifiedBaseTableName
     - SchemaReservedTable
     - CatalogReservedSchemaTable
+    - QualifiedTableName
     - TargetOptAlias
     - InsertTarget
 
@@ -702,12 +717,16 @@ StringList:
     - DottedIdentifier
     - ColumnAliases
     - TriggerColumnList
+    - RepositoryPublicKey
     - StarSymbolColumnList
     - StarQualifierList
     - PivotGroupByList
     - UnpivotHeader
     - UnpivotHeaderSingle
     - UnpivotHeaderList
+    - OptionalParensNameList
+    - ParenthesizedNameList
+    - BareNameList
 
 ExternalResourceOptionsPtr:
   type: "unique_ptr<ExternalResourceOptions>"
@@ -1024,11 +1043,13 @@ String:
     - ColumnNameKeyword
     - FuncNameKeyword
     - TypeNameKeyword
+    - TypeFuncKeyword
     - IndexName
     - Identifier
     - ExportSource
     - ReservedKeyword
     - VersionNumber
+    - RepositoryPrefix
     - LikeVariations
     - LikeToken
     - ILikeToken
@@ -1158,6 +1179,7 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - InstallAndLoad
     - ShowAllModifier
     - FunctionTypeMacro
     - FunctionTypeMacroKeyword
@@ -1351,8 +1373,8 @@ ShowType:
   type: "ShowType"
   by_value: false
   rules:
-    - ShowOrDescribeOrSummarize
     - ShowOrDescribe
+    - DescribeOrSummarize
     - Summarize
     - SummarizeRule
     - ShowRule
@@ -1496,6 +1518,9 @@ DescribeTarget:
     - DescribeTarget
     - DescribeBaseTableName
     - DescribeStringLiteral
+    - ShowTarget
+    - ShowDeprecatedQualifiedTableName
+    - ShowSettingName
 
 OnConflictExpressionTarget:
   type: "OnConflictExpressionTarget"
@@ -1807,6 +1832,9 @@ packrat_memoized_rules:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
+  # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
+  - ShowSpecialForm
   - PivotStatement
   - UnpivotStatement
   - Program

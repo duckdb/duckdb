@@ -197,7 +197,7 @@ string Function::CallToString(const Identifier &catalog_name, const Identifier &
 	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
 		prefix = StringUtil::Format("%s.%s.", SQLIdentifier(catalog_name), SQLIdentifier(schema_name));
 	}
-	return StringUtil::Format("%s%s(%s)", prefix, SQLIdentifier(name), StringUtil::Join(input_arguments, ", "));
+	return StringUtil::Format("%s%s(%s)", prefix, name, StringUtil::Join(input_arguments, ", "));
 }
 
 hash_t BoundSimpleFunction::Hash() const {

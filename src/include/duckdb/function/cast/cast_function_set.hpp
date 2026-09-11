@@ -78,7 +78,10 @@ public:
 
 private:
 	optional_ptr<DBConfig> config;
-	vector<BindCastFunction> bind_functions;
+	//! Built-in fallback used after all registered cast providers have declined the cast
+	BindCastFunction default_bind_function;
+	//! Registered cast providers, searched newest-first before the built-in fallback
+	vector<BindCastFunction> registered_bind_functions;
 	vector<CombineTypesRule> combine_rules;
 	//! If any custom cast functions have been defined using RegisterCastFunction, this holds the map
 	optional_ptr<MapCastInfo> map_info;

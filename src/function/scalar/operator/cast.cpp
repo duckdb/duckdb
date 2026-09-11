@@ -3,11 +3,13 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/legacy_bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -15,6 +17,12 @@ static BoundCastInfo BindCastScalarFunction(ClientContext &context, const Logica
                                             const LogicalType &target) {
 	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
 	GetCastFunctionInput input(context);
+	return cast_functions.GetCastFunction(source, target, input);
+}
+
+static BoundCastInfo BindDefaultCastScalarFunction(const LogicalType &source, const LogicalType &target) {
+	CastFunctionSet cast_functions;
+	GetCastFunctionInput input;
 	return cast_functions.GetCastFunction(source, target, input);
 }
 
@@ -43,24 +51,27 @@ static bool BoundCastCanThrow(const BoundCastInfo &bound_cast, const LogicalType
 }
 
 struct CastFunctionData : public FunctionData {
-	CastFunctionData(LogicalType source_type_p, LogicalType target_type_p, BoundCastInfo bound_cast_p, bool try_cast_p)
+	CastFunctionData(LogicalType source_type_p, LogicalType target_type_p, BoundCastInfo bound_cast_p, bool try_cast_p,
+	                 bool is_default_cast_p)
 	    : source_type(std::move(source_type_p)), target_type(std::move(target_type_p)),
-	      bound_cast(std::move(bound_cast_p)), try_cast(try_cast_p) {
+	      bound_cast(std::move(bound_cast_p)), try_cast(try_cast_p), is_default_cast(is_default_cast_p) {
 	}
 
 	LogicalType source_type;
 	LogicalType target_type;
 	BoundCastInfo bound_cast;
 	bool try_cast;
+	bool is_default_cast;
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<CastFunctionData>(source_type, target_type, bound_cast.Copy(), try_cast);
+		return make_uniq<CastFunctionData>(source_type, target_type, bound_cast.Copy(), try_cast, is_default_cast);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<CastFunctionData>();
-		return source_type == other.source_type && target_type == other.target_type && try_cast == other.try_cast;
+		return source_type == other.source_type && target_type == other.target_type && try_cast == other.try_cast &&
+		       is_default_cast == other.is_default_cast && bound_cast.Equals(other.bound_cast);
 	}
 };
 
@@ -98,6 +109,11 @@ static unique_ptr<FunctionData> BindCastFun(BindScalarFunctionInput &input) {
 	throw InvalidInputException("Cast function cannot be called directly");
 }
 
+static unique_ptr<BaseStatistics> CastPropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+	D_ASSERT(input.child_stats.size() == 1);
+	return BoundCastExpression::PropagateStatistics(input.expr, input.child_stats[0], context);
+}
+
 static string CastToString(FunctionToStringInput &input) {
 	auto &cast_data = input.bind_data->Cast<CastFunctionData>();
 	string prefix = cast_data.try_cast ? "TRY_CAST(" : "CAST(";
@@ -110,6 +126,9 @@ static ExpressionType CastGetExpressionType(FunctionToStringInput &input) {
 
 static unique_ptr<Expression> CastLegacySerializeCallback(FunctionToStringInput &input) {
 	auto &cast_data = input.bind_data->Cast<CastFunctionData>();
+	if (cast_data.is_default_cast) {
+		throw NotImplementedException("Default casts cannot be represented by the legacy cast format");
+	}
 	return make_uniq<LegacyBoundCastExpression>(input.GetChild(0).Copy(), cast_data.target_type, cast_data.try_cast);
 }
 
@@ -117,20 +136,23 @@ static void CastFunctionSerialize(Serializer &serializer, const optional_ptr<Fun
                                   const BoundScalarFunction &function) {
 	auto &bind_data = bind_data_p->Cast<CastFunctionData>();
 	serializer.WriteProperty(100, "try_cast", bind_data.try_cast);
+	serializer.WriteProperty(101, "is_default_cast", bind_data.is_default_cast);
 }
 
 static unique_ptr<FunctionData> CastFunctionDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 	auto try_cast = deserializer.ReadProperty<bool>(100, "try_cast");
+	auto is_default_cast = deserializer.ReadPropertyWithDefault<bool>(101, "is_default_cast");
 	auto &context = deserializer.Get<ClientContext &>();
 	// the target type is the return type of the function (set by the function serializer)
 	auto target_type = deserializer.Get<const LogicalType &>();
 	auto source_type = function.GetArguments()[0];
-	auto bound_cast = BindCastScalarFunction(context, source_type, target_type);
+	auto bound_cast = is_default_cast ? BindDefaultCastScalarFunction(source_type, target_type)
+	                                  : BindCastScalarFunction(context, source_type, target_type);
 	if (BoundCastCanThrow(bound_cast, source_type, target_type, try_cast)) {
 		function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 	}
 	SetCastNullHandling(function, target_type);
-	return make_uniq<CastFunctionData>(source_type, target_type, std::move(bound_cast), try_cast);
+	return make_uniq<CastFunctionData>(source_type, target_type, std::move(bound_cast), try_cast, is_default_cast);
 }
 
 ScalarFunction CastFun::GetFunction() {
@@ -141,21 +163,23 @@ ScalarFunction CastFun::GetFunction() {
 	cast_fun.SetSerializeCallback(CastFunctionSerialize);
 	cast_fun.SetDeserializeCallback(CastFunctionDeserialize);
 	cast_fun.SetInitStateCallback(CastInitLocalState);
+	cast_fun.SetStatisticsCallback(CastPropagateStatistics);
 	return cast_fun;
 }
 
 //===--------------------------------------------------------------------===//
 // BoundCastExpression
 //===--------------------------------------------------------------------===//
-unique_ptr<Expression> BoundCastExpression::Create(unique_ptr<Expression> child, const LogicalType &target_type,
-                                                   BoundCastInfo bound_cast, bool try_cast) {
+static unique_ptr<Expression> CreateCastExpression(unique_ptr<Expression> child, const LogicalType &target_type,
+                                                   BoundCastInfo bound_cast, bool try_cast, bool is_default_cast) {
 	auto source_type = child->GetReturnType();
 	auto query_location = child->GetQueryLocation();
 
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(child));
 
-	auto function_data = make_uniq<CastFunctionData>(source_type, target_type, std::move(bound_cast), try_cast);
+	auto function_data =
+	    make_uniq<CastFunctionData>(source_type, target_type, std::move(bound_cast), try_cast, is_default_cast);
 
 	auto scalar_function = CastFun::GetFunction();
 	scalar_function.SetReturnType(target_type);
@@ -171,6 +195,16 @@ unique_ptr<Expression> BoundCastExpression::Create(unique_ptr<Expression> child,
 	                                                 std::move(function_data), true);
 	result->SetQueryLocation(query_location);
 	return std::move(result);
+}
+
+unique_ptr<Expression> BoundCastExpression::Create(unique_ptr<Expression> child, const LogicalType &target_type,
+                                                   BoundCastInfo bound_cast, bool try_cast) {
+	return CreateCastExpression(std::move(child), target_type, std::move(bound_cast), try_cast, false);
+}
+
+unique_ptr<Expression> BoundCastExpression::CreateDefault(unique_ptr<Expression> child, const LogicalType &target_type,
+                                                          BoundCastInfo bound_cast, bool try_cast) {
+	return CreateCastExpression(std::move(child), target_type, std::move(bound_cast), try_cast, true);
 }
 
 bool BoundCastExpression::IsCast(const Expression &expr) {
@@ -204,6 +238,18 @@ const BoundCastInfo &BoundCastExpression::GetBoundCast(const BoundFunctionExpres
 
 BoundCastInfo &BoundCastExpression::GetBoundCastMutable(BoundFunctionExpression &cast_expr) {
 	return cast_expr.BindInfoMutable()->Cast<CastFunctionData>().bound_cast;
+}
+
+unique_ptr<BaseStatistics> BoundCastExpression::PropagateStatistics(BoundFunctionExpression &cast_expr,
+                                                                    const BaseStatistics &child_stats,
+                                                                    optional_ptr<ClientContext> context) {
+	auto &cast_data = cast_expr.BindInfoMutable()->Cast<CastFunctionData>();
+	auto result =
+	    cast_data.bound_cast.PropagateStatistics(cast_data.source_type, cast_data.target_type, child_stats, context);
+	if (cast_data.try_cast && result) {
+		result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
+	return result;
 }
 
 } // namespace duckdb

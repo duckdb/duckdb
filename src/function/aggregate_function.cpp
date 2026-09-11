@@ -1,10 +1,32 @@
 #include "duckdb/function/aggregate_function.hpp"
 
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+
+unique_ptr<BaseStatistics> AggregateFunction::PropagateInputValueStats(ClientContext &context,
+                                                                       BoundAggregateExpression &expr,
+                                                                       AggregateStatisticsInput &input) {
+	if (input.child_stats.empty() || expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+		return nullptr;
+	}
+	auto &child_stats = input.child_stats[0];
+	auto &return_type = expr.GetReturnType();
+	auto result = child_stats.GetType() == return_type
+	                  ? child_stats.ToUnique()
+	                  : CastStatistics::TryPropagate(child_stats, child_stats.GetType(), return_type);
+	if (!result) {
+		return nullptr;
+	}
+	result->ResetAdditiveStatistics();
+	// the result is NULL when the aggregate sees no valid rows
+	result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	return result;
+}
 
 AggregateInputData::AggregateInputData(const BoundAggregateExpression &expr, ArenaAllocator &allocator_p,
                                        AggregateCombineType combine_type_p)
@@ -84,7 +106,14 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &cont
 	return func_binder.BindAggregateFunction(*this, std::move(arguments));
 }
 
-BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function) {
+BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function)
+    // the function does not come from a function set - copy it into a definition of its own
+    : BoundAggregateFunction(make_shared_ptr<AggregateFunction>(function)) {
+}
+
+BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunction> function_p)
+    : definition(std::move(function_p)) {
+	auto &function = *definition;
 	name = function.name;
 	schema_name = function.GetSchemaName();
 	catalog_name = function.GetCatalogName();

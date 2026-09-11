@@ -8,6 +8,7 @@ We then need to make it work in C++. We have a diff available that fixes these i
 
 ```
 git apply inline_mbedtls.diff --reject
+git apply inline_mbedtls_cpp17.diff --reject
 ```
 
 It is recommended to test regular compilation.
