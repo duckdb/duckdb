@@ -92,9 +92,9 @@ NodePtr PrefixHandle::Split(ART &art, NodePtr &node, NodePtr &replacement, const
 
 		if (pos + 1 < count) {
 			// The split is not at the last prefix byte.
-			// We get:
-			// [this prefix minus split byte, minus remaining bytes] ->
-			// [new node at split byte] ->
+			// After the caller attaches the returned child, we get:
+			// [this prefix minus split byte, minus remaining bytes (omitted if pos == 0)] ->
+			// [new node at split byte] --(split byte)-->
 			// [child with remaining bytes, and possibly remaining prefix nodes].
 
 			// Create a new prefix and
@@ -106,9 +106,9 @@ NodePtr PrefixHandle::Split(ART &art, NodePtr &node, NodePtr &replacement, const
 		} else {
 			// The split is at the last prefix byte, whether the prefix is full or not.
 			// There are no bytes left in this prefix after the split.
-			// We get:
-			// [this prefix minus split byte (can be its only byte, then we free it)] ->
-			// [new node at split byte] ->
+			// After the caller attaches the returned child, we get:
+			// [this prefix minus split byte (omitted if pos == 0)] ->
+			// [new node at split byte] --(split byte)-->
 			// [child at split byte: prefix.Child(art)].
 			child = prefix.Child(art);
 		}
