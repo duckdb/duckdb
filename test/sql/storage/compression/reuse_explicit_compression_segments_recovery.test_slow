@@ -1,0 +1,491 @@
+# name: test/sql/storage/compression/reuse_explicit_compression_segments_recovery.test_slow
+# description: Test auxiliary blocks, checkpoint recovery, and concurrent updates with segment reuse
+# group: [compression]
+
+require noforcestorage
+
+require no_alternative_verify
+
+require vector_size 2048
+
+load {TEST_DIR}/reuse_explicit_compression_segments_recovery.db readwrite v1.2.0
+
+statement ok
+SET checkpoint_threshold='9999GB'
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+SET threads=8
+
+# ZSTD owns additional pages through its ColumnSegment state. A validity-only
+# update must retain both the main Block and every additional Block.
+statement ok
+SET force_compression='zstd'
+
+statement ok
+CREATE TABLE zstd_aux_t(
+    id BIGINT,
+    v VARCHAR)
+
+statement ok
+INSERT INTO zstd_aux_t
+SELECT i, md5(i::VARCHAR)
+       || md5((i+16384)::VARCHAR)
+       || md5((i+32768)::VARCHAR)
+       || md5((i+49152)::VARCHAR)
+FROM range(16384) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+RESET force_compression
+
+query II
+SELECT count(*), count(*) FILTER (WHERE len(additional_block_ids)>0)
+FROM pragma_storage_info('zstd_aux_t')
+WHERE column_name='v' AND segment_type='VARCHAR' AND compression='ZSTD'
+----
+1	1
+
+statement ok
+CREATE TEMP TABLE zstd_aux_before AS
+SELECT start, count, block_id, block_offset, additional_block_ids
+FROM pragma_storage_info('zstd_aux_t')
+WHERE column_name='v' AND segment_type='VARCHAR' AND compression='ZSTD'
+
+statement ok
+UPDATE zstd_aux_t SET v=NULL WHERE id=0
+
+statement ok
+FORCE CHECKPOINT
+
+query III
+WITH after_segment AS (
+    SELECT start, count, block_id, block_offset, additional_block_ids
+    FROM pragma_storage_info('zstd_aux_t')
+    WHERE column_name='v' AND segment_type='VARCHAR' AND compression='ZSTD'
+)
+SELECT count(*) FILTER (WHERE before.block_id=after.block_id
+                         AND before.block_offset=after.block_offset),
+       count(*) FILTER (WHERE before.additional_block_ids=after.additional_block_ids),
+       (SELECT count(*) FROM zstd_aux_t WHERE v IS NULL)
+FROM zstd_aux_before before
+JOIN after_segment after USING (start, count)
+----
+1	1	1
+
+# A data update rewrites the ZSTD Segment and replaces its auxiliary Block set.
+statement ok
+CREATE TEMP TABLE zstd_rewrite_before AS
+SELECT start, count, block_id, block_offset, additional_block_ids
+FROM pragma_storage_info('zstd_aux_t')
+WHERE column_name='v' AND segment_type='VARCHAR' AND compression='ZSTD'
+
+statement ok
+SET force_compression='zstd'
+
+statement ok
+UPDATE zstd_aux_t SET v='zstd-restored-0' WHERE id=0
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+RESET force_compression
+
+query IIII
+WITH after_segment AS (
+    SELECT start, count, block_id, block_offset, additional_block_ids
+    FROM pragma_storage_info('zstd_aux_t')
+    WHERE column_name='v' AND segment_type='VARCHAR' AND compression='ZSTD'
+)
+SELECT count(*) FILTER (WHERE before.block_id!=after.block_id
+                         OR before.block_offset!=after.block_offset),
+       count(*) FILTER (WHERE before.additional_block_ids!=after.additional_block_ids),
+       count(*) FILTER (WHERE len(after.additional_block_ids)>0),
+       (SELECT count(*) FROM zstd_aux_t
+        WHERE v IS DISTINCT FROM CASE WHEN id=0 THEN 'zstd-restored-0'
+            ELSE md5(id::VARCHAR)
+              || md5((id+16384)::VARCHAR)
+              || md5((id+32768)::VARCHAR)
+              || md5((id+49152)::VARCHAR) END)
+FROM zstd_rewrite_before before
+JOIN after_segment after USING (start, count)
+----
+1	1	1	0
+
+# FORCE CHECKPOINT waits for an updater that already owns the shared checkpoint
+# lock, then includes the committed update in the checkpoint it writes.
+statement ok
+CREATE TABLE snapshot_reuse_t(
+    id BIGINT,
+    v BIGINT USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO snapshot_reuse_t SELECT i, i FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+CREATE TEMP TABLE snapshot_wait_before AS
+SELECT start, count, block_id, block_offset,
+       start<=60000 AND start+count>60000 AS dirty
+FROM pragma_storage_info('snapshot_reuse_t')
+WHERE column_name='v' AND segment_type='BIGINT'
+
+concurrentloop threadid 0 2
+
+onlyif threadid=1
+statement ok
+BEGIN TRANSACTION
+
+onlyif threadid=1
+statement ok
+UPDATE snapshot_reuse_t SET v=-60000 WHERE id=60000
+
+onlyif threadid=0
+statement ok
+SELECT sleep_ms(100)
+
+onlyif threadid=0
+statement ok
+FORCE CHECKPOINT
+
+onlyif threadid=1
+statement ok
+SELECT sleep_ms(300)
+
+onlyif threadid=1
+statement ok
+COMMIT
+
+endloop
+
+query III
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('snapshot_reuse_t')
+    WHERE column_name='v' AND segment_type='BIGINT'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty
+                          AND before.block_id=after.block_id
+                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty))::INTEGER,
+       (count(*) FILTER (WHERE before.dirty
+                          AND before.block_id=after.block_id
+                          AND before.block_offset=after.block_offset)=0)::INTEGER,
+       (SELECT count(*) FROM snapshot_reuse_t
+        WHERE v IS DISTINCT FROM CASE WHEN id=60000 THEN -60000 ELSE id END)
+FROM snapshot_wait_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	1	0
+
+# Once checkpoint holds the exclusive lock, a newly-started transaction may
+# begin but its update waits until this checkpoint's snapshot is complete.
+statement ok
+CREATE TEMP TABLE snapshot_during_before AS
+SELECT start, count, block_id, block_offset,
+       start<=90000 AND start+count>90000 AS dirty
+FROM pragma_storage_info('snapshot_reuse_t')
+WHERE column_name='v' AND segment_type='BIGINT'
+
+statement ok
+SET debug_checkpoint_sleep_ms=500
+
+concurrentloop threadid 0 2
+
+onlyif threadid=0
+statement ok
+FORCE CHECKPOINT
+
+onlyif threadid=1
+statement ok
+SELECT sleep_ms(100)
+
+onlyif threadid=1
+statement ok
+BEGIN TRANSACTION
+
+onlyif threadid=1
+statement ok
+UPDATE snapshot_reuse_t SET v=-90000 WHERE id=90000
+
+onlyif threadid=1
+statement ok
+COMMIT
+
+endloop
+
+statement ok
+SET debug_checkpoint_sleep_ms=0
+
+query II
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('snapshot_reuse_t')
+    WHERE column_name='v' AND segment_type='BIGINT'
+)
+SELECT (count(*) FILTER (WHERE before.block_id=after.block_id
+                          AND before.block_offset=after.block_offset)=count(*))::INTEGER,
+       (SELECT count(*) FROM snapshot_reuse_t
+        WHERE v IS DISTINCT FROM CASE
+            WHEN id=60000 THEN -60000
+            WHEN id=90000 THEN -90000
+            ELSE id END)
+FROM snapshot_during_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	0
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('snapshot_reuse_t')
+    WHERE column_name='v' AND segment_type='BIGINT'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty
+                          AND before.block_id=after.block_id
+                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty))::INTEGER,
+       (count(*) FILTER (WHERE before.dirty
+                          AND before.block_id=after.block_id
+                          AND before.block_offset=after.block_offset)=0)::INTEGER
+FROM snapshot_during_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	1
+
+restart
+
+statement ok
+SET checkpoint_threshold='9999GB'
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+SELECT count(*) FILTER (WHERE v IS DISTINCT FROM CASE
+           WHEN id=60000 THEN -60000
+           WHEN id=90000 THEN -90000
+           ELSE id END),
+       (bit_xor(hash(id, v))=bit_xor(hash(id, CASE
+           WHEN id=60000 THEN -60000
+           WHEN id=90000 THEN -90000
+           ELSE id END)))::INTEGER
+FROM snapshot_reuse_t
+----
+0	1
+
+# Select one RLE tail from a main Block shared by multiple RowGroups.
+statement ok
+CREATE TABLE shared_abort_t(
+    id BIGINT,
+    v INTEGER USING COMPRESSION RLE)
+
+statement ok
+INSERT INTO shared_abort_t
+SELECT i, (((i%122880)*100000)//122880)::INTEGER
+FROM range(491520) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+CREATE TABLE shared_abort_targets AS
+WITH segments AS (
+    SELECT row_group_id, start, count, block_id, block_offset,
+           min(start) OVER (PARTITION BY row_group_id) AS first_start,
+           row_number() OVER (PARTITION BY row_group_id ORDER BY start DESC) AS tail_no
+    FROM pragma_storage_info('shared_abort_t')
+    WHERE column_name='v' AND segment_type='INTEGER' AND block_id>=0
+), tails AS (
+    SELECT *, count(*) OVER (PARTITION BY block_id) AS peer_count,
+           row_number() OVER (PARTITION BY block_id ORDER BY row_group_id) AS peer_no
+    FROM segments
+    WHERE tail_no=1
+), selected_block AS (
+    SELECT min(block_id) AS block_id FROM tails WHERE peer_count>1
+)
+SELECT row_group_id, start, count, tails.block_id, block_offset,
+       row_group_id*122880+(start-first_start)+count//2 AS id,
+       peer_no=1 AS dirty
+FROM tails, selected_block
+WHERE tails.block_id=selected_block.block_id
+
+query III
+SELECT (count(*)>1)::INTEGER,
+       (count(*) FILTER (WHERE dirty)=1)::INTEGER,
+       (count(*) FILTER (WHERE NOT dirty)>0)::INTEGER
+FROM shared_abort_targets
+----
+1	1	1
+
+statement ok
+CREATE TABLE shared_abort_before AS
+SELECT storage.row_group_id, storage.start, storage.count,
+       storage.block_id, storage.block_offset,
+       EXISTS (SELECT 1 FROM shared_abort_targets target
+               WHERE target.row_group_id=storage.row_group_id
+                 AND target.start=storage.start AND target.dirty) AS dirty
+FROM pragma_storage_info('shared_abort_t') storage
+WHERE column_name='v' AND segment_type='INTEGER'
+
+statement ok
+FORCE CHECKPOINT
+
+# The old header and free list must remain usable after an abort that occurs
+# after the new free list is written but before the header is switched.
+loop abort_round 0 3
+
+statement ok
+SET checkpoint_threshold='9999GB'
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+UPDATE shared_abort_t
+SET v=-({abort_round}+1)
+WHERE id=(SELECT id FROM shared_abort_targets WHERE dirty)
+
+statement ok
+PRAGMA debug_checkpoint_abort='after_free_list_write'
+
+statement error
+FORCE CHECKPOINT
+----
+Checkpoint aborted after free list write
+
+restart
+
+statement ok
+PRAGMA debug_checkpoint_abort='none'
+
+statement ok
+SET checkpoint_threshold='9999GB'
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+FORCE CHECKPOINT
+
+query I
+SELECT count(*) FROM shared_abort_t
+WHERE v IS DISTINCT FROM CASE
+    WHEN id=(SELECT id FROM shared_abort_targets WHERE dirty) THEN -({abort_round}+1)
+    ELSE (((id%122880)*100000)//122880)::INTEGER END
+----
+0
+
+endloop
+
+query II
+WITH after_segments AS (
+    SELECT row_group_id, start, count, block_id, block_offset
+    FROM pragma_storage_info('shared_abort_t')
+    WHERE column_name='v' AND segment_type='INTEGER'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty
+                          AND before.block_id=after.block_id
+                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty))::INTEGER,
+       (SELECT count(*) FROM shared_abort_before before
+        JOIN pragma_storage_info('shared_abort_t') after
+          ON before.block_id=after.block_id AND before.block_offset=after.block_offset
+        WHERE before.dirty AND after.column_name='v' AND after.segment_type='INTEGER')
+FROM shared_abort_before before
+LEFT JOIN after_segments after USING (row_group_id, start, count)
+----
+1	0
+
+# Updates in open transactions and FORCE CHECKPOINT serialize on the checkpoint
+# lock. The final hash must include every committed update exactly once.
+statement ok
+CREATE TABLE concurrent_reuse_t(
+    id BIGINT,
+    v BIGINT USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO concurrent_reuse_t SELECT i, i FROM range(491520) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+SET debug_checkpoint_sleep_ms=25
+
+concurrentloop threadid 0 5
+
+loop update_round 0 20
+
+onlyif threadid=0
+statement ok
+FORCE CHECKPOINT
+
+onlyif threadid>0
+statement ok
+BEGIN TRANSACTION
+
+onlyif threadid>0
+statement ok
+UPDATE concurrent_reuse_t
+SET v=v+1
+WHERE id=({threadid}-1)*122880+2048
+
+onlyif threadid>0
+statement ok
+COMMIT
+
+endloop
+
+endloop
+
+statement ok
+SET debug_checkpoint_sleep_ms=0
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+SELECT count(*) FILTER (WHERE v IS DISTINCT FROM
+           CASE WHEN id%122880=2048 THEN id+20 ELSE id END),
+       (bit_xor(hash(id, v))=bit_xor(hash(id,
+           CASE WHEN id%122880=2048 THEN id+20 ELSE id END)))::INTEGER
+FROM concurrent_reuse_t
+----
+0	1
+
+restart
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+FORCE CHECKPOINT
+
+query III
+SELECT count(*) FILTER (WHERE v IS DISTINCT FROM
+           CASE WHEN id%122880=2048 THEN id+20 ELSE id END),
+       (bit_xor(hash(id, v))=bit_xor(hash(id,
+           CASE WHEN id%122880=2048 THEN id+20 ELSE id END)))::INTEGER,
+       (SELECT count(*) FROM zstd_aux_t
+        WHERE v IS DISTINCT FROM CASE WHEN id=0 THEN 'zstd-restored-0'
+            ELSE md5(id::VARCHAR)
+              || md5((id+16384)::VARCHAR)
+              || md5((id+32768)::VARCHAR)
+              || md5((id+49152)::VARCHAR) END)
+FROM concurrent_reuse_t
+----
+0	1	0

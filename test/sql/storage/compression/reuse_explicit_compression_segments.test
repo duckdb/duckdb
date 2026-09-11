@@ -1,0 +1,944 @@
+# name: test/sql/storage/compression/reuse_explicit_compression_segments.test
+# description: Test persistent base segment reuse across checkpoint rewrites
+# group: [compression]
+
+require noforcestorage
+
+require no_alternative_verify
+
+require vector_size 2048
+
+load {TEST_DIR}/reuse_explicit_compression_segments.db readwrite v1.2.0
+
+statement ok
+SET threads=1
+
+statement ok
+SET checkpoint_threshold='9999GB'
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+CALL enable_logging(storage='memory', level='trace')
+
+# Exercise the tuple/Vector amortization policy on deterministic 16 KiB fixed-size Segments.
+statement ok
+ATTACH '{TEST_DIR}/reuse_range_gate.db' AS range_gate_db (STORAGE_VERSION 'v1.2.0', BLOCK_SIZE 16384)
+
+statement ok
+CREATE TABLE range_gate_db.reuse_pipeline_gate_t(
+    id BIGINT,
+    v BIGINT USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO range_gate_db.reuse_pipeline_gate_t
+SELECT i, i FROM range(860160) t(i)
+
+statement ok
+FORCE CHECKPOINT range_gate_db
+
+statement ok
+CREATE TEMP TABLE reuse_pipeline_gate_cases(
+    row_group_id BIGINT,
+    expected_local BOOLEAN)
+
+statement ok
+INSERT INTO reuse_pipeline_gate_cases VALUES
+    (0, true),
+    (1, true),
+    (2, true),
+    (3, true),
+    (4, false),
+    (5, false),
+    (6, false)
+
+statement ok
+CREATE TABLE range_gate_db.reuse_pipeline_gate_targets AS
+WITH segments AS (
+    SELECT row_group_id, start, count,
+           row_number() OVER (PARTITION BY row_group_id ORDER BY start) AS segment_no
+    FROM pragma_storage_info('range_gate_db.reuse_pipeline_gate_t')
+    WHERE column_name='v' AND segment_type='BIGINT'
+)
+SELECT row_group_id, start AS segment_start,
+       row_group_id*122880+start+count//2 AS id
+FROM segments
+WHERE CASE row_group_id
+    WHEN 0 THEN segment_no>=9
+    WHEN 1 THEN segment_no BETWEEN 11 AND 35 OR segment_no>=37
+    WHEN 2 THEN segment_no BETWEEN 12 AND 35 OR segment_no>=37
+    WHEN 3 THEN segment_no BETWEEN 5 AND 10 OR segment_no BETWEEN 20 AND 25
+                 OR segment_no BETWEEN 35 AND 40 OR segment_no BETWEEN 50 AND 55
+    WHEN 4 THEN segment_no NOT IN (1,2,3,4,5,6,7,8,20,40,60)
+    WHEN 5 THEN segment_no IN (5,15,25,35,45)
+    WHEN 6 THEN segment_no>=8
+    ELSE false
+END
+
+statement ok
+CREATE TEMP TABLE reuse_pipeline_gate_before AS
+SELECT row_group_id, start, count, block_id, block_offset,
+       row_number() OVER (PARTITION BY row_group_id ORDER BY start) AS segment_no,
+       EXISTS (SELECT 1 FROM range_gate_db.reuse_pipeline_gate_targets target
+               WHERE target.row_group_id=storage.row_group_id
+                 AND target.segment_start=storage.start) AS dirty
+FROM pragma_storage_info('range_gate_db.reuse_pipeline_gate_t') storage
+WHERE column_name='v' AND segment_type='BIGINT'
+
+# The selected RowGroups cover one, four, and five dirty ranges as well as
+# insufficient reuse and an over-fragmented projected layout.
+statement ok
+SET threads=32
+
+statement ok
+UPDATE range_gate_db.reuse_pipeline_gate_t AS target
+SET v=-target.id-1
+FROM range_gate_db.reuse_pipeline_gate_targets AS changes
+WHERE target.id=changes.id
+
+statement ok
+FORCE CHECKPOINT range_gate_db
+
+query II rowsort
+WITH after_segments AS (
+    SELECT row_group_id, start, count, block_id, block_offset
+    FROM pragma_storage_info('range_gate_db.reuse_pipeline_gate_t')
+    WHERE column_name='v' AND segment_type='BIGINT'
+), matches AS (
+    SELECT before.row_group_id,
+           count(*) FILTER (WHERE NOT before.dirty) AS clean_segments,
+           count(*) FILTER (WHERE NOT before.dirty AND before.block_id=after.block_id
+                                                   AND before.block_offset=after.block_offset) AS reused_clean_segments,
+           count(*) FILTER (WHERE before.block_id=after.block_id
+                              AND before.block_offset=after.block_offset) AS retained_segments
+    FROM reuse_pipeline_gate_before before
+    LEFT JOIN after_segments after USING (row_group_id, start, count)
+    GROUP BY before.row_group_id
+)
+SELECT matches.row_group_id,
+       CASE WHEN cases.expected_local THEN reused_clean_segments=clean_segments AND clean_segments>0
+            ELSE retained_segments=0 END::INTEGER
+FROM matches
+JOIN reuse_pipeline_gate_cases cases USING (row_group_id)
+ORDER BY row_group_id
+----
+0	1
+1	1
+2	1
+3	1
+4	1
+5	1
+6	1
+
+query I
+SELECT count(*) FROM range_gate_db.reuse_pipeline_gate_t
+WHERE v IS DISTINCT FROM CASE
+    WHEN id IN (SELECT id FROM range_gate_db.reuse_pipeline_gate_targets) THEN -id-1
+    ELSE id END
+----
+0
+
+statement ok
+SET threads=1
+
+# One dirty range passes tuple amortization but an already sparse layout exceeds the Segment budget.
+statement ok
+CREATE TABLE range_gate_db.reuse_layout_gate_t(
+    id BIGINT,
+    v VARCHAR USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO range_gate_db.reuse_layout_gate_t
+SELECT i, CASE WHEN i<32768 THEN 'x' ELSE repeat('y',64) END
+FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT range_gate_db
+
+statement ok
+CREATE TABLE range_gate_db.reuse_layout_gate_target AS
+SELECT start+count//2 AS id
+FROM pragma_storage_info('range_gate_db.reuse_layout_gate_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+ORDER BY start
+LIMIT 1
+
+statement ok
+CREATE TEMP TABLE reuse_layout_gate_before AS
+SELECT start, count, block_id, block_offset,
+       (SELECT id FROM range_gate_db.reuse_layout_gate_target)>=start
+         AND (SELECT id FROM range_gate_db.reuse_layout_gate_target)<start+count AS dirty
+FROM pragma_storage_info('range_gate_db.reuse_layout_gate_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+UPDATE range_gate_db.reuse_layout_gate_t
+SET v=repeat('z',64)
+WHERE id=(SELECT id FROM range_gate_db.reuse_layout_gate_target)
+
+statement ok
+FORCE CHECKPOINT range_gate_db
+
+query II
+SELECT (SELECT count(*)
+        FROM reuse_layout_gate_before before
+        JOIN pragma_storage_info('range_gate_db.reuse_layout_gate_t') after USING (block_id, block_offset)
+        WHERE after.column_name='v' AND after.segment_type='VARCHAR'),
+       (SELECT count(*) FROM range_gate_db.reuse_layout_gate_t
+        WHERE v IS DISTINCT FROM CASE
+            WHEN id=(SELECT id FROM range_gate_db.reuse_layout_gate_target) THEN repeat('z',64)
+            WHEN id<32768 THEN 'x' ELSE repeat('y',64) END)
+----
+0	0
+
+# Analyze candidates are initialized independently for every dirty range.
+statement ok
+CREATE TABLE range_gate_db.reuse_range_analyze_t(
+    id BIGINT,
+    v VARCHAR USING COMPRESSION DICTIONARY)
+
+statement ok
+INSERT INTO range_gate_db.reuse_range_analyze_t
+SELECT i, concat('dictionary-', i::VARCHAR, '-', repeat(md5(i::VARCHAR), 2))
+FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT range_gate_db
+
+statement ok
+CREATE TABLE range_gate_db.reuse_range_analyze_targets AS
+WITH segments AS (
+    SELECT start, count, row_number() OVER (ORDER BY start) AS segment_no,
+           count(*) OVER () AS segment_count
+    FROM pragma_storage_info('range_gate_db.reuse_range_analyze_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT start+count//2 AS id, segment_no=2 AS use_large_string
+FROM segments
+WHERE segment_no=2 OR segment_no=segment_count-1
+
+query I
+SELECT (count(*)=2 AND count(*) FILTER (WHERE use_large_string)=1)::INTEGER
+FROM range_gate_db.reuse_range_analyze_targets
+----
+1
+
+statement ok
+CREATE TEMP TABLE reuse_range_analyze_before AS
+SELECT start, count, block_id, block_offset,
+       EXISTS (SELECT 1 FROM range_gate_db.reuse_range_analyze_targets target
+               WHERE target.id>=storage.start AND target.id<storage.start+storage.count) AS dirty
+FROM pragma_storage_info('range_gate_db.reuse_range_analyze_t') storage
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+UPDATE range_gate_db.reuse_range_analyze_t AS target
+SET v=CASE WHEN changes.use_large_string THEN repeat('L',300000) ELSE 'dictionary-after-failure' END
+FROM range_gate_db.reuse_range_analyze_targets AS changes
+WHERE target.id=changes.id
+
+statement ok
+FORCE CHECKPOINT range_gate_db
+
+query IIIII
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('range_gate_db.reuse_range_analyze_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty AND before.block_id=after.block_id
+                                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty)
+        AND count(*) FILTER (WHERE NOT before.dirty)>0)::INTEGER,
+       (SELECT count(*) FROM duckdb_logs
+        WHERE contains(message, 'reuse_range_analyze_t')
+          AND contains(message, '.1(VARCHAR)')
+          AND starts_with(message, 'ColumnDataCheckpointer FinalAnalyze(UNCOMPRESSED)')),
+       (SELECT count(*) FROM duckdb_logs
+        WHERE contains(message, 'reuse_range_analyze_t')
+          AND contains(message, '.1(VARCHAR)')
+          AND starts_with(message, 'ColumnDataCheckpointer FinalAnalyze(DICTIONARY)')),
+       (SELECT count(*) FROM range_gate_db.reuse_range_analyze_t data
+        JOIN range_gate_db.reuse_range_analyze_targets target USING (id)
+        WHERE target.use_large_string AND data.v!=repeat('L',300000)),
+       (SELECT count(*) FROM range_gate_db.reuse_range_analyze_t data
+        JOIN range_gate_db.reuse_range_analyze_targets target USING (id)
+        WHERE NOT target.use_large_string AND data.v!='dictionary-after-failure')
+FROM reuse_range_analyze_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	1	1	0	0
+
+statement ok
+ATTACH '{TEST_DIR}/reuse_fragment_guard.db' AS fragment_db (STORAGE_VERSION 'v1.2.0', BLOCK_SIZE 262144)
+
+statement ok
+CREATE TABLE fragment_db.reuse_fragment_guard_t(
+    id BIGINT,
+    v VARCHAR USING COMPRESSION FSST)
+
+statement ok
+INSERT INTO fragment_db.reuse_fragment_guard_t
+SELECT i, md5(i::VARCHAR) || md5((i+1)::VARCHAR)
+FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT fragment_db
+
+# Alternating dirty segments exceed the budget and rewrite the complete base column.
+statement ok
+CREATE TABLE fragment_db.reuse_fragment_guarded_targets AS
+WITH segments AS (
+    SELECT start, count, row_number() OVER (ORDER BY start) AS segment_no
+    FROM pragma_storage_info('fragment_db.reuse_fragment_guard_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT start+count//2 AS id
+FROM segments
+WHERE segment_no%2=1
+
+statement ok
+CREATE TEMP TABLE reuse_fragment_guarded_before AS
+SELECT start, count, block_id, block_offset,
+       EXISTS (SELECT 1 FROM fragment_db.reuse_fragment_guarded_targets targets
+               WHERE targets.id>=start AND targets.id<start+count) AS dirty
+FROM pragma_storage_info('fragment_db.reuse_fragment_guard_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+UPDATE fragment_db.reuse_fragment_guard_t AS target
+SET v=md5(concat('guarded-', target.id::VARCHAR))
+   || md5(concat('guarded-tail-', target.id::VARCHAR))
+FROM fragment_db.reuse_fragment_guarded_targets AS changes
+WHERE target.id=changes.id
+
+statement ok
+FORCE CHECKPOINT fragment_db
+
+query III
+WITH layout AS (
+    SELECT count(*) AS segments, sum(count) AS tuples, max(count) AS max_count
+    FROM pragma_storage_info('fragment_db.reuse_fragment_guard_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT (SELECT count(*)
+        FROM reuse_fragment_guarded_before before
+        JOIN pragma_storage_info('fragment_db.reuse_fragment_guard_t') after USING (block_id, block_offset)
+        WHERE after.column_name='v' AND after.segment_type='VARCHAR'),
+       (SELECT (segments <= (tuples+max_count-1)//max_count
+                           + greatest(1, ((tuples+max_count-1)//max_count)//8))::INTEGER
+        FROM layout),
+       (SELECT count(*) FROM fragment_db.reuse_fragment_guard_t
+        WHERE v IS DISTINCT FROM CASE
+            WHEN id IN (SELECT id FROM fragment_db.reuse_fragment_guarded_targets)
+                THEN md5(concat('guarded-', id::VARCHAR))
+                  || md5(concat('guarded-tail-', id::VARCHAR))
+            ELSE md5(id::VARCHAR) || md5((id+1)::VARCHAR) END)
+----
+0	1	0
+
+# Once compacted, one dirty segment is again eligible for local rewriting.
+statement ok
+CREATE TABLE fragment_db.reuse_fragment_post_target AS
+SELECT start+count//2 AS id
+FROM pragma_storage_info('fragment_db.reuse_fragment_guard_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+ORDER BY start
+LIMIT 1
+
+statement ok
+CREATE TEMP TABLE reuse_fragment_compacted_before AS
+SELECT start, count, block_id, block_offset,
+       EXISTS (SELECT 1 FROM fragment_db.reuse_fragment_post_target target
+               WHERE target.id>=start AND target.id<start+count) AS dirty
+FROM pragma_storage_info('fragment_db.reuse_fragment_guard_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+UPDATE fragment_db.reuse_fragment_guard_t AS target
+SET v=md5(concat('post-', target.id::VARCHAR))
+   || md5(concat('post-tail-', target.id::VARCHAR))
+FROM fragment_db.reuse_fragment_post_target AS changes
+WHERE target.id=changes.id
+
+statement ok
+FORCE CHECKPOINT fragment_db
+
+query II
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('fragment_db.reuse_fragment_guard_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty AND before.block_id=after.block_id
+                                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty)
+        AND count(*) FILTER (WHERE NOT before.dirty)>0)::INTEGER,
+       (SELECT count(*) FROM fragment_db.reuse_fragment_guard_t
+        WHERE v IS DISTINCT FROM CASE
+            WHEN id IN (SELECT id FROM fragment_db.reuse_fragment_post_target)
+                THEN md5(concat('post-', id::VARCHAR))
+                  || md5(concat('post-tail-', id::VARCHAR))
+            WHEN id IN (SELECT id FROM fragment_db.reuse_fragment_guarded_targets)
+                THEN md5(concat('guarded-', id::VARCHAR))
+                  || md5(concat('guarded-tail-', id::VARCHAR))
+            ELSE md5(id::VARCHAR) || md5((id+1)::VARCHAR) END)
+FROM reuse_fragment_compacted_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	0
+
+statement ok
+SET threads=1
+
+# An explicit codec rewrites the dirty segment and reuses every unchanged segment.
+statement ok
+CREATE TABLE reuse_numeric_t(
+    id BIGINT,
+    v BIGINT USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO reuse_numeric_t SELECT i, i FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+CREATE TEMP TABLE reuse_numeric_before AS
+SELECT start, count, block_id, block_offset,
+       start<=60000 AND start+count>60000 AS dirty
+FROM pragma_storage_info('reuse_numeric_t')
+WHERE column_name='v' AND segment_type='BIGINT'
+
+statement ok
+UPDATE reuse_numeric_t SET v=v+1 WHERE id=60000
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('reuse_numeric_t')
+    WHERE column_name='v' AND segment_type='BIGINT'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty AND before.block_id=after.block_id
+                                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty)
+        AND count(*) FILTER (WHERE NOT before.dirty)>0)::INTEGER,
+       (SELECT count(*) FROM reuse_numeric_t
+        WHERE v IS DISTINCT FROM CASE WHEN id=60000 THEN id+1 ELSE id END)
+FROM reuse_numeric_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	0
+
+# A partial RowGroup with no reusable tuples takes the whole-column path.
+statement ok
+CREATE TABLE reuse_tiny_row_group_t(
+    id BIGINT,
+    v BIGINT USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO reuse_tiny_row_group_t VALUES
+    (0, NULL),
+    (1, 10),
+    (2, 20),
+    (3, 30)
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+SELECT (count(*)=1)::INTEGER, max(count)//8
+FROM pragma_storage_info('reuse_tiny_row_group_t')
+WHERE column_name='v' AND segment_type='BIGINT'
+----
+1	0
+
+statement ok
+UPDATE reuse_tiny_row_group_t SET v=v+1 WHERE id=1
+
+statement ok
+FORCE CHECKPOINT
+
+query I
+SELECT (SELECT count(*) FROM reuse_tiny_row_group_t
+        WHERE v IS DISTINCT FROM CASE id
+            WHEN 0 THEN NULL WHEN 1 THEN 11 WHEN 2 THEN 20 ELSE 30 END)
+----
+0
+
+# A validity-only change can reuse the base of a tiny partial RowGroup.
+statement ok
+CREATE TEMP TABLE reuse_tiny_validity_before AS
+SELECT start, count, block_id, block_offset
+FROM pragma_storage_info('reuse_tiny_row_group_t')
+WHERE column_name='v' AND segment_type='BIGINT'
+
+statement ok
+UPDATE reuse_tiny_row_group_t SET v=NULL WHERE id=2
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('reuse_tiny_row_group_t')
+    WHERE column_name='v' AND segment_type='BIGINT'
+)
+SELECT (count(*) FILTER (WHERE before.block_id=after.block_id
+                           AND before.block_offset=after.block_offset)=1)::INTEGER,
+       (SELECT count(*) FROM reuse_tiny_row_group_t
+        WHERE v IS DISTINCT FROM CASE id
+            WHEN 0 THEN NULL WHEN 1 THEN 11 WHEN 2 THEN NULL ELSE 30 END)
+FROM reuse_tiny_validity_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	0
+
+# A fresh compact layout keeps two separated dirty segments as independent rewrite ranges.
+statement ok
+CREATE TABLE reuse_auto_disjoint_t(id BIGINT, v VARCHAR)
+
+statement ok
+INSERT INTO reuse_auto_disjoint_t
+SELECT i, concat('value-', i::VARCHAR, '-', repeat(md5(i::VARCHAR), 2))
+FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+CREATE TABLE reuse_auto_disjoint_targets AS
+WITH segments AS (
+    SELECT start, count, row_number() OVER (ORDER BY start) AS segment_no,
+           count(*) OVER () AS segment_count
+    FROM pragma_storage_info('reuse_auto_disjoint_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT start+count//2 AS id, segment_count
+FROM segments
+WHERE segment_no=1 OR segment_no=segment_count
+
+query I
+SELECT (count(*)=2 AND min(segment_count)>=3)::INTEGER
+FROM reuse_auto_disjoint_targets
+----
+1
+
+statement ok
+CREATE TEMP TABLE reuse_auto_disjoint_before AS
+SELECT start, count, block_id, block_offset,
+       EXISTS (SELECT 1 FROM reuse_auto_disjoint_targets targets
+               WHERE targets.id>=start AND targets.id<start+count) AS dirty
+FROM pragma_storage_info('reuse_auto_disjoint_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+UPDATE reuse_auto_disjoint_t AS target
+SET v=concat('point-', target.id::VARCHAR)
+FROM reuse_auto_disjoint_targets changes
+WHERE target.id=changes.id
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('reuse_auto_disjoint_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty AND before.block_id=after.block_id
+                                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty)
+        AND count(*) FILTER (WHERE NOT before.dirty)>0)::INTEGER,
+       (SELECT count(*) FROM reuse_auto_disjoint_t
+        WHERE v IS DISTINCT FROM CASE
+            WHEN id IN (SELECT id FROM reuse_auto_disjoint_targets) THEN concat('point-', id::VARCHAR)
+            ELSE concat('value-', id::VARCHAR, '-', repeat(md5(id::VARCHAR), 2)) END)
+FROM reuse_auto_disjoint_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	0
+
+# AUTO can retain and rewrite ranges with different physical codecs.
+statement ok
+CREATE TABLE reuse_mixed_codec_t(id BIGINT, v UBIGINT)
+
+statement ok
+INSERT INTO reuse_mixed_codec_t SELECT i, hash(i) FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+CREATE TABLE reuse_mixed_codec_target AS
+SELECT start, count
+FROM pragma_storage_info('reuse_mixed_codec_t')
+WHERE column_name='v' AND segment_type='UBIGINT'
+ORDER BY start
+LIMIT 1
+
+query I
+SELECT (count(*)>1 AND count(DISTINCT compression)=1)::INTEGER
+FROM pragma_storage_info('reuse_mixed_codec_t')
+WHERE column_name='v' AND segment_type='UBIGINT'
+----
+1
+
+statement ok
+CREATE TEMP TABLE reuse_mixed_codec_before AS
+SELECT start, count, block_id, block_offset,
+       start=(SELECT start FROM reuse_mixed_codec_target) AS dirty
+FROM pragma_storage_info('reuse_mixed_codec_t')
+WHERE column_name='v' AND segment_type='UBIGINT'
+
+statement ok
+UPDATE reuse_mixed_codec_t
+SET v=7
+WHERE id>=(SELECT start FROM reuse_mixed_codec_target)
+  AND id<(SELECT start+count FROM reuse_mixed_codec_target)
+
+statement ok
+FORCE CHECKPOINT
+
+query IIII
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset, compression
+    FROM pragma_storage_info('reuse_mixed_codec_t')
+    WHERE column_name='v' AND segment_type='UBIGINT'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty AND before.block_id=after.block_id
+                                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty)
+        AND count(*) FILTER (WHERE NOT before.dirty)>0)::INTEGER,
+       (SELECT count(DISTINCT compression) FROM after_segments),
+       (SELECT count(*) FROM after_segments WHERE compression='Constant'),
+       (SELECT count(*) FROM reuse_mixed_codec_t
+        WHERE v IS DISTINCT FROM CASE
+            WHEN id>=(SELECT start FROM reuse_mixed_codec_target)
+             AND id<(SELECT start+count FROM reuse_mixed_codec_target) THEN 7::UBIGINT
+            ELSE hash(id) END)
+FROM reuse_mixed_codec_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	2	1	0
+
+# Use stable multi-segment data to cover both sides of the local rewrite threshold.
+statement ok
+CREATE TABLE reuse_threshold_t(
+    id BIGINT,
+    v VARCHAR USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO reuse_threshold_t
+SELECT i, concat('threshold-', i::VARCHAR, '-', repeat(md5(i::VARCHAR), 2))
+FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+# A dense rewrite remains local while at least one eighth of the tuples can be reused.
+statement ok
+CREATE TEMP TABLE reuse_threshold_dense_boundary AS
+SELECT max(start) AS boundary
+FROM pragma_storage_info('reuse_threshold_t')
+WHERE column_name='v' AND segment_type='VARCHAR' AND start<=98304
+
+query I
+SELECT ((SELECT boundary FROM reuse_threshold_dense_boundary)>=61440
+        AND 122880-(SELECT boundary FROM reuse_threshold_dense_boundary)>=122880//8)::INTEGER
+----
+1
+
+statement ok
+CREATE TEMP TABLE reuse_threshold_dense_before AS
+SELECT start, count, block_id, block_offset,
+       start<(SELECT boundary FROM reuse_threshold_dense_boundary) AS dirty
+FROM pragma_storage_info('reuse_threshold_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+UPDATE reuse_threshold_t
+SET v=concat('dense-profit-', id::VARCHAR)
+WHERE id<(SELECT boundary FROM reuse_threshold_dense_boundary)
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('reuse_threshold_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty AND before.block_id=after.block_id
+                                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty)
+        AND count(*) FILTER (WHERE NOT before.dirty)>0)::INTEGER,
+       (SELECT count(*) FROM reuse_threshold_t
+        WHERE v IS DISTINCT FROM CASE
+            WHEN id<(SELECT boundary FROM reuse_threshold_dense_boundary)
+                THEN concat('dense-profit-', id::VARCHAR)
+            ELSE concat('threshold-', id::VARCHAR, '-', repeat(md5(id::VARCHAR), 2)) END)
+FROM reuse_threshold_dense_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	0
+
+# Rewriting all but a suffix smaller than one eighth takes the whole-column path.
+statement ok
+CREATE TEMP TABLE reuse_threshold_small_suffix_boundary AS
+SELECT max(start) AS boundary
+FROM pragma_storage_info('reuse_threshold_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+query I
+SELECT ((SELECT boundary FROM reuse_threshold_small_suffix_boundary)<122880
+        AND 122880-(SELECT boundary FROM reuse_threshold_small_suffix_boundary)<122880//8)::INTEGER
+----
+1
+
+statement ok
+CREATE TEMP TABLE reuse_threshold_small_suffix_before AS
+SELECT block_id, block_offset
+FROM pragma_storage_info('reuse_threshold_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+UPDATE reuse_threshold_t
+SET v=concat('dense-fallback-', id::VARCHAR)
+WHERE id<(SELECT boundary FROM reuse_threshold_small_suffix_boundary)
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+SELECT (SELECT count(*)
+        FROM reuse_threshold_small_suffix_before before
+        JOIN pragma_storage_info('reuse_threshold_t') after USING (block_id, block_offset)
+        WHERE after.column_name='v' AND after.segment_type='VARCHAR'),
+       (SELECT count(*) FROM reuse_threshold_t
+        WHERE v IS DISTINCT FROM CASE
+            WHEN id<(SELECT boundary FROM reuse_threshold_small_suffix_boundary)
+                THEN concat('dense-fallback-', id::VARCHAR)
+            ELSE concat('threshold-', id::VARCHAR, '-', repeat(md5(id::VARCHAR), 2)) END)
+----
+0	0
+
+# A validity-only update preserves the complete base and independently rewrites validity.
+statement ok
+CREATE TABLE reuse_validity_t(id BIGINT, v VARCHAR)
+
+statement ok
+INSERT INTO reuse_validity_t
+SELECT i, CASE WHEN i=60000 THEN repeat('x', 300000) ELSE concat('base-', i::VARCHAR) END
+FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+CREATE TEMP TABLE reuse_validity_only_before AS
+SELECT start, count, block_id, block_offset
+FROM pragma_storage_info('reuse_validity_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+UPDATE reuse_validity_t SET v=NULL WHERE id<30720
+
+statement ok
+FORCE CHECKPOINT
+
+query III
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('reuse_validity_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT (count(*) FILTER (WHERE before.block_id=after.block_id
+                           AND before.block_offset=after.block_offset)
+            = (SELECT count(*) FROM reuse_validity_only_before))::INTEGER,
+       (SELECT count(*) FROM reuse_validity_t WHERE v IS NULL),
+       (SELECT count(*) FROM reuse_validity_t
+        WHERE v IS DISTINCT FROM CASE WHEN id<30720 THEN NULL
+            WHEN id=60000 THEN repeat('x', 300000) ELSE concat('base-', id::VARCHAR) END)
+FROM reuse_validity_only_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	30720	0
+
+# NULL-to-value updates rewrite the affected base range and retain its clean suffix.
+statement ok
+CREATE TEMP TABLE reuse_validity_restore_before AS
+SELECT start, count, block_id, block_offset, start<30720 AS dirty
+FROM pragma_storage_info('reuse_validity_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+UPDATE reuse_validity_t SET v=concat('restored-', id::VARCHAR) WHERE v IS NULL
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('reuse_validity_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty AND before.block_id=after.block_id
+                                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty)
+        AND count(*) FILTER (WHERE NOT before.dirty)>0)::INTEGER,
+       (SELECT count(*) FROM reuse_validity_t
+        WHERE v IS DISTINCT FROM CASE WHEN id<30720 THEN concat('restored-', id::VARCHAR)
+            WHEN id=60000 THEN repeat('x', 300000) ELSE concat('base-', id::VARCHAR) END)
+FROM reuse_validity_restore_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	0
+
+# A global force setting retains the original whole-column behavior.
+statement ok
+CREATE TABLE reuse_force_t(id BIGINT, v BIGINT)
+
+statement ok
+INSERT INTO reuse_force_t SELECT i, i//64 FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+CREATE TEMP TABLE reuse_force_before AS
+SELECT block_id, block_offset
+FROM pragma_storage_info('reuse_force_t')
+WHERE column_name='v' AND segment_type='BIGINT'
+
+statement ok
+SET force_compression='rle'
+
+statement ok
+UPDATE reuse_force_t SET v=-1 WHERE id=60000
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+SELECT (SELECT count(*)
+        FROM reuse_force_before before
+        JOIN pragma_storage_info('reuse_force_t') after USING (block_id, block_offset)
+        WHERE after.column_name='v' AND after.segment_type='BIGINT'),
+       (SELECT count(*) FROM reuse_force_t
+        WHERE v IS DISTINCT FROM CASE WHEN id=60000 THEN -1 ELSE id//64 END)
+----
+0	0
+
+statement ok
+RESET force_compression
+
+# Empty validity means the base owns NULL information and disables reuse.
+statement ok
+ATTACH '{TEST_DIR}/reuse_empty_validity.db' AS empty_db (STORAGE_VERSION 'v1.3.0', BLOCK_SIZE 16384)
+
+statement ok
+SET force_compression='dict_fsst'
+
+statement ok
+CREATE TABLE empty_db.reuse_empty_t(id BIGINT, v VARCHAR)
+
+statement ok
+INSERT INTO empty_db.reuse_empty_t
+SELECT i, CASE WHEN i=1000 THEN NULL ELSE concat('value-', (i%4)::VARCHAR) END
+FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT empty_db
+
+statement ok
+RESET force_compression
+
+query II
+SELECT (count(*) FILTER (WHERE segment_type='VARCHAR' AND compression='DICT_FSST')
+            = count(*) FILTER (WHERE segment_type='VARCHAR')
+        AND count(*) FILTER (WHERE segment_type='VARCHAR')>0)::INTEGER,
+       count(*) FILTER (WHERE segment_type='VALIDITY' AND compression='Empty Validity')
+FROM pragma_storage_info('empty_db.reuse_empty_t')
+----
+1	1
+
+statement ok
+CREATE TEMP TABLE reuse_empty_before AS
+SELECT block_id, block_offset
+FROM pragma_storage_info('empty_db.reuse_empty_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+UPDATE empty_db.reuse_empty_t SET v=NULL WHERE id=1
+
+statement ok
+FORCE CHECKPOINT empty_db
+
+query III
+SELECT (SELECT count(*)
+        FROM reuse_empty_before before
+        JOIN pragma_storage_info('empty_db.reuse_empty_t') after USING (block_id, block_offset)
+        WHERE after.column_name='v' AND after.segment_type='VARCHAR'),
+       (SELECT count(*) FROM empty_db.reuse_empty_t WHERE v IS NULL),
+       (SELECT count(*) FROM empty_db.reuse_empty_t
+        WHERE v IS DISTINCT FROM CASE WHEN id IN (1, 1000) THEN NULL
+                                      ELSE concat('value-', (id%4)::VARCHAR) END)
+----
+0	2	0
+
+# Parallel RowGroups keep base and validity decisions local to each checkpoint task.
+statement ok
+SET threads=8
+
+statement ok
+CREATE TABLE reuse_parallel_t(id BIGINT, v VARCHAR)
+
+statement ok
+INSERT INTO reuse_parallel_t
+SELECT i, concat('parallel-', i::VARCHAR, '-', repeat(md5(i::VARCHAR), 2))
+FROM range(983040) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+CREATE TEMP TABLE reuse_parallel_validity_before AS
+SELECT row_group_id, start, count, block_id, block_offset
+FROM pragma_storage_info('reuse_parallel_t')
+WHERE column_name='v' AND segment_type='VARCHAR'
+
+statement ok
+UPDATE reuse_parallel_t SET v=NULL WHERE id%122880=1
+
+statement ok
+FORCE CHECKPOINT
+
+query III
+WITH after_segments AS (
+    SELECT row_group_id, start, count, block_id, block_offset
+    FROM pragma_storage_info('reuse_parallel_t')
+    WHERE column_name='v' AND segment_type='VARCHAR'
+)
+SELECT (count(*) FILTER (WHERE before.block_id=after.block_id
+                           AND before.block_offset=after.block_offset)
+            = (SELECT count(*) FROM reuse_parallel_validity_before))::INTEGER,
+       (SELECT count(*) FROM reuse_parallel_t WHERE v IS NULL),
+       (SELECT count(*) FROM reuse_parallel_t
+        WHERE v IS DISTINCT FROM CASE WHEN id%122880=1 THEN NULL
+            ELSE concat('parallel-', id::VARCHAR, '-', repeat(md5(id::VARCHAR), 2)) END)
+FROM reuse_parallel_validity_before before
+LEFT JOIN after_segments after USING (row_group_id, start, count)
+----
+1	8	0
