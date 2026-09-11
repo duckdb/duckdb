@@ -42,7 +42,6 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 
 	length_idx = 0;
 	length_buffer.Unpin();
-	block.Unpin();
 }
 
 void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
