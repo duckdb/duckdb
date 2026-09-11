@@ -153,7 +153,7 @@ protected:
 	mutex sync_lock;
 	std::condition_variable sync_cv;
 	//! Sync offsets are LOGICAL (BufferedFileWriter::GetTotalWritten), not file positions: a
-	//! truncation rewinds the file, so a file offset can be reused but a logical one never is
+	//! truncation rewinds the file, so a file position can be reused but a logical one never is
 	//! The WAL is durable up to this logical offset
 	idx_t durable_offset = 0;
 	//! An in-flight sync will make the WAL durable up to this logical offset
@@ -161,8 +161,8 @@ protected:
 	//! The highest logical offset for which a sync has been requested
 	idx_t requested_sync_offset = 0;
 	//! File positions matching the two offsets above, needed only by the failure path
-	idx_t durable_file_offset = 0;
-	idx_t requested_sync_file_offset = 0;
+	idx_t durable_file_pos = 0;
+	idx_t requested_sync_file_pos = 0;
 	//! Set when a sync has failed: the OS may have dropped the dirty pages, so all further
 	//! syncs of this WAL fail
 	bool sync_failed = false;
