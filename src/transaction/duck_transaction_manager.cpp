@@ -66,9 +66,6 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 }
 
 DuckTransactionManager::~DuckTransactionManager() {
-	// a committing thread keeps the AttachedDatabase alive until it leaves SyncUpTo, so no commit
-	// can still be pending here - unless a sync failed, which leaves its entry behind and
-	// invalidates the database
 	D_ASSERT(unsynced_commits.empty() || durability_failed);
 }
 
