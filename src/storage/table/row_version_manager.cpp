@@ -204,8 +204,12 @@ idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
 	needs_compression_check = true;
-	if (!uncheckpointed_delete_commit.IsValid() || commit_id > uncheckpointed_delete_commit.GetIndex()) {
-		uncheckpointed_delete_commit = commit_id;
+	// `uncheckpointed_delete_commit` is used to decide whether there're uncommitted deletes, no need to overwrite on
+	// rollback-ed transaction.
+	if (commit_id != NOT_DELETED_ID) {
+		if (!uncheckpointed_delete_commit.IsValid() || commit_id > uncheckpointed_delete_commit.GetIndex()) {
+			uncheckpointed_delete_commit = commit_id;
+		}
 	}
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
