@@ -10,6 +10,7 @@
   "skip_error_messages": [
     "Aggregate state columns are not supported in storage versions prior to v2.0.0",
     "TUPLE columns are not supported in storage versions prior to v2.0.0",
+    "VARIANT columns are not supported in storage versions prior to v1.5.0",
     "CREATE SECURE VIEW is only supported for storage versions v2.0.0 and higher"
   ],
   "skip_compiled": "true",
@@ -124,6 +125,7 @@
         "test/geoparquet/unsupported.test",
         "test/geoparquet/versions.text",
         "test/sql/types/variant/variant_distinct.test",
+        "test/sql/aggregate/variant/variant_group_object.test",
         "test/parquet/variant/variant_comparison.test",
         "test/parquet/variant/variant_json_copy.test",
         "test/parquet/variant/variant_shredding_reanalysis_bug.test",

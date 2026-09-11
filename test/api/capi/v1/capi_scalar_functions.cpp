@@ -660,6 +660,11 @@ static void CounterFunctionBind(duckdb_bind_info info) {
 	bind_data = extra_info + 10;
 
 	duckdb_scalar_function_set_bind_data(info, bind_data_ptr, free);
+	duckdb_scalar_function_set_bind_data_copy(info, [](void *ptr) -> void * {
+		auto copy = static_cast<int64_t *>(malloc(sizeof(int64_t)));
+		*copy = *static_cast<int64_t *>(ptr);
+		return copy;
+	});
 }
 
 static void CounterFunctionInit(duckdb_init_info info) {
@@ -709,6 +714,8 @@ static void CAPIRegisterCounterFunction(duckdb_connection connection, const char
 
 	auto function = duckdb_create_scalar_function();
 	duckdb_scalar_function_set_name(function, name);
+	// The counter advances on every row, even when its argument is constant.
+	duckdb_scalar_function_set_volatile(function);
 
 	auto bigint_type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
 	duckdb_scalar_function_add_parameter(function, bigint_type);
@@ -734,6 +741,12 @@ TEST_CASE("Test Scalar Functions - Local State", "[capi]") {
 	CAPIRegisterCounterFunction(tester.connection, "my_counter", 5);
 
 	result = tester.Query("SELECT my_counter(i) FROM range(3) r(i)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<idx_t>(0, 0) == 5);
+	REQUIRE(result->Fetch<idx_t>(0, 1) == 6);
+	REQUIRE(result->Fetch<idx_t>(0, 2) == 7);
+
+	result = tester.Query("SELECT my_counter(0) FROM range(3)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<idx_t>(0, 0) == 5);
 	REQUIRE(result->Fetch<idx_t>(0, 1) == 6);

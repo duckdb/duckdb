@@ -1,4 +1,5 @@
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/constants.hpp"

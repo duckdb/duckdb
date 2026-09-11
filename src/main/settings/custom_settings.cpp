@@ -1059,7 +1059,9 @@ void HomeDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 void ForceMbedtlsUnsafeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.force_mbedtls = input.GetValue<bool>();
 
-	if (!config.options.force_mbedtls) {
+	// db is null when the option is set on a DBConfig before the database is opened (e.g. duckdb_set_config),
+	// in which case nothing is attached yet
+	if (!config.options.force_mbedtls && db) {
 		// check if there are attached databases encrypted that are not read only
 		bool encrypted_db_attached = false;
 		for (auto &database : db->GetDatabaseManager().GetDatabases()) {

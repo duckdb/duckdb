@@ -147,7 +147,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		const auto type_id = bound_order->GetReturnType().id();
 		if (type_id == LogicalTypeId::TIME || type_id == LogicalTypeId::TIME_TZ) {
 			//	Convert to time + epoch and rebind
-			unique_ptr<ParsedExpression> epoch = make_uniq<ConstantExpression>(Value::DATE(date_t::epoch()));
+			unique_ptr<ParsedExpression> epoch = ConstantExpression::FromValue(Value::DATE(date_t::epoch()));
 			auto bound_epoch = BindChild(epoch, depth, error);
 			BindRangeExpression(context, "+", bound_order, bound_epoch);
 		}

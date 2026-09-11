@@ -16,6 +16,7 @@ add_library_unity(
   materialized_aggregate_reuse.cpp
   aggregate_rewrite_helper.cpp
   build_probe_side_optimizer.cpp
+  builtin_function_lookup.cpp
   column_binding_replacer.cpp
   column_lifetime_analyzer.cpp
   empty_result_pullup.cpp

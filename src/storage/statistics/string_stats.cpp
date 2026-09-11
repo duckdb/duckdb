@@ -751,11 +751,14 @@ FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType mi
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		if (min_comp == 0 && max_comp == 0 && min_type == StringStatsType::EXACT_STATS &&
+		    max_type == StringStatsType::EXACT_STATS) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
 		if (min_comp >= 0 && max_comp <= 0) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_NOTEQUAL:
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		if (min_comp < 0 || max_comp > 0) {
