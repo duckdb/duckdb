@@ -184,6 +184,7 @@
 #include "duckdb/parallel/scan_read_ahead.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -1438,6 +1439,25 @@ const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value) {
 template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value) {
 	return static_cast<ConflictManagerMode>(StringUtil::StringToEnum(GetConflictManagerModeValues(), 2, "ConflictManagerMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetConstraintTimingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ConstraintTiming::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ConstraintTiming::IMMEDIATE), "IMMEDIATE" },
+		{ static_cast<uint32_t>(ConstraintTiming::DEFERRED), "DEFERRED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ConstraintTiming>(ConstraintTiming value) {
+	return StringUtil::EnumToString(GetConstraintTimingValues(), 3, "ConstraintTiming", static_cast<uint32_t>(value));
+}
+
+template<>
+ConstraintTiming EnumUtil::FromString<ConstraintTiming>(const char *value) {
+	return static_cast<ConstraintTiming>(StringUtil::StringToEnum(GetConstraintTimingValues(), 3, "ConstraintTiming", value));
 }
 
 const StringUtil::EnumStringLiteral *GetConstraintTypeValues() {

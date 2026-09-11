@@ -1,0 +1,28 @@
+# name: test/sql/constraints/deferred/test_alter_constraint_timing.test
+# description: Test constraint timing when adding constraints to existing columns
+# group: [deferred]
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER);
+
+statement error
+ALTER TABLE t ADD UNIQUE(i) DEFERRED;
+----
+Not implemented Error: Deferred UNIQUE constraints are not implemented yet
+
+statement error
+ALTER TABLE t ADD PRIMARY KEY(j) DEFERRED;
+----
+Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
+
+statement ok
+ALTER TABLE t ADD UNIQUE(i) IMMEDIATE;
+
+statement ok
+ALTER TABLE t ADD PRIMARY KEY(j) IMMEDIATE;
+
+query I rowsort
+SELECT constraint_text FROM duckdb_constraints() WHERE table_name = 't' AND constraint_type <> 'NOT NULL';
+----
+PRIMARY KEY(j) IMMEDIATE
+UNIQUE(i) IMMEDIATE

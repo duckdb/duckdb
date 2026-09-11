@@ -849,6 +849,15 @@ static const TransformFrameOps UNIQUE_CONSTRAINT_OPS = {"UniqueConstraint",
 static const TransformFrameOps PRIMARY_KEY_CONSTRAINT_OPS = {
     "PrimaryKeyConstraint", &PEGTransformerFactory::InitializePrimaryKeyConstraintTrampoline,
     &PEGTransformerFactory::FinalizePrimaryKeyConstraintTrampoline};
+static const TransformFrameOps CONSTRAINT_TIMING_OPS = {"ConstraintTiming",
+                                                        &PEGTransformerFactory::InitializeConstraintTimingTrampoline,
+                                                        &PEGTransformerFactory::FinalizeConstraintTimingTrampoline};
+static const TransformFrameOps IMMEDIATE_CONSTRAINT_OPS = {
+    "ImmediateConstraint", &PEGTransformerFactory::InitializeImmediateConstraintTrampoline,
+    &PEGTransformerFactory::FinalizeImmediateConstraintTrampoline};
+static const TransformFrameOps DEFERRED_CONSTRAINT_OPS = {
+    "DeferredConstraint", &PEGTransformerFactory::InitializeDeferredConstraintTrampoline,
+    &PEGTransformerFactory::FinalizeDeferredConstraintTrampoline};
 static const TransformFrameOps DEFAULT_VALUE_OPS = {"DefaultValue",
                                                     &PEGTransformerFactory::InitializeDefaultValueTrampoline,
                                                     &PEGTransformerFactory::FinalizeDefaultValueTrampoline};
@@ -3246,6 +3255,9 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"NotNullColumnConstraint", &NOT_NULL_COLUMN_CONSTRAINT_OPS},
 	    {"UniqueConstraint", &UNIQUE_CONSTRAINT_OPS},
 	    {"PrimaryKeyConstraint", &PRIMARY_KEY_CONSTRAINT_OPS},
+	    {"ConstraintTiming", &CONSTRAINT_TIMING_OPS},
+	    {"ImmediateConstraint", &IMMEDIATE_CONSTRAINT_OPS},
+	    {"DeferredConstraint", &DEFERRED_CONSTRAINT_OPS},
 	    {"DefaultValue", &DEFAULT_VALUE_OPS},
 	    {"CheckConstraint", &CHECK_CONSTRAINT_OPS},
 	    {"ForeignKeyConstraint", &FOREIGN_KEY_CONSTRAINT_OPS},
@@ -9820,26 +9832,89 @@ PEGTransformerFactory::FinalizeNotNullColumnConstraintTrampoline(PEGTransformer 
 
 void PEGTransformerFactory::InitializeUniqueConstraintTrampoline(PEGTransformer &transformer,
                                                                  GeneratedTransformProcess &process) {
-	process.ReserveChildSlots(0);
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	auto &constraint_timing_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (constraint_timing_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("ConstraintTiming"), constraint_timing_opt.GetResult()}, 0);
+	}
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeUniqueConstraintTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
-	auto result = TransformUniqueConstraint(transformer);
+	optional<ConstraintTiming> constraint_timing {};
+	if (process.child_results[0]) {
+		constraint_timing = process.TakeResult<ConstraintTiming>(0);
+	}
+	auto result = TransformUniqueConstraint(transformer, constraint_timing);
 	return make_uniq<TypedTransformResult<ColumnConstraintEntry>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializePrimaryKeyConstraintTrampoline(PEGTransformer &transformer,
                                                                      GeneratedTransformProcess &process) {
-	process.ReserveChildSlots(0);
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	auto &constraint_timing_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (constraint_timing_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("ConstraintTiming"), constraint_timing_opt.GetResult()}, 0);
+	}
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizePrimaryKeyConstraintTrampoline(PEGTransformer &transformer,
                                                               GeneratedTransformProcess &process) {
-	auto result = TransformPrimaryKeyConstraint(transformer);
+	optional<ConstraintTiming> constraint_timing {};
+	if (process.child_results[0]) {
+		constraint_timing = process.TakeResult<ConstraintTiming>(0);
+	}
+	auto result = TransformPrimaryKeyConstraint(transformer, constraint_timing);
 	return make_uniq<TypedTransformResult<ColumnConstraintEntry>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeConstraintTimingTrampoline(PEGTransformer &transformer,
+                                                                 GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeConstraintTimingTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<ConstraintTiming>(0);
+	return make_uniq<TypedTransformResult<ConstraintTiming>>(result);
+}
+
+void PEGTransformerFactory::InitializeImmediateConstraintTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeImmediateConstraintTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	auto result = TransformImmediateConstraint(transformer);
+	return make_uniq<TypedTransformResult<ConstraintTiming>>(result);
+}
+
+void PEGTransformerFactory::InitializeDeferredConstraintTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDeferredConstraintTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto result = TransformDeferredConstraint(transformer);
+	return make_uniq<TypedTransformResult<ConstraintTiming>>(result);
 }
 
 void PEGTransformerFactory::InitializeDefaultValueTrampoline(PEGTransformer &transformer,
@@ -10140,7 +10215,11 @@ PEGTransformerFactory::FinalizeTopCheckConstraintTrampoline(PEGTransformer &tran
 void PEGTransformerFactory::InitializeTopPrimaryKeyConstraintTrampoline(PEGTransformer &transformer,
                                                                         GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(1);
+	process.ReserveChildSlots(2);
+	auto &constraint_timing_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (constraint_timing_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("ConstraintTiming"), constraint_timing_opt.GetResult()}, 1);
+	}
 	process.PushChild({transformer.GetRule("ColumnIdList"), list_pr.GetChild(2)}, 0);
 }
 
@@ -10148,14 +10227,22 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeTopPrimaryKeyConstraintTrampoline(PEGTransformer &transformer,
                                                                  GeneratedTransformProcess &process) {
 	auto column_id_list = process.TakeResult<vector<string>>(0);
-	auto result = TransformTopPrimaryKeyConstraint(transformer, column_id_list);
+	optional<ConstraintTiming> constraint_timing {};
+	if (process.child_results[1]) {
+		constraint_timing = process.TakeResult<ConstraintTiming>(1);
+	}
+	auto result = TransformTopPrimaryKeyConstraint(transformer, column_id_list, constraint_timing);
 	return make_uniq<TypedTransformResult<unique_ptr<Constraint>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeTopUniqueConstraintTrampoline(PEGTransformer &transformer,
                                                                     GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(1);
+	process.ReserveChildSlots(2);
+	auto &constraint_timing_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (constraint_timing_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("ConstraintTiming"), constraint_timing_opt.GetResult()}, 1);
+	}
 	process.PushChild({transformer.GetRule("ColumnIdList"), list_pr.GetChild(1)}, 0);
 }
 
@@ -10163,7 +10250,11 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeTopUniqueConstraintTrampoline(PEGTransformer &transformer,
                                                              GeneratedTransformProcess &process) {
 	auto column_id_list = process.TakeResult<vector<string>>(0);
-	auto result = TransformTopUniqueConstraint(transformer, column_id_list);
+	optional<ConstraintTiming> constraint_timing {};
+	if (process.child_results[1]) {
+		constraint_timing = process.TakeResult<ConstraintTiming>(1);
+	}
+	auto result = TransformTopUniqueConstraint(transformer, column_id_list, constraint_timing);
 	return make_uniq<TypedTransformResult<unique_ptr<Constraint>>>(std::move(result));
 }
 

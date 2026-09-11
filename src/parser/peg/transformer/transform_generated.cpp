@@ -3094,14 +3094,48 @@ PEGTransformerFactory::TransformNotNullColumnConstraintInternal(PEGTransformer &
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUniqueConstraintInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
-	auto result = TransformUniqueConstraint(transformer);
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<ConstraintTiming> constraint_timing {};
+	auto &constraint_timing_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (constraint_timing_opt.HasResult()) {
+		auto constraint_timing_value = transformer.Transform<ConstraintTiming>(constraint_timing_opt.GetResult());
+		constraint_timing = constraint_timing_value;
+	}
+	auto result = TransformUniqueConstraint(transformer, constraint_timing);
 	return make_uniq<TypedTransformResult<ColumnConstraintEntry>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformPrimaryKeyConstraintInternal(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto result = TransformPrimaryKeyConstraint(transformer);
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<ConstraintTiming> constraint_timing {};
+	auto &constraint_timing_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (constraint_timing_opt.HasResult()) {
+		auto constraint_timing_value = transformer.Transform<ConstraintTiming>(constraint_timing_opt.GetResult());
+		constraint_timing = constraint_timing_value;
+	}
+	auto result = TransformPrimaryKeyConstraint(transformer, constraint_timing);
 	return make_uniq<TypedTransformResult<ColumnConstraintEntry>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformConstraintTimingInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<ConstraintTiming>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<ConstraintTiming>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformImmediateConstraintInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto result = TransformImmediateConstraint(transformer);
+	return make_uniq<TypedTransformResult<ConstraintTiming>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDeferredConstraintInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto result = TransformDeferredConstraint(transformer);
+	return make_uniq<TypedTransformResult<ConstraintTiming>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDefaultValueInternal(PEGTransformer &transformer,
@@ -3268,7 +3302,13 @@ PEGTransformerFactory::TransformTopPrimaryKeyConstraintInternal(PEGTransformer &
                                                                 ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_id_list = transformer.Transform<vector<string>>(list_pr.GetChild(2));
-	auto result = TransformTopPrimaryKeyConstraint(transformer, column_id_list);
+	optional<ConstraintTiming> constraint_timing {};
+	auto &constraint_timing_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (constraint_timing_opt.HasResult()) {
+		auto constraint_timing_value = transformer.Transform<ConstraintTiming>(constraint_timing_opt.GetResult());
+		constraint_timing = constraint_timing_value;
+	}
+	auto result = TransformTopPrimaryKeyConstraint(transformer, column_id_list, constraint_timing);
 	return make_uniq<TypedTransformResult<unique_ptr<Constraint>>>(std::move(result));
 }
 
@@ -3276,7 +3316,13 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformTopUniqueConstraintInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_id_list = transformer.Transform<vector<string>>(list_pr.GetChild(1));
-	auto result = TransformTopUniqueConstraint(transformer, column_id_list);
+	optional<ConstraintTiming> constraint_timing {};
+	auto &constraint_timing_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (constraint_timing_opt.HasResult()) {
+		auto constraint_timing_value = transformer.Transform<ConstraintTiming>(constraint_timing_opt.GetResult());
+		constraint_timing = constraint_timing_value;
+	}
+	auto result = TransformTopUniqueConstraint(transformer, column_id_list, constraint_timing);
 	return make_uniq<TypedTransformResult<unique_ptr<Constraint>>>(std::move(result));
 }
 
@@ -11309,6 +11355,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"NotNullColumnConstraint", &PEGTransformerFactory::TransformNotNullColumnConstraintInternal},
 	    {"UniqueConstraint", &PEGTransformerFactory::TransformUniqueConstraintInternal},
 	    {"PrimaryKeyConstraint", &PEGTransformerFactory::TransformPrimaryKeyConstraintInternal},
+	    {"ConstraintTiming", &PEGTransformerFactory::TransformConstraintTimingInternal},
+	    {"ImmediateConstraint", &PEGTransformerFactory::TransformImmediateConstraintInternal},
+	    {"DeferredConstraint", &PEGTransformerFactory::TransformDeferredConstraintInternal},
 	    {"DefaultValue", &PEGTransformerFactory::TransformDefaultValueInternal},
 	    {"CheckConstraint", &PEGTransformerFactory::TransformCheckConstraintInternal},
 	    {"ForeignKeyConstraint", &PEGTransformerFactory::TransformForeignKeyConstraintInternal},

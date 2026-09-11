@@ -1103,6 +1103,14 @@ String:
     - DoubleType
     - UpdateSetColumnTarget
 
+ConstraintTiming:
+  type: "ConstraintTiming"
+  by_value: false
+  rules:
+    - ConstraintTiming
+    - ImmediateConstraint
+    - DeferredConstraint
+
 Bool:
   type: "bool"
   by_value: false
