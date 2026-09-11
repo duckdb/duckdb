@@ -126,6 +126,12 @@ struct TableFunctionBindInput {
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
 	optional_ptr<unique_ptr<LogicalOperator>> input_plan;
+	//! Optional comments for the columns produced by the table function
+	vector<Value> column_comments;
+	//! Optional tags for the columns produced by the table function
+	vector<InsertionOrderPreservingMap<string>> column_tags;
+
+	void CheckBindResult(const vector<LogicalType> &return_types, const vector<Identifier> &names) const;
 };
 
 struct TableFunctionInitInput {

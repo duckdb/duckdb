@@ -82,6 +82,33 @@ bool TableFunction::operator==(const TableFunction &rhs) const {
 	       global_initialization == rhs.global_initialization;
 }
 
+void TableFunctionBindInput::CheckBindResult(const vector<LogicalType> &return_types,
+                                             const vector<Identifier> &names) const {
+	if (return_types.size() != names.size()) {
+		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.name);
+	}
+	if (return_types.empty()) {
+		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
+		                        table_function.name);
+	}
+	if (!column_comments.empty() && column_comments.size() != return_types.size()) {
+		throw InternalException(
+		    "Failed to bind \"%s\": column comments must be empty or have the same size as return_types",
+		    table_function.name);
+	}
+	if (!column_tags.empty() && column_tags.size() != return_types.size()) {
+		throw InternalException(
+		    "Failed to bind \"%s\": column tags must be empty or have the same size as return_types",
+		    table_function.name);
+	}
+	for (auto &comment : column_comments) {
+		if (!comment.IsNull() && comment.type() != LogicalType::VARCHAR) {
+			throw InternalException("Failed to bind \"%s\": column comments must be VARCHAR values",
+			                        table_function.name);
+		}
+	}
+}
+
 bool TableFunction::operator!=(const TableFunction &rhs) const {
 	return !(*this == rhs);
 }

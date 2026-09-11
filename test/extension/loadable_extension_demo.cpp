@@ -157,6 +157,11 @@ public:
 	                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 		names.emplace_back("quack");
 		return_types.emplace_back(LogicalType::VARCHAR);
+		input.column_comments.emplace_back("A single duck utterance");
+		InsertionOrderPreservingMap<string> tags;
+		tags["ext:name"] = "loadable_extension_demo";
+		tags["ext:column_type"] = "sound";
+		input.column_tags.push_back(std::move(tags));
 		return make_uniq<QuackBindData>(BigIntValue::Get(input.inputs[0]));
 	}
 
@@ -168,6 +173,9 @@ public:
 	static void QuackFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		auto &bind_data = data_p.bind_data->Cast<QuackBindData>();
 		auto &data = data_p.global_state->Cast<QuackGlobalData>();
+		if (bind_data.number_of_quacks == 999) {
+			throw InvalidInputException("quack scan must not execute");
+		}
 		if (data.offset >= bind_data.number_of_quacks) {
 			// finished returning values
 			return;
@@ -1217,6 +1225,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 		tagged_table_info->internal = true;
 
 		ColumnDefinition col_a("a", LogicalType::INTEGER);
+		col_a.SetComment(Value("Primary tagged column"));
 		InsertionOrderPreservingMap<string> col_a_tags;
 		col_a_tags["ext:name"] = "loadable_extension_demo";
 		col_a_tags["ext:column_type"] = "primary";
@@ -1224,6 +1233,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 		tagged_table_info->columns.AddColumn(std::move(col_a));
 
 		ColumnDefinition col_b("b", LogicalType::VARCHAR);
+		col_b.SetComment(Value("Dimension tagged column"));
 		InsertionOrderPreservingMap<string> col_b_tags;
 		col_b_tags["ext:name"] = "loadable_extension_demo";
 		col_b_tags["ext:column_type"] = "dimension";
