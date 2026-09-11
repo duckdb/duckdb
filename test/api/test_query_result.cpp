@@ -307,7 +307,7 @@ TEST_CASE("A statement that completes on return is retained and refuses a stream
 
 	for (auto query : {"INSERT INTO t VALUES (1), (2) RETURNING i", "CREATE TABLE ctas AS SELECT 42 AS i"}) {
 		auto handle = Submit(con, query);
-		REQUIRE(handle->GetStatementProperties().complete_on_return);
+		REQUIRE(handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED);
 		// The store is settled before execution starts, so no producer parks for a decision
 		REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::RETAINED);
 		REQUIRE_THROWS_AS(QueryResultStream(std::move(handle)), InvalidInputException);

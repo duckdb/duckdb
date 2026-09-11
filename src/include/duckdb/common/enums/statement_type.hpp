@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/result_eagerness.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -72,7 +73,7 @@ class ClientContext;
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
-	    : requires_valid_transaction(true), complete_on_return(true), bound_all_parameters(true),
+	    : requires_valid_transaction(true), result_eagerness(ResultEagerness::FORCED), bound_all_parameters(true),
 	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
 	}
 
@@ -101,9 +102,9 @@ struct StatementProperties {
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
 	//! exception of ROLLBACK
 	bool requires_valid_transaction;
-	//! Whether the statement must run to completion before the call that returns its result does:
-	//! its side effects cannot wait for a consumer, so its result is never streamed
-	bool complete_on_return;
+	//! FORCED for a statement whose side effects cannot wait for a consumer: it runs to completion
+	//! before the call that returns its result does, and its result is never streamed
+	ResultEagerness result_eagerness;
 	//! Whether or not all parameters have successfully had their types determined
 	bool bound_all_parameters;
 	//! What type of data the statement returns

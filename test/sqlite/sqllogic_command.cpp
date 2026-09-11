@@ -261,7 +261,8 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 			return handle;
 		}
 		auto &properties = handle->GetStatementProperties();
-		if (properties.complete_on_return || properties.return_type != StatementReturnType::QUERY_RESULT) {
+		if (properties.result_eagerness == ResultEagerness::FORCED ||
+		    properties.return_type != StatementReturnType::QUERY_RESULT) {
 			handle->Complete();
 			return handle;
 		}

@@ -661,7 +661,8 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 		} else {
 			buffer = make_shared_ptr<SimpleBufferedData>(*this, sink.lifetime);
 		}
-		if (parameters.eager || statement_data.properties.complete_on_return) {
+		if (parameters.result_eagerness == ResultEagerness::FORCED ||
+		    statement_data.properties.result_eagerness == ResultEagerness::FORCED) {
 			// Settled before execution starts, so no producer ever parks for the decision
 			buffer->Decide(ResultLifetime::RETAINED);
 		}
@@ -929,7 +930,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	prepare->statement = std::move(statement);
 
 	QueryParameters parameters;
-	parameters.eager = true;
+	parameters.result_eagerness = ResultEagerness::FORCED;
 	auto result = RunStatementInternal(lock, std::move(prepare), parameters, false);
 	if (result->HasError()) {
 		result->ThrowError();
@@ -1175,7 +1176,7 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
 	auto lock = LockContext();
-	parameters.eager = true;
+	parameters.result_eagerness = ResultEagerness::FORCED;
 	try {
 		InitialCleanup(*lock);
 	} catch (std::exception &ex) {
@@ -1261,7 +1262,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 			auto parameters = query_parameters;
 			// Every statement of an eager query completes before the call returns, so none of them
 			// leaves a producer parked for the consumer's choice
-			parameters.eager = true;
+			parameters.result_eagerness = ResultEagerness::FORCED;
 			auto current_result = SubmitInternal(*lock, std::move(statement), parameters);
 			auto has_result = current_result->GetStatementProperties().return_type == StatementReturnType::QUERY_RESULT;
 			if (!current_result->HasError()) {
@@ -1349,7 +1350,7 @@ unique_ptr<QueryResult> ClientContext::RunInternalStatement(unique_ptr<SQLStatem
 		return ErrorResult<QueryResult>(ErrorData(ex), statement->query);
 	}
 	QueryParameters params = parameters;
-	params.eager = true;
+	params.result_eagerness = ResultEagerness::FORCED;
 	return RunStatementInternal(*lock, std::move(statement), params, false);
 }
 
@@ -1614,7 +1615,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 
 	auto relation_stmt = make_uniq<RelationStatement>(relation);
 	QueryParameters parameters;
-	parameters.eager = true;
+	parameters.result_eagerness = ResultEagerness::FORCED;
 	auto result = SubmitInternal(*lock, std::move(relation_stmt), parameters);
 	if (result->HasError()) {
 		return result;

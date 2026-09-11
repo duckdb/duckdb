@@ -31,7 +31,7 @@ BoundStatement Binder::Bind(ExternalResourceStatement &stmt) {
 		select_statement.node = std::move(select_node);
 
 		auto show_result = Bind(select_statement);
-		GetStatementProperties().complete_on_return = true;
+		GetStatementProperties().result_eagerness = ResultEagerness::FORCED;
 		return show_result;
 	}
 
@@ -71,7 +71,7 @@ BoundStatement Binder::Bind(ExternalResourceStatement &stmt) {
 	result.plan = make_uniq<LogicalExternalResource>(std::move(data));
 
 	auto &properties = GetStatementProperties();
-	properties.complete_on_return = true;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

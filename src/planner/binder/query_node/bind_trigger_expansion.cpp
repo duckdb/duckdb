@@ -460,7 +460,7 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 
 	if (!has_returning) {
 		auto &properties = GetStatementProperties();
-		properties.complete_on_return = true;
+		properties.result_eagerness = ResultEagerness::FORCED;
 		properties.return_type = StatementReturnType::CHANGED_ROWS;
 		return chain;
 	}
@@ -533,7 +533,7 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	result.plan = std::move(returning_projection);
 
 	auto &properties = GetStatementProperties();
-	properties.complete_on_return = true;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }
@@ -720,7 +720,7 @@ BoundStatement Binder::ExpandRowTriggers(QueryNode &node, vector<unique_ptr<Pars
 
 	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
-	properties.complete_on_return = true;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	return bound;
 }
 

@@ -472,6 +472,8 @@ enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
 
+enum class ResultEagerness : uint8_t;
+
 enum class ResultLifetime : uint8_t;
 
 enum class ResultModifierType : uint8_t;
@@ -1302,6 +1304,9 @@ const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
+
+template<>
+const char* EnumUtil::ToChars<ResultEagerness>(ResultEagerness value);
 
 template<>
 const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value);
@@ -2218,6 +2223,9 @@ RenderMode EnumUtil::FromString<RenderMode>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
+
+template<>
+ResultEagerness EnumUtil::FromString<ResultEagerness>(const char *value);
 
 template<>
 ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value);

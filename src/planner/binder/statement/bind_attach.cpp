@@ -40,7 +40,7 @@ BoundStatement Binder::Bind(AttachStatement &stmt) {
 	result.plan = make_uniq<LogicalAttach>(std::move(stmt.info));
 
 	auto &properties = GetStatementProperties();
-	properties.complete_on_return = true;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

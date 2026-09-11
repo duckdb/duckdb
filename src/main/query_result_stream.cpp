@@ -14,7 +14,7 @@ QueryResultStream::QueryResultStream(unique_ptr<QueryResult> result) : handle(st
 		throw InvalidInputException("Attempting to open a stream on an unsuccessful query result\nError: %s",
 		                            handle->GetError());
 	}
-	if (handle->GetStatementProperties().complete_on_return) {
+	if (handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED) {
 		throw InvalidInputException(
 		    "Attempting to open a stream on a %s statement, which completes before its result is returned",
 		    StatementTypeToString(handle->GetStatementType()));

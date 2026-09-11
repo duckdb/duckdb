@@ -971,7 +971,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	// Row-wise rendering drains the result as it is produced; everything else is retained
 	const bool render_streaming = !render_materialized &&
 	                              properties.return_type == duckdb::StatementReturnType::QUERY_RESULT &&
-	                              !properties.complete_on_return;
+	                              properties.result_eagerness != duckdb::ResultEagerness::FORCED;
 	if (!render_materialized && !render_streaming) {
 		// the statement is not rendered row by row, but its side effects must still happen
 		res.Complete();

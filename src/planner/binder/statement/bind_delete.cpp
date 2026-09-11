@@ -127,7 +127,7 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 	result.types = {LogicalType::BIGINT};
 
 	auto &properties = GetStatementProperties();
-	properties.complete_on_return = true;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 
 	return result;

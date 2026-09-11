@@ -447,7 +447,8 @@ duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepare
 
 	try {
 		auto result = wrapper->statement->Submit(wrapper->values);
-		if (result->HasError() || result->GetStatementProperties().complete_on_return) {
+		if (result->HasError() ||
+		    result->GetStatementProperties().result_eagerness == duckdb::ResultEagerness::FORCED) {
 			// The statement cannot be streamed: it completes before its result is returned
 			result->Complete();
 			return DuckDBTranslateResult(std::move(result), out_result);

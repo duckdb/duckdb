@@ -7,7 +7,7 @@ namespace duckdb {
 
 BoundStatement Binder::Bind(SelectStatement &stmt) {
 	auto &properties = GetStatementProperties();
-	properties.complete_on_return = false;
+	properties.result_eagerness = ResultEagerness::AUTO;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	auto result = Bind(*stmt.node);
 	// A bare table-function passthrough honors the function's call_return_type (e.g. a CONNECT-routed

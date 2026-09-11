@@ -17,7 +17,7 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 
 	// CALL is `SELECT * FROM func()` (which already propagates call_return_type) forced to materialize.
 	auto result = Bind(select_statement);
-	GetStatementProperties().complete_on_return = true;
+	GetStatementProperties().result_eagerness = ResultEagerness::FORCED;
 	return result;
 }
 

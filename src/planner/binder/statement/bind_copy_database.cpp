@@ -128,7 +128,7 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	result.plan = std::move(plan);
 
 	auto &properties = GetStatementProperties();
-	properties.complete_on_return = true;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::NOTHING;
 
 	DatabaseModificationType modification;

@@ -32,7 +32,7 @@ BoundStatement Binder::Bind(ConnectStatement &stmt) {
 	result.plan = make_uniq<LogicalConnect>(std::move(stmt.info));
 
 	auto &properties = GetStatementProperties();
-	properties.complete_on_return = true;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
@@ -45,7 +45,7 @@ BoundStatement Binder::Bind(DisconnectStatement &stmt) {
 	result.plan = make_uniq<LogicalDisconnect>(std::move(stmt.info));
 
 	auto &properties = GetStatementProperties();
-	properties.complete_on_return = true;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

@@ -161,7 +161,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_ch
 			// transition keeps the contract simple: one unit of work per
 			// step; the next step hits the stream.
 			try {
-				if (handle->GetStatementProperties().complete_on_return) {
+				if (handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED) {
 					// The statement completes before its result is returned:
 					// its chunks come from the retained handle instead.
 					handle->Complete();

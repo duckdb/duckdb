@@ -145,7 +145,7 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	QueryParameters parameters;
 	parameters.statement_args = named_params;
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
-	parameters.eager = true;
+	parameters.result_eagerness = ResultEagerness::FORCED;
 	return context->Query(query, std::move(parameters));
 }
 
