@@ -173,6 +173,6 @@ work. The parser workloads themselves are single-threaded.
 Use clean build directories for comparisons. The regression script rejects a
 build directory containing extension artifacts from multiple revisions.
 
-The parser list is deliberately not yet added to the automatic regression workflow:
-its baseline runner must first contain this harness. Enable that CI comparison
-once both sides can recognize these benchmarks.
+The automatic regression workflow runs this list in its `Bench Parser` matrix job.
+Both the baseline and current runner must contain the C++ benchmark registrations;
+a baseline predating this harness will fail with a missing-benchmark error.
