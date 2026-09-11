@@ -4,8 +4,6 @@ TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
 	ExternalResourceStatement /
-	AttachToExternalResource /
-	ConnectToExternalResource /
 	ExtensionRepositoryStatement /
 	CreateStatement /
 	SelectStatement /
@@ -1566,7 +1564,9 @@ ExtractDatePart <-
     MillisecondKeyword / MicrosecondKeyword / WeekKeyword / QuarterKeyword / DecadeKeyword /
     CenturyKeyword / MillenniumKeyword
 
-ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / ShowExternalResourcesStmt
+# Every statement about external resources, so the top-level Statement choice carries one entry
+# rather than one per form.
+ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / ShowExternalResourcesStmt / AttachToExternalResource / ConnectToExternalResource
 
 CreateExternalResourceStmt <- 'CREATE' ExternalResourceKeyword StringLiteral AttachAlias? ExternalResourceCreationOptions?
 RegisterExternalResourceStmt <- 'REGISTER' ExternalResourceKeyword StringLiteral AttachAlias? 'FROM' Expression
