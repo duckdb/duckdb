@@ -43,17 +43,26 @@ AttachOptions::AttachOptions(const DBConfigOptions &options)
     : access_mode(options.access_mode), db_type(options.database_type) {
 }
 
+//! The spellings of the access mode option, and whether `true` means read-only for each.
+static const unordered_map<string, bool> ACCESS_MODE_OPTIONS = {
+    {"readonly", true}, {"read_only", true}, {"readwrite", false}, {"read_write", false}};
+
+string AttachOptions::OptionSetting(const string &name) {
+	auto lower = StringUtil::Lower(name);
+	if (ACCESS_MODE_OPTIONS.find(lower) != ACCESS_MODE_OPTIONS.end()) {
+		return "access_mode";
+	}
+	return lower;
+}
+
 AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options, const AccessMode default_access_mode)
     : access_mode(default_access_mode) {
 	for (auto &entry : attach_options) {
-		if (entry.first == "readonly" || entry.first == "read_only") {
-			// Extract the read access mode.
-			auto read_only = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
-			if (read_only) {
-				access_mode = AccessMode::READ_ONLY;
-			} else {
-				access_mode = AccessMode::READ_WRITE;
-			}
+		auto access_mode_option = ACCESS_MODE_OPTIONS.find(entry.first);
+		if (access_mode_option != ACCESS_MODE_OPTIONS.end()) {
+			// Extract the access mode; the option reads inverted for the readwrite spellings.
+			auto value = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
+			access_mode = value == access_mode_option->second ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
 			continue;
 		}
 
@@ -61,17 +70,6 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 			// Extract the recovery mode.
 			auto mode_str = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
 			recovery_mode = EnumUtil::FromString<RecoveryMode>(mode_str);
-			continue;
-		}
-
-		if (entry.first == "readwrite" || entry.first == "read_write") {
-			// Extract the write access mode.
-			auto read_write = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
-			if (!read_write) {
-				access_mode = AccessMode::READ_ONLY;
-			} else {
-				access_mode = AccessMode::READ_WRITE;
-			}
 			continue;
 		}
 

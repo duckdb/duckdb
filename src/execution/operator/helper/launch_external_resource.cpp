@@ -6,6 +6,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/external_resources_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 
 namespace duckdb {
@@ -72,10 +73,12 @@ LaunchedResource ProvisionExternalResource(ClientContext &client, const string &
 }
 
 //! The statement's options are already in place, so a key the resource also supplies would silently
-//! overrule what the user wrote. The resource dictates how it is reached, so refuse instead.
+//! overrule what the user wrote. The resource dictates how it is reached, so refuse instead. Compared
+//! by setting, not by key: READWRITE and READ_ONLY are one option under two names.
 static void RejectOptionCollision(const AttachInfo &info, const string &key) {
+	auto setting = AttachOptions::OptionSetting(key);
 	for (auto &entry : info.options) {
-		if (StringUtil::CIEquals(entry.first, key)) {
+		if (AttachOptions::OptionSetting(entry.first) == setting) {
 			throw InvalidInputException("EXTERNAL RESOURCE: the resource supplies \"%s\", so it cannot also be given "
 			                            "as an option on the statement",
 			                            key);

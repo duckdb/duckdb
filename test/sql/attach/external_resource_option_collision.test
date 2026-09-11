@@ -47,6 +47,23 @@ ATTACH TO EXTERNAL RESOURCE pinned_ro AS b1 (READ_ONLY 1);
 ----
 <REGEX>:.*the resource supplies "read_only".*
 
+# READONLY is a second spelling of the same option, so it collides too.
+statement error
+ATTACH TO EXTERNAL RESOURCE pinned_ro AS b1 (READONLY 0);
+----
+<REGEX>:.*the resource supplies "read_only".*
+
+# READWRITE and READ_WRITE are the same option again, phrased the other way round.
+statement error
+ATTACH TO EXTERNAL RESOURCE pinned_ro AS b1 (READWRITE 1);
+----
+<REGEX>:.*the resource supplies "read_only".*
+
+statement error
+ATTACH TO EXTERNAL RESOURCE pinned_ro AS b1 (READ_WRITE 0);
+----
+<REGEX>:.*the resource supplies "read_only".*
+
 # ... and the same for the db type the resource dictates.
 statement error
 ATTACH TO EXTERNAL RESOURCE pinned_ro AS b1 (TYPE 'duckdb');
