@@ -34,13 +34,17 @@ SELECT count(*) FROM const_db.constant_inputs WHERE hash(x) = hash(NULL::BIGINT)
 1024
 
 # Equal floating-point bounds do not distinguish signed zeros, but atan2 does.
+# Keep them in memory: constant compression can discard the sign of zero.
 statement ok
-CREATE TABLE signed_zeros AS SELECT x FROM (VALUES ('0'::DOUBLE), ('-0'::DOUBLE)) t(x);
+CREATE TEMP TABLE signed_zeros AS SELECT x FROM (VALUES ('0'::DOUBLE), ('-0'::DOUBLE)) t(x);
 
 query II
 SELECT count(*) FILTER (WHERE atan2(x, -1) < 0), count(*) FILTER (WHERE atan2(x, -1) > 0) FROM signed_zeros;
 ----
 1	1
+
+statement ok
+DROP TABLE signed_zeros;
 
 # RG 1: all NULL; RG 2: alpha; RG 3: beta; RG 4: two strings sharing a truncated 12-byte prefix.
 statement ok
@@ -49,8 +53,8 @@ SELECT CASE WHEN i < 2048 THEN NULL WHEN i < 4096 THEN 'alpha'
             WHEN i < 6144 THEN 'beta' ELSE 'abcdefghijkl' || (i % 2)::VARCHAR END AS s
 FROM range(8192) t(i);
 
-# regexp_matches exercises direct BOOLEAN pruning without a statistics callback, including unknown stats in RG 4.
-foreach predicate hash(s)=hash('beta') reverse(s)='ateb' hash(s)=hash(NULL::VARCHAR) regexp_matches(s,'(t|z)')
+# RGs 1 and 4 remain unknown; regexp_matches also exercises direct BOOLEAN pruning.
+foreach predicate hash(s)=hash('beta') reverse(s)='ateb' regexp_matches(s,'(t|z)')
 
 query I
 SELECT count(*) FROM const_db.constant_strings WHERE {predicate};
@@ -60,11 +64,22 @@ SELECT count(*) FROM const_db.constant_strings WHERE {predicate};
 query II
 EXPLAIN ANALYZE SELECT s FROM const_db.constant_strings WHERE {predicate};
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 4.*
 
 endloop
 
-# With a callback: RGs 1-3 use constant evaluation; RG 4 falls back to string-length statistics.
+# Literal NULL remains foldable; the all-NULL row group is scanned.
+query I
+SELECT count(*) FROM const_db.constant_strings WHERE hash(s) = hash(NULL::VARCHAR);
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT s FROM const_db.constant_strings WHERE hash(s) = hash(NULL::VARCHAR);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
+
+# With a callback: RGs 2-3 use constant evaluation; RGs 1 and 4 use string-length statistics.
 query I
 SELECT count(*) FROM const_db.constant_strings WHERE length_grapheme(s) = 4;
 ----
@@ -95,7 +110,7 @@ SELECT count(*) FROM const_db.constant_strings WHERE reverse(s) = '0lkjihgfedcba
 query II
 EXPLAIN ANALYZE SELECT s FROM const_db.constant_strings WHERE reverse(s) = '0lkjihgfedcba';
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 4.*
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
 
 # Equal intervals can have different month/day components.
 statement ok

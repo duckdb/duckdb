@@ -18,9 +18,10 @@ bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionExpressio
 	for (auto &v : arg_values) {
 		children.push_back(make_uniq<BoundConstantExpression>(v));
 	}
-	auto bind_info_clone = func.BindInfo() ? func.BindInfo()->Copy() : nullptr;
-	BoundFunctionExpression clone(func.Function(), std::move(children), std::move(bind_info_clone), func.IsOperator());
-	return ExpressionExecutor::TryEvaluateScalar(context, clone, result);
+	// Functions such as alias() inspect expression metadata during execution.
+	auto clone = func.Copy();
+	clone->Cast<BoundFunctionExpression>().GetChildrenMutable() = std::move(children);
+	return ExpressionExecutor::TryEvaluateScalar(context, *clone, result);
 }
 
 // Equal bounds need not imply identical inputs for certain types, so we skip this optimization for them.
@@ -49,9 +50,6 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateConstantInputs(ClientC
 			if (!ExpressionExecutor::TryEvaluateScalar(context, child, value)) {
 				return nullptr;
 			}
-		} else if (!stats.CanHaveNoNull()) {
-			// Evaluate NULL arguments too.
-			value = Value(child.GetReturnType());
 		} else if (stats.CanHaveNull()) {
 			return nullptr;
 		} else if (stats.GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(stats)) {
