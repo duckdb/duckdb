@@ -90,9 +90,6 @@ void WriteAheadLog::Truncate(idx_t size) {
 	}
 	writer->Truncate(size);
 	storage_manager.SetWALSize(writer->GetFileSize());
-
-	// the logical sync offsets need no adjustment: they are never reused, so no in-flight sync can
-	// be confused by the file rewinding
 }
 
 bool WriteAheadLog::Initialized() const {
