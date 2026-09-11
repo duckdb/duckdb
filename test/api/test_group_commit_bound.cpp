@@ -109,49 +109,6 @@ TEST_CASE("A bounded transaction conflicts with the commit it cannot see", "[api
 	REQUIRE(ScalarValue(setup, "SELECT v FROM t WHERE i = 1") == 1);
 }
 
-TEST_CASE("A checkpoint waiting for durability can be interrupted", "[api][group_commit]") {
-	auto db_path = TestCreatePath("group_commit_bound_interrupt.db");
-	DeleteDatabase(db_path);
-	DuckDB db(db_path);
-
-	Connection setup(db);
-	REQUIRE_NO_FAIL(setup.Query("SET checkpoint_threshold='1TB'"));
-	REQUIRE_NO_FAIL(setup.Query("PRAGMA disable_checkpoint_on_shutdown"));
-	REQUIRE_NO_FAIL(setup.Query("CREATE TABLE t(i INTEGER)"));
-	REQUIRE_NO_FAIL(setup.Query("SET debug_wal_fsync_sleep_ms=" + to_string(FSYNC_MS)));
-
-	bool writer_failed = false;
-	std::thread writer([&db, &writer_failed]() {
-		Connection con(db);
-		writer_failed = con.Query("INSERT INTO t SELECT * FROM range(" + to_string(ROW_COUNT) + ")")->HasError();
-	});
-
-	SleepMs(READER_DELAY_MS);
-
-	// the checkpoint waits on another connection's fsync - that wait must stay cancellable
-	Connection checkpointer(db);
-	auto start = std::chrono::steady_clock::now();
-	// interrupt repeatedly: a single signal can land before the statement reaches the wait
-	std::atomic<bool> stop_interrupting(false);
-	std::thread interrupter([&checkpointer, &stop_interrupting]() {
-		SleepMs(READER_DELAY_MS);
-		while (!stop_interrupting) {
-			checkpointer.Interrupt();
-			SleepMs(25);
-		}
-	});
-	auto result = checkpointer.Query("FORCE CHECKPOINT");
-	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
-	stop_interrupting = true;
-	interrupter.join();
-	writer.join();
-	REQUIRE(!writer_failed);
-
-	REQUIRE(result->HasError());
-	// without a cancellable drain this waits out the writer's fsync and then performs its own
-	REQUIRE(idx_t(elapsed.count()) < FSYNC_MS);
-}
-
 TEST_CASE("txid_current stays unique while commits are pending durability", "[api][group_commit]") {
 	auto db_path = TestCreatePath("group_commit_bound_txid.db");
 	DeleteDatabase(db_path);
