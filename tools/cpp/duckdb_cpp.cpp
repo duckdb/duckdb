@@ -622,6 +622,49 @@ auto Connection::ParseSQL(const char *sql) -> StatementIterator {
 	return detail::Factory::Make<StatementIterator>(iterator);
 }
 
+// TokenType mirrors DUCKDB_V2_TOKEN_TYPE numerically; every member is pinned. END_OF_INPUT has no C++ member: it
+// is the C iterator's exhaustion marker, and the vector simply ends.
+static_assert(static_cast<uint8_t>(TokenType::INVALID) == DUCKDB_V2_TOKEN_TYPE_INVALID,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::KEYWORD) == DUCKDB_V2_TOKEN_TYPE_KEYWORD,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::IDENTIFIER) == DUCKDB_V2_TOKEN_TYPE_IDENTIFIER,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::STRING_LITERAL) == DUCKDB_V2_TOKEN_TYPE_STRING_LITERAL,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::NUMBER_LITERAL) == DUCKDB_V2_TOKEN_TYPE_NUMBER_LITERAL,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::OPERATOR) == DUCKDB_V2_TOKEN_TYPE_OPERATOR,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::COMMENT) == DUCKDB_V2_TOKEN_TYPE_COMMENT,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::TERMINATOR) == DUCKDB_V2_TOKEN_TYPE_TERMINATOR,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+
+auto Connection::Tokenize(std::string_view sql) const -> TokenList {
+	duckdb_v2_token_iterator_handle iterator = nullptr;
+	CheckedAPICall(duckdb_v2_tokenize_sql, handle(), ToStr(sql), &iterator);
+	TokenList list;
+	try {
+		while (true) {
+			auto type = DUCKDB_V2_TOKEN_TYPE_INVALID;
+			idx_t start = 0;
+			idx_t length = 0;
+			CheckedAPICall(duckdb_v2_token_iterator_next, iterator, &type, &start, &length);
+			if (type == DUCKDB_V2_TOKEN_TYPE_END_OF_INPUT) {
+				break;
+			}
+			list.tokens.push_back(Token {static_cast<TokenType>(type), start, length});
+		}
+		CheckedAPICall(duckdb_v2_token_iterator_ends_unterminated, iterator, &list.ends_unterminated);
+	} catch (...) {
+		duckdb_v2_token_iterator_destroy(&iterator);
+		throw;
+	}
+	duckdb_v2_token_iterator_destroy(&iterator);
+	return list;
+}
+
 auto Connection::Execute(const SqlStatement &statement, const Value *parameters, idx_t parameter_count) -> QueryResult {
 	// Borrowed, not consumed: pass the handle without releasing it, so the
 	// caller's SqlStatement keeps ownership and can be executed again.
