@@ -548,10 +548,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// durable (or durability has failed): now leave the list of active transactions
 		t_lock.lock();
 		if (synced) {
-			// advance the durable bound over every commit the sync covered, including ones whose
-			// threads have not woken up yet, so that an acknowledgement always implies observability.
-			// The bound only moves forward: a covered commit raises it only from at or above it, so a
-			// sync that covered less than an earlier one, finishing later, leaves it where it is
+			// advance the durable bound over every commit the sync covered
 			for (auto &active_transaction : active_transactions) {
 				if (active_transaction->wal_sync_offset != 0 &&
 				    active_transaction->wal_sync_offset <= info.wal_sync_offset &&
