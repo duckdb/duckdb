@@ -51,13 +51,6 @@ public:
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
 	static void Reduce(ART &art, NodePtr &node, const idx_t pos);
-	//! Splits the prefix at pos.
-	//! node_ref references the node that replaces the split byte.
-	//! child references the remaining node after the split.
-	//! Returns GATE_SET, if a gate node was freed, else GATE_NOT_SET.
-	//! If it returns GATE_SET, then the caller must set the gate for the node replacing the split byte,
-	//! after its creation.
-	static GateStatus Split(ART &art, reference<NodePtr> &node_ref, NodePtr &child, const uint8_t pos);
 
 private:
 	static Prefix NewInternal(ART &art, NodePtr &node, const data_ptr_t data, const uint8_t count, const idx_t offset);
