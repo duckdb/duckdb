@@ -144,9 +144,7 @@ private:
 	struct DurableSnapshot {
 		//! Every commit before this bound is durable
 		VisibilityBound visibility_bound = VisibilityBound::IncludingUncommitted();
-		//! The catalog version that snapshot observes. Prepared statements compare versions for
-		//! equality, so this has to be exact: any other value can match a plan bound against a
-		//! different catalog state and skip a re-bind that was needed
+		//! The catalog version that snapshot observes
 		idx_t catalog_version = DConstants::INVALID_INDEX;
 	};
 	//! The most recent snapshot that contains only durable commits; unbounded when none is pending
