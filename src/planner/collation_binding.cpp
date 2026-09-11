@@ -8,6 +8,8 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 constexpr const char *CollateCatalogEntry::Name;
@@ -100,6 +102,63 @@ CollationBinding::CollationBinding() {
 	RegisterCollation(CollationCallback(GetBitStringCollationFunctions));
 	RegisterCollation(CollationCallback(GetIntervalCollationFunctions));
 	RegisterCollation(CollationCallback(GetVariantCollationFunctions));
+}
+
+hash_t CollationBinding::HashCollations(const LogicalType &type) {
+	hash_t result = 0;
+	TypeVisitor::Contains(type, [&](const LogicalType &child) {
+		result = CombineHash(result, duckdb::Hash(child.id()));
+		auto collation = StringType::GetCollation(child);
+		result = CombineHash(result, duckdb::Hash(collation.c_str(), collation.size()));
+		return false;
+	});
+	return result;
+}
+
+bool CollationBinding::CollationsEqual(const LogicalType &left, const LogicalType &right) {
+	if (left != right || StringType::GetCollation(left) != StringType::GetCollation(right)) {
+		return false;
+	}
+	if (!left.AuxInfo() && !right.AuxInfo()) {
+		return true;
+	}
+	switch (left.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
+		auto &left_children = StructType::GetChildTypes(left);
+		auto &right_children = StructType::GetChildTypes(right);
+		if (left_children.size() != right_children.size()) {
+			return false;
+		}
+		for (idx_t child_idx = 0; child_idx < left_children.size(); child_idx++) {
+			if (!CollationsEqual(left_children[child_idx].second, right_children[child_idx].second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::UNION: {
+		if (UnionType::GetMemberCount(left) != UnionType::GetMemberCount(right)) {
+			return false;
+		}
+		for (idx_t child_idx = 0; child_idx < UnionType::GetMemberCount(left); child_idx++) {
+			if (!CollationsEqual(UnionType::GetMemberType(left, child_idx),
+			                     UnionType::GetMemberType(right, child_idx))) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::LIST:
+		return CollationsEqual(ListType::GetChildType(left), ListType::GetChildType(right));
+	case LogicalTypeId::ARRAY:
+		return CollationsEqual(ArrayType::GetChildType(left), ArrayType::GetChildType(right));
+	case LogicalTypeId::MAP:
+		return CollationsEqual(MapType::KeyType(left), MapType::KeyType(right)) &&
+		       CollationsEqual(MapType::ValueType(left), MapType::ValueType(right));
+	default:
+		return true;
+	}
 }
 
 void CollationBinding::RegisterCollation(CollationCallback callback) {

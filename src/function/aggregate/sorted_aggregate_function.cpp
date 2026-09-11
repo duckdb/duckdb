@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/collation_binding.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -35,7 +36,8 @@ vector<LogicalType> MapSortedColumns(const vector<unique_ptr<Expression>> &child
 	for (const auto &order : order_bys) {
 		idx_t column = DConstants::INVALID_INDEX;
 		for (idx_t arg = 0; arg < children.size(); ++arg) {
-			if (children[arg]->Equals(*order.expression)) {
+			if (CollationBinding::CollationsEqual(children[arg]->GetReturnType(), order.expression->GetReturnType()) &&
+			    children[arg]->Equals(*order.expression)) {
 				column = arg;
 				break;
 			}
