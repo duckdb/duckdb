@@ -143,6 +143,7 @@ bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const
 void BoundAggregateFunction::ReplaceImplementation(const BoundAggregateFunction &function) {
 	BaseAggregateFunction::operator=(function);
 	BoundSimpleFunction::operator=(function);
+	SetDefinition(definition);
 }
 
 void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {

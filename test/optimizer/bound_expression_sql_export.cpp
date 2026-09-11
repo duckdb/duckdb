@@ -2576,7 +2576,7 @@ TEST_CASE("Bound expression SQL export owns outputs and propagates resolver exce
 	REQUIRE_THROWS_AS(BoundExpressionSQLExporter::Export(expression, throwing_context), InvalidInputException);
 }
 
-TEST_CASE("SQL export rejects optimizer functions subject to search path shadowing",
+TEST_CASE("SQL export preserves optimizer function identity despite search path shadowing",
           "[bound_expression_sql_export][optimizer][serialization]") {
 	DuckDB db;
 	Connection connection(db);
@@ -2597,8 +2597,6 @@ TEST_CASE("SQL export rejects optimizer functions subject to search path shadowi
 	                    {"s LIKE '%a'", " FROM (VALUES ('bca'),('abc'),(NULL)) v(s)", "suffix", "s, 'a'"},
 	                    {"s LIKE '%a%'", " FROM (VALUES ('abc'),('bbb'),(NULL)) v(s)", "contains", "s, 'a'"},
 	                    {"avg(i)", " FROM (VALUES (1),(2),(NULL)) v(i)", "count", "i"}};
-	LogicalPlanVerificationPath path;
-	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 	for (auto &entry : cases) {
 		INFO(entry.source);
 		auto query = "SELECT " + entry.source + entry.from;
@@ -2616,8 +2614,8 @@ TEST_CASE("SQL export rejects optimizer functions subject to search path shadowi
 		        ? static_cast<const Function &>(*expression->Cast<BoundFunctionExpression>().Function().GetDefinition())
 		        : static_cast<const Function &>(
 		              *expression->Cast<BoundAggregateExpression>().Function().GetDefinition());
-		REQUIRE(definition.GetCatalogName().empty());
-		REQUIRE(definition.GetSchemaName().empty());
+		REQUIRE(definition.GetCatalogName() == Identifier::SystemCatalog());
+		REQUIRE(definition.GetSchemaName() == Identifier::DefaultSchema());
 		auto optimized = connection.Query(query);
 		REQUIRE_NO_FAIL(*optimized);
 		REQUIRE_NO_FAIL(connection.Query("PRAGMA disable_optimizer"));
@@ -2637,12 +2635,9 @@ TEST_CASE("SQL export rejects optimizer functions subject to search path shadowi
 		REQUIRE(bindings.size() == 1);
 		auto context = ResolveBinding(
 		    bindings[0].binding, {Identifier("v"), Identifier(entry.name == "count" ? "i" : "s")}, bindings[0].type);
-		RequireIssue(BoundExpressionSQLExporter::Export(*expression, context),
-		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
+		RequireRoundTrip(connection, *expression, context, entry.from, canonical_call);
 		auto copied = expression->Copy();
-		RequireIssue(BoundExpressionSQLExporter::Export(*copied, context),
-		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
-		// Ordinary deserialization resolves these definitions to their complete catalog identity.
+		RequireRoundTrip(connection, *copied, context, entry.from, canonical_call);
 		auto restored = BinaryRoundTrip(*connection.context, *expression);
 		auto exported = BoundExpressionSQLExporter::Export(*restored, context);
 		REQUIRE(exported.IsSuccess());
@@ -2655,7 +2650,7 @@ TEST_CASE("SQL export rejects optimizer functions subject to search path shadowi
 	connection.Rollback();
 }
 
-TEST_CASE("Optimized expression SQL export measures AVG and LIKE qualification gaps",
+TEST_CASE("Optimized expression SQL export covers qualified AVG and LIKE rewrites",
           "[bound_expression_sql_export][optimizer][serialization]") {
 	DuckDB db;
 	Connection connection(db);
@@ -2663,26 +2658,22 @@ TEST_CASE("Optimized expression SQL export measures AVG and LIKE qualification g
 	struct Case {
 		string query;
 		vector<Identifier> required_functions;
-		vector<Identifier> unqualified_functions;
 	};
 	vector<Case> cases {
-	    {"SELECT avg(i) FROM (VALUES (1),(2),(NULL)) t(i)", {"sum", "count", "/"}, {"count"}},
-	    {"SELECT sum(i + 1) FROM (VALUES (1),(2),(NULL)) t(i)", {"sum", "count"}, {"count"}},
-	    {"SELECT count(i) FROM (VALUES (1),(2),(NULL)) t(i)", {"count"}, {}},
-	    {"SELECT count(*) FROM (VALUES (1),(2)) t(i)", {"count_star"}, {}},
-	    {"SELECT sum(i), avg(i), count(DISTINCT i) FROM (VALUES (1),(2),(2),(NULL)) t(i)",
-	     {"sum", "count", "/"},
-	     {"count"}},
-	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE 'a%'", {"prefix"}, {"prefix"}},
-	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE '%a'", {"suffix"}, {"suffix"}},
-	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE '%a%'", {"contains"}, {"contains"}},
-	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s NOT LIKE 'a%'", {"prefix"}, {"prefix"}},
+	    {"SELECT avg(i) FROM (VALUES (1),(2),(NULL)) t(i)", {"sum", "count", "/"}},
+	    {"SELECT sum(i + 1) FROM (VALUES (1),(2),(NULL)) t(i)", {"sum", "count"}},
+	    {"SELECT count(i) FROM (VALUES (1),(2),(NULL)) t(i)", {"count"}},
+	    {"SELECT count(*) FROM (VALUES (1),(2)) t(i)", {"count_star"}},
+	    {"SELECT sum(i), avg(i), count(DISTINCT i) FROM (VALUES (1),(2),(2),(NULL)) t(i)", {"sum", "count", "/"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE 'a%'", {"prefix"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE '%a'", {"suffix"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s LIKE '%a%'", {"contains"}},
+	    {"SELECT s FROM (VALUES ('abc'),('cab'),('bca'),(NULL)) t(s) WHERE s NOT LIKE 'a%'", {"prefix"}},
 	};
 	for (auto &entry : cases) {
 		INFO(entry.query);
 		auto plan = OptimizeExportQuery(connection, entry.query);
 		vector<Identifier> functions;
-		vector<Identifier> unqualified_functions;
 		std::function<void(const Expression &)> visit_expression = [&](const Expression &expression) {
 			if (expression.GetExpressionType() == ExpressionType::BOUND_FUNCTION ||
 			    expression.GetExpressionType() == ExpressionType::BOUND_AGGREGATE) {
@@ -2692,18 +2683,8 @@ TEST_CASE("Optimized expression SQL export measures AVG and LIKE qualification g
 				                       : static_cast<const Function &>(
 				                             *expression.Cast<BoundAggregateExpression>().Function().GetDefinition());
 				functions.push_back(definition.GetName());
-				if (definition.GetCatalogName().empty() || definition.GetSchemaName().empty()) {
-					// Producer qualification is a follow-up; keep its missing coverage observable.
-					REQUIRE(std::find(entry.unqualified_functions.begin(), entry.unqualified_functions.end(),
-					                  definition.GetName()) != entry.unqualified_functions.end());
-					unqualified_functions.push_back(definition.GetName());
-					LogicalPlanVerificationPath path;
-					path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-					RequireIssue(BoundExpressionSQLExporter::Export(expression, {}),
-					             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, path);
-					ExpressionIterator::EnumerateChildren(expression, visit_expression);
-					return;
-				}
+				REQUIRE(definition.GetCatalogName() == Identifier::SystemCatalog());
+				REQUIRE(definition.GetSchemaName() == Identifier::DefaultSchema());
 				vector<SQLBindingEntry> bindings;
 				CollectSQLBindings(expression, bindings);
 				SyntheticSQLSource source;
@@ -2740,10 +2721,6 @@ TEST_CASE("Optimized expression SQL export measures AVG and LIKE qualification g
 			}
 		};
 		visit_operator(*plan);
-		for (auto &expected : entry.unqualified_functions) {
-			REQUIRE(std::find(unqualified_functions.begin(), unqualified_functions.end(), expected) !=
-			        unqualified_functions.end());
-		}
 		for (auto &required : entry.required_functions) {
 			INFO(required);
 			REQUIRE(std::find(functions.begin(), functions.end(), required) != functions.end());
@@ -2759,7 +2736,7 @@ TEST_CASE("Optimized expression SQL export measures AVG and LIKE qualification g
 	connection.Rollback();
 }
 
-TEST_CASE("SQL export measures qualification gaps in aggregate and TopN rewrites",
+TEST_CASE("SQL export covers catalog-bound aggregate and TopN rewrites",
           "[bound_expression_sql_export][optimizer][serialization]") {
 	DuckDB db;
 	Connection connection(db);
@@ -2931,7 +2908,7 @@ TEST_CASE("SQL export measures qualification gaps in aggregate and TopN rewrites
 					}
 					REQUIRE(value);
 				} else {
-					value = make_uniq<CastExpression>(binding.type, make_uniq<ConstantExpression>(Value()));
+					value = make_uniq<CastExpression>(binding.type, ConstantExpression::Null());
 				}
 				from_clause += from_clause.empty() ? " FROM (SELECT " : ", ";
 				from_clause += value->ToString() + " AS " + SQLIdentifier(binding.name);
@@ -2952,11 +2929,7 @@ TEST_CASE("SQL export measures qualification gaps in aggregate and TopN rewrites
 			REQUIRE_NO_FAIL(*restored_result);
 			REQUIRE(restored_result->Equals(*result));
 		}
-		if (entry.optimizer == "top_n_window_elimination") {
-			REQUIRE(unqualified_introduced_count == 0);
-		} else {
-			REQUIRE(unqualified_introduced_count > 0);
-		}
+		REQUIRE(unqualified_introduced_count == 0);
 	}
 	connection.Rollback();
 }

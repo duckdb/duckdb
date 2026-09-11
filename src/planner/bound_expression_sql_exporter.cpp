@@ -258,7 +258,7 @@ private:
 			return Failure(UnsupportedFeature(path, "variant_literal",
 			                                  "VARIANT object keys cannot be represented by a struct literal"));
 		}
-		unique_ptr<ParsedExpression> result = make_uniq<ConstantExpression>(value);
+		auto result = ConstantExpression::FromValue(value);
 		if (return_type.id() != LogicalTypeId::SQLNULL) {
 			result = make_uniq<CastExpression>(return_type, std::move(result));
 		}
