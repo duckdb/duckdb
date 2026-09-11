@@ -13,8 +13,9 @@
 namespace duckdb {
 
 // Group constant expression parameters together in commutative arithmetic expressions to expose
-// constant folding opportunities. After folding collapses multiplication constants into a single
-// value, keep that constant on the right to match the canonical binary operator shape.
+// constant folding opportunities, but only when reassociation cannot introduce integer overflow.
+// After folding collapses multiplication constants into a single value, keep that constant on the
+// right to match the canonical binary operator shape.
 class ConstantOrderNormalizationRule : public Rule {
 public:
 	explicit ConstantOrderNormalizationRule(ExpressionRewriter &rewriter);
