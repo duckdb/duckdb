@@ -503,34 +503,23 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			transaction.catalog_version = ++last_committed_version;
 		}
 	}
+	OnCommitCheckpointDecision(checkpoint_decision, transaction);
+
+	if (!checkpoint_decision.can_checkpoint && lock) {
+		// we won't checkpoint after all due to an error during commit: unlock the checkpoint lock again
+		skip_wal_write_due_to_checkpoint = false;
+		lock.reset();
+	}
+
 	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	bool store_transaction = undo_properties.has_updates || undo_properties.has_index_deletes ||
 	                         undo_properties.has_catalog_changes || error.HasError();
-	try {
-		OnCommitCheckpointDecision(checkpoint_decision, transaction);
 
-		if (!checkpoint_decision.can_checkpoint && lock) {
-			// we won't checkpoint after all due to an error during commit: unlock the checkpoint lock again
-			skip_wal_write_due_to_checkpoint = false;
-			lock.reset();
-		}
-
-		if (!commit_wal) {
-			// Remove the transaction from the list of active transactions and gather cleanup information.
-			// A commit that needs a WAL sync stays active until the sync below has completed.
-			QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
-		}
-	} catch (...) {
-		if (commit_wal) {
-			// the commit can never be finished: it would bound every new snapshot and hang every
-			// checkpoint, so invalidate rather than leave a healthy-looking database
-			durability_failed = true;
-			durability_cv.notify_all();
-			ValidChecker::Invalidate(db,
-			                         "Failed to finish committing a transaction whose WAL write is not yet durable");
-		}
-		throw;
+	if (!commit_wal) {
+		// Remove the transaction from the list of active transactions and gather cleanup information.
+		// A commit that needs a WAL sync stays active until the sync below has completed.
+		QueueCleanup(RemoveTransaction(transaction, store_transaction, CreateCleanupInfo()));
 	}
 
 	// We do not need to hold the transaction lock during cleanup of transactions,
