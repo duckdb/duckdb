@@ -55,7 +55,7 @@ RegexpBaseBindData::~RegexpBaseBindData() {
 bool RegexpBaseBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<RegexpBaseBindData>();
 	return constant_pattern == other.constant_pattern && constant_string == other.constant_string &&
-	       RegexOptionsEquals(options, other.options);
+	       multiline == other.multiline && RegexOptionsEquals(options, other.options);
 }
 
 unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
@@ -93,8 +93,10 @@ RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, s
 }
 
 unique_ptr<FunctionData> RegexpMatchesBindData::Copy() const {
-	return make_uniq<RegexpMatchesBindData>(options, constant_string, constant_pattern, range_min, range_max,
-	                                        range_success);
+	auto copy = make_uniq<RegexpMatchesBindData>(options, constant_string, constant_pattern, range_min, range_max,
+	                                             range_success);
+	copy->multiline = multiline;
+	return std::move(copy);
 }
 
 unique_ptr<FunctionData> RegexpMatchesBind(BindScalarFunctionInput &input) {
@@ -103,14 +105,20 @@ unique_ptr<FunctionData> RegexpMatchesBind(BindScalarFunctionInput &input) {
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	RE2::Options options;
 	options.set_log_errors(false);
+	bool multiline = false;
 	if (arguments.size() == 3) {
-		ParseRegexOptions(input.GetConstant(2), options);
+		ParseRegexOptions(input.GetConstant(2), options, nullptr, nullptr, &multiline);
 	}
 
 	string constant_string;
 	bool constant_pattern;
 	constant_pattern = TryParseConstantPattern(input.TryGetConstant(1), constant_string);
-	return make_uniq<RegexpMatchesBindData>(options, std::move(constant_string), constant_pattern);
+	if (multiline && constant_pattern) {
+		constant_string = "(?m)" + constant_string;
+	}
+	auto result = make_uniq<RegexpMatchesBindData>(options, std::move(constant_string), constant_pattern);
+	result->multiline = multiline;
+	return std::move(result);
 }
 
 struct RegexPartialMatch {
@@ -139,14 +147,14 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 			return OP::Operation(CreateStringPiece(input), lstate.constant_pattern);
 		});
 	} else {
-		BinaryExecutor::Execute<string_t, string_t, bool>(strings, patterns, result,
-		                                                  [&](string_t input, string_t pattern) {
-			                                                  RE2 re(CreateStringPiece(pattern), info.options);
-			                                                  if (!re.ok()) {
-				                                                  throw InvalidInputException(re.error());
-			                                                  }
-			                                                  return OP::Operation(CreateStringPiece(input), re);
-		                                                  });
+		BinaryExecutor::Execute<string_t, string_t, bool>(
+		    strings, patterns, result, [&](string_t input, string_t pattern) {
+			    RE2 re(info.multiline ? "(?m)" + pattern.GetString() : pattern.GetString(), info.options);
+			    if (!re.ok()) {
+				    throw InvalidInputException(re.error());
+			    }
+			    return OP::Operation(CreateStringPiece(input), re);
+		    });
 	}
 }
 
@@ -163,6 +171,7 @@ RegexpReplaceBindData::RegexpReplaceBindData(duckdb_re2::RE2::Options options, s
 
 unique_ptr<FunctionData> RegexpReplaceBindData::Copy() const {
 	auto copy = make_uniq<RegexpReplaceBindData>(options, constant_string, constant_pattern, global_replace);
+	copy->multiline = multiline;
 	return std::move(copy);
 }
 
@@ -176,10 +185,15 @@ static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input)
 	auto data = make_uniq<RegexpReplaceBindData>();
 
 	data->constant_pattern = TryParseConstantPattern(input.TryGetConstant(1), data->constant_string);
+	bool multiline = false;
 	if (arguments.size() == 4) {
-		ParseRegexOptions(input.GetConstant(3), data->options, &data->global_replace);
+		ParseRegexOptions(input.GetConstant(3), data->options, &data->global_replace, nullptr, &multiline);
 	}
 	data->options.set_log_errors(false);
+	data->multiline = multiline;
+	if (multiline && data->constant_pattern) {
+		data->constant_string = "(?m)" + data->constant_string;
+	}
 	return std::move(data);
 }
 
@@ -212,7 +226,7 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 	} else {
 		TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
 		    strings, patterns, replaces, result, [&](string_t input, string_t pattern, string_t replace) {
-			    RE2 re(CreateStringPiece(pattern), info.options);
+			    RE2 re(info.multiline ? "(?m)" + pattern.GetString() : pattern.GetString(), info.options);
 			    if (!re.ok()) {
 				    throw InvalidInputException(re.error());
 			    }
@@ -245,8 +259,10 @@ RegexpExtractBindData::RegexpExtractBindData(duckdb_re2::RE2::Options options, s
 }
 
 unique_ptr<FunctionData> RegexpExtractBindData::Copy() const {
-	return make_uniq<RegexpExtractBindData>(options, constant_string, constant_pattern, group_index,
-	                                        no_match_returns_input);
+	auto copy = make_uniq<RegexpExtractBindData>(options, constant_string, constant_pattern, group_index,
+	                                             no_match_returns_input);
+	copy->multiline = multiline;
+	return std::move(copy);
 }
 
 bool RegexpExtractBindData::Equals(const FunctionData &other_p) const {
@@ -275,7 +291,7 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, patterns, result, [&](string_t input, string_t pattern) {
-			    RE2 re(CreateStringPiece(pattern), info.options);
+			    RE2 re(info.multiline ? "(?m)" + pattern.GetString() : pattern.GetString(), info.options);
 			    return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input);
 		    });
 	}
@@ -369,14 +385,26 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 	bool constant_pattern = TryParseConstantPattern(input.TryGetConstant(1), constant_string);
 
 	bool no_match_returns_input = false;
-
+	bool multiline = false;
 	if (arguments.size() >= 4) {
-		ParseRegexOptions(input.GetConstant(3), options, nullptr, &no_match_returns_input);
+		ParseRegexOptions(input.GetConstant(3), options, nullptr, &no_match_returns_input, &multiline);
+	}
+	// the three-argument form carries the options string in place of the group index
+	const bool has_group_or_options = arguments.size() >= 3;
+	Value group_or_options;
+	if (has_group_or_options) {
+		group_or_options = input.GetConstant(2);
+		if (group_or_options.type() == LogicalType::VARCHAR) {
+			ParseRegexOptions(group_or_options, options, nullptr, &no_match_returns_input, &multiline);
+		}
+	}
+	// apply the prefix once, after every option source has been parsed
+	if (multiline && constant_pattern) {
+		constant_string = "(?m)" + constant_string;
 	}
 
 	int8_t group_index = 0;
-	if (arguments.size() >= 3) {
-		Value group_or_options = input.GetConstant(2);
+	if (has_group_or_options) {
 		if (group_or_options.type().id() == LogicalTypeId::LIST) {
 			if (!constant_pattern) {
 				throw BinderException("%s with LIST of group names requires a constant pattern",
@@ -388,7 +416,7 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 			                                constant_string, options, constant_pattern, dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
 		} else if (group_or_options.type() == LogicalType::VARCHAR) {
-			ParseRegexOptions(group_or_options, options, nullptr, &no_match_returns_input);
+			// options, already parsed above
 		} else if (group_or_options.IsNull()) {
 			// NULL group → never returns a capture; runtime treats out-of-range index as no match.
 			group_index = -1;
@@ -401,8 +429,10 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 		}
 	}
 
-	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, group_index,
-	                                        no_match_returns_input);
+	auto result = make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, group_index,
+	                                               no_match_returns_input);
+	result->multiline = multiline;
+	return std::move(result);
 }
 
 ScalarFunctionSet RegexpFun::GetFunctions() {
