@@ -377,8 +377,21 @@ public:
 	    : BaseExecutorTask(executor_p), lifecycle(lifecycle_p), job(std::move(job_p)), task(std::move(task_p)) {
 	}
 
+	~CopyFileLifecycleTask() override {
+		// Neither ExecuteTask nor Cancel ran, because the executor could not take the task at all. The job
+		// waiter and pending_tasks still have to be settled, or a waiter spins with nothing left to run.
+		if (settled) {
+			return;
+		}
+		try {
+			Cancel();
+		} catch (...) { // NOLINT
+		}
+	}
+
 public:
 	void ExecuteTask() override {
+		settled = true;
 		CopyFileLifecycleTaskFinishGuard finish_guard(lifecycle);
 		try {
 			task();
@@ -394,6 +407,7 @@ public:
 
 	void Cancel() override {
 		// the task is retired without running - settle the job, WaitForJob spins until it is finished
+		settled = true;
 		CopyFileLifecycleTaskFinishGuard finish_guard(lifecycle);
 		if (job->IsFinished()) {
 			return;
@@ -413,6 +427,8 @@ private:
 	CopyFileLifecycleExecutor &lifecycle;
 	shared_ptr<CopyFileLifecycleJob> job;
 	FUNC task;
+	//! Whether ExecuteTask or Cancel ran, so the destructor knows the job and the count are settled
+	bool settled = false;
 };
 
 template <class FUNC>
