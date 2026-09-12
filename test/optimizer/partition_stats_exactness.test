@@ -123,6 +123,78 @@ SELECT count(*) FROM big
 ----
 100999
 
+# Unloaded (persisted) deletes leave a superset bound over the surviving rows: when the bound of
+# every deleted partition is strictly dominated by an exact partition, min/max still folds. The
+# deleted ids must sit in an interior row group: a deleted row group whose all-rows min/max bound
+# is not strictly dominated by the exact partitions holding the global extremes vetoes the fold.
+statement ok
+CREATE TABLE voted AS SELECT i AS id FROM range(0, 500_000) t(i);
+
+# deletes inside an interior row group: its all-rows min/max are strictly dominated by the exact
+# partitions holding the global minimum and maximum
+statement ok
+DELETE FROM voted WHERE id BETWEEN 200_000 AND 200_010;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM voted
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+SELECT min(id), max(id) FROM voted
+----
+0	499999
+
+# deletes that are not yet committed only shrink the set of rows the scanning transaction will
+# read, so the statistics remain a superset bound over the surviving rows and the fold still
+# happens. Had the deleted rows held the extremum, the all-rows bound of the partition would not
+# be dominated and would veto the fold.
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM voted WHERE id BETWEEN 300_000 AND 300_010;
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM voted
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+SELECT min(id), max(id) FROM voted
+----
+0	499999
+
+statement ok
+ROLLBACK
+
+# the deleted partition holds the global maximum: its bound is not dominated, so the fold is vetoed
+statement ok
+CREATE TABLE vetoed AS SELECT i AS id FROM range(0, 500_000) t(i);
+
+statement ok
+DELETE FROM vetoed WHERE id = 499_999;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM vetoed
+----
+physical_plan	<REGEX>:.*Sequential Scan.*
+
+query II
+SELECT min(id), max(id) FROM vetoed
+----
+0	499998
+
 # Loaded deletes make min/max inexact, so offset pruning must not use stale row group ordering stats.
 statement ok
 CREATE TABLE rg_order AS

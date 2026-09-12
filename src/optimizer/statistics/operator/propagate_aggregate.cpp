@@ -191,6 +191,15 @@ struct MinMaxFoldClient {
 		}
 	}
 
+	bool ExcludesCandidate(const Value &bound, const Value &candidate) const {
+		if (column_info.input_type == LogicalType::VARCHAR) {
+			// string statistics may keep only a truncated prefix of the value: the bound does not
+			// upper-bound the true maximum, so a plain comparison cannot exclude the partition
+			return false;
+		}
+		return comparator->Compare(candidate, bound);
+	}
+
 	Value FallbackValue() const {
 		// MIN/MAX over no non-null values is NULL
 		return Value(column_info.result_type);
@@ -214,6 +223,11 @@ struct CountStarFoldClient {
 
 	void CombineCandidate(Value &candidate, Value &value) const {
 		candidate = Value::BIGINT(candidate.GetValue<int64_t>() + value.GetValue<int64_t>());
+	}
+
+	bool ExcludesCandidate(const Value &, const Value &) const {
+		// a count has no bound source - every partition must be exact
+		return false;
 	}
 
 	Value FallbackValue() const {

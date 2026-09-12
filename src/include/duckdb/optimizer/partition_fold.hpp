@@ -14,6 +14,12 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/partition_stats.hpp"
 
+#include <type_traits>
+
+#if defined(__cpp_concepts) && __cpp_concepts >= 201907L
+#include <concepts>
+#endif
+
 namespace duckdb {
 
 //! Classification of one partition's statistics for one aggregate.
@@ -44,14 +50,51 @@ struct FoldPartition {
 	FilterPropagateResult filter_result;
 };
 
-//! Fold one aggregate over the partitions with the compile-time client policy `Client`. A policy
-//! provides ClassifyPartition, CombineCandidate and FallbackValue; using a template keeps the
-//! per-aggregate families free of virtual dispatch and per-aggregate allocations. Returns false
-//! when the statistics cannot answer the aggregate - the caller then keeps the original plan.
+#if defined(__cpp_concepts) && __cpp_concepts >= 201907L
+// clang-format off
+template <typename Client>
+concept PartitionFoldClient = requires(const Client &client, const FoldPartition &partition, Value &value) {
+	// Classify one partition for this aggregate. On EXACT_VALUE `value` holds the exact value; on
+	// BOUND it holds the bound covering every surviving row.
+	{ client.ClassifyPartition(partition, value) } -> std::same_as<FoldPartitionState>;
+	// Merge an exact value into the running candidate.
+	client.CombineCandidate(value, value);
+	// Whether a BOUND partition cannot contribute a value strictly better than the candidate. The
+	// comparison must be sound for the kind of bound the client returned - statistics that are not
+	// safe for a plain comparison (e.g. truncated string prefixes) must not be excluded.
+	{ client.ExcludesCandidate(value, value) } -> std::same_as<bool>;
+	// The result when every partition is NEUTRAL.
+	{ client.FallbackValue() } -> std::same_as<Value>;
+};
+// clang-format on
+
+template <typename T>
+using IsPartitionFoldClient = std::bool_constant<PartitionFoldClient<T>>;
+#else
+//! C++17 stand-in for the PartitionFoldClient concept above.
+template <typename T, typename = void>
+struct IsPartitionFoldClient : std::false_type {};
+
+template <typename T>
+struct IsPartitionFoldClient<T, std::void_t<decltype(std::declval<const T &>().ClassifyPartition(
+                                                std::declval<const FoldPartition &>(), std::declval<Value &>())),
+                                            decltype(std::declval<const T &>().CombineCandidate(
+                                                std::declval<Value &>(), std::declval<Value &>())),
+                                            decltype(std::declval<const T &>().ExcludesCandidate(
+                                                std::declval<const Value &>(), std::declval<const Value &>())),
+                                            decltype(std::declval<const T &>().FallbackValue())>> : std::true_type {};
+#endif
+
+//! Fold one aggregate over the partitions with the compile-time client policy `Client`, keeping the
+//! aggregate families free of virtual dispatch and per-aggregate allocations. Bounds only vote: a
+//! fold requires an exact source. Returns false when the statistics cannot answer the aggregate.
 template <typename Client>
 bool PartitionFold(const vector<FoldPartition> &partitions, const Client &client, Value &result) {
+	static_assert(IsPartitionFoldClient<Client>::value,
+	              "Client must provide ClassifyPartition, CombineCandidate, ExcludesCandidate and FallbackValue");
 	Value candidate;
 	bool found_candidate = false;
+	vector<Value> bounds;
 	for (auto &partition : partitions) {
 		Value value;
 		switch (client.ClassifyPartition(partition, value)) {
@@ -64,19 +107,35 @@ bool PartitionFold(const vector<FoldPartition> &partitions, const Client &client
 			}
 			break;
 		case FoldPartitionState::NEUTRAL:
-			// the partition contributes no value, so it cannot affect the extremum
+			// the partition contributes no value, so it cannot affect the result
 			break;
 		case FoldPartitionState::BOUND:
-			// a bound always carries the value that bounds the partition
+			// the bound covers every surviving row but is not attained by any of them: it can never
+			// become the candidate, it can only be excluded by one
 			D_ASSERT(!value.IsNull());
-			// a bound is never exact: only an exact value can become a folded constant
-			return false;
+			bounds.push_back(std::move(value));
+			break;
 		case FoldPartitionState::NO_INFO:
 			// the statistics do not describe the rows that will be read
 			return false;
 		}
 	}
-	result = found_candidate ? std::move(candidate) : client.FallbackValue();
+	if (!found_candidate) {
+		if (!bounds.empty()) {
+			// only an exact source can produce the candidate - a bound alone never folds
+			return false;
+		}
+		// every partition is neutral
+		result = client.FallbackValue();
+		return true;
+	}
+	for (auto &bound : bounds) {
+		if (!client.ExcludesCandidate(bound, candidate)) {
+			// the partition may hold a surviving row that beats the candidate
+			return false;
+		}
+	}
+	result = std::move(candidate);
 	return true;
 }
 
