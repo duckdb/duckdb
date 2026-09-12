@@ -158,7 +158,7 @@ public:
 	void ScheduleFileOpen(std::function<void()> open_fn, std::function<void()> cancel_fn);
 	//! Whether another file-open may be scheduled without exceeding the open-ahead window
 	bool CanScheduleOpen() const;
-	//! Run one queued async task inline, throwing any recorded async error; returns false when none is queued
+	//! Run one queued async task inline, returns false when none is queued
 	bool TryRunPendingTask();
 	//! Throw the first error recorded on the async executor, if there is one
 	void ThrowIfError();

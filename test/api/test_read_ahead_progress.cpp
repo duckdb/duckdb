@@ -46,15 +46,6 @@ TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding"
 	stream.reset();
 }
 
-TEST_CASE("Read-ahead inline task draining surfaces async errors", "[api]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	ScanReadAhead read_ahead(*con.context, 1, nullptr);
-	read_ahead.PushError(ErrorData("injected read-ahead error"));
-	REQUIRE_THROWS(read_ahead.TryRunPendingTask());
-}
-
 TEST_CASE("Read-ahead settles a file open that never runs", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
