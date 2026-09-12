@@ -68,6 +68,16 @@ string GetTempDirHome();
 void SetEmitTestEvents(bool emit);
 bool EmitTestEventsEnabled();
 
+//! How the runner renders its results. DEFAULT is the human-readable Catch console output; JSON
+//! replaces it with one JSON object per line on stdout (--output=json).
+enum class TestOutputFormat : uint8_t { DEFAULT, JSON };
+
+void SetTestOutputFormat(TestOutputFormat format);
+TestOutputFormat GetTestOutputFormat();
+//! True when the human-readable failure dumps must stay off the stream, because a machine-readable
+//! renderer owns the output and carries the same information structurally.
+bool SuppressTextFailureOutput();
+
 unique_ptr<DBConfig> GetTestConfig();
 bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error);
 

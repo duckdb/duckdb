@@ -13446,7 +13446,22 @@ namespace Catch {
 
 namespace Catch {
 
+    bool &progressReportingEnabledRef() {
+        // Machine-readable reporters own the stream; the progress line is written straight to
+        // std::cout and would otherwise interleave with their output.
+        static bool enabled = true;
+        return enabled;
+    }
+
+    void setProgressReporting(bool enabled) {
+        progressReportingEnabledRef() = enabled;
+    }
+
     namespace {
+        bool progressReportingEnabled() {
+            return progressReportingEnabledRef();
+        }
+
         const int MaxExitCode = 255;
 
         // Helper function to check if stdout is a terminal
@@ -13479,6 +13494,9 @@ namespace Catch {
         }
 
         void renderTestProgress(int current_test, int total_tests, std::string next_test, double elapsed_seconds = -1) {
+            if (!progressReportingEnabled()) {
+                return;
+            }
             double progress = (double) current_test / (double) total_tests;
             std::string prefix = "[" + std::to_string(current_test) + "/" + std::to_string(total_tests) + "] (" + std::to_string(int(progress * 100)) + "%): ";
             std::string test_label = next_test;
@@ -13513,8 +13531,9 @@ namespace Catch {
 
                 std::cout << "\r" << result;
             } else {
-                // For non-terminals, we just print each line
-                std::cout << "\n" << result;
+                // For non-terminals, we just print each line. The newline terminates this line rather
+                // than opening it, so a consumer never sees another writer's output appended to it.
+                std::cout << result << "\n";
             }
 
             std::cout.flush();
@@ -13599,7 +13618,9 @@ namespace Catch {
                         current_test++;
                         if (!m_config->printFailingTests()) {
                             renderTestProgress(current_test, total_tests_run, testCase->name, elapsed_seconds);
-                            if (current_test == total_tests_run) {
+                            if (current_test == total_tests_run && progressReportingEnabled()) {
+                                // terminates the \r-overwritten progress line; nothing to terminate when
+                                // progress reporting is off
                                 std::cout << std::endl;
                             }
                         }
