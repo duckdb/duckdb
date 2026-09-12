@@ -104,7 +104,7 @@ SELECT * FROM employee WHERE managerid = 2;
 5	2	Juliet
 
 # a row may reference itself: the referenced row is part of the same statement, so it is visible when the
-# foreign key is validated at the end of the statement (#7168)
+# foreign key is validated at the end of the statement
 statement ok
 CREATE TABLE employee_self(id INTEGER PRIMARY KEY, managerid INTEGER REFERENCES employee_self(id));
 

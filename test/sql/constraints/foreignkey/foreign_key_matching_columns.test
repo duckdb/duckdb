@@ -69,7 +69,7 @@ CREATE TABLE routes (
 );
 ----
 
-# self-referential foreign key: a row may reference itself, as it is part of the same statement (#7168)
+# self-referential foreign key: a row may reference itself, as it is part of the same statement
 statement ok
 CREATE TABLE routes (
 	route_id TEXT PRIMARY KEY,
