@@ -1,5 +1,5 @@
-# name: test/sql/storage/concurrent_wal/group_commit_ddl.test_slow
-# description: Group commit: concurrent DDL and data commits
+# name: test/sql/storage/concurrent_wal/concurrent_ddl_replay.test_slow
+# description: Concurrent DDL and data commits replay
 # group: [concurrent_wal]
 
 # WAL-only, so reopening replays catalog and data
@@ -14,7 +14,7 @@ statement ok
 SET debug_wal_fsync_sleep_ms=2
 
 statement ok
-ATTACH '{TEST_DIR}/group_commit_ddl.db' AS gc
+ATTACH '{TEST_DIR}/concurrent_ddl_replay.db' AS gc
 
 statement ok
 CREATE TABLE gc.base(i INTEGER)
@@ -72,7 +72,7 @@ statement ok
 DETACH gc
 
 statement ok
-ATTACH '{TEST_DIR}/group_commit_ddl.db' AS gc
+ATTACH '{TEST_DIR}/concurrent_ddl_replay.db' AS gc
 
 query I
 SELECT count(*) >= 100 AND count(*) = count(DISTINCT i) FROM gc.base

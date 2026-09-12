@@ -1,8 +1,8 @@
-# name: test/sql/storage/concurrent_wal/group_commit_fsync_failure_concurrent.test_slow
-# description: Group commit: a failed shared fsync acknowledges no commit and fails stop
+# name: test/sql/storage/concurrent_wal/concurrent_fsync_failure.test_slow
+# description: A failed shared fsync acknowledges no commit and fails stop
 # group: [concurrent_wal]
 
-load {TEST_DIR}/group_commit_fsync_fail_conc.db
+load {TEST_DIR}/concurrent_fsync_failure.db
 
 statement ok
 SET checkpoint_threshold='1TB'

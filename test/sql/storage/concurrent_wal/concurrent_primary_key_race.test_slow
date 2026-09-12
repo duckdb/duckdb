@@ -1,5 +1,5 @@
-# name: test/sql/storage/concurrent_wal/group_commit_unique_conflict.test_slow
-# description: Group commit: concurrent inserts of the same primary keys never duplicate
+# name: test/sql/storage/concurrent_wal/concurrent_primary_key_race.test_slow
+# description: Concurrent inserts of the same primary keys never duplicate and replay
 # group: [concurrent_wal]
 
 # WAL-only, so reopening replays the primary-key index
@@ -14,7 +14,7 @@ statement ok
 SET debug_wal_fsync_sleep_ms=2
 
 statement ok
-ATTACH '{TEST_DIR}/group_commit_unique_conflict.db' AS gc
+ATTACH '{TEST_DIR}/concurrent_primary_key_race.db' AS gc
 
 statement ok
 CREATE TABLE gc.t(id INTEGER PRIMARY KEY, who INTEGER)
@@ -54,7 +54,7 @@ statement ok
 DETACH gc
 
 statement ok
-ATTACH '{TEST_DIR}/group_commit_unique_conflict.db' AS gc
+ATTACH '{TEST_DIR}/concurrent_primary_key_race.db' AS gc
 
 query II
 SELECT COUNT(*), COUNT(DISTINCT id) FROM gc.t

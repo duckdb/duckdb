@@ -1,5 +1,5 @@
-# name: test/sql/storage/concurrent_wal/group_commit_conflict.test_slow
-# description: Group commit: conflicting concurrent updates keep the total conserved
+# name: test/sql/storage/concurrent_wal/concurrent_conflicting_updates.test_slow
+# description: Conflicting concurrent updates keep the total conserved and replay
 # group: [concurrent_wal]
 
 statement ok
@@ -13,7 +13,7 @@ statement ok
 SET debug_wal_fsync_sleep_ms=2
 
 statement ok
-ATTACH '{TEST_DIR}/group_commit_conflict.db' AS gc
+ATTACH '{TEST_DIR}/concurrent_conflicting_updates.db' AS gc
 
 statement ok
 CREATE TABLE gc.accounts(id INTEGER, balance BIGINT)
@@ -44,7 +44,7 @@ statement ok
 DETACH gc
 
 statement ok
-ATTACH '{TEST_DIR}/group_commit_conflict.db' AS gc
+ATTACH '{TEST_DIR}/concurrent_conflicting_updates.db' AS gc
 
 query I
 SELECT SUM(balance) FROM gc.accounts

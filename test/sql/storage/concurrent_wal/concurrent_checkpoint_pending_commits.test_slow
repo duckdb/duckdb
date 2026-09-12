@@ -1,5 +1,5 @@
-# name: test/sql/storage/concurrent_wal/group_commit_concurrent_checkpoint.test_slow
-# description: Group commit: commits concurrent with frequent force checkpoints
+# name: test/sql/storage/concurrent_wal/concurrent_checkpoint_pending_commits.test_slow
+# description: Force checkpoints while commits await their WAL sync
 # group: [concurrent_wal]
 
 statement ok
@@ -18,7 +18,7 @@ statement ok
 SET debug_checkpoint_sleep_ms={sleep_time}
 
 statement ok
-ATTACH '{TEST_DIR}/group_commit_concurrent_checkpoint{sleep_time}.db' AS gc
+ATTACH '{TEST_DIR}/concurrent_checkpoint_pending_commits{sleep_time}.db' AS gc
 
 statement ok
 CREATE TABLE gc.integers(i INTEGER)
@@ -55,7 +55,7 @@ statement ok
 DETACH gc
 
 statement ok
-ATTACH '{TEST_DIR}/group_commit_concurrent_checkpoint{sleep_time}.db' AS gc
+ATTACH '{TEST_DIR}/concurrent_checkpoint_pending_commits{sleep_time}.db' AS gc
 
 query I
 SELECT COUNT(*) FROM gc.integers
