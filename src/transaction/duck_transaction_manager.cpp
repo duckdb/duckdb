@@ -452,12 +452,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		DUCKDB_LOG(context, TransactionLogType, db, "Commit", info.commit_id);
 		last_commit = info.commit_id;
 		if (wal_written && info.wal_sync_offset > 0) {
-			// published but not yet durable: track it until the sync below. No flush marker
-			// (offset 0) means nothing reached the WAL, so there is nothing to wait for
+			// published but not yet durable: the transaction stays active until the sync below. No
+			// flush marker (offset 0) means nothing reached the WAL, so there is nothing to wait for
 			commit_wal = db.GetStorageManager().GetWAL();
 			if (commit_wal) {
-				// the transaction stays active until the WAL is synced up to its flush marker; the
-				// catalog version is recorded before this commit's own bump below
+				// the catalog version is recorded before this commit's own bump below
 				D_ASSERT(info.commit_id >= durable_bound);
 				transaction.wal_sync_offset = info.wal_sync_offset;
 				transaction.catalog_version_before_commit = last_committed_version;

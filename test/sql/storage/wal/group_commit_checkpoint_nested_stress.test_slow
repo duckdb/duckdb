@@ -1,8 +1,8 @@
 # name: test/sql/storage/wal/group_commit_checkpoint_nested_stress.test_slow
-# description: Group commit: deferred commits of nested (LIST/ARRAY) data racing checkpoints replay with exact counts and intact values
+# description: Group commit: commits of nested (LIST/ARRAY) data racing checkpoints replay with exact counts and intact values
 # group: [wal]
 
-# Stresses the checkpoint linchpin under group commit: concurrent deferred commits append nested-typed rows while a
+# Stresses checkpoints under group commit: concurrent commits append nested-typed rows while a
 # thread force-checkpoints. The checkpoint must (a) freeze each row group at its committed-as-of-snapshot count and
 # push concurrent appends to new row groups (REQUIRE_NEW), and (b) slice LIST/ARRAY child columns to the matching
 # child-entry count for the (possibly partial) last vector. A leak in either direction surfaces as

@@ -15,7 +15,7 @@ ATTACH '{TEST_DIR}/group_commit_unique_conflict.db' AS gc
 statement ok
 CREATE TABLE gc.t(id INTEGER PRIMARY KEY, who INTEGER)
 
-# 8 threads all race to insert the SAME 200 keys as single-row autocommit commits (deferred group-commit path).
+# 8 threads all race to insert the SAME 200 keys as single-row autocommit commits.
 # For each key exactly one committer can win; the rest hit the PK conflict and abort (statement maybe). The global
 # index insert + conflict check happen under the table append lock BEFORE any WAL entry is written, so two
 # concurrent committers can never both append the same key. If that were broken a key would be inserted twice

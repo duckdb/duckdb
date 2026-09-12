@@ -15,8 +15,8 @@ statement ok
 CREATE TABLE gc.big(i BIGINT)
 
 # each thread bulk-inserts > row_group_size (122880) rows in one transaction, triggering optimistic
-# row-group writes; group commit defers the data-block fsync to the sync leader, which must persist the
-# blocks before the WAL flush marker that references them. disjoint ranges => deterministic total.
+# row-group writes; the blocks are flushed and synced before the commit takes any lock, so the WAL flush
+# marker never references blocks that are not yet durable. disjoint ranges => deterministic total.
 concurrentloop threadid 0 3
 
 statement ok

@@ -20,7 +20,7 @@ INSERT INTO gc.accounts SELECT i, 1000 FROM range(10) t(i)
 # each thread repeatedly transfers 1 unit between two adjacent accounts in a single atomic UPDATE.
 # adjacent threads share an account, so their commits conflict; a conflicting UPDATE aborts atomically
 # (statement maybe), so the total balance is conserved regardless of interleaving. If conflict detection
-# on the deferred group-commit path were broken, lost updates would make the total drift.
+# on the group-commit path were broken, lost updates would make the total drift.
 concurrentloop threadid 0 10
 
 loop x 0 100
