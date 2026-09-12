@@ -509,6 +509,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// bytes; whether a restart replays them is in doubt
 			error = ErrorData(ex);
 			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing: " + error.Message());
+			// no checkpoint after a failed commit, as on the rollback path above
+			checkpoint_decision = CheckpointDecision(error.Message());
+			lock.reset();
 		}
 		// durable, or durability has failed: now leave the list of active transactions
 		t_lock.lock();

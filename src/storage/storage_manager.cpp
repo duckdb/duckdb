@@ -22,7 +22,6 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
-#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/common/path.hpp"
