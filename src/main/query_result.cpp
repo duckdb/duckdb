@@ -3,6 +3,7 @@
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/column_data_collection_render_interface.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector.hpp"
@@ -92,27 +93,45 @@ const vector<Identifier> &BaseQueryResult::GetNames() const {
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
                          vector<LogicalType> types_p, vector<Identifier> names_p, ClientProperties client_properties_p)
     : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
-      client_properties(std::move(client_properties_p)) {
+      client_properties(std::move(client_properties_p)), format(ResultFormat::Chunk()) {
 }
 
 QueryResult::QueryResult(QueryResultType type, ErrorData error)
     : BaseQueryResult(type, std::move(error)),
-      client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr) {
+      client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr),
+      format(ResultFormat::Chunk()) {
 }
 
 QueryResult::QueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
                          vector<LogicalType> types_p, ClientProperties client_properties_p,
-                         shared_ptr<BufferedData> buffer_p)
+                         shared_ptr<BufferedData> buffer_p, shared_ptr<ResultFormat> format_p)
     : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement.statement_type, statement.properties,
                       std::move(types_p), statement.names),
-      client_properties(std::move(client_properties_p)), context(std::move(context_p)), buffer(std::move(buffer_p)) {
+      client_properties(std::move(client_properties_p)), context(std::move(context_p)), buffer(std::move(buffer_p)),
+      format(std::move(format_p)) {
+	if (!format) {
+		format = ResultFormat::Chunk();
+	}
+	AdoptSettledFormat();
 }
 
 QueryResult::QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names_p,
                          unique_ptr<ColumnDataCollection> collection_p, ClientProperties client_properties_p)
     : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties),
                       collection_p->Types(), std::move(names_p)),
-      client_properties(std::move(client_properties_p)), collection(std::move(collection_p)) {
+      client_properties(std::move(client_properties_p)), format(ResultFormat::Chunk()),
+      collection(std::move(collection_p)) {
+}
+
+QueryResult::QueryResult(StatementType statement_type, StatementProperties properties, vector<LogicalType> types_p,
+                         vector<Identifier> names_p, unique_ptr<ResultUnitCollection> units_p,
+                         shared_ptr<ResultFormat> format_p, shared_ptr<ResultFormatGlobalState> format_state_p,
+                         ClientProperties client_properties_p)
+    : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties), std::move(types_p),
+                      std::move(names_p)),
+      client_properties(std::move(client_properties_p)), format(std::move(format_p)),
+      format_state(std::move(format_state_p)), unit_collection(std::move(units_p)) {
+	D_ASSERT(format && format_state && unit_collection);
 }
 
 QueryResult::QueryResult(ErrorData error) : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)) {
@@ -206,7 +225,7 @@ QueryResultState QueryResult::Poll() {
 	if (HasError()) {
 		return QueryResultState::EXECUTION_ERROR;
 	}
-	if (collection || !context) {
+	if (IsCollected() || !context) {
 		// The result was collected, or the query already ended: keep reporting the terminal state
 		return QueryResultState::FINISHED;
 	}
@@ -250,10 +269,87 @@ void QueryResult::Close() {
 }
 
 //===--------------------------------------------------------------------===//
+// Format
+//===--------------------------------------------------------------------===//
+void QueryResult::SetFormat(shared_ptr<ResultFormat> format_p) {
+	if (HasError()) {
+		throw InvalidInputException("Attempting to set a format on an unsuccessful query result\nError: %s",
+		                            GetError());
+	}
+	if (IsCollected() || !context || !buffer) {
+		throw InvalidInputException("Attempting to set a format on a query result that already holds its rows");
+	}
+	if (buffer->Lifetime() != ResultLifetime::UNDECIDED) {
+		throw InvalidInputException("Attempting to set a format on a query result that is already being %s",
+		                            buffer->Lifetime() == ResultLifetime::DRAINING ? "streamed" : "materialized");
+	}
+	if (!format_p) {
+		format_p = ResultFormat::Chunk();
+	}
+	format = std::move(format_p);
+}
+
+const ResultFormat &QueryResult::Format() const {
+	D_ASSERT(format);
+	return *format;
+}
+
+void QueryResult::AdoptSettledFormat() {
+	if (!buffer || buffer->Lifetime() == ResultLifetime::UNDECIDED) {
+		return;
+	}
+	format = buffer->SharedFormat();
+	format_state = buffer->SharedFormatState();
+}
+
+void QueryResult::AdoptCollected(QueryResult &produced) {
+	collection = std::move(produced.collection);
+	unit_collection = std::move(produced.unit_collection);
+	if (produced.format_state) {
+		format = produced.format;
+		format_state = produced.format_state;
+	}
+}
+
+void QueryResult::ThrowFormatMismatch(const char *expected) const {
+	throw InvalidInputException("This query result is in the \"%s\" format, but it was asked for the \"%s\" format",
+	                            Format().Name(), expected);
+}
+
+bool QueryResult::IsChunkFormat() const {
+	return Format().IsChunk();
+}
+
+const ResultFormatGlobalState &QueryResult::CheckedFormatState(const char *expected) const {
+	if (!StringUtil::Equals(Format().Name(), expected)) {
+		ThrowFormatMismatch(expected);
+	}
+	if (!format_state) {
+		throw InvalidInputException("This query result has no format state yet: its format is settled by the first "
+		                            "consuming call");
+	}
+	return *format_state;
+}
+
+void QueryResult::PrepareCollected(const char *expected) {
+	Complete();
+	if (HasError()) {
+		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
+		                            GetError());
+	}
+	if (!StringUtil::Equals(Format().Name(), expected)) {
+		ThrowFormatMismatch(expected);
+	}
+	if (!IsCollected()) {
+		ThrowNoCollection();
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Retention
 //===--------------------------------------------------------------------===//
 void QueryResult::Materialize() {
-	if (collection || HasError() || !context) {
+	if (IsCollected() || HasError() || !context) {
 		return;
 	}
 	auto lock = LockContext();
@@ -263,11 +359,12 @@ void QueryResult::Materialize() {
 		return;
 	}
 	D_ASSERT(buffer);
-	buffer->Decide(ResultLifetime::RETAINED);
+	buffer->Decide(ResultLifetime::RETAINED, format);
+	AdoptSettledFormat();
 }
 
 void QueryResult::Complete() {
-	if (collection || HasError() || !context) {
+	if (IsCollected() || HasError() || !context) {
 		return;
 	}
 	// The handle may hold the last reference to the context, which the lock below outlives
@@ -277,7 +374,7 @@ void QueryResult::Complete() {
 }
 
 void QueryResult::CompleteInternal(ClientContextLock &lock) {
-	if (collection || HasError() || !context) {
+	if (IsCollected() || HasError() || !context) {
 		return;
 	}
 	if (!IsOpenInternal(lock)) {
@@ -286,7 +383,8 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 		return;
 	}
 	D_ASSERT(buffer);
-	buffer->Decide(ResultLifetime::RETAINED);
+	buffer->Decide(ResultLifetime::RETAINED, format);
+	AdoptSettledFormat();
 	QueryResultState state;
 	while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
 		if (state == QueryResultState::BLOCKED || state == QueryResultState::READY) {
@@ -298,7 +396,7 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 		// Cleanup can fail on an autocommit commit; it records the error on this result
 		context->CleanupInternal(lock, this, false);
 		if (!HasError()) {
-			collection = produced->TakeCollection();
+			AdoptCollected(*produced);
 		}
 	}
 	context.reset();
@@ -309,47 +407,15 @@ void QueryResult::ThrowNoCollection() const {
 	                            "the result was closed before it was collected");
 }
 
-ColumnDataCollection &QueryResult::Collection() {
-	Complete();
-	if (HasError()) {
-		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
-		                            GetError());
-	}
-	if (!collection) {
-		ThrowNoCollection();
-	}
-	return *collection;
-}
-
-unique_ptr<ColumnDataCollection> QueryResult::TakeCollection() {
-	Complete();
-	if (HasError()) {
-		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
-		                            GetError());
-	}
-	if (!collection) {
-		ThrowNoCollection();
-	}
-	return std::move(collection);
-}
-
-Value QueryResult::GetValue(idx_t column_idx, idx_t row_idx) {
-	Complete();
-	if (HasError()) {
-		ThrowError();
-	}
-	if (!row_collection) {
-		if (!collection) {
-			ThrowNoCollection();
-		}
-		row_collection = make_uniq<ColumnDataRowCollection>(collection->GetRows());
-	}
-	return row_collection->GetValue(column_idx, row_idx);
-}
-
 idx_t QueryResult::RowCount() {
 	Complete();
-	return collection ? collection->Count() : 0;
+	if (collection) {
+		return collection->Count();
+	}
+	if (unit_collection) {
+		return unit_collection->Count();
+	}
+	return 0;
 }
 
 //===--------------------------------------------------------------------===//
@@ -379,6 +445,9 @@ unique_ptr<DataChunk> QueryResult::FetchInternal() {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
 	}
+	if (!IsChunkFormat()) {
+		ThrowFormatMismatch(ChunkFormat::NAME);
+	}
 	if (!collection) {
 		ThrowNoCollection();
 	}
@@ -396,15 +465,6 @@ unique_ptr<DataChunk> QueryResult::FetchInternal() {
 	return result;
 }
 
-unique_ptr<DataChunk> QueryResult::Fetch() {
-	auto chunk = FetchRaw();
-	if (!chunk) {
-		return nullptr;
-	}
-	chunk->Flatten();
-	return chunk;
-}
-
 unique_ptr<DataChunk> QueryResult::FetchRaw() {
 	return FetchInternal();
 }
@@ -417,6 +477,9 @@ string QueryResult::ToString() {
 		return GetError() + "\n";
 	}
 	string result = HeaderToString();
+	if (!IsChunkFormat()) {
+		return result + "[ Rows: " + to_string(RowCount()) + "]\n\n";
+	}
 	auto &coll = Collection();
 	result += "[ Rows: " + to_string(coll.Count()) + "]\n";
 	for (auto &row : coll.Rows()) {
@@ -437,6 +500,9 @@ string QueryResult::ToBox(BoxRendererContext &context_p, const BoxRendererConfig
 	if (HasError()) {
 		return GetError() + "\n";
 	}
+	if (!IsChunkFormat()) {
+		return HeaderToString() + "[ Rows: " + to_string(RowCount()) + "]\n\n";
+	}
 	BoxRenderer renderer(config);
 	ColumnDataCollectionWrapper wrapper(Collection());
 	return renderer.ToString(context_p, IdentifiersToStrings(GetNames()), wrapper);
@@ -449,6 +515,9 @@ bool QueryResult::Equals(QueryResult &other, bool compare_names) { // LCOV_EXCL_
 	}
 	if (HasError()) {
 		return GetErrorObject() == other.GetErrorObject();
+	}
+	if (!IsChunkFormat() || !other.IsChunkFormat()) {
+		throw InvalidInputException("Query results can only be compared in the chunk format");
 	}
 	// compare names
 	if (compare_names && GetNames() != other.GetNames()) {

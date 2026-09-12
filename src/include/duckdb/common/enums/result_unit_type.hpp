@@ -15,7 +15,9 @@ namespace duckdb {
 //! What a piece of query output holds, and what a unit cast is checked against
 enum class ResultUnitType : uint8_t {
 	//! A DataChunk
-	CHUNK
+	CHUNK,
+	//! What a format defined outside the engine produces. Every extension format shares this tag
+	EXTENSION
 };
 
 } // namespace duckdb

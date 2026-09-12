@@ -13,7 +13,7 @@ using namespace std;
 static Value EvalConstantExpression(Connection &con, const string &expr) {
 	auto result = con.Query("SELECT " + expr);
 	REQUIRE_NO_FAIL(*result);
-	return result->GetValue(0, 0);
+	return result->Collection().GetValue(0, 0);
 }
 
 // Binds the parsed expression directly (no SQL text in between) and evaluates it.

@@ -31,7 +31,7 @@ static string GetExplainForFilter(Connection &con, ArrowTestFactory &factory, co
 	const auto explain_result = rel->Explain();
 	REQUIRE(!explain_result->HasError());
 	auto &mat = *explain_result;
-	return mat.GetValue(1, 0).ToString();
+	return mat.Collection().GetValue(1, 0).ToString();
 }
 
 // Helper: check for a standalone FILTER operator node in the explain output
