@@ -69,6 +69,7 @@
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/result_eagerness.hpp"
 #include "duckdb/common/enums/result_lifetime.hpp"
+#include "duckdb/common/enums/result_unit_type.hpp"
 #include "duckdb/common/enums/row_group_append_mode.hpp"
 #include "duckdb/common/enums/row_id_handling.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
@@ -5274,6 +5275,23 @@ const char* EnumUtil::ToChars<ResultOrdering>(ResultOrdering value) {
 template<>
 ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value) {
 	return static_cast<ResultOrdering>(StringUtil::StringToEnum(GetResultOrderingValues(), 3, "ResultOrdering", value));
+}
+
+const StringUtil::EnumStringLiteral *GetResultUnitTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ResultUnitType::CHUNK), "CHUNK" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ResultUnitType>(ResultUnitType value) {
+	return StringUtil::EnumToString(GetResultUnitTypeValues(), 1, "ResultUnitType", static_cast<uint32_t>(value));
+}
+
+template<>
+ResultUnitType EnumUtil::FromString<ResultUnitType>(const char *value) {
+	return static_cast<ResultUnitType>(StringUtil::StringToEnum(GetResultUnitTypeValues(), 1, "ResultUnitType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRowGroupAppendModeValues() {
