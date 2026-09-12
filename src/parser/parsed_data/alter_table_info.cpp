@@ -384,8 +384,10 @@ ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 }
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
-	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
-	                                                       expression->Copy());
+	auto result = make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
+	                                                              expression->Copy());
+	result->Cast<ChangeColumnTypeInfo>().column_path = column_path;
+	return result;
 }
 
 string ChangeColumnTypeInfo::ToString() const {
@@ -396,7 +398,16 @@ string ChangeColumnTypeInfo::ToString() const {
 	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	if (column_path.empty()) {
+		result += SQLIdentifier(column_name);
+	} else {
+		for (idx_t i = 0; i < column_path.size(); i++) {
+			if (i > 0) {
+				result += ".";
+			}
+			result += SQLIdentifier(column_path[i]);
+		}
+	}
 	result += " TYPE ";
 	if (target_type.IsValid()) {
 		result += target_type.ToString();
@@ -431,8 +442,10 @@ SetDefaultInfo::~SetDefaultInfo() {
 }
 
 unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name,
-	                                                 expression ? expression->Copy() : nullptr);
+	auto result = make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name,
+	                                                        expression ? expression->Copy() : nullptr);
+	result->Cast<SetDefaultInfo>().column_path = column_path;
+	return result;
 }
 
 string SetDefaultInfo::ToString() const {
@@ -443,7 +456,16 @@ string SetDefaultInfo::ToString() const {
 	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	if (column_path.empty()) {
+		result += SQLIdentifier(column_name);
+	} else {
+		for (idx_t i = 0; i < column_path.size(); i++) {
+			if (i > 0) {
+				result += ".";
+			}
+			result += SQLIdentifier(column_path[i]);
+		}
+	}
 	if (expression) {
 		result += " SET DEFAULT ";
 		result += expression->ToString();
@@ -467,7 +489,9 @@ SetNotNullInfo::~SetNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
+	auto result = make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
+	result->Cast<SetNotNullInfo>().column_path = column_path;
+	return result;
 }
 
 string SetNotNullInfo::ToString() const {
@@ -478,7 +502,16 @@ string SetNotNullInfo::ToString() const {
 	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	if (column_path.empty()) {
+		result += SQLIdentifier(column_name);
+	} else {
+		for (idx_t i = 0; i < column_path.size(); i++) {
+			if (i > 0) {
+				result += ".";
+			}
+			result += SQLIdentifier(column_path[i]);
+		}
+	}
 	result += " SET NOT NULL";
 	result += ";";
 	return result;
@@ -497,7 +530,9 @@ DropNotNullInfo::~DropNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
-	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
+	auto result = make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
+	result->Cast<DropNotNullInfo>().column_path = column_path;
+	return result;
 }
 
 string DropNotNullInfo::ToString() const {
@@ -508,7 +543,16 @@ string DropNotNullInfo::ToString() const {
 	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	if (column_path.empty()) {
+		result += SQLIdentifier(column_name);
+	} else {
+		for (idx_t i = 0; i < column_path.size(); i++) {
+			if (i > 0) {
+				result += ".";
+			}
+			result += SQLIdentifier(column_path[i]);
+		}
+	}
 	result += " DROP NOT NULL";
 	result += ";";
 	return result;
