@@ -442,9 +442,10 @@ TEST_CASE("Test TryFlushCachingOperators interrupted ExecutePushInternal", "[api
 	auto &materialized_res = *res;
 	idx_t initial_tuples = 2 * 2;
 	REQUIRE(materialized_res.RowCount() == initial_tuples * 100000);
+	auto rows = materialized_res.Collection().GetRows();
 	for (idx_t i = 0; i < initial_tuples; i++) {
 		for (idx_t j = 0; j < 100000; j++) {
-			auto value = static_cast<idx_t>(materialized_res.GetValue<int64_t>(0, (i * 100000) + j));
+			auto value = static_cast<idx_t>(rows.GetValue(0, (i * 100000) + j).GetValue<int64_t>());
 			REQUIRE(value == j);
 		}
 	}

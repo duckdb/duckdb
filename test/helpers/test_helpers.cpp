@@ -740,8 +740,9 @@ bool CHECK_COLUMN(QueryResult &result, size_t column_number, vector<duckdb::Valu
 		result.Print();
 		return false;
 	}
+	auto rows = result.Collection().GetRows();
 	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
-		auto value = result.GetValue(column_number, row_idx);
+		auto value = rows.GetValue(column_number, row_idx);
 		// NULL <> NULL, hence special handling
 		if (value.IsNull() && values[row_idx].IsNull()) {
 			continue;

@@ -1871,8 +1871,8 @@ struct MaxStreamingBufferSizeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "max_streaming_buffer_size";
 	static constexpr const char *Description =
-	    "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Buffered bytes stay under this cap "
-	    "plus at most one chunk: an oversized chunk is only admitted into an empty queue";
+	    "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Queued output stays under this cap, "
+	    "and each engine thread may hold one more unit, in construction or finished and waiting";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

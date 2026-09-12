@@ -49,6 +49,7 @@ add_library_unity(
   query_profiler.cpp
   query_result.cpp
   query_result_stream.cpp
+  result_format.cpp
   result_set_manager.cpp
   result_unit.cpp
   user_settings.cpp

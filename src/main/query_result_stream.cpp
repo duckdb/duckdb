@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-QueryResultStream::QueryResultStream(unique_ptr<QueryResult> result) : handle(std::move(result)) {
+ResultStreamBase::ResultStreamBase(unique_ptr<QueryResult> result, const char *expected_format)
+    : handle(std::move(result)) {
 	if (!handle) {
 		throw InvalidInputException("Attempting to open a stream on a query result that does not exist");
 	}
@@ -23,26 +24,31 @@ QueryResultStream::QueryResultStream(unique_ptr<QueryResult> result) : handle(st
 	if (!handle->HasBufferedData()) {
 		throw InvalidInputException("Attempting to open a stream on a query result that has no streaming buffer");
 	}
-	if (handle->GetBufferedData().Decide(ResultLifetime::DRAINING) != ResultLifetime::DRAINING) {
+	if (handle->GetBufferedData().Decide(ResultLifetime::DRAINING, handle->format) != ResultLifetime::DRAINING) {
 		throw InvalidInputException("Attempting to open a stream on a query result that is being retained");
+	}
+	handle->AdoptSettledFormat();
+	if (!StringUtil::Equals(handle->Format().Name(), expected_format)) {
+		throw InvalidInputException("Attempting to open a \"%s\" stream on a query result in the \"%s\" format",
+		                            expected_format, handle->Format().Name());
 	}
 }
 
-QueryResultStream::~QueryResultStream() {
+ResultStreamBase::~ResultStreamBase() {
 	Close();
 }
 
-void QueryResultStream::Close() {
+void ResultStreamBase::Close() {
 	handle->Close();
 }
 
-bool QueryResultStream::IsOpen() {
+bool ResultStreamBase::IsOpen() {
 	return handle->IsOpen();
 }
 
 QueryResultState
-QueryResultStream::GuardedInternal(const char *name,
-                                   const std::function<QueryResultState(ClientContextLock &lock)> &call) {
+ResultStreamBase::GuardedInternal(const char *name,
+                                  const std::function<QueryResultState(ClientContextLock &lock)> &call) {
 	if (!handle->context) {
 		// The stream already ended. Keep reporting the terminal state
 		return handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
@@ -60,7 +66,7 @@ QueryResultStream::GuardedInternal(const char *name,
 	return QueryResultState::EXECUTION_ERROR;
 }
 
-QueryResultState QueryResultStream::Poll() {
+QueryResultState ResultStreamBase::Poll() {
 	auto state = GuardedInternal("Poll", [&](ClientContextLock &lock) { return handle->buffer->Poll(lock, *handle); });
 	if (state == QueryResultState::EXECUTION_ERROR) {
 		Close();
@@ -68,17 +74,17 @@ QueryResultState QueryResultStream::Poll() {
 	return state;
 }
 
-QueryResultState QueryResultStream::ExecuteTask() {
+QueryResultState ResultStreamBase::ExecuteTask() {
 	auto state = GuardedInternal("ExecuteTask",
 	                             [&](ClientContextLock &lock) { return handle->buffer->Participate(lock, *handle); });
 	if (state == QueryResultState::EXECUTION_ERROR) {
-		// A finished execution can still hold trailing chunks, so only an error ends the stream here
+		// A finished execution can still hold trailing units, so only an error ends the stream here
 		Close();
 	}
 	return state;
 }
 
-void QueryResultStream::WaitForTask() {
+void ResultStreamBase::WaitForTask() {
 	if (!handle->context) {
 		return;
 	}
@@ -86,8 +92,8 @@ void QueryResultStream::WaitForTask() {
 	handle->WaitForTask();
 }
 
-QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
-	out_chunk.reset();
+QueryResultState ResultStreamBase::TryFetchUnit(unique_ptr<ResultUnit> &out_unit) {
+	out_unit.reset();
 	auto state = GuardedInternal("TryFetch", [&](ClientContextLock &lock) {
 		auto &buffer = *handle->buffer;
 		auto state = buffer.Poll(lock, *handle);
@@ -95,14 +101,12 @@ QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
 			return state;
 		}
 		if (state == QueryResultState::READY) {
-			if (auto unit = buffer.Scan()) {
-				out_chunk = std::move(unit->Cast<ChunkUnit>().chunk);
-			}
+			out_unit = buffer.Scan();
 		}
-		if (out_chunk && out_chunk->size() != 0) {
+		if (out_unit && out_unit->row_count != 0) {
 			return QueryResultState::READY;
 		}
-		out_chunk.reset();
+		out_unit.reset();
 		if (state == QueryResultState::FINISHED) {
 			// The buffer is drained and execution is done: this is the end of the stream
 			buffer.AssertNoBlockedSinks();
@@ -122,22 +126,19 @@ QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
 	return state;
 }
 
-unique_ptr<DataChunk> QueryResultStream::FetchInternal(ClientContextLock &lock) {
+unique_ptr<ResultUnit> ResultStreamBase::FetchUnitInternal(ClientContextLock &lock) {
 	auto &buffer = *handle->buffer;
-	unique_ptr<DataChunk> chunk;
 	try {
 		auto state = buffer.ReplenishBuffer(lock, *handle);
 		if (state == QueryResultState::EXECUTION_ERROR) {
 			return nullptr;
 		}
-		if (auto unit = buffer.Scan()) {
-			chunk = std::move(unit->Cast<ChunkUnit>().chunk);
-		}
-		if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
+		auto unit = buffer.Scan();
+		if (!unit || unit->row_count == 0) {
 			handle->EndQuery(lock);
 			return nullptr;
 		}
-		return chunk;
+		return unit;
 	} catch (std::exception &ex) {
 		handle->HandleFetchFailure(lock, ErrorData(ex));
 	} catch (...) { // LCOV_EXCL_START
@@ -147,78 +148,105 @@ unique_ptr<DataChunk> QueryResultStream::FetchInternal(ClientContextLock &lock) 
 	return nullptr;
 }
 
-unique_ptr<DataChunk> QueryResultStream::Fetch() {
+unique_ptr<ResultUnit> ResultStreamBase::FetchUnit() {
 	if (!handle->context && !handle->HasError()) {
 		// The stream ended cleanly. Keep reporting the end, the way TryFetch and Poll do
 		return nullptr;
 	}
-	unique_ptr<DataChunk> chunk;
+	unique_ptr<ResultUnit> unit;
 	{
 		auto lock = handle->LockContext();
 		handle->CheckExecutableInternal(*lock);
-		chunk = FetchInternal(*lock);
+		unit = FetchUnitInternal(*lock);
 	}
-	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
+	if (!unit || unit->row_count == 0) {
 		if (!HasError()) {
 			handle->buffer->AssertNoBlockedSinks();
 		}
 		Close();
 		return nullptr;
 	}
-	chunk->Flatten();
-	return chunk;
+	return unit;
 }
 
-void QueryResultStream::SetError(ErrorData error) {
+const ResultFormatGlobalState &ResultStreamBase::FormatStateInternal() const {
+	return handle->GetBufferedData().FormatState();
+}
+
+void ResultStreamBase::SetError(ErrorData error) {
 	handle->SetError(std::move(error));
 }
 
-bool QueryResultStream::HasError() const {
+bool ResultStreamBase::HasError() const {
 	return handle->HasError();
 }
 
-const string &QueryResultStream::GetError() const {
+const string &ResultStreamBase::GetError() const {
 	return handle->GetError();
 }
 
-const ErrorData &QueryResultStream::GetErrorObject() const {
+const ErrorData &ResultStreamBase::GetErrorObject() const {
 	return handle->GetErrorObject();
 }
 
-const ExceptionType &QueryResultStream::GetErrorType() const {
+const ExceptionType &ResultStreamBase::GetErrorType() const {
 	return handle->GetErrorType();
 }
 
-const vector<LogicalType> &QueryResultStream::GetTypes() const {
+const vector<LogicalType> &ResultStreamBase::GetTypes() const {
 	return handle->GetTypes();
 }
 
-const vector<Identifier> &QueryResultStream::GetNames() const {
+const vector<Identifier> &ResultStreamBase::GetNames() const {
 	return handle->GetNames();
 }
 
-const Identifier &QueryResultStream::ColumnName(idx_t index) const {
+const Identifier &ResultStreamBase::ColumnName(idx_t index) const {
 	return handle->ColumnName(index);
 }
 
-idx_t QueryResultStream::ColumnCount() const {
+idx_t ResultStreamBase::ColumnCount() const {
 	return handle->ColumnCount();
 }
 
-StatementType QueryResultStream::GetStatementType() const {
+StatementType ResultStreamBase::GetStatementType() const {
 	return handle->GetStatementType();
 }
 
-const StatementProperties &QueryResultStream::GetStatementProperties() const {
+const StatementProperties &ResultStreamBase::GetStatementProperties() const {
 	return handle->GetStatementProperties();
 }
 
-const ClientProperties &QueryResultStream::GetClientProperties() const {
+const ClientProperties &ResultStreamBase::GetClientProperties() const {
 	return handle->client_properties;
 }
 
-ClientProperties &QueryResultStream::GetClientProperties() {
+ClientProperties &ResultStreamBase::GetClientProperties() {
 	return handle->client_properties;
+}
+
+//===--------------------------------------------------------------------===//
+// QueryResultStream
+//===--------------------------------------------------------------------===//
+QueryResultStream::QueryResultStream(unique_ptr<QueryResult> result)
+    : ResultStreamBase(std::move(result), ChunkFormat::NAME) {
+}
+
+QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
+	unique_ptr<ResultUnit> unit;
+	auto state = TryFetchUnit(unit);
+	out_chunk = unit ? std::move(unit->Cast<ChunkUnit>().chunk) : nullptr;
+	return state;
+}
+
+unique_ptr<DataChunk> QueryResultStream::Fetch() {
+	auto unit = FetchUnit();
+	if (!unit) {
+		return nullptr;
+	}
+	auto chunk = std::move(unit->Cast<ChunkUnit>().chunk);
+	chunk->Flatten();
+	return chunk;
 }
 
 } // namespace duckdb

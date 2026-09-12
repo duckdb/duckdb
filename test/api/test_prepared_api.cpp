@@ -161,7 +161,7 @@ TEST_CASE("Test that prepared statements live in the client context", "[api]") {
 
 	auto prepared_statement_count = [&con]() {
 		auto result = con.Query("SELECT count(*) FROM duckdb_prepared_statements()");
-		return result->GetValue(0, 0).GetValue<int64_t>();
+		return result->Collection().GetValue(0, 0).GetValue<int64_t>();
 	};
 	REQUIRE(prepared_statement_count() == 0);
 
