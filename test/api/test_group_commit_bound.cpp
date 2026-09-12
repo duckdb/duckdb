@@ -1,8 +1,8 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/thread.hpp"
 
 #include <atomic>
-#include <chrono>
 #include <thread>
 
 using namespace duckdb;
@@ -15,10 +15,6 @@ namespace {
 constexpr idx_t FSYNC_MS = 4000;
 constexpr idx_t READER_DELAY_MS = 500;
 constexpr idx_t ROW_COUNT = 5000;
-
-void SleepMs(idx_t ms) {
-	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-}
 
 idx_t ScalarValue(Connection &con, const string &query) {
 	auto result = con.Query(query);
@@ -47,7 +43,7 @@ TEST_CASE("A commit pending durability is not visible to a transaction that star
 		writer_failed = con.Query("INSERT INTO t SELECT * FROM range(" + to_string(ROW_COUNT) + ")")->HasError();
 	});
 
-	SleepMs(READER_DELAY_MS);
+	ThreadUtil::SleepMs(READER_DELAY_MS);
 
 	// published but not yet durable: a transaction starting now is bounded below it and must see
 	// the pre-insert state, twice in a row - its snapshot cannot shift under it
@@ -91,7 +87,7 @@ TEST_CASE("A bounded transaction conflicts with the commit it cannot see", "[api
 		writer_failed = con.Query("UPDATE t SET v = 1 WHERE i = 1")->HasError();
 	});
 
-	SleepMs(READER_DELAY_MS);
+	ThreadUtil::SleepMs(READER_DELAY_MS);
 
 	// this transaction's snapshot is bounded AT the writer's commit id, so it does not see the
 	// update - but it must still conflict with it rather than silently overwriting it
@@ -126,7 +122,7 @@ TEST_CASE("txid_current stays unique while commits are pending durability", "[ap
 		writer_failed = con.Query("INSERT INTO t SELECT * FROM range(" + to_string(ROW_COUNT) + ")")->HasError();
 	});
 
-	SleepMs(READER_DELAY_MS);
+	ThreadUtil::SleepMs(READER_DELAY_MS);
 
 	// both transactions are capped at the same commit, so they share a visibility bound - the id
 	// reported to the user must still be the distinct one each of them drew
