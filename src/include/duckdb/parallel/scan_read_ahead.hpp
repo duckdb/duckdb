@@ -160,6 +160,8 @@ public:
 	bool CanScheduleOpen() const;
 	//! Run one queued async task inline, throwing any recorded async error; returns false when none is queued
 	bool TryRunPendingTask();
+	//! Throw the first error recorded on the async executor, if there is one
+	void ThrowIfError();
 
 private:
 	//! Settles the reservation taken by TryReserveSlot
@@ -196,8 +198,6 @@ private:
 	bool TryReserveSlot();
 	//! Schedule the job's I/O and admit the job to the queue
 	void PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
-	//! Throw if any read-ahead thread or task pushed an error
-	void ThrowIfError();
 	//! Release a read-ahead slot
 	void ReleaseSlot();
 

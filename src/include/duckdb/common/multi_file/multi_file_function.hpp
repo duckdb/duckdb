@@ -646,6 +646,10 @@ public:
 
 		while (true) {
 			if (gstate.error_opening_file) {
+				// the flag only says a file failed, the error itself lives on the read-ahead - report before ending
+				if (gstate.read_ahead) {
+					gstate.read_ahead->ThrowIfError();
+				}
 				return MultiFileClaimResult::EXHAUSTED;
 			}
 
