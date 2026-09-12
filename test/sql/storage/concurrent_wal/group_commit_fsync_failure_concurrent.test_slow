@@ -1,5 +1,5 @@
 # name: test/sql/storage/concurrent_wal/group_commit_fsync_failure_concurrent.test_slow
-# description: Group commit: when a shared fsync fails no commit in the group is acknowledged, and the database fails stop
+# description: Group commit: a failed shared fsync acknowledges no commit and fails stop
 # group: [concurrent_wal]
 
 load {TEST_DIR}/group_commit_fsync_fail_conc.db
@@ -13,15 +13,14 @@ PRAGMA disable_checkpoint_on_shutdown
 statement ok
 CREATE TABLE t(i INTEGER)
 
-# these commits are acknowledged before any failure is injected
+# acknowledged before the failure is injected
 statement ok
 INSERT INTO t SELECT range FROM range(50)
 
 statement ok
 SET debug_force_wal_fsync_failure=true
 
-# one leader's fsync covers the whole group, so every committer must observe the failure and none
-# may be acknowledged. Nothing may hang, and the database must fail stop rather than continue
+# one fsync covers the group: no committer may be acknowledged, nothing may hang
 concurrentloop threadid 0 8
 
 loop x 0 20
@@ -34,15 +33,14 @@ endloop
 
 endloop
 
-# fail-stop: the database is invalidated rather than silently continuing
+# fail-stop
 statement error
 INSERT INTO t VALUES (999999)
 ----
 
 restart
 
-# the acknowledged prefix comes back intact; the commits whose sync failed are in doubt and may be
-# replayed, since their bytes reached the OS before the failure
+# the acknowledged prefix is intact; the failed group's commits are in doubt and may be replayed
 query I
 SELECT count(*) FILTER (WHERE i < 1000) FROM t
 ----

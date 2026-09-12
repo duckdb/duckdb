@@ -1,5 +1,5 @@
 # name: test/sql/storage/concurrent_wal/group_commit_concurrent_checkpoint.test_slow
-# description: Group commit: commits concurrent with frequent checkpoints make progress (no deadlock) and replay
+# description: Group commit: commits concurrent with frequent force checkpoints
 # group: [concurrent_wal]
 
 statement ok
@@ -19,10 +19,7 @@ ATTACH '{TEST_DIR}/group_commit_concurrent_checkpoint{sleep_time}.db' AS gc
 statement ok
 CREATE TABLE gc.integers(i INTEGER)
 
-# threads 0-8 commit concurrently; thread 9 repeatedly force-checkpoints.
-# FORCE CHECKPOINT drains commits that are published but not yet durable while their syncs are still in
-# flight - the regression this guards against is a deadlock between the drain and the sync. (A plain CHECKPOINT would
-# bail out while writers are active and never reach the drain.)
+# threads 0-8 commit; thread 9 force-checkpoints, draining commits whose syncs are in flight
 concurrentloop threadid 0 10
 
 loop x 0 50

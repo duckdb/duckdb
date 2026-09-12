@@ -1,5 +1,5 @@
 # name: test/sql/storage/wal/wal_fsync_failure.test
-# description: A failed WAL fsync poisons durability: later commits fail instead of being acknowledged without durability
+# description: A failed WAL fsync fails the commit and invalidates the database
 # group: [wal]
 
 load __TEST_DIR__/wal_fsync_failure.db
@@ -24,14 +24,13 @@ INSERT INTO t VALUES (2)
 ----
 injected WAL fsync failure
 
-# the database is invalidated: a published commit cannot be rolled back
+# invalidated: a published commit cannot be rolled back
 statement error
 SELECT count(*) FROM t
 ----
 Failed to sync the WAL after committing
 
-# the commit that reported failure is in doubt: its WAL bytes reached the OS before the sync
-# failed, so a reopen on the same machine replays them. Either way the database reopens cleanly
+# the failed commit is in doubt: its bytes reached the OS, so a reopen may replay it
 restart
 
 query I
