@@ -171,6 +171,7 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
+#include "duckdb/optimizer/partition_fold.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
@@ -2622,6 +2623,26 @@ const char* EnumUtil::ToChars<FilterPropagateResult>(FilterPropagateResult value
 template<>
 FilterPropagateResult EnumUtil::FromString<FilterPropagateResult>(const char *value) {
 	return static_cast<FilterPropagateResult>(StringUtil::StringToEnum(GetFilterPropagateResultValues(), 5, "FilterPropagateResult", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFoldPartitionStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FoldPartitionState::EXACT_VALUE), "EXACT_VALUE" },
+		{ static_cast<uint32_t>(FoldPartitionState::BOUND), "BOUND" },
+		{ static_cast<uint32_t>(FoldPartitionState::NEUTRAL), "NEUTRAL" },
+		{ static_cast<uint32_t>(FoldPartitionState::NO_INFO), "NO_INFO" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FoldPartitionState>(FoldPartitionState value) {
+	return StringUtil::EnumToString(GetFoldPartitionStateValues(), 4, "FoldPartitionState", static_cast<uint32_t>(value));
+}
+
+template<>
+FoldPartitionState EnumUtil::FromString<FoldPartitionState>(const char *value) {
+	return static_cast<FoldPartitionState>(StringUtil::StringToEnum(GetFoldPartitionStateValues(), 4, "FoldPartitionState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetForeignKeyTypeValues() {
