@@ -15,6 +15,7 @@ add_library_unity(
   OBJECT
   aggregate_function.cpp
   aggregate_state_serialization.cpp
+  builtin_function_lookup.cpp
   built_in_functions.cpp
   cast_rules.cpp
   combine_types_rules.cpp

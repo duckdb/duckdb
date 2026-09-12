@@ -1,4 +1,5 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
 
@@ -413,7 +414,7 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
                                                        vector<BoundOrderByNode> orders = {}) {
 	auto window = make_uniq<LogicalWindow>(table_index);
 
-	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
+	auto row_number = GetBuiltinWindowFunction(binder.context, RowNumberFun::Name, {})->Bind(binder.context);
 	row_number->PartitionsMutable() = std::move(partitions);
 	row_number->OrderByMutable() = std::move(orders);
 	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
@@ -790,14 +791,14 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
                                                          const vector<ColumnBinding> &state) const {
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
-		auto first_aggregate = FirstFunctionGetter::GetFunction(col.type);
 		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state[i]);
 		vector<unique_ptr<Expression>> aggr_children;
 		aggr_children.push_back(std::move(colref));
 
-		BoundAggregateFunction bound_func(first_aggregate);
-		auto first_fun = make_uniq<BoundAggregateExpression>(std::move(bound_func), std::move(aggr_children), nullptr,
-		                                                     nullptr, AggregateType::NON_DISTINCT);
+		auto first_aggregate = GetBuiltinAggregateFunction(binder.context, FirstFun::Name, {col.type});
+		FunctionBinder function_binder(binder.context);
+		auto first_fun = function_binder.BindAggregateFunction(std::move(first_aggregate), std::move(aggr_children),
+		                                                       nullptr, AggregateType::NON_DISTINCT);
 		aggr.expressions.push_back(std::move(first_fun));
 	}
 }
@@ -909,8 +910,9 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 
 		auto marker_index = ProjectionIndex(aggr.expressions.size());
 		FunctionBinder function_binder(binder.context);
-		aggr.expressions.push_back(function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
-		                                                                 AggregateType::NON_DISTINCT));
+		aggr.expressions.push_back(
+		    function_binder.BindAggregateFunction(GetBuiltinAggregateFunction(binder.context, CountStarFun::Name, {}),
+		                                          {}, nullptr, AggregateType::NON_DISTINCT));
 		auto marker_binding = ColumnBinding(aggr.aggregate_index, marker_index);
 		for (idx_t i = 0; i < special_handling_bindings.size(); i++) {
 			replacement_map[special_handling_bindings[i]] = {marker_binding,

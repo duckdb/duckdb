@@ -1,4 +1,6 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -24,7 +26,7 @@ static unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, u
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key_path.back())));
-	auto result = GetKeyExtractFunction().Bind(context, std::move(arguments));
+	auto result = BindBuiltinScalarFunction(context, StructExtractFun::Name, std::move(arguments));
 
 	if (keep_parent_names) {
 		auto alias = StringUtil::Join(key_path, ".");
@@ -43,7 +45,7 @@ static unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &conte
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(int64_t(key))));
-	auto result = GetIndexExtractFunction().Bind(context, std::move(arguments));
+	auto result = BindBuiltinScalarFunction(context, StructExtractFun::Name, std::move(arguments));
 
 	result->SetAlias(Identifier("element" + to_string(key)));
 	return std::move(result);

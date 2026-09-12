@@ -61,6 +61,9 @@ void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &se
 	}
 }
 
+// The table filter functions are registered for (de)serialization only - TableFilterFunctions::Bind rejects
+// ordinary binding - so they are constructed and specialized for the column type here rather than resolved
+// through the catalog, and carry no catalog or schema name.
 static unique_ptr<Expression> CreateSingleArgumentFunctionExpression(const ScalarFunction &function,
                                                                      const LogicalType &target_type,
                                                                      unique_ptr<FunctionData> bind_data) {

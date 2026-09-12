@@ -2,7 +2,7 @@
 
 #include "duckdb/optimizer/aggregate_rewrite_helper.hpp"
 #include "duckdb/optimizer/aggregate_reuse_internal.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"

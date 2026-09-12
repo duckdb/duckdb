@@ -1,5 +1,6 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -97,22 +98,25 @@ static unique_ptr<Expression> PlanExtremumRewrite(Binder &binder, BoundSubqueryE
 	}
 	min_max_children.push_back(std::move(min_max_child));
 
-	auto extremum_aggr =
-	    function_binder.BindAggregateFunction(is_min ? MinFunction::GetFunction() : MaxFunction::GetFunction(),
-	                                          std::move(min_max_children), nullptr, AggregateType::NON_DISTINCT);
+	auto extremum_fun = GetBuiltinAggregateFunction(binder.context, is_min ? MinFun::Name : MaxFun::Name,
+	                                                {min_max_children[0]->GetReturnType()});
+	auto extremum_aggr = function_binder.BindAggregateFunction(std::move(extremum_fun), std::move(min_max_children),
+	                                                           nullptr, AggregateType::NON_DISTINCT);
 	auto extremum_type = extremum_aggr->GetReturnType();
 	aggregate_list.push_back(std::move(extremum_aggr));
 
 	// 2. count_star = COUNT(*)
-	auto count_star_aggr =
-	    function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr, AggregateType::NON_DISTINCT);
+	auto count_star_aggr = function_binder.BindAggregateFunction(
+	    GetBuiltinAggregateFunction(binder.context, CountStarFun::Name, {}), {}, nullptr, AggregateType::NON_DISTINCT);
 	aggregate_list.push_back(std::move(count_star_aggr));
 
 	// 3. count_child = COUNT(child)
 	vector<unique_ptr<Expression>> count_child_children;
 	count_child_children.push_back(bound_colref->Copy());
-	auto count_child_aggr = function_binder.BindAggregateFunction(
-	    CountFunctionBase::GetFunction(), std::move(count_child_children), nullptr, AggregateType::NON_DISTINCT);
+	auto count_fun =
+	    GetBuiltinAggregateFunction(binder.context, CountFun::Name, {count_child_children[0]->GetReturnType()});
+	auto count_child_aggr = function_binder.BindAggregateFunction(std::move(count_fun), std::move(count_child_children),
+	                                                              nullptr, AggregateType::NON_DISTINCT);
 	aggregate_list.push_back(std::move(count_child_aggr));
 
 	auto aggr_index = binder.GenerateTableIndex();
@@ -216,11 +220,11 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = std::move(limit);
 
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
-		auto count_star_fun = CountStarFun::GetFunction();
+		auto count_star_fun = GetBuiltinAggregateFunction(binder.context, CountStarFun::Name, {});
 
 		FunctionBinder function_binder(binder);
 		auto count_star =
-		    function_binder.BindAggregateFunction(count_star_fun, {}, nullptr, AggregateType::NON_DISTINCT);
+		    function_binder.BindAggregateFunction(std::move(count_star_fun), {}, nullptr, AggregateType::NON_DISTINCT);
 		auto idx_type = count_star->GetReturnType();
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(std::move(count_star));
@@ -275,15 +279,16 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		first_children.push_back(std::move(bound));
 
 		FunctionBinder function_binder(binder);
-		auto first_agg =
-		    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(expr.GetReturnType()),
-		                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+		auto first_fun = GetBuiltinAggregateFunction(binder.context, FirstFun::Name, {expr.GetReturnType()});
+		auto first_agg = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children), nullptr,
+		                                                       AggregateType::NON_DISTINCT);
 
 		expressions.push_back(std::move(first_agg));
 		if (error_on_multiple_rows) {
 			vector<unique_ptr<Expression>> count_children;
 			auto count_agg = function_binder.BindAggregateFunction(
-			    CountStarFun::GetFunction(), std::move(count_children), nullptr, AggregateType::NON_DISTINCT);
+			    GetBuiltinAggregateFunction(binder.context, CountStarFun::Name, {}), std::move(count_children), nullptr,
+			    AggregateType::NON_DISTINCT);
 			expressions.push_back(std::move(count_agg));
 		}
 		auto aggr_index = binder.GenerateTableIndex();
@@ -310,7 +315,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			    Value("More than one row returned by a subquery used as an expression - scalar subqueries can only "
 			          "return a single row.\n\nUse \"SET scalar_subquery_error_on_multiple_rows=false\" to revert to "
 			          "previous behavior of returning a random row.")));
-			auto error_expr = function_binder.BindScalarFunction(ErrorFun::GetFunction(), std::move(error_children));
+			auto error_expr = BindBuiltinScalarFunction(binder.context, ErrorFun::Name, std::move(error_children));
 			error_expr->SetReturnType(first_ref->GetReturnType());
 			auto case_expr =
 			    make_uniq<BoundCaseExpression>(std::move(count_check), std::move(error_expr), std::move(first_ref));
@@ -375,7 +380,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 			// Create a struct expression from the subquery columns using the "row" function
 			FunctionBinder function_binder(binder);
-			auto struct_expr = function_binder.BindScalarFunction(RowFun::GetFunction(), std::move(struct_children));
+			auto struct_expr = BindBuiltinScalarFunction(binder.context, RowFun::Name, std::move(struct_children));
 
 			JoinCondition cond(std::move(expr.GetChildrenMutable()[0]), std::move(struct_expr), expr.ComparisonType());
 

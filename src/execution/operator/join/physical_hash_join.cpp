@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/common/assert.hpp"
@@ -683,17 +684,17 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			// we need a count_star and a count to get counts with and without NULLs
 
 			FunctionBinder function_binder(context);
-			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
-			                                             AggregateType::NON_DISTINCT);
+			aggr = function_binder.BindAggregateFunction(GetBuiltinAggregateFunction(context, CountStarFun::Name, {}),
+			                                             {}, nullptr, AggregateType::NON_DISTINCT);
 			correlated_aggregates.emplace_back(*aggr);
 			delim_payload_types.push_back(aggr->GetReturnType());
 			info.correlated_aggregates.push_back(std::move(aggr));
 
-			auto count_fun = CountFunctionBase::GetFunction();
+			auto count_fun = GetBuiltinAggregateFunction(context, CountFun::Name, {LogicalType::BIGINT});
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
-			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.GetReturnType(), 0U));
-			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
+			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun->GetReturnType(), 0U));
+			aggr = function_binder.BindAggregateFunction(std::move(count_fun), std::move(children), nullptr,
 			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.emplace_back(*aggr);
 			delim_payload_types.push_back(aggr->GetReturnType());

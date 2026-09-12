@@ -5,6 +5,7 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/set/physical_union.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -17,7 +18,7 @@ namespace duckdb {
 static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(ClientContext &client,
                                                                         const vector<LogicalType> &types) {
 	vector<unique_ptr<Expression>> res;
-	auto expr = RowNumberFun::GetFunction().Bind(client);
+	auto expr = GetBuiltinWindowFunction(client, RowNumberFun::Name, {})->Bind(client);
 	expr->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 	expr->WindowEndMutable() = WindowBoundary::UNBOUNDED_FOLLOWING;
 	for (idx_t i = 0; i < types.size(); i++) {

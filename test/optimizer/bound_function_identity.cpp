@@ -6,6 +6,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
@@ -45,6 +46,19 @@ void CollectIdentityFunctions(const Expression &expr, vector<BoundFunctionInfo> 
 		auto &fun = expr.Cast<BoundAggregateExpression>().Function();
 		result.push_back(
 		    {fun.GetCatalogName(), fun.GetSchemaName(), fun.GetName(), fun.GetArguments(), fun.GetReturnType(), true});
+	} else if (expr.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
+		// a window expression holds either an aggregate (sum(x) OVER ()) or a true window function (row_number())
+		auto &window = expr.Cast<BoundWindowExpression>();
+		if (window.AggregateFunction()) {
+			auto &fun = *window.AggregateFunction();
+			result.push_back({fun.GetCatalogName(), fun.GetSchemaName(), fun.GetName(), fun.GetArguments(),
+			                  fun.GetReturnType(), true});
+		}
+		if (window.WindowFunction()) {
+			auto &fun = *window.WindowFunction();
+			result.push_back({fun.GetCatalogName(), fun.GetSchemaName(), fun.GetName(), fun.GetArguments(),
+			                  fun.GetReturnType(), false});
+		}
 	}
 	ExpressionIterator::EnumerateChildren(expr,
 	                                      [&](const Expression &child) { CollectIdentityFunctions(child, result); });
@@ -302,5 +316,51 @@ TEST_CASE("Join filter pushdown keeps the definition of min() and max()", "[opti
 	auto &min_function = RequireIdentityFunction(functions, "min");
 	REQUIRE(min_function.is_aggregate);
 	RequireIdentityFunction(functions, "max");
+	con.Rollback();
+}
+
+TEST_CASE("Planner-introduced row_number keeps its definition", "[optimizer][function_identity]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT i::INTEGER AS v, (i % 5)::INTEGER AS g FROM range(50) x(i)"));
+
+	con.BeginTransaction();
+	// WITH ORDINALITY, decorrelating a correlated subquery with a LIMIT, and a set operation each push a
+	// row_number() window of their own
+	for (auto &query : vector<string> {"SELECT * FROM range(3) WITH ORDINALITY",
+	                                   "SELECT v, (SELECT g FROM t x WHERE x.v = t.v LIMIT 1) FROM t",
+	                                   "SELECT v FROM t UNION SELECT v FROM t"}) {
+		INFO(query);
+		auto functions = PlanIdentityFunctions(con, query);
+		if (!FindIdentityFunction(functions, "row_number").IsValid()) {
+			continue;
+		}
+		auto &row_number = RequireIdentityFunction(functions, "row_number");
+		REQUIRE(!row_number.is_aggregate);
+		REQUIRE(row_number.return_type == LogicalType::BIGINT);
+	}
+	// WITH ORDINALITY always introduces one
+	RequireIdentityFunction(PlanIdentityFunctions(con, "SELECT * FROM range(3) WITH ORDINALITY"), "row_number");
+	con.Rollback();
+}
+
+TEST_CASE("Specializing a bound aggregate keeps its definition", "[optimizer][function_identity]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT i::INTEGER AS v, (i * 1.5)::DECIMAL(10,2) AS d, "
+	                          "(i % 5)::VARCHAR AS s FROM range(50) x(i)"));
+
+	con.BeginTransaction();
+	// each of these binds from the catalog and then replaces the implementation with a specialized one - the
+	// replacement comes from a factory, so it must not take the qualification with it
+	for (auto &entry : vector<pair<string, string>> {{"SELECT sum(v) FROM t", "sum_no_overflow"},
+	                                                 {"SELECT min(v) FROM t", "min"},
+	                                                 {"SELECT max(v) FROM t", "max"},
+	                                                 {"SELECT quantile(v, 0.5) FROM t", "quantile_disc"},
+	                                                 {"SELECT first(v) FROM t", "first"},
+	                                                 {"SELECT arg_min(v, d) FROM t", "arg_min"}}) {
+		INFO(entry.first);
+		RequireIdentityFunction(PlanIdentityFunctions(con, entry.first), Identifier(entry.second));
+	}
 	con.Rollback();
 }
