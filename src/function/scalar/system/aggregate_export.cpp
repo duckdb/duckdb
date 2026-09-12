@@ -355,6 +355,10 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	ParseOrderBys(order_entry->second, column_count, orders);
 	// the leading buffered columns are the inner aggregate's bound arguments (post constant-erasure)
 	const idx_t argument_count = inner->aggr.GetArguments().size();
+	if (argument_count > column_count) {
+		throw BinderException("to_aggregate_state: argument count %llu exceeds the number of state columns (%llu)",
+							(uint64_t)argument_count, (uint64_t)column_count);
+	}
 
 	auto reconstructed = FunctionBinder::BindSortedAggregateState(context, inner->aggr, std::move(inner->bind_data),
 	                                                              buffer_struct, orders, argument_count);
