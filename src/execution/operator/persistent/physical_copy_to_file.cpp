@@ -323,6 +323,8 @@ public:
 	void WorkOnTaskOrYield();
 	void FinishTask();
 	void PushError(const std::exception_ptr &error);
+	//! The first error pushed by a task, if any
+	std::exception_ptr GetError();
 
 private:
 	bool WorkOnTask(bool throw_error = true);
@@ -341,8 +343,7 @@ private:
 
 class CopyFileLifecycleTaskFinishGuard {
 public:
-	CopyFileLifecycleTaskFinishGuard(TaskExecutor &executor_p, CopyFileLifecycleExecutor &lifecycle_p)
-	    : executor(executor_p), lifecycle(lifecycle_p) {
+	explicit CopyFileLifecycleTaskFinishGuard(CopyFileLifecycleExecutor &lifecycle_p) : lifecycle(lifecycle_p) {
 	}
 
 	~CopyFileLifecycleTaskFinishGuard() {
@@ -352,28 +353,26 @@ public:
 	void Finish() {
 		if (!finished) {
 			lifecycle.FinishTask();
-			executor.FinishTask();
 			finished = true;
 		}
 	}
 
 private:
-	TaskExecutor &executor;
 	CopyFileLifecycleExecutor &lifecycle;
 	bool finished = false;
 };
 
 template <class FUNC>
-class CopyFileLifecycleTask : public Task {
+class CopyFileLifecycleTask : public BaseExecutorTask {
 public:
 	CopyFileLifecycleTask(TaskExecutor &executor_p, CopyFileLifecycleExecutor &lifecycle_p,
 	                      shared_ptr<CopyFileLifecycleJob> job_p, FUNC task_p)
-	    : executor(executor_p), lifecycle(lifecycle_p), job(std::move(job_p)), task(std::move(task_p)) {
+	    : BaseExecutorTask(executor_p), lifecycle(lifecycle_p), job(std::move(job_p)), task(std::move(task_p)) {
 	}
 
 public:
-	TaskExecutionResult Execute(TaskExecutionMode mode) override {
-		CopyFileLifecycleTaskFinishGuard finish_guard(executor, lifecycle);
+	void ExecuteTask() override {
+		CopyFileLifecycleTaskFinishGuard finish_guard(lifecycle);
 		try {
 			task();
 			if (!job->IsFinished()) {
@@ -384,7 +383,19 @@ public:
 			job->CompleteException(error);
 			lifecycle.PushError(error);
 		}
-		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	void Cancel() override {
+		// the task is retired without running - settle the job, WaitForJob spins until it is finished
+		CopyFileLifecycleTaskFinishGuard finish_guard(lifecycle);
+		if (job->IsFinished()) {
+			return;
+		}
+		auto error = lifecycle.GetError();
+		if (!error) {
+			error = std::make_exception_ptr(InternalException("COPY file task was cancelled before it could run"));
+		}
+		job->CompleteException(error);
 	}
 
 	string TaskType() const override {
@@ -392,7 +403,6 @@ public:
 	}
 
 private:
-	TaskExecutor &executor;
 	CopyFileLifecycleExecutor &lifecycle;
 	shared_ptr<CopyFileLifecycleJob> job;
 	FUNC task;
@@ -1540,6 +1550,11 @@ void CopyFileLifecycleExecutor::PushError(const std::exception_ptr &error_p) {
 	if (!error) {
 		error = error_p;
 	}
+}
+
+std::exception_ptr CopyFileLifecycleExecutor::GetError() {
+	lock_guard<mutex> guard(error_lock);
+	return error;
 }
 
 bool CopyFileLifecycleExecutor::WorkOnTask(bool throw_error) {

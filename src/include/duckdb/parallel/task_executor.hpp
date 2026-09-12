@@ -17,6 +17,34 @@
 
 namespace duckdb {
 
+class TaskExecutor;
+class TaskExecutorTask;
+
+//! A unit of work scheduled on a TaskExecutor
+//! Deliberately not a Task: it cannot be handed to the TaskScheduler directly, it cannot be descheduled or
+//! rescheduled, and it cannot report partial progress. The executor wraps it and owns cancellation, error handling
+//! and task accounting, so implementations only have to describe their work.
+class BaseExecutorTask {
+public:
+	explicit BaseExecutorTask(TaskExecutor &executor);
+	virtual ~BaseExecutorTask() = default;
+
+public:
+	//! Perform the task's work - throwing is allowed, the executor captures the error and cancels the other tasks
+	virtual void ExecuteTask() = 0;
+	//! Called instead of ExecuteTask when the task is retired without running its work, because another task errored
+	//! or because the executor was cancelled. Exactly one of ExecuteTask or Cancel runs for every scheduled task.
+	//! Anything a waiter watches must be settled here as well as in ExecuteTask, or that waiter never wakes up.
+	virtual void Cancel() {
+	}
+	virtual string TaskType() const {
+		return "UnnamedTask";
+	}
+
+protected:
+	TaskExecutor &executor;
+};
+
 //! The TaskExecutor is a helper class that enables parallel scheduling and execution of tasks
 class TaskExecutor {
 public:
@@ -30,11 +58,11 @@ public:
 	bool HasError();
 	//! Throw an error that was encountered during execution (if HasError() is true)
 	void ThrowError();
+	//! Whether the executor has been cancelled
+	bool IsCancelled() const;
 
 	//! Schedule a new task
-	void ScheduleTask(unique_ptr<Task> task);
-	//! Label a task as finished
-	void FinishTask();
+	void ScheduleTask(unique_ptr<BaseExecutorTask> task);
 
 	//! Work on tasks until all tasks are finished. Throws an exception if any error occurred while executing the tasks.
 	void WorkOnTasks();
@@ -47,9 +75,11 @@ public:
 private:
 	//! Work on tasks until all tasks are finished
 	void DrainTasks();
+	//! Label a task as finished - called by the wrapper the executor puts around every scheduled task
+	void FinishTask();
 
 private:
-	friend class BaseExecutorTask;
+	friend class TaskExecutorTask;
 
 	TaskScheduler &scheduler;
 	const TaskSchedulerType type;
@@ -59,17 +89,6 @@ private:
 	idx_t total_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
 	atomic<bool> cancelled {false};
 	optional_ptr<ClientContext> context;
-};
-
-class BaseExecutorTask : public Task {
-public:
-	explicit BaseExecutorTask(TaskExecutor &executor);
-
-	virtual void ExecuteTask() = 0;
-	TaskExecutionResult Execute(TaskExecutionMode mode) override;
-
-protected:
-	TaskExecutor &executor;
 };
 
 } // namespace duckdb

@@ -4,6 +4,71 @@
 
 namespace duckdb {
 
+//! The wrapper the executor puts around every scheduled task
+//! It owns the cancel check, the task notifier, the error handling and the task accounting, so that none of those
+//! depend on what the task itself does
+class TaskExecutorTask : public Task {
+public:
+	TaskExecutorTask(TaskExecutor &executor, unique_ptr<BaseExecutorTask> task_p)
+	    : executor(executor), task(std::move(task_p)) {
+	}
+
+public:
+	TaskExecutionResult Execute(TaskExecutionMode mode) override {
+		FinishGuard guard(executor);
+		if (executor.HasError() || executor.IsCancelled()) {
+			// another task encountered an error, or the executor was cancelled - retire without doing the work
+			return RunGuarded([&]() { task->Cancel(); }, "Unknown exception while cancelling a task");
+		}
+		TaskNotifier task_notifier {executor.context};
+		return RunGuarded([&]() { task->ExecuteTask(); }, "Unknown exception during task execution");
+	}
+
+	void Deschedule() override {
+		throw InternalException("Tasks scheduled on a TaskExecutor cannot be descheduled");
+	}
+
+	void Reschedule() override {
+		throw InternalException("Tasks scheduled on a TaskExecutor cannot be rescheduled");
+	}
+
+	string TaskType() const override {
+		return task->TaskType();
+	}
+
+private:
+	//! Settles the executor's task counter on every exit path, so that a drain always terminates
+	class FinishGuard {
+	public:
+		explicit FinishGuard(TaskExecutor &executor) : executor(executor) {
+		}
+		~FinishGuard() {
+			executor.FinishTask();
+		}
+
+	private:
+		TaskExecutor &executor;
+	};
+
+	template <class FUNC>
+	TaskExecutionResult RunGuarded(FUNC &&callback, const char *unknown_error) {
+		try {
+			callback();
+		} catch (std::exception &ex) {
+			executor.PushError(ErrorData(ex));
+			return TaskExecutionResult::TASK_ERROR;
+		} catch (...) { // LCOV_EXCL_START
+			executor.PushError(ErrorData(unknown_error));
+			return TaskExecutionResult::TASK_ERROR;
+		} // LCOV_EXCL_STOP
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	TaskExecutor &executor;
+	unique_ptr<BaseExecutorTask> task;
+};
+
 TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p)
     : scheduler(scheduler), type(type_p), token(scheduler.CreateProducer()) {
 }
@@ -34,13 +99,19 @@ void TaskExecutor::ThrowError() {
 	error_manager.ThrowException();
 }
 
-void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
+bool TaskExecutor::IsCancelled() const {
+	return cancelled;
+}
+
+void TaskExecutor::ScheduleTask(unique_ptr<BaseExecutorTask> task) {
+	// wrap before taking ownership of a slot, so that a failure to allocate the wrapper needs no rollback
+	auto scheduled_task = make_uniq<TaskExecutorTask>(*this, std::move(task));
 	{
 		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
 		++total_tasks;
 	}
 	try {
-		scheduler.ScheduleTask(*token, std::move(task), type);
+		scheduler.ScheduleTask(*token, std::move(scheduled_task), type);
 	} catch (...) {
 		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
 		// We failed to schedule the task, so we decrement the total number of tasks, instead of incrementing completed
@@ -99,28 +170,6 @@ bool TaskExecutor::GetTask(shared_ptr<Task> &task) {
 }
 
 BaseExecutorTask::BaseExecutorTask(TaskExecutor &executor) : executor(executor) {
-}
-
-TaskExecutionResult BaseExecutorTask::Execute(TaskExecutionMode mode) {
-	if (executor.HasError() || executor.cancelled) {
-		// another task encountered an error or the executor was cancelled - bailout
-		executor.FinishTask();
-		return TaskExecutionResult::TASK_FINISHED;
-	}
-	try {
-		{
-			TaskNotifier task_notifier {executor.context};
-			ExecuteTask();
-		}
-		executor.FinishTask();
-		return TaskExecutionResult::TASK_FINISHED;
-	} catch (std::exception &ex) {
-		executor.PushError(ErrorData(ex));
-	} catch (...) { // LCOV_EXCL_START
-		executor.PushError(ErrorData("Unknown exception during Checkpoint!"));
-	} // LCOV_EXCL_STOP
-	executor.FinishTask();
-	return TaskExecutionResult::TASK_ERROR;
 }
 
 } // namespace duckdb

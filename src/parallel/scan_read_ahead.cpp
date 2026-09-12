@@ -255,7 +255,7 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	auto completion = make_shared_ptr<ReadAheadJobCompletion>(executor);
 	job->io_completion = completion;
 	// wrap all reads before scheduling any, a wrapped task settles the completion even when scheduling throws
-	vector<unique_ptr<Task>> read_tasks;
+	vector<unique_ptr<BaseExecutorTask>> read_tasks;
 	read_tasks.reserve(io_tasks.size());
 	for (auto &task : io_tasks) {
 		job->io_bytes += task->GetIOSize();
