@@ -799,11 +799,14 @@ void DataTable::VerifyAppendedForeignKeys(ClientContext &context, idx_t start, i
 	if (append_constraints.empty()) {
 		return;
 	}
-
 	auto &transaction = DuckTransaction::Get(context, db);
+	auto &local_storage = LocalStorage::Get(context, db);
+	auto local_table_storage = local_storage.GetStorage(*this);
+	if (!local_table_storage) {
+		return;
+	}
+	auto &collection = local_table_storage->GetCollection();
 	auto types = GetTypes();
-	ColumnFetchState fetch_state;
-	Vector row_ids(LogicalType::ROW_TYPE);
 	for (auto &bound_foreign_key_ref : append_constraints) {
 		auto &bound_foreign_key = bound_foreign_key_ref.get();
 		auto &fk_keys = bound_foreign_key.info.fk_keys;
@@ -813,26 +816,29 @@ void DataTable::VerifyAppendedForeignKeys(ClientContext &context, idx_t start, i
 			column_ids.emplace_back(fk_key.index);
 			fk_types.push_back(types[fk_key.index]);
 		}
+		// Read the key columns with a vectorized range scan instead of a per-row fetch; the scan starts at the
+		// enclosing vector boundary, so a few rows appended by earlier statements may be verified again
+		TableScanState scan_state;
+		scan_state.Initialize(column_ids);
+		auto local_start = NumericCast<idx_t>(MAX_ROW_ID) + start;
+		auto local_end = NumericCast<idx_t>(MAX_ROW_ID) + end;
+		collection.InitializeScanWithOffset(QueryContext(context), scan_state.table_state, column_ids, local_start,
+		                                    local_end);
 		DataChunk fk_chunk;
 		fk_chunk.Initialize(context, fk_types);
-		for (idx_t offset = start; offset < end; offset += STANDARD_VECTOR_SIZE) {
+		while (true) {
 			context.InterruptCheck();
-			auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, end - offset);
-			row_ids.SetVectorType(VectorType::FLAT_VECTOR);
-			auto row_id_data = FlatVector::GetDataMutable<row_t>(row_ids);
-			for (idx_t i = 0; i < count; i++) {
-				row_id_data[i] = MAX_ROW_ID + NumericCast<row_t>(offset + i);
-			}
 			fk_chunk.Reset();
-			Fetch(transaction, fk_chunk, column_ids, row_ids, count, fetch_state);
-
+			if (!scan_state.table_state.Scan(transaction, fk_chunk)) {
+				break;
+			}
 			// Build a shell chunk holding the key columns at their physical positions
 			DataChunk shell_chunk;
 			shell_chunk.InitializeEmpty(types);
 			for (idx_t i = 0; i < fk_keys.size(); i++) {
 				shell_chunk.data[fk_keys[i].index].Reference(fk_chunk.data[i]);
 			}
-			shell_chunk.SetChildCardinality(count);
+			shell_chunk.SetChildCardinality(fk_chunk.size());
 			VerifyAppendForeignKeyConstraint(nullptr, bound_foreign_key, context, shell_chunk);
 		}
 	}
