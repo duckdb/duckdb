@@ -1,6 +1,6 @@
-# name: test/sql/storage/wal/group_commit_concurrent_checkpoint.test_slow
+# name: test/sql/storage/concurrent_wal/group_commit_concurrent_checkpoint.test_slow
 # description: Group commit: commits concurrent with frequent checkpoints make progress (no deadlock) and replay
-# group: [wal]
+# group: [concurrent_wal]
 
 statement ok
 SET checkpoint_threshold='1TB'

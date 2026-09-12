@@ -1,6 +1,6 @@
-# name: test/sql/storage/wal/group_commit_conflict.test_slow
+# name: test/sql/storage/concurrent_wal/group_commit_conflict.test_slow
 # description: Group commit: concurrent conflicting commits keep the conserved invariant and survive WAL replay
-# group: [wal]
+# group: [concurrent_wal]
 
 statement ok
 SET checkpoint_threshold='1TB'

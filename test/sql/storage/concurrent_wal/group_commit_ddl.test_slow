@@ -1,6 +1,6 @@
-# name: test/sql/storage/wal/group_commit_ddl.test_slow
+# name: test/sql/storage/concurrent_wal/group_commit_ddl.test_slow
 # description: Group commit: concurrent DDL shares fsyncs with data commits and replays correctly
-# group: [wal]
+# group: [concurrent_wal]
 
 # force WAL-only so reopening must replay both the catalog and the data changes
 statement ok

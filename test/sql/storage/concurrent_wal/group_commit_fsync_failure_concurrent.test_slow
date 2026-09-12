@@ -1,6 +1,6 @@
-# name: test/sql/storage/wal/group_commit_fsync_failure_concurrent.test_slow
+# name: test/sql/storage/concurrent_wal/group_commit_fsync_failure_concurrent.test_slow
 # description: Group commit: when a shared fsync fails no commit in the group is acknowledged, and the database fails stop
-# group: [wal]
+# group: [concurrent_wal]
 
 load {TEST_DIR}/group_commit_fsync_fail_conc.db
 
