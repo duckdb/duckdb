@@ -29,7 +29,7 @@ public:
 		state.token_iterator.SetPreviousTokenType(TokenType::NUMBER_LITERAL);
 		auto result = state.AllocateParseResult<NumberParseResult>(token_text, start_offset, token_length);
 		if (result.HasParseResult()) {
-			result.GetParseResult()->name = name;
+			state.context.allocator.Get(result.GetParseResult()).name = name;
 		}
 		return result;
 	}

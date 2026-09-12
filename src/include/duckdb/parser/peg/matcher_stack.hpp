@@ -7,11 +7,31 @@
 
 #pragma once
 
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
+
+using match_frame_index_t = idx_t;
+
+class MatchStack;
+
+//! Locates a MatchState either outside the stack or within a stable frame slot.
+struct MatchStateReference {
+	explicit MatchStateReference(MatchState &state_p) : external_state(state_p) {
+	}
+	explicit MatchStateReference(idx_t frame_offset_p) : frame_offset(frame_offset_p) {
+	}
+
+	MatchState &Get(MatchStack &stack, match_frame_index_t frame_index);
+
+private:
+	optional_ptr<MatchState> external_state;
+	idx_t frame_offset = 0;
+};
 
 struct PackratMatchState {
 	static bool IsEnabled(const Matcher &matcher, const MatchState &state) {
@@ -28,14 +48,17 @@ private:
 
 struct MatchStackFrame {
 public:
-	explicit MatchStackFrame(MatchInput input);
+	MatchStackFrame(const Matcher &matcher_p, MatchStateReference match_state_p, data_ptr_t process_storage_p,
+	                idx_t process_capacity, idx_t process_alignment);
 
 public:
 	bool IsInitialized() const;
+	MatchState &GetMatchState(MatchStack &stack, match_frame_index_t frame_index);
 
 public:
 	const Matcher &matcher;
-	MatchState &match_state;
+	MatchStateReference match_state;
+	MatchProcessInlineStorage process_inline_storage;
 	arena_ptr<MatchProcess> process;
 	optional<MatcherResult> child_result;
 	optional<MatcherResult> result;
@@ -50,8 +73,18 @@ public:
 	MatcherResult Execute(MatchInput input);
 
 private:
-	static constexpr idx_t INITIAL_FRAME_CAPACITY = 64;
+	static constexpr idx_t FRAME_SEGMENT_CAPACITY = 64;
+	static constexpr idx_t INLINE_FRAME_SEGMENT_COUNT = 2;
 
+	static idx_t FrameHeaderSize();
+	static idx_t FrameSlotSize();
+	static idx_t FrameSegmentSize();
+	void AllocateFrameSegment();
+	data_ptr_t GetFrameSegment(idx_t segment_index) const;
+	void SetActiveFrameSegment(idx_t segment_index);
+	data_ptr_t GetFrameSlot(match_frame_index_t frame_index) const;
+	MatchStackFrame &GetFrame(match_frame_index_t frame_index) const;
+	MatchStateReference CreateStateReference(MatchState &state) const;
 	MatcherResult ExecuteAtomicMatcher(MatchInput input);
 	void DestroyTopFrame();
 	void PushFrame(MatchInput input);
@@ -61,7 +94,14 @@ private:
 	MatcherResult FinalizeFrame(MatchStackFrame &frame);
 
 private:
-	vector<MatchStackFrame> frames;
+	friend struct MatchStateReference;
+	ArenaAllocator frame_allocator;
+	array<data_ptr_t, INLINE_FRAME_SEGMENT_COUNT> inline_frame_segments {};
+	vector<data_ptr_t> overflow_frame_segments;
+	idx_t frame_segment_count = 0;
+	idx_t frame_count = 0;
+	data_ptr_t active_frame_segment = nullptr;
+	idx_t active_frame_segment_index = DConstants::INVALID_INDEX;
 };
 
 } // namespace duckdb
