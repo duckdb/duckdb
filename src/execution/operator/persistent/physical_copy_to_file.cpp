@@ -2588,9 +2588,7 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 				sinking_state = make_shared_ptr<PartitionedCopyState>(*this, std::move(global_sink_state));
 			}
 			lstate.current_state = sinking_state;
-		}
-
-		{
+			// count in under the global lock, so a flush cannot start between picking the state and counting
 			annotated_lock_guard<annotated_mutex> state_guard(lstate.current_state->lock);
 			lstate.current_state->locals++;
 		}
