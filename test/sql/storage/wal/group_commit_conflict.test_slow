@@ -8,6 +8,10 @@ SET checkpoint_threshold='1TB'
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
+# widen the publish-to-durable window so updates run against commits that are not yet durable
+statement ok
+SET debug_wal_fsync_sleep_ms=2
+
 statement ok
 ATTACH '{TEST_DIR}/group_commit_conflict.db' AS gc
 
