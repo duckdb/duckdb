@@ -219,7 +219,9 @@ struct MinMaxFoldClient {
 			// upper-bound the true maximum, so a plain comparison cannot exclude the partition
 			return false;
 		}
-		return comparator->Compare(candidate, bound);
+		// the partition is excluded when its bound is weakly dominated by the candidate: a surviving
+		// row changes the candidate only if it compares strictly better than it
+		return !comparator->Compare(bound, candidate);
 	}
 
 	Value FallbackValue() const {

@@ -59,9 +59,10 @@ concept PartitionFoldClient = requires(const Client &client, const FoldPartition
 	{ client.ClassifyPartition(partition, value) } -> std::same_as<FoldPartitionState>;
 	// Merge an exact value into the running candidate.
 	client.CombineCandidate(value, value);
-	// Whether a BOUND partition cannot contribute a value strictly better than the candidate. The
-	// comparison must be sound for the kind of bound the client returned - statistics that are not
-	// safe for a plain comparison (e.g. truncated string prefixes) must not be excluded.
+	// Whether a BOUND partition cannot contribute a surviving row that would change the candidate -
+	// i.e. its bound is weakly dominated by the candidate. Only consulted after the exact partitions
+	// have produced a candidate. Statistics that are not safe for a plain comparison (e.g. truncated
+	// string prefixes) must not be excluded.
 	{ client.ExcludesCandidate(value, value) } -> std::same_as<bool>;
 	// The result when every partition is NEUTRAL.
 	{ client.FallbackValue() } -> std::same_as<Value>;

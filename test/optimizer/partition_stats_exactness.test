@@ -195,6 +195,46 @@ SELECT min(id), max(id) FROM vetoed
 ----
 0	499998
 
+# a deleted partition whose all-rows bound ties the candidate is excluded as well: the exact
+# partition attains the extremum, so a surviving row equal to the candidate cannot change it.
+# the extremum 499999 lives in the first and in the (deleted) third row group; the deleted
+# partition's bound ties the exact candidate and no longer vetoes the fold
+statement ok
+CREATE TABLE tied (id BIGINT);
+
+statement ok
+INSERT INTO tied SELECT CASE WHEN i = 0 THEN 499999 ELSE i - 1 END FROM range(0, 122880) t(i);
+
+statement ok
+INSERT INTO tied SELECT i FROM range(122879, 245759) t(i);
+
+statement ok
+INSERT INTO tied SELECT i FROM range(245759, 368638) t(i);
+
+statement ok
+INSERT INTO tied SELECT 499999;
+
+statement ok
+INSERT INTO tied SELECT i FROM range(368638, 491518) t(i);
+
+statement ok
+DELETE FROM tied WHERE id BETWEEN 250000 AND 250010;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM tied
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+SELECT min(id), max(id) FROM tied
+----
+0	499999
+
 # a row group that is both deleted and cut by the filter is still a bound: its all-rows maximum is
 # dominated by the exact candidate from the aligned row groups, so max folds - the minimum, whose
 # true value lives in the surviving part of that row group, vetoes
