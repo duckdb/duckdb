@@ -302,7 +302,7 @@ TEST_CASE("Test internal appender foreign key checks", "[api]") {
 	auto &table_entry =
 	    Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "child"));
 
-	// Rows referencing a non-existent parent are rejected: the internal appender has no statement end to defer to
+	// Appends outside a statement are still checked eagerly, so the row is rejected when the appender is flushed
 	{
 		InternalAppender appender(context, table_entry);
 		appender.AppendRow(1);

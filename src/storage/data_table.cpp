@@ -911,7 +911,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 			// so that all rows written by the statement are visible to the check
 			if (!context.transaction.HasActiveTransaction() ||
 			    context.transaction.GetActiveQuery() == MAXIMUM_QUERY_ID) {
-				// appends outside of a statement (e.g. the internal appender) have no statement end to defer to
+				// appends outside of a statement (e.g. the internal appender) are not verified later
 				auto &bound_foreign_key = constraint->Cast<BoundForeignKeyConstraint>();
 				if (bound_foreign_key.info.IsAppendConstraint()) {
 					VerifyAppendForeignKeyConstraint(storage, bound_foreign_key, context, chunk);
