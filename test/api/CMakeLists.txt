@@ -38,6 +38,8 @@ set(TEST_API_OBJECTS
     test_extension_schema_api.cpp
     test_pending_query.cpp
     test_query_result.cpp
+    test_query_result_format.cpp
+    test_query_result_format_buffer.cpp
     test_query_result_stream.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp

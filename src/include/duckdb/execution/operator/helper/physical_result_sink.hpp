@@ -9,24 +9,17 @@
 #pragma once
 
 #include "duckdb/common/enums/result_lifetime.hpp"
+#include "duckdb/common/enums/result_ordering.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 
 namespace duckdb {
 
 class BufferedData;
+class ResultFormatLocalState;
+class ResultUnit;
 
 class ResultSinkGlobalState;
 class ResultSinkLocalState;
-
-//! How the consumer-visible chunk order is established
-enum class ResultOrdering : uint8_t {
-	//! No order guarantee: a parallel sink stores chunks as they arrive
-	UNORDERED,
-	//! Source order, preserved by sinking through a single thread
-	SOURCE_ORDERED,
-	//! Source order, restored from batch indexes under a parallel sink
-	BATCH_INDEX_ORDERED
-};
 
 //! The root operator of every chunk-producing plan.
 class PhysicalResultSink : public PhysicalResultCollector {
@@ -69,12 +62,31 @@ private:
 	//! The retention in effect: the consumer's decision for a deferred sink, the plan's otherwise
 	ResultLifetime CurrentLifetime(ResultSinkGlobalState &gstate) const;
 	bool DrainsByBatchIndex(ResultSinkGlobalState &gstate) const;
+	//! Whether the settled format is the identity. True for a sink the plan retained, which has no buffer
+	bool UsesChunkFormat(ResultSinkGlobalState &gstate) const;
+	//! The producer's format state, created at its first Append
+	ResultFormatLocalState &LocalFormatState(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
+	//! Append the chunk, and finish the unit when it reached the format's target. Null otherwise
+	unique_ptr<ResultUnit> AppendToUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+	                                    DataChunk &chunk) const;
+	//! Finish the unit under construction. Null when there is none
+	unique_ptr<ResultUnit> FinishUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
+	//! Give a finished unit to the buffer. True when the producer parked holding it
+	bool HandOver(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, unique_ptr<ResultUnit> unit,
+	              const InterruptState &interrupt) const;
+	//! Finish the unit under construction, so no unit spans two batch indexes: hand it to the buffer
+	//! when draining, list it for Combine when retained. True when the producer parked holding it
+	bool FlushPartialUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+	                      const InterruptState &interrupt) const;
 	SinkResultType SinkDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk,
 	                            OperatorSinkInput &input) const;
 	SinkResultType SinkRetained(ExecutionContext &context, ResultSinkLocalState &lstate, DataChunk &chunk) const;
+	SinkResultType SinkRetainedFormatted(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+	                                     DataChunk &chunk) const;
 	SinkCombineResultType CombineDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
 	SinkCombineResultType CombineRetained(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
 	unique_ptr<QueryResult> GetMaterializedResult(ResultSinkGlobalState &gstate) const;
+	unique_ptr<QueryResult> GetFormattedResult(ResultSinkGlobalState &gstate, ClientContext &context) const;
 
 private:
 	//! The buffer created at submission, which also holds the retention decision
