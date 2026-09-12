@@ -315,6 +315,13 @@ public:
 		max_pending_tasks = MaxValue<idx_t>(MIN_PENDING_TASKS, (async_threads + regular_threads) * 4);
 	}
 
+	~CopyFileLifecycleExecutor() {
+		// A queued task's Cancel reaches back into this object (GetError, FinishTask). Join here, while every
+		// member is still alive, rather than leaving it to ~TaskExecutor, which runs after error_lock and error
+		// have already been destroyed. CancelAndDrain does not throw.
+		executor.CancelAndDrain();
+	}
+
 public:
 	template <class FUNC>
 	void Schedule(shared_ptr<CopyFileLifecycleJob> job, CopyFileLifecycleWaitMode mode, FUNC &&task);
