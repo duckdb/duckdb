@@ -20,7 +20,7 @@ PendingQueryResult::PendingQueryResult(ErrorData error)
 PendingQueryResult::~PendingQueryResult() {
 }
 
-unique_ptr<ClientContextLock> PendingQueryResult::LockContext() {
+ClientContext &PendingQueryResult::GetClientContext() const {
 	if (!context) {
 		if (HasError()) {
 			throw InvalidInputException(
@@ -28,7 +28,7 @@ unique_ptr<ClientContextLock> PendingQueryResult::LockContext() {
 		}
 		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result");
 	}
-	return context->LockContext();
+	return *context;
 }
 
 void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
@@ -46,19 +46,19 @@ void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 }
 
 void PendingQueryResult::WaitForTask() {
-	auto lock = LockContext();
-	context->WaitForTask(*lock, *this);
+	ClientContextLock lock(GetClientContext());
+	context->WaitForTask(lock, *this);
 }
 
 PendingExecutionResult PendingQueryResult::ExecuteTask() {
-	auto lock = LockContext();
-	return ExecuteTaskInternal(*lock);
+	ClientContextLock lock(GetClientContext());
+	return ExecuteTaskInternal(lock);
 }
 
 PendingExecutionResult PendingQueryResult::CheckPulse() {
-	auto lock = LockContext();
-	CheckExecutableInternal(*lock);
-	return context->ExecuteTaskInternal(*lock, *this, true);
+	ClientContextLock lock(GetClientContext());
+	CheckExecutableInternal(lock);
+	return context->ExecuteTaskInternal(lock, *this, true);
 }
 
 bool PendingQueryResult::AllowStreamResult() const {
@@ -94,17 +94,17 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 }
 
 unique_ptr<QueryResult> PendingQueryResult::Execute() {
-	auto lock = LockContext();
-	return ExecuteInternal(*lock);
+	ClientContextLock lock(GetClientContext());
+	return ExecuteInternal(lock);
 }
 
 void PendingQueryResult::Close() {
 	if (context) {
-		auto lock = LockContext();
-		if (context->IsActiveResult(*lock, *this)) {
+		ClientContextLock lock(GetClientContext());
+		if (context->IsActiveResult(lock, *this)) {
 			// Abandoned before execution finished: release the active-query state now (matching
 			// InitialCleanup) instead of leaking it until the next query or context teardown.
-			context->CleanupInternal(*lock, this, false);
+			context->CleanupInternal(lock, this, false);
 		}
 	}
 	context.reset();

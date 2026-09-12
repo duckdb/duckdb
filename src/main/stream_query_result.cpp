@@ -35,7 +35,7 @@ string StreamQueryResult::ToString() {
 	return result;
 }
 
-unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
+ClientContext &StreamQueryResult::GetClientContext() const {
 	if (!context) {
 		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
 		if (HasError()) {
@@ -43,7 +43,7 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 		}
 		throw InvalidInputException(error_str);
 	}
-	return context->LockContext();
+	return *context;
 }
 
 StreamExecutionResult StreamQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
@@ -51,18 +51,18 @@ StreamExecutionResult StreamQueryResult::ExecuteTaskInternal(ClientContextLock &
 }
 
 StreamExecutionResult StreamQueryResult::ExecuteTask() {
-	auto lock = LockContext();
-	return ExecuteTaskInternal(*lock);
+	ClientContextLock lock(GetClientContext());
+	return ExecuteTaskInternal(lock);
 }
 
 void StreamQueryResult::WaitForTask() {
-	auto lock = LockContext();
+	ClientContextLock lock(GetClientContext());
 	// Nothing to wait for on a result being materialized; ExecuteTask reports it
 	if (buffered_data->Decide(ResultLifetime::DRAINING) != ResultLifetime::DRAINING) {
 		return;
 	}
 	buffered_data->UnblockSinks();
-	context->WaitForTask(*lock, *this);
+	context->WaitForTask(lock, *this);
 }
 
 static bool ExecutionErrorOccurred(StreamExecutionResult result) {
@@ -112,9 +112,9 @@ unique_ptr<DataChunk> StreamQueryResult::FetchNextInternal(ClientContextLock &lo
 unique_ptr<DataChunk> StreamQueryResult::FetchInternal() {
 	unique_ptr<DataChunk> chunk;
 	{
-		auto lock = LockContext();
-		CheckExecutableInternal(*lock);
-		chunk = FetchNextInternal(*lock);
+		ClientContextLock lock(GetClientContext());
+		CheckExecutableInternal(lock);
+		chunk = FetchNextInternal(lock);
 	}
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 		if (!HasError()) {
@@ -179,23 +179,23 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	bool retained;
 	unique_ptr<QueryResult> result;
 	{
-		auto lock = LockContext();
-		CheckExecutableInternal(*lock);
+		ClientContextLock lock(GetClientContext());
+		CheckExecutableInternal(lock);
 		retained = buffered_data->Decide(ResultLifetime::RETAINED) == ResultLifetime::RETAINED;
 		if (retained) {
 			// Producers append into the sink's collection from here on, so the query runs to
 			// completion and the collection is taken from the sink instead of copied out of the buffer
 			PendingExecutionResult execution_result;
 			while (!PendingQueryResult::IsExecutionFinished(execution_result =
-			                                                    context->ExecuteTaskInternal(*lock, *this))) {
+			                                                    context->ExecuteTaskInternal(lock, *this))) {
 				if (execution_result == PendingExecutionResult::BLOCKED ||
 				    execution_result == PendingExecutionResult::RESULT_READY) {
-					context->WaitForTask(*lock, *this);
+					context->WaitForTask(lock, *this);
 				}
 			}
 			if (execution_result == PendingExecutionResult::EXECUTION_FINISHED) {
 				result = context->GetExecutor().GetResult();
-				context->CleanupInternal(*lock, result.get(), false);
+				context->CleanupInternal(lock, result.get(), false);
 			}
 		}
 	}
@@ -232,18 +232,18 @@ bool StreamQueryResult::IsOpen() {
 	if (HasError() || !context) {
 		return false;
 	}
-	auto lock = LockContext();
-	return IsOpenInternal(*lock);
+	ClientContextLock lock(GetClientContext());
+	return IsOpenInternal(lock);
 }
 
 void StreamQueryResult::Close() {
 	buffered_data->Close();
 	if (context) {
-		auto lock = LockContext();
-		if (context->IsActiveResult(*lock, *this)) {
+		ClientContextLock lock(GetClientContext());
+		if (context->IsActiveResult(lock, *this)) {
 			// Abandoned before the stream was fully drained: release the active-query state now
 			// (matching InitialCleanup) instead of leaking it until the next query or context teardown.
-			context->CleanupInternal(*lock, this, false);
+			context->CleanupInternal(lock, this, false);
 		}
 	}
 	context.reset();

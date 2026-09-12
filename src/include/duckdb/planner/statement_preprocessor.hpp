@@ -13,10 +13,10 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/common/enums/current_transaction_state.hpp"
+#include "duckdb/main/client_context_lock.hpp"
 
 namespace duckdb {
 class ClientContext;
-class ClientContextLock;
 class SQLStatement;
 struct PragmaInfo;
 //! Preprocesses parsed statements: expands pragmas, unpacks multi-statements, and wraps in transactions
@@ -24,9 +24,9 @@ class StatementPreprocessor {
 public:
 	explicit StatementPreprocessor(ClientContext &context);
 	void Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-	                CurrentTransactionState transaction_context_state);
+	                CurrentTransactionState transaction_context_state) DUCKDB_REQUIRES(lock);
 	void PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-	                        CurrentTransactionState transaction_context_state);
+	                        CurrentTransactionState transaction_context_state) DUCKDB_REQUIRES(lock);
 
 private:
 	ClientContext &context;
