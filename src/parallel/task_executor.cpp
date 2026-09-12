@@ -36,6 +36,11 @@ public:
 		return task->TaskType();
 	}
 
+	//! Retire a task that never made it into the queue, without touching the executor's accounting
+	void Retire() {
+		RunGuarded([&]() { task->Cancel(); }, "Unknown exception while cancelling a task");
+	}
+
 private:
 	//! Settles the executor's task counter on every exit path, so that a drain always terminates
 	class FinishGuard {
@@ -109,19 +114,23 @@ bool TaskExecutor::IsCancelled() const {
 
 void TaskExecutor::ScheduleTask(unique_ptr<BaseExecutorTask> task) {
 	// wrap before taking ownership of a slot, so that a failure to allocate the wrapper needs no rollback
-	auto scheduled_task = make_uniq<TaskExecutorTask>(*this, std::move(task));
+	auto scheduled_task = make_shared_ptr<TaskExecutorTask>(*this, std::move(task));
 	{
 		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
 		++total_tasks;
 	}
 	try {
-		scheduler.ScheduleTask(*token, std::move(scheduled_task), type);
+		// hold on to our own reference, so that a task that fails to queue can still be retired
+		scheduler.ScheduleTask(*token, scheduled_task, type);
 	} catch (...) {
-		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
-		// We failed to schedule the task, so we decrement the total number of tasks, instead of incrementing completed
-		// tasks count.
-		--total_tasks;
-		token->producer_cv.notify_one();
+		{
+			const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
+			// We failed to schedule the task, so we decrement the total number of tasks, instead of incrementing
+			// completed tasks count.
+			--total_tasks;
+			token->producer_cv.notify_one();
+		}
+		scheduled_task->Retire();
 		throw;
 	}
 }

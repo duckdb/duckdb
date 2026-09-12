@@ -413,14 +413,11 @@ void CopyFileLifecycleExecutor::Schedule(shared_ptr<CopyFileLifecycleJob> job, C
                                          FUNC &&task) {
 	WaitForTaskSlot(mode);
 	auto job_ref = job;
+	using TaskType = CopyFileLifecycleTask<typename std::decay<FUNC>::type>;
+	auto lifecycle_task = make_uniq<TaskType>(executor, *this, std::move(job), std::forward<FUNC>(task));
+	// past this point the task settles pending_tasks itself, on the execute path and on the cancel path
 	++pending_tasks;
-	try {
-		using TaskType = CopyFileLifecycleTask<typename std::decay<FUNC>::type>;
-		executor.ScheduleTask(make_uniq<TaskType>(executor, *this, std::move(job), std::forward<FUNC>(task)));
-	} catch (...) {
-		--pending_tasks;
-		throw;
-	}
+	executor.ScheduleTask(std::move(lifecycle_task));
 	if (async_threads == 0) {
 		WaitForJob(*job_ref, mode);
 	}

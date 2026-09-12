@@ -32,8 +32,9 @@ public:
 public:
 	//! Perform the task's work - throwing is allowed, the executor captures the error and cancels the other tasks
 	virtual void ExecuteTask() = 0;
-	//! Called instead of ExecuteTask when the task is retired without running its work, because another task errored
-	//! or because the executor was cancelled. Exactly one of ExecuteTask or Cancel runs for every scheduled task.
+	//! Called instead of ExecuteTask when the task is retired without running its work, because another task errored,
+	//! because the executor was cancelled, or because the task could not be queued at all. Exactly one of ExecuteTask
+	//! or Cancel runs for every task passed to TaskExecutor::ScheduleTask.
 	//! Anything a waiter watches must be settled here as well as in ExecuteTask, or that waiter never wakes up.
 	virtual void Cancel() {
 	}
