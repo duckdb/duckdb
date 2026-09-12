@@ -245,10 +245,8 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 	if (entry == referenced_databases.end()) {
 		auto used_entry = used_databases.emplace(db_ref.GetName(), db_ref);
 		if (!used_entry.second) {
-			// return used_entry.first->second.get();
-			throw InternalException(
-			    "Database name %s was already used by a different database for this meta transaction",
-			    db_ref.GetName());
+			throw TransactionException("Cannot re-attach database %s in the same transaction that already used it",
+			                           db_ref.GetName());
 		}
 		referenced_databases.emplace(reference<AttachedDatabase>(db_ref), database);
 	}
