@@ -29,8 +29,8 @@ statement ok
 CREATE VIEW gc.owner_view AS SELECT * FROM gc.owner
 
 # threads 0-2 churn catalog entries, 3-5 append data, 6 drops and recreates a dependency pair -
-# a bounded snapshot can now start exactly at a pending catalog commit, which is the boundary
-# CatalogSet::HasConflict and DependencyManager::VerifyCommitDrop newly have to handle
+# a bounded snapshot can start exactly at a pending catalog commit, so catalog conflict checks and
+# dependency verification run at that boundary
 concurrentloop threadid 0 7
 
 loop x 0 15
