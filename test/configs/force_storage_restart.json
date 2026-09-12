@@ -94,7 +94,7 @@
       ]
     },
     {
-      "reason": "Asserts that a failed WAL fsync leaves the database invalidated; force_restart reopens it between statements, clearing the invalidation.",
+      "reason": "Asserts that commits keep failing after a failed WAL fsync; force_restart reopens the database between statements, clearing that state.",
       "paths": [
         "test/sql/storage/wal/wal_fsync_failure.test"
       ]

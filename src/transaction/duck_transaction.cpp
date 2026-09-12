@@ -291,8 +291,11 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 			throw InvalidInputException("Forced commit failure (debug_force_commit_failure)");
 		}
 		if (commit_state) {
-			// if we have written to the WAL - flush after the commit has been successful
-			commit_info.wal_sync_offset = commit_state->FlushCommit();
+			// if we have written to the WAL - flush after the commit has been successful. A commit with no
+			// other transactions has nothing to share its sync with: it syncs now, under the transaction
+			// lock, so no snapshot is bounded below it. Otherwise the sync happens once the locks are released
+			bool sync_now = commit_info.active_transactions == ActiveTransactionState::NO_OTHER_TRANSACTIONS;
+			commit_info.wal_sync_offset = commit_state->FlushCommit(sync_now);
 		}
 		drop_state.FinalizeCommit();
 		return ErrorData();

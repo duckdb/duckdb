@@ -79,6 +79,11 @@ struct GatedDatabase {
 
 	//! Run the query on its own connection and wait until its commit is parked in the WAL fsync
 	void StartWriter(const string &query) {
+		// a commit with no other transaction syncs under the transaction lock; keep one open, touching
+		// the database so it really starts, and the writer defers its sync instead
+		holder = make_uniq<Connection>(*db);
+		REQUIRE_NO_FAIL(holder->Query("BEGIN"));
+		REQUIRE_NO_FAIL(holder->Query("SELECT count(*) FROM t"));
 		gate->Arm();
 		writer = std::thread([this, query]() {
 			Connection con(*db);
@@ -92,11 +97,16 @@ struct GatedDatabase {
 		if (writer.joinable()) {
 			writer.join();
 		}
+		if (holder) {
+			holder->Query("ROLLBACK");
+			holder.reset();
+		}
 		return !writer_failed;
 	}
 
 	unique_ptr<DuckDB> db;
 	GatedFsyncFileSystem *gate;
+	unique_ptr<Connection> holder;
 	std::thread writer;
 	bool writer_failed = false;
 };

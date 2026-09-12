@@ -1,5 +1,5 @@
 # name: test/sql/storage/wal/wal_fsync_failure.test
-# description: A failed WAL fsync fails the commit and invalidates the database
+# description: A failed WAL fsync fails the commit, and the WAL is not synced again
 # group: [wal]
 
 load __TEST_DIR__/wal_fsync_failure.db
@@ -24,16 +24,21 @@ INSERT INTO t VALUES (2)
 ----
 injected WAL fsync failure
 
-# invalidated: a published commit cannot be rolled back
-statement error
+# alone, the commit synced under the transaction lock, so nobody saw it and it rolled back
+query I
 SELECT count(*) FROM t
 ----
-Failed to sync the WAL after committing
+1
 
-# the failed commit is in doubt: its bytes reached the OS, so a reopen may replay it
+# the WAL is not synced again until it is reopened
+statement error
+INSERT INTO t VALUES (3)
+----
+a previous sync of this WAL has failed
+
 restart
 
 query I
 SELECT count(*) FROM t
 ----
-2
+1

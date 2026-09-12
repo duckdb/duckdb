@@ -426,8 +426,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	// commit the UndoBuffer of the transaction
 	if (!error.HasError()) {
-		if (HasOtherTransactions(transaction) || wal_written) {
-			// bounded snapshots can still start below a WAL-written commit and need its old state
+		if (HasOtherTransactions(transaction)) {
 			info.active_transactions = ActiveTransactionState::OTHER_TRANSACTIONS;
 		} else {
 			info.active_transactions = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
@@ -452,8 +451,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		DUCKDB_LOG(context, TransactionLogType, db, "Commit", info.commit_id);
 		last_commit = info.commit_id;
 		if (wal_written && info.wal_sync_offset > 0) {
-			// published but not yet durable: the transaction stays active until the sync below. No
-			// flush marker (offset 0) means nothing reached the WAL, so there is nothing to wait for
+			// published but not yet durable: the transaction stays active until the sync below. Offset 0
+			// means nothing reached the WAL, or the commit already synced under the lock: nothing to wait for
 			commit_wal = db.GetStorageManager().GetWAL();
 			if (commit_wal) {
 				// the catalog version is recorded before this commit's own bump below
