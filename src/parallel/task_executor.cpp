@@ -99,6 +99,10 @@ void TaskExecutor::ThrowError() {
 	error_manager.ThrowException();
 }
 
+ErrorData TaskExecutor::GetError() {
+	return error_manager.GetError();
+}
+
 bool TaskExecutor::IsCancelled() const {
 	return cancelled;
 }
@@ -170,6 +174,16 @@ bool TaskExecutor::GetTask(shared_ptr<Task> &task) {
 }
 
 BaseExecutorTask::BaseExecutorTask(TaskExecutor &executor) : executor(executor) {
+}
+
+TaskExecutor::JoinGuard::JoinGuard(TaskExecutor &executor) : executor(executor) {
+}
+
+TaskExecutor::JoinGuard::~JoinGuard() {
+	try {
+		executor.WorkOnTasks();
+	} catch (...) { // NOLINT
+	}
 }
 
 } // namespace duckdb

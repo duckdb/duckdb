@@ -58,6 +58,8 @@ public:
 	bool HasError();
 	//! Throw an error that was encountered during execution (if HasError() is true)
 	void ThrowError();
+	//! Get the first error that was encountered during execution (if HasError() is true)
+	ErrorData GetError();
 	//! Whether the executor has been cancelled
 	bool IsCancelled() const;
 
@@ -71,6 +73,19 @@ public:
 
 	//! Get a task - returns true if a task was found
 	bool GetTask(shared_ptr<Task> &task);
+
+public:
+	//! Joins the executor when the scope is left, so that its tasks never outlive the state they reference.
+	//! Only needed for an executor that outlives the scope scheduling onto it, where its own destructor is not the
+	//! join. Errors are swallowed: the exception that is unwinding wins, and a recorded task error is still there.
+	class JoinGuard {
+	public:
+		explicit JoinGuard(TaskExecutor &executor);
+		~JoinGuard();
+
+	private:
+		TaskExecutor &executor;
+	};
 
 private:
 	//! Work on tasks until all tasks are finished
