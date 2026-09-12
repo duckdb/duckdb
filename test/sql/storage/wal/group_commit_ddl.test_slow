@@ -88,6 +88,3 @@ query I
 SELECT count(*) >= 100 AND count(*) = count(DISTINCT i) FROM gc.base
 ----
 true
-
-statement ok
-DETACH gc

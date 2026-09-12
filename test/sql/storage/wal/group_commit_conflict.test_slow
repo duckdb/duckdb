@@ -49,6 +49,3 @@ query I
 SELECT SUM(balance) FROM gc.accounts
 ----
 10000
-
-statement ok
-DETACH gc

@@ -66,6 +66,3 @@ statement error
 INSERT INTO gc.t VALUES (100, 99)
 ----
 <REGEX>:.*violates primary key.*
-
-statement ok
-DETACH gc

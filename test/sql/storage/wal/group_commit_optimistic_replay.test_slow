@@ -40,6 +40,3 @@ query II
 SELECT COUNT(*), SUM(i) FROM gc.big
 ----
 600000	179999700000
-
-statement ok
-DETACH gc

@@ -43,6 +43,3 @@ query II
 SELECT COUNT(*), SUM(i) FROM gc.integers
 ----
 1000	499500
-
-statement ok
-DETACH gc
