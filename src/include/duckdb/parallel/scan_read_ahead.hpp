@@ -154,7 +154,8 @@ public:
 	void PushError(ErrorData error);
 
 	//! Schedule a file-open closure on the async pool, opening files ahead of decoding
-	void ScheduleFileOpen(std::function<void()> open_fn);
+	//! cancel_fn runs instead when the open is retired without running, and must settle whatever a scan waits on
+	void ScheduleFileOpen(std::function<void()> open_fn, std::function<void()> cancel_fn);
 	//! Whether another file-open may be scheduled without exceeding the open-ahead window
 	bool CanScheduleOpen() const;
 	//! Run one queued async task inline, throwing any recorded async error; returns false when none is queued

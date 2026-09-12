@@ -54,3 +54,19 @@ TEST_CASE("Read-ahead inline task draining surfaces async errors", "[api]") {
 	read_ahead.PushError(ErrorData("injected read-ahead error"));
 	REQUIRE_THROWS(read_ahead.TryRunPendingTask());
 }
+
+TEST_CASE("Read-ahead settles a file open that never runs", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	std::atomic<bool> opened {false};
+	std::atomic<bool> settled {false};
+	{
+		ScanReadAhead read_ahead(*con.context, 1, nullptr);
+		read_ahead.PushError(ErrorData("injected read-ahead error"));
+		read_ahead.ScheduleFileOpen([&]() { opened = true; }, [&]() { settled = true; });
+		// leaving the scope cancels and drains, retiring the open without running it
+	}
+	REQUIRE(settled);
+	REQUIRE(!opened);
+}
