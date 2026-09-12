@@ -1317,7 +1317,6 @@ public:
 private:
 	unique_ptr<const SortStrategy> ConstructSortStrategy() const;
 	void CreateNextState();
-	bool ShouldStopFlushing() const;
 	bool RequiresSerializedPartitionWrites() const;
 	void EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info, const vector<Value> &values)
 	    DUCKDB_EXCLUDES(copy_gstate.lock);
@@ -1358,8 +1357,6 @@ public:
 	atomic<bool> flushing;
 	//! How many threads are active
 	atomic<idx_t> locals;
-	//! How many threads did a combine
-	atomic<idx_t> combined;
 	//! Whether Finalize has been called
 	atomic<bool> finalized;
 
@@ -2516,7 +2513,7 @@ vector<vector<Value>> PartitionedCopyState::FinishTask(const PartitionedCopyTask
 PartitionedCopy::PartitionedCopy(const PhysicalCopyToFile &op_p, ClientContext &context_p,
                                  CopyToFileGlobalState &copy_gstate_p)
     : op(op_p), context(context_p), copy_gstate(copy_gstate_p), partition_writes(op_p, context_p),
-      sort_strategy(ConstructSortStrategy()), flushing(false), locals(0), combined(0), finalized(false) {
+      sort_strategy(ConstructSortStrategy()), flushing(false), locals(0), finalized(false) {
 	unordered_set<idx_t> part_col_set(op.partition_columns.begin(), op.partition_columns.end());
 	for (idx_t col_idx = 0; col_idx < op.expected_types.size(); col_idx++) {
 		raw_columns.push_back(col_idx);
@@ -2543,11 +2540,6 @@ void PartitionedCopy::CreateNextState() {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	D_ASSERT(!sinking_state);
 	sinking_state = make_shared_ptr<PartitionedCopyState>(*this, std::move(global_sink_state));
-}
-
-bool PartitionedCopy::ShouldStopFlushing() const {
-	return !finalized.load(std::memory_order_relaxed) &&
-	       locals.load(std::memory_order_relaxed) == combined.load(std::memory_order_relaxed);
 }
 
 bool PartitionedCopy::RequiresSerializedPartitionWrites() const {
@@ -2802,15 +2794,8 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		D_ASSERT(flushing_state_copy->global_source_state);
 	}
 
-	if (ShouldStopFlushing()) {
-		return; // Avoid straggling threads during Combine
-	}
-
 	while (auto task = flushing_state_copy->TryAssignTask()) {
 		flushing_state_copy->ExecuteTask(execution_context, *task, interrupt_state);
-		if (ShouldStopFlushing()) {
-			break; // Avoid straggling threads during Combine
-		}
 	}
 
 	if (!flushing_state_copy->HasCompleted()) {
