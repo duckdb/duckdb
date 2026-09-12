@@ -78,10 +78,12 @@ SELECT count(*) FROM t WHERE __internal_barrier(i % 2048 = 42);
 
 # a throwing expression is the reason the barrier exists in the first place - it still prunes: no row group holds an
 # i > 5000 for which 100 // (i + 1) is 1, and the division is never evaluated to find that out
+# every partition is pruned, so the aggregate folds to its empty-input result and no row group is
+# scanned at all
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE __internal_barrier((100 // (i + 1)) = 1 AND i > 5000);
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+analyzed_plan	<!REGEX>:.*Row Groups Scanned.*
 
 query I
 SELECT count(*) FROM t WHERE __internal_barrier((100 // (i + 1)) = 1 AND i > 5000);

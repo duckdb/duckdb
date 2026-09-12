@@ -118,6 +118,22 @@ bool TryGetMinMaxColumnInfo(const Expression &expr, MinMaxColumnInfo &info) {
 	return true;
 }
 
+//! Extract the partition's extremum for the aggregate, cast to the result type. Returns false when
+//! the value cannot be represented.
+static bool ExtractMinMaxValue(BaseStatistics &column_stats, const ValueComparator &comparator,
+                               const LogicalType &result_type, Value &result) {
+	result = comparator.GetVal(column_stats);
+	if (result.type() != result_type) {
+		auto cast = result.DefaultTryCastAs(result_type);
+		if (!cast) {
+			// the value cannot be represented in the result type
+			return false;
+		}
+		result = std::move(*cast);
+	}
+	return true;
+}
+
 //! MIN/MAX over the partition statistics. Exact partitions are reduced into a candidate, partitions
 //! holding only NULL values are neutral; when every partition is neutral the result is NULL.
 struct MinMaxFoldClient {
@@ -153,6 +169,18 @@ struct MinMaxFoldClient {
 			has_min_max = StringStats::HasMinMax(*column_stats);
 		}
 
+		if (partition.filter_result != FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			// the filter cuts the partition: it only removes rows, so the all-rows statistics remain a
+			// superset bound over the surviving rows without ever being attained by one of them
+			if (!has_min_max) {
+				// the filter cannot turn a partition without non-null values into one with them
+				return column_stats->CanHaveNoNull() ? FoldPartitionState::NO_INFO : FoldPartitionState::NEUTRAL;
+			}
+			return ExtractMinMaxValue(*column_stats, *comparator, column_info.result_type, value)
+			           ? FoldPartitionState::BOUND
+			           : FoldPartitionState::NO_INFO;
+		}
+
 		const bool min_max_exact = stats.partition_row_group->MinMaxIsExact(storage_index);
 		if (!has_min_max) {
 			if (!min_max_exact) {
@@ -173,14 +201,8 @@ struct MinMaxFoldClient {
 			                 StringStats::GetMaxType(*column_stats) == StringStatsType::EXACT_STATS;
 		}
 
-		value = comparator->GetVal(*column_stats);
-		if (value.type() != column_info.result_type) {
-			auto cast = value.DefaultTryCastAs(column_info.result_type);
-			if (!cast) {
-				// the value cannot be represented in the result type
-				return FoldPartitionState::NO_INFO;
-			}
-			value = std::move(*cast);
+		if (!ExtractMinMaxValue(*column_stats, *comparator, column_info.result_type, value)) {
+			return FoldPartitionState::NO_INFO;
 		}
 		return value_is_exact ? FoldPartitionState::EXACT_VALUE : FoldPartitionState::BOUND;
 	}
@@ -213,8 +235,10 @@ struct MinMaxFoldClient {
 //! COUNT(*) over the partition statistics: the partition counts must be exact and are summed.
 struct CountStarFoldClient {
 	FoldPartitionState ClassifyPartition(const FoldPartition &partition, Value &value) const {
-		if (partition.stats.count_type == CountType::COUNT_APPROXIMATE) {
-			// we cannot get an exact count
+		if (partition.filter_result != FilterPropagateResult::FILTER_ALWAYS_TRUE ||
+		    partition.stats.count_type == CountType::COUNT_APPROXIMATE) {
+			// we cannot get an exact count: the surviving row count of a partition the filter cuts
+			// is unknown, and an approximate total is just as unusable
 			return FoldPartitionState::NO_INFO;
 		}
 		value = Value::BIGINT(NumericCast<int64_t>(partition.stats.count));
@@ -356,7 +380,6 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	// Build the partition list shared by filter classification and folding; `original_index` is the
 	// position of the partition in the row-group list
 	vector<FoldPartition> partitions;
-	bool need_to_scan = false;
 	// we can keep execute eager aggregate if all partitions could be either filtered entirely or remained entirely
 	if (get.table_filters.HasFilters()) {
 		map<StorageIndex, reference<TableFilter>> filter_storage_index_map;
@@ -410,7 +433,9 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 				break;
 			default:
-				need_to_scan = true;
+				// the filter cuts the partition: the surviving rows are a subset of the rows the
+				// statistics describe, so the partition enters the fold as a bound
+				partitions.emplace_back(std::move(stats), partition_idx, filter_result);
 				break;
 			}
 		}
@@ -420,18 +445,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			                        FilterPropagateResult::FILTER_ALWAYS_TRUE);
 		}
 	}
-	if (partitions.empty()) {
-		// no partitions can be pre-computed
-		return;
-	}
-
-	if (need_to_scan) {
-		// Partial precomputation combines plan-time partition statistics with an execution-time scan that
-		// skips partitions by their index in the row-group list. That list can change in between
-		// (concurrent appends, checkpoints), in which case a skipped partition is scanned again and its
-		// rows are counted twice. Only the full precomputation (no scan) is safe.
-		return;
-	}
+	// An empty list after filter classification means every partition was filtered out entirely:
+	// the aggregates run over an empty surviving set and fold to their fallback values. A
+	// partition-statistics list that is empty to begin with is different - it means the statistics
+	// are unknown, not that there are no rows - and is rejected earlier.
 
 	// Fold each recognized aggregate with a stack-allocated client of its own type
 	vector<Value> results(aggr.expressions.size());

@@ -195,6 +195,40 @@ SELECT min(id), max(id) FROM vetoed
 ----
 0	499998
 
+# a row group that is both deleted and cut by the filter is still a bound: its all-rows maximum is
+# dominated by the exact candidate from the aligned row groups, so max folds - the minimum, whose
+# true value lives in the surviving part of that row group, vetoes
+statement ok
+CREATE TABLE resdel AS SELECT i AS id FROM range(0, 500_000) t(i);
+
+statement ok
+DELETE FROM resdel WHERE id BETWEEN 11 AND 20;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+EXPLAIN SELECT max(id) FROM resdel WHERE id > 10
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query I
+SELECT max(id) FROM resdel WHERE id > 10
+----
+499999
+
+query II
+EXPLAIN SELECT min(id) FROM resdel WHERE id > 10
+----
+physical_plan	<REGEX>:.*Sequential Scan.*
+
+query I
+SELECT min(id) FROM resdel WHERE id > 10
+----
+21
+
 # Loaded deletes make min/max inexact, so offset pruning must not use stale row group ordering stats.
 statement ok
 CREATE TABLE rg_order AS

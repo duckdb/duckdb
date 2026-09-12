@@ -191,6 +191,19 @@ TEST_CASE("NO_INFO vetoes the fold immediately", "[optimizer][partition_fold]") 
 	REQUIRE(!PartitionFold(single_partition, fatal_client, result));
 }
 
+TEST_CASE("An empty partition list folds to the fallback values", "[optimizer][partition_fold]") {
+	vector<FoldPartition> partitions;
+
+	ScriptedFoldClient null_fallback(Value(-1));
+	Value result;
+	REQUIRE(PartitionFold(partitions, null_fallback, result));
+	REQUIRE(result == Value(-1));
+
+	SummingFoldClient summing;
+	REQUIRE(PartitionFold(partitions, summing, result));
+	REQUIRE(result == Value::BIGINT(0));
+}
+
 TEST_CASE("Additive reduction sums exact values and refuses bounds", "[optimizer][partition_fold]") {
 	Value result;
 

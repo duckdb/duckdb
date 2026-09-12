@@ -27,10 +27,12 @@ SELECT count(*) FROM t WHERE s GLOB 'mmm*';
 ----
 2048
 
+# every partition is pruned, so the aggregate folds to its empty-input result and no row group is
+# scanned at all
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s GLOB 'qqq';
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+analyzed_plan	<!REGEX>:.*Row Groups Scanned.*
 
 query I
 SELECT count(*) FROM t WHERE s GLOB 'qqq';
