@@ -286,8 +286,6 @@ transaction_t DuckTransactionManager::GetCommitTimestamp() {
 
 bool DuckTransactionManager::HasUnsyncedCommits() {
 	for (auto &active_transaction : active_transactions) {
-		// a commit that needed a WAL sync stays active until its own thread has left SyncUpTo, even when
-		// another thread's sync already made it durable: a checkpoint may destroy the WAL once this is false
 		if (active_transaction->wal_sync_offset != 0) {
 			return true;
 		}
