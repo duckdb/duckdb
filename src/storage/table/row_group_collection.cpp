@@ -312,9 +312,6 @@ void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionS
 	auto row_group = state.GetRootSegment();
 	state.max_row = state.row_groups->GetBaseRowId() + next_row_id.load();
 	state.Initialize(context, GetTypes());
-	// A collection without any committed row groups (a freshly created table, or a table whose rows are all still
-	// in LocalStorage) has no root segment. That is a legitimate state to start a scan from - the loop below
-	// handles a null root, and DataTable::InitializeScan continues into LocalStorage afterwards.
 	while (row_group && !row_group->GetNode().InitializeScan(state, *row_group)) {
 		row_group = state.GetNextRowGroup(*row_group);
 	}
