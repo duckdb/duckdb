@@ -92,8 +92,10 @@ private:
 //! Async task that opens one file ahead of decoding and releases the pending-open count when destroyed
 class FileOpenTask : public BaseExecutorTask {
 public:
-	FileOpenTask(TaskExecutor &executor, shared_ptr<atomic<idx_t>> pending_opens_p, std::function<void()> open_fn_p)
-	    : BaseExecutorTask(executor), pending_opens(std::move(pending_opens_p)), open_fn(std::move(open_fn_p)) {
+	FileOpenTask(TaskExecutor &executor, shared_ptr<atomic<idx_t>> pending_opens_p, std::function<void()> open_fn_p,
+	             std::function<void()> cancel_fn_p)
+	    : BaseExecutorTask(executor), pending_opens(std::move(pending_opens_p)), open_fn(std::move(open_fn_p)),
+	      cancel_fn(std::move(cancel_fn_p)) {
 		++*pending_opens;
 	}
 	~FileOpenTask() override {
@@ -105,9 +107,15 @@ public:
 		open_fn();
 	}
 
+	//! The open never runs, so settle the state the scan waits on - it only ever leaves OPENING in one of these two
+	void Cancel() override {
+		cancel_fn();
+	}
+
 private:
 	shared_ptr<atomic<idx_t>> pending_opens;
 	std::function<void()> open_fn;
+	std::function<void()> cancel_fn;
 };
 
 ScanReadAheadJob::~ScanReadAheadJob() = default;
@@ -255,7 +263,7 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	auto completion = make_shared_ptr<ReadAheadJobCompletion>(executor);
 	job->io_completion = completion;
 	// wrap all reads before scheduling any, a wrapped task settles the completion even when scheduling throws
-	vector<unique_ptr<Task>> read_tasks;
+	vector<unique_ptr<BaseExecutorTask>> read_tasks;
 	read_tasks.reserve(io_tasks.size());
 	for (auto &task : io_tasks) {
 		job->io_bytes += task->GetIOSize();
@@ -290,9 +298,9 @@ void ScanReadAhead::PushError(ErrorData error) {
 	executor->PushError(std::move(error));
 }
 
-void ScanReadAhead::ScheduleFileOpen(std::function<void()> open_fn) {
+void ScanReadAhead::ScheduleFileOpen(std::function<void()> open_fn, std::function<void()> cancel_fn) {
 	// the task holds the count from construction to destruction, so it stays balanced even if scheduling throws
-	executor->ScheduleTask(make_uniq<FileOpenTask>(*executor, pending_opens, std::move(open_fn)));
+	executor->ScheduleTask(make_uniq<FileOpenTask>(*executor, pending_opens, std::move(open_fn), std::move(cancel_fn)));
 }
 
 bool ScanReadAhead::CanScheduleOpen() const {
@@ -300,13 +308,11 @@ bool ScanReadAhead::CanScheduleOpen() const {
 }
 
 bool ScanReadAhead::TryRunPendingTask() {
-	ThrowIfError();
 	shared_ptr<Task> task;
 	if (!executor->GetTask(task)) {
 		return false;
 	}
 	task->Execute(TaskExecutionMode::PROCESS_ALL);
-	ThrowIfError();
 	return true;
 }
 

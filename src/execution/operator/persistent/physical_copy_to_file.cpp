@@ -315,6 +315,13 @@ public:
 		max_pending_tasks = MaxValue<idx_t>(MIN_PENDING_TASKS, (async_threads + regular_threads) * 4);
 	}
 
+	~CopyFileLifecycleExecutor() {
+		// A queued task's Cancel reaches back into this object (GetError, FinishTask). Join here, while every
+		// member is still alive, rather than leaving it to ~TaskExecutor, which runs after error_lock and error
+		// have already been destroyed. CancelAndDrain does not throw.
+		executor.CancelAndDrain();
+	}
+
 public:
 	template <class FUNC>
 	void Schedule(shared_ptr<CopyFileLifecycleJob> job, CopyFileLifecycleWaitMode mode, FUNC &&task);
@@ -323,6 +330,8 @@ public:
 	void WorkOnTaskOrYield();
 	void FinishTask();
 	void PushError(const std::exception_ptr &error);
+	//! The first error pushed by a task, if any
+	std::exception_ptr GetError();
 
 private:
 	bool WorkOnTask(bool throw_error = true);
@@ -341,8 +350,7 @@ private:
 
 class CopyFileLifecycleTaskFinishGuard {
 public:
-	CopyFileLifecycleTaskFinishGuard(TaskExecutor &executor_p, CopyFileLifecycleExecutor &lifecycle_p)
-	    : executor(executor_p), lifecycle(lifecycle_p) {
+	explicit CopyFileLifecycleTaskFinishGuard(CopyFileLifecycleExecutor &lifecycle_p) : lifecycle(lifecycle_p) {
 	}
 
 	~CopyFileLifecycleTaskFinishGuard() {
@@ -352,28 +360,39 @@ public:
 	void Finish() {
 		if (!finished) {
 			lifecycle.FinishTask();
-			executor.FinishTask();
 			finished = true;
 		}
 	}
 
 private:
-	TaskExecutor &executor;
 	CopyFileLifecycleExecutor &lifecycle;
 	bool finished = false;
 };
 
 template <class FUNC>
-class CopyFileLifecycleTask : public Task {
+class CopyFileLifecycleTask : public BaseExecutorTask {
 public:
 	CopyFileLifecycleTask(TaskExecutor &executor_p, CopyFileLifecycleExecutor &lifecycle_p,
 	                      shared_ptr<CopyFileLifecycleJob> job_p, FUNC task_p)
-	    : executor(executor_p), lifecycle(lifecycle_p), job(std::move(job_p)), task(std::move(task_p)) {
+	    : BaseExecutorTask(executor_p), lifecycle(lifecycle_p), job(std::move(job_p)), task(std::move(task_p)) {
+	}
+
+	~CopyFileLifecycleTask() override {
+		// Neither ExecuteTask nor Cancel ran, because the executor could not take the task at all. The job
+		// waiter and pending_tasks still have to be settled, or a waiter spins with nothing left to run.
+		if (settled) {
+			return;
+		}
+		try {
+			Cancel();
+		} catch (...) { // NOLINT
+		}
 	}
 
 public:
-	TaskExecutionResult Execute(TaskExecutionMode mode) override {
-		CopyFileLifecycleTaskFinishGuard finish_guard(executor, lifecycle);
+	void ExecuteTask() override {
+		settled = true;
+		CopyFileLifecycleTaskFinishGuard finish_guard(lifecycle);
 		try {
 			task();
 			if (!job->IsFinished()) {
@@ -384,7 +403,20 @@ public:
 			job->CompleteException(error);
 			lifecycle.PushError(error);
 		}
-		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	void Cancel() override {
+		// the task is retired without running - settle the job, WaitForJob spins until it is finished
+		settled = true;
+		CopyFileLifecycleTaskFinishGuard finish_guard(lifecycle);
+		if (job->IsFinished()) {
+			return;
+		}
+		auto error = lifecycle.GetError();
+		if (!error) {
+			error = std::make_exception_ptr(InternalException("COPY file task was cancelled before it could run"));
+		}
+		job->CompleteException(error);
 	}
 
 	string TaskType() const override {
@@ -392,10 +424,11 @@ public:
 	}
 
 private:
-	TaskExecutor &executor;
 	CopyFileLifecycleExecutor &lifecycle;
 	shared_ptr<CopyFileLifecycleJob> job;
 	FUNC task;
+	//! Whether ExecuteTask or Cancel ran, so the destructor knows the job and the count are settled
+	bool settled = false;
 };
 
 template <class FUNC>
@@ -403,14 +436,11 @@ void CopyFileLifecycleExecutor::Schedule(shared_ptr<CopyFileLifecycleJob> job, C
                                          FUNC &&task) {
 	WaitForTaskSlot(mode);
 	auto job_ref = job;
+	using TaskType = CopyFileLifecycleTask<typename std::decay<FUNC>::type>;
+	auto lifecycle_task = make_uniq<TaskType>(executor, *this, std::move(job), std::forward<FUNC>(task));
+	// past this point the task settles pending_tasks itself, on the execute path and on the cancel path
 	++pending_tasks;
-	try {
-		using TaskType = CopyFileLifecycleTask<typename std::decay<FUNC>::type>;
-		executor.ScheduleTask(make_uniq<TaskType>(executor, *this, std::move(job), std::forward<FUNC>(task)));
-	} catch (...) {
-		--pending_tasks;
-		throw;
-	}
+	executor.ScheduleTask(std::move(lifecycle_task));
 	if (async_threads == 0) {
 		WaitForJob(*job_ref, mode);
 	}
@@ -1540,6 +1570,11 @@ void CopyFileLifecycleExecutor::PushError(const std::exception_ptr &error_p) {
 	if (!error) {
 		error = error_p;
 	}
+}
+
+std::exception_ptr CopyFileLifecycleExecutor::GetError() {
+	lock_guard<mutex> guard(error_lock);
+	return error;
 }
 
 bool CopyFileLifecycleExecutor::WorkOnTask(bool throw_error) {
