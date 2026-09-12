@@ -133,7 +133,7 @@ DistinctCount RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, Client
 
 RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientContext &context) {
 	RelationStats result;
-	auto base_table_cardinality = get.EstimateCardinality(context);
+	auto base_table_cardinality = get.EstimateSourceCardinality(context);
 	auto cardinality_after_filters = base_table_cardinality;
 	result.table_name = get.GetTable() ? get.GetTable()->name : Identifier(get.GetName());
 

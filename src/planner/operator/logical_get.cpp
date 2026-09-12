@@ -276,6 +276,10 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	if (has_estimated_cardinality) {
 		return estimated_cardinality;
 	}
+	return EstimateSourceCardinality(context);
+}
+
+idx_t LogicalGet::EstimateSourceCardinality(ClientContext &context) {
 	if (function.cardinality) {
 		auto node_stats = function.cardinality(context, bind_data.get());
 		if (node_stats && node_stats->has_estimated_cardinality) {
