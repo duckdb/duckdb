@@ -322,6 +322,13 @@ bool NumericStats::ConstantsCoverRange(const BaseStatistics &stats, array_ptr<co
 }
 
 bool NumericStats::IsConstant(const BaseStatistics &stats) {
+	auto physical_type = stats.GetType().InternalType();
+	if ((physical_type == PhysicalType::FLOAT || physical_type == PhysicalType::DOUBLE) &&
+	    NumericStats::Min(stats) == 0) {
+		// -0.0 and 0.0 compare equal but are not bit-identical, so min == max == 0 does not
+		// guarantee that all values in the segment have the same sign
+		return false;
+	}
 	return NumericStats::Max(stats) <= NumericStats::Min(stats);
 }
 

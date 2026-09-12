@@ -1,0 +1,71 @@
+# name: test/sql/storage/compression/constant/constant_negative_zero.test
+# description: Test that checkpointing a FLOAT/DOUBLE column with mixed -0.0/0.0 does not lose the sign of zero
+# group: [constant]
+
+require no_alternative_verify
+
+load {TEST_DIR}/constant_negative_zero.db
+
+# min == max == 0 for these columns even though the values are not bit-identical:
+# -0.0 and 0.0 compare equal, so this must not be treated as a constant segment
+statement ok
+CREATE TABLE zero_probe(id INTEGER, v DOUBLE, vf FLOAT);
+
+statement ok
+INSERT INTO zero_probe VALUES (1, '-0.0', '-0.0'), (2, '0.0', '0.0');
+
+statement ok
+checkpoint;
+
+query III
+SELECT id, signbit(v), signbit(vf) FROM zero_probe ORDER BY id;
+----
+1	true	true
+2	false	false
+
+query I
+SELECT compression FROM pragma_storage_info('zero_probe') WHERE column_name = 'v' AND segment_type = 'DOUBLE';
+----
+Uncompressed
+
+restart
+
+query III
+SELECT id, signbit(v), signbit(vf) FROM zero_probe ORDER BY id;
+----
+1	true	true
+2	false	false
+
+# an RLE-compressed column with a mixed-zero run must also keep the sign of each run
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+CREATE TABLE zero_probe_rle(id INTEGER, v DOUBLE);
+
+statement ok
+INSERT INTO zero_probe_rle VALUES (1, '-0.0'), (2, '0.0'), (3, 1.5);
+
+statement ok
+checkpoint;
+
+query II
+SELECT id, signbit(v) FROM zero_probe_rle ORDER BY id;
+----
+1	true
+2	false
+3	false
+
+query I
+SELECT compression FROM pragma_storage_info('zero_probe_rle') WHERE column_name = 'v' AND segment_type = 'DOUBLE';
+----
+RLE
+
+restart
+
+query II
+SELECT id, signbit(v) FROM zero_probe_rle ORDER BY id;
+----
+1	true
+2	false
+3	false
