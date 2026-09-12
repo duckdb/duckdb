@@ -19,7 +19,6 @@ INSERT INTO t VALUES (1)
 statement ok
 SET debug_force_wal_fsync_failure=true
 
-# the commit publishes but can never become durable: it must fail, not be acknowledged
 statement error
 INSERT INTO t VALUES (2)
 ----
