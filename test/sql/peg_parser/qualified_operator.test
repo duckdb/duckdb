@@ -7,6 +7,17 @@ select 1 OPERATOR(main.+) 2;
 ----
 3
 
+statement ok
+create schema "schema.with.dot";
+
+statement ok
+create macro "schema.with.dot"."+"(a, b) as a + b;
+
+query I
+select 1 OPERATOR("schema.with.dot".+) 2;
+----
+3
+
 statement error
 select 1 OPERATOR(foo.bar.main.+) 2;
 ----

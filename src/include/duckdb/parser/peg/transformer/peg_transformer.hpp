@@ -2678,6 +2678,14 @@ public:
 	                                                        GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
 	FinalizeOtherOperatorExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeInfixOtherOperatorExpressionTrampoline(PEGTransformer &transformer,
+	                                                             GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeInfixOtherOperatorExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeCustomPrefixExpressionTrampoline(PEGTransformer &transformer,
+	                                                       GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeCustomPrefixExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeOtherOperatorTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeOtherOperatorTailTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -2691,6 +2699,10 @@ public:
 	static void InitializeNamedOtherOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeNamedOtherOperatorTrampoline(PEGTransformer &transformer,
 	                                                                             GeneratedTransformProcess &process);
+	static void InitializeUnqualifiedOtherOperatorTrampoline(PEGTransformer &transformer,
+	                                                         GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeUnqualifiedOtherOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeOperatorLiteralTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeOperatorLiteralTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
@@ -2788,6 +2800,10 @@ public:
 	static void InitializePrefixOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizePrefixOperatorTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
+	static void InitializeUnqualifiedPrefixOperatorTrampoline(PEGTransformer &transformer,
+	                                                          GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeUnqualifiedPrefixOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeMinusPrefixOperatorTrampoline(PEGTransformer &transformer,
 	                                                    GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeMinusPrefixOperatorTrampoline(PEGTransformer &transformer,
@@ -6286,9 +6302,16 @@ public:
 	                       unique_ptr<ParsedExpression> other_operator_expression_1);
 	static unique_ptr<TransformResultValue> TransformOtherOperatorExpressionInternal(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformInfixOtherOperatorExpressionInternal(PEGTransformer &transformer,
+	                                                                                      ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>
-	TransformOtherOperatorExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> bitwise_expression,
-	                                 optional<vector<OtherOperatorTail>> other_operator_tail);
+	TransformInfixOtherOperatorExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> bitwise_expression,
+	                                      optional<vector<OtherOperatorTail>> other_operator_tail);
+	static unique_ptr<TransformResultValue> TransformCustomPrefixExpressionInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformCustomPrefixExpression(PEGTransformer &transformer, const string &any_op,
+	                                unique_ptr<ParsedExpression> other_operator_expression);
 	static unique_ptr<TransformResultValue> TransformOtherOperatorTailInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static OtherOperatorTail TransformOtherOperatorTail(PEGTransformer &transformer, ParsedOperator other_operator,
@@ -6301,7 +6324,9 @@ public:
 	                                                    const pair<string, bool> &any_all_operator);
 	static unique_ptr<TransformResultValue> TransformNamedOtherOperatorInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
-	static ParsedOperator TransformNamedOtherOperator(PEGTransformer &transformer, const string &child);
+	static unique_ptr<TransformResultValue> TransformUnqualifiedOtherOperatorInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static ParsedOperator TransformUnqualifiedOtherOperator(PEGTransformer &transformer, const string &child);
 	static unique_ptr<TransformResultValue> TransformAnyAllOperatorInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static pair<string, bool> TransformAnyAllOperator(PEGTransformer &transformer, const string &any_op,
@@ -6324,11 +6349,13 @@ public:
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformQualifiedOperatorInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
-	static string TransformQualifiedOperator(PEGTransformer &transformer, const string &qualified_operator_contents);
+	static ParsedOperator TransformQualifiedOperator(PEGTransformer &transformer,
+	                                                 QualifiedName qualified_operator_contents);
 	static unique_ptr<TransformResultValue> TransformQualifiedOperatorContentsInternal(PEGTransformer &transformer,
 	                                                                                   ParseResult &parse_result);
-	static string TransformQualifiedOperatorContents(PEGTransformer &transformer,
-	                                                 const optional<vector<string>> &col_id_dot, const string &any_op);
+	static QualifiedName TransformQualifiedOperatorContents(PEGTransformer &transformer,
+	                                                        const optional<vector<string>> &col_id_dot,
+	                                                        const string &any_op);
 	static unique_ptr<TransformResultValue> TransformAnyOpInternal(PEGTransformer &transformer,
 	                                                               ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformBitwiseExpressionInternal(PEGTransformer &transformer,
@@ -6399,6 +6426,9 @@ public:
 	TransformAtTimeZoneExpressionTail(PEGTransformer &transformer, unique_ptr<ParsedExpression> prefix_expression);
 	static unique_ptr<TransformResultValue> TransformPrefixOperatorInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformUnqualifiedPrefixOperatorInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static ParsedOperator TransformUnqualifiedPrefixOperator(PEGTransformer &transformer, const string &child);
 	static unique_ptr<TransformResultValue> TransformMinusPrefixOperatorInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformPlusPrefixOperatorInternal(PEGTransformer &transformer,
