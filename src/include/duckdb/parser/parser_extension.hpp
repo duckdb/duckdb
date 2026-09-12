@@ -55,7 +55,7 @@ struct ParserExtensionInfo {
 enum class ParserExtensionResultType : uint8_t { PARSE_SUCCESSFUL, DISPLAY_ORIGINAL_ERROR, DISPLAY_EXTENSION_ERROR };
 
 //! The ParserExtensionParseData holds the result of a successful parse step
-//! It will be passed along to the subsequent plan function
+//! It will be passed along to the subsequent rewrite or plan function
 struct ParserExtensionParseData {
 	virtual ~ParserExtensionParseData() {
 	}
@@ -131,6 +131,20 @@ typedef ParserExtensionPlanResult (*plan_function_t)(ParserExtensionInfo *info, 
                                                      unique_ptr<ParserExtensionParseData> parse_data);
 
 //===--------------------------------------------------------------------===//
+// Rewrite
+//===--------------------------------------------------------------------===//
+struct ParserExtensionRewriteResult {
+	//! The single, planner-ready statement that replaces the extension statement
+	//! Multi-statements, pragmas, transaction-control, PREPARE and EXECUTE statements are not supported.
+	unique_ptr<SQLStatement> statement;
+	//! Whether prepared statements must invoke the rewrite before every execution
+	bool always_require_rebind = false;
+};
+
+typedef ParserExtensionRewriteResult (*rewrite_function_t)(ParserExtensionInfo *info, ClientContext &context,
+                                                           unique_ptr<ParserExtensionParseData> parse_data);
+
+//===--------------------------------------------------------------------===//
 // Parser override
 //===--------------------------------------------------------------------===//
 struct ParserOverrideResult {
@@ -168,6 +182,10 @@ public:
 
 	//! Additional parser info passed to the parse function
 	shared_ptr<ParserExtensionInfo> parser_info;
+
+	//! Replaces the extension statement before planning; takes precedence over plan_function when both are set
+	//! The callback can inspect the current transaction, but must not execute statements or modify transaction state.
+	rewrite_function_t rewrite_function = nullptr;
 
 	static void Register(DBConfig &config, ParserExtension extension);
 };
