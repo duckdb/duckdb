@@ -1,5 +1,6 @@
 #include "duckdb/main/client_context.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -51,12 +52,15 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/common/enums/current_transaction_state.hpp"
 #include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -95,6 +99,8 @@ public:
 	unique_ptr<Executor> executor;
 	//! The progress bar
 	unique_ptr<ProgressBar> progress_bar;
+	//! Whether the foreign keys of the rows appended by this statement have been verified already
+	bool foreign_keys_verified = false;
 
 public:
 	void SetOpenResult(BaseQueryResult &result) {
@@ -716,6 +722,11 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			throw InterruptException();
 		}
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
+		if (!dry_run && query_result == PendingExecutionResult::EXECUTION_FINISHED &&
+		    !active_query->foreign_keys_verified && transaction.HasActiveTransaction()) {
+			active_query->foreign_keys_verified = true;
+			VerifyDeferredForeignKeys();
+		}
 		if (active_query->progress_bar) {
 			auto is_finished = PendingQueryResult::IsResultReady(query_result);
 			active_query->progress_bar->Update(is_finished);
@@ -750,6 +761,35 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	} // LCOV_EXCL_STOP
 	EndQueryInternal(lock, false, invalidate_transaction, result.GetErrorObject());
 	return PendingExecutionResult::EXECUTION_ERROR;
+}
+
+void ClientContext::VerifyDeferredForeignKeys() {
+	auto query_number = transaction.GetActiveQuery();
+	auto &meta_transaction = MetaTransaction::Get(*this);
+	for (auto &database : meta_transaction.OpenedTransactions()) {
+		// only DuckDB databases have transaction-local storage
+		auto db_transaction = meta_transaction.TryGetTransaction(database.get());
+		if (!db_transaction || !db_transaction->IsDuckTransaction()) {
+			continue;
+		}
+		auto &local_storage = db_transaction->Cast<DuckTransaction>().GetLocalStorage();
+		auto appended_rows = local_storage.GetAppendedRows(query_number);
+		for (auto &entry : appended_rows) {
+			bool has_foreign_key = false;
+			for (auto &constraint : entry.table_entry.GetConstraints()) {
+				if (constraint->type == ConstraintType::FOREIGN_KEY) {
+					has_foreign_key = true;
+					break;
+				}
+			}
+			if (!has_foreign_key) {
+				continue;
+			}
+			auto binder = Binder::CreateBinder(*this);
+			auto bound_constraints = binder->BindConstraints(entry.table_entry);
+			entry.table_entry.GetStorage().VerifyAppendedForeignKeys(*this, entry.start, entry.end, bound_constraints);
+		}
+	}
 }
 
 void ClientContext::InitialCleanup(ClientContextLock &lock) {

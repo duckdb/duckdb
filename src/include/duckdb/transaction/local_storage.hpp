@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/reference_map.hpp"
 
@@ -71,6 +72,10 @@ public:
 	IndexAppendMode index_append_mode = IndexAppendMode::DEFAULT;
 	//! The number of deleted rows
 	idx_t deleted_rows;
+	//! Statement number of the currently tracked append range
+	transaction_t append_query_number = MAXIMUM_QUERY_ID;
+	//! Start (local row position) of the append range tracked in append_query_number
+	idx_t append_query_start = 0;
 
 	//! The optimistic row group collections associated with this table.
 	vector<unique_ptr<OptimisticWriteCollection>> optimistic_collections;
@@ -101,6 +106,10 @@ public:
 	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
 	                          const vector<LogicalType> &table_types, row_t &start_row);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
+	//! Track the start of the append range for the given statement number
+	void TrackAppendForQuery(transaction_t query_number);
+	//! Whether the given statement number appended rows, and if so sets the appended local row range
+	bool GetAppendRange(transaction_t query_number, idx_t &start, idx_t &end);
 
 	//! Create an optimistic row group collection for this table.
 	//! Returns the index into the optimistic_collections vector for newly created collection.
@@ -145,6 +154,13 @@ public:
 		reference_map_t<DataTable, unique_ptr<TableAppendState>> append_states;
 	};
 
+	//! A table that had rows appended to it in a statement, with the appended local row range
+	struct AppendedRows {
+		DuckTableEntry &table_entry;
+		idx_t start;
+		idx_t end;
+	};
+
 public:
 	explicit LocalStorage(ClientContext &context, DuckTransaction &transaction);
 
@@ -160,6 +176,9 @@ public:
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
 	optional_idx NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
 	                              CollectionScanState &scan_state, bool initialize_columns = true);
+
+	//! The local row ranges appended to under the given statement number
+	vector<AppendedRows> GetAppendedRows(transaction_t query_number);
 
 	//! Begin appending to the local storage
 	void InitializeAppend(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
