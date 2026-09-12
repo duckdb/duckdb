@@ -114,6 +114,12 @@
         "test/sql/optimizer/secure_view_pushdown.test",
         "test/sql/optimizer/secure_view_statistics.test"
       ]
+    },
+    {
+      "reason": "Persisting loses the sign of zero for FLOAT/DOUBLE, unrelated bug, see issue #25580",
+      "paths": [
+        "test/sql/order/order_by_negative_zero.test"
+      ]
     }
   ]
 }
