@@ -20,8 +20,27 @@ public:
 			// another task encountered an error, or the executor was cancelled - retire without doing the work
 			return RunGuarded([&]() { task->Cancel(); }, "Unknown exception while cancelling a task");
 		}
-		TaskNotifier task_notifier {executor.context};
-		return RunGuarded([&]() { task->ExecuteTask(); }, "Unknown exception during task execution");
+		TaskExecutionResult result;
+		try {
+			TaskNotifier task_notifier {executor.context};
+			// PROCESS_ALL must run to completion, so loop the steps; PROCESS_PARTIAL does one and yields
+			do {
+				result = task->ExecuteTaskStep();
+			} while (result == TaskExecutionResult::TASK_NOT_FINISHED && mode == TaskExecutionMode::PROCESS_ALL);
+		} catch (std::exception &ex) {
+			executor.PushError(ErrorData(ex));
+			return TaskExecutionResult::TASK_ERROR;
+		} catch (...) { // LCOV_EXCL_START
+			executor.PushError(ErrorData("Unknown exception during task execution"));
+			return TaskExecutionResult::TASK_ERROR;
+		} // LCOV_EXCL_STOP
+		if (result == TaskExecutionResult::TASK_NOT_FINISHED) {
+			// yielded under PROCESS_PARTIAL: the scheduler re-enqueues this wrapper, keep the task's slot open
+			guard.Dismiss();
+			return TaskExecutionResult::TASK_NOT_FINISHED;
+		}
+		D_ASSERT(result == TaskExecutionResult::TASK_FINISHED);
+		return TaskExecutionResult::TASK_FINISHED;
 	}
 
 	void Deschedule() override {
@@ -48,11 +67,18 @@ private:
 		explicit FinishGuard(TaskExecutor &executor) : executor(executor) {
 		}
 		~FinishGuard() {
-			executor.FinishTask();
+			if (!dismissed) {
+				executor.FinishTask();
+			}
+		}
+		//! Keep the task's slot open across a yield - the wrapper will run again and finish it later
+		void Dismiss() {
+			dismissed = true;
 		}
 
 	private:
 		TaskExecutor &executor;
+		bool dismissed = false;
 	};
 
 	template <class FUNC>
@@ -157,7 +183,8 @@ void TaskExecutor::DrainTasks() {
 
 		const auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
 		std::ignore = res;
-		D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
+		// PROCESS_ALL runs a task to completion, so a drain only ever sees a finished or errored task
+		D_ASSERT(res == TaskExecutionResult::TASK_FINISHED || res == TaskExecutionResult::TASK_ERROR);
 		task_from_producer.reset();
 	}
 }

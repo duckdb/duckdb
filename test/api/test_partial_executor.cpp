@@ -75,3 +75,32 @@ TEST_CASE("TaskExecutor runs exactly one of ExecuteTask or Cancel for every sche
 	}
 	REQUIRE(executed + cancelled == TASK_COUNT);
 }
+
+struct SteppingTask : BaseExecutorTask {
+	SteppingTask(TaskExecutor &executor, std::atomic<int> &steps, int total)
+	    : BaseExecutorTask(executor), steps(steps), total(total) {
+	}
+
+	TaskExecutionResult ExecuteTaskStep() override {
+		if (++steps >= total) {
+			return TaskExecutionResult::TASK_FINISHED;
+		}
+		return TaskExecutionResult::TASK_NOT_FINISHED;
+	}
+
+	std::atomic<int> &steps;
+	int total;
+};
+
+TEST_CASE("TaskExecutor drains an incremental task to completion") {
+	static constexpr int STEPS = 8;
+
+	DuckDB db;
+	Connection con {db};
+	std::atomic<int> steps {0};
+	TaskExecutor executor {*con.context};
+	executor.ScheduleTask(make_uniq<SteppingTask>(executor, steps, STEPS));
+	// WorkOnTasks drains inline with PROCESS_ALL, which must loop the steps to completion
+	executor.WorkOnTasks();
+	REQUIRE(steps == STEPS);
+}

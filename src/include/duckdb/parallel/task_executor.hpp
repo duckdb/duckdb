@@ -30,8 +30,19 @@ public:
 	virtual ~BaseExecutorTask() = default;
 
 public:
-	//! Perform the task's work - throwing is allowed, the executor captures the error and cancels the other tasks
-	virtual void ExecuteTask() = 0;
+	//! Perform the task's work in one call - throwing is allowed, the executor captures the error and cancels the
+	//! other tasks. Run-to-completion tasks override this.
+	virtual void ExecuteTask() {
+		throw InternalException("BaseExecutorTask::ExecuteTask was not implemented");
+	}
+	//! Perform one unit of work, returning TASK_NOT_FINISHED while more remains and TASK_FINISHED when done.
+	//! Incremental tasks override this instead of ExecuteTask; the default runs the whole task in one call. The
+	//! executor loops this to completion while draining, and calls it once per turn on a background thread so the
+	//! task yields cooperatively. The mode never reaches the task: the wrapper owns the loop.
+	virtual TaskExecutionResult ExecuteTaskStep() {
+		ExecuteTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
 	//! Called instead of ExecuteTask when the task is retired without running its work, because another task errored,
 	//! because the executor was cancelled, or because the task could not be queued at all. Exactly one of ExecuteTask
 	//! or Cancel runs for every task passed to TaskExecutor::ScheduleTask.
