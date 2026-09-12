@@ -35,7 +35,10 @@ public:
 	//! Called instead of ExecuteTask when the task is retired without running its work, because another task errored,
 	//! because the executor was cancelled, or because the task could not be queued at all. Exactly one of ExecuteTask
 	//! or Cancel runs for every task passed to TaskExecutor::ScheduleTask.
-	//! Anything a waiter watches must be settled here as well as in ExecuteTask, or that waiter never wakes up.
+	//! Anything a waiter watches must change on every exit path, or that waiter never wakes up. Either settle it here
+	//! as well as in ExecuteTask, or settle it in the destructor, which also covers a task that was constructed but
+	//! never scheduled. A destructor settle runs after the executor has already counted the task as finished, so it
+	//! must not be something a drain is expected to observe.
 	virtual void Cancel() {
 	}
 	virtual string TaskType() const {
