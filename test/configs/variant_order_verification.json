@@ -46,7 +46,8 @@
       "paths": [
         "test/sql/topn/test_top_n_nulls_row_group_pruner_extensive.test",
         "test/sql/topn/top_n_pruning.test",
-        "test/sql/topn/topn_nulls_first.test"
+        "test/sql/topn/topn_nulls_first.test",
+        "test/optimizer/remove_redundant_order_keys.test"
       ]
     }
   ]
