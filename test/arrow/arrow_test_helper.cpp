@@ -183,7 +183,8 @@ bool ArrowTestHelper::CompareResults(Connection &con, shared_ptr<Relation> arrow
 			if (!row_str.empty()) {
 				row_str += "\t";
 			}
-			row_str += row.GetValue<string>(c);
+			// render through the Value so a NULL in a differing row prints instead of throwing
+			row_str += row.GetBaseValue(c).ToString();
 		}
 		rows.push_back(row_str);
 	}
