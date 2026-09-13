@@ -163,6 +163,8 @@ ScalarFunction MakeTimeFun::GetFunction() {
 	ScalarFunction function({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE}, LogicalType::TIME,
 	                        ExecuteMakeTime<int64_t>);
 	function.SetFallible();
+	function.SetArgProperties(0, ArgProperties().StrictlyIncreasing());
+	function.SetArgProperties(1, ArgProperties().StrictlyIncreasing());
 	return function;
 }
 

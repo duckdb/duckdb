@@ -2673,6 +2673,7 @@ ScalarFunctionSet JulianDayFun::GetFunctions() {
 	auto ts_func = DatePart::UnaryFunction<timestamp_t, double, OP>;
 	auto ts_stats = OP::template PropagateStatistics<timestamp_t>;
 	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DOUBLE, ts_func, nullptr, ts_stats));
+	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 
 	return operator_set;
 }

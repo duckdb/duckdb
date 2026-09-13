@@ -169,7 +169,64 @@ SELECT count(*) FROM ets WHERE year(t) = 2005;
 8760
 
 # ---------------------------------------------------------------------------
-# TIME and TIME_NS are deliberately not rewritten
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT count(*) FROM d WHERE julian(dt) = 2451545;
+----
+logical_opt	<REGEX>:.*dt = '2000-01-01'::DATE.*
+
+query II
+EXPLAIN SELECT count(*) FROM d WHERE julian(dt) = 2451545;
+----
+logical_opt	<!REGEX>:.*julian.*
+
+query II
+EXPLAIN SELECT count(*) FROM d WHERE julian(dt) >= 2451545;
+----
+logical_opt	<REGEX>:.*dt >= '2000-01-01'::DATE.*
+
+query I
+SELECT count(*) FROM d WHERE julian(dt) = 2451545;
+----
+1
+
+query I
+SELECT count(*) FROM e WHERE julian(dt) >= 2451545;
+----
+3
+
+query I
+SELECT julian(dt) >= 2451545 FROM e ORDER BY dt NULLS LAST;
+----
+NULL
+true
+true
+true
+NULL
+NULL
+
+query II
+EXPLAIN SELECT count(*) FROM ts WHERE julian(t) = 2458850.0;
+----
+logical_opt	<!REGEX>:.*julian.*
+
+query I
+SELECT count(*) FROM (
+  SELECT 1 FROM ets WHERE julian(t) > 2451545
+  EXCEPT ALL SELECT 1 FROM (SELECT t FROM ets OFFSET 0) WHERE julian(t) > 2451545
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT 1 FROM (SELECT t FROM ets OFFSET 0) WHERE julian(t) > 2451545
+  EXCEPT ALL SELECT 1 FROM ets WHERE julian(t) > 2451545
+);
+----
+0
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 statement ok
 CREATE TABLE oob_time(t TIME);
@@ -199,7 +256,6 @@ SELECT count(*) FROM oob_time_ns WHERE epoch_ns(t) > 86400000000000;
 ----
 1
 
-# the rule must leave the function in place on both types
 query II
 EXPLAIN SELECT count(*) FROM oob_time WHERE epoch_us(t) > 86400000000;
 ----
