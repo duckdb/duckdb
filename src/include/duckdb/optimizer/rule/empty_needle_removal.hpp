@@ -21,4 +21,13 @@ public:
 	                             bool is_root) override;
 };
 
+// Simplifies replace(input, needle, needle) to input.
+class NoopReplaceRemovalRule : public Rule {
+public:
+	explicit NoopReplaceRemovalRule(ExpressionRewriter &rewriter);
+
+	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
+	                             bool is_root) override;
+};
+
 } // namespace duckdb

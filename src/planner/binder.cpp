@@ -266,29 +266,51 @@ bool Binder::IsInsideSubquery() const {
 }
 
 void Binder::BeginSubqueryBind(Binder &parent, ExpressionBinder &binder) {
-	// push all active expression binders
-	auto &active_binders = GetActiveBinders();
-	for (auto &active_binder : parent.GetActiveBinders()) {
-		active_binders.push_back(active_binder);
-	}
-	// finally push this binder
+	// this binder already inherited a copy of the enclosing scopes when it was created, so replace them
+	// rather than appending the parent's on top: appending would list every scope twice per level of
+	// nesting, growing the chain as 2^depth and making the index of a scope no longer unique
+	active_binders = parent.active_binders;
+	// the scope that is binding the subquery encloses it
 	active_binders.push_back(binder);
 }
 
 void Binder::FinishSubqueryBind() {
-	GetActiveBinders().clear();
+	active_binders.clear();
 }
 
-ExpressionBinder &Binder::GetActiveBinder() {
-	return GetActiveBinders().back();
+ExpressionBinder &Binder::GetInnermostScope() {
+	return active_binders.back();
 }
 
-bool Binder::HasActiveBinder() {
-	return !GetActiveBinders().empty();
+bool Binder::HasEnclosingScope() {
+	return !active_binders.empty();
 }
 
-vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
+const vector<reference<ExpressionBinder>> &Binder::GetEnclosingScopes() const {
 	return active_binders;
+}
+
+void Binder::PushScope(ExpressionBinder &binder) {
+	active_binders.push_back(binder);
+}
+
+void Binder::PopScope() {
+	active_binders.pop_back();
+}
+
+vector<reference<ExpressionBinder>> Binder::SaveScopesAfter(idx_t count) {
+	vector<reference<ExpressionBinder>> result;
+	for (idx_t i = count; i < active_binders.size(); i++) {
+		result.push_back(active_binders[i]);
+	}
+	active_binders.erase(active_binders.begin() + UnsafeNumericCast<int64_t>(count), active_binders.end());
+	return result;
+}
+
+void Binder::RestoreScopes(const vector<reference<ExpressionBinder>> &scopes) {
+	for (auto &scope : scopes) {
+		active_binders.push_back(scope);
+	}
 }
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
@@ -480,13 +502,7 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 	auto &indexes = info->GetIndexes();
 
 	// Collect column IDs from unique indexes
-	unordered_set<column_t> indexed_column_ids;
-	for (auto &index : indexes.Indexes()) {
-		if (index.IsUnique()) {
-			auto &col_ids = index.GetColumnIdSet();
-			indexed_column_ids.insert(col_ids.begin(), col_ids.end());
-		}
-	}
+	auto indexed_column_ids = indexes.GetUniqueIndexColumns();
 
 	if (indexed_column_ids.empty()) {
 		return;

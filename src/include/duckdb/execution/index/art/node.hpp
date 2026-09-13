@@ -158,9 +158,9 @@ public:
 	//! Get the first immutable child greater than or equal to the byte.
 	const unsafe_optional_ptr<NodePtr> GetNextChild(ART &art, uint8_t &byte) const;
 	//! Returns true, if the byte exists, else false.
-	bool HasByte(ART &art, const uint8_t byte) const;
+	bool HasByte(const ART &art, const uint8_t byte) const;
 	//! Get the first byte greater than or equal to the byte.
-	bool GetNextByte(ART &art, uint8_t &byte) const;
+	bool GetNextByte(const ART &art, uint8_t &byte) const;
 
 	//! Traverses and verifies the node.
 	void Verify(ART &art) const;

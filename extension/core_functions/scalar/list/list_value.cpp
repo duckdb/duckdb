@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
@@ -267,6 +266,12 @@ unique_ptr<FunctionData> UnpivotBind(BindScalarFunctionInput &input) {
 	}
 	child_type = LogicalType::NormalizeType(child_type);
 
+	auto &function_args = bound_function.GetArguments();
+	function_args.clear();
+	function_args.reserve(arguments.size());
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		function_args.push_back(child_type);
+	}
 	bound_function.SetReturnType(LogicalType::LIST(child_type));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }

@@ -14,12 +14,6 @@ ValidityColumnData::ValidityColumnData(BlockManager &block_manager, DataTableInf
     : ValidityColumnData(block_manager, info, column_index, parent.GetDataType(), parent) {
 }
 
-FilterPropagateResult ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
-                                                       optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
-	checked_segment = nullptr;
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-}
-
 void ValidityColumnData::UpdateWithBase(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                                         Vector &update_vector, row_t *row_ids, idx_t update_count, ColumnData &base,
                                         idx_t row_group_start) {

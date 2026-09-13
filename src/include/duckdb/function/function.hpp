@@ -17,7 +17,6 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "fmt/core.h"
 
 namespace duckdb {
 class CatalogEntry;
@@ -41,6 +40,10 @@ class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
 
+struct BoundBetweenExpression;
+struct BoundCastExpression;
+struct BetweenFunctionData;
+struct CastFunctionData;
 struct PragmaInfo;
 
 //! The default null handling is NULL in, NULL out
@@ -63,6 +66,24 @@ enum class FunctionCollationHandling : uint8_t {
 };
 
 struct FunctionData {
+public:
+	FunctionData() = default;
+	FunctionData(const FunctionData &) : internal_kind(InternalKind::GENERIC) {
+	}
+	FunctionData(FunctionData &&) : internal_kind(InternalKind::GENERIC) {
+	}
+	FunctionData &operator=(const FunctionData &other) {
+		if (this != &other) {
+			internal_kind = InternalKind::GENERIC;
+		}
+		return *this;
+	}
+	FunctionData &operator=(FunctionData &&other) {
+		if (this != &other) {
+			internal_kind = InternalKind::GENERIC;
+		}
+		return *this;
+	}
 	DUCKDB_API virtual ~FunctionData();
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
@@ -85,6 +106,22 @@ struct FunctionData {
 	TARGET &CastNoConst() const {
 		return const_cast<TARGET &>(Cast<TARGET>()); // NOLINT: FIXME
 	}
+
+private:
+	enum InternalKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN };
+
+	explicit FunctionData(InternalKind internal_kind_p) : internal_kind(internal_kind_p) {
+	}
+	InternalKind GetInternalKind() const {
+		return internal_kind;
+	}
+
+	InternalKind internal_kind = InternalKind::GENERIC;
+
+	friend struct BoundBetweenExpression;
+	friend struct BoundCastExpression;
+	friend struct BetweenFunctionData;
+	friend struct CastFunctionData;
 };
 
 struct TableFunctionData : public FunctionData {
@@ -333,9 +370,6 @@ public:
 	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
 	                                      const Identifier &name, const vector<LogicalType> &arguments,
 	                                      const named_parameter_type_map_t &named_parameters);
-	//! Used in the bind to erase an argument from a function
-	DUCKDB_API static void EraseArgument(BoundSimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
-	                                     idx_t argument_index);
 
 private:
 	//! Optional catalog name of the function
@@ -393,9 +427,6 @@ public:
 
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
-	//! The set of original arguments of the function - only set if Function::EraseArgument is called
-	//! Used for (de)serialization purposes
-	vector<LogicalType> original_arguments;
 	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
 	//! arguments
 	LogicalType varargs;
@@ -412,13 +443,6 @@ public:
 	}
 	const vector<LogicalType> &GetArguments() const {
 		return arguments;
-	}
-
-	vector<LogicalType> &GetOriginalArguments() {
-		return original_arguments;
-	}
-	const vector<LogicalType> &GetOriginalArguments() const {
-		return original_arguments;
 	}
 
 	const LogicalType &GetVarArgs() const {
@@ -472,6 +496,12 @@ public:
 	auto SetCaptureArgumentAliases(bool value) -> void {
 		capture_argument_aliases = value;
 	}
+	auto RequiresExpressionNames() const -> bool {
+		return requires_expression_names;
+	}
+	auto SetRequiresExpressionNames(bool value) -> void {
+		requires_expression_names = value;
+	}
 
 	auto RequiresOrderedExecution() const -> bool {
 		return requires_ordered_execution;
@@ -503,6 +533,8 @@ public:
 	//! function. This preserves the legacy behavior of functions such as struct_pack/row, which derived their
 	//! (struct field) names from argument aliases and therefore allowed positional arguments after named ones.
 	bool capture_argument_aliases = false;
+	//! Whether results depend on argument expression names or the call's result alias
+	bool requires_expression_names = false;
 	//! Whether calls to this function must follow input order
 	bool requires_ordered_execution = false;
 };
@@ -516,9 +548,6 @@ protected:
 
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
-	//! The set of original arguments of the function - only set if Function::EraseArgument is called
-	//! Used for (de)serialization purposes
-	vector<LogicalType> original_arguments;
 	//! Return type of the function
 	LogicalType return_type;
 
@@ -549,13 +578,6 @@ public:
 	}
 	auto GetArguments() -> vector<LogicalType> & {
 		return arguments;
-	}
-
-	auto GetOriginalArguments() const -> const vector<LogicalType> & {
-		return original_arguments;
-	}
-	auto GetOriginalArguments() -> vector<LogicalType> & {
-		return original_arguments;
 	}
 
 	auto GetReturnType() const -> const LogicalType & {

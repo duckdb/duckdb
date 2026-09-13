@@ -105,6 +105,8 @@ public:
 	DUCKDB_API void Flush();
 	//! Wait for all writes and close the queue.
 	DUCKDB_API void Close();
+	//! Stop scheduling writes, discard pending requests, and wait for scheduled requests.
+	DUCKDB_API void AbortWrites();
 	//! Surface an error thrown by an async drain task.
 	DUCKDB_API void RethrowTaskError();
 
@@ -236,6 +238,8 @@ public:
 	DUCKDB_API void WaitAll();
 	//! Drain all writes, close the queue, and release the TemporaryMemoryState reservation.
 	DUCKDB_API void Close();
+	//! Stop scheduling writes, discard pending requests, and wait for submitted requests.
+	DUCKDB_API void AbortWrites();
 	//! Release the queue's TemporaryMemoryState reservation.
 	DUCKDB_API void ReleaseMemoryReservation();
 	//! Surface an error thrown by an async drain task.
@@ -364,6 +368,8 @@ public:
 	DUCKDB_API void WaitAll(BatchDrainMode batch_drain_mode = BatchDrainMode::PRESERVE_BATCH);
 	//! Drain all writes, close any open registration batch, and release the TemporaryMemoryState reservation.
 	DUCKDB_API void Close();
+	//! Stop scheduling writes, discard pending writes, and wait for submitted writes.
+	DUCKDB_API void AbortWrites();
 	//! Reset the next expected contiguous offset after all registered writes have drained.
 	DUCKDB_API void ResetNextOffset(idx_t offset);
 	//! Release the queue's TemporaryMemoryState reservation.

@@ -41,12 +41,13 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	auto bound_constraint =
 	    BindUniqueConstraint(*constraint_info.constraint, table_info.GetQualifiedName().Name(), column_list);
 	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
+	auto &unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	// Create the CreateIndexInfo.
 	auto create_index_info = make_uniq<CreateIndexInfo>();
 	create_index_info->table = table_info.GetQualifiedName().Name();
 	create_index_info->index_type = ART::TYPE_NAME;
-	create_index_info->constraint_type = IndexConstraintType::PRIMARY;
+	create_index_info->constraint_type = unique_constraint.GetIndexConstraintType();
 
 	for (const auto &physical_index : bound_unique.keys) {
 		auto &col = column_list.GetColumn(physical_index);
@@ -56,7 +57,6 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 		create_index_info->parsed_expressions.push_back(parsed->Copy());
 	}
 
-	auto unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 	auto index_name = unique_constraint.GetName(table_info.GetQualifiedName().Name());
 	create_index_info->SetIndexName(index_name);
 	D_ASSERT(!create_index_info->GetIndexName().empty());
@@ -160,7 +160,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	}
 	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 
-	if (!stmt.info->IsAddPrimaryKey()) {
+	if (!stmt.info->IsAddUniqueConstraint()) {
 		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
 		return result;
 	}

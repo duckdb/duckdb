@@ -127,6 +127,8 @@ struct QuantileOperation {
 //! Creates a quantile aggregate that buffers the input values in a linked list, sharing the "list" aggregate
 //! callbacks for update/combine - the operation only provides the finalizer.
 //! Quantiles ignore NULL values, so they are filtered out while appending.
+//! The quantile parameter is folded into the bind data by the bind, but stays part of the expression tree - the
+//! update callback is handed it along with the input and simply does not read it
 template <class STATE, class RESULT_TYPE, class OP>
 AggregateFunction QuantileBufferingAggregate(const LogicalType &input_type, const LogicalType &result_type) {
 	AggregateFunction fun({input_type}, result_type, AggregateFunction::StateSize<STATE>,
@@ -158,22 +160,8 @@ struct WindowQuantileState {
 	unique_ptr<SkipListType> s;
 	mutable vector<SkipType> skips;
 
-	// Windowed MAD indirection
-	idx_t count;
-	vector<idx_t> m;
-
 	using IncludedType = QuantileIncluded<INPUT_TYPE>;
 	using CursorType = QuantileCursor<INPUT_TYPE>;
-
-	WindowQuantileState() : count(0) {
-	}
-
-	inline void SetCount(size_t count_p) {
-		count = count_p;
-		if (count >= m.size()) {
-			m.resize(count);
-		}
-	}
 
 	inline SkipListType &GetSkipList(bool reset = false) {
 		if (reset || !s) {
@@ -235,6 +223,15 @@ struct WindowQuantileState {
 
 	bool HasTree() const {
 		return qst.get();
+	}
+
+	INPUT_TYPE SkipNth(idx_t n) const {
+		D_ASSERT(s);
+		try {
+			return s->at(n).second;
+		} catch (const duckdb_skiplistlib::skip_list::IndexError &idx_err) {
+			throw InternalException(idx_err.message());
+		}
 	}
 
 	template <typename RESULT_TYPE, bool DISCRETE>
@@ -396,12 +393,12 @@ AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
 	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
 	layout.field = BuildStateField<STATE_FIELD>();
 	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
-	if (function.GetOriginalArguments().size() == 2) {
-		// the quantile parameter must be a constant at bind time (its argument is erased by BindQuantile) -
+	if (function.GetArguments().size() == 2) {
+		// the quantile parameter must be a constant at bind time (BindQuantile folds it into the bind data) -
 		// record its value so that re-binding the exported state can supply it
 		// median and mad have no parameter argument (their binds create the quantile themselves) and skip this
 		auto &bind_data = input.bind_data->Cast<QuantileBindData>();
-		layout.constant_parameters.emplace(1, QuantileParameterValue(bind_data, function.GetOriginalArguments()[1]));
+		layout.constant_parameters.emplace(1, QuantileParameterValue(bind_data, function.GetArguments()[1]));
 	}
 	return layout;
 }

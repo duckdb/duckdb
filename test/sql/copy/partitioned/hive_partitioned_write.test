@@ -109,14 +109,14 @@ SELECT part_col, value_col, value2_col FROM '{TEST_DIR}/partitioned5/part_col=0/
 statement error
 COPY test TO '{TEST_DIR}/partitioned6' (FORMAT PARQUET, PARTITION_BY part_col, USE_TMP_FILE TRUE);
 ----
-Not implemented Error: Can't combine USE_TMP_FILE and PARTITION_BY for COPY
+Not implemented Error: Can't combine USE_TMP_FILE and PARTITIONED BY for COPY
 
 # Technically it doesn't really matter, as currently out parition_by behaves similarly, but for clarity user should just
 # EITHER use partition_by or per_thread_output.
 statement error
 COPY test TO '{TEST_DIR}/partitioned6' (FORMAT PARQUET, PARTITION_BY part_col, PER_THREAD_OUTPUT TRUE);
 ----
-Not implemented Error: Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY
+Not implemented Error: Can't combine PER_THREAD_OUTPUT and PARTITIONED BY for COPY
 
 # partitioning csv files is also a thing
 statement ok

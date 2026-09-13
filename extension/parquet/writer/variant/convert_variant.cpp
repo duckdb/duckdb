@@ -230,14 +230,13 @@ vector<idx_t> GetChildIndices(const UnifiedVariantVectorData &variant, idx_t row
 		}
 		return child_indices;
 	}
-	//! FIXME: The variant spec says that field names should be case-sensitive, not insensitive
-	case_insensitive_string_set_t shredded_fields = shredding_state->ObjectFields();
+	auto shredded_fields = shredding_state->ObjectFields();
 
 	for (idx_t i = 0; i < nested_data.child_count; i++) {
 		auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
 		auto &key = variant.GetKey(row, keys_index);
 
-		if (shredded_fields.count(key)) {
+		if (shredded_fields.count(key.GetString())) {
 			//! This field is shredded on, omit it from the value
 			continue;
 		}

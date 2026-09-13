@@ -26,9 +26,7 @@ ScalarFunctionSet JSONFunctions::GetExistsFunction() {
 	ScalarFunctionSet set("json_exists");
 	GetExistsFunctionsInternal(set, LogicalType::VARCHAR);
 	GetExistsFunctionsInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 

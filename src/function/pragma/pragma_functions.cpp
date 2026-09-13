@@ -53,11 +53,21 @@ static void PragmaDisablePrintProgressBar(ClientContext &context, const Function
 	ClientConfig::GetConfig(context).print_progress_bar = false;
 }
 
+//! Warn that a pragma that no longer does anything is on its way out
+static void WarnDeprecatedPragma(ClientContext &context, const char *name) {
+	DUCKDB_LOG_WARNING(
+	    context,
+	    StringUtil::Format("The '%s' pragma no longer has any effect; it is deprecated and will be removed in a "
+	                       "future release.",
+	                       name));
+}
+
 static void PragmaEnableVerification(ClientContext &context, const FunctionParameters &parameters) {
-	Printer::PrintF("PRAGMA enable_verification has been deprecated - there is no need to set this anymore");
+	WarnDeprecatedPragma(context, "enable_verification");
 }
 
 static void PragmaDisableVerification(ClientContext &context, const FunctionParameters &parameters) {
+	WarnDeprecatedPragma(context, "disable_verification");
 }
 
 static void PragmaEnableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
@@ -73,9 +83,11 @@ static void PragmaDisableForceParallelism(ClientContext &context, const Function
 }
 
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
+	WarnDeprecatedPragma(context, "enable_object_cache");
 }
 
 static void PragmaDisableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
+	WarnDeprecatedPragma(context, "disable_object_cache");
 }
 
 static void PragmaEnableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {

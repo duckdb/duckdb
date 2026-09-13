@@ -140,11 +140,33 @@ static FilterPropagateResult ContainsFilterPrune(const FunctionStatisticsPruneIn
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	auto &needle = StringValue::Get(needle_value);
+
+	// if the max string length is less than the needle size, we can prune the filter.
 	if (StringStats::HasMaxStringLength(*haystack_stats) &&
 	    StringStats::MaxStringLength(*haystack_stats) < needle.size()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+
+	if (!StringStats::HasMinMax(*haystack_stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	const auto min = StringStats::Min(*haystack_stats);
+	const auto max = StringStats::Max(*haystack_stats);
+	if (min != max) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	// All strings share the stored prefix, so a needle within it always matches.
+	if (FindStrInStr(string_t(min), string_t(needle)) == DConstants::INVALID_INDEX) {
+		// A missing needle could still occur beyond the truncated prefix.
+		if (StringStats::GetMinType(*haystack_stats) != StringStatsType::EXACT_STATS ||
+		    StringStats::GetMaxType(*haystack_stats) != StringStatsType::EXACT_STATS) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	return haystack_stats->CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL
+	                                     : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 }
 
 ScalarFunction GetStringContains() {

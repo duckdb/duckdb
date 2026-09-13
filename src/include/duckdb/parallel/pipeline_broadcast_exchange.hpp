@@ -31,6 +31,10 @@ class PipelineExecutor;
 class PhysicalOperator;
 
 enum class PipelineBroadcastExchangeCompletionMode : uint8_t { STOP_WHEN_UNCONSUMED, RUN_TO_COMPLETION };
+//! THROTTLE_PRODUCER blocks the producer while the consumers cannot keep up. BUFFER_ALL never blocks the producer and
+//! buffers the rows instead (spilling to disk if required) - required when the consumer of the exchange cannot run
+//! until the producer is done, e.g. because its pipeline depends on a pipeline that the producer feeds
+enum class PipelineBroadcastExchangeBufferMode { THROTTLE_PRODUCER, BUFFER_ALL };
 enum class PipelineBroadcastExchangeOrderMode : uint8_t { UNORDERED, SEQUENTIAL, BATCH_INDEX };
 enum class PipelineBroadcastExchangeLocalMode : uint8_t { DIRECT_ONLY, BUFFERED };
 enum class PipelineBroadcastExchangeDirectPushState : uint8_t { NOT_STARTED, RESUMING, ACTIVE, FINISHED };
@@ -69,6 +73,7 @@ private:
 	optional_idx GetSourceMinBatchIndex(const SourcePartitionInfo &partition_info) const;
 
 	vector<unique_ptr<PipelineExecutor>> direct_executors;
+	vector<unique_ptr<DataChunk>> direct_input_chunks;
 	idx_t direct_idx = 0;
 	idx_t direct_next_batch_idx = 0;
 	idx_t direct_min_batch_idx = 0;
@@ -83,9 +88,10 @@ class PipelineBroadcastExchange {
 	friend class PipelineBroadcastExchangeLocalState;
 
 public:
-	PipelineBroadcastExchange(ClientContext &context, vector<LogicalType> types_p,
-	                          PipelineBroadcastExchangeCompletionMode completion_mode_p,
-	                          OrderPreservationType source_order_p, bool use_batch_index_p);
+	PipelineBroadcastExchange(
+	    ClientContext &context, vector<LogicalType> types_p, PipelineBroadcastExchangeCompletionMode completion_mode_p,
+	    OrderPreservationType source_order_p, bool use_batch_index_p,
+	    PipelineBroadcastExchangeBufferMode buffer_mode_p = PipelineBroadcastExchangeBufferMode::THROTTLE_PRODUCER);
 
 	const vector<LogicalType> &Types() const {
 		return types;
@@ -112,7 +118,10 @@ public:
 
 	void SetProducerPipelines(const vector<shared_ptr<Pipeline>> &pipelines);
 	idx_t RegisterConsumer();
+	bool CanRegisterDirectConsumer(Pipeline &pipeline) const;
+	void SelectDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
 	bool TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
+	vector<reference<Pipeline>> GetProducerPipelines() const;
 	void SelectBufferedConsumer(idx_t consumer_idx, PipelineBroadcastExchangeScanMode scan_mode);
 	void SelectMaterializedConsumer(idx_t consumer_idx);
 	void ResetConsumerRegistrations();
@@ -263,6 +272,7 @@ private:
 	ClientContext &context;
 	vector<LogicalType> types;
 	PipelineBroadcastExchangeCompletionMode completion_mode;
+	PipelineBroadcastExchangeBufferMode buffer_mode;
 	PipelineBroadcastExchangeOrderMode order_mode;
 	OrderPreservationType source_order;
 	idx_t max_threads;

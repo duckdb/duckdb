@@ -1,0 +1,47 @@
+# name: test/sql/order/top_n_limit_zero.test
+# description: Issue #24794 - repeated execution of a Top-N with LIMIT 0 crashes
+# group: [order]
+
+statement ok
+SET disabled_optimizers='filter_pushdown,join_order';
+
+statement ok
+SET threads=4;
+
+statement ok
+CREATE TABLE src(vp_rowid BIGINT PRIMARY KEY, c0 BOOLEAN, c1 BOOLEAN, c2 BIGINT);
+
+statement ok
+INSERT INTO src VALUES (1, TRUE, NULL, NULL), (2, TRUE, FALSE, 42);
+
+statement ok
+CREATE TABLE l AS SELECT vp_rowid, c2 FROM src;
+
+statement ok
+CREATE TABLE r AS SELECT vp_rowid, c0, c1 FROM src;
+
+query I
+SELECT c2 FROM src ORDER BY vp_rowid LIMIT 0
+----
+
+query I
+SELECT c2 FROM src ORDER BY vp_rowid LIMIT 0 OFFSET 1
+----
+
+# the zero-sized heap used to read uninitialized memory through heap.front()
+# this only crashes once the memory has been recycled a number of times, hence the loop
+loop i 0 500
+
+query I
+SELECT sub.c2
+FROM (
+    SELECT l.vp_rowid, r.c0, r.c1, l.c2
+    FROM l
+    JOIN r ON l.vp_rowid = r.vp_rowid
+    WHERE NOT EXISTS (SELECT 1 FROM r rx WHERE rx.vp_rowid = l.vp_rowid AND rx.vp_rowid <> l.vp_rowid)
+) sub
+ORDER BY sub.vp_rowid
+LIMIT 0
+----
+
+endloop

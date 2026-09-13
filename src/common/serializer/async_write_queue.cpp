@@ -102,10 +102,12 @@ AsyncWriteQueue::AsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarg
 
 AsyncWriteQueue::~AsyncWriteQueue() {
 	lock_guard<mutex> guard(lock);
+#ifdef D_ASSERT_IS_ENABLED
 	auto drained = pending_requests.empty() && pending_bytes == 0 && in_flight_bytes == 0 && active_tasks == 0 &&
 	               pending_tasks == 0 && scheduled_pending_bytes == 0 && pending_task_bytes.empty();
 	D_ASSERT(closed || drained);
 	D_ASSERT(!closed || drained);
+#endif
 }
 
 bool AsyncWriteQueue::IsAsync() const {
@@ -200,7 +202,9 @@ void AsyncWriteQueue::ScheduleTasksInternal(bool force) {
 	deque<idx_t> task_bytes;
 	{
 		lock_guard<mutex> guard(lock);
-		VerifyOpen();
+		if (closed) {
+			return;
+		}
 		idx_t scheduled_bytes = 0;
 		while (scheduled_pending_bytes + scheduled_bytes < pending_bytes &&
 		       active_tasks + schedule_count < max_active_tasks) {
@@ -391,8 +395,12 @@ void AsyncWriteQueue::WorkOnPendingTask() {
 		TaskScheduler::YieldThread();
 		return;
 	}
+#ifdef D_ASSERT_IS_ENABLED
 	auto result = task->Execute(TaskExecutionMode::PROCESS_ALL);
 	D_ASSERT(result != TaskExecutionResult::TASK_BLOCKED);
+#else
+	task->Execute(TaskExecutionMode::PROCESS_ALL);
+#endif
 	task.reset();
 }
 
@@ -486,6 +494,23 @@ void AsyncWriteQueue::Close() {
 	closed = true;
 }
 
+void AsyncWriteQueue::AbortWrites() {
+	{
+		lock_guard<mutex> guard(lock);
+		if (closed) {
+			return;
+		}
+		closed = true;
+	}
+
+	if (executor) {
+		executor->CancelAndDrain();
+	}
+	const ErrorData abort_error("Async writes aborted");
+	CancelPendingRequestsAfterFailure(abort_error);
+	RethrowTaskError();
+}
+
 void AsyncWriteQueue::VerifyOpen() const {
 	if (closed) {
 		throw InternalException("Cannot use closed AsyncWriteQueue");
@@ -512,10 +537,12 @@ ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, 
 
 ManagedAsyncWriteQueue::~ManagedAsyncWriteQueue() {
 	lock_guard<mutex> guard(lock);
+#ifdef D_ASSERT_IS_ENABLED
 	auto drained = pending_writes.empty() && pending_bytes == 0 && external_pending_bytes == 0 &&
 	               submitted_bytes == 0 && submitted_requests == 0;
 	D_ASSERT(closed || drained);
 	D_ASSERT(!closed || drained);
+#endif
 }
 
 bool ManagedAsyncWriteQueue::IsAsync() const {
@@ -873,6 +900,54 @@ void ManagedAsyncWriteQueue::Close() {
 	closed = true;
 }
 
+void ManagedAsyncWriteQueue::AbortWrites() {
+	deque<PendingWrite> writes;
+	{
+		lock_guard<mutex> guard(lock);
+		if (closed) {
+			return;
+		}
+		closed = true;
+		writes = std::move(pending_writes);
+		pending_bytes = 0;
+		external_pending_bytes = 0;
+	}
+
+	const ErrorData abort_error("Async writes aborted");
+	for (auto &pending : writes) {
+		auto request_size = pending.Size();
+		auto &request = pending.request;
+		request.payload.reset();
+		if (request.completion) {
+			try {
+				request.completion(request.offset, request_size, abort_error);
+			} catch (...) {
+			}
+		}
+	}
+
+	std::exception_ptr error;
+	try {
+		write_queue->AbortWrites();
+	} catch (...) {
+		error = std::current_exception();
+	}
+	try {
+		ReleaseMemoryReservation();
+	} catch (...) {
+		if (!error) {
+			error = std::current_exception();
+		}
+	}
+	{
+		lock_guard<mutex> guard(lock);
+		VerifyDrained();
+	}
+	if (error) {
+		std::rethrow_exception(error);
+	}
+}
+
 void ManagedAsyncWriteQueue::ReleaseMemoryReservation() {
 	memory_governor.Release();
 }
@@ -992,10 +1067,12 @@ ManagedAsyncWriteStreamQueue::ManagedAsyncWriteStreamQueue(ClientContext &client
 
 ManagedAsyncWriteStreamQueue::~ManagedAsyncWriteStreamQueue() {
 	annotated_lock_guard<annotated_mutex> guard(lock);
+#ifdef D_ASSERT_IS_ENABLED
 	auto drained = batch_depth == 0 && pending_writes.empty() && pending_bytes == 0 && submitted_bytes == 0 &&
 	               submitted_requests == 0;
 	D_ASSERT(closed || drained);
 	D_ASSERT(!closed || drained);
+#endif
 }
 
 bool ManagedAsyncWriteStreamQueue::IsAsync() const {
@@ -1546,6 +1623,42 @@ void ManagedAsyncWriteStreamQueue::Close() {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	VerifyDrained();
 	closed = true;
+}
+
+void ManagedAsyncWriteStreamQueue::AbortWrites() {
+	std::exception_ptr error;
+	lock_guard<mutex> submission_guard(submission_lock);
+	idx_t discarded_bytes;
+	shared_ptr<const ErrorData> local_error_ref;
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		if (closed) {
+			return;
+		}
+		closed = true;
+		discarded_bytes = pending_bytes;
+		pending_writes.clear();
+		pending_bytes = 0;
+		batch_depth = 0;
+		force_completion_refill = false;
+		local_error_ref = local_error;
+	}
+	write_queue->DiscardExternalPendingBytes(discarded_bytes);
+	try {
+		write_queue->AbortWrites();
+	} catch (...) {
+		error = std::current_exception();
+	}
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		VerifyDrained();
+	}
+	if (local_error_ref) {
+		local_error_ref->Throw();
+	}
+	if (error) {
+		std::rethrow_exception(error);
+	}
 }
 
 void ManagedAsyncWriteStreamQueue::ResetNextOffset(idx_t offset) {

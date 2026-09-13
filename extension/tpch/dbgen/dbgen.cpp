@@ -161,7 +161,7 @@ struct tpch_append_information {
 			return;
 		}
 		FlushChunk();
-		TransactionData transaction_data(0, 0);
+		auto transaction_data = TransactionData::Unversioned();
 		auto &row_collection = *optimistic_collection->collection;
 		row_collection.FinalizeAppend(transaction_data, append_state);
 		finalized = true;
@@ -792,8 +792,8 @@ static void ValidateTPCHTableSchema(const TableCatalogEntry &table, const string
 
 		if (column.Name() != Identifier(T::Columns[i])) {
 			throw InvalidInputException(
-			    "TPC-H table \"%s\" has an incompatible schema: expected column \"%s\" at position %llu but found \"%s\"",
-			    table_name, T::Columns[i], (unsigned long long)i, column.Name().GetIdentifierName());
+			    "TPC-H table \"%s\" has an incompatible schema: expected column \"%s\" at position %llu but found %s",
+			    table_name, T::Columns[i], (unsigned long long)i, column.Name());
 		}
 
 		if (column.Type() != T::Types[i]) {

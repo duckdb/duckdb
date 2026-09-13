@@ -42,9 +42,7 @@ ScalarFunctionSet BitStringFun::GetFunctions() {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<true>));
 	bitstring.AddFunction(
 	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<false>));
-	for (auto &func : bitstring.functions) {
-		func.SetFallible();
-	}
+	bitstring.SetFallible();
 	return bitstring;
 }
 

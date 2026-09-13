@@ -107,6 +107,11 @@ public:
 	idx_t AddChunk(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter);
+	using before_update_callback_t =
+	    std::function<void(const Vector &group_addresses, const SelectionVector &new_groups, idx_t new_group_count)>;
+	//! Adds a chunk and invokes a callback with stable row-start addresses before updating the aggregate states.
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter,
+	               const before_update_callback_t &before_update);
 	//! Adds a chunk and returns the stable row-start addresses and input indexes of newly created groups.
 	idx_t AddChunkAndGetNewGroups(DataChunk &groups, DataChunk &payload, AggregateType filter,
 	                              Vector &new_group_addresses, SelectionVector &new_groups_out);

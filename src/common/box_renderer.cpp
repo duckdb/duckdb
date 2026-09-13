@@ -486,6 +486,28 @@ void BoxRendererImplementation::RenderValue(BaseResultRenderer &ss, const string
 	ss << string(rpadding, ' ');
 }
 
+static string LowerTypeStringPreservingQuotes(const string &str) {
+	string result;
+	result.reserve(str.size());
+	bool in_single_quote = false;
+	for (idx_t i = 0; i < str.size(); i++) {
+		char c = str[i];
+		if (c == '\'') {
+			result += c;
+			if (in_single_quote && i + 1 < str.size() && str[i + 1] == '\'') {
+				result += str[++i];
+				continue;
+			}
+			in_single_quote = !in_single_quote;
+		} else if (in_single_quote) {
+			result += c;
+		} else {
+			result += StringUtil::CharacterToLower(c);
+		}
+	}
+	return result;
+}
+
 string BoxRendererImplementation::RenderType(const LogicalType &type) {
 	if (type.HasAlias()) {
 		return StringUtil::Lower(type.ToString());
@@ -516,7 +538,7 @@ string BoxRendererImplementation::RenderType(const LogicalType &type) {
 		return child + "[]";
 	}
 	default:
-		return StringUtil::Lower(type.ToString());
+		return LowerTypeStringPreservingQuotes(type.ToString());
 	}
 }
 

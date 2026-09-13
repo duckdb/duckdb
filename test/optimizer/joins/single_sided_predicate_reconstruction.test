@@ -1,0 +1,51 @@
+# name: test/optimizer/joins/single_sided_predicate_reconstruction.test
+# description: Join-order reconstruction must not fail when a cross-product spans more than two relations
+# group: [joins]
+
+statement ok
+CREATE TABLE a1 AS SELECT i AS x FROM range(8) s(i);
+
+statement ok
+CREATE TABLE b1 AS SELECT i AS x FROM range(8) s(i);
+
+statement ok
+CREATE TABLE c1 AS SELECT i AS x FROM range(16) s(i);
+
+statement ok
+CREATE TABLE d1 AS SELECT i AS x FROM range(8) s(i);
+
+# c1's join predicate only references c1, not d1, so the join is really an
+# unfiltered cross product between {a1,b1} and {c1,d1}.
+query I
+SELECT count(*) FROM a1, b1, c1 INNER JOIN d1 ON (c1.x > 0);
+----
+7680
+
+statement ok
+CREATE TABLE a2 AS SELECT i AS x FROM range(5) s(i);
+
+statement ok
+CREATE TABLE b2 AS SELECT i AS x FROM range(7) s(i);
+
+statement ok
+CREATE TABLE c2 AS SELECT i AS x FROM range(10) s(i);
+
+statement ok
+CREATE TABLE d2 AS SELECT i AS x FROM range(6) s(i);
+
+# Same shape with different, asymmetric cardinalities so the optimizer's cost
+# model is free to pick a different bushy plan than the first case.
+query I
+SELECT count(*) FROM a2, b2, c2 INNER JOIN d2 ON (c2.x > 3);
+----
+1260
+
+statement ok
+CREATE TABLE e3 AS SELECT i AS x FROM range(4) s(i);
+
+# A fifth relation widens the cross product further, stressing the same
+# reconstruction path with a larger connected component.
+query I
+SELECT count(*) FROM a2, b2, e3, c2 INNER JOIN d2 ON (c2.x >= 4);
+----
+5040

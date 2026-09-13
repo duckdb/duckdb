@@ -116,9 +116,7 @@ ScalarFunctionSet BitwiseAndFun::GetFunctions() {
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseANDOperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, BitwiseANDOperation));
-	for (auto &function : functions.functions) {
-		function.SetFallible();
-	}
+	functions.SetFallible();
 	return functions;
 }
 
@@ -154,9 +152,7 @@ ScalarFunctionSet BitwiseOrFun::GetFunctions() {
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseOROperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, BitwiseOROperation));
-	for (auto &function : functions.functions) {
-		function.SetFallible();
-	}
+	functions.SetFallible();
 	return functions;
 }
 
@@ -192,9 +188,7 @@ ScalarFunctionSet BitwiseXorFun::GetFunctions() {
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseXOROperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, BitwiseXOROperation));
-	for (auto &function : functions.functions) {
-		function.SetFallible();
-	}
+	functions.SetFallible();
 	return functions;
 }
 
@@ -228,9 +222,7 @@ ScalarFunctionSet BitwiseNotFun::GetFunctions() {
 		functions.AddFunction(ScalarFunction({type}, type, GetScalarIntegerUnaryFunction<BitwiseNotOperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIT, BitwiseNOTOperation));
-	for (auto &function : functions.functions) {
-		function.SetFallible();
-	}
+	functions.SetFallible();
 	return functions;
 }
 
@@ -257,6 +249,9 @@ struct BitwiseShiftLeftOperator {
 		}
 		if (shift == 0) {
 			return input;
+		}
+		if (input == 0) {
+			return 0;
 		}
 		TA max_value = UnsafeNumericCast<TA>((TA(1) << (max_shift - shift - 1)));
 		if (input >= max_value) {
@@ -297,9 +292,7 @@ ScalarFunctionSet LeftShiftFun::GetFunctions() {
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitwiseShiftLeftOperation));
-	for (auto &function : functions.functions) {
-		function.SetFallible();
-	}
+	functions.SetFallible();
 	return functions;
 }
 
@@ -347,9 +340,7 @@ ScalarFunctionSet RightShiftFun::GetFunctions() {
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitwiseShiftRightOperation));
-	for (auto &function : functions.functions) {
-		function.SetFallible();
-	}
+	functions.SetFallible();
 	return functions;
 }
 

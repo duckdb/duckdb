@@ -37,7 +37,7 @@ void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
 		load_lock.unlock();
 		ExtensionManager::Get(db).RemoveExtensionInfo(alias.GetIdentifierName());
 	}
-	DUCKDB_LOG_INFO(db, "Failed to load extension '%s': %s", extension_name.GetIdentifierName(), error.Message());
+	DUCKDB_LOG_INFO(db, "Failed to load extension %s: %s", extension_name, error.Message());
 }
 
 ExtensionManager::ExtensionManager(DatabaseInstance &db) : db(db) {
@@ -92,8 +92,8 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 		if (loaded_extensions_info.find(Identifier(options.alias.GetIdentifierName())) !=
 		    loaded_extensions_info.end()) {
 			auto &info = loaded_extensions_info[Identifier(options.alias.GetIdentifierName())];
-			throw InvalidInputException("Alias '%s' already exists for extension '%s'",
-			                            options.alias.GetIdentifierName(), info->orig_ext_name);
+			throw InvalidInputException("Alias %s already exists for extension '%s'", options.alias,
+			                            info->orig_ext_name);
 		}
 	}
 

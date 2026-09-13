@@ -86,12 +86,30 @@ string HivePartitioning::Escape(const string &input) {
 	return StringUtil::URLEncode(input);
 }
 
+string HivePartitioning::EscapeValue(const string &input) {
+	auto result = Escape(input);
+	// the comparison is case-insensitive because on a case-insensitive file system a value that differs only in
+	// case still lands in the directory that is reserved for NULL values
+	if (!StringUtil::CIEquals(result, DEFAULT_PARTITION_NAME)) {
+		return result;
+	}
+	// percent-encode the first character so the value gets its own directory while still unescaping back to the
+	// original value
+	static constexpr const char *HEX_DIGIT = "0123456789ABCDEF";
+	const auto first = static_cast<unsigned char>(result[0]);
+	string escaped = "%";
+	escaped += HEX_DIGIT[first >> 4];
+	escaped += HEX_DIGIT[first & 15];
+	escaped += result.substr(1);
+	return escaped;
+}
+
 string HivePartitioning::Unescape(const string &input) {
 	return StringUtil::URLDecode(input);
 }
 
 bool HivePartitioning::IsNull(const string &input) {
-	return StringUtil::CIEquals(input, "NULL") || input == "__HIVE_DEFAULT_PARTITION__";
+	return StringUtil::CIEquals(input, "NULL") || input == DEFAULT_PARTITION_NAME;
 }
 
 // matches hive partitions in file name. For example:
@@ -132,7 +150,7 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 Value HivePartitioning::GetValue(ClientContext &context, const string &key, const string &str_val,
                                  const LogicalType &type) {
 	// On SQLNULL, DuckDB writes "__HIVE_DEFAULT_PARTITION__", instead of string version "NULL".
-	if (str_val == "__HIVE_DEFAULT_PARTITION__") {
+	if (str_val == DEFAULT_PARTITION_NAME) {
 		return Value(type);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {

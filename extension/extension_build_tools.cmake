@@ -97,6 +97,23 @@ if (NOT ${EXTENSION_CONFIG_BUILD} AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_
     endif()
 endif()
 
+# The entrypoint a C ABI extension is expected to export. The CAPI version major selects the API family, and
+# C_STRUCT_UNSTABLE always means V2 (nothing is unstable in the V1 API anymore).
+function(capi_entrypoint_symbol NAME ABI_TYPE CAPI_VERSION OUT_VAR)
+    if (${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
+        set(${OUT_VAR} "${NAME}_init_c_api_v2" PARENT_SCOPE)
+    elseif (${ABI_TYPE} STREQUAL "C_STRUCT")
+        string(REGEX MATCH "^v([0-9]+)\\." _unused "${CAPI_VERSION}")
+        if ("${CMAKE_MATCH_1}" STREQUAL "2")
+            set(${OUT_VAR} "${NAME}_init_c_api_v2" PARENT_SCOPE)
+        else()
+            set(${OUT_VAR} "${NAME}_init_c_api" PARENT_SCOPE)
+        endif()
+    else()
+        message(FATAL_ERROR "capi_entrypoint_symbol called with non-C ABI type '${ABI_TYPE}'")
+    endif()
+endfunction()
+
 function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTENSION_VERSION CAPI_VERSION PARAMETERS)
     set(TARGET_NAME ${NAME}_loadable_extension)
     if (LOCAL_EXTENSION_REPO)
@@ -138,7 +155,9 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     elseif(${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
         # TODO strip all symbols except the capi init
     elseif (EXTENSION_STATIC_BUILD)
-        if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+        if (WIN32)
+            target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS})
+        elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
             if (APPLE)
                 set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
                 # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
@@ -151,10 +170,8 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
                 set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
                 target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
             endif()
-        elseif (WIN32)
-            target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS})
         else()
-            message(FATAL_ERROR, "EXTENSION static build is only intended for Linux and Windows on MVSC")
+            message(FATAL_ERROR "EXTENSION static build is only intended for Linux and Windows on MVSC")
         endif()
     else()
         if (WIN32)
@@ -187,8 +204,9 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
         separate_arguments(TO_BE_LINKED)
         if (${ABI_TYPE} STREQUAL "CPP")
             set(EXPORTED_FUNCTIONS "_${NAME}_duckdb_cpp_init")
-        elseif (${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
-            set(EXPORTED_FUNCTIONS "_${NAME}_init_c_api")
+        else()
+            capi_entrypoint_symbol(${NAME} ${ABI_TYPE} "${CAPI_VERSION}" CAPI_ENTRYPOINT)
+            set(EXPORTED_FUNCTIONS "_${CAPI_ENTRYPOINT}")
         endif()
         add_custom_command(
                 TARGET ${TARGET_NAME}
@@ -237,6 +255,17 @@ function(build_loadable_extension_capi NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINO
     target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
 endfunction()
 
+# Versioned build against the V2 C API. Produces a C_STRUCT footer carrying a v2.x.y CAPI version, which is what
+# selects the <name>_init_c_api_v2 entrypoint at load time.
+function(build_loadable_extension_capi_v2 NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINOR CAPI_VERSION_PATCH PARAMETERS)
+    if (NOT ${CAPI_VERSION_MAJOR} EQUAL 2)
+        message(FATAL_ERROR "build_loadable_extension_capi_v2 requires a v2.x.y API version, got v${CAPI_VERSION_MAJOR}.${CAPI_VERSION_MINOR}.${CAPI_VERSION_PATCH}")
+    endif()
+    set(FILES "${ARGV}")
+    list(REMOVE_AT FILES 0 1 2 3)
+    build_loadable_extension_capi(${NAME} ${CAPI_VERSION_MAJOR} ${CAPI_VERSION_MINOR} ${CAPI_VERSION_PATCH} ${FILES})
+endfunction()
+
 function(build_loadable_extension_capi_unstable NAME PARAMETERS)
     set(FILES "${ARGV}")
     list(REMOVE_AT FILES 0)
@@ -276,6 +305,18 @@ function(build_static_extension_capi NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINOR 
     set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI")
 endfunction()
 
+# Versioned build against the V2 C API, statically linked into DuckDB.
+function(build_static_extension_capi_v2 NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINOR CAPI_VERSION_PATCH PARAMETERS)
+    if (NOT ${CAPI_VERSION_MAJOR} EQUAL 2)
+        message(FATAL_ERROR "build_static_extension_capi_v2 requires a v2.x.y API version, got v${CAPI_VERSION_MAJOR}.${CAPI_VERSION_MINOR}.${CAPI_VERSION_PATCH}")
+    endif()
+    set(FILES "${ARGV}")
+    list(REMOVE_AT FILES 0 1 2 3)
+    build_static_extension_capi(${NAME} ${CAPI_VERSION_MAJOR} ${CAPI_VERSION_MINOR} ${CAPI_VERSION_PATCH} ${FILES})
+    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI_V2")
+endfunction()
+
+# The unstable API is the V2 API: everything that was unstable in V1 was stabilized into v1.5.6.
 function(build_static_extension_capi_unstable NAME PARAMETERS)
     set(FILES "${ARGV}")
     list(REMOVE_AT FILES 0)
@@ -284,7 +325,7 @@ function(build_static_extension_capi_unstable NAME PARAMETERS)
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_UNSTABLE=${DUCKDB_NORMALIZED_VERSION})
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
-    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI")
+    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI_V2")
 endfunction()
 
 # Internal extension register function
@@ -423,14 +464,16 @@ function(duckdb_extension_generate_version OUTPUT_VAR WORKING_DIR)
     endif()
     if (IS_IN_GIT_DIR)
         execute_process(
-                COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+                COMMAND ${GIT_EXECUTABLE} log -1 --format=%H
                 WORKING_DIRECTORY ${WORKING_DIR}
                 RESULT_VARIABLE GIT_RESULT
                 OUTPUT_VARIABLE GIT_COMMIT_HASH
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
         if (GIT_RESULT)
-            message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'.")
+            message(FATAL_ERROR
+                    "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%H'.")
         endif()
+        string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 GIT_COMMIT_HASH)
         execute_process(
                 COMMAND ${GIT_EXECUTABLE} describe --tags --always --match "${VERSIONING_TAG_MATCH}"
                 WORKING_DIRECTORY ${WORKING_DIR}
@@ -485,7 +528,7 @@ function(duckdb_extension_load NAME)
         register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "" "" "" "" "" "${duckdb_extension_load_EXTENSION_VERSION}")
     elseif (NOT "${duckdb_extension_load_GIT_URL}" STREQUAL "")
         if ("${duckdb_extension_load_GIT_TAG}" STREQUAL "")
-            message(FATAL_ERROR, "Git URL specified but no valid GIT_TAG was found for ${NAME} extension")
+            message(FATAL_ERROR "Git URL specified but no valid GIT_TAG was found for ${NAME} extension")
         endif()
         register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}" "${duckdb_extension_load_LINKED_LIBS}" "${duckdb_extension_load_SUBMODULES}" "${duckdb_extension_load_EXTENSION_VERSION}")
         if (NOT "${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")

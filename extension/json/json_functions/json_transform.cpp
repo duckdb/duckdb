@@ -14,6 +14,7 @@
 #include "json_geojson.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
@@ -1116,6 +1117,11 @@ static bool TransformFunctionInternal(const Vector &input, const idx_t count, Ve
 	auto docs = JSONCommon::AllocateArray<yyjson_doc *>(alc, count);
 	auto vals = JSONCommon::AllocateArray<yyjson_val *>(alc, count);
 	auto &result_validity = FlatVector::ValidityMutable(result);
+	auto read_flags = JSONCommon::READ_FLAG;
+	if (TypeVisitor::Contains(result.GetType(), LogicalTypeId::DECIMAL)) {
+		read_flags &= ~YYJSON_READ_BIGNUM_AS_RAW;
+		read_flags |= YYJSON_READ_NUMBER_AS_RAW;
+	}
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(idx)) {
@@ -1123,7 +1129,7 @@ static bool TransformFunctionInternal(const Vector &input, const idx_t count, Ve
 			vals[i] = nullptr;
 			result_validity.SetInvalid(i);
 		} else {
-			docs[i] = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc);
+			docs[i] = JSONCommon::ReadDocument(inputs[idx], read_flags, alc);
 			vals[i] = docs[i]->root;
 		}
 	}
@@ -1152,9 +1158,7 @@ ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 	ScalarFunctionSet set("json_transform");
 	GetTransformFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformFunctionInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 
@@ -1167,9 +1171,7 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 	ScalarFunctionSet set("json_transform_strict");
 	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformStrictFunctionInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 

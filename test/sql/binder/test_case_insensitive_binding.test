@@ -138,3 +138,30 @@ query I
 SELECT hello FROM (SELECT 42) tbl("HeLlO")
 ----
 42
+
+statement ok
+CREATE TABLE case_test(MixedCase INTEGER);
+
+statement ok
+CREATE TABLE case_output AS
+SELECT mixedcase
+FROM case_test;
+
+query I
+SELECT column_name
+FROM duckdb_columns()
+WHERE table_name = 'case_output';
+----
+MixedCase
+
+statement ok
+CREATE TABLE case_alias_output AS
+SELECT mixedcase AS custom_name
+FROM case_test;
+
+query I
+SELECT column_name
+FROM duckdb_columns()
+WHERE table_name = 'case_alias_output';
+----
+custom_name

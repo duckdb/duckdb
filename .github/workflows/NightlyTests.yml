@@ -887,6 +887,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Check Architecture Flags
+        run: |
+          cmake -P scripts/ci/test_architecture_flags.cmake
+
       - name: Create Dir
         run: |
           mkdir build

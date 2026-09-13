@@ -78,7 +78,7 @@ struct CSVReaderOptions {
 	//! User-defined SQL type list
 	vector<LogicalType> sql_type_list;
 	//! User-defined name list
-	vector<string> name_list;
+	vector<Identifier> name_list;
 	//! If the names and types were set by the columns parameter
 	bool columns_set = false;
 	//! Types considered as candidates for auto-detection ordered by ascending specificity (~ from low to high)
@@ -189,7 +189,7 @@ struct CSVReaderOptions {
 	//! loption - lowercase string
 	//! set - argument(s) to the option
 	//! expected_names - names expected if the option is "columns"
-	void SetReadOption(const Identifier &loption, const Value &value, vector<string> &expected_names);
+	void SetReadOption(const Identifier &loption, const Value &value, const vector<Identifier> &expected_names);
 	void SetWriteOption(const Identifier &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 	void ToNamedParameters(named_parameter_map_t &out) const;

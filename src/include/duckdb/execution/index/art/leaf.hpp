@@ -56,7 +56,7 @@ public:
 	static void DeprecatedFree(ART &art, NodePtr &node);
 	//! Fills the row_ids vector with the row IDs of this linked list of leaves.
 	//! Never pushes more than max_count row IDs.
-	static bool DeprecatedGetRowIds(ART &art, const NodePtr &node, set<row_t> &row_ids, const idx_t max_count);
+	static bool DeprecatedGetRowIds(const ART &art, const NodePtr &node, set<row_t> &row_ids, const idx_t max_count);
 	//! Vacuums the internal links in the deprecated leaf list pointed to by node.
 	//! The caller is responsible for vacuuming the slot that points to the list head.
 	static void DeprecatedVacuum(ART &art, NodePtr node);

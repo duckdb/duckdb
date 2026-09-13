@@ -1,0 +1,14 @@
+# name: test/issues/general/test_24828.test
+# description: Issue 24828 - ROW_NUMBER argument order with a frame excluding the current row
+# group: [general]
+
+query III
+WITH t(id, x) AS (VALUES (1, 10), (2, 20))
+SELECT id,
+       ROW_NUMBER(ORDER BY x) OVER (ORDER BY x ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING),
+       ROW_NUMBER(ORDER BY x) OVER (ORDER BY x ROWS BETWEEN 2 PRECEDING AND 2 PRECEDING)
+FROM t
+ORDER BY id;
+----
+1	1	1
+2	1	1

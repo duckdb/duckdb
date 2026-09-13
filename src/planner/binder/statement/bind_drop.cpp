@@ -95,7 +95,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			break;
 		}
 		if (entry->internal) {
-			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name.GetIdentifierName());
+			throw CatalogException("Cannot drop internal catalog entry %s!", entry->name);
 		}
 		// keep the entry's full (possibly nested) schema path so execution navigates the same schema
 		stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));

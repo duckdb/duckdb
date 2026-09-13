@@ -25,4 +25,4 @@ sniff_csv cannot take NULL as a file path parameter
 statement error
 SELECT NULL FROM read_csv(NULL)
 ----
-read_csv cannot take NULL list as parameter
+"read_csv" cannot take NULL list as parameter

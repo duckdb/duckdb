@@ -13,7 +13,7 @@
 #include "test_helpers.hpp"
 #include "test_config.hpp"
 #include "sqllogic_test_logger.hpp"
-#include "catch.hpp"
+#include "test_reporter.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -40,7 +40,7 @@ static Connection &GetConnection(SQLLogicTestRunner &runner, DuckDB &db,
 		if (!init_cmd.empty()) {
 			auto res = con->Query(runner.ReplaceKeywords(init_cmd));
 			if (res->HasError()) {
-				FAIL("Startup queries provided via on_new_connection failed: " + res->GetError());
+				TEST_FAIL("Startup queries provided via on_new_connection failed: " + res->GetError());
 			}
 		}
 		auto &res = *con;
@@ -49,7 +49,7 @@ static Connection &GetConnection(SQLLogicTestRunner &runner, DuckDB &db,
 		return res;
 	}
 	if (!RefersToSameObject(*entry->second->context->db, *db.instance)) {
-		FAIL("Named connection has been started with different target databases");
+		TEST_FAIL("Named connection has been started with different target databases");
 	}
 	return *entry->second;
 }
@@ -59,7 +59,7 @@ static Connection &GetConnection(SQLLogicTestRunner &runner,
 	if (StringUtil::Contains(con_name, ":")) {
 		auto splits = StringUtil::Split(con_name, ":");
 		if (splits.size() != 2) {
-			FAIL("Expected either connection name or database:connection");
+			TEST_FAIL("Expected either connection name or database:connection");
 		}
 		auto &db_name = splits[0];
 		auto &con_name = splits[1];
@@ -70,7 +70,7 @@ static Connection &GetConnection(SQLLogicTestRunner &runner,
 		}
 		// no database - create it
 		if (runner.named_connection_map.find(con_name) != runner.named_connection_map.end()) {
-			FAIL("Database did not exist, but named connection already existed");
+			TEST_FAIL("Database did not exist, but named connection already existed");
 		}
 		auto result = runner.CreateDatabase(":memory:", true);
 		auto &result_con = *result.con;
@@ -102,7 +102,7 @@ Connection &Command::CommandConnection(ExecuteContext &context) const {
 					if (context.is_parallel) {
 						throw std::runtime_error(error_msg);
 					} else {
-						FAIL(error_msg);
+						TEST_FAIL(error_msg);
 					}
 				}
 			}
@@ -361,7 +361,7 @@ void ResetLabel::ExecuteInternal(ExecuteContext &context) const {
 		auto it = map.find(query_label);
 		//! should we allow this to be missing at all?
 		if (it == map.end()) {
-			FAIL_LINE(file_name, query_line, 0);
+			TEST_FAIL_LINE(file_name, query_line, "");
 		}
 		map.erase(it);
 	});
@@ -693,9 +693,9 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 				runner.test_failure_locator =
 				    StringUtil::Format("%s:%d", execute_context.error_file, execute_context.error_line);
 				if (!execute_context.error_message.empty()) {
-					FAIL(execute_context.error_message);
+					TEST_FAIL(execute_context.error_message);
 				} else {
-					FAIL_LINE(execute_context.error_file, execute_context.error_line, 0);
+					TEST_FAIL_LINE(execute_context.error_file, execute_context.error_line, "");
 				}
 			}
 		}
@@ -768,7 +768,7 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 			context.error_line = query_line;
 		} else {
 			runner.test_failure_locator = StringUtil::Format("%s:%d", file_name, query_line);
-			FAIL_LINE(file_name, query_line, 0);
+			TEST_FAIL_LINE(file_name, query_line, "");
 		}
 	}
 }
@@ -883,7 +883,7 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			context.error_line = query_line;
 		} else {
 			runner.test_failure_locator = StringUtil::Format("%s:%d", file_name, query_line);
-			FAIL_LINE(file_name, query_line, 0);
+			TEST_FAIL_LINE(file_name, query_line, "");
 		}
 	}
 }
@@ -944,7 +944,7 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 			} catch (std::exception &ex) {
 				ErrorData err(ex);
 				SQLLogicTestLogger::LoadDatabaseFail(runner.file_name, dbpath, err.Message());
-				FAIL();
+				TEST_FAIL("");
 			}
 		}
 	}

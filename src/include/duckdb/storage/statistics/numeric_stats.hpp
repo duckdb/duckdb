@@ -73,6 +73,9 @@ struct NumericStats {
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
 	                                                     array_ptr<const Value> constants);
 
+	//! Whether the constants cover every value in [min, max] - only meaningful for integral types
+	static bool ConstantsCoverRange(const BaseStatistics &stats, array_ptr<const Value> constants);
+
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other_p);
 
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);

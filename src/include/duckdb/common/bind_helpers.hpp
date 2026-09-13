@@ -19,8 +19,8 @@ struct BoundStatement;
 class Binder;
 
 Value ConvertVectorToValue(vector<Value> set);
-vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, const Identifier &option_name);
-vector<bool> ParseColumnList(const Value &value, vector<string> &names, const Identifier &option_name);
+vector<bool> ParseColumnList(const vector<Value> &set, const vector<Identifier> &names, const Identifier &option_name);
+vector<bool> ParseColumnList(const Value &value, const vector<Identifier> &names, const Identifier &option_name);
 vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<Identifier> &names,
                                   const Identifier &option_name);
 vector<idx_t> ParseColumnsOrdered(const Value &value, const vector<Identifier> &names, const Identifier &option_name);

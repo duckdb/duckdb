@@ -17,6 +17,7 @@ namespace duckdb {
 void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	query = std::move(info.query);
 	this->aliases = info.aliases;
+	this->security_type = info.security_type;
 	if (!info.types.empty()) {
 		bind_state = ViewBindState::BOUND;
 		view_columns = make_shared_ptr<ViewColumnInfo>();
@@ -52,6 +53,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->sql = sql;
 	result->query = query ? unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy()) : nullptr;
 	result->aliases = aliases;
+	result->security_type = security_type;
 	auto view_columns = GetColumnInfo();
 	if (view_columns) {
 		result->names = view_columns->names;
@@ -86,8 +88,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 				// the column name might be a view alias - check those as well
 				auto alias_entry = std::find_if(aliases.begin(), aliases.end(), match_name);
 				if (alias_entry == aliases.end()) {
-					throw BinderException("View \"%s\" does not have a column with name \"%s\"",
-					                      name.GetIdentifierName(), resolved_column_name.GetIdentifierName());
+					throw BinderException("View %s does not have a column with name %s", name, resolved_column_name);
 				}
 				auto alias_index = NumericCast<idx_t>(std::distance(aliases.begin(), alias_entry));
 				D_ASSERT(alias_index < names.size());

@@ -77,12 +77,24 @@ SELECT 1 // a FROM test
 0
 0
 
-# a / 0 => NULL
+# a / 0 => error
+statement error
+SELECT a // 0 FROM test
+----
+<REGEX>:.*Division by zero.*
+
+statement ok
+SET null_on_division_by_zero=true;
+
+# a / 0 => NULL with null_on_division_by_zero
 query I
 SELECT a // 0 FROM test
 ----
 NULL
 NULL
+
+statement ok
+SET null_on_division_by_zero=false;
 
 # 0 / a => 0
 query I
@@ -117,6 +129,14 @@ NULL
 
 statement ok
 SET ieee_floating_point_ops=false;
+
+statement error
+SELECT 0 / rowid FROM test
+----
+<REGEX>:.*Division by zero.*
+
+statement ok
+SET null_on_division_by_zero=true;
 
 query I
 SELECT 0 / rowid FROM test

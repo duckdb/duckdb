@@ -1,5 +1,4 @@
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -43,7 +42,7 @@ inline void TupleDataValueStore(const string_t &source, data_t *__restrict const
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
 		// Copy non-inlined part
-		FastMemcpy(heap_location, source.GetPointer(), source.GetSize());
+		memcpy(heap_location, source.GetPointer(), source.GetSize());
 		// Copy first 8 bytes of string_t
 		memcpy(row_location + offset_in_row, &source, string_t::HEADER_SIZE);
 		// Copy new heap pointer into the correct offset
@@ -65,7 +64,7 @@ inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr
 	source.VerifyCharacters();
 #endif
 	Store<uint32_t>(UnsafeNumericCast<uint32_t>(source.GetSize()), location);
-	FastMemcpy(heap_location, source.GetData(), source.GetSize());
+	memcpy(heap_location, source.GetData(), source.GetSize());
 	heap_location += source.GetSize();
 }
 
@@ -647,7 +646,7 @@ static void InitializeValidityMask(const data_ptr_t row_locations[], const idx_t
 		break;
 	default:
 		for (idx_t i = 0; i < append_count; i++) {
-			FastMemset(row_locations[i], ~0, validity_bytes);
+			memset(row_locations[i], ~0, validity_bytes);
 		}
 	}
 }

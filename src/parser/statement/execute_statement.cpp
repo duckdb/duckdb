@@ -24,10 +24,11 @@ string ExecuteStatement::ToString() const {
 	result += " " + SQLIdentifier(name);
 	vector<string> stringified;
 	for (auto &val : named_values) {
-		stringified.push_back(StringUtil::Format("%s := %s", val.first, val.second->ToString()));
+		stringified.push_back(StringUtil::Format("%s := %s", SQLIdentifier(val.first), val.second->ToString()));
 	}
 	for (auto &val : bound_values) {
-		stringified.push_back(StringUtil::Format("%s := %s", val.first, val.second.GetValue().ToSQLString()));
+		stringified.push_back(
+		    StringUtil::Format("%s := %s", SQLIdentifier(val.first), val.second.GetValue().ToSQLString()));
 	}
 	if (!stringified.empty()) {
 		result += "(" + StringUtil::Join(stringified, ", ") + ")";

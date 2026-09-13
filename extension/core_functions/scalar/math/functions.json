@@ -237,6 +237,14 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "round_even",
+        "parameters": "x,precision",
+        "description": "Rounds x to s decimal places, rounding halfway cases to the nearest even digit",
+        "example": "round_even(24.5, 0)",
+        "type": "scalar_function_set",
+        "aliases": ["roundbankers"]
+    },
+    {
         "name": "sign",
         "parameters": "x",
         "description": "Returns the sign of x as -1, 0 or 1",

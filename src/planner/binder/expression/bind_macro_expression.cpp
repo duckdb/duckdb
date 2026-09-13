@@ -1,4 +1,6 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
@@ -107,9 +109,8 @@ void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
 		auto &fn_expr = expr->Cast<FunctionExpression>();
 
 		// Look up the function in the catalog, check to see if it is actually an aggregate function
-		EntryLookupInfo fn_entry(CatalogType::AGGREGATE_FUNCTION_ENTRY, QualifiedName(fn_expr.FunctionName()));
-		auto entry = GetCatalogEntry(fn_expr.GetQualifiedName().Catalog(), fn_expr.GetQualifiedName().Schema(),
-		                             fn_entry, OnEntryNotFound::RETURN_NULL);
+		EntryLookupInfo fn_entry(CatalogType::AGGREGATE_FUNCTION_ENTRY, fn_expr.GetQualifiedName());
+		auto entry = GetCatalogEntry(fn_entry, OnEntryNotFound::RETURN_NULL);
 
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			exprs.push_back(expr);

@@ -18,8 +18,12 @@ idx_t LogicalLoad::EstimateCardinality(ClientContext &context) {
 	return 1;
 }
 
+vector<ColumnBinding> LogicalLoad::GetColumnBindings() {
+	return GenerateColumnBindings(TableIndex(0), LoadInfo::GetResultTypes(info->load_type).size());
+}
+
 void LogicalLoad::ResolveTypes() {
-	types.emplace_back(LogicalType::BOOLEAN);
+	types = LoadInfo::GetResultTypes(info->load_type);
 }
 
 } // namespace duckdb

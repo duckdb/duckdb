@@ -84,6 +84,7 @@ class TestCase:
 class FailedAttempt:
     lines: list[str]
     reproduce_batch: list[str]
+    failed_test_names: list[str]
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,7 @@ class StdoutParse:
     last_unfinished_test: str | None
     preferred_assertion: StdoutAssertionFailure | None
     fallback_failure_block: tuple[str | None, list[str]] | None
+    fatal_error_lines: list[str]
     failed_reason_line: str | None
 
 
@@ -140,6 +142,7 @@ class BatchRunState:
         self.retry_count = 0
         self.stop_launching = False
         self.failed_attempts = {}
+        self.failed_test_names = set()
 
     def record_retry(self):
         self.retry_count += 1
@@ -147,10 +150,16 @@ class BatchRunState:
     def record_failure(self):
         self.failed_count += 1
 
-    def add_failed_attempt(self, batch_idx: int, lines: list[str], reproduce_batch: list[str]):
+    def add_failed_attempt(
+        self, batch_idx: int, lines: list[str], reproduce_batch: list[str], failed_test_names: list[str]
+    ):
         self.failed_attempts.setdefault(batch_idx, []).append(
-            FailedAttempt(lines=lines, reproduce_batch=reproduce_batch)
+            FailedAttempt(lines=lines, reproduce_batch=reproduce_batch, failed_test_names=failed_test_names)
         )
+
+    def record_failed_test_names(self, attempts: list[FailedAttempt]):
+        for attempt in attempts:
+            self.failed_test_names.update(attempt.failed_test_names)
 
     def pop_failed_attempts(self, batch_idx: int):
         return self.failed_attempts.pop(batch_idx, [])
@@ -548,6 +557,9 @@ FAILED_HEADER_PATTERN = re.compile(r"^\s*.+:\s+FAILED:\s*$")
 EXPLICIT_MESSAGE_PATTERN = re.compile(r"^\s*explicitly with message:\s*$")
 # Catch prints source locations as "path:line:" with GCC/Clang and as "path(line):" with MSVC
 CATCH_ASSERTION_LOCATION_PATTERN = re.compile(r"^(.+?)(?::(\d+)|\((\d+)\)): FAILED:$")
+SANITIZER_PATTERN = re.compile(
+    r"(AddressSanitizer|LeakSanitizer|ThreadSanitizer|UndefinedBehaviorSanitizer)", flags=re.IGNORECASE
+)
 SANITIZER_OR_ASSERT_PATTERN = re.compile(
     r"(AddressSanitizer|LeakSanitizer|ThreadSanitizer|UndefinedBehaviorSanitizer|runtime error:|assert)",
     flags=re.IGNORECASE,
@@ -602,6 +614,32 @@ def infer_timed_out_test_from_stdout(stdout_lines: list[str], batch):
     return None
 
 
+def extract_fatal_error_lines(stdout_lines: list[str]):
+    for idx, line in enumerate(stdout_lines):
+        if not FATAL_ERROR_PATTERN.match(line):
+            continue
+
+        lines = []
+        for next_line in stdout_lines[idx + 1 :]:
+            stripped = next_line.strip()
+            if PROGRESS_TEST_START_PATTERN.match(stripped):
+                break
+            if stripped.startswith("test cases:") or stripped.startswith("assertions:"):
+                break
+            if stripped.startswith("==============================================================================="):
+                break
+            if stripped.startswith("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"):
+                break
+            lines.append(stripped)
+
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        while lines and not lines[-1].strip():
+            lines.pop()
+        return lines
+    return []
+
+
 def extract_failed_reason_line(stdout_lines: list[str]):
     for idx, line in enumerate(stdout_lines):
         if not FAILED_HEADER_PATTERN.match(line):
@@ -629,27 +667,31 @@ def extract_failed_reason_line(stdout_lines: list[str]):
     return None
 
 
+def find_catch_failure_test_name(stdout_lines: list[str], failure_idx: int):
+    separator_indices = []
+    for idx in range(failure_idx - 1, -1, -1):
+        stripped = stdout_lines[idx].strip()
+        if stripped and set(stripped) == {"-"}:
+            separator_indices.append(idx)
+            if len(separator_indices) == 2:
+                break
+    if not separator_indices:
+        return None, separator_indices
+
+    name_idx = separator_indices[0] - 1
+    if name_idx < 0:
+        return None, separator_indices
+    test_name = stdout_lines[name_idx].strip()
+    return test_name or None, separator_indices
+
+
 def iter_stdout_failure_blocks(stdout_lines: list[str]):
     for failure_idx, line in enumerate(stdout_lines):
         if not FAILED_HEADER_PATTERN.match(line):
             continue
 
-        separator_indices = []
-        for idx in range(failure_idx - 1, -1, -1):
-            stripped = stdout_lines[idx].strip()
-            if stripped and set(stripped) == {"-"}:
-                separator_indices.append(idx)
-                if len(separator_indices) == 2:
-                    break
+        test_name, separator_indices = find_catch_failure_test_name(stdout_lines, failure_idx)
         start_idx = separator_indices[-1] if separator_indices else failure_idx
-
-        test_name = None
-        if len(separator_indices) >= 2:
-            name_idx = separator_indices[-1] + 1
-            if name_idx < len(stdout_lines):
-                candidate_name = stdout_lines[name_idx].strip()
-                if candidate_name:
-                    test_name = candidate_name
 
         end_idx = len(stdout_lines)
         for idx in range(failure_idx + 1, len(stdout_lines)):
@@ -677,6 +719,37 @@ def iter_stdout_failure_blocks(stdout_lines: list[str]):
         if any(EXPLICIT_MESSAGE_PATTERN.match(entry) for entry in block):
             continue
         yield test_name, block
+
+
+def extract_failed_test_names(failure: FailureInfo, stdout: str, stderr: str, batch: list[str]):
+    stdout_lines = strip_skipped_test_summary_lines(strip_ansi(stdout).splitlines())
+    stderr_lines = strip_skipped_test_summary_lines(strip_ansi(stderr).splitlines())
+    failed_names = []
+
+    def add_name(test_name: str | None):
+        if test_name and test_name not in failed_names:
+            failed_names.append(test_name)
+
+    for line in stderr_lines:
+        stripped = line.strip()
+        match = FAILING_TEST_PATTERN.match(stripped)
+        if match:
+            add_name(match.group(1))
+            continue
+        match = WRONG_RESULT_PATTERN.match(stripped)
+        if match and match.group(1):
+            add_name(match.group(1))
+
+    for failure_idx, line in enumerate(stdout_lines):
+        if FAILED_HEADER_PATTERN.match(line):
+            test_name, _ = find_catch_failure_test_name(stdout_lines, failure_idx)
+            add_name(test_name)
+
+    add_name(failure.test_name)
+    if not failed_names:
+        for test_name in failure.reproduce_batch or batch:
+            add_name(test_name)
+    return failed_names
 
 
 def extract_stdout_failure_block(stdout_lines: list[str]):
@@ -755,6 +828,7 @@ def parse_stdout_failure_info(stdout_lines: list[str]):
         last_unfinished_test=last_unfinished_test,
         preferred_assertion=preferred_assertion,
         fallback_failure_block=fallback_failure_block,
+        fatal_error_lines=extract_fatal_error_lines(stdout_lines),
         failed_reason_line=extract_failed_reason_line(stdout_lines),
     )
 
@@ -879,6 +953,14 @@ def parse_stderr_failure_info(stderr_lines: list[str], batch):
 
 def extract_interesting_failure_block(lines: list[str]):
     for idx, line in enumerate(lines):
+        if not SANITIZER_PATTERN.search(line):
+            continue
+        block = [next_line.strip() for next_line in lines[idx:]]
+        while block and not block[-1]:
+            block.pop()
+        return block
+
+    for idx, line in enumerate(lines):
         if not SANITIZER_OR_ASSERT_PATTERN.search(line):
             continue
         block = []
@@ -948,6 +1030,8 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
 
     test_name = stderr_info.test_name
     line_number = stderr_info.line_number
+    if stdout_info.fatal_error_lines and stdout_info.last_started_test:
+        test_name, line_number = retarget_failing_test(stdout_info.last_started_test, test_name, line_number)
     if test_name is None and returncode is not None and returncode < 0:
         test_name = stdout_info.last_unfinished_test or infer_timed_out_test_from_stdout(stdout_lines, batch)
     reproduce_batch = [test_name] if test_name else list(batch)
@@ -983,6 +1067,8 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
     snippet_lines = []
     if stderr_info.query_failure_lines:
         detail_lines.extend(stderr_info.query_failure_lines)
+    elif stdout_info.fatal_error_lines:
+        detail_lines.extend(stdout_info.fatal_error_lines)
 
     preferred_assertion = stdout_info.preferred_assertion
     if preferred_assertion is not None:
@@ -996,6 +1082,10 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             if detail_lines:
                 detail_lines.append("")
             detail_lines.extend(preferred_assertion.detail_lines)
+    if not snippet_lines and test_name is not None and line_number is not None:
+        snippet_lines = render_test_snippet(test_name, line_number)
+    if not detail_lines and stderr_info.failing_summary_block:
+        detail_lines.extend(stderr_info.failing_summary_block)
     if not detail_lines:
         if stdout_info.fallback_failure_block:
             stdout_failure_test_name, stdout_failure_block = stdout_info.fallback_failure_block
@@ -1004,10 +1094,6 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             )
             reproduce_batch = [test_name] if test_name else list(batch)
             detail_lines.extend(stdout_failure_block)
-    if not snippet_lines and test_name is not None and line_number is not None:
-        snippet_lines = render_test_snippet(test_name, line_number)
-    if not detail_lines and stderr_info.failing_summary_block:
-        detail_lines.extend(stderr_info.failing_summary_block)
     if not detail_lines:
         detail_lines.extend(extract_interesting_failure_block(stderr_lines))
     if not detail_lines:
@@ -1144,6 +1230,33 @@ def format_unittest_bin_for_display(unittest_bin: str):
         # On Windows, relpath can fail across drives. Fall back to the original path.
         return unittest_bin
     return unittest_bin
+
+
+def format_test_runner_for_display(unittest_bin: str):
+    runner_name = "run.py" if os.name == "nt" else "run"
+    return format_unittest_bin_for_display(os.fspath(Path(unittest_bin).with_name(runner_name)))
+
+
+def quote_catch_test_name(test_name: str):
+    escaped_name = test_name.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped_name}"'
+
+
+def format_failed_tests_reproducer(
+    unittest_bin: str, test_flags: str, failed_test_configs: list[str], failed_test_names: list[str]
+):
+    runner = format_test_runner_for_display(unittest_bin)
+    command = [runner]
+    if os.name == "nt":
+        command.insert(0, sys.executable)
+    if test_flags:
+        command.extend(["--test-flags", test_flags])
+    for test_config in failed_test_configs:
+        command.extend(["--test-config", test_config])
+    command.append(",".join(quote_catch_test_name(test_name) for test_name in failed_test_names))
+    if os.name == "nt":
+        return subprocess.list2cmdline(command)
+    return shlex.join(command)
 
 
 def normalize_output(output):
@@ -1534,7 +1647,8 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
     )
     lines = render_failure_lines_with_diagnostics(failure, result["stdout"], result["stderr"])
     reproduce_batch = failure.reproduce_batch
-    ctx.state.add_failed_attempt(batch_info["batch_idx"], lines, reproduce_batch)
+    failed_test_names = extract_failed_test_names(failure, result["stdout"], result["stderr"], batch_info["batch"])
+    ctx.state.add_failed_attempt(batch_info["batch_idx"], lines, reproduce_batch, failed_test_names)
     retry_target = format_failed_test_retry_target(failure.test_name, batch_info)
     if result.get("allow_retry", True) and ctx.state.can_retry(batch_info, ctx.config):
         ctx.state.record_retry()
@@ -1558,11 +1672,13 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
             f"not retrying failed test {retry_target} after reaching {ctx.config.max_retries} retries"
         )
 
+    attempt_summaries = ctx.state.pop_failed_attempts(batch_info["batch_idx"])
+    ctx.state.record_failed_test_names(attempt_summaries)
     ctx.progress.print_message(
         format_batch_failure(
             batch_info["batch"],
             ctx.config,
-            ctx.state.pop_failed_attempts(batch_info["batch_idx"]),
+            attempt_summaries,
             recovered=False,
             retry_count=batch_info["attempt"],
         )
@@ -1674,6 +1790,7 @@ class ConfigRunResult:
     failed_tests: int
     skipped_tests: int
     elapsed_seconds: float
+    failed_test_names: tuple[str, ...] = ()
 
 
 def build_test_flags(base_flags: str, test_config: str | None):
@@ -1793,6 +1910,7 @@ def run_single_config(
         )
 
         stabilization_failed = False
+        stabilization_failed_test_names = []
         for rerun_idx in range(max(fast_extra_runs, slow_extra_runs)):
             rerun_round = rerun_idx + 1
             if rerun_idx < fast_extra_runs and fast_tests:
@@ -1801,12 +1919,14 @@ def run_single_config(
                 fast_result = run_tests(config, fast_batches, len(fast_tests))
                 if fast_result.returncode != 0:
                     stabilization_failed = True
+                    stabilization_failed_test_names.extend(fast_result.failed_test_names)
             if rerun_idx < slow_extra_runs and slow_tests:
                 print(f"stabilization rerun {rerun_round}/{slow_extra_runs} for slow tests")
                 slow_batches = list(chunked(slow_tests, computed_batch_size))
                 slow_result = run_tests(config, slow_batches, len(slow_tests))
                 if slow_result.returncode != 0:
                     stabilization_failed = True
+                    stabilization_failed_test_names.extend(slow_result.failed_test_names)
             if stabilization_failed:
                 break
 
@@ -1818,6 +1938,7 @@ def run_single_config(
                 failed_tests=max(1, initial_run_result.failed_tests),
                 skipped_tests=initial_run_result.skipped_tests,
                 elapsed_seconds=initial_run_result.elapsed_seconds,
+                failed_test_names=tuple(dict.fromkeys(stabilization_failed_test_names)),
             )
 
         return initial_run_result
@@ -1866,6 +1987,9 @@ def main_impl(argv: list[str] | None = None):
         unittest_bin = unittest_bin.replace("/", "\\")
     batch_size = args.batch_size
     failed_configs = []
+    failed_test_configs = []
+    failed_test_names = []
+    failed_test_name_set = set()
     if len(config_invocations) > 1:
         print(f"running {len(config_invocations)} configs")
     coverage_profile_tmp = None
@@ -1924,6 +2048,13 @@ def main_impl(argv: list[str] | None = None):
                 return 130
             if returncode != 0:
                 failed_configs.append(invocation.label)
+                if run_result.failed_test_names:
+                    if invocation.test_config is not None:
+                        failed_test_configs.append(invocation.test_config)
+                    for test_name in run_result.failed_test_names:
+                        if test_name not in failed_test_name_set:
+                            failed_test_name_set.add(test_name)
+                            failed_test_names.append(test_name)
 
         report_returncode = 0
         if args.coverage_report is not None:
@@ -1935,9 +2066,12 @@ def main_impl(argv: list[str] | None = None):
             coverage_profile_tmp.cleanup()
 
     if failed_configs:
-        if len(config_invocations) == 1:
-            return 1
-        print(f"error: {len(failed_configs)} config runs failed: {', '.join(failed_configs)}")
+        if len(config_invocations) > 1:
+            print(f"error: {len(failed_configs)} config runs failed: {', '.join(failed_configs)}")
+        if failed_test_names:
+            print()
+            print("reproduce all failed tests:")
+            print(format_failed_tests_reproducer(unittest_bin, args.test_flags, failed_test_configs, failed_test_names))
         return 1
     if args.coverage_report is not None and report_returncode != 0:
         return report_returncode
@@ -2049,12 +2183,19 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
             print(f"{reason}: {skipped_reason_counts[reason]}")
     failed_tests = state.failed_count
     passed_tests = max(0, total_tests - failed_tests - total_skipped_tests)
+    failed_test_names = []
+    for batch in batches:
+        for test_name in batch:
+            if test_name in state.failed_test_names and test_name not in failed_test_names:
+                failed_test_names.append(test_name)
+    failed_test_names.extend(sorted(state.failed_test_names.difference(failed_test_names)))
     return ConfigRunResult(
         returncode=exit_code,
         passed_tests=passed_tests,
         failed_tests=failed_tests,
         skipped_tests=total_skipped_tests,
         elapsed_seconds=elapsed,
+        failed_test_names=tuple(failed_test_names),
     )
 
 

@@ -146,7 +146,7 @@ CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
 	thread_local CachedGlobalSettings current_cache;
 #endif
 
-	const auto current_version = settings_version.load(std::memory_order_relaxed);
+	const auto current_version = settings_version.load(std::memory_order_acquire);
 	if (!current_cache.global_user_settings || this != current_cache.global_user_settings.get() ||
 	    current_cache.uuid != uuid || current_cache.version != current_version) {
 		// out-of-date, refresh the cache

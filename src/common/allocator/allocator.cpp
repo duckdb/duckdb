@@ -124,14 +124,14 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 		                        size, MAXIMUM_ALLOC_SIZE);
 	}
 	auto result = allocate_function(private_data.get(), size);
+	if (!result) {
+		throw OutOfMemoryException("Failed to allocate block of %llu bytes (bad allocation)", size);
+	}
 #ifdef DEBUG
 	if (ShouldUseDebugInfo()) {
 		private_data->debug_info->AllocateData(result, size);
 	}
 #endif
-	if (!result) {
-		throw OutOfMemoryException("Failed to allocate block of %llu bytes (bad allocation)", size);
-	}
 	return result;
 }
 
@@ -159,14 +159,14 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 		    MAXIMUM_ALLOC_SIZE);
 	}
 	auto new_pointer = reallocate_function(private_data.get(), pointer, old_size, size);
+	if (!new_pointer) {
+		throw OutOfMemoryException("Failed to re-allocate block of %llu bytes (bad allocation)", size);
+	}
 #ifdef DEBUG
 	if (ShouldUseDebugInfo()) {
 		private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
 	}
 #endif
-	if (!new_pointer) {
-		throw OutOfMemoryException("Failed to re-allocate block of %llu bytes (bad allocation)", size);
-	}
 	return new_pointer;
 }
 shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {

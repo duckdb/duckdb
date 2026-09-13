@@ -1,0 +1,75 @@
+# name: test/sql/copy/parquet/parquet_hive_override_stats.test
+# description: A hive partitioning column overrides the file column of the same name - do not use the file's statistics
+# group: [parquet]
+
+require parquet
+
+# both files keep a physical "part" column next to the hive path, but with a different type:
+# ubigint in one file, bigint in the other - the hive column overrides both with its own type
+statement ok
+COPY (SELECT 1::UBIGINT AS id, 42::UBIGINT AS part)
+TO '{TEST_DIR}/hive_override_u' (FORMAT parquet, PARTITION_BY (part), WRITE_PARTITION_COLUMNS true)
+
+statement ok
+COPY (SELECT 1::UBIGINT AS id, 42::BIGINT AS part)
+TO '{TEST_DIR}/hive_override_s' (FORMAT parquet, PARTITION_BY (part), WRITE_PARTITION_COLUMNS true)
+
+# the hive column wins, so both sides are bigint regardless of what the files contain
+query II
+SELECT typeof(part), part FROM read_parquet('{TEST_DIR}/hive_override_u/part=42/*.parquet')
+----
+BIGINT	42
+
+query II
+SELECT typeof(part), part FROM read_parquet('{TEST_DIR}/hive_override_s/part=42/*.parquet')
+----
+BIGINT	42
+
+# joining the two used to hand the optimizer ubigint statistics for a bigint column
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/hive_override_u/part=42/*.parquet') u
+JOIN read_parquet('{TEST_DIR}/hive_override_s/part=42/*.parquet') s ON u.part = s.part
+----
+1
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/hive_override_u/part=42/*.parquet') u
+SEMI JOIN (SELECT DISTINCT id, part FROM read_parquet('{TEST_DIR}/hive_override_s/part=42/*.parquet')) s
+ON u.id = s.id AND u.part = s.part
+----
+1
+
+# filters on the overridden column use the hive value, not the value stored in the file
+# (write a part=7 directory first, then drop a file into it that disagrees with the path)
+statement ok
+COPY (SELECT 1::UBIGINT AS id, 7::UBIGINT AS part)
+TO '{TEST_DIR}/hive_mismatch' (FORMAT parquet, PARTITION_BY (part), WRITE_PARTITION_COLUMNS false)
+
+statement ok
+COPY (SELECT 1::UBIGINT AS id, 999::UBIGINT AS part)
+TO '{TEST_DIR}/hive_mismatch/part=7/disagrees.parquet' (FORMAT parquet)
+
+query II
+SELECT part, count(*) FROM read_parquet('{TEST_DIR}/hive_mismatch/part=7/disagrees.parquet') GROUP BY part
+----
+7	1
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_mismatch/part=7/disagrees.parquet') WHERE part = 7
+----
+1
+
+# filtering on the value stored in the file prunes the only file away, leaving an empty file list
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_mismatch/part=7/disagrees.parquet') WHERE part = 999
+----
+0
+
+# the value stored in the file is only visible with hive partitioning turned off
+query II
+SELECT typeof(part), part
+FROM read_parquet('{TEST_DIR}/hive_mismatch/part=7/disagrees.parquet', hive_partitioning=false)
+----
+UBIGINT	999

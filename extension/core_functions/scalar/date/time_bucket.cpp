@@ -401,9 +401,8 @@ ScalarFunctionSet TimeBucketFun::GetFunctions() {
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP},
 	                                       LogicalType::TIMESTAMP, TimeBucketOriginFunction<timestamp_t>));
 
-	for (auto &func : time_bucket.functions) {
-		func.SetArgProperties(1, ArgProperties().NonDecreasing());
-	}
+	time_bucket.ApplyToFunctions(
+	    [](ScalarFunction &func) { func.SetArgProperties(1, ArgProperties().NonDecreasing()); });
 
 	//	Not monotonic (wraps)
 	time_bucket.AddFunction(
@@ -413,9 +412,7 @@ ScalarFunctionSet TimeBucketFun::GetFunctions() {
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME, LogicalType::TIME},
 	                                       LogicalType::TIME, TimeBucketOriginFunction<dtime_t>));
 
-	for (auto &func : time_bucket.functions) {
-		func.SetFallible();
-	}
+	time_bucket.SetFallible();
 
 	return time_bucket;
 }

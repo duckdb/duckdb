@@ -18,16 +18,7 @@ static bool SuffixFunction(const string_t &str, const string_t &suffix) {
 		return false;
 	}
 
-	auto suffix_data = suffix.GetData();
-	auto str_data = str.GetData();
-	auto suf_idx = UnsafeNumericCast<int32_t>(suffix_size) - 1;
-	idx_t str_idx = str_size - 1;
-	for (; suf_idx >= 0; --suf_idx, --str_idx) {
-		if (suffix_data[suf_idx] != str_data[str_idx]) {
-			return false;
-		}
-	}
-	return true;
+	return memcmp(str.GetData() + str_size - suffix_size, suffix.GetData(), suffix_size) == 0;
 }
 
 struct SuffixOperator {
@@ -71,7 +62,7 @@ FilterPropagateResult SuffixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	if (!SuffixFunction(string_t(min), string_t(suffix))) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	return string_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+	return string_stats->CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL
 	                                   : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 }
 

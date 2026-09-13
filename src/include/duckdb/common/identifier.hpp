@@ -35,6 +35,9 @@ public:
 	}
 	explicit Identifier(string &&str) : value(std::move(str)) {
 	}
+	//! Construction from a string view is also explicit to be safe
+	explicit Identifier(const std::string_view str) : value(str) {
+	}
 
 	//! Named constructors for well-known identifiers
 	static Identifier DefaultSchema() {
