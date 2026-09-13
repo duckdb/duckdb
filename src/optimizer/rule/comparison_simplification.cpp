@@ -143,10 +143,8 @@ static optional_ptr<BoundFunctionExpression> UnwrapRowConstructor(Expression &ex
 	return &function;
 }
 
-//! Extract the children of one side of a row constructor comparison.
-//! A side is either a row constructor function (possibly wrapped in casts) or a folded TUPLE/STRUCT
-//! constant (the binder folds row(a, b) with constant arguments into a single constant Value).
-//! Returns false if the side is not a row constructor in either form.
+//! Extract one side of a row comparison: a row constructor (possibly wrapped in casts), or a folded
+//! TUPLE/STRUCT constant (the binder folds row(a, b) with constant arguments into a single Value).
 static bool ExtractRowComparisonSide(Expression &expr, LogicalType &type, vector<unique_ptr<Expression>> &children,
                                      bool &is_constant) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
@@ -167,8 +165,7 @@ static bool ExtractRowComparisonSide(Expression &expr, LogicalType &type, vector
 	if (!row) {
 		return false;
 	}
-	// only tuple/struct comparisons compare their children element-wise; anything else (e.g. casts to
-	// VARCHAR or VARIANT) compares the entire value as a whole
+	// only tuple/struct comparisons compare element-wise; other types compare the value as a whole
 	if (type.id() != LogicalTypeId::TUPLE && type.id() != LogicalTypeId::STRUCT) {
 		return false;
 	}
@@ -183,8 +180,7 @@ static bool ExtractRowComparisonSide(Expression &expr, LogicalType &type, vector
 RowComparisonSimplificationRule::RowComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto comparison = make_uniq<ComparisonExpressionMatcher>();
 	comparison->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
-	// at least one side is a row constructor - the other side is either a row constructor
-	// or a folded TUPLE/STRUCT constant (the binder folds row(a, b) with constant arguments into a single constant)
+	// at least one side is a row constructor, the other is a row constructor or a folded TUPLE/STRUCT constant
 	comparison->matchers.push_back(make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_FUNCTION));
 	comparison->matchers.push_back(make_uniq<ExpressionMatcher>());
 	comparison->policy = SetMatcher::Policy::SOME;
@@ -228,19 +224,15 @@ unique_ptr<Expression> RowComparisonSimplificationRule::Apply(LogicalOperator &o
 			}
 		}
 	}
-	// Row comparisons are decomposed with IS NOT DISTINCT FROM, matching the row comparison semantics:
-	// a NULL field does not make the row comparison NULL - row equality compares per-field distinctness.
-	// For a row-vs-constant comparison with a NULL-free constant the comparison can be decomposed with `=`:
-	// `a = 42` and `a IS NOT DISTINCT FROM 42` reject the same rows, and `=` is absorbed by the filter
-	// combiner, enabling constant filter pushdown. A constant containing NULLs is decomposed with
-	// IS NOT DISTINCT FROM instead - (a, b) = (NULL, 2) matches rows with a IS NULL, which `=` cannot
-	// express - and will benefit from pushdown once the combiner supports such comparisons.
+	// row equality compares fields with IS NOT DISTINCT FROM, which is the general case
 	ExpressionType comparison_type = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	if (left_is_constant || right_is_constant) {
+		// a NULL-free constant can use '=' instead, which the filter combiner absorbs for pushdown
 		comparison_type = ExpressionType::COMPARE_EQUAL;
 		auto &constant_children = left_is_constant ? left_children : right_children;
 		for (auto &child : constant_children) {
 			if (child->Cast<BoundConstantExpression>().GetValue().IsNull()) {
+				// (a, b) = (1, NULL) matches rows with a = 1 AND b IS NULL, which '=' cannot express
 				comparison_type = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 				break;
 			}

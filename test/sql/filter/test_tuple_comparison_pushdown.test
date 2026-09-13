@@ -45,4 +45,3 @@ query I
 SELECT count(*) FROM t WHERE (id, b) = (42, 1.5);
 ----
 1
-

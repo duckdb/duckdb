@@ -41,7 +41,7 @@ SELECT count(*) FROM rows WHERE (a, b) = (1, 2);
 3
 
 # Constants containing NULLs decompose with IS NOT DISTINCT FROM: (a, b) = (1, NULL) matches rows
-# with a = 1 AND b IS NULL, which a decomposition into `=` would drop (a = NULL is NULL)
+# with a = 1 AND b IS NULL, which a decomposition into `=` would drop (b = NULL is NULL)
 query I
 SELECT count(*) FROM rows WHERE (a, b) = (1, NULL);
 ----
