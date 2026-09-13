@@ -1,5 +1,6 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/partition_stats.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
@@ -13,6 +14,24 @@ PartitionStatistics::PartitionStatistics() : row_start(0), count(0), count_type(
 }
 
 TableFunctionInfo::~TableFunctionInfo() {
+}
+
+const vector<TableFunctionInputRelation> &TableFunctionBindInput::InputRelations() const {
+	static const vector<TableFunctionInputRelation> empty_relations;
+	return input_relations ? *input_relations : empty_relations;
+}
+
+unique_ptr<LogicalOperator> TableFunctionBindInput::TakeInputPlan(idx_t relation_index) {
+	if (!input_relations || relation_index >= input_relations->size()) {
+		throw InternalException("Function \"%s\" has no TABLE argument %llu to take", table_function.name,
+		                        relation_index);
+	}
+	auto &relation = (*input_relations)[relation_index];
+	if (!relation.plan) {
+		throw InternalException("Function \"%s\" already took the plan of TABLE argument %llu", table_function.name,
+		                        relation.argument_index);
+	}
+	return std::move(relation.plan);
 }
 
 TableFunction::TableFunction(Identifier name, const vector<LogicalType> &arguments, table_function_t function_,
