@@ -10607,6 +10607,83 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformVariableListInt
 	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTagStatementInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto tag_on_type = transformer.Transform<CatalogType>(list_pr.GetChild(2));
+	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.GetChild(3));
+	auto tag_action_info = transformer.Transform<TagActionInfo>(list_pr.GetChild(4));
+	auto result = TransformTagStatement(transformer, tag_on_type, dotted_identifier, std::move(tag_action_info));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTagOnTypeInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<CatalogType>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTagActionInfoInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<TagActionInfo>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<TagActionInfo>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTagSetActionInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto tag_assignment_list = transformer.Transform<vector<pair<string, string>>>(list_pr.GetChild(1));
+	auto result = TransformTagSetAction(transformer, std::move(tag_assignment_list));
+	return make_uniq<TypedTransformResult<TagActionInfo>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTagUnsetActionInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto tag_name_list = transformer.Transform<vector<string>>(list_pr.GetChild(1));
+	auto result = TransformTagUnsetAction(transformer, std::move(tag_name_list));
+	return make_uniq<TypedTransformResult<TagActionInfo>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTagAssignmentListInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<pair<string, string>> tag_assignment;
+	auto tag_assignment_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	for (auto &tag_assignment_item : tag_assignment_items) {
+		auto tag_assignment_value = transformer.Transform<pair<string, string>>(tag_assignment_item.get());
+		tag_assignment.push_back(std::move(tag_assignment_value));
+	}
+	auto result = TransformTagAssignmentList(transformer, std::move(tag_assignment));
+	return make_uniq<TypedTransformResult<vector<pair<string, string>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTagNameListInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<string> string_literal;
+	auto string_literal_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	for (auto &string_literal_item : string_literal_items) {
+		auto string_literal_value = transformer.Transform<string>(string_literal_item.get());
+		string_literal.push_back(string_literal_value);
+	}
+	auto result = TransformTagNameList(transformer, string_literal);
+	return make_uniq<TypedTransformResult<vector<string>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTagAssignmentInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(0));
+	auto string_literal_1 = transformer.Transform<string>(list_pr.GetChild(2));
+	auto result = TransformTagAssignment(transformer, string_literal, string_literal_1);
+	return make_uniq<TypedTransformResult<pair<string, string>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformTransactionStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -12000,6 +12077,14 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"GlobalScope", &PEGTransformerFactory::TransformGlobalScopeInternal},
 	    {"SetAssignment", &PEGTransformerFactory::TransformSetAssignmentInternal},
 	    {"VariableList", &PEGTransformerFactory::TransformVariableListInternal},
+	    {"TagStatement", &PEGTransformerFactory::TransformTagStatementInternal},
+	    {"TagOnType", &PEGTransformerFactory::TransformTagOnTypeInternal},
+	    {"TagActionInfo", &PEGTransformerFactory::TransformTagActionInfoInternal},
+	    {"TagSetAction", &PEGTransformerFactory::TransformTagSetActionInternal},
+	    {"TagUnsetAction", &PEGTransformerFactory::TransformTagUnsetActionInternal},
+	    {"TagAssignmentList", &PEGTransformerFactory::TransformTagAssignmentListInternal},
+	    {"TagNameList", &PEGTransformerFactory::TransformTagNameListInternal},
+	    {"TagAssignment", &PEGTransformerFactory::TransformTagAssignmentInternal},
 	    {"TransactionStatement", &PEGTransformerFactory::TransformTransactionStatementInternal},
 	    {"BeginTransaction", &PEGTransformerFactory::TransformBeginTransactionInternal},
 	    {"RollbackTransaction", &PEGTransformerFactory::TransformRollbackTransactionInternal},

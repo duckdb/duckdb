@@ -44,6 +44,7 @@
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_data/connect_info.hpp"
+#include "duckdb/parser/parsed_data/set_tags_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
@@ -3745,6 +3746,30 @@ public:
 	static void InitializeVariableListTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeVariableListTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
+	static void InitializeTagStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTagStatementTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
+	static void InitializeTagOnTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTagOnTypeTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
+	static void InitializeTagActionInfoTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTagActionInfoTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeTagSetActionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTagSetActionTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
+	static void InitializeTagUnsetActionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTagUnsetActionTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeTagAssignmentListTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTagAssignmentListTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
+	static void InitializeTagNameListTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTagNameListTrampoline(PEGTransformer &transformer,
+	                                                                      GeneratedTransformProcess &process);
+	static void InitializeTagAssignmentTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTagAssignmentTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
 	static void InitializeTransactionStatementTrampoline(PEGTransformer &transformer,
 	                                                     GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeTransactionStatementTrampoline(PEGTransformer &transformer,
@@ -7511,6 +7536,33 @@ public:
 	                                                                      ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,
 	                                                                  vector<unique_ptr<ParsedExpression>> expression);
+	static unique_ptr<TransformResultValue> TransformTagStatementInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformTagStatement(PEGTransformer &transformer, const CatalogType &tag_on_type,
+	                                                      const vector<string> &dotted_identifier,
+	                                                      TagActionInfo tag_action_info);
+	static unique_ptr<TransformResultValue> TransformTagOnTypeInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformTagActionInfoInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformTagSetActionInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static TagActionInfo TransformTagSetAction(PEGTransformer &transformer,
+	                                           vector<pair<string, string>> tag_assignment_list);
+	static unique_ptr<TransformResultValue> TransformTagUnsetActionInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static TagActionInfo TransformTagUnsetAction(PEGTransformer &transformer, vector<string> tag_name_list);
+	static unique_ptr<TransformResultValue> TransformTagAssignmentListInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static vector<pair<string, string>> TransformTagAssignmentList(PEGTransformer &transformer,
+	                                                               vector<pair<string, string>> tag_assignment);
+	static unique_ptr<TransformResultValue> TransformTagNameListInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static vector<string> TransformTagNameList(PEGTransformer &transformer, const vector<string> &string_literal);
+	static unique_ptr<TransformResultValue> TransformTagAssignmentInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static pair<string, string> TransformTagAssignment(PEGTransformer &transformer, const string &string_literal,
+	                                                   const string &string_literal_1);
 	static unique_ptr<TransformResultValue> TransformTransactionStatementInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformBeginTransactionInternal(PEGTransformer &transformer,

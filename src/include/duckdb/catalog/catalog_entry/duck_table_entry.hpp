@@ -19,6 +19,7 @@ class CommitDropState;
 
 struct AddConstraintInfo;
 struct CreateTriggerInfo;
+struct SetTagsInfo;
 
 //! A table catalog entry
 class DuckTableEntry : public TableCatalogEntry {
@@ -95,6 +96,7 @@ private:
 	unique_ptr<CatalogEntry> AddForeignKeyConstraint(AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> SetColumnComment(ClientContext &context, SetColumnCommentInfo &info);
+	unique_ptr<CatalogEntry> SetColumnTags(ClientContext &context, SetTagsInfo &info);
 	unique_ptr<CatalogEntry> AddConstraint(ClientContext &context, AddConstraintInfo &info);
 
 	void UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index, const vector<LogicalIndex> &adjusted_indices,

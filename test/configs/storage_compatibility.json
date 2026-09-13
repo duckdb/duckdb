@@ -10,7 +10,8 @@
   "skip_error_messages": [
     "Aggregate state columns are not supported in storage versions prior to v2.0.0",
     "TUPLE columns are not supported in storage versions prior to v2.0.0",
-    "CREATE SECURE VIEW is only supported for storage versions v2.0.0 and higher"
+    "CREATE SECURE VIEW is only supported for storage versions v2.0.0 and higher",
+    "View column tags are only supported for storage versions v2.0.0 and higher"
   ],
   "skip_compiled": "true",
   "skip_tests": [
