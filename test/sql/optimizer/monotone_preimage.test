@@ -167,3 +167,45 @@ query I
 SELECT count(*) FROM ets WHERE year(t) = 2005;
 ----
 8760
+
+# ---------------------------------------------------------------------------
+# TIME and TIME_NS are deliberately not rewritten
+# ---------------------------------------------------------------------------
+statement ok
+CREATE TABLE oob_time(t TIME);
+
+statement ok
+INSERT INTO oob_time VALUES ('12:00:00'), (make_time(23, 59, 60.4));
+
+query II
+SELECT t, epoch_us(t) FROM oob_time ORDER BY t;
+----
+12:00:00	43200000000
+24:00:00.4	86400400000
+
+query I
+SELECT count(*) FROM oob_time WHERE epoch_us(t) > 86400000000;
+----
+1
+
+statement ok
+CREATE TABLE oob_time_ns(t TIME_NS);
+
+statement ok
+INSERT INTO oob_time_ns VALUES ('12:00:00'), ('24:00:00.000000999');
+
+query I
+SELECT count(*) FROM oob_time_ns WHERE epoch_ns(t) > 86400000000000;
+----
+1
+
+# the rule must leave the function in place on both types
+query II
+EXPLAIN SELECT count(*) FROM oob_time WHERE epoch_us(t) > 86400000000;
+----
+logical_opt	<REGEX>:.*epoch_us.*
+
+query II
+EXPLAIN SELECT count(*) FROM oob_time_ns WHERE epoch_ns(t) > 86400000000000;
+----
+logical_opt	<REGEX>:.*epoch_ns.*
