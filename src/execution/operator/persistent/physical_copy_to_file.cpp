@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
@@ -7,6 +8,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -107,6 +109,7 @@ struct PendingFileState {
 };
 
 struct PartitionDirectory {
+	string root;
 	string path;
 	vector<string> directories;
 };
@@ -115,7 +118,7 @@ enum class CopyDirectoryState : uint8_t { PENDING, COMPLETE, FAILED };
 
 class CopyDirectoryManager {
 public:
-	bool EnsureDirectory(FileSystem &fs, const string &dir_path);
+	bool EnsureDirectory(FileSystem &fs, const string &parent_path, const string &dir_path, bool check_case_collision);
 
 private:
 	struct DirectoryEntry {
@@ -125,9 +128,16 @@ private:
 	};
 
 private:
+	void CheckCaseCollision(FileSystem &fs, const string &parent_path, const string &dir_path);
+	void ThrowOnCaseSiblingLocked(const string &dir_path);
+
+private:
 	mutex lock;
 	std::condition_variable condition;
 	unordered_map<string, DirectoryEntry> directories;
+	unordered_set<string> known_directories;
+	case_insensitive_map_t<string> case_folded_directories;
+	unordered_set<string> listed_parents;
 };
 
 class CopyOutputFileRegistry {
@@ -459,7 +469,7 @@ public:
 
 private:
 	void PrepareOutputDirectory() DUCKDB_EXCLUDES(lock);
-	void EnsureDirectory(const string &dir_path) DUCKDB_EXCLUDES(lock);
+	void EnsureDirectory(const string &parent_path, const string &dir_path) DUCKDB_EXCLUDES(lock);
 	void RegisterPendingFileStatePathLocked(PendingFileState &pending_file_state, string output_path)
 	    DUCKDB_REQUIRES(lock);
 
@@ -489,6 +499,7 @@ public:
 	const std::function<void(FileStateHandle &)> create_file_state_fun;
 	//! Asynchronously prepares the root output directory for directory-style COPY outputs.
 	shared_ptr<CopyFileLifecycleJob> output_directory_job;
+	atomic<bool> output_directory_folds_case;
 	CopyFileLifecycleExecutor lifecycle_executor;
 	CopyDirectoryManager directory_manager;
 	CopyOutputFileRegistry output_files;
@@ -1461,6 +1472,31 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 	}
 }
 
+static bool FileSystemFoldsCase(FileSystem &fs, const string &directory) {
+	const auto probe_name = "duckdb_case_probe_" + UUID::ToString(UUID::GenerateRandomUUID());
+	const auto probe_path = fs.JoinPath(directory, probe_name);
+	const auto upper_probe_path = fs.JoinPath(directory, StringUtil::Upper(probe_name));
+	fs.CreateDirectory(probe_path);
+	bool folds_case = false;
+	std::exception_ptr error;
+	try {
+		folds_case = fs.DirectoryExists(upper_probe_path);
+	} catch (...) {
+		error = std::current_exception();
+	}
+	try {
+		fs.RemoveDirectory(probe_path);
+	} catch (...) {
+		if (!error) {
+			error = std::current_exception();
+		}
+	}
+	if (error) {
+		std::rethrow_exception(error);
+	}
+	return folds_case;
+}
+
 struct PhysicalCopyToFileColumnStatsMapData {
 	vector<Value> keys;
 	vector<Value> values;
@@ -1589,7 +1625,46 @@ void CopyFileLifecycleExecutor::ThrowError() {
 //===--------------------------------------------------------------------===//
 // Copy File State Helpers
 //===--------------------------------------------------------------------===//
-bool CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_path) {
+void CopyDirectoryManager::ThrowOnCaseSiblingLocked(const string &dir_path) {
+	if (known_directories.find(dir_path) != known_directories.end()) {
+		return;
+	}
+	auto sibling = case_folded_directories.find(dir_path);
+	if (sibling == case_folded_directories.end() || sibling->second == dir_path) {
+		return;
+	}
+	throw InvalidInputException("Cannot write partition \"%s\" - it differs only in case from \"%s\" and resolves "
+	                            "to the same directory",
+	                            dir_path, sibling->second);
+}
+
+void CopyDirectoryManager::CheckCaseCollision(FileSystem &fs, const string &parent_path, const string &dir_path) {
+	{
+		lock_guard<mutex> guard(lock);
+		ThrowOnCaseSiblingLocked(dir_path);
+		if (listed_parents.find(parent_path) != listed_parents.end()) {
+			return;
+		}
+	}
+
+	vector<string> children;
+	fs.ListFiles(parent_path, [&](const string &name, bool is_directory) {
+		if (is_directory) {
+			children.push_back(fs.JoinPath(parent_path, name));
+		}
+	});
+
+	lock_guard<mutex> guard(lock);
+	listed_parents.insert(parent_path);
+	for (auto &child : children) {
+		known_directories.insert(child);
+		case_folded_directories[child] = child;
+	}
+	ThrowOnCaseSiblingLocked(dir_path);
+}
+
+bool CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &parent_path, const string &dir_path,
+                                           bool check_case_collision) {
 #ifdef D_ASSERT_IS_ENABLED
 	bool created_entry = false;
 #endif
@@ -1599,6 +1674,9 @@ bool CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_pat
 			auto entry = directories.find(dir_path);
 			if (entry == directories.end()) {
 				directories.emplace(dir_path, DirectoryEntry());
+				if (check_case_collision) {
+					case_folded_directories.emplace(dir_path, dir_path);
+				}
 #ifdef D_ASSERT_IS_ENABLED
 				created_entry = true;
 #endif
@@ -1619,6 +1697,9 @@ bool CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_pat
 	bool created = false;
 	try {
 		created = fs.CreateDirectoryExtended(dir_path, {CreateDirectoryMode::SINGLE});
+		if (check_case_collision && !created) {
+			CheckCaseCollision(fs, parent_path, dir_path);
+		}
 	} catch (...) {
 		error = std::current_exception();
 	}
@@ -2994,6 +3075,7 @@ PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) cons
 	auto &fs = FileSystem::GetFileSystem(partitioned_copy.context);
 	PartitionDirectory result;
 	result.path = std::move(path);
+	result.root = result.path;
 	if (partitioned_copy.op.hive_file_pattern) {
 		for (idx_t i = 0; i < partitioned_copy.op.partition_columns.size(); i++) {
 			const auto &partition_col_name = partitioned_copy.op.names[partitioned_copy.op.partition_columns[i]];
@@ -3251,7 +3333,8 @@ void PartitionedCopy::FinalizeFileStates(vector<FileStateHandle> files_to_finali
 CopyToFileGlobalState::CopyToFileGlobalState(const PhysicalCopyToFile &op_p, ClientContext &context_p)
     : op(op_p), context(context_p), output_lifecycle(context_p), initialized(false), prepare_global_state(nullptr),
       create_file_state_fun([&](FileStateHandle &file_state) DUCKDB_EXCLUDES(lock) { RequestFileState(file_state); }),
-      lifecycle_executor(context_p), output_files(op_p), rows_copied(0), last_file_offset(0) {
+      output_directory_folds_case(true), lifecycle_executor(context_p), output_files(op_p), rows_copied(0),
+      last_file_offset(0) {
 }
 
 CopyToFileGlobalState::~CopyToFileGlobalState() {
@@ -3292,6 +3375,13 @@ void CopyToFileGlobalState::PrepareOutputDirectory() {
 	} else {
 		CheckDirectory(fs, op.file_path, op.overwrite_mode);
 	}
+
+	if (op.partition_output) {
+		try {
+			output_directory_folds_case = !fs.IsRemoteFile(op.file_path) && FileSystemFoldsCase(fs, op.file_path);
+		} catch (...) {
+		}
+	}
 }
 
 void CopyToFileGlobalState::ScheduleOutputDirectorySetup() {
@@ -3315,9 +3405,10 @@ void CopyToFileGlobalState::EnsureOutputDirectoryReady() {
 	lifecycle_executor.WaitForJob(*output_directory_job, CopyFileLifecycleWaitMode::INTERRUPTIBLE);
 }
 
-void CopyToFileGlobalState::EnsureDirectory(const string &dir_path) {
+void CopyToFileGlobalState::EnsureDirectory(const string &parent_path, const string &dir_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	if (directory_manager.EnsureDirectory(fs, dir_path)) {
+	const auto check_case_collision = output_directory_folds_case && !op.filename_pattern.HasUUID();
+	if (directory_manager.EnsureDirectory(fs, parent_path, dir_path, check_case_collision)) {
 		output_lifecycle.RegisterCreatedDirectory(dir_path);
 	}
 }
@@ -3419,8 +3510,10 @@ void CopyToFileGlobalState::SchedulePartitionFileStateOpen(PartitionFileOpenRequ
 void PartitionFileOpenRequest::Run(CopyToFileGlobalState &copy_gstate) {
 	copy_gstate.EnsureOutputDirectoryReady();
 	auto &fs = FileSystem::GetFileSystem(copy_gstate.context);
+	auto parent_path = directory.root;
 	for (auto &dir : directory.directories) {
-		copy_gstate.EnsureDirectory(dir);
+		copy_gstate.EnsureDirectory(parent_path, dir);
+		parent_path = dir;
 	}
 
 	auto output_path = std::move(pending_file_state.output_path);
