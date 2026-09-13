@@ -52,8 +52,6 @@ public:
 	void GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip);
 	//! Recursively gets the last child added
 	MetaPipeline &GetLastChild();
-	//! Get the dependencies of the Pipelines of this MetaPipeline
-	const reference_map_t<Pipeline, vector<reference<Pipeline>>> &GetDependencies() const;
 	//! Whether the sink of this pipeline is a join build
 	MetaPipelineType Type() const;
 	//! Whether this MetaPipeline has a recursive CTE
@@ -92,6 +90,11 @@ public:
 	                                      MetaPipelineType type = MetaPipelineType::REGULAR);
 
 private:
+	//! Register that 'dependency' must have run before 'dependant' can start.
+	//! Both pipelines belong to this MetaPipeline, or to one of its descendants
+	static void AddPipelineDependency(Pipeline &dependant, Pipeline &dependency);
+
+private:
 	//! The executor for all MetaPipelines in the query plan
 	Executor &executor;
 	//! The PipelineBuildState for all MetaPipelines in the query plan
@@ -106,8 +109,6 @@ private:
 	bool recursive_cte;
 	//! All pipelines with a different source, but the same sink
 	vector<shared_ptr<Pipeline>> pipelines;
-	//! Dependencies of Pipelines of this MetaPipeline
-	reference_map_t<Pipeline, vector<reference<Pipeline>>> pipeline_dependencies;
 	//! Other MetaPipelines that this MetaPipeline depends on
 	vector<shared_ptr<MetaPipeline>> children;
 	//! Next batch index

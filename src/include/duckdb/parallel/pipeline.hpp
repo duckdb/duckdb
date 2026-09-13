@@ -86,7 +86,10 @@ public:
 	ClientContext &GetClientContext();
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
+	//! The dependencies of this pipeline on pipelines of other MetaPipelines
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
+	//! All pipelines this pipeline waits on before it can start: 'intra_dependencies' and 'dependencies'
+	vector<shared_ptr<Pipeline>> GetAllDependencies() const;
 
 	void Ready();
 	void Reset();
@@ -142,8 +145,11 @@ private:
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	vector<weak_ptr<Pipeline>> parents;
-	//! The dependencies of this pipeline
+	//! The dependencies of this pipeline in other MetaPipelines
 	vector<weak_ptr<Pipeline>> dependencies;
+	//! The dependencies of this pipeline in the same MetaPipeline (or sibling MetaPipelines in case of recursive
+	//! dependencies)
+	vector<weak_ptr<Pipeline>> intra_dependencies;
 
 	//! The base batch index of this pipeline
 	idx_t base_batch_index = 0;
@@ -160,6 +166,12 @@ private:
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 
 	bool ScheduleParallel(shared_ptr<Event> &event);
+
+	//! Add a dependency on a pipeline within the same MetaPipeline (or sibling MetaPipelines in case of recursive
+	//! dependencies)
+	void AddIntraDependency(Pipeline &dependency);
+	//! Copy all dependencies (within and across MetaPipelines) of 'other'
+	void InheritDependencies(const Pipeline &other);
 };
 
 } // namespace duckdb

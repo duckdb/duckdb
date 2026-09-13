@@ -192,29 +192,19 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		for (auto &dependency : pipeline.dependencies) {
 			auto dep = dependency.lock();
 			D_ASSERT(dep);
-			auto event_map_entry = event_map.find(*dep);
-			if (event_map_entry == event_map.end()) {
+			auto dependency_entry = event_map.find(*dep);
+			if (dependency_entry == event_map.end()) {
 				continue;
 			}
-			D_ASSERT(event_map_entry != event_map.end());
-			auto &dep_entry = event_map_entry->second;
-			entry.second.pipeline_event.AddDependency(dep_entry.pipeline_complete_event);
+			D_ASSERT(dependency_entry != event_map.end());
+			entry.second.pipeline_event.AddDependency(dependency_entry->second.pipeline_complete_event);
 		}
-	}
-
-	// set the dependencies for pipeline event
-	for (auto &meta_pipeline : event_data.meta_pipelines) {
-		for (auto &entry : meta_pipeline->GetDependencies()) {
-			auto &pipeline = entry.first.get();
-			auto root_entry = event_map.find(pipeline);
-			D_ASSERT(root_entry != event_map.end());
-			auto &pipeline_stack = root_entry->second;
-			for (auto &dependency : entry.second) {
-				auto event_entry = event_map.find(dependency);
-				D_ASSERT(event_entry != event_map.end());
-				auto &dependency_stack = event_entry->second;
-				pipeline_stack.pipeline_event.AddDependency(dependency_stack.pipeline_event);
-			}
+		for (auto &dependency : pipeline.intra_dependencies) {
+			auto dep = dependency.lock();
+			D_ASSERT(dep);
+			auto dependency_entry = event_map.find(*dep);
+			D_ASSERT(dependency_entry != event_map.end());
+			entry.second.pipeline_event.AddDependency(dependency_entry->second.pipeline_event);
 		}
 	}
 

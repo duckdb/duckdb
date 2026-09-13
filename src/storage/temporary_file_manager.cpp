@@ -1,5 +1,7 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 
+#include "duckdb/common/exception.hpp"
+
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
@@ -253,15 +255,24 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext con
 		return buffer;
 	}
 
-	// Decompress into buffer
+	// Decompress into buffer.
+	// The leading length word and the compressed payload both come off disk, so validate them before
+	// handing them to zstd: an oversized length would make ZSTD_decompress read past compressed_buffer.
 	const auto compressed_size = Load<idx_t>(compressed_buffer.get());
-	D_ASSERT(!duckdb_zstd::ZSTD_isError(compressed_size));
+	if (compressed_size > compressed_buffer.GetSize() - sizeof(idx_t)) {
+		throw IOException("Corrupt temporary file: compressed block claims %llu bytes but only %llu are available",
+		                  compressed_size, compressed_buffer.GetSize() - sizeof(idx_t));
+	}
 	const auto decompressed_size = duckdb_zstd::ZSTD_decompress(
 	    buffer->InternalBuffer(), buffer->AllocSize(), compressed_buffer.get() + sizeof(idx_t), compressed_size);
-	(void)decompressed_size;
-	D_ASSERT(!duckdb_zstd::ZSTD_isError(decompressed_size));
-
-	D_ASSERT(decompressed_size == buffer->AllocSize());
+	if (duckdb_zstd::ZSTD_isError(decompressed_size)) {
+		throw IOException("Corrupt temporary file: failed to decompress block (%s)",
+		                  duckdb_zstd::ZSTD_getErrorName(decompressed_size));
+	}
+	if (decompressed_size != buffer->AllocSize()) {
+		throw IOException("Corrupt temporary file: decompressed block is %llu bytes but expected %llu",
+		                  decompressed_size, buffer->AllocSize());
+	}
 	return buffer;
 }
 
