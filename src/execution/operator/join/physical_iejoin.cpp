@@ -2,7 +2,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/map.hpp"
-#include <array>
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/bit_utils.hpp"
@@ -93,7 +93,7 @@ struct IEMarkJoinBounds {
 
 	unique_ptr<ColumnDataCollection> prefix;
 	vector<Value> prefix_ends;
-	vector<std::array<idx_t, 3>> prefix_chunks;
+	vector<array<idx_t, 3>> prefix_chunks;
 	vector<Value> remaining_bounds;
 	vector<idx_t> remaining_null_counts;
 	Value values[2];

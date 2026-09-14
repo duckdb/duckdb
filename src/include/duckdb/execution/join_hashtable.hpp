@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/execution/mark_join_refinement.hpp"
+
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
@@ -273,6 +275,7 @@ public:
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
 	//! Enable selective NULL refinement for an uncorrelated multi-column MARK join
 	void InitializeUncorrelatedMarkJoin(bool compare_conditions = false);
+	void RefineMarkPatterns(DataChunk &keys, bool matches[], ValidityMask &validity);
 	bool HasMarkJoinConjunction() const;
 	idx_t MarkJoinSize() const;
 	bool HasUncorrelatedMarkJoin() const;
@@ -447,10 +450,8 @@ public:
 		bool uncorrelated_has_null = false;
 		//! All RHS condition rows, used only for uncorrelated row equality NULL refinement
 		unique_ptr<ColumnDataCollection> uncorrelated_condition_rows;
-		//! NULL hash-key rows used by mixed-condition MARK probes with non-NULL keys.
-		unique_ptr<ColumnDataCollection> null_condition_rows;
-		vector<Value> range_bounds;
-		vector<idx_t> range_null_counts;
+		bool compare_conditions = false;
+		unique_ptr<MarkJoinRefinement> refinement;
 	} mark_join_info;
 
 private:

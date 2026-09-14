@@ -154,11 +154,7 @@ void JoinHashTable::InitializeUncorrelatedMarkJoin(bool compare_conditions) {
 	D_ASSERT(mark_join_info.correlated_types.empty());
 	mark_join_info.uncorrelated_has_null = false;
 	mark_join_info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(context, condition_types);
-	if (compare_conditions) {
-		mark_join_info.null_condition_rows = make_uniq<ColumnDataCollection>(context, condition_types);
-		mark_join_info.range_bounds.resize(conditions.size());
-		mark_join_info.range_null_counts.resize(conditions.size(), 0);
-	}
+	mark_join_info.compare_conditions = compare_conditions;
 }
 
 bool JoinHashTable::HasUncorrelatedMarkJoin() const {
@@ -166,14 +162,15 @@ bool JoinHashTable::HasUncorrelatedMarkJoin() const {
 }
 
 bool JoinHashTable::HasMarkJoinConjunction() const {
-	return mark_join_info.null_condition_rows != nullptr;
+	return mark_join_info.compare_conditions;
 }
 
 idx_t JoinHashTable::MarkJoinSize() const {
 	idx_t size =
 	    mark_join_info.uncorrelated_condition_rows ? mark_join_info.uncorrelated_condition_rows->SizeInBytes() : 0;
-	if (mark_join_info.null_condition_rows) {
-		size += mark_join_info.null_condition_rows->SizeInBytes();
+
+	if (mark_join_info.refinement) {
+		size += mark_join_info.refinement->SizeInBytes();
 	}
 	return size;
 }
@@ -195,21 +192,6 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		if (info.uncorrelated_condition_rows && other.mark_join_info.uncorrelated_condition_rows) {
 			info.uncorrelated_has_null = info.uncorrelated_has_null || other.mark_join_info.uncorrelated_has_null;
 			info.uncorrelated_condition_rows->Combine(*other.mark_join_info.uncorrelated_condition_rows);
-			if (info.null_condition_rows) {
-				info.null_condition_rows->Combine(*other.mark_join_info.null_condition_rows);
-				for (idx_t col = 0; col < conditions.size(); col++) {
-					const auto &value = other.mark_join_info.range_bounds[col];
-					auto &bound = info.range_bounds[col];
-					const auto comparison = conditions[col].GetComparisonType();
-					const bool maximum = comparison == ExpressionType::COMPARE_LESSTHAN ||
-					                     comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-					if (!value.IsNull() && (bound.IsNull() || (maximum ? ValueOperations::GreaterThan(value, bound)
-					                                                   : ValueOperations::LessThan(value, bound)))) {
-						bound = value;
-					}
-					info.range_null_counts[col] += other.mark_join_info.range_null_counts[col];
-				}
-			}
 		}
 	}
 
@@ -698,36 +680,9 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	}
 	if (mark_join_info.uncorrelated_condition_rows) {
 		// Keep all rows: probe-side NULLs can be UNKNOWN against non-NULL rows in other external hash partitions.
-		if (HasMarkJoinConjunction()) {
-			for (idx_t col = 0; col < conditions.size(); col++) {
-				const auto comparison = conditions[col].GetComparisonType();
-				if (!condition_types[col].IsNested() && (comparison == ExpressionType::COMPARE_LESSTHAN ||
-				                                         comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
-				                                         comparison == ExpressionType::COMPARE_GREATERTHAN ||
-				                                         comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO)) {
-					MarkJoinRowComparison::UpdateRangeBound(keys.data[col], comparison,
-					                                        mark_join_info.range_bounds[col],
-					                                        mark_join_info.range_null_counts[col]);
-				}
-			}
-			bool null_rows[STANDARD_VECTOR_SIZE] = {false};
-			MarkJoinKeysHaveNull(keys, null_rows, &equality_predicates);
-			SelectionVector null_sel(STANDARD_VECTOR_SIZE);
-			idx_t null_count = 0;
-			for (idx_t row = 0; row < keys.size(); row++) {
-				if (null_rows[row]) {
-					null_sel.set_index(null_count++, row);
-				}
-			}
-			if (null_count) {
-				DataChunk null_keys;
-				null_keys.InitializeEmpty(condition_types);
-				null_keys.Slice(keys, null_sel, null_count);
-				mark_join_info.null_condition_rows->Append(null_keys);
-			}
-		} else {
-			mark_join_info.uncorrelated_has_null = mark_join_info.uncorrelated_has_null || MarkJoinKeysHaveNull(keys);
-		}
+		mark_join_info.uncorrelated_has_null =
+		    mark_join_info.uncorrelated_has_null ||
+		    MarkJoinKeysHaveNull(keys, nullptr, HasMarkJoinConjunction() ? &equality_predicates : nullptr);
 		mark_join_info.uncorrelated_condition_rows->Append(keys);
 	}
 
@@ -2094,20 +2049,249 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 	finished = true;
 }
 
-static bool MarkJoinChunkHasUnknown(DataChunk &left, idx_t left_row, DataChunk &right) {
-	D_ASSERT(left.ColumnCount() == right.ColumnCount());
-	bool row_is_false[STANDARD_VECTOR_SIZE] = {false};
-	bool row_is_unknown[STANDARD_VECTOR_SIZE] = {false};
-	for (idx_t col_idx = 0; col_idx < left.ColumnCount(); col_idx++) {
-		MarkJoinRowComparison::CompareEquality(left.data[col_idx], left_row, left.size(), right.data[col_idx],
-		                                       right.size(), row_is_false, row_is_unknown);
+void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], ValidityMask &validity) {
+	auto &rows = *mark_join_info.uncorrelated_condition_rows;
+	if (!mark_join_info.uncorrelated_has_null && !MarkJoinKeysHaveNull(keys, nullptr, &equality_predicates)) {
+		return;
 	}
-	for (idx_t right_row = 0; right_row < right.size(); right_row++) {
-		if (!row_is_false[right_row] && row_is_unknown[right_row]) {
-			return true;
+	bool needed = false;
+	for (idx_t probe = 0; probe < keys.size(); probe++) {
+		needed |= !matches[probe] && validity.RowIsValid(probe);
+	}
+	if (!needed) {
+		return;
+	}
+	auto &refinement = [&]() -> MarkJoinRefinement & {
+		lock_guard<mutex> guard(mark_join_info.mj_lock);
+		if (!mark_join_info.refinement) {
+			auto state = make_uniq<MarkJoinRefinement>();
+			ColumnDataParallelScanState scan;
+			ColumnDataLocalScanState local;
+			rows.InitializeScan(scan);
+			DataChunk chunk;
+			rows.InitializeScanChunk(chunk);
+			idx_t chunk_index, segment_index, row_index;
+			while (rows.NextScanIndex(scan.scan_state, chunk_index, segment_index, row_index)) {
+				context.InterruptCheck();
+				chunk.Reset();
+				rows.ScanAtIndex(scan, local, chunk, chunk_index, segment_index, row_index);
+				state->AddChunk(chunk, state->chunks.size(), conditions);
+				state->chunks.push_back({chunk_index, segment_index, row_index});
+			}
+			mark_join_info.refinement = std::move(state);
+		}
+		return *mark_join_info.refinement;
+	}();
+	ColumnDataParallelScanState scan;
+	ColumnDataLocalScanState local;
+	rows.InitializeScan(scan);
+	DataChunk chunk;
+	rows.InitializeScanChunk(chunk);
+	idx_t cached_chunk = DConstants::INVALID_INDEX;
+	auto fetch = [&](idx_t index) {
+		if (cached_chunk == index) {
+			return;
+		}
+		chunk.Reset();
+		const auto &location = refinement.chunks[index];
+		rows.ScanAtIndex(scan, local, chunk, location[0], location[1], location[2]);
+		cached_chunk = index;
+	};
+	Vector comparison(LogicalType::BOOLEAN);
+	DataChunk candidates;
+	candidates.InitializeEmpty(condition_types);
+	for (idx_t probe = 0; probe < keys.size(); probe++) {
+		if (matches[probe] || !validity.RowIsValid(probe)) {
+			continue;
+		}
+		const auto probe_mask = MarkJoinRefinement::NullMask(keys, probe, conditions);
+		for (auto &entry : refinement.groups) {
+			const auto dropped = probe_mask | entry.first;
+			auto &group = entry.second;
+			uint64_t equality_mask = 0;
+			idx_t applicable_count = 0;
+			idx_t range_column = DConstants::INVALID_INDEX;
+			if (conditions.size() <= 64) {
+				for (idx_t col = 0; col < conditions.size(); col++) {
+					if (dropped & (uint64_t(1) << col)) {
+						continue;
+					}
+					applicable_count++;
+					if (condition_types[col].IsNested()) {
+						continue;
+					}
+					const auto comparison_type = conditions[col].GetComparisonType();
+					if (comparison_type == ExpressionType::COMPARE_EQUAL) {
+						equality_mask |= uint64_t(1) << col;
+					} else if (comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+					           comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+					           comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+					           comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+						range_column = col;
+					}
+				}
+			}
+			auto finish = [&]() {
+				MarkJoinRowComparison::CompareConjunction(keys, probe, candidates, conditions, comparison);
+				for (auto value : comparison.Values<bool>()) {
+					if (!value.IsValid()) {
+						validity.SetInvalid(probe);
+						if (dropped) {
+							return true;
+						}
+					} else if (value.GetValue()) {
+						matches[probe] = true;
+						validity.SetValid(probe);
+						return true;
+					}
+				}
+				return false;
+			};
+			bool finished = false;
+			if (equality_mask) {
+				auto &index = [&]() -> MarkJoinRefinementIndex & {
+					lock_guard<mutex> guard(mark_join_info.mj_lock);
+					auto &cached = group.indexes[equality_mask];
+					if (!cached) {
+						auto built = make_uniq<MarkJoinRefinementIndex>();
+						vector<LogicalType> types;
+						for (idx_t col = 0; col < conditions.size(); col++) {
+							if (equality_mask & (uint64_t(1) << col)) {
+								built->columns.push_back(col);
+								built->conditions.push_back(conditions[col].Copy());
+								types.push_back(condition_types[col]);
+							}
+						}
+						built->output_columns.push_back(types.size());
+						built->hash = make_uniq<JoinHashTable>(context, op, built->conditions,
+						                                       vector<LogicalType> {LogicalType::UBIGINT},
+						                                       JoinType::INNER, 0, built->output_columns, nullptr);
+						auto layout_types = types;
+						layout_types.push_back(LogicalType::UBIGINT);
+						layout_types.push_back(LogicalType::HASH);
+						auto layout = make_shared_ptr<TupleDataLayout>();
+						layout->Initialize(layout_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+						built->hash->FinishInitWithLayout(layout);
+						PartitionedTupleDataAppendState append;
+						built->hash->GetSinkCollection().InitializeAppendState(append);
+						DataChunk index_keys, payload;
+						index_keys.InitializeEmpty(types);
+						payload.Initialize(Allocator::Get(context), {LogicalType::UBIGINT});
+						for (auto &selection : group.selections) {
+							context.InterruptCheck();
+							fetch(selection.first);
+							SelectionVector selected(selection.second.data(), selection.second.size());
+							index_keys.ReferenceColumns(chunk, built->columns);
+							index_keys.Slice(selected, selection.second.size());
+							payload.Reset();
+							for (auto row : selection.second) {
+								payload.data[0].Append(Value::UBIGINT(selection.first * STANDARD_VECTOR_SIZE + row));
+							}
+							payload.SetChildCardinality(selection.second.size());
+							built->hash->Build(append, index_keys, payload);
+						}
+						built->hash->Unpartition();
+						built->hash->AllocatePointerTable();
+						built->hash->InitializePointerTable(0, built->hash->capacity);
+						built->hash->Finalize(0, built->hash->GetDataCollection().ChunkCount(), false);
+						cached = std::move(built);
+					}
+					return *cached;
+				}();
+				DataChunk probe_keys, probe_payload, result;
+				probe_keys.InitializeEmpty(index.hash->condition_types);
+				probe_keys.ReferenceColumns(keys, index.columns);
+				SelectionVector selected(1);
+				selected.set_index(0, probe);
+				probe_keys.Slice(selected, 1);
+				probe_payload.SetChildCardinality(1);
+				result.Initialize(Allocator::Get(context), {LogicalType::UBIGINT});
+				TupleDataChunkState key_state;
+				TupleDataCollection::InitializeChunkState(key_state, index.hash->condition_types);
+				JoinHashTable::ScanStructure cursor(*index.hash, key_state);
+				JoinHashTable::ProbeState probe_state;
+				index.hash->Probe(cursor, probe_keys, key_state, probe_state);
+				while (cursor.count > 0 && !finished) {
+					context.InterruptCheck();
+					result.Reset();
+					cursor.Next(probe_keys, probe_payload, result);
+					auto ids = result.data[0].Values<uint64_t>();
+					SelectionVector selected_rows(STANDARD_VECTOR_SIZE);
+					idx_t offset = 0;
+					while (offset < result.size()) {
+						const auto chunk_index = ids[offset].GetValue() / STANDARD_VECTOR_SIZE;
+						idx_t count = 0;
+						do {
+							selected_rows.set_index(count++, ids[offset++].GetValue() % STANDARD_VECTOR_SIZE);
+						} while (offset < result.size() &&
+						         ids[offset].GetValue() / STANDARD_VECTOR_SIZE == chunk_index);
+						fetch(chunk_index);
+						candidates.Reference(chunk);
+						candidates.Slice(selected_rows, count);
+						if (finish()) {
+							finished = true;
+							break;
+						}
+					}
+				}
+			} else if (conditions.size() <= 64 && applicable_count == 0) {
+				const auto &selection = *group.selections.begin();
+				fetch(selection.first);
+				SelectionVector selected(1);
+				selected.set_index(0, selection.second[0]);
+				candidates.Reference(chunk);
+				candidates.Slice(selected, 1);
+				finished = finish();
+			} else if (conditions.size() <= 64 && applicable_count == 1 && range_column != DConstants::INVALID_INDEX) {
+				auto &index = [&]() -> MarkJoinRefinementIndex & {
+					lock_guard<mutex> guard(mark_join_info.mj_lock);
+					auto &cached = group.indexes[uint64_t(1) << range_column];
+					if (!cached) {
+						auto built = make_uniq<MarkJoinRefinementIndex>();
+						const auto comparison_type = conditions[range_column].GetComparisonType();
+						const bool maximum = comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+						                     comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+						for (auto &selection : group.selections) {
+							context.InterruptCheck();
+							fetch(selection.first);
+							for (auto row : selection.second) {
+								auto value = chunk.GetValue(range_column, row);
+								if (built->bound.IsNull() ||
+								    (maximum ? ValueOperations::GreaterThan(value, built->bound)
+								             : ValueOperations::LessThan(value, built->bound))) {
+									built->bound = std::move(value);
+									built->witness = selection.first * STANDARD_VECTOR_SIZE + row;
+								}
+							}
+						}
+						cached = std::move(built);
+					}
+					return *cached;
+				}();
+				fetch(index.witness / STANDARD_VECTOR_SIZE);
+				SelectionVector selected(1);
+				selected.set_index(0, index.witness % STANDARD_VECTOR_SIZE);
+				candidates.Reference(chunk);
+				candidates.Slice(selected, 1);
+				finished = finish();
+			} else {
+				for (auto &selection : group.selections) {
+					context.InterruptCheck();
+					fetch(selection.first);
+					SelectionVector selected(selection.second.data(), selection.second.size());
+					candidates.Reference(chunk);
+					candidates.Slice(selected, selection.second.size());
+					if (finish()) {
+						finished = true;
+						break;
+					}
+				}
+			}
+			if (finished) {
+				break;
+			}
 		}
 	}
-	return false;
 }
 
 void JoinHashTable::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
@@ -2170,123 +2354,7 @@ void JoinHashTable::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 	    mark_join_info.uncorrelated_condition_rows->Count() == 0) {
 		return;
 	}
-	if (HasMarkJoinConjunction()) {
-		bool null_probe[STANDARD_VECTOR_SIZE] = {false};
-		MarkJoinKeysHaveNull(join_keys, null_probe, &equality_predicates);
-		for (idx_t probe = 0; probe < join_keys.size(); probe++) {
-			if (bool_result[probe] || !mask.RowIsValid(probe)) {
-				continue;
-			}
-			if (null_probe[probe]) {
-				idx_t remaining = DConstants::INVALID_INDEX;
-				bool can_reduce = true;
-				for (idx_t col = 0; col < conditions.size(); col++) {
-					if (condition_types[col].IsNested() ||
-					    conditions[col].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
-					    conditions[col].GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-						can_reduce = false;
-						break;
-					}
-					if (!join_keys.data[col].GetValue(probe).IsNull()) {
-						if (remaining != DConstants::INVALID_INDEX) {
-							can_reduce = false;
-							break;
-						}
-						remaining = col;
-					}
-				}
-				if (can_reduce && remaining == DConstants::INVALID_INDEX) {
-					mask.SetInvalid(probe);
-					continue;
-				}
-				if (can_reduce && remaining >= equality_types.size()) {
-					const auto comparison = conditions[remaining].GetComparisonType();
-					const bool maximum = comparison == ExpressionType::COMPARE_LESSTHAN ||
-					                     comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-					if (maximum || comparison == ExpressionType::COMPARE_GREATERTHAN ||
-					    comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-						const auto &bound = mark_join_info.range_bounds[remaining];
-						bool unknown = mark_join_info.range_null_counts[remaining] > 0;
-						if (!unknown && !bound.IsNull()) {
-							const auto value = join_keys.data[remaining].GetValue(probe);
-							switch (comparison) {
-							case ExpressionType::COMPARE_LESSTHAN:
-								unknown = ValueOperations::LessThan(value, bound);
-								break;
-							case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-								unknown = ValueOperations::LessThanEquals(value, bound);
-								break;
-							case ExpressionType::COMPARE_GREATERTHAN:
-								unknown = ValueOperations::GreaterThan(value, bound);
-								break;
-							case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-								unknown = ValueOperations::GreaterThanEquals(value, bound);
-								break;
-							default:
-								break;
-							}
-						}
-						if (unknown) {
-							mask.SetInvalid(probe);
-						}
-						continue;
-					}
-				}
-			}
-			auto &rows =
-			    null_probe[probe] ? *mark_join_info.uncorrelated_condition_rows : *mark_join_info.null_condition_rows;
-			if (!rows.Count()) {
-				continue;
-			}
-			ColumnDataScanState scan;
-			rows.InitializeScan(scan);
-			DataChunk rhs;
-			rows.InitializeScanChunk(rhs);
-			Vector comparison(LogicalType::BOOLEAN);
-			while (rows.Scan(scan, rhs)) {
-				context.InterruptCheck();
-				MarkJoinRowComparison::CompareConjunction(join_keys, probe, rhs, conditions, comparison);
-				if (FlatVector::Validity(comparison).CountValid(rhs.size()) < rhs.size()) {
-					mask.SetInvalid(probe);
-					break;
-				}
-			}
-		}
-		return;
-	}
-	bool requires_refinement[STANDARD_VECTOR_SIZE] = {false};
-	if (!mark_join_info.uncorrelated_has_null && !MarkJoinKeysHaveNull(join_keys, requires_refinement)) {
-		return;
-	}
-
-	SelectionVector refinement_sel(STANDARD_VECTOR_SIZE);
-	idx_t refinement_count = 0;
-	for (idx_t probe_idx = 0; probe_idx < join_keys.size(); probe_idx++) {
-		if ((mark_join_info.uncorrelated_has_null || requires_refinement[probe_idx]) && !bool_result[probe_idx] &&
-		    mask.RowIsValid(probe_idx)) {
-			refinement_sel.set_index(refinement_count++, probe_idx);
-		}
-	}
-	if (refinement_count == 0) {
-		return;
-	}
-
-	ColumnDataScanState scan_state;
-	mark_join_info.uncorrelated_condition_rows->InitializeScan(scan_state);
-	DataChunk rhs_chunk;
-	mark_join_info.uncorrelated_condition_rows->InitializeScanChunk(rhs_chunk);
-	while (refinement_count > 0 && mark_join_info.uncorrelated_condition_rows->Scan(scan_state, rhs_chunk)) {
-		idx_t remaining_count = 0;
-		for (idx_t candidate_idx = 0; candidate_idx < refinement_count; candidate_idx++) {
-			auto probe_idx = refinement_sel.get_index(candidate_idx);
-			if (MarkJoinChunkHasUnknown(join_keys, probe_idx, rhs_chunk)) {
-				mask.SetInvalid(probe_idx);
-			} else {
-				refinement_sel.set_index(remaining_count++, probe_idx);
-			}
-		}
-		refinement_count = remaining_count;
-	}
+	RefineMarkPatterns(join_keys, bool_result, mask);
 }
 
 void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
@@ -2770,13 +2838,9 @@ static void ResetMarkJoinInfo(JoinHashTable &ht) {
 		info.result_chunk.Reset();
 	}
 	if (info.uncorrelated_condition_rows) {
+		info.refinement.reset();
 		info.uncorrelated_has_null = false;
 		info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(ht.context, ht.condition_types);
-		if (info.null_condition_rows) {
-			info.null_condition_rows = make_uniq<ColumnDataCollection>(ht.context, ht.condition_types);
-			info.range_bounds.assign(ht.condition_types.size(), Value());
-			info.range_null_counts.assign(ht.condition_types.size(), 0);
-		}
 	}
 }
 
