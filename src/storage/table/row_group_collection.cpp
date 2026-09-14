@@ -339,14 +339,14 @@ void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, C
 
 bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, CollectionScanState &state,
                                                   RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
-                                                  idx_t vector_index, idx_t max_row) {
+                                                  idx_t vector_index, idx_t max_row, bool initialize_columns) {
 	state.max_row = max_row;
 	state.row_groups = collection.GetRowGroups();
 	if (state.column_scans.empty()) {
 		// initialize the scan state
 		state.Initialize(context, collection.GetTypes());
 	}
-	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index);
+	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index, initialize_columns);
 }
 
 void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
@@ -359,12 +359,13 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.processed_rows = 0;
 }
 
-bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
-                                          CollectionScanState &scan_state) {
+optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
+                                                  CollectionScanState &scan_state, bool initialize_columns) {
 	AssignSharedPointer(scan_state.row_groups, state.row_groups);
 	while (true) {
 		idx_t vector_index;
 		idx_t max_row;
+		idx_t assignment_rows;
 		optional_ptr<RowGroupCollection> collection;
 		optional_ptr<SegmentNode<RowGroup>> row_group;
 		{
@@ -392,39 +393,41 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 					state.vector_index = 0;
 				}
 			} else {
-				state.processed_rows += current_row_group.count;
 				vector_index = 0;
 				max_row = row_start + current_row_group.count;
 				state.AssignRowGroup(state.GetNextRowGroup(*state.row_groups, *row_group).get());
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
+			const idx_t assignment_start = row_start + vector_index * STANDARD_VECTOR_SIZE;
+			assignment_rows = max_row > assignment_start ? max_row - assignment_start : 0;
+			state.processed_rows += assignment_rows;
 			scan_state.batch_index = ++state.batch_index;
 			if (!state.row_number_base.IsValid() && scan_state.row_number_base.IsValid()) {
 				state.row_number_base = scan_state.row_number_base.GetIndex();
 			}
 			if (state.row_number_base.IsValid()) {
-				// if we are scanning the row_number virtual column - shift the base based on the number of visible rows
-				// (i.e. non-deleted rows) for the current transaction
+				// Reserve numbers only for visible rows in this assignment, which may be part of a row group.
 				scan_state.row_number_base = state.row_number_base.GetIndex();
 				auto &tx = DuckTransaction::Get(context, GetAttached());
-				state.row_number_base = state.row_number_base.GetIndex() + current_row_group.GetVisibleRowCount(tx);
+				state.row_number_base = state.row_number_base.GetIndex() +
+				                        current_row_group.GetVisibleRowCount(tx, vector_index, assignment_rows);
 			}
 		}
 		D_ASSERT(collection);
 		D_ASSERT(row_group);
 
 		// initialize the scan for this row group
-		bool need_to_scan =
-		    InitializeScanInRowGroup(context, scan_state, *collection, *row_group, vector_index, max_row);
+		bool need_to_scan = InitializeScanInRowGroup(context, scan_state, *collection, *row_group, vector_index,
+		                                             max_row, initialize_columns);
 		if (!need_to_scan) {
 			// skip this row group
 			continue;
 		}
-		return true;
+		return assignment_rows;
 	}
 	lock_guard<mutex> l(state.lock);
 	scan_state.batch_index = state.batch_index;
-	return false;
+	return optional_idx();
 }
 
 //===--------------------------------------------------------------------===//

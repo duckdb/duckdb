@@ -1,4 +1,5 @@
 import argparse
+import json
 import re
 import sys
 from dataclasses import dataclass, field
@@ -9,6 +10,7 @@ from typing import List
 sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar, PEGTokenType
 from grammar_types import (
+    load_additional_transform_result_types,
     load_grammar_types,
     load_grammar_types_yaml,
     load_matcher_rule_overrides,
@@ -1180,6 +1182,8 @@ def write_cpp(all_implementations, all_registrations):
     content = (
         GENERATED_HEADER
         + '#include "duckdb/parser/peg/transformer/peg_transformer.hpp"\n'
+        + '#include "duckdb/parser/expression/star_expression.hpp"\n'
+        + '#include "duckdb/parser/expression/columnref_expression.hpp"\n'
         + "\nnamespace duckdb {\n\n"
         + "\n".join(all_implementations)
         + "\n"
@@ -1197,6 +1201,11 @@ _MATCHER_START_BLOCK = _SEPARATOR + "\t// START GENERATED RULE OVERRIDES\n" + _S
 _MATCHER_END_BLOCK = _SEPARATOR + "\t// END GENERATED RULE OVERRIDES\n" + _SEPARATOR
 _PACKRAT_START_BLOCK = _SEPARATOR + "\t// START GENERATED PACKRAT MEMOIZED RULES\n" + _SEPARATOR
 _PACKRAT_END_BLOCK = _SEPARATOR + "\t// END GENERATED PACKRAT MEMOIZED RULES\n" + _SEPARATOR
+_RESULT_TYPE_SEPARATOR = "//===--------------------------------------------------------------------===//\n"
+_RESULT_TYPE_START_BLOCK = (
+    _RESULT_TYPE_SEPARATOR + "// START GENERATED TRANSFORM RESULT TYPES\n" + _RESULT_TYPE_SEPARATOR
+)
+_RESULT_TYPE_END_BLOCK = _RESULT_TYPE_SEPARATOR + "// END GENERATED TRANSFORM RESULT TYPES\n" + _RESULT_TYPE_SEPARATOR
 
 
 def _matcher_override_expr(rule_name, override):
@@ -1267,9 +1276,29 @@ def write_packrat_memoized_rules(packrat_memoized_rules):
     print(f"Updated {matcher_cpp_path}")
 
 
-def write_hpp(all_declarations):
+def generate_transform_result_types(rule_types, additional_result_types):
+    result_types = sorted({info.cpp_type for info in rule_types.values()}.union(additional_result_types))
+    lines = []
+    for cpp_type in result_types:
+        stable_name = json.dumps(f"duckdb.transform_result.{cpp_type}")
+        lines.append(f"DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE({stable_name}, {cpp_type});\n")
+    return "".join(lines)
+
+
+def write_hpp(all_declarations, result_types):
     hpp_path = include_peg_dir / "peg_transformer.hpp"
     content = hpp_path.read_text()
+
+    result_type_start_idx = content.find(_RESULT_TYPE_START_BLOCK)
+    if result_type_start_idx == -1:
+        raise RuntimeError(f"Could not find START GENERATED TRANSFORM RESULT TYPES marker in {hpp_path}")
+    result_type_end_idx = content.find(_RESULT_TYPE_END_BLOCK, result_type_start_idx + len(_RESULT_TYPE_START_BLOCK))
+    if result_type_end_idx == -1:
+        raise RuntimeError(f"Could not find END GENERATED TRANSFORM RESULT TYPES marker in {hpp_path}")
+
+    result_type_block_end = result_type_end_idx + len(_RESULT_TYPE_END_BLOCK)
+    generated_result_type_block = _RESULT_TYPE_START_BLOCK + result_types + _RESULT_TYPE_END_BLOCK
+    content = content[:result_type_start_idx] + generated_result_type_block + content[result_type_block_end:]
 
     start_idx = content.find(_START_BLOCK)
     if start_idx == -1:
@@ -1519,7 +1548,8 @@ def main():
 
     if args.write:
         all_declarations = [d for r in results for d in r.declarations]
-        write_hpp(all_declarations)
+        additional_result_types = load_additional_transform_result_types(grammar_types_file)
+        write_hpp(all_declarations, generate_transform_result_types(rule_types, additional_result_types))
         all_implementations = [impl for r in results for impl in r.implementations]
         all_registrations = [reg for r in results for reg in r.registrations]
         write_cpp(all_implementations, all_registrations)

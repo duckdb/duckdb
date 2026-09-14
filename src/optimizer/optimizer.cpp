@@ -8,6 +8,7 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
+#include "duckdb/optimizer/constant_or_null_simplification.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
@@ -52,6 +53,7 @@
 #include "duckdb/optimizer/outer_join_simplification.hpp"
 #include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
+#include "duckdb/optimizer/projection_placement.hpp"
 #include "duckdb/optimizer/rule/contains_to_in_clause.hpp"
 #include "duckdb/optimizer/rule/monotone_preimage.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
@@ -243,7 +245,11 @@ void Optimizer::RunBuiltInOptimizers() {
 	}
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
-	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
+	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() {
+		rewriter.VisitOperator(*plan);
+		ConstantOrNullSimplification constant_or_null_simplification(context);
+		plan = constant_or_null_simplification.Optimize(std::move(plan));
+	});
 
 	// try to inline CTEs instead of materialization
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
@@ -465,6 +471,10 @@ void Optimizer::RunBuiltInOptimizers() {
 			statistics_map = propagator.GetStatisticsMap();
 			removed_expressions |= propagator.HasRemovedExpressions();
 		}
+		RunOptimizer(OptimizerType::PROJECTION_PLACEMENT, [&]() {
+			ProjectionPlacementOptimizer projection_placement(*this, statistics_map);
+			projection_placement.Optimize(plan);
+		});
 	}
 
 	// rewrite row_number window function + filter on row_number to aggregate
