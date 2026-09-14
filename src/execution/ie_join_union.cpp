@@ -360,4 +360,72 @@ void IEJoinUnion::InitializeTables(ClientContext &client, const PhysicalComparis
 	l2 = make_uniq<SortedTable>(client, orders, types, op);
 }
 
+unique_ptr<IEJoinUnion::SortedTable> IEJoinUnion::SortInput(ExecutionContext &context, const PhysicalComparisonJoin &op,
+                                                            const vector<JoinCondition> &conditions,
+                                                            ColumnDataCollection &keys) {
+	const auto comparison = conditions[0].GetComparisonType();
+	const bool ascending =
+	    comparison == ExpressionType::COMPARE_LESSTHAN || comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+	vector<BoundOrderByNode> orders;
+	orders.emplace_back(ascending ? OrderType::ASCENDING : OrderType::DESCENDING, OrderByNullType::NULLS_LAST,
+	                    make_uniq<BoundReferenceExpression>(conditions[0].GetLHS().GetReturnType(), 0));
+	auto result = make_uniq<SortedTable>(context.client, orders, keys.Types(), op);
+	auto local = result->sort->GetLocalSinkState(context);
+	InterruptState interrupt;
+	OperatorSinkInput input {*result->global_sink, *local, interrupt};
+	ColumnDataScanState scan;
+	keys.InitializeScan(scan);
+	DataChunk chunk, sort_chunk;
+	keys.InitializeScanChunk(chunk);
+	auto types = keys.Types();
+	types.insert(types.begin(), types[0]);
+	sort_chunk.InitializeEmpty(types);
+	while (keys.Scan(scan, chunk)) {
+		context.client.InterruptCheck();
+		sort_chunk.data[0].Reference(chunk.data[0]);
+		for (idx_t col = 0; col < chunk.ColumnCount(); col++) {
+			sort_chunk.data[col + 1].Reference(chunk.data[col]);
+		}
+		sort_chunk.SetChildCardinality(chunk.size());
+		result->sort->Sink(context, sort_chunk, input);
+		result->count += chunk.size();
+	}
+	OperatorSinkCombineInput combine {*result->global_sink, *local, interrupt};
+	result->sort->Combine(context, combine);
+	result->Finalize(context.client, interrupt);
+	result->Materialize(context, interrupt);
+	return result;
+}
+
+void IEJoinUnion::Prepare(ExecutionContext &context, const PhysicalComparisonJoin &op,
+                          const vector<JoinCondition> &conditions, SortedTable &left, SortedTable &right,
+                          unique_ptr<SortedTable> &l2, unique_ptr<ColumnDataCollection> &li,
+                          unique_ptr<ColumnDataCollection> &p) {
+	unique_ptr<SortedTable> l1;
+	InitializeTables(context.client, op, conditions, l1, l2);
+	InterruptState interrupt;
+	for (idx_t side = 0; side < 2; side++) {
+		auto &table = side ? right : left;
+		BoundReferenceExpression first(conditions[0].GetLHS().GetReturnType(), 0);
+		BoundConstantExpression from_left(Value::BOOLEAN(side == 0));
+		BoundReferenceExpression second(conditions[1].GetLHS().GetReturnType(), 1);
+		ExpressionExecutor executor(context.client);
+		executor.AddExpression(first);
+		executor.AddExpression(from_left);
+		executor.AddExpression(second);
+		const int64_t direction = side ? -1 : 1;
+		AppendKey(context, interrupt, table, executor, *l1, direction, direction, {0, table.BlockCount()});
+	}
+	l1->Finalize(context.client, interrupt);
+	l1->Materialize(context, interrupt);
+	li = ExtractColumn(*l1, 1, BufferManager::GetBufferManager(context.client));
+	BoundReferenceExpression second(conditions[1].GetLHS().GetReturnType(), 0);
+	ExpressionExecutor executor(context.client);
+	executor.AddExpression(second);
+	AppendKey(context, interrupt, *l1, executor, *l2, 1, 0, {0, l1->BlockCount()});
+	l2->Finalize(context.client, interrupt);
+	l2->Materialize(context, interrupt);
+	p = ExtractColumn(*l2, 0, BufferManager::GetBufferManager(context.client));
+}
+
 } // namespace duckdb

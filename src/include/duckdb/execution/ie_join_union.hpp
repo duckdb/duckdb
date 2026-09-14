@@ -160,6 +160,14 @@ struct IEJoinUnion {
 	                             const vector<JoinCondition> &conditions, unique_ptr<SortedTable> &l1,
 	                             unique_ptr<SortedTable> &l2);
 
+	static unique_ptr<SortedTable> SortInput(ExecutionContext &context, const PhysicalComparisonJoin &op,
+	                                         const vector<JoinCondition> &conditions, ColumnDataCollection &keys);
+
+	static void Prepare(ExecutionContext &context, const PhysicalComparisonJoin &op,
+	                    const vector<JoinCondition> &conditions, SortedTable &left, SortedTable &right,
+	                    unique_ptr<SortedTable> &l2, unique_ptr<ColumnDataCollection> &li,
+	                    unique_ptr<ColumnDataCollection> &p);
+
 	//! Start the current row.
 	//! Returns false if there are no more rows to process
 	template <SortKeyType SORT_KEY_TYPE>

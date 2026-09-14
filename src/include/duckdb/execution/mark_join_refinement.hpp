@@ -11,6 +11,7 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/common/array.hpp"
+#include "duckdb/execution/operator/join/physical_range_join.hpp"
 
 namespace duckdb {
 
@@ -23,7 +24,8 @@ struct MarkJoinRefinementIndex {
 	vector<idx_t> output_columns;
 	vector<JoinCondition> conditions;
 	unique_ptr<JoinHashTable> hash;
-	unique_ptr<ColumnDataCollection> prefix;
+	unique_ptr<PhysicalRangeJoin::GlobalSortedTable> ranges;
+	map<uint64_t, unique_ptr<ColumnDataCollection>> probe_results;
 	Value bound;
 	idx_t witness = 0;
 };

@@ -6,8 +6,7 @@ namespace duckdb {
 MarkJoinRefinementIndex::MarkJoinRefinementIndex() = default;
 MarkJoinRefinementIndex::~MarkJoinRefinementIndex() = default;
 
-uint64_t MarkJoinRefinement::NullMask(const DataChunk &keys, idx_t row,
-                                     const vector<JoinCondition> &conditions) {
+uint64_t MarkJoinRefinement::NullMask(const DataChunk &keys, idx_t row, const vector<JoinCondition> &conditions) {
 	if (conditions.size() > 64) {
 		return 0;
 	}
@@ -25,8 +24,7 @@ uint64_t MarkJoinRefinement::NullMask(const DataChunk &keys, idx_t row,
 	return mask;
 }
 
-void MarkJoinRefinement::AddChunk(const DataChunk &keys, idx_t chunk,
-                                  const vector<JoinCondition> &conditions) {
+void MarkJoinRefinement::AddChunk(const DataChunk &keys, idx_t chunk, const vector<JoinCondition> &conditions) {
 	for (idx_t row = 0; row < keys.size(); row++) {
 		auto &group = groups[NullMask(keys, row, conditions)];
 		group.selections[chunk].push_back(UnsafeNumericCast<sel_t>(row));
@@ -46,8 +44,11 @@ idx_t MarkJoinRefinement::SizeInBytes() const {
 			if (index.second->hash) {
 				size += index.second->hash->SizeInBytes() + index.second->hash->capacity * sizeof(ht_entry_t);
 			}
-			if (index.second->prefix) {
-				size += index.second->prefix->SizeInBytes();
+			if (index.second->ranges) {
+				size += index.second->ranges->sorted->SizeInBytes();
+			}
+			for (auto &result : index.second->probe_results) {
+				size += sizeof(result) + result.second->SizeInBytes();
 			}
 		}
 	}
