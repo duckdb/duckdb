@@ -76,10 +76,14 @@ string KeywordHelper::WriteQuoted(const string &text, char quote) {
 	return WriteQuotedAndEscaped(text, quote);
 }
 
-string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool allow_caps) {
+static bool RequiresQuotesForPrinting(const string &text, bool allow_caps) {
 	// After a qualification dot, an underscore followed by a digit can begin a decimal literal.
 	const bool ambiguous_after_dot = text.size() > 1 && text[0] == '_' && StringUtil::CharacterIsDigit(text[1]);
-	if (!ambiguous_after_dot && !RequiresQuotes(text, allow_caps)) {
+	return ambiguous_after_dot || KeywordHelper::RequiresQuotes(text, allow_caps);
+}
+
+string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool allow_caps) {
+	if (!RequiresQuotesForPrinting(text, allow_caps)) {
 		return text;
 	}
 	return WriteQuotedAndEscaped(text, quote);
@@ -89,7 +93,10 @@ SQLIdentifier::SQLIdentifier(const Identifier &id) : raw_string(id.GetIdentifier
 }
 
 string SQLIdentifier::ToString(const string &identifier) {
-	return KeywordHelper::WriteOptionallyQuoted(identifier);
+	if (!RequiresQuotesForPrinting(identifier, true)) {
+		return identifier;
+	}
+	return SQLQuotedIdentifier::ToString(identifier);
 }
 
 string SQLIdentifier::ToString(const Identifier &identifier) {
