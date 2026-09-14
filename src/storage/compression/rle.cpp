@@ -660,17 +660,44 @@ void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 	result_data[result_idx] = scan_state.ValidateAndGetCurrentRun().value;
 }
 
+template <class T>
+void RLEFetchRows(ColumnSegment &segment, ColumnFetchState &state, const row_t *row_ids, idx_t fetch_count,
+                  Vector &result, idx_t result_offset) {
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto result_data = FlatVector::GetDataMutable<T>(result);
+	idx_t idx = 0;
+	// Reuse the decoder within each nondecreasing sequence. A backwards request starts a fresh decoder,
+	// preserving arbitrary input order without retaining state or pinned blocks beyond this batch.
+	while (idx < fetch_count) {
+		auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
+		RLEScanState<T> scan_state(std::move(handle), segment);
+		idx_t position = 0;
+		do {
+			const auto target = NumericCast<idx_t>(row_ids[idx]);
+			if (target < position) {
+				break;
+			}
+			scan_state.Skip(segment, target - position);
+			result_data[result_offset + idx] = scan_state.ValidateAndGetCurrentRun().value;
+			position = target;
+			idx++;
+		} while (idx < fetch_count);
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 template <class T, bool WRITE_STATISTICS = true>
 CompressionFunction GetRLEFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
-	                           RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
-	                           RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>,
-	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>, nullptr,
-	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>,
-	                           RLEFilter<T>);
+	auto function =
+	    CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
+	                        RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
+	                        RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>, RLEInitScan<T>,
+	                        RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>, nullptr, nullptr, nullptr,
+	                        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>, RLEFilter<T>);
+	function.fetch_rows = RLEFetchRows<T>;
+	return function;
 }
 
 CompressionFunction RLEFun::GetFunction(PhysicalType type) {

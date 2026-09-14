@@ -189,6 +189,27 @@ void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 	function.get().fetch_row(*this, state, row_id, result, result_idx);
 }
 
+void ColumnSegment::FetchRows(ColumnFetchState &state, const row_t *row_ids, idx_t fetch_count, Vector &result,
+                              idx_t result_offset) {
+	if (fetch_count == 0) {
+		return;
+	}
+	// Validate the whole batch before dispatching so optimized codecs keep the single-row bounds contract.
+	for (idx_t i = 0; i < fetch_count; i++) {
+		if (row_ids[i] < 0 || NumericCast<idx_t>(row_ids[i]) >= count) {
+			throw InternalException("ColumnSegment::FetchRows - row_id out of range for segment");
+		}
+	}
+	auto &compression = function.get();
+	if (compression.fetch_rows) {
+		compression.fetch_rows(*this, state, row_ids, fetch_count, result, result_offset);
+	} else {
+		for (idx_t i = 0; i < fetch_count; i++) {
+			compression.fetch_row(*this, state, row_ids[i], result, result_offset + i);
+		}
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
