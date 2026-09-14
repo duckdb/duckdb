@@ -96,6 +96,7 @@ DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ColumnList", Colu
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CommonTableExpressionMap", CommonTableExpressionMap);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ComparisonExpressionTail", ComparisonExpressionTail);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ConstraintColumnDefinition", ConstraintColumnDefinition);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ConstraintTiming", ConstraintTiming);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CopyDatabaseType", CopyDatabaseType);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CreateTableColumnElement", CreateTableColumnElement);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CreateTableDefinition", CreateTableDefinition);
