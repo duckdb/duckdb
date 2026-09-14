@@ -11,6 +11,7 @@
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
+#include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
@@ -234,7 +235,7 @@ public:
 		}
 		if (lifetime.create_result) {
 			return MatchStep::Complete(child_state.AllocateParseResult<ListParseResult>(
-			    vector<reference<ParseResult>>(), string("nested result"), optional_idx()));
+			    vector<ParseResultRef>(), string("nested result"), optional_idx()));
 		}
 		return MatchStep::Complete(MatcherResult::Success());
 	}
@@ -270,7 +271,7 @@ private:
 	MatchProcessLifetimeState &lifetime;
 };
 
-TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api][grammar_extension]") {
+TEST_CASE("Heap matcher segment growth preserves custom process lifetimes", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
@@ -283,7 +284,7 @@ TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api
 	lifetime.destroyed.reserve(2049);
 	NestedTestMatcher matcher(lifetime);
 
-	SECTION("Completed frames are reused across vector growth boundaries") {
+	SECTION("Completed frames are reused across segment boundaries") {
 		MatchStack stack;
 		lifetime.create_result = true;
 		for (idx_t depth : {idx_t(1), idx_t(64), idx_t(65), idx_t(128), idx_t(129), idx_t(256), idx_t(257), idx_t(1025),
@@ -295,7 +296,7 @@ TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api
 			auto result = stack.Execute({matcher, state});
 			REQUIRE(result.IsSuccess());
 			REQUIRE(result.HasParseResult());
-			REQUIRE(result.GetParseResult()->name == "nested result");
+			REQUIRE(allocator.Get(result.GetParseResult()).name == "nested result");
 			REQUIRE(lifetime.active == 0);
 			REQUIRE(lifetime.state_valid);
 			REQUIRE(lifetime.started == depth);
@@ -356,6 +357,26 @@ TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api
 		REQUIRE(lifetime.state_valid);
 		REQUIRE(lifetime.started == lifetime.depth);
 	}
+}
+
+TEST_CASE("Heap matcher inlines fitting processes", "[api][grammar_extension]") {
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_results;
+	idx_t max_token_index = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
+	MatchState state(iterator, context);
+	MatchProcessLifetimeState lifetime;
+	lifetime.depth = 65;
+	NestedTestMatcher matcher(lifetime);
+	MatchStack stack;
+
+	REQUIRE(stack.Execute({matcher, state}).IsSuccess());
+	REQUIRE(process_allocator.IsEmpty());
+	REQUIRE(lifetime.active == 0);
+	REQUIRE(lifetime.started == lifetime.depth);
 }
 
 class DerivedListTestMatcher final : public ListMatcher {
@@ -614,14 +635,14 @@ TEST_CASE("Packrat results outlive reset process arenas", "[api][grammar_extensi
 	lifetime.started = 0;
 	auto cached = stack.Execute({matcher, state});
 	REQUIRE(cached.IsSuccess() == first.IsSuccess());
-	REQUIRE(cached.GetParseResult().get() == first.GetParseResult().get());
+	REQUIRE(cached.GetParseResult() == first.GetParseResult());
 	REQUIRE(lifetime.started == 0);
 	REQUIRE(lifetime.active == 0);
 	REQUIRE(lifetime.storage_valid);
 	REQUIRE(lifetime.state_valid);
 	if (cached.IsSuccess()) {
 		REQUIRE(cached.HasParseResult());
-		REQUIRE(cached.GetParseResult()->name == "nested result");
+		REQUIRE(parse_results.Get(cached.GetParseResult()).name == "nested result");
 	}
 }
 
@@ -641,6 +662,27 @@ TEST_CASE("Compiled grammar processes use arena ownership", "[api][grammar_exten
 	process.reset();
 	process_allocator.Reset();
 	REQUIRE(process_allocator.SizeInBytes() == 0);
+}
+
+TEST_CASE("Heap matcher inlines compiled grammar processes", "[api][grammar_extension]") {
+	auto grammar = CompiledGrammar::Create();
+	vector<MatcherToken> tokens;
+	const string sql = "SELECT 42";
+	ParserTokenizerBehavior tokenizer_behavior(sql, tokens);
+	grammar->GetTokenizer().TokenizeInput(tokenizer_behavior);
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_results;
+	idx_t max_token_index = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
+	MatchState state(iterator, context);
+	MatchStack stack;
+
+	auto result = stack.Execute({grammar->TopLevelStatementMatcher(), state});
+	REQUIRE(result.IsSuccess());
+	REQUIRE(result.HasParseResult());
+	REQUIRE(process_allocator.IsEmpty());
 }
 
 TEST_CASE("Grammar changes expose structured metadata", "[api][grammar_extension]") {

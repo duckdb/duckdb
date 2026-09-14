@@ -10,10 +10,10 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parser/peg/transformer/parse_result.hpp"
 
 namespace duckdb {
 class Matcher;
-class ParseResult;
 
 struct ParserPackratKey {
 	idx_t matcher_id;
@@ -32,7 +32,7 @@ struct ParserPackratEntry {
 	bool success = false;
 	idx_t token_index_after = 0;
 	idx_t max_token_index_seen = 0;
-	optional_ptr<ParseResult> result;
+	ParseResultRef result;
 };
 
 class ParserPackratCache {

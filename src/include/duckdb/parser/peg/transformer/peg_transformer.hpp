@@ -263,18 +263,19 @@ unique_ptr<TypedTransformResult<T>> TryBridgeTransformResultValue(TransformResul
 
 //! Input to start a transformer execution. The rule can be supplied explicitly for transparent parse nodes.
 struct TransformInput {
-	TransformInput(ParseResult &parse_result_p) : parse_result(parse_result_p) {
+	TransformInput(ParseResult &parse_result_p)
+	    : rule(parse_result_p.GetRule()), parse_result(parse_result_p.GetReference()) {
 	}
 	TransformInput(const CompiledGrammarRule &rule_p, ParseResult &parse_result_p)
-	    : rule(rule_p), parse_result(parse_result_p) {
+	    : rule(rule_p), parse_result(parse_result_p.GetReference()) {
 	}
 
 	optional_ptr<const CompiledGrammarRule> GetRule() const {
-		return rule ? rule : parse_result.GetRule();
+		return rule;
 	}
 
 	optional_ptr<const CompiledGrammarRule> rule;
-	ParseResult &parse_result;
+	ParseResultRef parse_result;
 };
 
 //! Essentially a std::variant<TransformInput, unique_ptr<TransformResultValue>>.
@@ -386,7 +387,7 @@ struct TransformStackFrame {
 	explicit TransformStackFrame(TransformInput input);
 
 	optional_ptr<const CompiledGrammarRule> rule;
-	ParseResult &parse_result;
+	ParseResultRef parse_result;
 	unique_ptr<TransformProcess> process;
 	unique_ptr<TransformResultValue> child_result;
 };
@@ -407,7 +408,8 @@ public:
 		auto base_result = Execute(input);
 		auto *result_value = TryGetTransformResult<T>(*base_result);
 		if (!result_value) {
-			throw InternalException("Unexpected transformer result type for root rule '%s'", input.parse_result.name);
+			throw InternalException("Unexpected transformer result type for root rule '%s'",
+			                        GetParseResultName(input.parse_result));
 		}
 		return std::move(*result_value);
 	}
@@ -420,6 +422,7 @@ private:
 	void PushFrame(TransformInput input);
 	void InitializeFrame(TransformStackFrame &frame);
 	unique_ptr<TransformResultValue> ExecuteFrame(TransformStackFrame &frame);
+	const string &GetParseResultName(ParseResultRef result) const;
 
 private:
 	PEGTransformer &transformer;
@@ -428,12 +431,16 @@ private:
 
 class PEGTransformer {
 public:
-	PEGTransformer(ArenaAllocator &allocator, TokenIterator &token_iterator, ParserOptions &options_p,
-	               const CompiledGrammar &grammar_p)
-	    : allocator(allocator), token_iterator(token_iterator), options(options_p), grammar(grammar_p) {
+	PEGTransformer(ArenaAllocator &allocator, ParseResultAllocator &parse_results_p, TokenIterator &token_iterator,
+	               ParserOptions &options_p, const CompiledGrammar &grammar_p)
+	    : allocator(allocator), parse_results(parse_results_p), token_iterator(token_iterator), options(options_p),
+	      grammar(grammar_p) {
 	}
 
 	const CompiledGrammarRule &GetRule(const string &rule_name) const;
+	ParseResult &GetParseResult(ParseResultRef result) {
+		return parse_results.Get(result);
+	}
 
 public:
 	template <typename T>
@@ -527,6 +534,7 @@ private:
 
 public:
 	ArenaAllocator &allocator;
+	ParseResultAllocator &parse_results;
 	TokenIterator &token_iterator;
 	identifier_map_t<idx_t> named_parameter_map;
 	idx_t prepared_statement_parameter_index = 0;
