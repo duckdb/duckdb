@@ -11,11 +11,10 @@
 
 namespace duckdb {
 
-namespace {
-
 struct ListSliceBindData : public FunctionData {
 	ListSliceBindData(const LogicalType &return_type_p, bool begin_is_empty_p, bool end_is_empty_p)
-	    : return_type(return_type_p), begin_is_empty(begin_is_empty_p), end_is_empty(end_is_empty_p) {
+	    : FunctionData(InternalKind::ARRAY_SLICE), return_type(return_type_p), begin_is_empty(begin_is_empty_p),
+	      end_is_empty(end_is_empty_p) {
 	}
 	LogicalType return_type;
 	bool begin_is_empty;
@@ -35,6 +34,8 @@ bool ListSliceBindData::Equals(const FunctionData &other_p) const {
 unique_ptr<FunctionData> ListSliceBindData::Copy() const {
 	return make_uniq<ListSliceBindData>(return_type, begin_is_empty, end_is_empty);
 }
+
+namespace {
 
 template <typename INDEX_TYPE>
 idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {

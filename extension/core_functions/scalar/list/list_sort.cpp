@@ -16,7 +16,8 @@ namespace duckdb {
 
 struct ListSortBindData : public FunctionData {
 	ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, bool is_grade_up,
-	                 const LogicalType &return_type_p, const LogicalType &child_type_p, ClientContext &context_p);
+	                 const LogicalType &return_type_p, const LogicalType &child_type_p, ClientContext &context_p,
+	                 unique_ptr<Expression> sort_key_p = nullptr);
 	~ListSortBindData() override;
 
 	OrderType order_type;
@@ -28,16 +29,20 @@ struct ListSortBindData : public FunctionData {
 	vector<LogicalType> types;
 
 	ClientContext &context;
+	unique_ptr<Expression> sort_key;
 	unique_ptr<Sort> sort;
 
 public:
 	bool Equals(const FunctionData &other_p) const override;
 	unique_ptr<FunctionData> Copy() const override;
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                      const BoundScalarFunction &);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &);
 };
 
 ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, bool is_grade_up_p,
                                    const LogicalType &return_type_p, const LogicalType &child_type_p,
-                                   ClientContext &context_p)
+                                   ClientContext &context_p, unique_ptr<Expression> sort_key_p)
     : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p), child_type(child_type_p),
       is_grade_up(is_grade_up_p), context(context_p) {
 	// get the vector types
@@ -48,28 +53,57 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 
 	// get the BoundOrderByNode
 	auto idx_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0U);
-	auto lists_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(child_type, 1U);
-	// Normalize the sort key without changing the sorted values (#25108): push the
-	// type's collation (for INTERVAL this wraps the expression in
-	// normalized_interval(...), the same normalization comparison operators, ORDER BY
-	// and aggregates apply) onto the key expression BEFORE constructing its
-	// BoundOrderByNode. The key then byte-compares like ORDER BY, while the list
-	// payload keeps the original (non-normalized) values.
-	ExpressionBinder::PushCollation(context, lists_col_expr, child_type);
+	if (!sort_key_p) {
+		sort_key_p = make_uniq_base<Expression, BoundReferenceExpression>(child_type, 1U);
+		// Normalize the sort key without changing the sorted values (#25108): push the
+		// type's collation (for INTERVAL this wraps the expression in
+		// normalized_interval(...), the same normalization comparison operators, ORDER BY
+		// and aggregates apply) onto the key expression BEFORE constructing its
+		// BoundOrderByNode. The key then byte-compares like ORDER BY, while the list
+		// payload keeps the original (non-normalized) values.
+		ExpressionBinder::PushCollation(context, sort_key_p, child_type);
+	}
+	sort_key = sort_key_p->Copy();
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(idx_col_expr));
-	orders.emplace_back(order_type, null_order, std::move(lists_col_expr));
+	orders.emplace_back(order_type, null_order, std::move(sort_key_p));
 	sort =
 	    unique_ptr<Sort>(new Sort(context, orders, {LogicalType::USMALLINT, child_type, LogicalType::UINTEGER}, {2}));
 }
 
 unique_ptr<FunctionData> ListSortBindData::Copy() const {
-	return make_uniq<ListSortBindData>(order_type, null_order, is_grade_up, return_type, child_type, context);
+	return make_uniq<ListSortBindData>(order_type, null_order, is_grade_up, return_type, child_type, context,
+	                                   sort_key->Copy());
 }
 
 bool ListSortBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListSortBindData>();
-	return order_type == other.order_type && null_order == other.null_order && is_grade_up == other.is_grade_up;
+	return order_type == other.order_type && null_order == other.null_order && return_type == other.return_type &&
+	       child_type == other.child_type && is_grade_up == other.is_grade_up &&
+	       Expression::Equals(sort_key, other.sort_key);
+}
+
+void ListSortBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                 const BoundScalarFunction &) {
+	auto &data = bind_data->Cast<ListSortBindData>();
+	serializer.WriteProperty(100, "order_type", data.order_type);
+	serializer.WriteProperty(101, "null_order", data.null_order);
+	serializer.WriteProperty(102, "return_type", data.return_type);
+	serializer.WriteProperty(103, "child_type", data.child_type);
+	serializer.WriteProperty(104, "is_grade_up", data.is_grade_up);
+	serializer.WriteProperty(105, "sort_key", data.sort_key);
+}
+
+unique_ptr<FunctionData> ListSortBindData::Deserialize(Deserializer &deserializer, BoundScalarFunction &) {
+	auto order_type = deserializer.ReadProperty<OrderType>(100, "order_type");
+	auto null_order = deserializer.ReadProperty<OrderByNullType>(101, "null_order");
+	auto return_type = deserializer.ReadProperty<LogicalType>(102, "return_type");
+	auto child_type = deserializer.ReadProperty<LogicalType>(103, "child_type");
+	auto is_grade_up = deserializer.ReadProperty<bool>(104, "is_grade_up");
+	auto sort_key = deserializer.ReadProperty<unique_ptr<Expression>>(105, "sort_key");
+	auto &context = deserializer.Get<ClientContext &>();
+	return make_uniq<ListSortBindData>(order_type, null_order, is_grade_up, return_type, child_type, context,
+	                                   std::move(sort_key));
 }
 
 ListSortBindData::~ListSortBindData() {
@@ -360,6 +394,11 @@ static unique_ptr<FunctionData> ListReverseSortBind(BindScalarFunctionInput &inp
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
+static void SetListSortSerialization(ScalarFunction &function) {
+	function.SetSerializeCallback(ListSortBindData::Serialize);
+	function.SetDeserializeCallback(ListSortBindData::Deserialize);
+}
+
 ScalarFunctionSet ListSortFun::GetFunctions() {
 	// one parameter: list
 	ScalarFunction sort({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
@@ -377,6 +416,9 @@ ScalarFunctionSet ListSortFun::GetFunctions() {
 	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
 	    .AddParameter("sort_order", LogicalType::VARCHAR)
 	    .AddParameter("null_order", LogicalType::VARCHAR);
+	SetListSortSerialization(sort);
+	SetListSortSerialization(sort_order);
+	SetListSortSerialization(sort_orders);
 
 	ScalarFunctionSet list_sort;
 	list_sort.AddFunction(sort);
@@ -402,6 +444,9 @@ ScalarFunctionSet ListGradeUpFun::GetFunctions() {
 	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
 	    .AddParameter("sort_order", LogicalType::VARCHAR)
 	    .AddParameter("null_order", LogicalType::VARCHAR);
+	SetListSortSerialization(sort);
+	SetListSortSerialization(sort_order);
+	SetListSortSerialization(sort_orders);
 
 	ScalarFunctionSet list_grade_up;
 	list_grade_up.AddFunction(sort);
@@ -421,6 +466,8 @@ ScalarFunctionSet ListReverseSortFun::GetFunctions() {
 	sort_reverse_null_order.GetSignature()
 	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
 	    .AddParameter("null_order", LogicalType::VARCHAR);
+	SetListSortSerialization(sort_reverse);
+	SetListSortSerialization(sort_reverse_null_order);
 
 	ScalarFunctionSet list_reverse_sort;
 	list_reverse_sort.AddFunction(sort_reverse);
