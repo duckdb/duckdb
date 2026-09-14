@@ -111,6 +111,17 @@ public:
 	unique_ptr<Expression> &EndExprMutable() {
 		return end_expr;
 	}
+	void RetainSQLRange(optional_ptr<const Expression> start, optional_ptr<const Expression> end,
+	                    const LogicalType &order_type);
+	const unique_ptr<Expression> &SQLRangeStart() const {
+		return sql_range_start;
+	}
+	const unique_ptr<Expression> &SQLRangeEnd() const {
+		return sql_range_end;
+	}
+	const LogicalType &SQLRangeOrderType() const {
+		return sql_range_order_type;
+	}
 	const vector<BoundOrderByNode> &ArgOrders() const {
 		return arg_orders;
 	}
@@ -188,6 +199,11 @@ private:
 
 	unique_ptr<Expression> start_expr;
 	unique_ptr<Expression> end_expr;
+
+	//! Literal SQL offsets before endpoint arithmetic; these are not execution children.
+	unique_ptr<Expression> sql_range_start;
+	unique_ptr<Expression> sql_range_end;
+	LogicalType sql_range_order_type = LogicalType::INVALID;
 
 	//! The set of argument ordering clauses
 	//! These are distinct from the frame ordering clauses e.g., the "x" in
