@@ -1320,21 +1320,13 @@ void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool foun
 		}
 		return *gsource.gsink.mark_refinement;
 	}();
-	idx_t cached_chunk = DConstants::INVALID_INDEX;
 	auto fetch = [&](idx_t chunk) {
-		if (cached_chunk != chunk) {
-			scan.Seek(chunk);
-			cached_chunk = chunk;
-		}
+		scan.Seek(chunk);
 	};
 	IEMarkKeyScan probe_scan(context.client, op, *gsource.gsink.tables[0], 0);
-	idx_t cached_probe_chunk = DConstants::INVALID_INDEX;
 	MarkPatternProbeSource probes;
 	probes.fetch = [&](idx_t chunk) -> DataChunk & {
-		if (cached_probe_chunk != chunk) {
-			probe_scan.Seek(chunk);
-			cached_probe_chunk = chunk;
-		}
+		probe_scan.Seek(chunk);
 		return probe_scan.keys;
 	};
 	probes.count = gsource.gsink.tables[0]->count;

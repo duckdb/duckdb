@@ -151,6 +151,13 @@ MarkPatternRefiner::MarkPatternRefiner(ClientContext &context, const PhysicalCom
 	candidates.InitializeEmpty(condition_types);
 }
 
+void MarkPatternRefiner::Fetch(idx_t index) {
+	if (cached_chunk != index) {
+		fetch(index);
+		cached_chunk = index;
+	}
+}
+
 bool MarkPatternRefiner::Finish(idx_t probe, uint64_t dropped) {
 	MarkJoinRowComparison::CompareConjunction(keys, probe, candidates, conditions, comparison);
 	for (auto value : comparison.Values<bool>()) {
@@ -173,17 +180,27 @@ MarkJoinRefinementIndex &MarkPatternRefiner::BuildEqualityIndex(MarkJoinRefineme
 	lock_guard<mutex> guard(lock);
 	auto &cached = group.indexes[equality_mask];
 	if (!cached) {
-		cached = MarkJoinRefinementIndex::BuildHash(context, op, group, equality_mask, conditions, fetch);
+		cached = MarkJoinRefinementIndex::BuildHash(context, op, group, equality_mask, conditions,
+		                                            [&](idx_t index) -> DataChunk & {
+			                                            Fetch(index);
+			                                            return chunk;
+		                                            });
 	}
 	return *cached;
 }
 
 void MarkPatternRefiner::ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint64_t probe_mask, uint64_t dropped,
                                             uint64_t equality_mask) {
+	auto &keys = this->keys;
+	auto &chunk = this->chunk;
+	auto &conditions = this->conditions;
+	auto &comparison = this->comparison;
+	auto &validity = this->validity;
+	auto matches = this->matches.get();
 	SelectionVector selected(STANDARD_VECTOR_SIZE);
 	idx_t probe_count = 0;
 	for (idx_t row = 0; row < keys.size(); row++) {
-		if (!matches.get()[row] && validity.RowIsValid(row) &&
+		if (!matches[row] && validity.RowIsValid(row) &&
 		    MarkJoinRefinement::NullMask(keys, row, conditions) == probe_mask) {
 			selected.set_index(probe_count++, row);
 		}
@@ -223,7 +240,7 @@ void MarkPatternRefiner::ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint
 					left_sel.set_index(batch_count, selected.get_index(matched.get_index(offset)));
 					right_sel.set_index(batch_count++, ids[offset++].GetValue() % STANDARD_VECTOR_SIZE);
 				} while (offset < match_count && ids[offset].GetValue() / STANDARD_VECTOR_SIZE == chunk_index);
-				fetch(chunk_index);
+				Fetch(chunk_index);
 				for (auto col : tail) {
 					probe_candidates.data[col].Slice(keys.data[col], left_sel, batch_count);
 					build_candidates.data[col].Slice(chunk.data[col], right_sel, batch_count);
@@ -236,11 +253,11 @@ void MarkPatternRefiner::ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint
 					const auto original = left_sel.get_index(row);
 					auto value = values[row];
 					if (!value.IsValid() || (dropped && value.GetValue())) {
-						if (!matches.get()[original]) {
+						if (!matches[original]) {
 							validity.SetInvalid(original);
 						}
 					} else if (value.GetValue()) {
-						matches.get()[original] = true;
+						matches[original] = true;
 						validity.SetValid(original);
 					}
 				}
@@ -250,7 +267,7 @@ void MarkPatternRefiner::ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint
 		for (idx_t row = 0; row < cursor.count; row++) {
 			const auto local = cursor.sel_vector.get_index(row);
 			const auto original = selected.get_index(local);
-			if (!matches.get()[original] && !(dropped && !validity.RowIsValid(original))) {
+			if (!matches[original] && !(dropped && !validity.RowIsValid(original))) {
 				remaining.set_index(remaining_count++, local);
 			}
 		}
@@ -271,7 +288,7 @@ unique_ptr<IEJoinBuildOrders> MarkPatternRefiner::BuildRangeIndex(ExecutionConte
 	projected.Initialize(context, types);
 	for (auto &selection : group.selections) {
 		context.InterruptCheck();
-		fetch(selection.first);
+		Fetch(selection.first);
 		projected.Reset();
 		for (auto row : selection.second) {
 			projected.data[0].Append(chunk.GetValue(driving[0], row));
@@ -331,6 +348,8 @@ void MarkPatternRefiner::RunRangeJoin(ExecutionContext &execution, IEJoinBuildOr
 			tail.push_back(col);
 		}
 	}
+	idx_t cached_probe_chunk = DConstants::INVALID_INDEX;
+	optional_ptr<DataChunk> probe_keys;
 	while (joiner.JoinBlocks(left, right)) {
 		context.InterruptCheck();
 		for (idx_t pair = 0; pair < left.size();) {
@@ -354,10 +373,13 @@ void MarkPatternRefiner::RunRangeJoin(ExecutionContext &execution, IEJoinBuildOr
 			if (!batch_count) {
 				continue;
 			}
-			auto &probe_keys = probe_fetch(left_chunk);
-			fetch(right_chunk);
+			if (cached_probe_chunk != left_chunk) {
+				probe_keys = probe_fetch(left_chunk);
+				cached_probe_chunk = left_chunk;
+			}
+			Fetch(right_chunk);
 			for (auto col : tail) {
-				probe_candidates.data[col].Slice(probe_keys.data[col], left_sel, batch_count);
+				probe_candidates.data[col].Slice(probe_keys->data[col], left_sel, batch_count);
 				build_candidates.data[col].Slice(chunk.data[col], right_sel, batch_count);
 			}
 			probe_candidates.SetChildCardinality(batch_count);
@@ -490,7 +512,7 @@ bool MarkPatternRefiner::RefineOneRange(MarkJoinRefinementGroup &group, idx_t pr
 			                     comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 			for (auto &selection : group.selections) {
 				context.InterruptCheck();
-				fetch(selection.first);
+				Fetch(selection.first);
 				for (auto row : selection.second) {
 					auto value = chunk.GetValue(range_column, row);
 					if (built->bound.IsNull() || (maximum ? ValueOperations::GreaterThan(value, built->bound)
@@ -514,7 +536,7 @@ bool MarkPatternRefiner::RefineExact(MarkJoinRefinementGroup &group, idx_t probe
 			continue;
 		}
 		context.InterruptCheck();
-		fetch(selection.first);
+		Fetch(selection.first);
 		SelectionVector selected(STANDARD_VECTOR_SIZE);
 		idx_t count = 0;
 		for (auto row : selection.second) {
@@ -569,7 +591,7 @@ void MarkPatternRefiner::Refine() {
 }
 
 bool MarkPatternRefiner::RefineWitness(idx_t id, idx_t probe, uint64_t dropped) {
-	fetch(id / STANDARD_VECTOR_SIZE);
+	Fetch(id / STANDARD_VECTOR_SIZE);
 	SelectionVector selected(1);
 	selected.set_index(0, id % STANDARD_VECTOR_SIZE);
 	candidates.Reference(chunk);

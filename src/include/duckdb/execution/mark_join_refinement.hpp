@@ -85,6 +85,7 @@ public:
 	void Refine();
 
 private:
+	void Fetch(idx_t index);
 	bool Finish(idx_t probe, uint64_t dropped);
 	bool RefineWitness(idx_t id, idx_t probe, uint64_t dropped);
 	MarkJoinRefinementIndex &BuildEqualityIndex(MarkJoinRefinementGroup &group, uint64_t equality_mask);
@@ -109,6 +110,7 @@ private:
 	mutex &lock;
 	mark_key_fetch_t fetch;
 	DataChunk &chunk;
+	idx_t cached_chunk = 0;
 	DataChunk &keys;
 	optional_ptr<bool> matches;
 	ValidityMask &validity;

@@ -2087,15 +2087,10 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 	rows.InitializeScan(scan);
 	DataChunk chunk;
 	rows.InitializeScanChunk(chunk);
-	idx_t cached_chunk = DConstants::INVALID_INDEX;
 	auto fetch = [&](idx_t index) {
-		if (cached_chunk == index) {
-			return;
-		}
 		chunk.Reset();
 		const auto &location = refinement.chunks[index];
 		rows.ScanAtIndex(scan, local, chunk, location[0], location[1], location[2]);
-		cached_chunk = index;
 	};
 	MarkPatternRefiner refiner(
 	    context, op.Cast<PhysicalHashJoin>(), refinement, mark_join_info.mj_lock,
