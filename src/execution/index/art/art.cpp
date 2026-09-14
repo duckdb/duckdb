@@ -830,7 +830,7 @@ bool ART::ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const {
 	} else {
 		GenerateKeys<>(arena, input, keys);
 	}
-	lock_guard<mutex> guard(lock);
+	IndexLock guard(*this);
 	for (const auto &key : keys) {
 		if (!key.Empty() && !SearchEqual(key, row_ids)) {
 			return false;
