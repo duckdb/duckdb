@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/array_ptr.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/map.hpp"
@@ -171,9 +172,10 @@ typedef void (*compression_filter_t)(ColumnSegment &segment, ColumnScanState &st
 //! Function prototype used for reading a single value
 typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                         idx_t result_idx);
-//! Read segment-relative row offsets in input order, including duplicates and decreasing offsets.
-typedef void (*compression_fetch_rows_t)(ColumnSegment &segment, ColumnFetchState &state, const row_t *row_ids,
-                                         idx_t fetch_count, Vector &result, idx_t result_offset);
+//! Read segment-relative row offsets in nondecreasing order, including duplicates.
+typedef void (*compression_fetch_rows_t)(ColumnSegment &segment, ColumnFetchState &state,
+                                         const unsafe_array_ptr<row_t> &row_ids, idx_t fetch_count, Vector &result,
+                                         idx_t result_offset);
 //! Function prototype used for skipping 'skip_count' values, non-trivial if random-access is not supported for the
 //! compressed data.
 typedef void (*compression_skip_t)(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count);

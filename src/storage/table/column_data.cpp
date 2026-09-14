@@ -775,7 +775,8 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 			batch_offsets.push_back(NumericCast<row_t>(next_offset - segment_start));
 			idx++;
 		}
-		segment.FetchRows(state, batch_offsets.data(), batch_offsets.size(), result, result_offset + batch_start);
+		segment.FetchRows(state, unsafe_array_ptr<row_t>(batch_offsets.data(), batch_offsets.size()),
+		                  batch_offsets.size(), result, result_offset + batch_start);
 	}
 	{
 		const lock_guard<mutex> update_guard(update_lock);

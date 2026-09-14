@@ -40,26 +40,35 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 		state.context = context;
 
 		// Keep sentinel values around each output range to detect incorrect result offsets and overruns.
-		vector<row_t> ids {0, 5, 5, 2, 9, row_t(segment.count - 1), 0};
+		vector<row_t> ids {0, 5, 5, 2, 9, row_t(segment.count - 1), 12, 8, 4, 0, 0};
 		Vector actual(LogicalType::BIGINT, ids.size() + 2);
 		Vector expected(LogicalType::BIGINT, ids.size() + 2);
 		auto output = FlatVector::GetDataMutable<int64_t>(actual);
 		for (idx_t i = 0; i < ids.size() + 2; i++) {
 			output[i] = -1;
 		}
-		segment.FetchRows(state, ids.data(), ids.size(), actual, 1);
+		segment.FetchRows(state, unsafe_array_ptr<row_t>(ids.data(), ids.size()), ids.size(), actual, 1);
 		for (idx_t i = 0; i < ids.size(); i++) {
 			segment.FetchRow(state, ids[i], expected, i + 1);
 			REQUIRE(actual.GetValue(i + 1) == expected.GetValue(i + 1));
 		}
 		REQUIRE(output[0] == -1);
 		REQUIRE(output[ids.size() + 1] == -1);
-		segment.FetchRows(state, nullptr, 0, actual, 1);
+		segment.FetchRows(state, unsafe_array_ptr<row_t>(ids.data(), 0), 0, actual, 1);
 		REQUIRE(output[0] == -1);
 		row_t invalid = -1;
-		REQUIRE_THROWS(segment.FetchRows(state, &invalid, 1, actual, 1));
+		REQUIRE_THROWS(segment.FetchRows(state, unsafe_array_ptr<row_t>(invalid), 1, actual, 1));
 		invalid = row_t(segment.count);
-		REQUIRE_THROWS(segment.FetchRows(state, &invalid, 1, actual, 1));
+		REQUIRE_THROWS(segment.FetchRows(state, unsafe_array_ptr<row_t>(invalid), 1, actual, 1));
+
+		// Repeated fetches at a run boundary must not consume the current row.
+		vector<row_t> boundary_ids {3, 3, 4};
+		Vector boundary_result(LogicalType::BIGINT, boundary_ids.size());
+		segment.FetchRows(state, unsafe_array_ptr<row_t>(boundary_ids.data(), boundary_ids.size()), boundary_ids.size(),
+		                  boundary_result, 0);
+		REQUIRE(boundary_result.GetValue(0) == Value::BIGINT(0));
+		REQUIRE(boundary_result.GetValue(1) == Value::BIGINT(0));
+		REQUIRE(boundary_result.GetValue(2) == Value::BIGINT(1));
 
 		// More than one vector of requests exercises ColumnData's bounded batching and non-identity selection.
 		const idx_t count = STANDARD_VECTOR_SIZE + 1;

@@ -189,8 +189,8 @@ void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 	function.get().fetch_row(*this, state, row_id, result, result_idx);
 }
 
-void ColumnSegment::FetchRows(ColumnFetchState &state, const row_t *row_ids, idx_t fetch_count, Vector &result,
-                              idx_t result_offset) {
+void ColumnSegment::FetchRows(ColumnFetchState &state, const unsafe_array_ptr<row_t> &row_ids, idx_t fetch_count,
+                              Vector &result, idx_t result_offset) {
 	if (fetch_count == 0) {
 		return;
 	}
@@ -202,7 +202,17 @@ void ColumnSegment::FetchRows(ColumnFetchState &state, const row_t *row_ids, idx
 	}
 	auto &compression = function.get();
 	if (compression.fetch_rows) {
-		compression.fetch_rows(*this, state, row_ids, fetch_count, result, result_offset);
+		idx_t batch_start = 0;
+		while (batch_start < fetch_count) {
+			auto batch_end = batch_start + 1;
+			while (batch_end < fetch_count && row_ids[batch_end] >= row_ids[batch_end - 1]) {
+				batch_end++;
+			}
+			const auto batch_count = batch_end - batch_start;
+			compression.fetch_rows(*this, state, row_ids.SubArray(batch_start, batch_count), batch_count, result,
+			                       result_offset + batch_start);
+			batch_start = batch_end;
+		}
 	} else {
 		for (idx_t i = 0; i < fetch_count; i++) {
 			compression.fetch_row(*this, state, row_ids[i], result, result_offset + i);
