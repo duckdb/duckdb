@@ -13,6 +13,16 @@ AggregateFunctionCatalogEntry::AggregateFunctionCatalogEntry(Catalog &catalog, S
 		function.SetCatalogName(catalog.GetAttached().GetName());
 		function.SetSchemaName(schema.name);
 	});
+	registered_functions = functions.functions;
+}
+
+bool AggregateFunctionCatalogEntry::IsRegisteredFunction(const shared_ptr<const AggregateFunction> &function) const {
+	for (const auto &registered_function : registered_functions) {
+		if (registered_function == function) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb

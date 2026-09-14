@@ -40,6 +40,8 @@ BoundWindowFunction::BoundWindowFunction(shared_ptr<const WindowFunction> base_p
 	for (auto &param : base.GetSignature().GetParameters()) {
 		arguments.push_back(param.GetType());
 	}
+	logical_arguments = arguments;
+	logical_return_type = return_type;
 }
 
 bool BoundWindowFunction::operator==(const BoundWindowFunction &rhs) const {

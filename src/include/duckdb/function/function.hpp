@@ -17,6 +17,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -108,7 +109,7 @@ public:
 	}
 
 private:
-	enum InternalKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN };
+	enum InternalKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN, ARRAY_SLICE, ALIAS };
 
 	explicit FunctionData(InternalKind internal_kind_p) : internal_kind(internal_kind_p) {
 	}
@@ -122,6 +123,9 @@ private:
 	friend struct BoundCastExpression;
 	friend struct BetweenFunctionData;
 	friend struct CastFunctionData;
+	friend struct ListSliceBindData;
+	friend struct AliasBindData;
+	friend class BoundExpressionSQLExportState;
 };
 
 struct TableFunctionData : public FunctionData {
@@ -341,20 +345,34 @@ public:
 		name = std::move(name_p);
 	}
 	auto SetSchemaName(Identifier schema_name_p) -> void {
-		schema_name = std::move(schema_name_p);
+		qualified_name = QualifiedName(GetCatalogName(), std::move(schema_name_p), name);
 	}
 	auto SetCatalogName(Identifier catalog_name_p) -> void {
-		catalog_name = std::move(catalog_name_p);
+		auto path = qualified_name.Path();
+		if (path.size() < 3) {
+			qualified_name = QualifiedName(std::move(catalog_name_p), GetSchemaName(), name);
+		} else {
+			path.pop_back();
+			path[0] = std::move(catalog_name_p);
+			qualified_name = QualifiedName(std::move(path), name);
+		}
+	}
+	void SetQualifiedName(QualifiedName name_p) {
+		name = name_p.Name();
+		qualified_name = std::move(name_p);
+	}
+	QualifiedName GetQualifiedName() const {
+		return qualified_name.WithName(name);
 	}
 
 	const Identifier &GetName() const {
 		return name;
 	}
 	const Identifier &GetSchemaName() const {
-		return schema_name;
+		return qualified_name.Schema();
 	}
 	const Identifier &GetCatalogName() const {
-		return catalog_name;
+		return qualified_name.Catalog();
 	}
 
 	//! Returns the formatted string name(arg1, arg2, ...)
@@ -372,10 +390,7 @@ public:
 	                                      const named_parameter_type_map_t &named_parameters);
 
 private:
-	//! Optional catalog name of the function
-	Identifier catalog_name;
-	//! Optional schema name of the function
-	Identifier schema_name;
+	QualifiedName qualified_name;
 };
 
 class SimpleFunction : public Function {
