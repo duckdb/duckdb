@@ -1,11 +1,11 @@
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -91,21 +91,17 @@ public:
 
 	unique_ptr<Expression> Rewrite(unique_ptr<Expression> &expr, vector<reference<Expression>> &bindings,
 	                               vector<unique_ptr<Expression>> &additional_expressions) override {
-		auto &catalog = Catalog::GetSystemCatalog(optimizer.context);
 		FunctionBinder function_binder(optimizer.context);
 
 		// Move the child out of AVG(x)
 		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().GetChildrenMutable()[0]);
 
 		// Replace AVG(x) with SUM(x)
-		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
-		    optimizer.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "sum"));
-		const auto &sum_fun =
-		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
+		auto sum_fun = GetBuiltinAggregateFunction(optimizer.context, "sum", {avg_child->GetReturnType()});
 		vector<unique_ptr<Expression>> args;
 		args.push_back(std::move(avg_child));
 		auto count_arg = args.back()->Copy();
-		expr = function_binder.BindAggregateFunction(sum_fun, std::move(args));
+		expr = function_binder.BindAggregateFunction(std::move(sum_fun), std::move(args));
 
 		return count_arg;
 	}
@@ -354,15 +350,17 @@ private:
 			RewriteInfo rewrite_info;
 			auto count_arg = rule.Rewrite(expr, bindings, rewrite_info.additional_expressions);
 
-			// Add COUNT([x]) to the aggregate list
+			// Add COUNT([x]) to the aggregate list - the count set holds both the unary count and count_star
 			FunctionBinder function_binder(optimizer.context);
-			const auto count_fun = count_arg ? CountFunctionBase::GetFunction() : CountStarFun::GetFunction();
 			vector<unique_ptr<Expression>> count_args;
+			vector<LogicalType> count_arg_types;
 			if (count_arg) {
+				count_arg_types.push_back(count_arg->GetReturnType());
 				count_args.push_back(std::move(count_arg));
 			}
-			auto count_aggr = function_binder.BindAggregateFunction(count_fun, std::move(count_args), nullptr,
-			                                                        AggregateType::NON_DISTINCT);
+			auto count_fun = GetBuiltinAggregateFunction(optimizer.context, CountFun::Name, count_arg_types);
+			auto count_aggr = function_binder.BindAggregateFunction(std::move(count_fun), std::move(count_args),
+			                                                        nullptr, AggregateType::NON_DISTINCT);
 
 			rewrite_info.count_idx = aggr.expressions.size();
 			rewrites.emplace(i, std::move(rewrite_info));

@@ -93,6 +93,7 @@ ScalarFunction StructInsertFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, StructInsertStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

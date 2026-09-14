@@ -406,11 +406,11 @@ optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, Parall
 				state.row_number_base = scan_state.row_number_base.GetIndex();
 			}
 			if (state.row_number_base.IsValid()) {
-				// if we are scanning the row_number virtual column - shift the base based on the number of visible rows
-				// (i.e. non-deleted rows) for the current transaction
+				// Reserve numbers only for visible rows in this assignment, which may be part of a row group.
 				scan_state.row_number_base = state.row_number_base.GetIndex();
 				auto &tx = DuckTransaction::Get(context, GetAttached());
-				state.row_number_base = state.row_number_base.GetIndex() + current_row_group.GetVisibleRowCount(tx);
+				state.row_number_base = state.row_number_base.GetIndex() +
+				                        current_row_group.GetVisibleRowCount(tx, vector_index, assignment_rows);
 			}
 		}
 		D_ASSERT(collection);
