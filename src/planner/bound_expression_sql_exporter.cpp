@@ -2,14 +2,19 @@
 
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
+#include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -21,14 +26,26 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
+
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
+
+#include "duckdb/function/window_function.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression/bound_unnest_expression.hpp"
 
 namespace duckdb {
 
 using BoundExpressionSQLExportResult = LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>;
+using BoundAggregateSQLExportResult = LogicalPlanVerificationResult<unique_ptr<FunctionExpression>>;
 
 using SQLExportHelpers::ChildPath;
 using SQLExportHelpers::IsSQLRepresentableType;
+using SQLExportHelpers::IsSQLValueType;
 using SQLExportHelpers::IsValidIdentifier;
 
 static bool HasUnsupportedVariantKeys(const VariantNode &node) {
@@ -145,6 +162,38 @@ static BoundExpressionSQLExportResult Failure(LogicalPlanVerificationIssue issue
 	return BoundExpressionSQLExportResult::Failure(std::move(issues));
 }
 
+static BoundAggregateSQLExportResult AggregateFailure(LogicalPlanVerificationIssue issue) {
+	vector<LogicalPlanVerificationIssue> issues;
+	issues.push_back(std::move(issue));
+	return BoundAggregateSQLExportResult::Failure(std::move(issues));
+}
+
+static bool HasNestedCollation(const LogicalType &type) {
+	return type.id() != LogicalTypeId::VARCHAR && TypeVisitor::Contains(type, [](const LogicalType &child) {
+		       return child.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(child).empty();
+	       });
+}
+
+static BoundExpressionSQLExportResult PreserveCollation(const LogicalType &type, BoundExpressionSQLExportResult result,
+                                                        const LogicalPlanVerificationPath &path) {
+	if (result.HasError()) {
+		return result;
+	}
+	if (type.id() == LogicalTypeId::VARCHAR) {
+		auto collation = StringType::GetCollation(type);
+		if (!collation.empty()) {
+			result.GetValue() = make_uniq<CollateExpression>(std::move(collation), std::move(result.GetValue()));
+		}
+	} else if (HasNestedCollation(type)) {
+		auto issue = UnsupportedFeature(path, "nested_result_collation",
+		                                "Nested result collations require a typed SQL representation");
+		issue.facts.emplace_back("logical_type", Value(type.ToString()));
+		issue.facts.emplace_back("varchar_collations", Value(SQLExportHelpers::TypeCollationSignature(type)));
+		return Failure(std::move(issue));
+	}
+	return result;
+}
+
 static bool ChildrenAreConsistentWithArguments(const vector<unique_ptr<Expression>> &children,
                                                const vector<LogicalType> &arguments) {
 	if (children.size() != arguments.size()) {
@@ -172,17 +221,119 @@ static LogicalPlanVerificationFunctionIdentity DefinitionFunctionIdentity(const 
 	return identity;
 }
 
+template <class FUNCTION>
+static optional<QualifiedName> RebindableFunctionName(const FUNCTION &definition) {
+	auto name =
+	    QualifiedName(definition.GetCatalogName().empty() ? Identifier::SystemCatalog() : definition.GetCatalogName(),
+	                  definition.GetSchemaName().empty() ? Identifier::DefaultSchema() : definition.GetSchemaName(),
+	                  definition.GetName());
+	if (name.Path().empty()) {
+		return {};
+	}
+	for (auto &component : name.Path()) {
+		if (!IsValidIdentifier(component)) {
+			return {};
+		}
+	}
+	return name;
+}
+
+template <class FUNCTION>
+static bool IsOptimizerFunctionQualification(const FUNCTION &function) {
+	if (function.GetCatalogName().empty() && function.GetSchemaName().empty()) {
+		return true;
+	}
+	return function.GetCatalogName() == "system" && function.GetSchemaName() == "main";
+}
+
+static vector<LogicalType> ScalarFunctionArguments(const ScalarFunction &function) {
+	vector<LogicalType> result;
+	for (auto &parameter : function.GetSignature().GetParameters()) {
+		result.push_back(parameter.GetType());
+	}
+	return result;
+}
+
+static bool IsArraySliceDefinition(const ScalarFunction &definition) {
+	if (definition.GetCatalogName() != Identifier::SystemCatalog() ||
+	    definition.GetSchemaName() != Identifier::DefaultSchema() || definition.GetName() != "array_slice" ||
+	    !definition.HasBindCallback() || definition.GetReturnType() != LogicalType::ANY) {
+		return false;
+	}
+	auto arguments = ScalarFunctionArguments(definition);
+	if (arguments.size() != 3 && arguments.size() != 4) {
+		return false;
+	}
+	for (idx_t argument_index = 0; argument_index < arguments.size(); argument_index++) {
+		auto expected = argument_index == 3 ? LogicalType::BIGINT : LogicalType::ANY;
+		if (arguments[argument_index] != expected) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool IsOmittedArraySliceBound(const Expression &expression) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+	    expression.GetReturnType() != LogicalType::LIST(LogicalType::INTEGER)) {
+		return false;
+	}
+	auto &value = expression.Cast<BoundConstantExpression>().GetValue();
+	return value == Value::LIST(LogicalType::INTEGER, {});
+}
+
+static unique_ptr<ParsedExpression> SystemFunction(const string &name, vector<unique_ptr<ParsedExpression>> arguments) {
+	return make_uniq<FunctionExpression>(QualifiedName("system", "main", Identifier(name)), std::move(arguments));
+}
+
+static unique_ptr<ParsedExpression> UnarySystemFunction(const string &name, unique_ptr<ParsedExpression> argument) {
+	vector<unique_ptr<ParsedExpression>> arguments;
+	arguments.push_back(std::move(argument));
+	return SystemFunction(name, std::move(arguments));
+}
+
+static unique_ptr<ParsedExpression> BinarySystemFunction(const string &name, unique_ptr<ParsedExpression> left,
+                                                         unique_ptr<ParsedExpression> right) {
+	vector<unique_ptr<ParsedExpression>> arguments;
+	arguments.push_back(std::move(left));
+	arguments.push_back(std::move(right));
+	return SystemFunction(name, std::move(arguments));
+}
+
+static unique_ptr<ParsedExpression> IntervalSQLConstant(const interval_t &value) {
+	auto months = UnarySystemFunction("to_months", ConstantExpression::FromValue(Value::INTEGER(value.months)));
+	auto days = UnarySystemFunction("to_days", ConstantExpression::FromValue(Value::INTEGER(value.days)));
+	auto micros = UnarySystemFunction("to_microseconds", ConstantExpression::FromValue(Value::BIGINT(value.micros)));
+	return BinarySystemFunction("add", BinarySystemFunction("add", std::move(months), std::move(days)),
+	                            std::move(micros));
+}
+
 class BoundExpressionSQLExportState {
 public:
 	explicit BoundExpressionSQLExportState(const BoundExpressionSQLExportContext &context_p) : context(context_p) {
 	}
 
 	BoundExpressionSQLExportResult Export(const Expression &expression, const LogicalPlanVerificationPath &path) {
+		auto result = ExportInternal(expression, path);
+		if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF ||
+		    ((expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT ||
+		      expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) &&
+		     expression.GetReturnType().id() != LogicalTypeId::VARCHAR)) {
+			return result;
+		}
+		return PreserveCollation(expression.GetReturnType(), std::move(result), path);
+	}
+
+private:
+	BoundExpressionSQLExportResult ExportInternal(const Expression &expression,
+	                                              const LogicalPlanVerificationPath &path) {
 		switch (expression.GetExpressionClass()) {
 		case ExpressionClass::BOUND_CONSTANT:
 			return ExportConstant(expression.Cast<BoundConstantExpression>(), path);
 		case ExpressionClass::BOUND_COLUMN_REF:
 			return ExportColumnRef(expression.Cast<BoundColumnRefExpression>(), path);
+		case ExpressionClass::BOUND_REF:
+			return ExportReference(expression.Cast<BoundReferenceExpression>(), path);
 		case ExpressionClass::BOUND_FUNCTION:
 			return ExportFunction(expression.Cast<BoundFunctionExpression>(), path);
 		case ExpressionClass::BOUND_CONJUNCTION:
@@ -195,7 +346,6 @@ public:
 			return ExportAggregate(expression.Cast<BoundAggregateExpression>(), path);
 		case ExpressionClass::BOUND_DEFAULT:
 		case ExpressionClass::BOUND_PARAMETER:
-		case ExpressionClass::BOUND_REF:
 		case ExpressionClass::BOUND_SUBQUERY:
 		case ExpressionClass::BOUND_WINDOW:
 		case ExpressionClass::BOUND_UNNEST:
@@ -234,7 +384,329 @@ public:
 		return Failure(InternalInvariant(path, "Expression export received an unknown expression class"));
 	}
 
+public:
+	BoundExpressionSQLExportResult ExportWindow(const BoundWindowExpression &expression,
+	                                            const LogicalPlanVerificationPath &path) {
+		if (expression.AggregateFunction()) {
+			return PreserveCollation(expression.GetReturnType(),
+			                         ExportWindowFunction(expression, *expression.AggregateFunction(), path), path);
+		}
+		D_ASSERT(expression.WindowFunction());
+		return PreserveCollation(expression.GetReturnType(),
+		                         ExportWindowFunction(expression, *expression.WindowFunction(), path), path);
+	}
+
+	BoundExpressionSQLExportResult ExportUnnest(const BoundUnnestExpression &expression,
+	                                            const LogicalPlanVerificationPath &path) {
+		D_ASSERT(expression.Child());
+		auto child = ExportChild(*expression.Child(), path, 0);
+		if (child.HasError()) {
+			return child;
+		}
+		vector<unique_ptr<ParsedExpression>> arguments;
+		arguments.push_back(std::move(child.GetValue()));
+		return PreserveCollation(
+		    expression.GetReturnType(),
+		    BoundExpressionSQLExportResult::Success(make_uniq<FunctionExpression>("unnest", std::move(arguments))),
+		    path);
+	}
+
 private:
+	template <class FUNCTION>
+	BoundExpressionSQLExportResult ExportWindowFunction(const BoundWindowExpression &expression,
+	                                                    const FUNCTION &function,
+	                                                    const LogicalPlanVerificationPath &path) {
+		auto &definition = function.GetDefinition();
+		if (!definition) {
+			return Failure(
+			    InternalExpressionInvariant(path, expression, "Bound window function has no retained definition"));
+		}
+		auto identity =
+		    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
+		if (!identity.IsValid()) {
+			return Failure(
+			    InternalExpressionInvariant(path, expression, "Bound window function identity is incomplete"));
+		}
+		if (expression.GetChildren().size() != function.GetLogicalArguments().size()) {
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The window function does not retain every SQL argument"));
+		}
+		auto name = RebindableFunctionName(*definition);
+		if (!name || !IsSQLValueType(expression.GetReturnType()) ||
+		    definition->GetProperties().GetCaptureArgumentAliases()) {
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The window function no longer represents its logical SQL signature"));
+		}
+		auto is_range_offset = [](WindowBoundary boundary) {
+			return boundary == WindowBoundary::EXPR_PRECEDING_RANGE || boundary == WindowBoundary::EXPR_FOLLOWING_RANGE;
+		};
+		optional_ptr<const Expression> sql_order;
+		if (expression.OrderBy().size() == 1) {
+			sql_order = expression.OrderBy()[0].expression.get();
+			if (sql_order && expression.SQLRangeOrderType().IsComplete() &&
+			    !SQLExportHelpers::SQLTypesMatch(sql_order->GetReturnType(), expression.SQLRangeOrderType()) &&
+			    BoundCastExpression::IsCast(*sql_order)) {
+				auto &cast = sql_order->Cast<BoundFunctionExpression>();
+				if (BoundCastExpression::HasValidBindData(cast) && !BoundCastExpression::IsTryCast(cast) &&
+				    cast.GetChildren().size() == 1 && cast.GetChildren()[0] &&
+				    SQLExportHelpers::SQLTypesMatch(cast.GetChildren()[0]->GetReturnType(),
+				                                    expression.SQLRangeOrderType())) {
+					sql_order = cast.GetChildren()[0].get();
+				}
+			}
+		}
+		auto range_offset = [&](const unique_ptr<Expression> &endpoint, WindowBoundary boundary,
+		                        const unique_ptr<Expression> &literal) -> optional_ptr<const Expression> {
+			if (!is_range_offset(boundary)) {
+				return endpoint.get();
+			}
+			if (endpoint && sql_order && literal && literal->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+			    Expression::Equals(*endpoint, *expression.OrderBy()[0].expression)) {
+				auto &value = literal->Cast<BoundConstantExpression>().GetValue();
+				if (!value.IsNull() && value.type().IsNumeric() && value == Value::Numeric(value.type(), 0)) {
+					return literal.get();
+				}
+			}
+			if (!endpoint || expression.OrderBy().size() != 1 ||
+			    endpoint->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+				return nullptr;
+			}
+			auto &arithmetic = endpoint->Cast<BoundFunctionExpression>();
+			auto &order = expression.OrderBy()[0];
+			const bool subtract =
+			    (boundary == WindowBoundary::EXPR_PRECEDING_RANGE) == (order.type == OrderType::ASCENDING);
+			auto definition = arithmetic.Function().GetDefinition();
+			auto arithmetic_name = definition ? RebindableFunctionName(*definition) : optional<QualifiedName>();
+			if (!arithmetic_name || *arithmetic_name != QualifiedName("system", "main", subtract ? "-" : "+") ||
+			    arithmetic.GetChildren().size() != 2 || !arithmetic.GetChildren()[0] || !arithmetic.GetChildren()[1] ||
+			    !order.expression || (order.type != OrderType::ASCENDING && order.type != OrderType::DESCENDING) ||
+			    endpoint->GetReturnType() != order.expression->GetReturnType() || !sql_order ||
+			    (!Expression::Equals(*arithmetic.GetChildren()[0], *sql_order) &&
+			     !Expression::Equals(*arithmetic.GetChildren()[0], *order.expression))) {
+				return nullptr;
+			}
+			auto &offset = *arithmetic.GetChildren()[1];
+			if (offset.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+			    offset.Cast<BoundConstantExpression>().GetValue().IsNull()) {
+				return nullptr;
+			}
+			if (literal && literal->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+			    offset.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+				auto &original = literal->Cast<BoundConstantExpression>().GetValue();
+				auto &current = offset.Cast<BoundConstantExpression>().GetValue();
+				if (!original.IsNull() && original.type().IsNumeric() && current.type().IsNumeric() &&
+				    original == current) {
+					return literal.get();
+				}
+			}
+			return &offset;
+		};
+		auto start = range_offset(expression.StartExpr(), expression.WindowStart(), expression.SQLRangeStart());
+		auto end = range_offset(expression.EndExpr(), expression.WindowEnd(), expression.SQLRangeEnd());
+		if ((expression.StartExpr() && !start) || (expression.EndExpr() && !end)) {
+			return Failure(UnsupportedFeature(
+			    path, "window_range_offset", "The RANGE endpoint does not retain its SQL offset and ordering operand"));
+		}
+
+		vector<optional_ptr<const Expression>> source_children;
+		vector<optional<LogicalType>> expected_types;
+		auto add_child = [&](optional_ptr<const Expression> child, optional<LogicalType> type = {}) {
+			source_children.push_back(child.get());
+			expected_types.push_back(std::move(type));
+		};
+		for (auto &partition : expression.Partitions()) {
+			add_child(partition.get());
+		}
+		for (auto &order : expression.OrderBy()) {
+			add_child(sql_order ? sql_order : order.expression.get());
+		}
+		for (idx_t i = 0; i < expression.GetChildren().size(); i++) {
+			add_child(expression.GetChildren()[i].get());
+		}
+		if (expression.Filter()) {
+			add_child(expression.Filter().get(), LogicalType::BOOLEAN);
+		}
+		if (expression.StartExpr()) {
+			add_child(start);
+		}
+		if (expression.EndExpr()) {
+			add_child(end);
+		}
+		for (auto &order : expression.ArgOrders()) {
+			add_child(order.expression.get());
+		}
+		vector<unique_ptr<ParsedExpression>> children;
+		vector<LogicalPlanVerificationIssue> issues;
+		ExportChildren(source_children, path, children, issues, expected_types);
+		if (!issues.empty()) {
+			return BoundExpressionSQLExportResult::Failure(std::move(issues));
+		}
+		auto window = make_uniq<WindowExpression>(name->Catalog().GetIdentifierName(),
+		                                          name->Schema().GetIdentifierName(), name->Name().GetIdentifierName());
+		window->SetQualifiedName(*name);
+		idx_t ordinal = 0;
+		for (idx_t i = 0; i < expression.Partitions().size(); i++) {
+			window->PartitionsMutable().push_back(std::move(children[ordinal++]));
+		}
+		for (auto &order : expression.OrderBy()) {
+			window->OrderByMutable().emplace_back(order.type, order.null_order, std::move(children[ordinal++]));
+		}
+		for (idx_t i = 0; i < expression.GetChildren().size(); i++) {
+			window->GetArgumentsMutable().emplace_back(std::move(children[ordinal++]));
+		}
+		if (expression.Filter()) {
+			window->FilterMutable() = std::move(children[ordinal++]);
+		}
+		if (expression.StartExpr()) {
+			window->StartExprMutable() = std::move(children[ordinal++]);
+		}
+		if (expression.EndExpr()) {
+			window->EndExprMutable() = std::move(children[ordinal++]);
+		}
+		for (auto &order : expression.ArgOrders()) {
+			window->ArgOrdersMutable().emplace_back(order.type, order.null_order, std::move(children[ordinal++]));
+		}
+		window->IgnoreNullsMutable() = expression.IgnoreNulls();
+		window->HasIgnoreNullsMutable() = expression.IgnoreNulls();
+		window->DistinctMutable() = expression.Distinct();
+		window->WindowStartMutable() = expression.WindowStart();
+		window->WindowEndMutable() = expression.WindowEnd();
+		window->WindowExcludeMutable() = expression.WindowExclude();
+		unique_ptr<ParsedExpression> result = std::move(window);
+		if (IsSQLRepresentableType(expression.GetReturnType()) && definition->HasBindCallback() &&
+		    definition->GetReturnType() != expression.GetReturnType()) {
+			result = make_uniq<CastExpression>(expression.GetReturnType(), std::move(result));
+		}
+		return BoundExpressionSQLExportResult::Success(std::move(result));
+	}
+
+	static bool RequiresConstantConstructor(const LogicalType &type) {
+		if (HasNestedCollation(type)) {
+			return true;
+		}
+		return TypeVisitor::Contains(type, [](const LogicalType &child) {
+			return child.IsAggregateState() || child.id() == LogicalTypeId::TYPE ||
+			       (child.id() == LogicalTypeId::GEOMETRY && GeoType::HasCRS(child));
+		});
+	}
+
+	BoundExpressionSQLExportResult ExportNestedConstant(const LogicalType &type, optional_ptr<const Value> value,
+	                                                    const LogicalPlanVerificationPath &path) {
+		if (type.id() == LogicalTypeId::TYPE) {
+			if (!value || value->IsNull()) {
+				return BoundExpressionSQLExportResult::Success(
+				    make_uniq<CastExpression>(type, ConstantExpression::FromValue(Value())));
+			}
+			auto witness = ExportNestedConstant(TypeValue::GetType(*value), nullptr, path);
+			if (witness.HasError()) {
+				return witness;
+			}
+			return BoundExpressionSQLExportResult::Success(
+			    UnarySystemFunction("get_type", std::move(witness.GetValue())));
+		}
+		if (type.IsAggregateState() || type.id() == LogicalTypeId::GEOMETRY ||
+		    (IsSQLRepresentableType(type) && !RequiresConstantConstructor(type))) {
+			auto constant = BoundConstantExpression(value ? *value : Value(type));
+			constant.SetReturnType(type);
+			return Export(constant, path);
+		}
+		const bool empty_list =
+		    value && !value->IsNull() && type.id() == LogicalTypeId::LIST && ListValue::GetChildren(*value).empty();
+		if (value && (value->IsNull() || empty_list)) {
+			auto witness = ExportNestedConstant(type, nullptr, path);
+			if (witness.HasError()) {
+				return witness;
+			}
+			auto result = make_uniq<CaseExpression>();
+			result->CaseChecksMutable().push_back(
+			    {ConstantExpression::FromValue(Value::BOOLEAN(false)), std::move(witness.GetValue())});
+			result->ElseMutable() =
+			    ConstantExpression::FromValue(empty_list ? Value::LIST(LogicalType::SQLNULL, {}) : Value());
+			return BoundExpressionSQLExportResult::Success(std::move(result));
+		}
+		if (type.id() == LogicalTypeId::MAP) {
+			vector<Value> keys, values;
+			if (value) {
+				for (auto &entry : MapValue::GetChildren(*value)) {
+					auto &children = StructValue::GetChildren(entry);
+					keys.push_back(children[0]);
+					values.push_back(children[1]);
+				}
+			}
+			auto key_list = Value::LIST(MapType::KeyType(type), std::move(keys));
+			auto value_list = Value::LIST(MapType::ValueType(type), std::move(values));
+			auto left = ExportNestedConstant(key_list.type(), key_list, path);
+			if (left.HasError()) {
+				return left;
+			}
+			auto right = ExportNestedConstant(value_list.type(), value_list, path);
+			if (right.HasError()) {
+				return right;
+			}
+			auto result = BinarySystemFunction("map", std::move(left.GetValue()), std::move(right.GetValue()));
+			if (type.HasAlias()) {
+				result = make_uniq<CastExpression>(type, std::move(result));
+			}
+			return BoundExpressionSQLExportResult::Success(std::move(result));
+		}
+		vector<FunctionArgument> arguments;
+		child_list_t<LogicalType> child_types;
+		optional_ptr<const vector<Value>> children;
+		string function;
+		switch (type.id()) {
+		case LogicalTypeId::TUPLE:
+		case LogicalTypeId::STRUCT:
+			function = type.id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(type) ? "row" : "struct_pack";
+			child_types = StructType::GetChildTypes(type);
+			if (value) {
+				children = StructValue::GetChildren(*value);
+			}
+			break;
+		case LogicalTypeId::LIST:
+			function = "list_value";
+			if (value) {
+				children = ListValue::GetChildren(*value);
+			}
+			child_types.resize(children ? children->size() : 1, {Identifier(), ListType::GetChildType(type)});
+			break;
+		case LogicalTypeId::ARRAY:
+			function = "array_value";
+			if (value) {
+				children = ArrayValue::GetChildren(*value);
+			}
+			child_types.resize(ArrayType::GetSize(type), {Identifier(), ArrayType::GetChildType(type)});
+			break;
+		default:
+			return Failure(
+			    UnsupportedFeature(path, "nested_constant_type", "The nested value type has no SQL constructor"));
+		}
+		for (idx_t i = 0; i < child_types.size(); i++) {
+			auto child =
+			    ExportNestedConstant(child_types[i].second, children ? &(*children)[i] : nullptr, ChildPath(path, i));
+			if (child.HasError()) {
+				return child;
+			}
+			arguments.emplace_back(function == "struct_pack" ? child_types[i].first : Identifier(),
+			                       std::move(child.GetValue()));
+		}
+		unique_ptr<ParsedExpression> result =
+		    make_uniq<FunctionExpression>(QualifiedName("system", "main", Identifier(function)), std::move(arguments));
+		if (type.HasAlias()) {
+			result = make_uniq<CastExpression>(type, std::move(result));
+		}
+		return BoundExpressionSQLExportResult::Success(std::move(result));
+	}
+
+	BoundExpressionSQLExportResult CastToConstructedType(const LogicalType &type, unique_ptr<ParsedExpression> child,
+	                                                     const LogicalPlanVerificationPath &path) {
+		auto target = ExportNestedConstant(type, nullptr, path);
+		if (target.HasError()) {
+			return target;
+		}
+		return BoundExpressionSQLExportResult::Success(
+		    BinarySystemFunction("cast_to_type", std::move(child), std::move(target.GetValue())));
+	}
+
 	BoundExpressionSQLExportResult ExportConstant(const BoundConstantExpression &expression,
 	                                              const LogicalPlanVerificationPath &path) {
 		if (expression.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
@@ -243,26 +715,129 @@ private:
 		}
 		auto &return_type = expression.GetReturnType();
 		auto &value = expression.GetValue();
-		if (!IsSQLRepresentableType(return_type) || !IsSQLRepresentableType(value.type())) {
+		if (!IsSQLValueType(return_type) || !IsSQLValueType(value.type())) {
 			return Failure(InternalExpressionInvariant(path, expression, "Bound constant has an unexportable type"));
 		}
 		if (return_type != value.type()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound constant value and return types differ"));
 		}
-		if (TypeVisitor::Contains(return_type, [](const LogicalType &type) { return type.IsAggregateState(); })) {
-			return Failure(UnsupportedFeature(path, "aggregate_state_literal",
-			                                  "Aggregate-state values do not have a SQL literal representation"));
-		}
 		if (TypeVisitor::Contains(return_type, LogicalTypeId::VARIANT) && HasUnsupportedVariantKeys(value)) {
 			return Failure(UnsupportedFeature(path, "variant_literal",
 			                                  "VARIANT object keys cannot be represented by a struct literal"));
 		}
-		auto result = ConstantExpression::FromValue(value);
+		if (return_type.IsAggregateState()) {
+			auto storage_type = return_type.WithAlias("").WithExtensionInfo(nullptr);
+			Vector source(value, count_t(1));
+			Vector storage(storage_type, 1);
+			storage.Reinterpret(source);
+			auto child = ExportConstant(BoundConstantExpression(storage.GetValue(0)), path);
+			if (child.HasError()) {
+				return child;
+			}
+			auto result = ExportAggregateFunction::StateToSQL(return_type, std::move(child.GetValue()));
+			if (!result) {
+				return Failure(UnsupportedFeature(path, "aggregate_state_parameters",
+				                                  "Aggregate state SQL parameters are not representable"));
+			}
+			return BoundExpressionSQLExportResult::Success(std::move(result));
+		}
+		if (return_type.id() != LogicalTypeId::GEOMETRY &&
+		    (!IsSQLRepresentableType(return_type) || RequiresConstantConstructor(return_type))) {
+			return ExportNestedConstant(return_type, value, path);
+		}
+		unique_ptr<ParsedExpression> result;
+		if (!value.IsNull() && return_type.id() == LogicalTypeId::INTERVAL) {
+			return BoundExpressionSQLExportResult::Success(IntervalSQLConstant(IntervalValue::Get(value)));
+		}
+		if (return_type.id() == LogicalTypeId::GEOMETRY) {
+			if (value.IsNull()) {
+				auto geometry = GeoType::HasCRS(return_type) ? Value("GEOMETRYCOLLECTION EMPTY") : Value();
+				result = make_uniq<CastExpression>(LogicalType::GEOMETRY(), ConstantExpression::FromValue(geometry));
+			} else {
+				result = UnarySystemFunction("st_geomfromwkb",
+				                             ConstantExpression::FromValue(Value::BLOB_RAW(StringValue::Get(value))));
+			}
+			if (GeoType::HasCRS(return_type)) {
+				vector<unique_ptr<ParsedExpression>> arguments;
+				arguments.push_back(std::move(result));
+				arguments.push_back(ConstantExpression::FromValue(Value(GeoType::GetCRS(return_type).GetDefinition())));
+				result =
+				    make_uniq<FunctionExpression>(QualifiedName("system", "main", "st_setcrs"), std::move(arguments));
+				if (value.IsNull()) {
+					auto typed_null = make_uniq<CaseExpression>();
+					typed_null->CaseChecksMutable().push_back(
+					    {ConstantExpression::FromValue(Value::BOOLEAN(false)), std::move(result)});
+					typed_null->ElseMutable() = ConstantExpression::FromValue(Value());
+					result = std::move(typed_null);
+				}
+				return BoundExpressionSQLExportResult::Success(std::move(result));
+			}
+		} else {
+			result = ConstantExpression::FromValue(value);
+		}
 		if (return_type.id() != LogicalTypeId::SQLNULL) {
 			result = make_uniq<CastExpression>(return_type, std::move(result));
 		}
 		return BoundExpressionSQLExportResult::Success(std::move(result));
+	}
+
+	BoundExpressionSQLExportResult ExportReference(const BoundReferenceExpression &expression,
+	                                               const LogicalPlanVerificationPath &path) {
+		if (expression.GetExpressionType() != ExpressionType::BOUND_REF || lambda_reference_scopes.empty() ||
+		    expression.Index() >= lambda_reference_scopes.back().size()) {
+			return Failure(UnsupportedExpression(path, expression.GetExpressionClass()));
+		}
+		return BoundExpressionSQLExportResult::Success(lambda_reference_scopes.back()[expression.Index()]->Copy());
+	}
+
+	BoundExpressionSQLExportResult ExportLambda(const BoundLambdaExpression &lambda,
+	                                            const BoundFunctionExpression &function, idx_t logical_argument_count,
+	                                            const LogicalPlanVerificationPath &path) {
+		if (lambda.GetExpressionType() != ExpressionType::LAMBDA || lambda.GetReturnType() != LogicalType::LAMBDA ||
+		    !lambda.LambdaExpr() || !lambda.Captures().empty() || lambda.ParameterCount() == 0 ||
+		    lambda.ParameterNames().size() != lambda.ParameterCount()) {
+			return Failure(UnsupportedFeature(path, "lambda_binding",
+			                                  "The bound lambda does not retain its SQL parameter binding"));
+		}
+		identifier_set_t unique_parameters;
+		for (auto &parameter : lambda.ParameterNames()) {
+			if (!IsValidIdentifier(parameter) || !unique_parameters.insert(parameter).second) {
+				return Failure(
+				    UnsupportedFeature(path, "lambda_binding", "The bound lambda has an invalid SQL parameter name"));
+			}
+		}
+
+		vector<unique_ptr<ParsedExpression>> references;
+		for (idx_t index = 0; index < lambda.ParameterCount(); index++) {
+			auto &parameter = lambda.ParameterNames()[lambda.ParameterCount() - index - 1];
+			references.push_back(make_uniq<ColumnRefExpression>(parameter));
+		}
+		for (idx_t index = logical_argument_count; index < function.GetChildren().size(); index++) {
+			auto reference = Export(*function.GetChildren()[index], ChildPath(path, index));
+			if (reference.HasError()) {
+				return reference;
+			}
+			references.push_back(std::move(reference.GetValue()));
+		}
+
+		lambda_reference_scopes.push_back(std::move(references));
+		try {
+			auto body = Export(*lambda.LambdaExpr(), ChildPath(path, 0));
+			lambda_reference_scopes.pop_back();
+			if (body.HasError()) {
+				return body;
+			}
+			vector<string> parameter_names;
+			for (auto &parameter : lambda.ParameterNames()) {
+				parameter_names.push_back(parameter.GetIdentifierName());
+			}
+			return BoundExpressionSQLExportResult::Success(
+			    make_uniq<LambdaExpression>(std::move(parameter_names), std::move(body.GetValue())));
+		} catch (...) {
+			lambda_reference_scopes.pop_back();
+			throw;
+		}
 	}
 
 	BoundExpressionSQLExportResult ExportColumnRef(const BoundColumnRefExpression &expression,
@@ -275,7 +850,7 @@ private:
 		if (!binding.table_index.IsValid() || !binding.column_index.IsValid()) {
 			return Failure(InvalidBinding(path, binding, "Bound column reference has an incomplete binding"));
 		}
-		if (!IsSQLRepresentableType(expression.GetReturnType())) {
+		if (!IsSQLValueType(expression.GetReturnType())) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound column reference has an incomplete type"));
 		}
@@ -301,10 +876,11 @@ private:
 				    InvalidBinding(path, binding, "The resolved SQL column name contains an invalid identifier"));
 			}
 		}
-		if (!IsSQLRepresentableType(resolved->type)) {
+		if (!IsSQLValueType(resolved->type)) {
 			return Failure(InternalExpressionInvariant(path, expression, "The resolved SQL column type is incomplete"));
 		}
-		if (resolved->type != expression.GetReturnType()) {
+		auto optimizer_type_match = resolved->optimizer_type && *resolved->optimizer_type == expression.GetReturnType();
+		if (resolved->type != expression.GetReturnType() && !optimizer_type_match) {
 			LogicalPlanVerificationIssue issue;
 			issue.code = LogicalPlanVerificationIssueCode::TYPE_MISMATCH;
 			issue.phase = LogicalPlanVerificationPhase::EXPRESSION_EXPORT;
@@ -314,7 +890,30 @@ private:
 			issue.message = "The resolved SQL column type differs from the bound expression type";
 			return Failure(std::move(issue));
 		}
-		return BoundExpressionSQLExportResult::Success(make_uniq<ColumnRefExpression>(std::move(resolved->names)));
+		auto result =
+		    BoundExpressionSQLExportResult::Success(make_uniq<ColumnRefExpression>(std::move(resolved->names)));
+		if (optimizer_type_match) {
+			return result;
+		}
+		if (!SQLExportHelpers::SQLTypesMatch(expression.GetReturnType(), resolved->type)) {
+			if (expression.GetReturnType().id() != LogicalTypeId::VARCHAR) {
+				auto issue = UnsupportedFeature(path, "nested_result_collation",
+				                                "Changing nested input collations requires a typed SQL representation");
+				issue.facts.emplace_back("logical_type", Value(expression.GetReturnType().ToString()));
+				issue.facts.emplace_back("input_logical_type", Value(resolved->type.ToString()));
+				issue.facts.emplace_back("input_varchar_collations",
+				                         Value(SQLExportHelpers::TypeCollationSignature(resolved->type)));
+				issue.facts.emplace_back("varchar_collations",
+				                         Value(SQLExportHelpers::TypeCollationSignature(expression.GetReturnType())));
+				return Failure(std::move(issue));
+			}
+			if (StringType::GetCollation(expression.GetReturnType()).empty()) {
+				return Failure(UnsupportedFeature(path, "column_collation_reset",
+				                                  "Clearing an input collation requires a SQL representation"));
+			}
+			return PreserveCollation(expression.GetReturnType(), std::move(result), path);
+		}
+		return result;
 	}
 
 	LogicalPlanVerificationIssue InvalidBinding(const LogicalPlanVerificationPath &path, const ColumnBinding &binding,
@@ -364,13 +963,50 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound cast has malformed type, data, or arity"));
 		}
+		if (context.discard_optimizer_metadata &&
+		    expression.compression_origin == CompressedMaterializationOrigin::CAST) {
+			if (!BoundCastExpression::IsDefaultCast(expression)) {
+				return Failure(
+				    UnsupportedFeature(path, "compressed_materialization_cast",
+				                       "The compressed materialization projection contains a non-default cast"));
+			}
+			return ExportChild(*expression.GetChildren()[0], path, 0);
+		}
 		if (BoundCastExpression::IsDefaultCast(expression)) {
-			return Failure(UnsupportedFeature(path, "default_cast_binding",
-			                                  "A default-only bound cast cannot be reconstructed through SQL binding"));
+			if (!context.client_context ||
+			    CastFunctionSet::Get(*context.client_context.get_mutable()).HasRegisteredCastFunctions()) {
+				return Failure(
+				    UnsupportedFeature(path, "default_cast_binding",
+				                       "A default-only bound cast cannot be reconstructed through this SQL binding"));
+			}
 		}
 		auto child = ExportChild(*expression.GetChildren()[0], path, 0);
 		if (child.HasError()) {
 			return child;
+		}
+		if (expression.GetReturnType().IsAggregateState()) {
+			if (BoundCastExpression::IsTryCast(expression) || !context.client_context ||
+			    CastFunctionSet::Get(*context.client_context.get_mutable()).HasRegisteredCastFunctions()) {
+				return Failure(
+				    UnsupportedFeature(path, "aggregate_state_try_cast",
+				                       "Aggregate state TRY_CAST or custom casts require a SQL representation"));
+			}
+			auto storage_type = expression.GetReturnType().WithAlias("").WithExtensionInfo(nullptr);
+			auto result = ExportAggregateFunction::StateToSQL(
+			    expression.GetReturnType(), make_uniq<CastExpression>(storage_type, std::move(child.GetValue())));
+			if (!result) {
+				return Failure(UnsupportedFeature(path, "aggregate_state_parameters",
+				                                  "Aggregate state SQL parameters are not representable"));
+			}
+			return BoundExpressionSQLExportResult::Success(std::move(result));
+		}
+		if (HasNestedCollation(expression.GetReturnType())) {
+			if (BoundCastExpression::IsTryCast(expression) ||
+			    expression.GetReturnType() == expression.GetChildren()[0]->GetReturnType()) {
+				return Failure(UnsupportedFeature(path, "nested_result_collation",
+				                                  "This cast cannot preserve nested collations through SQL"));
+			}
+			return CastToConstructedType(expression.GetReturnType(), std::move(child.GetValue()), path);
 		}
 		return BoundExpressionSQLExportResult::Success(make_uniq<CastExpression>(
 		    expression.GetReturnType(), std::move(child.GetValue()), BoundCastExpression::IsTryCast(expression)));
@@ -383,7 +1019,7 @@ private:
 		    !expression.GetChildren()[0] || !expression.GetChildren()[1] || expression.BindInfo() ||
 		    !ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()) ||
 		    expression.GetReturnType() != expression.Function().GetReturnType() ||
-		    !IsSQLRepresentableType(expression.GetChildren()[0]->GetReturnType()) ||
+		    !IsSQLValueType(expression.GetChildren()[0]->GetReturnType()) ||
 		    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[1]->GetReturnType()) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound comparison has malformed type or arity"));
@@ -406,7 +1042,7 @@ private:
 		    !BoundBetweenExpression::HasValidBindData(expression) ||
 		    !ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()) ||
 		    expression.GetReturnType() != expression.Function().GetReturnType() ||
-		    !IsSQLRepresentableType(expression.GetChildren()[0]->GetReturnType()) ||
+		    !IsSQLValueType(expression.GetChildren()[0]->GetReturnType()) ||
 		    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[1]->GetReturnType() ||
 		    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[2]->GetReturnType()) {
 			return Failure(
@@ -461,7 +1097,7 @@ private:
 		if (expression.GetExpressionType() != ExpressionType::CASE_EXPR) {
 			return Failure(InternalExpressionInvariant(path, expression, "Bound CASE has an invalid expression type"));
 		}
-		if (!IsSQLRepresentableType(expression.GetReturnType()) || expression.CaseChecks().empty()) {
+		if (!IsSQLValueType(expression.GetReturnType()) || expression.CaseChecks().empty()) {
 			return Failure(InternalExpressionInvariant(path, expression, "Bound CASE has malformed type or arity"));
 		}
 		vector<optional_ptr<const Expression>> source_children;
@@ -518,15 +1154,14 @@ private:
 			expected_type = expression.GetChildren()[0]->GetReturnType();
 			break;
 		case ExpressionType::OPERATOR_COALESCE:
-			if (child_count < 2 || !IsSQLRepresentableType(expression.GetReturnType())) {
+			if (child_count < 2 || !IsSQLValueType(expression.GetReturnType())) {
 				return Failure(
 				    InternalExpressionInvariant(path, expression, "Bound COALESCE has malformed type or arity"));
 			}
 			expected_type = expression.GetReturnType();
 			break;
 		case ExpressionType::OPERATOR_TRY:
-			if (child_count != 1 || !expression.GetChildren()[0] ||
-			    !IsSQLRepresentableType(expression.GetReturnType())) {
+			if (child_count != 1 || !expression.GetChildren()[0] || !IsSQLValueType(expression.GetReturnType())) {
 				return Failure(InternalExpressionInvariant(path, expression, "Bound TRY has malformed type or arity"));
 			}
 			if (expression.GetChildren()[0]->IsVolatile()) {
@@ -559,6 +1194,52 @@ private:
 		    make_uniq<OperatorExpression>(expression.GetExpressionType(), std::move(children)));
 	}
 
+	BoundExpressionSQLExportResult CompressedMaterializationFailure(const BoundFunctionExpression &expression,
+	                                                                const LogicalPlanVerificationPath &path,
+	                                                                string message) {
+		auto &function = expression.Function();
+		auto &definition = function.GetDefinition();
+		D_ASSERT(definition);
+		return Failure(UnsupportedFunction(
+		    path,
+		    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType()),
+		    std::move(message)));
+	}
+
+	optional<BoundExpressionSQLExportResult>
+	TryExportCompressedMaterialization(const BoundFunctionExpression &expression,
+	                                   const LogicalPlanVerificationPath &path) {
+		auto &function = expression.Function();
+		auto &definition = function.GetDefinition();
+		if (!definition) {
+			return {};
+		}
+		auto compress = expression.compression_origin == CompressedMaterializationOrigin::COMPRESS;
+		auto decompress = expression.compression_origin == CompressedMaterializationOrigin::DECOMPRESS;
+		if (!compress && !decompress) {
+			return {};
+		}
+		if (!IsOptimizerFunctionQualification(*definition) || !IsOptimizerFunctionQualification(function) ||
+		    expression.GetChildren().empty()) {
+			return CompressedMaterializationFailure(expression, path,
+			                                        "The compressed materialization expression is malformed");
+		}
+		if (!context.discard_optimizer_metadata) {
+			return CompressedMaterializationFailure(expression, path,
+			                                        "Compressed materialization requires its complete logical plan");
+		}
+		if (decompress && expression.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			auto &column = expression.GetChildren()[0]->Cast<BoundColumnRefExpression>();
+			auto resolved = context.resolve_binding ? context.resolve_binding(column.Binding())
+			                                        : optional<ResolvedSQLColumnReference>();
+			if (!resolved || resolved->type != expression.GetReturnType()) {
+				return CompressedMaterializationFailure(expression, path,
+				                                        "The decompression input has no equivalent SQL representation");
+			}
+		}
+		return ExportChild(*expression.GetChildren()[0], path, 0);
+	}
+
 	BoundExpressionSQLExportResult ExportScalarFunction(const BoundFunctionExpression &expression,
 	                                                    const LogicalPlanVerificationPath &path) {
 		auto &function = expression.Function();
@@ -572,119 +1253,283 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound scalar function has no retained definition"));
 		}
+		if (function.GetBindCallback() == TableFilterFunctions::Bind &&
+		    TableFilterFunctions::IsTableFilterFunction(function.GetName())) {
+			auto identity = DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(),
+			                                           function.GetLogicalReturnType());
+			if (!context.discard_optimizer_metadata) {
+				return Failure(UnsupportedFunction(path, std::move(identity),
+				                                   "Internal table filters require their complete logical plan"));
+			}
+			if (expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 1) {
+				return Failure(
+				    InternalExpressionInvariant(path, expression, "Internal table filter metadata is malformed"));
+			}
+			return BoundExpressionSQLExportResult::Success(ConstantExpression::FromValue(Value::BOOLEAN(true)));
+		}
+		auto compressed = TryExportCompressedMaterialization(expression, path);
+		if (compressed) {
+			return std::move(*compressed);
+		}
 		auto identity =
 		    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 		if (!identity.IsValid()) {
-			return Failure(
-			    InternalExpressionInvariant(path, expression, "Bound scalar function identity is incomplete"));
+			identity.arguments.clear();
+			for (auto &child : expression.GetChildren()) {
+				identity.arguments.push_back(child->GetReturnType());
+			}
+			identity.return_type = expression.GetReturnType();
+			if (!identity.IsValid()) {
+				return Failure(
+				    InternalExpressionInvariant(path, expression, "Bound scalar function identity is incomplete"));
+			}
 		}
-		QualifiedName name(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
-		if (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()) ||
-		    !IsValidIdentifier(name.Name()) || !IsSQLRepresentableType(expression.GetReturnType())) {
+		auto qualified_name = definition->GetQualifiedName();
+		optional_idx lambda_index;
+		for (idx_t index = 0; index < MinValue(expression.GetChildren().size(), function.GetLogicalArguments().size());
+		     index++) {
+			if (expression.GetChildren()[index]->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA) {
+				if (lambda_index.IsValid()) {
+					return Failure(UnsupportedFunction(path, std::move(identity),
+					                                   "The scalar function retains multiple SQL lambda arguments"));
+				}
+				lambda_index = index;
+			}
+		}
+		if (function.HasBindLambdaCallback() != lambda_index.IsValid()) {
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The scalar function does not retain its SQL lambda argument"));
+		}
+		bool rewritten_date_part = (qualified_name == QualifiedName("system", "main", "date_part") ||
+		                            qualified_name == QualifiedName("system", "main", "datepart")) &&
+		                           function.GetLogicalArguments().size() == 2 && expression.GetChildren().size() == 1 &&
+		                           function.GetName() != definition->GetName() &&
+		                           IsOptimizerFunctionQualification(function) && IsValidIdentifier(function.GetName());
+		const bool retained_variadic_arguments =
+		    definition->HasVarArgs() && expression.GetChildren().size() >= function.GetLogicalArguments().size();
+		if ((!lambda_index.IsValid() && !retained_variadic_arguments &&
+		     expression.GetChildren().size() != function.GetLogicalArguments().size() && !rewritten_date_part) ||
+		    (lambda_index.IsValid() && expression.GetChildren().size() < function.GetLogicalArguments().size())) {
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The scalar function does not retain every SQL argument"));
+		}
+		auto name = rewritten_date_part ? optional<QualifiedName>(QualifiedName("system", "main", function.GetName()))
+		                                : RebindableFunctionName(*definition);
+		if (!name || !IsSQLValueType(expression.GetReturnType())) {
 			return Failure(UnsupportedFunction(path, std::move(identity),
 			                                   "The retained scalar function definition is not representable as SQL"));
 		}
-		for (auto &argument : identity.arguments) {
-			if (!IsSQLRepresentableType(argument)) {
+		bool captured_aliases_are_ignored = *name == QualifiedName("system", "main", "row");
+		if (qualified_name == QualifiedName("system", "main", "alias")) {
+			if (expression.GetChildren().size() != 1 ||
+			    (expression.GetAlias().empty() && (!expression.BindInfo() || expression.BindInfo()->GetInternalKind() !=
+			                                                                     FunctionData::InternalKind::ALIAS))) {
 				return Failure(UnsupportedFunction(path, std::move(identity),
-				                                   "The bound scalar function uses an internal argument type"));
+				                                   "The alias function does not expose its bound argument name"));
+			}
+			auto child = ExportChild(*expression.GetChildren()[0], path, 0);
+			if (child.HasError()) {
+				return child;
+			}
+			auto value = Value(expression.GetAlias().empty() ? expression.BindInfo()->Cast<AliasBindData>().alias
+			                                                 : expression.GetAlias());
+			vector<unique_ptr<ParsedExpression>> arguments;
+			arguments.push_back(std::move(child.GetValue()));
+			vector<unique_ptr<ParsedExpression>> condition;
+			condition.push_back(make_uniq<FunctionExpression>(qualified_name, std::move(arguments)));
+			auto result = make_uniq<CaseExpression>();
+			result->CaseChecksMutable().push_back(
+			    {make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, std::move(condition)),
+			     ConstantExpression::FromValue(value)});
+			result->ElseMutable() = ConstantExpression::FromValue(value);
+			return BoundExpressionSQLExportResult::Success(std::move(result));
+		}
+		bool argument_aliases_are_semantic = qualified_name == QualifiedName("system", "main", "struct_pack");
+		idx_t first_argument_alias = 0;
+		if (qualified_name == QualifiedName("system", "main", "struct_update") ||
+		    qualified_name == QualifiedName("system", "main", "write_log")) {
+			argument_aliases_are_semantic = true;
+			first_argument_alias = 1;
+		}
+		if (definition->GetProperties().GetCaptureArgumentAliases() && !argument_aliases_are_semantic &&
+		    !captured_aliases_are_ignored) {
+			return Failure(UnsupportedFunction(path, std::move(identity),
+			                                   "The bound scalar function does not expose its SQL argument names"));
+		}
+		bool array_slice_syntax = false;
+		if (IsArraySliceDefinition(*definition) && expression.GetChildren().size() == identity.arguments.size()) {
+			for (idx_t child_index = 1; child_index < 3; child_index++) {
+				auto &child = *expression.GetChildren()[child_index];
+				if (child.GetReturnType().id() != LogicalTypeId::LIST) {
+					continue;
+				}
+				if (!IsOmittedArraySliceBound(child)) {
+					return Failure(InternalExpressionInvariant(ChildPath(path, child_index), child,
+					                                           "Bound array slice has an invalid omitted bound"));
+				}
+				array_slice_syntax = true;
+			}
+			if (array_slice_syntax && (!expression.BindInfo() || expression.BindInfo()->GetInternalKind() !=
+			                                                         FunctionData::InternalKind::ARRAY_SLICE)) {
+				return Failure(
+				    UnsupportedFunction(path, std::move(identity),
+				                        "The bound array slice does not retain canonical omitted-bound metadata"));
 			}
 		}
-		if (definition->GetProperties().GetCaptureArgumentAliases() ||
-		    definition->GetProperties().RequiresExpressionNames()) {
-			return Failure(UnsupportedFunction(
-			    path, std::move(identity),
-			    "The bound scalar function requires expression names that SQL export does not preserve"));
+		if (definition->GetProperties().RequiresExpressionNames() && !definition->HasArgumentNamesCallback() &&
+		    !argument_aliases_are_semantic && !captured_aliases_are_ignored) {
+			return Failure(
+			    UnsupportedFunction(path, std::move(identity),
+			                        "The bound scalar function requires expression names that are not retained"));
 		}
-		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetArguments()) ||
-		    expression.GetReturnType() != function.GetReturnType() ||
-		    !ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetLogicalArguments()) ||
-		    expression.GetReturnType() != function.GetLogicalReturnType()) {
-			return Failure(UnsupportedFunction(
-			    path, std::move(identity), "The bound scalar function no longer represents its logical SQL signature"));
+		vector<Identifier> argument_names;
+		if (definition->HasArgumentNamesCallback()) {
+			argument_names = definition->GetArgumentNames(function);
+			if (argument_names.size() != expression.GetChildren().size()) {
+				return Failure(InternalExpressionInvariant(
+				    path, expression, "The scalar SQL argument-name callback returned an invalid argument count"));
+			}
+		} else if (argument_aliases_are_semantic) {
+			argument_names.resize(expression.GetChildren().size());
+			for (idx_t argument_index = first_argument_alias; argument_index < argument_names.size();
+			     argument_index++) {
+				argument_names[argument_index] = expression.GetChildren()[argument_index]->GetAlias();
+				if (argument_names[argument_index].empty()) {
+					return Failure(UnsupportedFunction(path, std::move(identity),
+					                                   "The bound scalar function is missing a SQL argument name"));
+				}
+			}
+		}
+		bool found_named_argument = false;
+		for (idx_t argument_index = 0; argument_index < argument_names.size(); argument_index++) {
+			auto &argument_name = argument_names[argument_index];
+			if (argument_name.empty()) {
+				if (found_named_argument) {
+					return Failure(InternalExpressionInvariant(ChildPath(path, argument_index),
+					                                           *expression.GetChildren()[argument_index],
+					                                           "The scalar SQL argument-name callback placed a "
+					                                           "positional argument after a named argument"));
+				}
+				continue;
+			}
+			if (!IsValidIdentifier(argument_name)) {
+				return Failure(InternalExpressionInvariant(
+				    ChildPath(path, argument_index), *expression.GetChildren()[argument_index],
+				    "The scalar SQL argument-name callback returned an invalid identifier"));
+			}
+			found_named_argument = true;
 		}
 		vector<unique_ptr<ParsedExpression>> children;
-		vector<LogicalPlanVerificationIssue> issues;
-		ExportChildren(expression.GetChildren(), path, children, issues);
-		if (!issues.empty()) {
-			return BoundExpressionSQLExportResult::Failure(std::move(issues));
+		auto sql_argument_count =
+		    lambda_index.IsValid() ? function.GetLogicalArguments().size() : expression.GetChildren().size();
+		if (rewritten_date_part) {
+			sql_argument_count = 1;
 		}
-		unique_ptr<ParsedExpression> result =
-		    make_uniq<FunctionExpression>(name, std::move(children), nullptr, nullptr, false, false, false);
-		// Aggregate-state schemas are inferred from the arguments, not expressible as SQL cast targets.
-		if (!function.GetLogicalReturnType().IsAggregateState() && definition->HasBindCallback() &&
-		    definition->GetReturnType() != function.GetLogicalReturnType()) {
-			result = make_uniq<CastExpression>(function.GetLogicalReturnType(), std::move(result));
+		for (idx_t child_index = 0; child_index < sql_argument_count; child_index++) {
+			auto child = lambda_index == child_index
+			                 ? ExportLambda(expression.GetChildren()[child_index]->Cast<BoundLambdaExpression>(),
+			                                expression, sql_argument_count, ChildPath(path, child_index))
+			                 : Export(*expression.GetChildren()[child_index], ChildPath(path, child_index));
+			if (child.HasError()) {
+				return child;
+			}
+			children.push_back(std::move(child.GetValue()));
+		}
+		if (array_slice_syntax) {
+			for (idx_t child_index = 1; child_index < 3; child_index++) {
+				if (!IsOmittedArraySliceBound(*expression.GetChildren()[child_index])) {
+					continue;
+				}
+				auto &value = expression.GetChildren()[child_index]->Cast<BoundConstantExpression>().GetValue();
+				children[child_index] = ConstantExpression::FromValue(value);
+			}
+		}
+		unique_ptr<ParsedExpression> result;
+		if (array_slice_syntax) {
+			result = make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(children));
+		} else if (!argument_names.empty()) {
+			vector<FunctionArgument> arguments;
+			for (idx_t argument_index = 0; argument_index < children.size(); argument_index++) {
+				arguments.emplace_back(argument_names[argument_index], std::move(children[argument_index]));
+			}
+			result = make_uniq<FunctionExpression>(*name, std::move(arguments), nullptr, nullptr, false, false, false);
+		} else {
+			result = make_uniq<FunctionExpression>(*name, std::move(children), nullptr, nullptr, false, false, false);
+		}
+		// Restore result types when binding or optimization changed argument types.
+		if (!captured_aliases_are_ignored && IsSQLRepresentableType(expression.GetReturnType()) &&
+		    !expression.GetReturnType().IsAggregateState() &&
+		    (definition->HasBindCallback() || definition->GetReturnType().id() == LogicalTypeId::SQLNULL) &&
+		    definition->GetReturnType() != expression.GetReturnType()) {
+			if (HasNestedCollation(expression.GetReturnType())) {
+				return CastToConstructedType(expression.GetReturnType(), std::move(result), path);
+			}
+			result = make_uniq<CastExpression>(expression.GetReturnType(), std::move(result));
 		}
 		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
 
-	BoundExpressionSQLExportResult ExportAggregate(const BoundAggregateExpression &expression,
-	                                               const LogicalPlanVerificationPath &path) {
+	BoundAggregateSQLExportResult BuildAggregateCall(const BoundAggregateExpression &expression,
+	                                                 const LogicalPlanVerificationPath &path) {
 		for (auto &child : expression.GetChildren()) {
 			if (!child) {
-				return Failure(
+				return AggregateFailure(
 				    InternalExpressionInvariant(path, expression, "Bound aggregate function has a null child"));
 			}
 		}
 		if (expression.GetExpressionType() != ExpressionType::BOUND_AGGREGATE) {
-			return Failure(
+			return AggregateFailure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid expression type"));
 		}
 		auto &function = expression.Function();
 		auto &definition = function.GetDefinition();
 		if (!definition) {
-			return Failure(
+			return AggregateFailure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function has no retained definition"));
 		}
 		auto identity =
 		    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 		if (!identity.IsValid()) {
-			return Failure(
+			return AggregateFailure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function identity is incomplete"));
 		}
-		QualifiedName name(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
-		if (!IsValidIdentifier(name.Catalog()) || !IsValidIdentifier(name.Schema()) ||
-		    !IsValidIdentifier(name.Name()) || !IsSQLRepresentableType(expression.GetReturnType())) {
-			return Failure(UnsupportedFunction(
+		auto name = RebindableFunctionName(*definition);
+		const bool collated_minmax =
+		    name &&
+		    ((*name == QualifiedName("system", "main", "min") && function.GetName() == "arg_min") ||
+		     (*name == QualifiedName("system", "main", "max") && function.GetName() == "arg_max")) &&
+		    IsOptimizerFunctionQualification(function) &&
+		    expression.GetChildren().size() == function.GetLogicalArguments().size() + 1;
+		if (collated_minmax) {
+			name = QualifiedName("system", "main", function.GetName());
+		} else if (expression.GetChildren().size() != function.GetLogicalArguments().size()) {
+			return AggregateFailure(
+			    UnsupportedFunction(path, std::move(identity), "The aggregate does not retain every SQL argument"));
+		}
+		if (!name || !IsSQLValueType(expression.GetReturnType())) {
+			return AggregateFailure(UnsupportedFunction(
 			    path, std::move(identity), "The retained aggregate function definition is not representable as SQL"));
 		}
 		if (expression.GetAggregateType() != AggregateType::NON_DISTINCT &&
 		    expression.GetAggregateType() != AggregateType::DISTINCT) {
-			return Failure(
+			return AggregateFailure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid distinct mode"));
 		}
 		if (expression.StateExportMode() != AggregateStateExportMode::NONE &&
 		    expression.StateExportMode() != AggregateStateExportMode::STATE_EXPORT) {
-			return Failure(
+			return AggregateFailure(
 			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid state export mode"));
-		}
-		for (auto &argument : identity.arguments) {
-			if (!IsSQLRepresentableType(argument)) {
-				return Failure(UnsupportedFunction(path, std::move(identity),
-				                                   "The bound aggregate uses an internal argument type"));
-			}
 		}
 		if (definition->GetProperties().GetCaptureArgumentAliases() ||
 		    definition->GetProperties().RequiresExpressionNames()) {
-			return Failure(
-			    UnsupportedFunction(path, std::move(identity),
-			                        "The bound aggregate requires expression names that SQL export does not preserve"));
-		}
-		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetLogicalArguments())) {
-			return Failure(UnsupportedFunction(path, std::move(identity),
-			                                   "The bound aggregate no longer represents its logical SQL arguments"));
-		}
-		if (expression.StateExportMode() == AggregateStateExportMode::NONE &&
-		    expression.GetReturnType() != function.GetLogicalReturnType()) {
-			return Failure(UnsupportedFunction(path, std::move(identity),
-			                                   "The bound aggregate no longer represents its logical SQL return type"));
+			return AggregateFailure(UnsupportedFunction(
+			    path, std::move(identity), "The bound aggregate requires argument aliases that are not retained"));
 		}
 		vector<optional_ptr<const Expression>> source_children;
 		vector<optional<LogicalType>> expected_types;
 		for (idx_t child_index = 0; child_index < expression.GetChildren().size(); child_index++) {
 			source_children.push_back(expression.GetChildren()[child_index].get());
-			expected_types.push_back(identity.arguments[child_index]);
+			expected_types.emplace_back();
 		}
 		if (expression.GetFilter()) {
 			source_children.push_back(expression.GetFilter().get());
@@ -695,7 +1540,7 @@ private:
 				if ((order.type != OrderType::ASCENDING && order.type != OrderType::DESCENDING) ||
 				    (order.null_order != OrderByNullType::NULLS_FIRST &&
 				     order.null_order != OrderByNullType::NULLS_LAST)) {
-					return Failure(
+					return AggregateFailure(
 					    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid ordering mode"));
 				}
 				source_children.push_back(order.expression.get());
@@ -707,7 +1552,7 @@ private:
 		vector<LogicalPlanVerificationIssue> issues;
 		ExportChildren(source_children, path, children, issues, expected_types);
 		if (!issues.empty()) {
-			return BoundExpressionSQLExportResult::Failure(std::move(issues));
+			return BoundAggregateSQLExportResult::Failure(std::move(issues));
 		}
 		vector<unique_ptr<ParsedExpression>> arguments;
 		for (idx_t child_index = 0; child_index < expression.GetChildren().size(); child_index++) {
@@ -725,17 +1570,46 @@ private:
 				order_bys->orders.emplace_back(order.type, order.null_order, std::move(children[child_index++]));
 			}
 		}
-		unique_ptr<ParsedExpression> result = make_uniq<FunctionExpression>(
-		    name, std::move(arguments), std::move(filter), std::move(order_bys), expression.IsDistinct(), false,
+		auto result = make_uniq<FunctionExpression>(
+		    *name, std::move(arguments), std::move(filter), std::move(order_bys), expression.IsDistinct(), false,
 		    expression.StateExportMode() == AggregateStateExportMode::STATE_EXPORT);
+		return BoundAggregateSQLExportResult::Success(std::move(result));
+	}
+
+	BoundExpressionSQLExportResult ExportAggregate(const BoundAggregateExpression &expression,
+	                                               const LogicalPlanVerificationPath &path) {
+		auto call = BuildAggregateCall(expression, path);
+		if (call.HasError()) {
+			return BoundExpressionSQLExportResult::Failure(call.GetIssues());
+		}
+		auto &function = expression.Function();
+		auto &definition = function.GetDefinition();
+		unique_ptr<ParsedExpression> result = std::move(call.GetValue());
 		if (expression.StateExportMode() == AggregateStateExportMode::NONE &&
-		    !function.GetLogicalReturnType().IsAggregateState() && definition->HasBindCallback() &&
-		    definition->GetReturnType() != function.GetLogicalReturnType()) {
-			result = make_uniq<CastExpression>(function.GetLogicalReturnType(), std::move(result));
+		    IsSQLRepresentableType(expression.GetReturnType()) && !expression.GetReturnType().IsAggregateState() &&
+		    definition->HasBindCallback() && definition->GetReturnType() != expression.GetReturnType()) {
+			result = make_uniq<CastExpression>(expression.GetReturnType(), std::move(result));
 		}
 		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
 
+public:
+	BoundAggregateSQLExportResult ExportAggregateCall(const BoundAggregateExpression &expression,
+	                                                  const LogicalPlanVerificationPath &path) {
+		auto call = BuildAggregateCall(expression, path);
+		if (call.HasError()) {
+			return call;
+		}
+		if (!SQLExportHelpers::SQLTypesMatch(expression.GetReturnType(),
+		                                     expression.Function().GetLogicalReturnType())) {
+			return AggregateFailure(
+			    UnsupportedFeature(path, "aggregate_call_result_type",
+			                       "A bare aggregate call cannot preserve the bound expression's logical result type"));
+		}
+		return call;
+	}
+
+private:
 	BoundExpressionSQLExportResult ExportChild(const Expression &expression, const LogicalPlanVerificationPath &path,
 	                                           idx_t child_index) {
 		return Export(expression, ChildPath(path, child_index));
@@ -783,6 +1657,7 @@ private:
 
 private:
 	const BoundExpressionSQLExportContext &context;
+	vector<vector<unique_ptr<ParsedExpression>>> lambda_reference_scopes;
 };
 
 LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
@@ -800,6 +1675,40 @@ BoundExpressionSQLExporter::ExportAtPath(const Expression &expression, const Bou
 	}
 	BoundExpressionSQLExportState state(context);
 	return state.Export(expression, path);
+}
+
+LogicalPlanVerificationResult<unique_ptr<FunctionExpression>>
+BoundExpressionSQLExporter::ExportAggregateCallAtPath(const BoundAggregateExpression &expression,
+                                                      const BoundExpressionSQLExportContext &context,
+                                                      const LogicalPlanVerificationPath &path) {
+	if (!IsExpressionRootPath(path)) {
+		return AggregateFailure(
+		    InternalInvariant({}, "Expression export requires an already-valid expression root path"));
+	}
+	BoundExpressionSQLExportState state(context);
+	return state.ExportAggregateCall(expression, path);
+}
+
+LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
+BoundExpressionSQLExporter::ExportWindowAtPath(const BoundWindowExpression &expression,
+                                               const BoundExpressionSQLExportContext &context,
+                                               const LogicalPlanVerificationPath &path) {
+	if (!IsExpressionRootPath(path)) {
+		return Failure(InternalInvariant({}, "Expression export requires an already-valid expression root path"));
+	}
+	BoundExpressionSQLExportState state(context);
+	return state.ExportWindow(expression, path);
+}
+
+LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
+BoundExpressionSQLExporter::ExportUnnestAtPath(const BoundUnnestExpression &expression,
+                                               const BoundExpressionSQLExportContext &context,
+                                               const LogicalPlanVerificationPath &path) {
+	if (!IsExpressionRootPath(path)) {
+		return Failure(InternalInvariant({}, "Expression export requires an already-valid expression root path"));
+	}
+	BoundExpressionSQLExportState state(context);
+	return state.ExportUnnest(expression, path);
 }
 
 } // namespace duckdb

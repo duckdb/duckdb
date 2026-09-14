@@ -64,6 +64,10 @@ public:
 	                                     int64_t implicit_cast_cost = -1);
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target,
 	                                     bind_cast_function_t bind, int64_t implicit_cast_cost = -1);
+	//! Whether any custom cast providers can affect explicit cast binding
+	bool HasRegisteredCastFunctions() const {
+		return !registered_bind_functions.empty();
+	}
 
 	//! Register a combine rule for LogicalType::TryGetMaxLogicalType, consulted before previously registered rules
 	//! and the built-in rules

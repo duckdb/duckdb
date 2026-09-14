@@ -36,12 +36,10 @@ inline bool IsValidIdentifier(const Identifier &identifier) {
 
 inline bool IsSQLExportType(LogicalTypeId id) {
 	static const auto admitted_ids = [] {
-		// SQL export follows AllTypes' value-type coverage, with SQLNULL included and TUPLE excluded.
-		unordered_set<LogicalTypeId> ids {LogicalTypeId::SQLNULL};
+		// TYPE has SQL syntax but is not included in AllTypes.
+		unordered_set<LogicalTypeId> ids {LogicalTypeId::SQLNULL, LogicalTypeId::TYPE};
 		for (auto &type : LogicalType::AllTypes()) {
-			if (type.id() != LogicalTypeId::TUPLE) {
-				ids.insert(type.id());
-			}
+			ids.insert(type.id());
 		}
 		return ids;
 	}();
@@ -49,6 +47,13 @@ inline bool IsSQLExportType(LogicalTypeId id) {
 }
 
 inline bool IsSQLRepresentableType(const LogicalType &type) {
+	return type.IsComplete() && !TypeVisitor::Contains(type, [](const LogicalType &child) {
+		       return !IsSQLExportType(child.id()) ||
+		              (child.id() == LogicalTypeId::TUPLE && StructType::GetChildCount(child) == 0);
+	       });
+}
+
+inline bool IsSQLValueType(const LogicalType &type) {
 	return type.IsComplete() &&
 	       !TypeVisitor::Contains(type, [](const LogicalType &child) { return !IsSQLExportType(child.id()); });
 }
@@ -70,6 +75,18 @@ inline bool SQLTypesMatch(const LogicalType &left, const LogicalType &right) {
 		       (index >= collations.size() || collations[index++] != StringType::GetCollation(child));
 	});
 	return !mismatch && index == collations.size();
+}
+
+inline string TypeCollationSignature(const LogicalType &type) {
+	string result;
+	TypeVisitor::Contains(type, [&](const LogicalType &child) {
+		if (child.id() == LogicalTypeId::VARCHAR) {
+			const auto collation = StringType::GetCollation(child);
+			result += std::to_string(collation.size()) + ":" + collation + ";";
+		}
+		return false;
+	});
+	return result;
 }
 
 } // namespace SQLExportHelpers
