@@ -1641,7 +1641,14 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	if (TryMoveFileWithPosixSemantics(source_handle.get(), target_unicode)) {
 		return;
 	}
+	auto error_code = GetLastError();
 	source_handle.reset();
+
+	if (error_code != ERROR_INVALID_PARAMETER && error_code != ERROR_NOT_SUPPORTED &&
+	    error_code != ERROR_INVALID_FUNCTION) {
+		SetLastError(error_code);
+		throw IOException("Could not move file \"%s\" to \"%s\": %s", source, target, GetLastErrorAsString());
+	}
 
 	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
