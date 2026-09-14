@@ -113,6 +113,9 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.duckdb_commit }}" ]]; then
             resolved_commit="$(gh api -X GET "/repos/${{ github.repository }}/commits" -f sha="${{ inputs.duckdb_commit }}" -f per_page=1 --jq '.[0].sha')"
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # github.sha is an ephemeral PR merge commit that is not pushed to origin on forks.
+            resolved_commit="${{ github.event.pull_request.head.sha }}"
           else
             resolved_commit="${{ github.sha }}"
           fi
