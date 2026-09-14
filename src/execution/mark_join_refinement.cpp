@@ -5,6 +5,8 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
