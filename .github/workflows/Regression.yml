@@ -142,6 +142,8 @@ jobs:
             benchmark: .github/regression/ingestion.csv
           - name: Micro
             benchmark: .github/regression/micro.csv
+          - name: Parser
+            benchmark: .github/regression/parser.csv
           - name: H2OAI
             benchmark: .github/regression/h2oai.csv
           - name: IMDB
