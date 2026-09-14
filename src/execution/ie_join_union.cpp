@@ -491,19 +491,25 @@ static unique_ptr<ColumnDataCollection> RankSortedKeys(ExecutionContext &context
 	idx_t previous = 0;
 	for (idx_t offset = 0; offset < probes.count;) {
 		context.client.InterruptCheck();
-		probe_state->SetKeepPinned(true);
 		ranks.Reset();
 		const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, probes.count - offset);
 		{
 			auto writer = FlatVector::Writer<uint64_t>(ranks.data[0], count);
 			for (idx_t row = 0; row < count; row++) {
-				build_state->SetKeepPinned(true);
 				const auto &key = probe_keys[offset + row];
-				idx_t low = previous, high = build.count;
+				auto before = [&](idx_t index) {
+					const auto &candidate = build_keys[index];
+					return candidate < key || (upper && !(key < candidate));
+				};
+				const idx_t remaining = build.count - previous;
+				idx_t step = 1;
+				while (step < remaining && before(previous + step)) {
+					step = MinValue<idx_t>(remaining, step * 2);
+				}
+				idx_t low = previous, high = previous + MinValue<idx_t>(remaining, step + 1);
 				while (low < high) {
 					const auto middle = low + (high - low) / 2;
-					const auto &candidate = build_keys[middle];
-					if (candidate < key || (upper && !(key < candidate))) {
+					if (before(middle)) {
 						low = middle + 1;
 					} else {
 						high = middle;
