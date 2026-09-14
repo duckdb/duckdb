@@ -12,3 +12,7 @@ test/sql/**/*.test
 !test/sql/types/geo/geometry_vertex_extract.test
 # Native join reordering changes whether an empty-input cast error is evaluated.
 !test/sql/join/natural/natural_join.test
+# Native implied join filters change whether a cast errors on an excluded row.
+!test/sql/function/generic/test_barrier.test
+# The native unbarriered comparison has the same planning-sensitive cast error.
+!test/sql/optimizer/secure_view_pushdown.test

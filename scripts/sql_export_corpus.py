@@ -99,6 +99,9 @@ def run(args):
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     (output / 'raw').mkdir()
+    # The parent owns the shared root; individual runners only reclaim their run directories.
+    temp_root = output / 'test-temp'
+    temp_root.mkdir()
     executable = args.unittest.resolve()
     config = CONFIGS / f'verify_sql_export_{args.mode}.json'
     resolved_manifest = output / 'resolved_manifest.txt'
@@ -136,6 +139,8 @@ def run(args):
         log = output / 'raw' / (path.replace('/', '__') + '.log')
         command = [
             str(executable),
+            '--temp-dir-root',
+            str(temp_root),
             '--test-config',
             str(config),
             '--emit-test-events',
