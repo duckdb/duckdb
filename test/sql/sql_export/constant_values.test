@@ -102,4 +102,4 @@ INT16	INT8
 query TTT
 SELECT variant_extract_string(v, ''), variant_typeof(v.a[1]), variant_typeof(v.a[2].b) FROM (VALUES ({'a': [7::SMALLINT::VARIANT, {'b': 2::TINYINT, 'a': 3}::VARIANT]}::VARIANT)) t(v);
 ----
-{"a":[7,{"b":2,"a":3}]}	INT16	INT8
+{"a":[7,{"a":3,"b":2}]}	INT16	INT8
