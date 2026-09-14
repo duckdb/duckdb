@@ -7,9 +7,6 @@ require skip_reload
 statement ok
 CREATE TABLE compression_test(i INTEGER)
 
-statement ok
-INSERT INTO compression_test SELECT * FROM range(10000)
-
 statement error
 ALTER TABLE compression_test ADD COLUMN invalid INTEGER USING COMPRESSION invalid
 ----
@@ -17,6 +14,9 @@ unrecognized value
 
 statement ok
 ALTER TABLE compression_test ADD COLUMN added INTEGER USING COMPRESSION UNCOMPRESSED DEFAULT 42
+
+statement ok
+INSERT INTO compression_test SELECT i, i FROM range(10000) t(i)
 
 query I
 SELECT contains(sql, 'USING COMPRESSION Uncompressed')
