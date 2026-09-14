@@ -1,0 +1,19 @@
+# name: benchmark/micro/string/like_escape_regular.benchmark
+# description: Contains word 'regular' in the l_comment (11.5%~), with an ESCAPE clause that the pattern never uses
+# group: [string]
+
+name Like Escape ('%regular%' ESCAPE '#')
+group string
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%regular%' ESCAPE '#'
+
+result I
+687323
