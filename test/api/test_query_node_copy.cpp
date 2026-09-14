@@ -12,7 +12,7 @@ static unique_ptr<CommonTableExpressionInfo> TestCTE() {
 	auto cte = make_uniq<CommonTableExpressionInfo>();
 	cte->aliases.emplace_back("cte_alias");
 	cte->key_targets.push_back(make_uniq<ColumnRefExpression>(Identifier("key_column")));
-	cte->payload_aggregates.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
+	cte->payload_aggregates.push_back(ConstantExpression::Integer(42));
 	auto query_node = make_uniq<SelectNode>();
 	query_node->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier("result_column")));
 	cte->query_node = std::move(query_node);
