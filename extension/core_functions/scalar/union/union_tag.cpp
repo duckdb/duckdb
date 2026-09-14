@@ -56,8 +56,10 @@ void UnionTagFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 } // namespace
 
 ScalarFunction UnionTagFun::GetFunction() {
-	return ScalarFunction({LogicalTypeId::UNION}, LogicalTypeId::ANY, UnionTagFunction, UnionTagBind, nullptr,
-	                      nullptr); // TODO: Statistics?
+	// TODO: Statistics?
+	ScalarFunction fun({}, LogicalTypeId::ANY, UnionTagFunction, UnionTagBind, nullptr, nullptr);
+	fun.GetSignature().AddParameter("union", LogicalTypeId::UNION);
+	return fun;
 }
 
 } // namespace duckdb

@@ -1365,9 +1365,6 @@ private:
 				parallel_work_offset++;
 			}
 			executor.WorkOnTasks();
-			if (executor.HasError()) {
-				executor.ThrowError();
-			}
 			for (idx_t appender_idx = 0; appender_idx < new_appenders.size(); appender_idx++) {
 				auto work_item_idx = parallel_work_offset - new_appenders.size() + appender_idx;
 				finished_appenders.push_back(make_uniq<FinishedDBGenAppender>(

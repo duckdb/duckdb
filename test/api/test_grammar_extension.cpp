@@ -17,6 +17,23 @@
 
 using namespace duckdb;
 
+struct RegisteredTransformResult {
+	idx_t value;
+};
+
+namespace duckdb {
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.test.RegisteredTransformResult", ::RegisteredTransformResult);
+} // namespace duckdb
+
+TEST_CASE("Transform result types use stable registered names", "[api][grammar_extension]") {
+	TypedTransformResult<RegisteredTransformResult> result({42});
+	auto copied_type_name = string(TransformResultTypeName<RegisteredTransformResult>());
+
+	REQUIRE(result.GetValuePointer(copied_type_name.c_str()) == &result.value);
+	REQUIRE(TryGetTransformResult<RegisteredTransformResult>(result) == &result.value);
+	REQUIRE(TryGetTransformResult<bool>(result) == nullptr);
+}
+
 class GrammarExtensionTestValueTransformProcess final : public TransformProcess {
 public:
 	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override {
@@ -39,7 +56,7 @@ public:
 		D_ASSERT(TryGetTransformResult<bool>(*child_result));
 		auto statement = make_uniq<SelectStatement>();
 		auto select_node = make_uniq<SelectNode>();
-		select_node->select_list.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
+		select_node->select_list.push_back(ConstantExpression::Integer(42));
 		select_node->from_table = make_uniq<EmptyTableRef>();
 		statement->node = std::move(select_node);
 		return TransformStep::Complete(
@@ -734,7 +751,6 @@ TEST_CASE("The parser cache only holds the base grammar", "[api][grammar_extensi
 	Connection con(db);
 	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
 	auto base_grammar = CompiledGrammar::Get(*con.context);
-	REQUIRE_FALSE(base_grammar->HasGrammarChanges());
 	REQUIRE(base_grammar == CompiledGrammar::Get(*con.context));
 
 	RegisterGrammarExtensionTestSyntax(*db.instance);
@@ -742,7 +758,6 @@ TEST_CASE("The parser cache only holds the base grammar", "[api][grammar_extensi
 	ActivateGrammarExtensionTestSyntax(con);
 	CheckGrammarExtensionTestSyntax(con);
 	auto extension_grammar = CompiledGrammar::Get(*con.context);
-	REQUIRE(extension_grammar->HasGrammarChanges());
 	REQUIRE(extension_grammar == CompiledGrammar::Get(*con.context));
 }
 

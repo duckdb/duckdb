@@ -133,8 +133,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			    distinct.distinct_on_targets.empty() ? DistinctType::DISTINCT : DistinctType::DISTINCT_ON;
 			if (distinct.distinct_on_targets.empty()) {
 				for (idx_t i = 0; i < result.names.size(); i++) {
-					distinct.distinct_on_targets.push_back(
-					    make_uniq<ConstantExpression>(Value::INTEGER(UnsafeNumericCast<int32_t>(1 + i))));
+					distinct.distinct_on_targets.push_back(ConstantExpression::Integer(NumericCast<int64_t>(1 + i)));
 				}
 			}
 			order_binder.SetQueryComponent("DISTINCT ON");
@@ -226,7 +225,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 						auto type = config.ResolveOrder(context, order_node.type);
 						auto null_order = config.ResolveNullOrder(context, type, order_node.null_order);
 						string sort_param = EnumUtil::ToString(type) + " " + EnumUtil::ToString(null_order);
-						sort_key_parameters.push_back(make_uniq<ConstantExpression>(Value(sort_param)));
+						sort_key_parameters.push_back(ConstantExpression::String(sort_param));
 					}
 					order.orders.clear();
 					auto create_sort_key =

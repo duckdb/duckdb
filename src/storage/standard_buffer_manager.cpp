@@ -244,14 +244,22 @@ void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
 	// Allocate a buffer to hold the data of all blocks.
 	auto block_alloc_size = run.handles[0]->GetBlockAllocSize();
 	auto total_block_size = block_count * block_alloc_size;
-	auto batch_memory = RegisterMemory(MemoryTag::BASE_TABLE, total_block_size, 0, true);
-	auto intermediate_buffer = Pin(batch_memory);
+	// prefetching is best effort, on memory pressure the run is left for the scan to pin its blocks on demand
+	unique_ptr<FileBuffer> staging_reuse;
+	auto staging_result = buffer_pool.EvictBlocks(context, MemoryTag::BASE_TABLE, GetAllocSize(total_block_size),
+	                                              buffer_pool.maximum_memory, &staging_reuse);
+	if (!staging_result.success) {
+		return;
+	}
+	// the reservation is held for the staging buffer's lifetime, released when this function returns
+	auto intermediate_buffer =
+	    ConstructManagedBuffer(total_block_size, 0, std::move(staging_reuse), FileBufferType::MANAGED_BUFFER);
 
 	// perform a batch read of the blocks into the buffer
 	auto &block_manager = run.handles[0]->GetBlockManager();
-	block_manager.ReadBlocks(context, intermediate_buffer.GetFileBuffer(), run.first_block, block_count);
+	block_manager.ReadBlocks(context, *intermediate_buffer, run.first_block, block_count);
 
-	// the blocks are read - now we need to assign them to the individual blocks
+	// the blocks are read, now assign them to the individual block handles
 	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
 		auto &handle = run.handles[block_idx];
 		D_ASSERT(handle->BlockId() == run.first_block + NumericCast<block_id_t>(block_idx));
@@ -260,22 +268,24 @@ void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
 		auto &block_memory = handle->GetMemory();
 		idx_t required_memory = block_memory.GetMemoryUsage();
 		unique_ptr<FileBuffer> reusable_buffer;
-		auto reservation = EvictBlocksOrThrow(context, block_memory.GetMemoryTag(), required_memory, &reusable_buffer,
-		                                      "failed to pin block of size %s%s",
-		                                      StringUtil::BytesToHumanReadableString(required_memory));
-		// now load the block from the buffer
-		// note that we discard the buffer handle - we do not keep it around
-		// the prefetching relies on the block handle being pinned again during the actual read before it is evicted
+		auto block_result = buffer_pool.EvictBlocks(context, block_memory.GetMemoryTag(), required_memory,
+		                                            buffer_pool.maximum_memory, &reusable_buffer);
+		if (!block_result.success) {
+			// the remaining blocks do not fit next to what the pool holds, the scan pins them on demand
+			return;
+		}
+		// load the block, the handle is not kept, the scan pins it again before it can be evicted
 		BufferHandle buf;
 		{
 			auto lock = block_memory.GetLock();
 			if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
-				// the block is loaded already by another thread - free up the reservation and continue
-				reservation.Resize(0);
+				// the block is loaded already by another thread, free up the reservation and continue
+				block_result.reservation.Resize(0);
 				continue;
 			}
-			auto block_ptr = intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * block_alloc_size;
-			buf = handle->LoadFromBuffer(lock, block_ptr, std::move(reusable_buffer), std::move(reservation));
+			auto block_ptr = intermediate_buffer->InternalBuffer() + block_idx * block_alloc_size;
+			buf = handle->LoadFromBuffer(lock, block_ptr, std::move(reusable_buffer),
+			                             std::move(block_result.reservation));
 		}
 	}
 }
@@ -290,10 +300,26 @@ StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles
 		}
 	}
 	vector<PrefetchRun> plan;
-	for (auto &entry : to_be_loaded) {
-		if (plan.empty() ||
-		    plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first) {
-			// this block is not adjacent to the previous block, start a new run
+	if (to_be_loaded.empty()) {
+		return plan;
+	}
+	// each run is read with a single pread into one staging buffer, cap the read size
+	static constexpr idx_t MAX_PREFETCH_RUN_SIZE = 32ULL * 1024 * 1024;
+	const idx_t block_size = to_be_loaded.begin()->second->GetBlockAllocSize();
+	for (auto it = to_be_loaded.begin(); it != to_be_loaded.end(); ++it) {
+		auto &entry = *it;
+		bool new_run = plan.empty() ||
+		               plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first;
+		if (!new_run) {
+			const auto run_size = plan.back().handles.size() * block_size;
+			auto next = std::next(it);
+			// a lone trailing block is not worth a run of its own, let a run within the cap grow by it instead
+			const bool last_of_region = next == to_be_loaded.end() || next->first != entry.first + 1;
+			new_run =
+			    run_size + block_size > MAX_PREFETCH_RUN_SIZE && !(last_of_region && run_size <= MAX_PREFETCH_RUN_SIZE);
+		}
+		if (new_run) {
+			// the block is not adjacent to the previous block or the run is full, start a new run
 			plan.push_back(PrefetchRun {entry.first, {}});
 		}
 		plan.back().handles.push_back(std::move(entry.second));
@@ -521,29 +547,40 @@ void StandardBufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag
 		header_size += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
 
-	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
-
 	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + header_size);
-	//! for very large buffers, we store the size of the buffer in plaintext.
-	idx_t block_header_size = buffer.GetHeaderSize();
-	auto user_size = buffer.Size();
-	handle->Write(context, &user_size, sizeof(idx_t), 0);
-	handle->Write(context, &block_header_size, sizeof(idx_t), sizeof(idx_t));
+	bool size_on_disk_increased = false;
+	try {
+		temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + header_size);
+		size_on_disk_increased = true;
+		//! for very large buffers, we store the size of the buffer in plaintext.
+		idx_t block_header_size = buffer.GetHeaderSize();
+		auto user_size = buffer.Size();
+		handle->Write(context, &user_size, sizeof(idx_t), 0);
+		handle->Write(context, &block_header_size, sizeof(idx_t), sizeof(idx_t));
 
-	idx_t offset = sizeof(idx_t) * 2;
+		idx_t offset = sizeof(idx_t) * 2;
 
-	if (EncryptTemporaryFiles()) {
-		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
-		EncryptionEngine::EncryptTemporaryBuffer(db, buffer.InternalBuffer(), buffer.AllocSize(), encryption_metadata);
-		//! Write the nonce (and tag for GCM).
-		handle->Write(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
-		offset += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+		if (EncryptTemporaryFiles()) {
+			uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
+			EncryptionEngine::EncryptTemporaryBuffer(db, buffer.InternalBuffer(), buffer.AllocSize(),
+			                                         encryption_metadata);
+			handle->Write(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
+			offset += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+		}
+
+		buffer.Write(context, *handle, offset);
+	} catch (...) {
+		// roll back the accounting and remove the partially written file
+		if (size_on_disk_increased) {
+			temporary_directory.handle->GetTempFile().DecreaseSizeOnDisk(buffer.AllocSize() + header_size);
+		}
+		handle.reset();
+		fs.RemoveFile(path);
+		throw;
 	}
-
-	buffer.Write(context, *handle, offset);
+	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
 }
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext context, MemoryTag tag,
@@ -596,7 +633,8 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	}
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
-	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer));
+	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer),
+	                                     block.GetMemory().GetBufferType());
 
 	if (EncryptTemporaryFiles()) {
 		// encrypted: the nonce/tag sit between the two size words and the payload (which starts at offset)

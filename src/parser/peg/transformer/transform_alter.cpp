@@ -1,5 +1,6 @@
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/peg/ast/add_column_entry.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/ast/column_constraint_entry.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
@@ -63,7 +64,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	unique_ptr<MultiStatement> multi_statement;
 	if (materialize_default) {
 		auto null_column = column_entry.Copy();
-		null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
+		null_column.SetDefaultValue(ConstantExpression::Null());
 		multi_statement = TransformAndMaterializeAlter(
 		    alter_entry_data,
 		    make_uniq<AddColumnInfo>(add_column.GetAlterEntryData(), std::move(null_column),
@@ -254,6 +255,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 	if (add_column_entry.default_value) {
 		column_definition.SetDefaultValue(std::move(add_column_entry.default_value));
 	}
+	column_definition.SetCompressionType(add_column_entry.add_column_constraints.compression_type);
 
 	unique_ptr<AlterTableInfo> result;
 	auto if_not_exists_value = if_not_exists.has_value();
@@ -267,6 +269,9 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 		}
 		if (add_column_entry.add_column_constraints.add_unique) {
 			throw NotImplementedException("Adding UNIQUE constraints to nested fields is not supported");
+		}
+		if (add_column_entry.add_column_constraints.compression_type != CompressionType::COMPRESSION_AUTO) {
+			throw NotImplementedException("Adding compression to nested fields is not supported");
 		}
 		const auto parent_path =
 		    vector<Identifier>(add_column_entry.column_path.begin(), add_column_entry.column_path.end() - 1);
@@ -306,6 +311,11 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 			} else if (constraint.constraint_name == "UniqueConstraint" &&
 			           constraint.constraint_type_info.second == ConstraintType::UNIQUE) {
 				new_column.add_column_constraints.add_unique = true;
+			} else if (constraint.constraint_name == "ColumnCompression") {
+				new_column.add_column_constraints.compression_type = constraint.compression_type;
+				if (new_column.add_column_constraints.compression_type == CompressionType::COMPRESSION_AUTO) {
+					throw ParserException("Unrecognized option for column compression");
+				}
 			}
 		}
 	}
@@ -467,7 +477,7 @@ PEGTransformerFactory::TransformResetOptions(PEGTransformer &transformer,
 			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
 		}
 		auto &const_expr = opt.second->Cast<ConstantExpression>();
-		if (!const_expr.GetValue().IsNull()) {
+		if (!const_expr.GetLiteral().IsNull()) {
 			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
 		}
 		option_names.insert(Identifier(opt.first));

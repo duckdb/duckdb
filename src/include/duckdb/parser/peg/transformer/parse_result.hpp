@@ -431,32 +431,17 @@ public:
 		return result;
 	}
 
-	unique_ptr<ParsedExpression> ToExpression() {
+	virtual unique_ptr<ParsedExpression> ToExpression() {
 		switch (string_type) {
 		case SpecialStringCharacter::STANDARD:
-			return make_uniq<ConstantExpression>(Value(result));
+			return ConstantExpression::String(result);
 		case SpecialStringCharacter::NATIONAL_STRING:
-			return make_uniq<CastExpression>(LogicalType::VARCHAR, make_uniq<ConstantExpression>(Value(result)));
-		case SpecialStringCharacter::HEXADECIMAL_STRING: {
+			return make_uniq<CastExpression>(LogicalType::VARCHAR, ConstantExpression::String(result));
+		case SpecialStringCharacter::HEXADECIMAL_STRING:
 			// result contains raw hex digits (e.g. "FF" for X'FF')
-			if (result.size() % 2 != 0) {
-				throw ParserException("Hex string literal must have an even number of hex digits");
-			}
-			// Build \xHH-escaped string that Blob::ToBlob (via Value::BLOB) expects
-			idx_t blob_len = result.size() / 2;
-			string escaped;
-			escaped.reserve(blob_len * 4);
-			for (idx_t i = 0; i < result.size(); i += 2) {
-				escaped += "\\x";
-				escaped += result[i];
-				escaped += result[i + 1];
-			}
-			return make_uniq<ConstantExpression>(Value::BLOB(escaped));
-		}
-		case SpecialStringCharacter::BIT_STRING: {
-			string bit_string = "b" + result;
-			return make_uniq<ConstantExpression>(Value(bit_string));
-		}
+			return ConstantExpression::Hex(result);
+		case SpecialStringCharacter::BIT_STRING:
+			return ConstantExpression::Bit(result);
 		case SpecialStringCharacter::ESCAPE_STRING:
 			string escaped_result;
 			escaped_result.reserve(result.size());
@@ -540,9 +525,9 @@ public:
 				    reason == UnicodeInvalidReason::BYTE_MISMATCH ? "byte mismatch" : "invalid unicode codepoint";
 				throw ParserException("Invalid UTF-8 in escape string literal at byte offset %d: %s", pos, reason_str);
 			}
-			return make_uniq<ConstantExpression>(Value(escaped_result));
+			return ConstantExpression::String(escaped_result);
 		}
-		return make_uniq<ConstantExpression>(Value(result));
+		return ConstantExpression::String(result);
 	}
 
 	string result;
