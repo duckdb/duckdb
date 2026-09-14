@@ -35,12 +35,11 @@ SELECT n FROM printable_join;
 4
 
 statement ok
-COPY (SELECT 'bad' AS a) TO '__TEST_DIR__/underscore_digit.csv' (HEADER false);
+COPY (SELECT 'bad' AS a) TO '{TEST_DIR}/underscore_digit.csv' (HEADER false);
 
 query I
-SELECT count(*) FROM read_csv('__TEST_DIR__/underscore_digit.csv', columns={'a':'INTEGER'}, header=false, store_rejects=true, rejects_table='_0_errors', rejects_scan='_9e3');
+SELECT a FROM read_csv('{TEST_DIR}/underscore_digit.csv', columns={'a':'INTEGER'}, header=false, store_rejects=true, rejects_table='_0_errors', rejects_scan='_9e3');
 ----
-0
 
 query I
 SELECT count(*) FROM temp.main."_0_errors";
