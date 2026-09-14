@@ -366,12 +366,14 @@ static idx_t NestedScatter(const int8_t *child_result, int8_t *result_data, idx_
 	idx_t new_remaining_count = 0;
 	for (idx_t i = 0; i < remaining_count; i++) {
 		const auto remaining_idx = remaining_result_sel.get_index(i);
-		const auto null = result_validity && !child_validity.RowIsValidUnsafe(i);
-		if (predicate(child_result[i], null)) {
+		const auto null = !child_validity.RowIsValid(i);
+		const auto comparison = null ? Comparator::VALUES_ARE_EQUAL : child_result[i];
+		if (predicate(comparison, null)) {
 			if (null) {
+				D_ASSERT(result_validity);
 				result_validity->SetInvalid(remaining_idx);
 			} else {
-				result_data[remaining_idx] = child_result[i];
+				result_data[remaining_idx] = comparison;
 			}
 		} else {
 			// still equal at this position - need to check the next entry
