@@ -10,6 +10,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/map.hpp"
 #include <functional>
+#include "duckdb/common/set.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/execution/operator/join/physical_range_join.hpp"
@@ -65,6 +66,39 @@ struct MarkJoinRefinement {
 
 	map<uint64_t, MarkJoinRefinementGroup> groups;
 	vector<array<idx_t, 3>> chunks;
+};
+
+class MarkPatternRefiner {
+public:
+	MarkPatternRefiner(ClientContext &context, const PhysicalComparisonJoin &op, MarkJoinRefinement &refinement,
+	                   mutex &lock, mark_key_fetch_t fetch, DataChunk &keys, bool matches[], ValidityMask &validity);
+	void Refine();
+
+private:
+	bool Finish(idx_t probe, uint64_t dropped);
+	bool RefineWitness(idx_t id, idx_t probe, uint64_t dropped);
+	MarkJoinRefinementIndex &BuildEqualityIndex(MarkJoinRefinementGroup &group, uint64_t equality_mask);
+	void ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint64_t probe_mask, uint64_t dropped,
+	                        uint64_t equality_mask);
+	void RefineRangePattern(MarkJoinRefinementGroup &group, uint64_t probe_mask, uint64_t build_mask,
+	                        vector<idx_t> driving);
+	bool RefineOneRange(MarkJoinRefinementGroup &group, idx_t probe, uint64_t dropped, idx_t range_column);
+	bool RefineExact(MarkJoinRefinementGroup &group, idx_t probe, uint64_t dropped);
+
+	ClientContext &context;
+	const PhysicalComparisonJoin &op;
+	const vector<JoinCondition> &conditions;
+	MarkJoinRefinement &refinement;
+	mutex &lock;
+	mark_key_fetch_t fetch;
+	DataChunk &chunk;
+	DataChunk &keys;
+	optional_ptr<bool> matches;
+	ValidityMask &validity;
+	vector<LogicalType> condition_types;
+	DataChunk candidates;
+	Vector comparison;
+	set<pair<uint64_t, uint64_t>> refinement_batches;
 };
 
 } // namespace duckdb
