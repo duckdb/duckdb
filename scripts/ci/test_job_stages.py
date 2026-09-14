@@ -301,9 +301,12 @@ class JobStagesTest(unittest.TestCase):
     def test_job_selection_override_adds_prepare(self):
         old_value = os.environ.get("OVERRIDE_JOBS")
         try:
-            os.environ["OVERRIDE_JOBS"] = "extensions"
+            os.environ["OVERRIDE_JOBS"] = "extensions-build extensions-deploy extensions-install"
             selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
-            self.assertEqual(selection.enabled_jobs, ["prepare", "extensions"])
+            self.assertEqual(
+                selection.enabled_jobs,
+                ["prepare", "extensions-build", "extensions-deploy", "extensions-install"],
+            )
         finally:
             if old_value is None:
                 os.environ.pop("OVERRIDE_JOBS", None)
@@ -313,7 +316,7 @@ class JobStagesTest(unittest.TestCase):
     def test_job_selection_override_invalid_job_raises(self):
         old_value = os.environ.get("OVERRIDE_JOBS")
         try:
-            os.environ["OVERRIDE_JOBS"] = "extensions,not-a-job"
+            os.environ["OVERRIDE_JOBS"] = "extensions-deploy,not-a-job"
             with self.assertRaises(ValueError):
                 self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
         finally:

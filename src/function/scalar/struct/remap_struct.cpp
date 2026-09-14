@@ -609,12 +609,12 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 } // namespace
 
 ScalarFunction RemapStructFun::GetFunction() {
-	ScalarFunction remap("remap_struct",
-	                     {{"input", LogicalTypeId::ANY},
-	                      {"target_type", LogicalTypeId::ANY},
-	                      {"mapping", LogicalTypeId::ANY},
-	                      {"defaults", LogicalTypeId::ANY}},
-	                     LogicalTypeId::ANY, RemapStructFunction, RemapStructBind);
+	ScalarFunction remap("remap_struct", {}, LogicalTypeId::ANY, RemapStructFunction, RemapStructBind);
+	remap.GetSignature()
+	    .AddParameter("input", LogicalTypeId::ANY)
+	    .AddParameter("target_type", LogicalTypeId::ANY)
+	    .AddParameter("mapping", LogicalTypeId::ANY)
+	    .AddParameter("defaults", LogicalTypeId::ANY);
 	remap.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return remap;
 }

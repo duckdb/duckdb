@@ -8,7 +8,7 @@
     },
     {
         "name": "getvariable",
-        "parameters": "",
+        "parameters": "variable_name",
         "description": "",
         "example": "",
         "type": "scalar_function",
