@@ -233,6 +233,39 @@ void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, 
 	}
 }
 
+void MarkJoinRowComparison::CompareTail(DataChunk &left, DataChunk &right, const vector<JoinCondition> &conditions,
+                                        const vector<idx_t> &tail, bool unknown, Vector &result) {
+	D_ASSERT(left.size() == right.size());
+	D_ASSERT(left.size() <= STANDARD_VECTOR_SIZE);
+	bool pair_is_false[STANDARD_VECTOR_SIZE] = {false};
+	bool pair_is_unknown[STANDARD_VECTOR_SIZE] = {false};
+	Vector comparison(LogicalType::BOOLEAN);
+	for (auto col : tail) {
+		Compare(left.data[col], right.data[col], conditions[col].GetComparisonType(), comparison);
+		auto values = comparison.Values<bool>();
+		for (idx_t row = 0; row < right.size(); row++) {
+			auto value = values[row];
+			if (!value.IsValid()) {
+				pair_is_unknown[row] = true;
+			} else if (!value.GetValue()) {
+				pair_is_false[row] = true;
+			}
+		}
+	}
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::ValidityMutable(result).Reset(right.size());
+	auto writer = FlatVector::Writer<bool>(result, right.size());
+	for (idx_t row = 0; row < right.size(); row++) {
+		if (pair_is_false[row]) {
+			writer.WriteValue(false);
+		} else if (unknown || pair_is_unknown[row]) {
+			writer.WriteNull();
+		} else {
+			writer.WriteValue(true);
+		}
+	}
+}
+
 void MarkJoinRowComparison::Perform(DataChunk &left, DataChunk &right, bool found_match[],
                                     const vector<JoinCondition> &conditions, optional_ptr<bool> found_unknown) {
 	Vector comparison(LogicalType::BOOLEAN);

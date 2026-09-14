@@ -1298,30 +1298,60 @@ unique_ptr<ColumnDataCollection> IEJoinLocalSourceState::RefineRangePattern(Exec
 	IEJoinUnion joiner(*index.ranges, *ranks);
 	unsafe_vector<idx_t> left, right;
 	Vector comparison(LogicalType::BOOLEAN);
-	DataChunk candidate;
-	candidate.InitializeEmpty(key_types);
-	SelectionVector selection(1);
+	array<DataChunk, 2> candidates;
+	for (auto &candidate : candidates) {
+		candidate.InitializeEmpty(key_types);
+	}
+	SelectionVector left_sel(STANDARD_VECTOR_SIZE), right_sel(STANDARD_VECTOR_SIZE);
+	idx_t probe_rows[STANDARD_VECTOR_SIZE];
+	vector<idx_t> tail;
+	for (idx_t col = 0; col < op.conditions.size(); col++) {
+		if (col != driving[0] && col != driving[1] && !(dropped & (uint64_t(1) << col))) {
+			tail.push_back(col);
+		}
+	}
 	while (joiner.JoinBlocks(left, right)) {
 		context.client.InterruptCheck();
-		for (idx_t pair = 0; pair < left.size(); pair++) {
-			const auto lhs = left_id[left[pair]];
-			if (markers.get()[lhs] == 2 || (dropped && markers.get()[lhs])) {
+		for (idx_t pair = 0; pair < left.size();) {
+			const auto left_chunk = left_id[left[pair]] / STANDARD_VECTOR_SIZE;
+			const auto right_chunk = right_id[right[pair]] / STANDARD_VECTOR_SIZE;
+			idx_t batch_count = 0;
+			while (pair < left.size()) {
+				const auto lhs = left_id[left[pair]];
+				const auto rhs = right_id[right[pair]];
+				if (lhs / STANDARD_VECTOR_SIZE != left_chunk || rhs / STANDARD_VECTOR_SIZE != right_chunk) {
+					break;
+				}
+				pair++;
+				if (markers.get()[lhs] == 2 || (dropped && markers.get()[lhs])) {
+					continue;
+				}
+				left_sel.set_index(batch_count, lhs % STANDARD_VECTOR_SIZE);
+				right_sel.set_index(batch_count, rhs % STANDARD_VECTOR_SIZE);
+				probe_rows[batch_count++] = lhs;
+			}
+			if (!batch_count) {
 				continue;
 			}
-			const auto rhs = right_id[right[pair]];
-			fetch(0, lhs);
-			fetch(1, rhs);
-			candidate.Reference(keys[1]);
-			selection.set_index(0, rhs % STANDARD_VECTOR_SIZE);
-			candidate.Slice(selection, 1);
-			MarkJoinRowComparison::CompareConjunction(keys[0], lhs % STANDARD_VECTOR_SIZE, candidate, op.conditions,
-			                                          comparison);
+			fetch(0, left_chunk * STANDARD_VECTOR_SIZE);
+			fetch(1, right_chunk * STANDARD_VECTOR_SIZE);
+			candidates[0].Reference(keys[0]);
+			candidates[1].Reference(keys[1]);
+			candidates[0].Slice(left_sel, batch_count);
+			candidates[1].Slice(right_sel, batch_count);
+			MarkJoinRowComparison::CompareTail(candidates[0], candidates[1], op.conditions, tail, dropped != 0,
+			                                   comparison);
 			auto values = comparison.Values<bool>();
-			auto result = values[0];
-			if (!result.IsValid()) {
-				markers.get()[lhs] = 1;
-			} else if (result.GetValue()) {
-				markers.get()[lhs] = 2;
+			for (idx_t row = 0; row < batch_count; row++) {
+				auto &marker = markers.get()[probe_rows[row]];
+				auto value = values[row];
+				if (!value.IsValid()) {
+					if (marker != 2) {
+						marker = 1;
+					}
+				} else if (value.GetValue()) {
+					marker = 2;
+				}
 			}
 		}
 		if (joiner.lrid > 0 && !left.empty() && left.back() == idx_t(joiner.lrid - 1)) {

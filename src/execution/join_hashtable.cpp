@@ -2158,28 +2158,56 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 		IEJoinCursor<uint64_t> left_id(*left_ids), right_id(*build.row_ids);
 		IEJoinUnion joiner(build, *ranks);
 		unsafe_vector<idx_t> left, right;
-		SelectionVector selected(1);
+		SelectionVector left_sel(STANDARD_VECTOR_SIZE), right_sel(STANDARD_VECTOR_SIZE);
+		DataChunk probe_candidates;
+		probe_candidates.InitializeEmpty(condition_types);
 		const auto dropped = probe_mask | build_mask;
+		vector<idx_t> tail;
+		for (idx_t col = 0; col < conditions.size(); col++) {
+			if (col != driving[0] && col != driving[1] && !(dropped & (uint64_t(1) << col))) {
+				tail.push_back(col);
+			}
+		}
 		while (joiner.JoinBlocks(left, right)) {
 			context.InterruptCheck();
-			for (idx_t pair = 0; pair < left.size(); pair++) {
-				const auto probe = left_id[left[pair]];
-				if (matches[probe] || (dropped && !validity.RowIsValid(probe))) {
+			for (idx_t pair = 0; pair < left.size();) {
+				const auto build_chunk = right_id[right[pair]] / STANDARD_VECTOR_SIZE;
+				idx_t batch_count = 0;
+				while (pair < left.size()) {
+					const auto probe = left_id[left[pair]];
+					const auto build_row = right_id[right[pair]];
+					if (build_row / STANDARD_VECTOR_SIZE != build_chunk) {
+						break;
+					}
+					pair++;
+					if (matches[probe] || (dropped && !validity.RowIsValid(probe))) {
+						continue;
+					}
+					left_sel.set_index(batch_count, probe);
+					right_sel.set_index(batch_count++, build_row % STANDARD_VECTOR_SIZE);
+				}
+				if (!batch_count) {
 					continue;
 				}
-				const auto build_row = right_id[right[pair]];
-				fetch(build_row / STANDARD_VECTOR_SIZE);
+				fetch(build_chunk);
+				probe_candidates.Reference(keys);
+				probe_candidates.Slice(left_sel, batch_count);
 				candidates.Reference(chunk);
-				selected.set_index(0, build_row % STANDARD_VECTOR_SIZE);
-				candidates.Slice(selected, 1);
-				MarkJoinRowComparison::CompareConjunction(keys, probe, candidates, conditions, comparison);
+				candidates.Slice(right_sel, batch_count);
+				MarkJoinRowComparison::CompareTail(probe_candidates, candidates, conditions, tail, dropped != 0,
+				                                   comparison);
 				auto values = comparison.Values<bool>();
-				auto value = values[0];
-				if (!value.IsValid()) {
-					validity.SetInvalid(probe);
-				} else if (value.GetValue()) {
-					matches[probe] = true;
-					validity.SetValid(probe);
+				for (idx_t row = 0; row < batch_count; row++) {
+					const auto probe = left_sel.get_index(row);
+					auto value = values[row];
+					if (!value.IsValid()) {
+						if (!matches[probe]) {
+							validity.SetInvalid(probe);
+						}
+					} else if (value.GetValue()) {
+						matches[probe] = true;
+						validity.SetValid(probe);
+					}
 				}
 			}
 			if (joiner.lrid > 0 && !left.empty() && left.back() == idx_t(joiner.lrid - 1)) {
