@@ -75,7 +75,6 @@ public:
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr) const;
-	unique_ptr<IndexScanState> InitializeFullScan();
 	//! Initializes a scan for multiple equality lookup values.
 	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> values) const;
 	//! Scans the ART and appends matching row IDs to the output collection.
@@ -187,7 +186,6 @@ private:
 	bool ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const;
 	bool ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const;
 	bool ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const;
-	bool FullScan(RowIdVectorOutput &row_ids) const;
 	bool SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const;
 	bool SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const;
 	bool SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const;

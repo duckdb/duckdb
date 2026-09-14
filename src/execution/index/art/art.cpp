@@ -33,8 +33,6 @@
 namespace duckdb {
 
 enum class ARTScanType : uint8_t {
-	//! Collect row IDs from the entire index.
-	FULL,
 	//! Equality lookup for one key.
 	EQUALITY,
 	//! Range lookup with one or two bounds.
@@ -301,9 +299,6 @@ unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> values
 	return std::move(result);
 }
 
-unique_ptr<IndexScanState> ART::InitializeFullScan() {
-	return make_uniq<ARTIndexScanState>(ARTScanType::FULL);
-}
 //===--------------------------------------------------------------------===//
 // ART Keys
 //===--------------------------------------------------------------------===//
@@ -749,16 +744,6 @@ bool ART::HasLegacyGeometryKeys() const {
 //===--------------------------------------------------------------------===//
 // Point and range lookups
 //===--------------------------------------------------------------------===//
-bool ART::FullScan(RowIdVectorOutput &row_ids) const {
-	if (!tree.HasMetadata()) {
-		return true;
-	}
-	Iterator it(*this);
-	it.FindMinimum(tree);
-	const auto empty_key = ARTKey();
-	return it.Scan(empty_key, row_ids, false) == ARTScanResult::COMPLETED;
-}
-
 bool ART::SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const {
 	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
 	if (!leaf) {
@@ -875,11 +860,6 @@ bool ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 bool ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	switch (scan_state.scan_type) {
-	case ARTScanType::FULL: {
-		D_ASSERT(!scan_state.batch_equality_values);
-		IndexLock l(*this);
-		return FullScan(row_ids);
-	}
 	case ARTScanType::EQUALITY: {
 		D_ASSERT(!scan_state.batch_equality_values);
 		D_ASSERT(!scan_state.values[0].IsNull());
