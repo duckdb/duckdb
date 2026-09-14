@@ -43,6 +43,8 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 	}
 	if (!transformer.pivot_entries.empty()) {
 		stmt = transformer.CreatePivotStatement(std::move(stmt));
+		// Unpacking discards the wrapper, so the parts keep their map; the wrapper carries it for introspection.
+		stmt->named_param_map = transformer.named_parameter_map;
 	}
 	transformer.Clear();
 
